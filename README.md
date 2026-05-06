@@ -34,7 +34,7 @@ V1 application server logic uses **Next.js Route Handlers and Server Actions**. 
 
 | Variable                                                          | Notes                                                                                 |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`                                        | Supabase project URL. **NEXT*PUBLIC*** vars are exposed to the browser.               |
+| `NEXT_PUBLIC_SUPABASE_URL`                                        | Supabase project URL. `NEXT_PUBLIC_*` vars are exposed to the browser.                |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`                                   | Supabase anon key (public). Still not a service role key.                             |
 | `SUPABASE_SERVICE_ROLE_KEY`                                       | **Server only.** Must never be used in client components or leaked to the bundle.     |
 | `OPENAI_API_KEY`                                                  | **Server only** (Route Handlers / Server Actions). Optional until AI features use it. |
@@ -44,6 +44,28 @@ V1 application server logic uses **Next.js Route Handlers and Server Actions**. 
 **Mock mode:** local development should remain usable **without** `OPENAI_API_KEY` or Google OAuth vars until those integrations are implemented (stubs/mocks). Do not require live AI or Google credentials for a basic UI/dev server.
 
 See **`.env.example`** for inline comments and placeholder lines.
+
+## Supabase local development
+
+Supabase is scaffolded for local database development only. V1 app server logic still belongs in **Next.js Route Handlers / Server Actions** per **`docs/adr/0001-v1-server-boundary.md`**. This scaffold does **not** connect the UI and does **not** add OpenAI or Google Calendar integration code.
+
+Run these from the repository root with the Supabase CLI installed:
+
+| Command             | Purpose                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| `supabase init`     | Initializes Supabase files. Already done here; use only if recreating local scaffolding. |
+| `supabase start`    | Starts the local Supabase stack.                                                         |
+| `supabase status`   | Prints local API, DB, Studio, and auth URLs/keys.                                        |
+| `supabase db reset` | Recreates the local database from migrations and then runs `supabase/seed.sql`.          |
+| `supabase stop`     | Stops the local Supabase stack when finished.                                            |
+
+Current local files:
+
+- **`supabase/config.toml`** — local Supabase service ports/settings.
+- **`supabase/migrations/20260506213000_create_v1_core_tables.sql`** — V1 core tables, indexes, RLS enablement, and per-user policies.
+- **`supabase/seed.sql`** — mock local rows for schema inspection.
+
+The seed uses a fixed mock `user_id` and is for local inspection only. Real auth wiring comes later.
 
 ## Monorepo commands
 

@@ -358,5 +358,5 @@ These documents are intentionally grounded in stable platform capabilities, not 
 - The dev server runs on `http://localhost:3000` by default.
 - `pnpm.onlyBuiltDependencies` in root `package.json` allows build scripts for `esbuild`, `sharp`, and `unrs-resolver` non-interactively.
 - The `.gitignore` is configured for JS/TS (not the auto-generated Python one from repo init).
-- Supabase local development is not yet configured; future work will add `supabase/config.toml` and migrations.
+- Supabase local development is scaffolded with `supabase/config.toml`, migrations, and `supabase/seed.sql`; V1 app server logic still belongs in Next.js per `docs/adr/0001-v1-server-boundary.md`.
 - No `.env` file is needed for basic dev server startup; external services (Supabase, OpenAI, Google Calendar) will require env vars when those integrations are built.
