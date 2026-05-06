@@ -1,0 +1,37 @@
+{
+  "name": "@lifeos/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lifeos/schemas": "workspace:*",
+    "@lifeos/types": "workspace:*",
+    "@lifeos/ui": "workspace:*",
+    "@lifeos/utils": "workspace:*",
+    "@supabase/supabase-js": "^2",
+    "next": "^15",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "^15",
+    "jsdom": "^25",
+    "typescript": "^5",
+    "vitest": "^3"
+  }
+}
