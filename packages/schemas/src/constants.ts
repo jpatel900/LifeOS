@@ -10,7 +10,13 @@ export const CAPTURE_ITEM_STATUSES = [
   "archived",
 ] as const;
 
-export const PROJECT_STATUSES = ["active", "paused", "done", "dropped", "archived"] as const;
+export const PROJECT_STATUSES = [
+  "active",
+  "paused",
+  "done",
+  "dropped",
+  "archived",
+] as const;
 
 export const TASK_STATUSES = [
   "draft",

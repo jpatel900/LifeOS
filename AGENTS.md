@@ -342,16 +342,16 @@ These documents are intentionally grounded in stable platform capabilities, not 
 
 ### Common commands
 
-
-| Action       | Command                                         |
-| ------------ | ----------------------------------------------- |
-| Install deps | `pnpm install` (from root)                      |
-| Dev server   | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
-| Build        | `pnpm build`                                    |
-| Lint         | `pnpm lint`                                     |
-| Test         | `pnpm test`                                     |
-| Type-check   | `pnpm type-check`                               |
-
+| Action         | Command                                         |
+| -------------- | ----------------------------------------------- |
+| Install deps   | `pnpm install` (from root)                      |
+| Dev server     | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
+| Build          | `pnpm build`                                    |
+| Lint           | `pnpm lint`                                     |
+| Test           | `pnpm test`                                     |
+| Type-check     | `pnpm type-check`                               |
+| Format         | `pnpm format` (Prettier, root only)             |
+| Format (check) | `pnpm format:check`                             |
 
 ### Notes for future agents
 
@@ -360,4 +360,3 @@ These documents are intentionally grounded in stable platform capabilities, not 
 - The `.gitignore` is configured for JS/TS (not the auto-generated Python one from repo init).
 - Supabase local development is not yet configured; future work will add `supabase/config.toml` and migrations.
 - No `.env` file is needed for basic dev server startup; external services (Supabase, OpenAI, Google Calendar) will require env vars when those integrations are built.
-

@@ -388,7 +388,6 @@ V1 will not include:
 
 ## 5. Requirement Risk Review
 
-
 | Requirement      | Risk       | Decision                        |
 | ---------------- | ---------- | ------------------------------- |
 | Audio capture    | Medium     | Keep submit-based, not realtime |
@@ -398,7 +397,6 @@ V1 will not include:
 | Sense-making     | Medium     | Strict schema + triage          |
 | Area inference   | Medium     | Confidence + user correction    |
 | Cron jobs        | Medium     | Avoid unless necessary          |
-
 
 ## Reference Links
 

@@ -84,7 +84,13 @@ describe("AreaSchema", () => {
 
 describe("ProjectSchema", () => {
   it("accepts project statuses from DATA_MODEL.md", () => {
-    for (const status of ["active", "paused", "done", "dropped", "archived"] as const) {
+    for (const status of [
+      "active",
+      "paused",
+      "done",
+      "dropped",
+      "archived",
+    ] as const) {
       const result = ProjectSchema.safeParse({
         id: uid,
         user_id: uid2,

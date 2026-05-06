@@ -12,7 +12,9 @@ import {
 } from "./constants";
 import { JsonValueSchema } from "./json";
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");
 
 export const AreaSchema = z.object({
   id: z.string().uuid(),

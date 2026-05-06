@@ -32,15 +32,33 @@ V1 application server logic uses **Next.js Route Handlers and Server Actions**. 
 1. Use **`.env.example`** at the repo root as the **template** (placeholder names and comments only).
 2. When wiring Supabase, OpenAI, or Google, copy the needed lines into **`apps/web/.env.local`** so Next.js picks them up (Next loads env files from the app package directory). **Never commit** `.env`, `.env.local`, or real keys. See **`AGENTS.md`** and **`SECURITY_PRIVACY.md`** for secrets handling.
 
-| Variable | Notes |
-| --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. **NEXT_PUBLIC_** vars are exposed to the browser. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (public). Still not a service role key. |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Server only.** Must never be used in client components or leaked to the bundle. |
-| `OPENAI_API_KEY` | **Server only** (Route Handlers / Server Actions). Optional until AI features use it. |
-| `AI_MODEL_CHEAP`, `AI_MODEL_STANDARD`, `AI_MODEL_STRONG` | **Server-side** model tier names; avoid hardcoding model IDs in code. |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | **Server only** for OAuth; secrets stay off the client. |
+| Variable                                                          | Notes                                                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`                                        | Supabase project URL. **NEXT*PUBLIC*** vars are exposed to the browser.               |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`                                   | Supabase anon key (public). Still not a service role key.                             |
+| `SUPABASE_SERVICE_ROLE_KEY`                                       | **Server only.** Must never be used in client components or leaked to the bundle.     |
+| `OPENAI_API_KEY`                                                  | **Server only** (Route Handlers / Server Actions). Optional until AI features use it. |
+| `AI_MODEL_CHEAP`, `AI_MODEL_STANDARD`, `AI_MODEL_STRONG`          | **Server-side** model tier names; avoid hardcoding model IDs in code.                 |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | **Server only** for OAuth; secrets stay off the client.                               |
 
 **Mock mode:** local development should remain usable **without** `OPENAI_API_KEY` or Google OAuth vars until those integrations are implemented (stubs/mocks). Do not require live AI or Google credentials for a basic UI/dev server.
 
 See **`.env.example`** for inline comments and placeholder lines.
+
+## Monorepo commands
+
+Run from the **repository root** after **`pnpm install`**.
+
+| Command             | Purpose                                                                                                                                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`          | Turborepo `dev`: runs **`next dev`** for `apps/web` (typically [http://localhost:3000](http://localhost:3000)).                                                                                                              |
+| `pnpm build`        | Turborepo **`build`**: runs dependency package **`tsc --noEmit`** (“build”), then **`next build`** for the web app.                                                                                                          |
+| `pnpm lint`         | Turborepo **`lint`**: `tsc --noEmit`-style lint in packages; **`next lint`** in `apps/web`. Depends on **`^build`** (packages typecheck/build pass first).                                                                   |
+| `pnpm type-check`   | Turborepo **`type-check`**: `tsc --noEmit` everywhere it is defined. Depends on **`^build`**.                                                                                                                                |
+| `pnpm test`         | Turborepo **`test`**: **Vitest** in `packages/schemas`, `packages/utils`, and `apps/web`; **`node -e process.exit(0)`** placeholders in packages without tests yet (`@lifeos/types`, `@lifeos/ui`). Depends on **`^build`**. |
+| `pnpm format`       | **Prettier** — writes formatting for the repo (uses **`.prettierrc.json`** and **`.prettierignore`**). Root-only script, not delegated through Turborepo.                                                                    |
+| `pnpm format:check` | **Prettier** — check-only; exits non‑zero if files need formatting.                                                                                                                                                          |
+
+Filter a single workspace: e.g. `pnpm --filter @lifeos/schemas test`.
+
+**Verification:** execute the commands above locally after installing dependencies; this environment does not substitute for your machine’s `pnpm` run.

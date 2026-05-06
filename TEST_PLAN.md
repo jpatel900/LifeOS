@@ -15,15 +15,15 @@ The V1 test strategy should favor practical coverage over perfection.
 
 ## 2. Test Types
 
-| Test Type | Purpose |
-|---|---|
-| Unit tests | Pure logic, schema validation, state transitions |
-| Integration tests | Next.js Route Handlers / Server Actions (and Edge Functions if adopted), database writes, adapters |
-| RLS/security tests | Verify users can only access their own rows |
-| AI contract tests | Validate schemas and fallback handling |
-| E2E tests | Core user flows |
-| Manual smoke tests | Calendar OAuth/write behavior |
-| Regression tests | Prevent future agent changes from breaking invariants |
+| Test Type          | Purpose                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| Unit tests         | Pure logic, schema validation, state transitions                                                   |
+| Integration tests  | Next.js Route Handlers / Server Actions (and Edge Functions if adopted), database writes, adapters |
+| RLS/security tests | Verify users can only access their own rows                                                        |
+| AI contract tests  | Validate schemas and fallback handling                                                             |
+| E2E tests          | Core user flows                                                                                    |
+| Manual smoke tests | Calendar OAuth/write behavior                                                                      |
+| Regression tests   | Prevent future agent changes from breaking invariants                                              |
 
 ## 3. Critical Invariants
 

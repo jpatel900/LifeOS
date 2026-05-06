@@ -19,16 +19,16 @@ The architecture should be boring on purpose.
 
 ## 2. Recommended Stack
 
-| Layer | Choice | Reason |
-|---|---|---|
-| Frontend | Next.js | Common, agent-friendly, deploys easily |
-| Hosting | Vercel Hobby initially | Low fixed cost, simple deployment |
-| Database/Auth | Supabase | Postgres + Auth + RLS + local DB dev via Supabase tooling |
-| Server logic (V1) | Next.js Route Handlers + Server Actions | Single app server surface; secrets and integrations stay in `apps/web` |
-| Server logic (V1.5+ / optional) | Supabase Edge Functions | Deferred by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`) |
-| AI | OpenAI Responses API + Structured Outputs | Typed AI output and tool-ready interaction model |
-| Calendar | Google Calendar API | Free/busy checks and approved event writes |
-| Background jobs | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity |
+| Layer                           | Choice                                                              | Reason                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Frontend                        | Next.js                                                             | Common, agent-friendly, deploys easily                                                                                        |
+| Hosting                         | Vercel Hobby initially                                              | Low fixed cost, simple deployment                                                                                             |
+| Database/Auth                   | Supabase                                                            | Postgres + Auth + RLS + local DB dev via Supabase tooling                                                                     |
+| Server logic (V1)               | Next.js Route Handlers + Server Actions                             | Single app server surface; secrets and integrations stay in `apps/web`                                                        |
+| Server logic (V1.5+ / optional) | Supabase Edge Functions                                             | Deferred by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`) |
+| AI                              | OpenAI Responses API + Structured Outputs                           | Typed AI output and tool-ready interaction model                                                                              |
+| Calendar                        | Google Calendar API                                                 | Free/busy checks and approved event writes                                                                                    |
+| Background jobs                 | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity                                                                                                   |
 
 ## 3. Runtime Architecture
 
@@ -221,11 +221,11 @@ The stable contract is:
 
 Use environment-configured model tiers:
 
-| Tier | Use |
-|---|---|
-| `AI_MODEL_CHEAP` | area inference, labels, simple scoring |
-| `AI_MODEL_STANDARD` | capture parsing, ambiguity assessment, block proposals |
-| `AI_MODEL_STRONG` | complex weekly review, prompt/schema evaluation, admin debugging |
+| Tier                | Use                                                              |
+| ------------------- | ---------------------------------------------------------------- |
+| `AI_MODEL_CHEAP`    | area inference, labels, simple scoring                           |
+| `AI_MODEL_STANDARD` | capture parsing, ambiguity assessment, block proposals           |
+| `AI_MODEL_STRONG`   | complex weekly review, prompt/schema evaluation, admin debugging |
 
 Do not hardcode exact model names in app logic.
 
@@ -306,33 +306,33 @@ Do not log:
 
 Architecture Decision Records live under `/docs/adr/`.
 
-| ADR | Decision | Status |
-|---|---|---|
+| ADR                                         | Decision                                                                                                                  | Status   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------- |
 | [0001](docs/adr/0001-v1-server-boundary.md) | V1 server boundary: Next.js Route Handlers + Server Actions; Supabase Edge Functions not the default (V1.5+ / exceptions) | Accepted |
 
 Additional invariants:
 
-| Decision | Status |
-|---|---|
+| Decision                                                         | Status   |
+| ---------------------------------------------------------------- | -------- |
 | Use Supabase for data/auth instead of a separate backend service | Accepted |
-| Use local proposals before calendar writes | Accepted |
-| Keep external writes approval-gated | Accepted |
-| Use strict schemas for AI output | Accepted |
-| Avoid multi-agent runtime in app | Accepted |
-| Avoid realtime voice in V1 | Accepted |
-| Avoid full calendar sync | Accepted |
+| Use local proposals before calendar writes                       | Accepted |
+| Keep external writes approval-gated                              | Accepted |
+| Use strict schemas for AI output                                 | Accepted |
+| Avoid multi-agent runtime in app                                 | Accepted |
+| Avoid realtime voice in V1                                       | Accepted |
+| Avoid full calendar sync                                         | Accepted |
 
 ## 12. Architecture Risks
 
-| Risk | Mitigation |
-|---|---|
-| RLS misconfiguration | Tests + deny-by-default policies |
-| Calendar write duplication | Idempotency keys / proposal status checks |
-| AI schema drift | Versioned schemas + validation |
-| Prompt-only business logic | Move rules into code/config |
-| Background job complexity | Avoid in V1 |
-| Overbuilt scheduling engine | Suggest only; user decides |
-| Future agent modifications breaking invariants | AGENTS.md + tests + forbidden zones |
+| Risk                                           | Mitigation                                |
+| ---------------------------------------------- | ----------------------------------------- |
+| RLS misconfiguration                           | Tests + deny-by-default policies          |
+| Calendar write duplication                     | Idempotency keys / proposal status checks |
+| AI schema drift                                | Versioned schemas + validation            |
+| Prompt-only business logic                     | Move rules into code/config               |
+| Background job complexity                      | Avoid in V1                               |
+| Overbuilt scheduling engine                    | Suggest only; user decides                |
+| Future agent modifications breaking invariants | AGENTS.md + tests + forbidden zones       |
 
 ## Reference Links
 

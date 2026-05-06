@@ -125,27 +125,27 @@ If a feature conflicts with these priorities, cut or defer it.
 
 ### 8.1 Unclear Assumptions
 
-| Assumption | Why It Is Unclear | Decision Needed Before Build |
-|---|---|---|
-| Audio is required in V1 | Audio adds storage, transcription, permissions, and UX complexity | Build text capture first; add audio as simple submit-to-transcribe only |
-| Google Calendar write access is necessary immediately | Calendar OAuth is one of the riskiest integrations | Phase it after local proposals work |
-| Meta-learning needs to be advanced in V1 | Real learning requires usage data | Start with explicit profiles + logs; derive learning later |
-| Health dashboard needs AI diagnosis | Deterministic checks are more reliable | Use rules for scoring; AI only explains |
-| Area inference should be automatic | Wrong area assignment can pollute learning | Auto-suggest with confidence; user approves low-confidence cases |
-| The user will perform daily reviews | Review friction may kill usage | Make daily review optional and lightweight |
-| Scheduling suggestions need full conflict solving | Full scheduling logic is hard | Flag conflicts and suggest slots; user decides |
+| Assumption                                            | Why It Is Unclear                                                 | Decision Needed Before Build                                            |
+| ----------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Audio is required in V1                               | Audio adds storage, transcription, permissions, and UX complexity | Build text capture first; add audio as simple submit-to-transcribe only |
+| Google Calendar write access is necessary immediately | Calendar OAuth is one of the riskiest integrations                | Phase it after local proposals work                                     |
+| Meta-learning needs to be advanced in V1              | Real learning requires usage data                                 | Start with explicit profiles + logs; derive learning later              |
+| Health dashboard needs AI diagnosis                   | Deterministic checks are more reliable                            | Use rules for scoring; AI only explains                                 |
+| Area inference should be automatic                    | Wrong area assignment can pollute learning                        | Auto-suggest with confidence; user approves low-confidence cases        |
+| The user will perform daily reviews                   | Review friction may kill usage                                    | Make daily review optional and lightweight                              |
+| Scheduling suggestions need full conflict solving     | Full scheduling logic is hard                                     | Flag conflicts and suggest slots; user decides                          |
 
 ### 8.2 Risky Requirements
 
-| Risk | Why Risky | Mitigation |
-|---|---|---|
-| Calendar writes | External mutation risk | Approval-only writes, audit log, minimal scopes |
-| Autonomous rescheduling | Can create calendar chaos | Exclude from V1 |
-| AI-generated structured objects | Model may misclassify or over-split | Strict schemas, confidence fields, triage screen |
-| Long-term pattern learning | Can become black-box advice | Explain all suggestions and keep user-controlled policy |
-| Personal data storage | Sensitive life/task data | RLS, minimal logs, `store: false`, deletion/export later |
-| Cron/background jobs | Reliability/cost/complexity drag | User-triggered by default; max 1-3 scheduled jobs later |
-| Over-scoped UX | Too many screens kills fast build | Build vertical slice first |
+| Risk                            | Why Risky                           | Mitigation                                               |
+| ------------------------------- | ----------------------------------- | -------------------------------------------------------- |
+| Calendar writes                 | External mutation risk              | Approval-only writes, audit log, minimal scopes          |
+| Autonomous rescheduling         | Can create calendar chaos           | Exclude from V1                                          |
+| AI-generated structured objects | Model may misclassify or over-split | Strict schemas, confidence fields, triage screen         |
+| Long-term pattern learning      | Can become black-box advice         | Explain all suggestions and keep user-controlled policy  |
+| Personal data storage           | Sensitive life/task data            | RLS, minimal logs, `store: false`, deletion/export later |
+| Cron/background jobs            | Reliability/cost/complexity drag    | User-triggered by default; max 1-3 scheduled jobs later  |
+| Over-scoped UX                  | Too many screens kills fast build   | Build vertical slice first                               |
 
 ### 8.3 Overbuilt Features To Avoid
 
