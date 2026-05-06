@@ -10,6 +10,8 @@ Build a private, one-user, low-cost AI-assisted workflow cockpit that turns mess
 
 The app must remain simple, maintainable, and safe.
 
+This is a personal-use system for one human operator, not a generalized autonomous platform.
+
 ## 2. Non-Negotiable Product Rules
 
 1. No external calendar write without explicit user approval.
@@ -22,6 +24,9 @@ The app must remain simple, maintainable, and safe.
 8. Do not build broad autonomous agent behavior in V1.
 9. Do not add background jobs unless clearly justified.
 10. Do not add new vendor services without documenting why.
+11. No feature is "done" until required tests pass for that change.
+12. Every implementation task must define acceptance criteria before coding starts.
+13. Do not expand scope beyond `REQUIREMENTS.md` without updating requirements first.
 
 ## 3. Build Priorities
 
@@ -35,6 +40,8 @@ Optimize in this order:
 6. future extensibility
 
 Do not optimize for cleverness.
+
+Default tie-breaker: choose the lower-cost and simpler architecture option.
 
 ## 4. Current V1 Scope
 
@@ -70,6 +77,8 @@ Do not build:
 - public SaaS billing
 - broad web browsing
 
+If a proposed feature resembles any "Do not build" item, reject or defer it unless `REQUIREMENTS.md` is explicitly revised and reviewed first.
+
 ## 5. Preferred Architecture
 
 Use:
@@ -88,6 +97,9 @@ Avoid:
 - complex workflow engines
 - multi-agent frameworks
 - hardcoded model names
+- architecture that increases operational overhead without clear V1 value
+
+Architecture principle: prefer one deployable web app plus typed functions over distributed services.
 
 ## 6. Repository Expectations
 
@@ -117,6 +129,14 @@ All mutation-producing AI calls must have:
 - validation
 - error handling
 - audit record where relevant
+
+Schema-first development order for AI-backed features:
+
+1. define/update schema contract
+2. add schema validation tests (valid + invalid fixtures)
+3. implement function/prompt wiring
+4. persist only validated outputs
+5. log schema/prompt versions
 
 Required schemas:
 
@@ -199,6 +219,8 @@ Before marking work done:
 - RLS tests pass if DB touched
 - E2E smoke test passes if UX flow touched
 - calendar write path tested with mock before real provider
+
+Do not claim completion with "code compiles" alone. Test evidence is required.
 
 ## 13. Forbidden Changes Without Human Review
 
@@ -292,8 +314,43 @@ A task is done when:
 - errors are recoverable
 - user action is explicit for external writes
 - docs updated if behavior changed
+- acceptance criteria are explicitly listed and all are satisfied
 
-## 18. Agent Behavior
+If acceptance criteria were missing at task start, define them first, then implement.
+
+## 18. Task Intake and Scope Control
+
+Before implementing any task, the agent must confirm:
+
+1. the task maps to an existing requirement in `REQUIREMENTS.md` (or a reviewed update exists)
+2. explicit acceptance criteria are written
+3. impacted schemas/tables/functions are identified
+4. required tests are identified
+5. risky surfaces (RLS, calendar writes, OAuth scopes, schema contracts) are flagged
+
+If any item is missing, stop implementation and resolve that gap first.
+
+## 19. Change Control for Feature Expansion
+
+Broad feature expansion is forbidden unless requirements are updated first.
+
+Examples of expansion requiring a requirements update:
+
+- new ingestion channels (email, messaging, browser capture)
+- autonomous external actions
+- new always-on/background intelligence
+- additional external vendors/services
+- multi-user or collaboration behavior
+- generalized multi-agent runtime inside the app
+
+Required sequence:
+
+1. update `REQUIREMENTS.md` with scope, non-goals, and acceptance criteria
+2. update related docs (`ARCHITECTURE.md`, `SECURITY_PRIVACY.md`, `TEST_PLAN.md`) as needed
+3. implement code changes
+4. verify tests
+
+## 20. Agent Behavior
 
 When working as an AI coding agent:
 
@@ -305,6 +362,9 @@ When working as an AI coding agent:
 - ask for review when touching dangerous areas
 - run tests before claiming done
 - update docs if architecture/data model changes
+- enforce approval gates for any calendar write path
+- reject in-app multi-agent/runtime orchestration proposals for V1
+- keep solutions suitable for one-person personal use and low ongoing cost
 
 If uncertain, choose the safer and simpler path.
 
