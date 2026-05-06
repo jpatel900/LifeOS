@@ -322,3 +322,32 @@ These documents are intentionally grounded in stable platform capabilities, not 
 - Vercel Cron Jobs / Hobby limits: [https://vercel.com/docs/cron-jobs/usage-and-pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)
 - Anthropic Building Effective Agents: [https://www.anthropic.com/research/building-effective-agents](https://www.anthropic.com/research/building-effective-agents)
 
+## Cursor Cloud specific instructions
+
+### Stack and tooling
+
+- **Monorepo**: pnpm workspaces + Turborepo
+- **Package manager**: pnpm (lockfile: `pnpm-lock.yaml`)
+- **Node.js**: v20 LTS (`.nvmrc` at root)
+- **Frontend**: Next.js 15 in `apps/web`
+- **Shared packages**: `packages/schemas` (zod), `packages/types`, `packages/ui`, `packages/utils`
+
+### Common commands
+
+| Action | Command |
+|--------|---------|
+| Install deps | `pnpm install` (from root) |
+| Dev server | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
+| Build | `pnpm build` |
+| Lint | `pnpm lint` |
+| Test | `pnpm test` |
+| Type-check | `pnpm type-check` |
+
+### Notes for future agents
+
+- The dev server runs on `http://localhost:3000` by default.
+- `pnpm.onlyBuiltDependencies` in root `package.json` allows build scripts for `esbuild`, `sharp`, and `unrs-resolver` non-interactively.
+- The `.gitignore` is configured for JS/TS (not the auto-generated Python one from repo init).
+- Supabase local development is not yet configured; future work will add `supabase/config.toml` and migrations.
+- No `.env` file is needed for basic dev server startup; external services (Supabase, OpenAI, Google Calendar) will require env vars when those integrations are built.
+
