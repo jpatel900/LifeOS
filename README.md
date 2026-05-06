@@ -26,3 +26,21 @@ To align **NFR-005** (six primary screens) with navigation that includes configu
 ### Server boundary (V1)
 
 V1 application server logic uses **Next.js Route Handlers and Server Actions**. **Supabase Edge Functions** are **not** the default for core APIs in V1 (use **V1.5+** or documented exceptions for cron / specific integrations). Details: **`docs/adr/0001-v1-server-boundary.md`**.
+
+## Environment variables
+
+1. Use **`.env.example`** at the repo root as the **template** (placeholder names and comments only).
+2. When wiring Supabase, OpenAI, or Google, copy the needed lines into **`apps/web/.env.local`** so Next.js picks them up (Next loads env files from the app package directory). **Never commit** `.env`, `.env.local`, or real keys. See **`AGENTS.md`** and **`SECURITY_PRIVACY.md`** for secrets handling.
+
+| Variable | Notes |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. **NEXT_PUBLIC_** vars are exposed to the browser. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (public). Still not a service role key. |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Server only.** Must never be used in client components or leaked to the bundle. |
+| `OPENAI_API_KEY` | **Server only** (Route Handlers / Server Actions). Optional until AI features use it. |
+| `AI_MODEL_CHEAP`, `AI_MODEL_STANDARD`, `AI_MODEL_STRONG` | **Server-side** model tier names; avoid hardcoding model IDs in code. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | **Server only** for OAuth; secrets stay off the client. |
+
+**Mock mode:** local development should remain usable **without** `OPENAI_API_KEY` or Google OAuth vars until those integrations are implemented (stubs/mocks). Do not require live AI or Google credentials for a basic UI/dev server.
+
+See **`.env.example`** for inline comments and placeholder lines.
