@@ -4,6 +4,10 @@
 
 This file is for AI coding agents and future maintainers.
 
+## Documentation authority
+
+See **README.md** for the canonical documentation order (implementation and product truth). **Architecture Decision Records** in `docs/adr/` amend or clarify **ARCHITECTURE.md** where they conflict. **LIFE_OS_WIKI.md** and **EXTRA_INFO_AND_RULES.md** are **background reference only**, not implementation authority.
+
 ## 1. Project Mission
 
 Build a private, one-user, low-cost AI-assisted workflow cockpit that turns messy input into structured work, stages scheduling decisions for approval, learns separately by area, and monitors its own health.
@@ -75,11 +79,13 @@ Do not build:
 Use:
 
 - Next.js frontend
-- Supabase Auth/Postgres/RLS
-- Supabase Edge Functions
+- **Next.js Route Handlers and Server Actions** for V1 app server logic (AI orchestration, validation, integration adapters)
+- Supabase Auth, Postgres, RLS, and Supabase tooling for **local database development**
 - OpenAI Responses API with Structured Outputs
 - Google Calendar API
 - minimal scheduled jobs
+
+**Supabase Edge Functions** are **not** the default V1 path for core APIs. Treat them as **V1.5 / later**, or use only when a **cron/scheduled** job or a **specific integration** cannot be implemented safely in Next server code (see `docs/adr/0001-v1-server-boundary.md`).
 
 Avoid:
 
@@ -100,8 +106,8 @@ Expected structure:
 /packages/ui
 /packages/utils
 /supabase/migrations
-/supabase/functions
 /docs
+/docs/adr
 ```
 
 Keep shared schemas in `/packages/schemas`.
@@ -195,7 +201,7 @@ Before marking work done:
 
 - unit tests pass
 - schema validation tests pass
-- integration tests pass for changed Edge Function
+- integration tests pass for changed **Route Handlers / Server Actions** (or Edge Functions, if used)
 - RLS tests pass if DB touched
 - E2E smoke test passes if UX flow touched
 - calendar write path tested with mock before real provider
@@ -237,6 +243,8 @@ Do not hardcode exact model names throughout the app.
 ## 15. UX Rules
 
 The UX must support executive-function friction.
+
+**V1 primary workflow screens (six):** Capture, Triage, Calendar / Planning, Execute, Review, Health. **Settings** (areas, policies, integrations) is **secondary / admin** and does not count toward the six-primary limit in **NFR-005**.
 
 Design for:
 
@@ -334,14 +342,16 @@ These documents are intentionally grounded in stable platform capabilities, not 
 
 ### Common commands
 
-| Action | Command |
-|--------|---------|
-| Install deps | `pnpm install` (from root) |
-| Dev server | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
-| Build | `pnpm build` |
-| Lint | `pnpm lint` |
-| Test | `pnpm test` |
-| Type-check | `pnpm type-check` |
+
+| Action       | Command                                         |
+| ------------ | ----------------------------------------------- |
+| Install deps | `pnpm install` (from root)                      |
+| Dev server   | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
+| Build        | `pnpm build`                                    |
+| Lint         | `pnpm lint`                                     |
+| Test         | `pnpm test`                                     |
+| Type-check   | `pnpm type-check`                               |
+
 
 ### Notes for future agents
 

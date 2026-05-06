@@ -23,11 +23,12 @@ The architecture should be boring on purpose.
 |---|---|---|
 | Frontend | Next.js | Common, agent-friendly, deploys easily |
 | Hosting | Vercel Hobby initially | Low fixed cost, simple deployment |
-| Database/Auth | Supabase | Postgres + Auth + RLS + functions |
-| Server logic | Supabase Edge Functions | TypeScript server functions without separate backend |
+| Database/Auth | Supabase | Postgres + Auth + RLS + local DB dev via Supabase tooling |
+| Server logic (V1) | Next.js Route Handlers + Server Actions | Single app server surface; secrets and integrations stay in `apps/web` |
+| Server logic (V1.5+ / optional) | Supabase Edge Functions | Deferred by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`) |
 | AI | OpenAI Responses API + Structured Outputs | Typed AI output and tool-ready interaction model |
 | Calendar | Google Calendar API | Free/busy checks and approved event writes |
-| Background jobs | None by default; Supabase Cron later | Avoid background complexity |
+| Background jobs | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity |
 
 ## 3. Runtime Architecture
 
@@ -38,7 +39,7 @@ Supabase Auth
   ↓
 Supabase Postgres with RLS
   ↓
-Supabase Edge Functions
+Next.js server (Route Handlers + Server Actions)
   ├─ parse_capture
   ├─ triage_apply
   ├─ propose_blocks
@@ -51,20 +52,21 @@ Supabase Edge Functions
       └─ Google Calendar API
 ```
 
+Optional **V1.5+** (not the default V1 path): **Supabase Edge Functions** for scheduled jobs or specific integrations — see `docs/adr/0001-v1-server-boundary.md`.
+
 ## 4. Why No Separate Backend in V1
 
-Do not add a separate Node/Express/Nest backend unless Supabase Edge Functions become clearly insufficient.
+Do not add a separate Node/Express/Nest backend. Application logic lives in **Next.js** (Route Handlers and Server Actions). **Supabase** provides the database, auth, RLS, and migrations; it is not a second application server for core CRUD and AI flows in V1.
 
-Supabase already covers:
+Supabase still provides:
 
 - auth
 - database
 - Row Level Security
-- server-side functions
-- scheduled jobs
-- local development tooling
+- local development tooling for Postgres
+- optional Edge Functions and scheduled jobs **when** the ADR exception applies (cron or integration constraints)
 
-Adding another backend increases cost, deployment complexity, secrets handling, and debugging overhead.
+Adding another backend beyond Next + Supabase data would increase cost, deployment complexity, secrets handling, and debugging overhead.
 
 ## 5. Repository Structure
 
@@ -82,25 +84,14 @@ Adding another backend increases cost, deployment complexity, secrets handling, 
   /utils
 /supabase
   /migrations
-  /functions
-    /parse_capture
-    /triage_apply
-    /propose_blocks
-    /approve_calendar_write
-    /mark_block_result
-    /generate_review
-    /health_check
   /seed
 /docs
-  PROJECT_BRIEF.md
-  REQUIREMENTS.md
-  ARCHITECTURE.md
-  DATA_MODEL.md
-  UX_FLOWS.md
-  TEST_PLAN.md
-  SECURITY_PRIVACY.md
-  AGENTS.md
+  /adr
+    0001-v1-server-boundary.md
+  (authoritative product/tech docs may live at repo root; see README.md)
 ```
+
+Core workflows in V1 are implemented under `apps/web` (not under `supabase/functions`). Edge Functions under `/supabase/functions` are **V1.5+ / optional**, unless an ADR documents a V1 exception (cron or integration).
 
 ## 6. Core Architectural Components
 
@@ -268,7 +259,7 @@ Allowed later:
 - weekly review draft
 - token validity check
 
-Prefer Supabase Cron for recurring jobs if needed. Avoid depending on Vercel Hobby cron for precise or frequent jobs.
+Prefer **Supabase Cron** invoking **Edge Functions** for recurring jobs when those jobs truly belong off the Next runtime; otherwise prefer a minimal **Vercel cron** calling a **secured Route Handler** if that stays simpler for V1. Avoid depending on Vercel Hobby cron for precise or frequent jobs without checking limits.
 
 ## 9. Deployment Environments
 
@@ -296,7 +287,7 @@ Prefer Supabase Cron for recurring jobs if needed. Avoid depending on Vercel Hob
 
 Minimum logging:
 
-- Edge Function invocation success/failure
+- Next.js Route Handler / Server Action invocation success/failure (and Edge Function invocations if used)
 - AI validation failures
 - calendar write attempts
 - calendar write failures
@@ -313,13 +304,17 @@ Do not log:
 
 ## 11. Architecture Decision Records
 
-Create `/docs/adr/` later if decisions grow.
+Architecture Decision Records live under `/docs/adr/`.
 
-Initial decisions:
+| ADR | Decision | Status |
+|---|---|---|
+| [0001](docs/adr/0001-v1-server-boundary.md) | V1 server boundary: Next.js Route Handlers + Server Actions; Supabase Edge Functions not the default (V1.5+ / exceptions) | Accepted |
+
+Additional invariants:
 
 | Decision | Status |
 |---|---|
-| Use Supabase instead of separate backend | Accepted |
+| Use Supabase for data/auth instead of a separate backend service | Accepted |
 | Use local proposals before calendar writes | Accepted |
 | Keep external writes approval-gated | Accepted |
 | Use strict schemas for AI output | Accepted |

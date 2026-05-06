@@ -330,7 +330,7 @@ Acceptance criteria:
 
 - Keep one repo.
 - Keep one schema source of truth.
-- Prefer boring CRUD plus typed Edge Functions.
+- Prefer boring CRUD plus typed **Next.js Route Handlers / Server Actions** (Supabase Edge Functions only when justified per `docs/adr/0001-v1-server-boundary.md`).
 - Avoid multi-agent orchestration inside app.
 - Use strict TypeScript types and shared schemas.
 
@@ -365,7 +365,7 @@ Acceptance criteria:
 
 ### NFR-005 — Simplicity
 
-- No more than six primary screens in V1.
+- No more than **six primary workflow screens** in V1: Capture, Triage, Calendar / Planning, Execute, Review, Health. **Settings** (areas, policies, integrations) is **secondary / admin** and does not count toward this limit.
 - No background job is allowed unless tied to a clear user value.
 - No autonomous external actions.
 - No generalized plugin system.
@@ -388,26 +388,28 @@ V1 will not include:
 
 ## 5. Requirement Risk Review
 
-| Requirement | Risk | Decision |
-|---|---|---|
-| Audio capture | Medium | Keep submit-based, not realtime |
-| Calendar write | High | Approval-only, audit-logged |
-| Meta-learning | Medium | Start as logs + suggestions |
-| Health dashboard | Low/Medium | Rule-based first |
-| Sense-making | Medium | Strict schema + triage |
-| Area inference | Medium | Confidence + user correction |
-| Cron jobs | Medium | Avoid unless necessary |
+
+| Requirement      | Risk       | Decision                        |
+| ---------------- | ---------- | ------------------------------- |
+| Audio capture    | Medium     | Keep submit-based, not realtime |
+| Calendar write   | High       | Approval-only, audit-logged     |
+| Meta-learning    | Medium     | Start as logs + suggestions     |
+| Health dashboard | Low/Medium | Rule-based first                |
+| Sense-making     | Medium     | Strict schema + triage          |
+| Area inference   | Medium     | Confidence + user correction    |
+| Cron jobs        | Medium     | Avoid unless necessary          |
+
 
 ## Reference Links
 
 These documents are intentionally grounded in stable platform capabilities, not hardcoded vendor-specific hype.
 
-- OpenAI Structured Outputs: https://developers.openai.com/api/docs/guides/structured-outputs
-- OpenAI Responses API migration / `store: false`: https://developers.openai.com/api/docs/guides/migrate-to-responses
-- Supabase Row Level Security: https://supabase.com/docs/guides/database/postgres/row-level-security
-- Supabase Edge Functions: https://supabase.com/docs/guides/functions
-- Supabase Cron: https://supabase.com/docs/guides/cron
-- Google Calendar Freebusy: https://developers.google.com/workspace/calendar/api/v3/reference/freebusy
-- Google Calendar Events Insert: https://developers.google.com/workspace/calendar/api/v3/reference/events/insert
-- Vercel Cron Jobs / Hobby limits: https://vercel.com/docs/cron-jobs/usage-and-pricing
-- Anthropic Building Effective Agents: https://www.anthropic.com/research/building-effective-agents
+- OpenAI Structured Outputs: [https://developers.openai.com/api/docs/guides/structured-outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
+- OpenAI Responses API migration / `store: false`: [https://developers.openai.com/api/docs/guides/migrate-to-responses](https://developers.openai.com/api/docs/guides/migrate-to-responses)
+- Supabase Row Level Security: [https://supabase.com/docs/guides/database/postgres/row-level-security](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- Supabase Edge Functions: [https://supabase.com/docs/guides/functions](https://supabase.com/docs/guides/functions)
+- Supabase Cron: [https://supabase.com/docs/guides/cron](https://supabase.com/docs/guides/cron)
+- Google Calendar Freebusy: [https://developers.google.com/workspace/calendar/api/v3/reference/freebusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy)
+- Google Calendar Events Insert: [https://developers.google.com/workspace/calendar/api/v3/reference/events/insert](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)
+- Vercel Cron Jobs / Hobby limits: [https://vercel.com/docs/cron-jobs/usage-and-pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)
+- Anthropic Building Effective Agents: [https://www.anthropic.com/research/building-effective-agents](https://www.anthropic.com/research/building-effective-agents)

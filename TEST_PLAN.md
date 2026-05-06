@@ -18,7 +18,7 @@ The V1 test strategy should favor practical coverage over perfection.
 | Test Type | Purpose |
 |---|---|
 | Unit tests | Pure logic, schema validation, state transitions |
-| Integration tests | Edge Functions, database writes, adapters |
+| Integration tests | Next.js Route Handlers / Server Actions (and Edge Functions if adopted), database writes, adapters |
 | RLS/security tests | Verify users can only access their own rows |
 | AI contract tests | Validate schemas and fallback handling |
 | E2E tests | Core user flows |
