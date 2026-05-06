@@ -8,6 +8,9 @@
     "lint": "tsc --noEmit",
     "type-check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@lifeos/schemas": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5"
   }
