@@ -9,6 +9,9 @@ MVP supports task capture, area assignment, and manual scheduling.
 - Task CRUD
 - Area model
 - Basic calendar draft creation
+- Added always-on Cursor execution discipline rule for phase gating, plugin restrictions, mock preservation, schema strictness, required validation commands, and final risk/file summary expectations
+- Refined plugin policy: strict no-plugin compliance when a prompt forbids plugins; otherwise plugins are allowed when appropriate to task and phase
+- Added completion proof requirement for agent work: final handoff must show changed files, tests run, limitations, and docs-updated status
 
 ## Known issues
 
@@ -25,3 +28,4 @@ MVP supports task capture, area assignment, and manual scheduling.
 
 - Task status and TimeBlock status are separate.
 - Calendar events are never auto-deleted without confirmation.
+- Agent guidance is now aligned across `AGENTS.md` and `.cursor/rules/execution-discipline.mdc` for phase-first implementation and completion checks.
