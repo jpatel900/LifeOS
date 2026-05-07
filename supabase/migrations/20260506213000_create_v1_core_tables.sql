@@ -86,8 +86,8 @@ create table public.tasks (
   updated_at timestamptz not null default now(),
   constraint tasks_id_user_id_key unique (id, user_id),
   constraint tasks_area_fk foreign key (area_id, user_id) references public.areas (id, user_id) on delete restrict,
-  constraint tasks_project_fk foreign key (project_id, user_id) references public.projects (id, user_id) on delete set null,
-  constraint tasks_source_capture_item_fk foreign key (source_capture_item_id, user_id) references public.capture_items (id, user_id) on delete set null,
+  constraint tasks_project_fk foreign key (project_id, user_id) references public.projects (id, user_id) on delete set null (project_id),
+  constraint tasks_source_capture_item_fk foreign key (source_capture_item_id, user_id) references public.capture_items (id, user_id) on delete set null (source_capture_item_id),
   constraint tasks_title_not_blank check (length(btrim(title)) > 0),
   constraint tasks_status_check check (status in ('draft', 'active', 'scheduled', 'blocked', 'done', 'dropped', 'archived')),
   constraint tasks_priority_confidence_check check (
@@ -117,7 +117,7 @@ create table public.time_block_proposals (
   created_at timestamptz not null default now(),
   constraint time_block_proposals_id_user_id_key unique (id, user_id),
   constraint time_block_proposals_area_fk foreign key (area_id, user_id) references public.areas (id, user_id) on delete restrict,
-  constraint time_block_proposals_task_fk foreign key (task_id, user_id) references public.tasks (id, user_id) on delete set null,
+  constraint time_block_proposals_task_fk foreign key (task_id, user_id) references public.tasks (id, user_id) on delete set null (task_id),
   constraint time_block_proposals_status_check check (status in ('proposed', 'edited', 'accepted', 'rejected', 'superseded')),
   constraint time_block_proposals_time_range_check check (proposed_end > proposed_start)
 );
@@ -136,8 +136,8 @@ create table public.calendar_blocks (
   updated_at timestamptz not null default now(),
   constraint calendar_blocks_id_user_id_key unique (id, user_id),
   constraint calendar_blocks_area_fk foreign key (area_id, user_id) references public.areas (id, user_id) on delete restrict,
-  constraint calendar_blocks_proposal_fk foreign key (proposal_id, user_id) references public.time_block_proposals (id, user_id) on delete set null,
-  constraint calendar_blocks_task_fk foreign key (task_id, user_id) references public.tasks (id, user_id) on delete set null,
+  constraint calendar_blocks_proposal_fk foreign key (proposal_id, user_id) references public.time_block_proposals (id, user_id) on delete set null (proposal_id),
+  constraint calendar_blocks_task_fk foreign key (task_id, user_id) references public.tasks (id, user_id) on delete set null (task_id),
   constraint calendar_blocks_status_check check (status in ('scheduled', 'running', 'completed', 'missed', 'cancelled')),
   constraint calendar_blocks_time_range_check check (end_at > start_at)
 );
@@ -159,8 +159,8 @@ create table public.execution_sessions (
   created_at timestamptz not null default now(),
   constraint execution_sessions_id_user_id_key unique (id, user_id),
   constraint execution_sessions_area_fk foreign key (area_id, user_id) references public.areas (id, user_id) on delete restrict,
-  constraint execution_sessions_task_fk foreign key (task_id, user_id) references public.tasks (id, user_id) on delete set null,
-  constraint execution_sessions_calendar_block_fk foreign key (calendar_block_id, user_id) references public.calendar_blocks (id, user_id) on delete set null,
+  constraint execution_sessions_task_fk foreign key (task_id, user_id) references public.tasks (id, user_id) on delete set null (task_id),
+  constraint execution_sessions_calendar_block_fk foreign key (calendar_block_id, user_id) references public.calendar_blocks (id, user_id) on delete set null (calendar_block_id),
   constraint execution_sessions_outcome_check check (outcome in ('completed', 'partial', 'stopped', 'distracted', 'blocked', 'skipped')),
   constraint execution_sessions_planned_minutes_check check (planned_minutes is null or planned_minutes >= 0),
   constraint execution_sessions_actual_minutes_check check (actual_minutes is null or actual_minutes >= 0),
