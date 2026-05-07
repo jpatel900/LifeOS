@@ -20,15 +20,15 @@ Large, ambiguous tasks usually fail at the **sense-making** stage, not the execu
 
 The system exists to help with:
 
-|Problem|System Response|
-|-|-|
-|“I don’t know where to start.”|Generate the smallest useful next move.|
-|“I don’t know what this task contains.”|Break messy input into tasks, projects, blockers, and unknowns.|
-|“I don’t know how long this will take.”|Estimate ranges, not fake-precise numbers.|
-|“I don’t know what matters most.”|Score against explicit and learned priorities.|
-|“I don’t know what I don’t know.”|Surface missing information and clarification questions.|
-|“I plan, then reality ruins it.”|Use rolling-wave planning: detail the near term, keep later work flexible.|
-|“I keep mixing work/personal/volunteer priorities.”|Scope everything by life area.|
+| Problem                                             | System Response                                                            |
+| --------------------------------------------------- | -------------------------------------------------------------------------- |
+| “I don’t know where to start.”                      | Generate the smallest useful next move.                                    |
+| “I don’t know what this task contains.”             | Break messy input into tasks, projects, blockers, and unknowns.            |
+| “I don’t know how long this will take.”             | Estimate ranges, not fake-precise numbers.                                 |
+| “I don’t know what matters most.”                   | Score against explicit and learned priorities.                             |
+| “I don’t know what I don’t know.”                   | Surface missing information and clarification questions.                   |
+| “I plan, then reality ruins it.”                    | Use rolling-wave planning: detail the near term, keep later work flexible. |
+| “I keep mixing work/personal/volunteer priorities.” | Scope everything by life area.                                             |
 
 The deeper product idea:
 
@@ -52,33 +52,33 @@ The deeper product idea:
 
 AI may:
 
-* parse
-* classify
-* summarize
-* suggest
-* score
-* explain
-* warn
-* propose
+- parse
+- classify
+- summarize
+- suggest
+- score
+- explain
+- warn
+- propose
 
 AI should not silently:
 
-* rewrite priorities
-* mutate the calendar
-* delete/archival decisions
-* change hard scheduling rules
-* expand permissions
-* operate external systems
+- rewrite priorities
+- mutate the calendar
+- delete/archival decisions
+- change hard scheduling rules
+- expand permissions
+- operate external systems
 
 ## 3.2 Clarity beats fake certainty
 
 The system should use:
 
-* confidence levels
-* explicit assumptions
-* reversible actions first
-* ranges instead of exact estimates
-* “what we know / what we do not know” separation
+- confidence levels
+- explicit assumptions
+- reversible actions first
+- ranges instead of exact estimates
+- “what we know / what we do not know” separation
 
 ## 3.3 Area-specific learning beats global mush
 
@@ -104,23 +104,23 @@ Use predefined workflows and tool calls before building autonomous agent webs. A
 
 ## 4.1 This system is
 
-* a private workflow cockpit
-* an ambiguity-to-action engine
-* a planning and scheduling assistant
-* an execution launchpad
-* a review and learning loop
-* a health-monitoring system
-* area-scoped and approval-first
+- a private workflow cockpit
+- an ambiguity-to-action engine
+- a planning and scheduling assistant
+- an execution launchpad
+- a review and learning loop
+- a health-monitoring system
+- area-scoped and approval-first
 
 ## 4.2 This system is not
 
-* a full autonomous life manager
-* a computer-use/browser agent
-* an email/message ingestion system
-* a full conflict-solving scheduler
-* a multi-user project-management platform
-* a system that silently rewrites its own rules
-* a broad web-browsing research agent
+- a full autonomous life manager
+- a computer-use/browser agent
+- an email/message ingestion system
+- a full conflict-solving scheduler
+- a multi-user project-management platform
+- a system that silently rewrites its own rules
+- a broad web-browsing research agent
 
 \---
 
@@ -128,17 +128,17 @@ Use predefined workflows and tool calls before building autonomous agent webs. A
 
 The system is designed around these recurring failure modes:
 
-|Failure Mode|Product Response|
-|-|-|
-|Time blindness|Visible schedules, timers, duration ranges, end-time awareness|
-|Task initiation friction|First tiny step, one-task execution screen, low-risk first move|
-|Overwhelm|Capture → parse → triage instead of giant undifferentiated lists|
-|Working memory overload|Externalize tasks, blockers, reminders, and “what is next”|
-|Poor transitions|Missed-block handling, rescheduling suggestions, transition buffers later|
-|Perfectionism|Definition of done, time caps, “ship at useful enough” prompts|
-|Planning collapse|Rolling-wave planning and review loops|
-|Cross-area contamination|Area-scoped priorities, policies, and learning|
-|Maintenance drag|Health dashboard and repair guides|
+| Failure Mode             | Product Response                                                          |
+| ------------------------ | ------------------------------------------------------------------------- |
+| Time blindness           | Visible schedules, timers, duration ranges, end-time awareness            |
+| Task initiation friction | First tiny step, one-task execution screen, low-risk first move           |
+| Overwhelm                | Capture → parse → triage instead of giant undifferentiated lists          |
+| Working memory overload  | Externalize tasks, blockers, reminders, and “what is next”                |
+| Poor transitions         | Missed-block handling, rescheduling suggestions, transition buffers later |
+| Perfectionism            | Definition of done, time caps, “ship at useful enough” prompts            |
+| Planning collapse        | Rolling-wave planning and review loops                                    |
+| Cross-area contamination | Area-scoped priorities, policies, and learning                            |
+| Maintenance drag         | Health dashboard and repair guides                                        |
 
 \---
 
@@ -150,12 +150,12 @@ Area is not a loose label. It is a first-class scope object.
 
 Examples:
 
-* Main Job
-* Personal
-* Volunteer Work
-* Side Project
-* Family
-* Health
+- Main Job
+- Personal
+- Volunteer Work
+- Side Project
+- Family
+- Health
 
 ## 6.2 Scope hierarchy
 
@@ -169,46 +169,46 @@ Item override
 
 Different areas may have different:
 
-* priorities
-* urgency patterns
-* preferred time windows
-* duration estimates
-* acceptable interruption levels
-* review cadence
-* scheduling softness
-* health thresholds
+- priorities
+- urgency patterns
+- preferred time windows
+- duration estimates
+- acceptable interruption levels
+- review cadence
+- scheduling softness
+- health thresholds
 
 ## 6.4 What should be area-scoped
 
 Most operational and learning objects should carry `area\\\\\\\_id`.
 
-|Object|Scope|
-|-|-|
-|Task|Area|
-|Project|Area|
-|Capture item|Area or unresolved area|
-|Time-block proposal|Area|
-|Calendar block|Area|
-|Review entry|Area or global|
-|Priority profile|Area + global fallback|
-|Time preference profile|Area + global fallback|
-|Duration profile|Area + global fallback|
-|Productivity profile|Area|
-|Triage-learning profile|Area|
-|Suggestion record|Area|
-|Override record|Area|
-|Health incident|Area or system-wide|
-|Approval rule|Global + area override|
+| Object                  | Scope                   |
+| ----------------------- | ----------------------- |
+| Task                    | Area                    |
+| Project                 | Area                    |
+| Capture item            | Area or unresolved area |
+| Time-block proposal     | Area                    |
+| Calendar block          | Area                    |
+| Review entry            | Area or global          |
+| Priority profile        | Area + global fallback  |
+| Time preference profile | Area + global fallback  |
+| Duration profile        | Area + global fallback  |
+| Productivity profile    | Area                    |
+| Triage-learning profile | Area                    |
+| Suggestion record       | Area                    |
+| Override record         | Area                    |
+| Health incident         | Area or system-wide     |
+| Approval rule           | Global + area override  |
 
 ## 6.5 What should stay mostly global
 
-* authentication/session
-* AI provider config
-* calendar connector token
-* global defaults
-* global health thresholds
-* audit conventions
-* core app settings
+- authentication/session
+- AI provider config
+- calendar connector token
+- global defaults
+- global health thresholds
+- audit conventions
+- core app settings
 
 \---
 
@@ -235,15 +235,15 @@ Application Backend
 
 Recommended technical posture:
 
-|Layer|Recommendation|
-|-|-|
-|Frontend|Next.js web app|
-|Hosting|Vercel Hobby for early personal use|
-|Backend/Auth/DB|Supabase|
-|Server functions|Supabase Edge Functions|
-|AI|OpenAI Responses API + Structured Outputs|
-|Calendar|Google Calendar API|
-|Background jobs|None by default; minimal Supabase Cron only if necessary|
+| Layer            | Recommendation                                           |
+| ---------------- | -------------------------------------------------------- |
+| Frontend         | Next.js web app                                          |
+| Hosting          | Vercel Hobby for early personal use                      |
+| Backend/Auth/DB  | Supabase                                                 |
+| Server functions | Supabase Edge Functions                                  |
+| AI               | OpenAI Responses API + Structured Outputs                |
+| Calendar         | Google Calendar API                                      |
+| Background jobs  | None by default; minimal Supabase Cron only if necessary |
 
 Supabase Row Level Security can combine with Supabase Auth for end-to-end user security from browser to database, and Supabase Edge Functions are server-side TypeScript functions suitable for third-party integrations. ([Supabase](https://supabase.com/docs/guides/database/postgres/row-level-security?utm_source=chatgpt.com))
 
@@ -257,26 +257,26 @@ Supabase Row Level Security can combine with Supabase Auth for end-to-end user s
 
 Inputs:
 
-* text dump
-* audio dump
-* optional manual area selection
+- text dump
+- audio dump
+- optional manual area selection
 
 System actions:
 
-* transcribe audio if needed
-* parse into structured drafts
-* infer area
-* assign confidence
-* route ambiguous items to triage
+- transcribe audio if needed
+- parse into structured drafts
+- infer area
+- assign confidence
+- route ambiguous items to triage
 
 Outputs:
 
-* capture item
-* task draft
-* project draft
-* blocker draft
-* proposed time block
-* clarification item
+- capture item
+- task draft
+- project draft
+- blocker draft
+- proposed time block
+- clarification item
 
 Core rule:
 
@@ -290,29 +290,29 @@ Core rule:
 
 Triage dimensions:
 
-* area assignment
-* task vs project
-* priority
-* due date
-* blocker status
-* scheduling intent
-* missing information
+- area assignment
+- task vs project
+- priority
+- due date
+- blocker status
+- scheduling intent
+- missing information
 
 User actions:
 
-* accept
-* edit
-* reject
-* split
-* merge
-* reassign area
-* defer
-* mark unclear
+- accept
+- edit
+- reject
+- split
+- merge
+- reassign area
+- defer
+- mark unclear
 
 Learning impact:
 
-* corrections feed the relevant area’s triage-learning model
-* corrections should not blindly affect all areas
+- corrections feed the relevant area’s triage-learning model
+- corrections should not blindly affect all areas
 
 \---
 
@@ -322,30 +322,30 @@ Learning impact:
 
 Views:
 
-* day view
-* week view
-* area filter
-* proposed vs confirmed blocks
-* conflict flags
-* missed-block actions
+- day view
+- week view
+- area filter
+- proposed vs confirmed blocks
+- conflict flags
+- missed-block actions
 
 Actions:
 
-* approve proposal
-* edit proposal
-* reject proposal
-* mark missed
-* reschedule
-* mark productive
-* mark distracted
-* compare actual duration with suggested duration
+- approve proposal
+- edit proposal
+- reject proposal
+- mark missed
+- reschedule
+- mark productive
+- mark distracted
+- compare actual duration with suggested duration
 
 Calendar behavior:
 
-* create proposals locally
-* check availability
-* flag conflicts
-* require approval before Google Calendar write
+- create proposals locally
+- check availability
+- flag conflicts
+- require approval before Google Calendar write
 
 \---
 
@@ -355,27 +355,27 @@ Calendar behavior:
 
 Elements:
 
-* current area
-* current task
-* first tiny step
-* timer
-* pause button
-* distracted button
-* stuck button
-* quick capture sidebar
-* anti-perfectionism prompt
-* session-end summary
+- current area
+- current task
+- first tiny step
+- timer
+- pause button
+- distracted button
+- stuck button
+- quick capture sidebar
+- anti-perfectionism prompt
+- session-end summary
 
 Logged data:
 
-* planned duration
-* actual duration
-* paused time
-* distraction estimate
-* productivity rating
-* outcome
-* task type
-* area
+- planned duration
+- actual duration
+- paused time
+- distraction estimate
+- productivity rating
+- outcome
+- task type
+- area
 
 Design rule:
 
@@ -389,24 +389,24 @@ Design rule:
 
 Daily review:
 
-* done
-* missed
-* moved
-* dropped
-* blocked
-* surprising friction
-* surprising ease
+- done
+- missed
+- moved
+- dropped
+- blocked
+- surprising friction
+- surprising ease
 
 Weekly review:
 
-* backlog health
-* stale tasks
-* missed blocks
-* accepted/rejected suggestions
-* priority drift
-* time-window drift
-* duration-estimation drift
-* area-specific policy suggestions
+- backlog health
+- stale tasks
+- missed blocks
+- accepted/rejected suggestions
+- priority drift
+- time-window drift
+- duration-estimation drift
+- area-specific policy suggestions
 
 Review should answer two questions:
 
@@ -421,26 +421,26 @@ Review should answer two questions:
 
 Views:
 
-* system-wide health
-* per-area health
-* subsystem health
-* meta-model health
+- system-wide health
+- per-area health
+- subsystem health
+- meta-model health
 
 Status badge:
 
-* 🟢 healthy
-* 🟡 attention needed
-* 🔴 repair needed
+- 🟢 healthy
+- 🟡 attention needed
+- 🔴 repair needed
 
 Health screen should show:
 
-* what is failing
-* why it matters
-* severity
-* last successful check
-* repair steps
-* affected area/subsystem
-* whether user action is required
+- what is failing
+- why it matters
+- severity
+- last successful check
+- repair steps
+- affected area/subsystem
+- whether user action is required
 
 \---
 
@@ -528,25 +528,25 @@ self-observing
 
 Purpose:
 
-* score incoming work against declared and learned priorities
+- score incoming work against declared and learned priorities
 
 Inputs:
 
-* declared priorities
-* user accept/reject choices
-* what gets scheduled first
-* what gets deferred repeatedly
-* deadlines
-* task type
-* area
+- declared priorities
+- user accept/reject choices
+- what gets scheduled first
+- what gets deferred repeatedly
+- deadlines
+- task type
+- area
 
 Outputs:
 
-* priority score
-* confidence
-* rationale
-* uncertainty flag
-* suggested priority update
+- priority score
+- confidence
+- rationale
+- uncertainty flag
+- suggested priority update
 
 Hard rule:
 
@@ -558,31 +558,31 @@ Hard rule:
 
 Purpose:
 
-* learn when each area works best
+- learn when each area works best
 
 Inputs:
 
-* declared work windows
-* sleep windows
-* productive ratings
-* missed-block data
-* time-of-day outcomes
-* task type
+- declared work windows
+- sleep windows
+- productive ratings
+- missed-block data
+- time-of-day outcomes
+- task type
 
 Outputs:
 
-* preferred windows
-* poor-fit windows
-* scheduling suggestions
-* proposed preference changes
+- preferred windows
+- poor-fit windows
+- scheduling suggestions
+- proposed preference changes
 
 Example:
 
-|Area|Possible Learned Pattern|
-|-|-|
-|Main Job|Deep work strongest 9:30 AM–1:00 PM|
-|Volunteer Work|Coordination works better evenings|
-|Personal|Errands fit late afternoon better|
+| Area           | Possible Learned Pattern            |
+| -------------- | ----------------------------------- |
+| Main Job       | Deep work strongest 9:30 AM–1:00 PM |
+| Volunteer Work | Coordination works better evenings  |
+| Personal       | Errands fit late afternoon better   |
 
 \---
 
@@ -590,25 +590,25 @@ Example:
 
 Purpose:
 
-* improve future duration estimates
+- improve future duration estimates
 
 Inputs:
 
-* planned duration
-* actual duration
-* paused time
-* distraction time
-* task type
-* area
-* manual overrides
+- planned duration
+- actual duration
+- paused time
+- distraction time
+- task type
+- area
+- manual overrides
 
 Outputs:
 
-* expected duration range
-* confidence band
-* underestimation warning
-* overestimation warning
-* task-type duration priors
+- expected duration range
+- confidence band
+- underestimation warning
+- overestimation warning
+- task-type duration priors
 
 Preferred estimate format:
 
@@ -633,22 +633,22 @@ That is spreadsheet cosplay.
 
 Purpose:
 
-* reduce future clarification burden
+- reduce future clarification burden
 
 Inputs:
 
-* user corrections
-* area reassignments
-* task/project flips
-* repeated ambiguity types
-* rejected AI suggestions
+- user corrections
+- area reassignments
+- task/project flips
+- repeated ambiguity types
+- rejected AI suggestions
 
 Outputs:
 
-* better area inference
-* better parsing thresholds
-* better clarification questions
-* fewer repeated errors
+- better area inference
+- better parsing thresholds
+- better clarification questions
+- fewer repeated errors
 
 This is one of the safest places for bounded self-adjustment.
 
@@ -658,24 +658,24 @@ This is one of the safest places for bounded self-adjustment.
 
 Purpose:
 
-* turn behavior into explicit insight
+- turn behavior into explicit insight
 
 Inputs:
 
-* review entries
-* missed blocks
-* duration errors
-* overrides
-* suggestion acceptance/rejection
-* productivity ratings
+- review entries
+- missed blocks
+- duration errors
+- overrides
+- suggestion acceptance/rejection
+- productivity ratings
 
 Outputs:
 
-* weekly insights
-* friction hypotheses
-* cleanup suggestions
-* policy suggestions
-* health warnings
+- weekly insights
+- friction hypotheses
+- cleanup suggestions
+- policy suggestions
+- health warnings
 
 \---
 
@@ -687,37 +687,37 @@ Health should be mostly deterministic. AI can explain the result, but it should 
 
 Tracks:
 
-* auth status
-* database reachability
-* AI parse success rate
-* calendar connector status
-* failed writes
-* open incidents
-* stale checks
+- auth status
+- database reachability
+- AI parse success rate
+- calendar connector status
+- failed writes
+- open incidents
+- stale checks
 
 ## 11.2 Area operational health
 
 Tracks:
 
-* stale task ratio
-* proposal acceptance rate
-* missed-block rate
-* review completion rate
-* backlog drift
-* override frequency
+- stale task ratio
+- proposal acceptance rate
+- missed-block rate
+- review completion rate
+- backlog drift
+- override frequency
 
 ## 11.3 Meta-model health
 
 Tracks:
 
-|Meta-Model|Health Signals|
-|-|-|
-|Priority model|override rate, accepted classification rate, drift|
-|Duration model|estimate error, underestimation bias, confidence calibration|
-|Time preference model|block acceptance rate, productivity by time window|
-|Triage model|correction rate, repeated ambiguity types|
-|Scheduler|proposal acceptance, conflict rate, reschedule churn|
-|Capture parser|parse success, edit rate, clarification rate|
+| Meta-Model            | Health Signals                                               |
+| --------------------- | ------------------------------------------------------------ |
+| Priority model        | override rate, accepted classification rate, drift           |
+| Duration model        | estimate error, underestimation bias, confidence calibration |
+| Time preference model | block acceptance rate, productivity by time window           |
+| Triage model          | correction rate, repeated ambiguity types                    |
+| Scheduler             | proposal acceptance, conflict rate, reschedule churn         |
+| Capture parser        | parse success, edit rate, clarification rate                 |
 
 \---
 
@@ -727,39 +727,39 @@ Tracks:
 
 The system may automatically:
 
-* parse input
-* infer area
-* classify tasks
-* suggest priorities
-* suggest next actions
-* suggest time blocks
-* flag conflicts
-* compute health
-* generate repair guidance
-* summarize reviews
+- parse input
+- infer area
+- classify tasks
+- suggest priorities
+- suggest next actions
+- suggest time blocks
+- flag conflicts
+- compute health
+- generate repair guidance
+- summarize reviews
 
 ## 12.2 Approval required
 
 The system must require approval before:
 
-* creating/updating Google Calendar events
-* changing core priority profiles
-* changing preferred work/sleep windows
-* applying major scheduling policies
-* deleting/archiving important items
-* changing connector permissions
-* changing external-write behavior
+- creating/updating Google Calendar events
+- changing core priority profiles
+- changing preferred work/sleep windows
+- applying major scheduling policies
+- deleting/archiving important items
+- changing connector permissions
+- changing external-write behavior
 
 ## 12.3 Explicitly out of autonomous scope for v1
 
-* email ingestion
-* message ingestion
-* autonomous calendar rewriting
-* full conflict solving
-* browser/computer-use automation
-* broad internet browsing
-* multi-agent orchestration
-* self-healing without user visibility
+- email ingestion
+- message ingestion
+- autonomous calendar rewriting
+- full conflict solving
+- browser/computer-use automation
+- broad internet browsing
+- multi-agent orchestration
+- self-healing without user visibility
 
 \---
 
@@ -771,28 +771,28 @@ The system must require approval before:
 
 Fields:
 
-* `id`
-* `user\\\\\\\_id`
-* `name`
-* `slug`
-* `description`
-* `color`
-* `icon`
-* `sort\\\\\\\_order`
-* `is\\\\\\\_active`
-* `created\\\\\\\_at`
-* `updated\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `name`
+- `slug`
+- `description`
+- `color`
+- `icon`
+- `sort\\\\\\\_order`
+- `is\\\\\\\_active`
+- `created\\\\\\\_at`
+- `updated\\\\\\\_at`
 
 ### `global\\\\\\\_defaults`
 
 Fields:
 
-* `user\\\\\\\_id`
-* `default\\\\\\\_priority\\\\\\\_policy\\\\\\\_json`
-* `default\\\\\\\_time\\\\\\\_policy\\\\\\\_json`
-* `default\\\\\\\_duration\\\\\\\_policy\\\\\\\_json`
-* `default\\\\\\\_health\\\\\\\_thresholds\\\\\\\_json`
-* `default\\\\\\\_approval\\\\\\\_rules\\\\\\\_json`
+- `user\\\\\\\_id`
+- `default\\\\\\\_priority\\\\\\\_policy\\\\\\\_json`
+- `default\\\\\\\_time\\\\\\\_policy\\\\\\\_json`
+- `default\\\\\\\_duration\\\\\\\_policy\\\\\\\_json`
+- `default\\\\\\\_health\\\\\\\_thresholds\\\\\\\_json`
+- `default\\\\\\\_approval\\\\\\\_rules\\\\\\\_json`
 
 \---
 
@@ -800,96 +800,96 @@ Fields:
 
 ### `capture\\\\\\\_items`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `raw\\\\\\\_text`
-* `raw\\\\\\\_audio\\\\\\\_ref`
-* `inferred\\\\\\\_area\\\\\\\_confidence`
-* `status`
-* `created\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `raw\\\\\\\_text`
+- `raw\\\\\\\_audio\\\\\\\_ref`
+- `inferred\\\\\\\_area\\\\\\\_confidence`
+- `status`
+- `created\\\\\\\_at`
 
 ### `tasks`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `project\\\\\\\_id`
-* `source\\\\\\\_capture\\\\\\\_item\\\\\\\_id`
-* `title`
-* `description`
-* `status`
-* `priority\\\\\\\_score`
-* `priority\\\\\\\_confidence`
-* `task\\\\\\\_type`
-* `energy\\\\\\\_type`
-* `estimated\\\\\\\_minutes\\\\\\\_low`
-* `estimated\\\\\\\_minutes\\\\\\\_high`
-* `due\\\\\\\_at`
-* `created\\\\\\\_at`
-* `updated\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `project\\\\\\\_id`
+- `source\\\\\\\_capture\\\\\\\_item\\\\\\\_id`
+- `title`
+- `description`
+- `status`
+- `priority\\\\\\\_score`
+- `priority\\\\\\\_confidence`
+- `task\\\\\\\_type`
+- `energy\\\\\\\_type`
+- `estimated\\\\\\\_minutes\\\\\\\_low`
+- `estimated\\\\\\\_minutes\\\\\\\_high`
+- `due\\\\\\\_at`
+- `created\\\\\\\_at`
+- `updated\\\\\\\_at`
 
 ### `projects`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `title`
-* `description`
-* `status`
-* `created\\\\\\\_at`
-* `updated\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `title`
+- `description`
+- `status`
+- `created\\\\\\\_at`
+- `updated\\\\\\\_at`
 
 ### `time\\\\\\\_block\\\\\\\_proposals`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `task\\\\\\\_id`
-* `proposed\\\\\\\_start`
-* `proposed\\\\\\\_end`
-* `rationale\\\\\\\_json`
-* `conflict\\\\\\\_flag`
-* `status`
-* `created\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `task\\\\\\\_id`
+- `proposed\\\\\\\_start`
+- `proposed\\\\\\\_end`
+- `rationale\\\\\\\_json`
+- `conflict\\\\\\\_flag`
+- `status`
+- `created\\\\\\\_at`
 
 ### `calendar\\\\\\\_blocks`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `proposal\\\\\\\_id`
-* `task\\\\\\\_id`
-* `google\\\\\\\_event\\\\\\\_id`
-* `start\\\\\\\_at`
-* `end\\\\\\\_at`
-* `status`
-* `created\\\\\\\_at`
-* `updated\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `proposal\\\\\\\_id`
+- `task\\\\\\\_id`
+- `google\\\\\\\_event\\\\\\\_id`
+- `start\\\\\\\_at`
+- `end\\\\\\\_at`
+- `status`
+- `created\\\\\\\_at`
+- `updated\\\\\\\_at`
 
 ### `execution\\\\\\\_sessions`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `task\\\\\\\_id`
-* `calendar\\\\\\\_block\\\\\\\_id`
-* `planned\\\\\\\_minutes`
-* `actual\\\\\\\_minutes`
-* `paused\\\\\\\_minutes`
-* `distraction\\\\\\\_minutes`
-* `productivity\\\\\\\_rating`
-* `outcome`
-* `created\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `task\\\\\\\_id`
+- `calendar\\\\\\\_block\\\\\\\_id`
+- `planned\\\\\\\_minutes`
+- `actual\\\\\\\_minutes`
+- `paused\\\\\\\_minutes`
+- `distraction\\\\\\\_minutes`
+- `productivity\\\\\\\_rating`
+- `outcome`
+- `created\\\\\\\_at`
 
 ### `review\\\\\\\_entries`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `review\\\\\\\_type`
-* `summary\\\\\\\_json`
-* `created\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `review\\\\\\\_type`
+- `summary\\\\\\\_json`
+- `created\\\\\\\_at`
 
 \---
 
@@ -897,63 +897,63 @@ Fields:
 
 ### `priority\\\\\\\_profiles`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `declared\\\\\\\_policy\\\\\\\_json`
-* `learned\\\\\\\_policy\\\\\\\_json`
-* `last\\\\\\\_reviewed\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `declared\\\\\\\_policy\\\\\\\_json`
+- `learned\\\\\\\_policy\\\\\\\_json`
+- `last\\\\\\\_reviewed\\\\\\\_at`
 
 ### `time\\\\\\\_preference\\\\\\\_profiles`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `declared\\\\\\\_windows\\\\\\\_json`
-* `learned\\\\\\\_windows\\\\\\\_json`
-* `last\\\\\\\_reviewed\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `declared\\\\\\\_windows\\\\\\\_json`
+- `learned\\\\\\\_windows\\\\\\\_json`
+- `last\\\\\\\_reviewed\\\\\\\_at`
 
 ### `duration\\\\\\\_profiles`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `task\\\\\\\_type`
-* `estimate\\\\\\\_stats\\\\\\\_json`
-* `last\\\\\\\_updated\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `task\\\\\\\_type`
+- `estimate\\\\\\\_stats\\\\\\\_json`
+- `last\\\\\\\_updated\\\\\\\_at`
 
 ### `triage\\\\\\\_learning\\\\\\\_profiles`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `correction\\\\\\\_patterns\\\\\\\_json`
-* `confidence\\\\\\\_thresholds\\\\\\\_json`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `correction\\\\\\\_patterns\\\\\\\_json`
+- `confidence\\\\\\\_thresholds\\\\\\\_json`
 
 ### `suggestion\\\\\\\_records`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `suggestion\\\\\\\_type`
-* `subject\\\\\\\_type`
-* `subject\\\\\\\_id`
-* `suggestion\\\\\\\_json`
-* `status`
-* `created\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `suggestion\\\\\\\_type`
+- `subject\\\\\\\_type`
+- `subject\\\\\\\_id`
+- `suggestion\\\\\\\_json`
+- `status`
+- `created\\\\\\\_at`
 
 ### `override\\\\\\\_records`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `subject\\\\\\\_type`
-* `subject\\\\\\\_id`
-* `override\\\\\\\_type`
-* `old\\\\\\\_value\\\\\\\_json`
-* `new\\\\\\\_value\\\\\\\_json`
-* `reason`
-* `created\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `subject\\\\\\\_type`
+- `subject\\\\\\\_id`
+- `override\\\\\\\_type`
+- `old\\\\\\\_value\\\\\\\_json`
+- `new\\\\\\\_value\\\\\\\_json`
+- `reason`
+- `created\\\\\\\_at`
 
 \---
 
@@ -961,36 +961,36 @@ Fields:
 
 ### `health\\\\\\\_checks`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `subsystem`
-* `status`
-* `score`
-* `details\\\\\\\_json`
-* `checked\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `subsystem`
+- `status`
+- `score`
+- `details\\\\\\\_json`
+- `checked\\\\\\\_at`
 
 ### `health\\\\\\\_incidents`
 
-* `id`
-* `user\\\\\\\_id`
-* `area\\\\\\\_id`
-* `subsystem`
-* `severity`
-* `incident\\\\\\\_code`
-* `details\\\\\\\_json`
-* `status`
-* `opened\\\\\\\_at`
-* `closed\\\\\\\_at`
+- `id`
+- `user\\\\\\\_id`
+- `area\\\\\\\_id`
+- `subsystem`
+- `severity`
+- `incident\\\\\\\_code`
+- `details\\\\\\\_json`
+- `status`
+- `opened\\\\\\\_at`
+- `closed\\\\\\\_at`
 
 ### `repair\\\\\\\_guides`
 
-* `id`
-* `subsystem`
-* `incident\\\\\\\_code`
-* `guide\\\\\\\_json`
-* `version`
-* `created\\\\\\\_at`
+- `id`
+- `subsystem`
+- `incident\\\\\\\_code`
+- `guide\\\\\\\_json`
+- `version`
+- `created\\\\\\\_at`
 
 \---
 
@@ -1055,20 +1055,20 @@ pending
 
 Input:
 
-* capture item ID
-* raw text or transcript
-* optional selected area
+- capture item ID
+- raw text or transcript
+- optional selected area
 
 Actions:
 
-* call AI with structured schema
-* infer area
-* extract task/project/blocker/proposal drafts
-* create clarification items if needed
+- call AI with structured schema
+- infer area
+- extract task/project/blocker/proposal drafts
+- create clarification items if needed
 
 Output:
 
-* structured parse result
+- structured parse result
 
 \---
 
@@ -1076,15 +1076,15 @@ Output:
 
 Input:
 
-* draft corrections
-* accept/edit/reject decisions
-* area decisions
+- draft corrections
+- accept/edit/reject decisions
+- area decisions
 
 Actions:
 
-* persist accepted objects
-* log corrections
-* update triage-learning signals
+- persist accepted objects
+- log corrections
+- update triage-learning signals
 
 \---
 
@@ -1092,18 +1092,18 @@ Actions:
 
 Input:
 
-* task ID
-* area context
-* optional date range
+- task ID
+- area context
+- optional date range
 
 Actions:
 
-* fetch task
-* fetch area policy
-* fetch time preferences
-* fetch duration priors
-* query calendar availability
-* generate local proposals only
+- fetch task
+- fetch area policy
+- fetch time preferences
+- fetch duration priors
+- query calendar availability
+- generate local proposals only
 
 \---
 
@@ -1111,15 +1111,15 @@ Actions:
 
 Input:
 
-* proposal ID
-* final start/end
-* user approval
+- proposal ID
+- final start/end
+- user approval
 
 Actions:
 
-* create/update Google Calendar event
-* save `google\\\\\\\_event\\\\\\\_id`
-* log external write
+- create/update Google Calendar event
+- save `google\\\\\\\_event\\\\\\\_id`
+- log external write
 
 \---
 
@@ -1127,18 +1127,18 @@ Actions:
 
 Input:
 
-* block ID
-* outcome
-* actual duration
-* pauses
-* distraction
-* productivity rating
+- block ID
+- outcome
+- actual duration
+- pauses
+- distraction
+- productivity rating
 
 Actions:
 
-* update calendar block
-* create execution session
-* update duration/productivity observations
+- update calendar block
+- create execution session
+- update duration/productivity observations
 
 \---
 
@@ -1146,15 +1146,15 @@ Actions:
 
 Input:
 
-* optional area ID
-* date window
+- optional area ID
+- date window
 
 Actions:
 
-* summarize area/system behavior
-* generate insights
-* create policy suggestions
-* create cleanup suggestions
+- summarize area/system behavior
+- generate insights
+- create policy suggestions
+- create cleanup suggestions
 
 \---
 
@@ -1162,15 +1162,15 @@ Actions:
 
 Input:
 
-* optional subsystem or area
+- optional subsystem or area
 
 Actions:
 
-* check connector/token health
-* check failed writes
-* compute deterministic health metrics
-* create incidents where thresholds are crossed
-* generate repair guidance if needed
+- check connector/token health
+- check failed writes
+- compute deterministic health metrics
+- create incidents where thresholds are crossed
+- generate repair guidance if needed
 
 Supabase Cron can schedule recurring jobs inside Postgres and can invoke Edge Functions periodically, but v1 should keep scheduled jobs minimal. ([Supabase](https://supabase.com/docs/guides/cron?utm_source=chatgpt.com))
 
@@ -1182,41 +1182,41 @@ Supabase Cron can schedule recurring jobs inside Postgres and can invoke Edge Fu
 
 Use:
 
-* free/personal hosting where possible
-* minimal backend services
-* small models for routine parsing/classification
-* AI only when it creates real workflow value
-* no always-on intelligence
+- free/personal hosting where possible
+- minimal backend services
+- small models for routine parsing/classification
+- AI only when it creates real workflow value
+- no always-on intelligence
 
 Vercel’s Hobby plan is free for personal projects, but its cron jobs are limited on Hobby accounts; Vercel may also invoke scheduled jobs within the specified hour rather than exactly at the minute. ([Vercel](https://vercel.com/docs/plans/hobby?utm_source=chatgpt.com))
 
 ## 16.2 Avoid in v1
 
-* realtime voice
-* vector database
-* web search
-* full-calendar sync
-* multi-agent runtime
-* autonomous writes
-* separate paid backend
-* heavy cron dependency
-* advanced analytics warehouse
+- realtime voice
+- vector database
+- web search
+- full-calendar sync
+- multi-agent runtime
+- autonomous writes
+- separate paid backend
+- heavy cron dependency
+- advanced analytics warehouse
 
 ## 16.3 AI cost discipline
 
 Use smaller models for:
 
-* classification
-* area inference
-* basic health narratives
-* low-stakes scoring
+- classification
+- area inference
+- basic health narratives
+- low-stakes scoring
 
 Use stronger models only for:
 
-* complex capture parsing
-* weekly reviews
-* policy suggestions
-* prompt/schema evaluation
+- complex capture parsing
+- weekly reviews
+- policy suggestions
+- prompt/schema evaluation
 
 OpenAI’s current pricing page lists lower rates for GPT-5.4 mini than larger models, so model routing matters for cost control. ([OpenAI](https://openai.com/api/pricing/?utm_source=chatgpt.com))
 
@@ -1226,15 +1226,15 @@ OpenAI’s current pricing page lists lower rates for GPT-5.4 mini than larger m
 
 ## 17.1 Security requirements
 
-* authenticated access only
-* row-level access protection
-* one user owns all operational data
-* minimal Google Calendar scopes
-* external writes logged
-* model output validated
-* secrets stored outside frontend
-* calendar writes approval-gated
-* AI response storage disabled where appropriate
+- authenticated access only
+- row-level access protection
+- one user owns all operational data
+- minimal Google Calendar scopes
+- external writes logged
+- model output validated
+- secrets stored outside frontend
+- calendar writes approval-gated
+- AI response storage disabled where appropriate
 
 OpenAI’s migration docs note that Responses are stored by default and can be disabled with `store: false`, which matters for a private personal workflow system. ([OpenAI Developers](https://developers.openai.com/api/docs/guides/migrate-to-responses?utm_source=chatgpt.com))
 
@@ -1242,18 +1242,18 @@ OpenAI’s migration docs note that Responses are stored by default and can be d
 
 Every user-owned table:
 
-* `select`: only own rows
-* `insert`: only rows with own `user\\\\\\\_id`
-* `update`: only own rows
-* `delete`: only own rows
+- `select`: only own rows
+- `insert`: only rows with own `user\\\\\\\_id`
+- `update`: only own rows
+- `delete`: only own rows
 
 Minimum indexes:
 
-* `(user\\\\\\\_id)` on user-owned tables
-* `(user\\\\\\\_id, area\\\\\\\_id)` on area-scoped tables
-* `(user\\\\\\\_id, status)` on tasks/proposals
-* `(user\\\\\\\_id, start\\\\\\\_at)` on calendar blocks
-* `(user\\\\\\\_id, subsystem, checked\\\\\\\_at desc)` on health checks
+- `(user\\\\\\\_id)` on user-owned tables
+- `(user\\\\\\\_id, area\\\\\\\_id)` on area-scoped tables
+- `(user\\\\\\\_id, status)` on tasks/proposals
+- `(user\\\\\\\_id, start\\\\\\\_at)` on calendar blocks
+- `(user\\\\\\\_id, subsystem, checked\\\\\\\_at desc)` on health checks
 
 \---
 
@@ -1261,51 +1261,51 @@ Minimum indexes:
 
 ## 18.1 Must ship
 
-* multi-area support
-* capture screen
-* triage screen
-* task/project persistence
-* calendar/planning screen
-* local time-block proposals
-* approval-gated Google Calendar writes
-* execute screen
-* session tracking
-* review screen
-* health screen
-* audit trail
-* basic priority/time/duration meta-layer
+- multi-area support
+- capture screen
+- triage screen
+- task/project persistence
+- calendar/planning screen
+- local time-block proposals
+- approval-gated Google Calendar writes
+- execute screen
+- session tracking
+- review screen
+- health screen
+- audit trail
+- basic priority/time/duration meta-layer
 
 ## 18.2 Should ship
 
-* productivity rating on past blocks
-* duration override warnings
-* policy suggestion cards
-* area-aware weekly review
-* repair guide flows
-* persistent health badge
+- productivity rating on past blocks
+- duration override warnings
+- policy suggestion cards
+- area-aware weekly review
+- repair guide flows
+- persistent health badge
 
 ## 18.3 Can wait
 
-* adaptive reminders
-* advanced productivity analytics
-* cross-area load balancing
-* richer incident diagnosis
-* onboarding templates by area
-* background weekly review generation
-* body-doubling / coworking
-* commitment contracts
-* context-aware location nudges
+- adaptive reminders
+- advanced productivity analytics
+- cross-area load balancing
+- richer incident diagnosis
+- onboarding templates by area
+- background weekly review generation
+- body-doubling / coworking
+- commitment contracts
+- context-aware location nudges
 
 ## 18.4 Keep out of v1
 
-* email/message ingestion
-* full autonomous rescheduling
-* browser/computer-use automation
-* multi-user collaboration
-* broad internet research
-* full project-management suite
-* plugin architecture
-* “self-healing” automation
+- email/message ingestion
+- full autonomous rescheduling
+- browser/computer-use automation
+- multi-user collaboration
+- broad internet research
+- full project-management suite
+- plugin architecture
+- “self-healing” automation
 
 \---
 
@@ -1326,12 +1326,12 @@ Decide clearly
 
 ## 19.2 Process lanes
 
-|Lane|Purpose|
-|-|-|
-|Architecture lane|Freeze scope, entities, rules, approval gates, and dangerous boundaries|
-|Production lane|Build bounded features in small implementation tickets|
-|Verification lane|Run the app, inspect behavior, debug flows, reduce friction|
-|Hardening lane|Review auth, calendar writes, secrets, RLS, schemas, and migrations|
+| Lane              | Purpose                                                                 |
+| ----------------- | ----------------------------------------------------------------------- |
+| Architecture lane | Freeze scope, entities, rules, approval gates, and dangerous boundaries |
+| Production lane   | Build bounded features in small implementation tickets                  |
+| Verification lane | Run the app, inspect behavior, debug flows, reduce friction             |
+| Hardening lane    | Review auth, calendar writes, secrets, RLS, schemas, and migrations     |
 
 ## 19.3 Build order
 
@@ -1352,15 +1352,15 @@ Do not build in architecture-purity order. Build in value order:
 
 ## 19.4 Hard rules during build
 
-* one repo
-* one schema source of truth
-* one orchestrator pattern
-* tiny tickets
-* no silent external writes
-* no feature without an acceptance test
-* no background job unless it removes real friction
-* no analytics before workflows work
-* no “smart” feature without an explanation surface
+- one repo
+- one schema source of truth
+- one orchestrator pattern
+- tiny tickets
+- no silent external writes
+- no feature without an acceptance test
+- no background job unless it removes real friction
+- no analytics before workflows work
+- no “smart” feature without an explanation surface
 
 \---
 
@@ -1370,56 +1370,56 @@ Do not build in architecture-purity order. Build in value order:
 
 Successful if:
 
-* user can dump audio/text
-* system creates structured drafts
-* area is assigned or triaged
-* missing info is surfaced
-* user can accept/edit/reject outputs
+- user can dump audio/text
+- system creates structured drafts
+- area is assigned or triaged
+- missing info is surfaced
+- user can accept/edit/reject outputs
 
 ## 20.2 Planning
 
 Successful if:
 
-* tasks can become proposed blocks
-* proposals respect area policies
-* conflicts are flagged
-* user can approve/edit/reject
-* approved proposals write to calendar
+- tasks can become proposed blocks
+- proposals respect area policies
+- conflicts are flagged
+- user can approve/edit/reject
+- approved proposals write to calendar
 
 ## 20.3 Execution
 
 Successful if:
 
-* user can start from one task
-* timer/session data works
-* user can mark stuck/distracted/paused/completed
-* execution data feeds learning tables
+- user can start from one task
+- timer/session data works
+- user can mark stuck/distracted/paused/completed
+- execution data feeds learning tables
 
 ## 20.4 Review
 
 Successful if:
 
-* daily review closes loops
-* weekly review summarizes patterns
-* system proposes useful changes
-* area-specific drift is visible
+- daily review closes loops
+- weekly review summarizes patterns
+- system proposes useful changes
+- area-specific drift is visible
 
 ## 20.5 Health
 
 Successful if:
 
-* failures are visible
-* repair guidance is actionable
-* health is shown by subsystem and area
-* AI explains health, but deterministic logic scores it
+- failures are visible
+- repair guidance is actionable
+- health is shown by subsystem and area
+- AI explains health, but deterministic logic scores it
 
 ## 20.6 Overhead
 
 Successful if:
 
-* weekly maintenance remains low
-* user does not need to babysit the system
-* the system does not become its own hobby
+- weekly maintenance remains low
+- user does not need to babysit the system
+- the system does not become its own hobby
 
 \---
 
@@ -1465,15 +1465,15 @@ Agile project management reinforces the same principle: break work into smaller 
 
 This sequence should become a first-class workflow in the product:
 
-|Stage|Goal|System Role|
-|-|-|-|
-|Dump|Get the mess out of the head|Capture raw thoughts/audio/text|
-|Diagnose|Identify what kind of problem this is|Classify ambiguity, complexity, urgency, uncertainty|
-|Bound|Set constraints|Clarify time, energy, budget, quality, area, risk tolerance|
-|Slice|Break the work into chunks|Create workstreams, tasks, blockers, first moves|
-|Discover|Reduce unknowns|Generate questions, research tasks, dependency checks|
-|Act|Start safely|Propose a first short execution wave|
-|Review|Learn from reality|Update estimates, priorities, assumptions, and next wave|
+| Stage    | Goal                                  | System Role                                                 |
+| -------- | ------------------------------------- | ----------------------------------------------------------- |
+| Dump     | Get the mess out of the head          | Capture raw thoughts/audio/text                             |
+| Diagnose | Identify what kind of problem this is | Classify ambiguity, complexity, urgency, uncertainty        |
+| Bound    | Set constraints                       | Clarify time, energy, budget, quality, area, risk tolerance |
+| Slice    | Break the work into chunks            | Create workstreams, tasks, blockers, first moves            |
+| Discover | Reduce unknowns                       | Generate questions, research tasks, dependency checks       |
+| Act      | Start safely                          | Propose a first short execution wave                        |
+| Review   | Learn from reality                    | Update estimates, priorities, assumptions, and next wave    |
 
 This also mirrors the diverge/converge pattern: first expand possibilities and interpretations, then narrow into decisions and action. Nielsen Norman Group describes diverge/converge as first generating or analyzing independently, then converging toward a collective output. ([Nielsen Norman Group](https://www.nngroup.com/articles/diverge-converge/?utm_source=chatgpt.com))
 
@@ -1510,12 +1510,12 @@ Whenever the user captures a large/unclear task, the system should produce:
 
 The AI must:
 
-* separate facts, assumptions, guesses, and decisions
-* use confidence levels
-* avoid exact timelines when work is unknown
-* prefer ranges over single-point estimates
-* prioritize reversible actions before irreversible commitments
-* identify what must be learned before committing
+- separate facts, assumptions, guesses, and decisions
+- use confidence levels
+- avoid exact timelines when work is unknown
+- prefer ranges over single-point estimates
+- prioritize reversible actions before irreversible commitments
+- identify what must be learned before committing
 
 ## Best First-Move Rule
 
@@ -1543,67 +1543,67 @@ Add these entities or fields.
 
 Fields:
 
-* `id`
-* `user\\\_id`
-* `area\\\_id`
-* `source\\\_capture\\\_item\\\_id`
-* `problem\\\_type`
-* `complexity\\\_level`
-* `knowns\\\_json`
-* `unknowns\\\_json`
-* `assumptions\\\_json`
-* `constraints\\\_json`
-* `risks\\\_json`
-* `dependencies\\\_json`
-* `confidence\\\_score`
-* `recommended\\\_first\\\_move`
-* `created\\\_at`
+- `id`
+- `user\\\_id`
+- `area\\\_id`
+- `source\\\_capture\\\_item\\\_id`
+- `problem\\\_type`
+- `complexity\\\_level`
+- `knowns\\\_json`
+- `unknowns\\\_json`
+- `assumptions\\\_json`
+- `constraints\\\_json`
+- `risks\\\_json`
+- `dependencies\\\_json`
+- `confidence\\\_score`
+- `recommended\\\_first\\\_move`
+- `created\\\_at`
 
 ## `discovery\\\_questions`
 
 Fields:
 
-* `id`
-* `user\\\_id`
-* `area\\\_id`
-* `source\\\_item\\\_id`
-* `question`
-* `why\\\_it\\\_matters`
-* `answer\\\_status`
-* `answer\\\_text`
-* `created\\\_at`
-* `resolved\\\_at`
+- `id`
+- `user\\\_id`
+- `area\\\_id`
+- `source\\\_item\\\_id`
+- `question`
+- `why\\\_it\\\_matters`
+- `answer\\\_status`
+- `answer\\\_text`
+- `created\\\_at`
+- `resolved\\\_at`
 
 ## `first\\\_wave\\\_plans`
 
 Fields:
 
-* `id`
-* `user\\\_id`
-* `area\\\_id`
-* `source\\\_item\\\_id`
-* `time\\\_horizon`
-* `goal`
-* `actions\\\_json`
-* `not\\\_yet\\\_json`
-* `success\\\_condition`
-* `review\\\_trigger`
-* `created\\\_at`
+- `id`
+- `user\\\_id`
+- `area\\\_id`
+- `source\\\_item\\\_id`
+- `time\\\_horizon`
+- `goal`
+- `actions\\\_json`
+- `not\\\_yet\\\_json`
+- `success\\\_condition`
+- `review\\\_trigger`
+- `created\\\_at`
 
 ## `assumption\\\_logs`
 
 Fields:
 
-* `id`
-* `user\\\_id`
-* `area\\\_id`
-* `subject\\\_type`
-* `subject\\\_id`
-* `assumption\\\_text`
-* `confidence`
-* `status`
-* `validated\\\_at`
-* `invalidated\\\_at`
+- `id`
+- `user\\\_id`
+- `area\\\_id`
+- `subject\\\_type`
+- `subject\\\_id`
+- `assumption\\\_text`
+- `confidence`
+- `status`
+- `validated\\\_at`
+- `invalidated\\\_at`
 
 This matters because assumptions must become trackable objects, not hidden prompt residue.
 
@@ -1615,10 +1615,10 @@ This matters because assumptions must become trackable objects, not hidden promp
 
 Current capture should support two modes:
 
-|Mode|Use Case|Output|
-|-|-|-|
-|Quick Capture|Simple task or reminder|Task/project/block draft|
-|Sense-Making Capture|Big, unclear, messy work|Ambiguity assessment + first-wave plan|
+| Mode                 | Use Case                 | Output                                 |
+| -------------------- | ------------------------ | -------------------------------------- |
+| Quick Capture        | Simple task or reminder  | Task/project/block draft               |
+| Sense-Making Capture | Big, unclear, messy work | Ambiguity assessment + first-wave plan |
 
 The app should detect when the input is ambiguous and suggest:
 
@@ -1630,45 +1630,45 @@ Triage should not only ask “task or project?”
 
 It should also ask:
 
-* Is the objective clear?
-* Is this actually multiple workstreams?
-* Is the area correct?
-* Is there enough information to schedule it?
-* Is this ready for execution, or still discovery?
-* What is the first reversible move?
+- Is the objective clear?
+- Is this actually multiple workstreams?
+- Is the area correct?
+- Is there enough information to schedule it?
+- Is this ready for execution, or still discovery?
+- What is the first reversible move?
 
 ## Planning Screen: Add Rolling-Wave Plans
 
 Planning should separate:
 
-|Planning Level|Detail Level|
-|-|-|
-|First wave|detailed|
-|Later waves|rough|
-|Unknown-dependent work|parked until discovery|
-|Irreversible commitments|blocked until confidence improves|
+| Planning Level           | Detail Level                      |
+| ------------------------ | --------------------------------- |
+| First wave               | detailed                          |
+| Later waves              | rough                             |
+| Unknown-dependent work   | parked until discovery            |
+| Irreversible commitments | blocked until confidence improves |
 
 ## Execute Screen: Add First-Move Launch
 
 For ambiguous or high-friction tasks, execution should show:
 
-* first tiny step
-* why this step matters
-* expected duration range
-* stop condition
-* “good enough for now” definition
-* next review point
+- first tiny step
+- why this step matters
+- expected duration range
+- stop condition
+- “good enough for now” definition
+- next review point
 
 ## Review Screen: Add Reality Feedback
 
 Daily/weekly review should ask:
 
-* Which assumptions were wrong?
-* Which estimates were off?
-* Which tasks were secretly bigger?
-* Which first moves created momentum?
-* Which plans were planning theatre?
-* What should be re-sliced?
+- Which assumptions were wrong?
+- Which estimates were off?
+- Which tasks were secretly bigger?
+- Which first moves created momentum?
+- Which plans were planning theatre?
+- What should be re-sliced?
 
 This is where the system learns from reality instead of worshipping the original plan.
 
@@ -1684,18 +1684,18 @@ CHADD describes time blindness as affecting punctuality, deadlines, bill payment
 
 ## Executive-Function Design Requirements
 
-|Need|Product Requirement|
-|-|-|
-|Time blindness|visual timelines, countdown timers, end-time prediction, duration ranges|
-|Task initiation|first tiny step, breakdown button, “pick next useful task”|
-|Sequencing|step-by-step task playlists, next-step handoff|
-|Working memory|always-visible current task, quick capture sidebar, widgets later|
-|Distraction|one-task execution mode, focus timer, distraction logging|
-|Motivation|small wins, completion feedback, progress visibility|
-|Flexibility|missed-block recovery, reschedule suggestions, forgiving planning|
-|Overwhelm reduction|visual structure, minimal daily list, area filters|
-|Energy regulation|energy labels, break prompts, task-energy matching|
-|Personalization|area-specific preferences, icons, colors, work styles|
+| Need                | Product Requirement                                                      |
+| ------------------- | ------------------------------------------------------------------------ |
+| Time blindness      | visual timelines, countdown timers, end-time prediction, duration ranges |
+| Task initiation     | first tiny step, breakdown button, “pick next useful task”               |
+| Sequencing          | step-by-step task playlists, next-step handoff                           |
+| Working memory      | always-visible current task, quick capture sidebar, widgets later        |
+| Distraction         | one-task execution mode, focus timer, distraction logging                |
+| Motivation          | small wins, completion feedback, progress visibility                     |
+| Flexibility         | missed-block recovery, reschedule suggestions, forgiving planning        |
+| Overwhelm reduction | visual structure, minimal daily list, area filters                       |
+| Energy regulation   | energy labels, break prompts, task-energy matching                       |
+| Personalization     | area-specific preferences, icons, colors, work styles                    |
 
 Apps like Tiimo emphasize visual timers, AI checklists, flexible scheduling, widgets, and focus timers; Goblin Tools focuses on breaking down overwhelming tasks; and Llama Life uses timeboxing/countdown timers to support focusing on one task at a time. These are not products to copy wholesale, but they reveal useful design patterns. ([Tiimo](https://www.tiimoapp.com/?utm_source=chatgpt.com))
 
@@ -1705,41 +1705,41 @@ Apps like Tiimo emphasize visual timers, AI checklists, flexible scheduling, wid
 
 ## V1 Must-Have
 
-|Feature|Why|
-|-|-|
-|Visual calendar/planning screen|Makes time visible|
-|Countdown timer in Execute screen|Creates time boundary|
-|First tiny step|Reduces task initiation friction|
-|Task breakdown|Turns vague blobs into executable actions|
-|One-task execution mode|Reduces overwhelm|
-|Quick capture sidebar|Protects working memory|
-|Missed-block recovery|Makes disruption survivable|
-|Productivity rating|Creates feedback loop|
-|Duration range estimation|Fights time agnosia|
-|Area-specific learning|Prevents mixed-context bad advice|
+| Feature                           | Why                                       |
+| --------------------------------- | ----------------------------------------- |
+| Visual calendar/planning screen   | Makes time visible                        |
+| Countdown timer in Execute screen | Creates time boundary                     |
+| First tiny step                   | Reduces task initiation friction          |
+| Task breakdown                    | Turns vague blobs into executable actions |
+| One-task execution mode           | Reduces overwhelm                         |
+| Quick capture sidebar             | Protects working memory                   |
+| Missed-block recovery             | Makes disruption survivable               |
+| Productivity rating               | Creates feedback loop                     |
+| Duration range estimation         | Fights time agnosia                       |
+| Area-specific learning            | Prevents mixed-context bad advice         |
 
 ## V1.5 Strong Candidates
 
-|Feature|Why|
-|-|-|
-|Friction audit before task|Identifies what will block starting|
-|Auto-prep checklist|Reduces setup friction|
-|Energy-based planning|Schedules work by cognitive load|
-|Transition buffers|Prevents cascade failure|
-|Definition of done|Fights perfectionism|
-|Weekly entropy reset|Prevents backlog rot|
-|WIP limits|Prevents too many active tasks|
+| Feature                    | Why                                 |
+| -------------------------- | ----------------------------------- |
+| Friction audit before task | Identifies what will block starting |
+| Auto-prep checklist        | Reduces setup friction              |
+| Energy-based planning      | Schedules work by cognitive load    |
+| Transition buffers         | Prevents cascade failure            |
+| Definition of done         | Fights perfectionism                |
+| Weekly entropy reset       | Prevents backlog rot                |
+| WIP limits                 | Prevents too many active tasks      |
 
 ## V2 / Later
 
-|Feature|Why Wait|
-|-|-|
-|Body-doubling sessions|Valuable, but adds social/live complexity|
-|Commitment contracts|Useful, but behaviorally sensitive|
-|Context-aware nudges|Risk of notification fatigue|
-|Real-world capture everywhere|High connector complexity|
-|Team/project ADHD layer|Multi-user complexity too early|
-|App/site blocking|Platform-specific and potentially brittle|
+| Feature                       | Why Wait                                  |
+| ----------------------------- | ----------------------------------------- |
+| Body-doubling sessions        | Valuable, but adds social/live complexity |
+| Commitment contracts          | Useful, but behaviorally sensitive        |
+| Context-aware nudges          | Risk of notification fatigue              |
+| Real-world capture everywhere | High connector complexity                 |
+| Team/project ADHD layer       | Multi-user complexity too early           |
+| App/site blocking             | Platform-specific and potentially brittle |
 
 \---
 
@@ -1749,16 +1749,16 @@ The system must explicitly avoid outputs that look impressive but do not create 
 
 ## Bad AI Outputs to Avoid
 
-|Bad Output|Why It Fails|
-|-|-|
-|Exact timelines for unknown work|Fake confidence|
-|Huge task trees|Over-decomposition|
-|Beautiful roadmap with no first action|Decorative nonsense|
-|Generic best practices|Context-free advice|
-|Too many options|Increases overwhelm|
-|Premature optimization|Turns product into a hobby|
-|No confidence labels|Hides uncertainty|
-|No “not yet” list|Encourages scope creep|
+| Bad Output                             | Why It Fails               |
+| -------------------------------------- | -------------------------- |
+| Exact timelines for unknown work       | Fake confidence            |
+| Huge task trees                        | Over-decomposition         |
+| Beautiful roadmap with no first action | Decorative nonsense        |
+| Generic best practices                 | Context-free advice        |
+| Too many options                       | Increases overwhelm        |
+| Premature optimization                 | Turns product into a hobby |
+| No confidence labels                   | Hides uncertainty          |
+| No “not yet” list                      | Encourages scope creep     |
 
 ## Product Rule
 
@@ -1790,25 +1790,25 @@ If it does not include those, it is not a useful plan.
 
 The product succeeds if:
 
-* messy input becomes structured without pretending certainty
-* large ambiguous work gets classified before planning
-* unknowns and assumptions are visible
-* the user receives a first reversible move
-* near-term work is detailed, later work remains rough
-* review updates the next wave based on reality
+- messy input becomes structured without pretending certainty
+- large ambiguous work gets classified before planning
+- unknowns and assumptions are visible
+- the user receives a first reversible move
+- near-term work is detailed, later work remains rough
+- review updates the next wave based on reality
 
 ## Executive-Function Acceptance Criteria
 
 The product succeeds if:
 
-* time becomes more visible
-* starting becomes easier
-* “what now?” is always obvious
-* missed blocks do not collapse the whole day
-* task lists do not become giant guilt museums
-* duration estimates improve over time
-* the system helps recover from disruption without shame-language
-* the system reduces cognitive load instead of adding management overhead
+- time becomes more visible
+- starting becomes easier
+- “what now?” is always obvious
+- missed blocks do not collapse the whole day
+- task lists do not become giant guilt museums
+- duration estimates improve over time
+- the system helps recover from disruption without shame-language
+- the system reduces cognitive load instead of adding management overhead
 
 \---
 
@@ -1851,4 +1851,3 @@ Low autonomy for external writes and policy changes
 ```
 
 That is the clean integration. The wiki should now be framed as an **ambiguity-to-motion operating system**, not merely a task manager with AI sprinkled on top.
-

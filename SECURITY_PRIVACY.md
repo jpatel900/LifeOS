@@ -19,18 +19,18 @@ Security goals:
 
 ## 2. Data Classification
 
-| Data Type | Sensitivity | Notes |
-|---|---|---|
-| Raw captures | High | May include private thoughts/work details |
-| Audio files | High | Delete after transcription unless user opts in |
-| Tasks/projects | Medium/High | Personal/work operational data |
-| Calendar event IDs | Medium | Links to external provider state |
-| Execution sessions | Medium/High | Behavioral/productivity data |
-| Productivity ratings | Medium | Personal pattern data |
-| AI recommendations | Medium | Derived from private data |
-| Health checks | Low/Medium | May reveal integration status |
-| OAuth tokens | Critical | Server-side only |
-| Service-role key | Critical | Never frontend |
+| Data Type            | Sensitivity | Notes                                          |
+| -------------------- | ----------- | ---------------------------------------------- |
+| Raw captures         | High        | May include private thoughts/work details      |
+| Audio files          | High        | Delete after transcription unless user opts in |
+| Tasks/projects       | Medium/High | Personal/work operational data                 |
+| Calendar event IDs   | Medium      | Links to external provider state               |
+| Execution sessions   | Medium/High | Behavioral/productivity data                   |
+| Productivity ratings | Medium      | Personal pattern data                          |
+| AI recommendations   | Medium      | Derived from private data                      |
+| Health checks        | Low/Medium  | May reveal integration status                  |
+| OAuth tokens         | Critical    | Server-side only                               |
+| Service-role key     | Critical    | Never frontend                                 |
 
 ## 3. Authentication
 
@@ -236,18 +236,18 @@ Later:
 
 ## 12. Threat Model
 
-| Threat | Risk | Mitigation |
-|---|---|---|
-| RLS misconfiguration | Data exposure | RLS tests, deny by default |
-| Service key in frontend | Total compromise | env separation, code review |
-| Calendar auto-write bug | Calendar damage | approval gates, proposal state machine |
-| Prompt injection | Unsafe action suggestion | captured text treated as data |
-| Token leakage in logs | Account compromise | logging policy |
-| AI hallucinated object IDs | Data corruption | validate IDs belong to user |
-| Duplicate calendar writes | Calendar clutter | idempotency and proposal status |
-| Overbroad OAuth scope | Privacy exposure | minimal scopes |
-| Cron runaway | cost/noise | avoid background jobs |
-| Agent-generated unsafe code | regression | AGENTS.md + tests + forbidden zones |
+| Threat                      | Risk                     | Mitigation                             |
+| --------------------------- | ------------------------ | -------------------------------------- |
+| RLS misconfiguration        | Data exposure            | RLS tests, deny by default             |
+| Service key in frontend     | Total compromise         | env separation, code review            |
+| Calendar auto-write bug     | Calendar damage          | approval gates, proposal state machine |
+| Prompt injection            | Unsafe action suggestion | captured text treated as data          |
+| Token leakage in logs       | Account compromise       | logging policy                         |
+| AI hallucinated object IDs  | Data corruption          | validate IDs belong to user            |
+| Duplicate calendar writes   | Calendar clutter         | idempotency and proposal status        |
+| Overbroad OAuth scope       | Privacy exposure         | minimal scopes                         |
+| Cron runaway                | cost/noise               | avoid background jobs                  |
+| Agent-generated unsafe code | regression               | AGENTS.md + tests + forbidden zones    |
 
 ## 13. Privacy UX
 

@@ -1,0 +1,9 @@
+.cursor
+.turbo
+.next
+dist
+node_modules
+coverage
+supabase/**/*.sql
+supabase/config.toml
+pnpm-lock.yaml
