@@ -92,14 +92,15 @@ Adding another backend increases cost, deployment complexity, secrets handling, 
     /health_check
   /seed
 /docs
+  PROJECT_STATE.md
   PROJECT_BRIEF.md
   REQUIREMENTS.md
   ARCHITECTURE.md
   DATA_MODEL.md
+  LIFE_OS_WIKI.md
   UX_FLOWS.md
   TEST_PLAN.md
   SECURITY_PRIVACY.md
-  AGENTS.md
 ```
 
 ## 6. Core Architectural Components
