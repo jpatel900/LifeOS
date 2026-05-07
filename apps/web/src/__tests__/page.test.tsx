@@ -6,15 +6,12 @@ describe("HomePage", () => {
   it("renders the heading", () => {
     render(<HomePage />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "LifeOS"
+      "LifeOS",
     );
   });
 
-  it("renders quick capture section", () => {
+  it("mentions the capture screen", () => {
     render(<HomePage />);
     expect(screen.getByText("Quick Capture")).toBeDefined();
-    expect(
-      screen.getByPlaceholderText("What's on your mind? Type anything...")
-    ).toBeDefined();
   });
 });

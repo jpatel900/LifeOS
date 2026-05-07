@@ -106,6 +106,12 @@ Expected structure:
 
 Keep shared schemas in `/packages/schemas`.
 
+Keep project documentation in `/docs`, except root-level files used by tooling or repository conventions such as `README.md` and `AGENTS.md`.
+
+`/docs/PROJECT_STATE.md` is the handoff file for future agents. At the start of each agent run, read it after `AGENTS.md` to understand current status, recent work, known issues, recommended next tasks, and implementation notes.
+
+After every major update, update `/docs/PROJECT_STATE.md` before finishing the run. Keep it concise and factual: current shipped or implemented behavior, recently completed work, known issues, next recommended tasks, and important implementation notes.
+
 ## 7. Schema and AI Rules
 
 All mutation-producing AI calls must have:
@@ -298,6 +304,7 @@ A task is done when:
 When working as an AI coding agent:
 
 - make small changes
+- read `AGENTS.md` and `docs/PROJECT_STATE.md` before planning substantial work
 - explain risky assumptions
 - prefer simple implementation
 - do not invent features
@@ -305,6 +312,7 @@ When working as an AI coding agent:
 - ask for review when touching dangerous areas
 - run tests before claiming done
 - update docs if architecture/data model changes
+- update `docs/PROJECT_STATE.md` after every major update
 
 If uncertain, choose the safer and simpler path.
 
