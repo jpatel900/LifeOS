@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@lifeos/ui";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 
@@ -25,7 +25,20 @@ function AppChrome({ children }: { children: ReactNode }) {
     submitCaptureText,
   } = useWorkflow();
   const currentArea = state.areas.find((a) => a.id === selectedAreaId) ?? state.areas[0];
-  const now = new Date().toLocaleTimeString();
+  const [now, setNow] = useState("--:--:--");
+
+  useEffect(() => {
+    const formatNow = () => new Date().toLocaleTimeString();
+    setNow(formatNow());
+
+    const intervalId = window.setInterval(() => {
+      setNow(formatNow());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   return (
     <div
