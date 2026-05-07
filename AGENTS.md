@@ -6,7 +6,9 @@ This file is for AI coding agents and future maintainers.
 
 ## Documentation authority
 
-See **README.md** for the canonical documentation order (implementation and product truth). **Architecture Decision Records** in `docs/adr/` amend or clarify **ARCHITECTURE.md** where they conflict. **LIFE_OS_WIKI.md** and **EXTRA_INFO_AND_RULES.md** are **background reference only**, not implementation authority.
+This file has the highest authority for Cursor/Codex agent behavior.
+
+See **README.md** for the canonical documentation order (implementation and product truth). The implementation authority docs are **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, and **TEST_PLAN.md**. **Architecture Decision Records** in `docs/adr/` amend or clarify **ARCHITECTURE.md** where they conflict. **LIFE_OS_WIKI.md** and **EXTRA_INFO_AND_RULES.md** are **background reference only**, not implementation authority.
 
 ## 1. Project Mission
 

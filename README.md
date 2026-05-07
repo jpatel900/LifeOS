@@ -2,7 +2,7 @@
 
 ## Documentation authority order
 
-Authority decreases down the list. higher entries **override** lower ones when they conflict.
+Authority decreases down the list. Higher entries **override** lower ones when they conflict.
 
 1. **AGENTS.md** — Agent operating rules; highest authority for Cursor/Codex behavior.
 2. **REQUIREMENTS.md** — Product requirements and V1 scope.
@@ -12,6 +12,8 @@ Authority decreases down the list. higher entries **override** lower ones when t
 6. **SECURITY_PRIVACY.md** — Security, privacy, auth, and external-write rules.
 7. **TEST_PLAN.md** — Acceptance tests and validation requirements.
 8. **PROJECT_BRIEF.md** — Product context and thesis.
+
+The implementation authority docs are **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, and **TEST_PLAN.md**. **AGENTS.md** governs agent behavior above all of them.
 
 **Architecture Decision Records (ADRs)** in `docs/adr/` **clarify or amend ARCHITECTURE.md** for the decisions they record. If an ADR conflicts with informal notes elsewhere, **trust the ADR + ARCHITECTURE.md + this table**.
 
