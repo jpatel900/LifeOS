@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   acceptDraft,
   createInitialWorkflowState,
@@ -41,6 +41,35 @@ describe("local mock workflow", () => {
     expect(state.timeBlockProposals).toHaveLength(1);
     expect(state.timeBlockProposals[0].task_id).toBe(state.tasks[0].id);
     expect(state.timeBlockProposals[0].status).toBe("proposed");
+  });
+
+  it("does not reuse generated IDs after a persisted session is reloaded", async () => {
+    vi.resetModules();
+    const firstModule = await import("@/lib/workflow");
+    let persistedState = firstModule.submitCapture(
+      firstModule.createInitialWorkflowState(),
+      {
+        rawText: "Draft the first capture before reload.",
+        areaId: "area-main-job",
+      },
+    );
+
+    vi.resetModules();
+    const reloadedModule = await import("@/lib/workflow");
+    persistedState = reloadedModule.submitCapture(persistedState, {
+      rawText: "Draft the second capture after reload.",
+      areaId: "area-main-job",
+    });
+
+    const captureIds = persistedState.captureItems.map((capture) => capture.id);
+    const draftIds = persistedState.taskDrafts.map((draft) => draft.id);
+    const proposalDraftIds = persistedState.timeBlockProposalDrafts.map(
+      (proposal) => proposal.id,
+    );
+
+    expect(new Set(captureIds).size).toBe(captureIds.length);
+    expect(new Set(draftIds).size).toBe(draftIds.length);
+    expect(new Set(proposalDraftIds).size).toBe(proposalDraftIds.length);
   });
 });
 

@@ -35,8 +35,15 @@ interface SubmitCaptureInput extends ParseCaptureInput {}
 let idCounter = 0;
 
 function nextId(prefix: string) {
+  const randomSuffix = globalThis.crypto?.randomUUID?.();
+  if (randomSuffix) {
+    return `${prefix}-${randomSuffix}`;
+  }
+
   idCounter += 1;
-  return `${prefix}-${idCounter}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2)}-${idCounter}`;
 }
 
 function nowIso() {

@@ -9,6 +9,7 @@ MVP supports task capture, area assignment, and manual scheduling.
 - Task CRUD
 - Area model
 - Basic calendar draft creation
+- Mock workflow ID generation now survives browser reloads without reusing local record IDs.
 
 ## Known issues
 
@@ -25,3 +26,4 @@ MVP supports task capture, area assignment, and manual scheduling.
 
 - Task status and TimeBlock status are separate.
 - Calendar events are never auto-deleted without confirmation.
+- Phase 2 mock workflow state is stored in `sessionStorage`; generated IDs must remain unique across module reloads.
