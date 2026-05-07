@@ -288,6 +288,7 @@ describe("ParseCaptureResponseSchema", () => {
         {
           draft_type: "task_draft",
           title: "Short task",
+          area_slug_suggestion: null,
           confidence: 0.9,
         },
         {
@@ -305,6 +306,12 @@ describe("ParseCaptureResponseSchema", () => {
       ],
       ambiguities: ["Area unclear between Personal and Volunteer"],
     });
+
+    if (!result.success) {
+      console.dir(result.error.format(), { depth: null });
+      console.dir(result.error.issues, { depth: null });
+    }    
+
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.drafts).toHaveLength(3);
@@ -341,6 +348,14 @@ describe("ParseCaptureResponseSchema", () => {
     const result = ParseCaptureResponseSchema.safeParse({
       ...minimalValid(),
       drafts: [{ draft_type: "unknown", title: "x", confidence: 0.5 }],
+    } as unknown);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects task_draft missing area_slug_suggestion", () => {
+    const result = ParseCaptureResponseSchema.safeParse({
+      ...minimalValid(),
+      drafts: [{ draft_type: "task_draft", title: "x", confidence: 0.5 }],
     } as unknown);
     expect(result.success).toBe(false);
   });
