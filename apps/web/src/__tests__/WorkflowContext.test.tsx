@@ -66,6 +66,33 @@ describe("WorkflowProvider storage fallback", () => {
     expect(screen.getByTestId("capture-count")).toHaveTextContent("0");
   });
 
+  it("falls back to initial state when stored workflow state has an invalid shape", () => {
+    replaceSessionStorage({
+      getItem: vi.fn(() =>
+        JSON.stringify({
+          captureItems: [],
+          taskDrafts: [],
+          ambiguityAssessments: [],
+          timeBlockProposalDrafts: [],
+          tasks: [],
+          timeBlockProposals: [],
+          calendarBlocks: [],
+          executionSessions: [],
+          healthChecks: [],
+          reviewLog: [],
+        }),
+      ),
+    });
+
+    render(
+      <WorkflowProvider>
+        <WorkflowProbe />
+      </WorkflowProvider>,
+    );
+
+    expect(screen.getByTestId("capture-count")).toHaveTextContent("0");
+  });
+
   it("keeps the workflow usable when sessionStorage cannot be written", () => {
     replaceSessionStorage({
       setItem: vi.fn(() => {

@@ -10,6 +10,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Cleaned up AppShell/type source-of-truth drift: added a static guard for the single AppShell import boundary and renamed app-local Phase 2 mock/session view models so canonical entity types remain owned by `@lifeos/schemas`.
 - Added route smoke coverage that renders workflow pages through the real app shell/provider instead of only manually wrapping pages in `WorkflowProvider`.
 - Hardened `WorkflowProvider` so blocked or unavailable `sessionStorage` falls back to in-memory workflow state instead of crashing the app.
+- Hardened `WorkflowProvider` hydration so structurally invalid persisted mock workflow JSON falls back to a fresh initial state instead of crashing primary screens.
 - Merged `origin/main` into the inspection branch; resolved conflicts by adopting main’s codebase and dropping unused `getTasksByArea` / `getProposalsByArea` / `getCalendarBlocksByArea` from `mockData.ts` (UI uses workflow context instead).
 - Task CRUD (mock path)
 - Area model
@@ -57,4 +58,4 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
 - `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`.
-- `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.
+- `WorkflowProvider` should remain usable when browser storage is unavailable or contains invalid mock workflow state; persistence failures are intentionally swallowed after ID-counter sync.

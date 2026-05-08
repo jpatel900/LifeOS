@@ -107,6 +107,27 @@ function createSyncedInitialState() {
   return initial;
 }
 
+function isStoredWorkflowState(value: unknown): value is WorkflowState {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const state = value as Partial<Record<keyof WorkflowState, unknown>>;
+  return (
+    Array.isArray(state.areas) &&
+    Array.isArray(state.captureItems) &&
+    Array.isArray(state.taskDrafts) &&
+    Array.isArray(state.ambiguityAssessments) &&
+    Array.isArray(state.timeBlockProposalDrafts) &&
+    Array.isArray(state.tasks) &&
+    Array.isArray(state.timeBlockProposals) &&
+    Array.isArray(state.calendarBlocks) &&
+    Array.isArray(state.executionSessions) &&
+    Array.isArray(state.healthChecks) &&
+    Array.isArray(state.reviewLog)
+  );
+}
+
 function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
     case "submitCapture":
@@ -149,6 +170,10 @@ function loadInitialState() {
     }
 
     const parsed = JSON.parse(stored) as WorkflowState;
+    if (!isStoredWorkflowState(parsed)) {
+      return createSyncedInitialState();
+    }
+
     syncWorkflowIdCounterFromState(parsed);
     return parsed;
   } catch {
