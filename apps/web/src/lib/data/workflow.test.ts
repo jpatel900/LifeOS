@@ -643,8 +643,21 @@ describe("workflow data provider", () => {
     const blockEq = vi.fn().mockReturnValue({ single: blockSingle });
     const blockSelect = vi.fn().mockReturnValue({ eq: blockEq });
 
-    const sessionInsert = vi.fn();
-    const blockUpdate = vi.fn();
+    const sessionSingle = vi.fn().mockResolvedValue({
+      data: { ...runningSessionRow, calendar_block_id: blockId },
+      error: null,
+    });
+    const sessionSelect = vi.fn().mockReturnValue({ single: sessionSingle });
+    const sessionInsert = vi.fn().mockReturnValue({ select: sessionSelect });
+
+    const runningMismatchedBlock = { ...mismatchedBlock, status: "running" };
+    const blockUpdateSingle = vi.fn().mockResolvedValue({
+      data: runningMismatchedBlock,
+      error: null,
+    });
+    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
     const from = vi.fn((table: string) => {
       if (table === "tasks") return { select: taskSelect };
       if (table === "calendar_blocks") {
