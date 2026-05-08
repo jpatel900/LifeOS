@@ -6,6 +6,7 @@ MVP supports task capture, area assignment, and manual scheduling.
 
 ## Recently completed
 
+- Removed unused `getTasksByArea`, `getProposalsByArea`, and `getCalendarBlocksByArea` helpers from `mockData.ts` (workflow context holds filtered data).
 - Task CRUD
 - Area model
 - Basic calendar draft creation

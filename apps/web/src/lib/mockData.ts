@@ -229,22 +229,3 @@ export function getAreaById(areaId: string | null | undefined): Area | undefined
   return areas.find((a) => a.id === areaId);
 }
 
-export function getTasksByArea(areaId: string | null | undefined): Task[] {
-  if (!areaId) return tasks;
-  return tasks.filter((t) => t.area_id === areaId);
-}
-
-export function getProposalsByArea(
-  areaId: string | null | undefined,
-): TimeBlockProposal[] {
-  if (!areaId) return timeBlockProposals;
-  return timeBlockProposals.filter((p) => p.area_id === areaId);
-}
-
-export function getCalendarBlocksByArea(
-  areaId: string | null | undefined,
-): CalendarBlock[] {
-  if (!areaId) return calendarBlocks;
-  return calendarBlocks.filter((b) => b.area_id === areaId);
-}
-
