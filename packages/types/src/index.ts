@@ -6,6 +6,7 @@ export type {
   AmbiguityAssessment,
   Area,
   CalendarBlock,
+  Capture,
   CaptureItem,
   ExecutionSession,
   HealthCheck,

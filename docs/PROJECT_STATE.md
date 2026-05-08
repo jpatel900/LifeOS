@@ -38,6 +38,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 
 ## Important implementation notes
 
+- Domain types in `@lifeos/types` are re-exports of Zod-inferred types from `@lifeos/schemas`; `packages/types/src/schema-type-parity.ts` is a compile-time check that `Area`, `Capture`/`CaptureItem`, and other re-exports stay aligned (fails `tsc` if `index.ts` is replaced with divergent manual interfaces).
 - Task status and TimeBlock status are separate.
 - Calendar events are never auto-deleted without confirmation.
 - Agent guidance is now aligned across `AGENTS.md` and `.cursor/rules/execution-discipline.mdc` for phase-first implementation and completion checks.
