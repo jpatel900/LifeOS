@@ -4,6 +4,7 @@ import {
   type MockParseCaptureResponse,
   type Phase2AmbiguityAssessmentResponse,
   type Phase2CaptureItem,
+  type Phase2ProjectDraft,
   type Phase2TaskDraft,
   type Phase2TimeBlockProposal,
   type Phase2TimeBlockProposalDraft,
@@ -13,6 +14,7 @@ import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
   Phase2MockExecutionSession,
+  Phase2MockProject,
   Phase2MockTask,
 } from "./types";
 
@@ -20,8 +22,10 @@ export interface WorkflowState {
   areas: Phase2MockArea[];
   captureItems: Phase2CaptureItem[];
   taskDrafts: Phase2TaskDraft[];
+  projectDrafts: Phase2ProjectDraft[];
   ambiguityAssessments: Phase2AmbiguityAssessmentResponse[];
   timeBlockProposalDrafts: Phase2TimeBlockProposalDraft[];
+  projects: Phase2MockProject[];
   tasks: Phase2MockTask[];
   timeBlockProposals: Phase2TimeBlockProposal[];
   calendarBlocks: Phase2MockCalendarBlock[];
@@ -41,7 +45,7 @@ let idCounter = 0;
 
 /** IDs produced by `nextId` use these prefixes; used to resync the counter after hydration. */
 const WORKFLOW_GENERATED_ID =
-  /^(?:capture|task-draft|proposal-draft|ambiguity|task|proposal|block|session)-(\d+)$/;
+  /^(?:capture|task-draft|project-draft|proposal-draft|ambiguity|task|project|proposal|block|session)-(\d+)$/;
 
 function maxWorkflowGeneratedIdSuffix(state: WorkflowState): number {
   let max = 0;
@@ -55,8 +59,10 @@ function maxWorkflowGeneratedIdSuffix(state: WorkflowState): number {
 
   for (const item of state.captureItems) consider(item.id);
   for (const item of state.taskDrafts) consider(item.id);
+  for (const item of state.projectDrafts) consider(item.id);
   for (const item of state.ambiguityAssessments) consider(item.id);
   for (const item of state.timeBlockProposalDrafts) consider(item.id);
+  for (const item of state.projects) consider(item.id);
   for (const item of state.tasks) consider(item.id);
   for (const item of state.timeBlockProposals) consider(item.id);
   for (const item of state.calendarBlocks) consider(item.id);
@@ -111,13 +117,31 @@ function makeTitle(rawText: string) {
   return `${normalized.slice(0, 69).trim()}...`;
 }
 
+function makeProjectTitle(rawText: string) {
+  return makeTitle(rawText)
+    .replace(/^(?:need\s+)?a\s+project\s+to\s+/i, "")
+    .trim();
+}
+
+function shouldCreateProjectDraft(rawText: string) {
+  const lower = rawText.toLowerCase();
+  return (
+    lower.includes(" project") ||
+    lower.includes("system") ||
+    lower.includes("roadmap") ||
+    lower.includes("initiative")
+  );
+}
+
 export function createInitialWorkflowState(): WorkflowState {
   return {
     areas,
     captureItems: [],
     taskDrafts: [],
+    projectDrafts: [],
     ambiguityAssessments: [],
     timeBlockProposalDrafts: [],
+    projects: [],
     tasks: [],
     timeBlockProposals: [],
     calendarBlocks: [],
@@ -137,6 +161,9 @@ export function mockParseCapture(input: ParseCaptureInput): MockParseCaptureResp
   const areaId = inferAreaId(rawText, input.areaId);
   const captureItemId = nextId("capture");
   const taskDraftId = nextId("task-draft");
+  const projectDraftId = shouldCreateProjectDraft(rawText)
+    ? nextId("project-draft")
+    : null;
   const proposalDraftId = nextId("proposal-draft");
   const title = makeTitle(rawText);
   const proposedStart = new Date(Date.now() + 60 * 60 * 1000);
@@ -169,6 +196,19 @@ export function mockParseCapture(input: ParseCaptureInput): MockParseCaptureResp
       status: "pending",
       created_at: createdAt,
     },
+    projectDraft: projectDraftId
+      ? {
+          id: projectDraftId,
+          user_id: MOCK_USER_ID,
+          capture_item_id: captureItemId,
+          area_id: areaId,
+          title: makeProjectTitle(rawText),
+          description: `Draft created from capture: ${rawText}`,
+          confidence: 0.66,
+          status: "pending",
+          created_at: createdAt,
+        }
+      : null,
     ambiguityAssessment: {
       id: nextId("ambiguity"),
       user_id: MOCK_USER_ID,
@@ -217,6 +257,9 @@ export function submitCapture(
     ...state,
     captureItems: [parsed.captureItem, ...state.captureItems],
     taskDrafts: [parsed.taskDraft, ...state.taskDrafts],
+    projectDrafts: parsed.projectDraft
+      ? [parsed.projectDraft, ...state.projectDrafts]
+      : state.projectDrafts,
     ambiguityAssessments: [
       parsed.ambiguityAssessment,
       ...state.ambiguityAssessments,
@@ -257,6 +300,65 @@ export function rejectDraft(state: WorkflowState, draftId: string): WorkflowStat
     reviewLog: draft
       ? [`Rejected draft: ${draft.title}`, ...state.reviewLog]
       : state.reviewLog,
+  };
+}
+
+export function rejectProjectDraft(
+  state: WorkflowState,
+  draftId: string,
+): WorkflowState {
+  const draft = state.projectDrafts.find((d) => d.id === draftId);
+  return {
+    ...state,
+    projectDrafts: state.projectDrafts.map((item) =>
+      item.id === draftId ? { ...item, status: "rejected" } : item,
+    ),
+    reviewLog: draft
+      ? [`Rejected project draft: ${draft.title}`, ...state.reviewLog]
+      : state.reviewLog,
+  };
+}
+
+export function acceptProjectDraft(
+  state: WorkflowState,
+  draftId: string,
+): WorkflowState {
+  const draft = state.projectDrafts.find((item) => item.id === draftId);
+  if (!draft || draft.status !== "pending") {
+    return state;
+  }
+
+  const existingProject = state.projects.find(
+    (project) => project.title === draft.title && project.area_id === draft.area_id,
+  );
+  if (existingProject) {
+    return state;
+  }
+
+  const createdAt = nowIso();
+  const project: Phase2MockProject = {
+    id: nextId("project"),
+    user_id: draft.user_id,
+    area_id: draft.area_id,
+    title: draft.title,
+    description: draft.description,
+    status: "active",
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+
+  return {
+    ...state,
+    captureItems: state.captureItems.map((capture) =>
+      capture.id === draft.capture_item_id
+        ? { ...capture, status: "resolved" }
+        : capture,
+    ),
+    projectDrafts: state.projectDrafts.map((item) =>
+      item.id === draftId ? { ...item, status: "accepted" } : item,
+    ),
+    projects: [project, ...state.projects],
+    reviewLog: [`Accepted project: ${project.title}`, ...state.reviewLog],
   };
 }
 

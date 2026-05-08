@@ -14,11 +14,13 @@ import type {
 } from "@lifeos/schemas";
 import {
   acceptDraft,
+  acceptProjectDraft,
   acceptProposal,
   createInitialWorkflowState,
   editDraft,
   markCurrentSession,
   rejectDraft,
+  rejectProjectDraft,
   rejectProposal,
   startExecutionSession,
   submitCapture,
@@ -41,7 +43,15 @@ type WorkflowAction =
       draftId: string;
     }
   | {
+      type: "acceptProjectDraft";
+      draftId: string;
+    }
+  | {
       type: "rejectDraft";
+      draftId: string;
+    }
+  | {
+      type: "rejectProjectDraft";
       draftId: string;
     }
   | {
@@ -83,7 +93,9 @@ interface WorkflowContextValue {
   setSelectedAreaId: (areaId: string | null) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
   acceptTaskDraft: (draftId: string) => void;
+  acceptProjectDraft: (draftId: string) => void;
   rejectTaskDraft: (draftId: string) => void;
+  rejectProjectDraft: (draftId: string) => void;
   editTaskDraft: (
     draftId: string,
     changes: Pick<Phase2TaskDraft, "title" | "description">,
@@ -107,6 +119,14 @@ function createSyncedInitialState() {
   return initial;
 }
 
+function normalizeWorkflowState(state: WorkflowState): WorkflowState {
+  return {
+    ...state,
+    projectDrafts: state.projectDrafts ?? [],
+    projects: state.projects ?? [],
+  };
+}
+
 function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
     case "submitCapture":
@@ -116,8 +136,12 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
       });
     case "acceptDraft":
       return acceptDraft(state, action.draftId);
+    case "acceptProjectDraft":
+      return acceptProjectDraft(state, action.draftId);
     case "rejectDraft":
       return rejectDraft(state, action.draftId);
+    case "rejectProjectDraft":
+      return rejectProjectDraft(state, action.draftId);
     case "editDraft":
       return editDraft(state, action.draftId, action.changes);
     case "acceptProposal":
@@ -148,7 +172,7 @@ function loadInitialState() {
       return createSyncedInitialState();
     }
 
-    const parsed = JSON.parse(stored) as WorkflowState;
+    const parsed = normalizeWorkflowState(JSON.parse(stored) as WorkflowState);
     syncWorkflowIdCounterFromState(parsed);
     return parsed;
   } catch {
@@ -178,7 +202,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     submitCaptureText: (rawText, areaId) =>
       dispatch({ type: "submitCapture", rawText, areaId }),
     acceptTaskDraft: (draftId) => dispatch({ type: "acceptDraft", draftId }),
+    acceptProjectDraft: (draftId) =>
+      dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => dispatch({ type: "rejectDraft", draftId }),
+    rejectProjectDraft: (draftId) =>
+      dispatch({ type: "rejectProjectDraft", draftId }),
     editTaskDraft: (draftId, changes) =>
       dispatch({ type: "editDraft", draftId, changes }),
     acceptLocalProposal: (proposalId) =>

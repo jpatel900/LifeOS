@@ -5,6 +5,8 @@ import {
   CalendarBlockSchema,
   CaptureItemSchema,
   CreateCaptureItemInputSchema,
+  CreateProjectInputSchema,
+  CreateTaskInputSchema,
   ExecutionSessionSchema,
   HealthCheckSchema,
   ParseCaptureResponseSchema,
@@ -59,6 +61,44 @@ describe("CreateCaptureItemInputSchema", () => {
     expect(result.success).toBe(true);
     expect(result.success ? result.data.raw_text : "").toBe(
       "Call dentist tomorrow"
+    );
+  });
+});
+
+describe("CreateProjectInputSchema", () => {
+  it("trims and validates accepted project draft input", () => {
+    const result = CreateProjectInputSchema.safeParse({
+      area_id: uid,
+      title: "  Volunteer ops cleanup  ",
+      description: "  Bring loose ends under control.  ",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.title : "").toBe("Volunteer ops cleanup");
+    expect(result.success ? result.data.description : "").toBe(
+      "Bring loose ends under control.",
+    );
+  });
+});
+
+describe("CreateTaskInputSchema", () => {
+  it("trims and validates accepted task draft input", () => {
+    const result = CreateTaskInputSchema.safeParse({
+      area_id: uid,
+      source_capture_item_id: uid2,
+      title: "  Draft sponsor email  ",
+      description: "",
+      priority_confidence: 0.78,
+      estimated_minutes_low: 15,
+      estimated_minutes_high: 45,
+      first_tiny_step: "  Open the event notes  ",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.title : "").toBe("Draft sponsor email");
+    expect(result.success ? result.data.description : "x").toBeNull();
+    expect(result.success ? result.data.first_tiny_step : "").toBe(
+      "Open the event notes",
     );
   });
 });

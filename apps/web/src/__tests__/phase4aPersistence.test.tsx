@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area, CaptureItem } from "@lifeos/schemas";
 import CapturePage from "../app/capture/page";
 import AreasSettingsPage from "../app/settings/areas/page";
-import { WorkflowProvider } from "@/lib/WorkflowContext";
+import TriagePage from "../app/triage/page";
+import { useEffect, useRef } from "react";
+import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 
 const mocks = vi.hoisted(() => {
   const supabaseClient = { client: "supabase-browser-client" };
@@ -13,6 +15,8 @@ const mocks = vi.hoisted(() => {
     createSupabaseBrowserClient: vi.fn(() => supabaseClient),
     listAreas: vi.fn(),
     createCaptureItem: vi.fn(),
+    createTask: vi.fn(),
+    createProject: vi.fn(),
   };
 });
 
@@ -23,6 +27,8 @@ vi.mock("@/lib/supabase/browser", () => ({
 vi.mock("@/lib/data/workflow", () => ({
   listAreas: mocks.listAreas,
   createCaptureItem: mocks.createCaptureItem,
+  createTask: mocks.createTask,
+  createProject: mocks.createProject,
 }));
 
 const area: Area = {
@@ -51,6 +57,52 @@ const capture: CaptureItem = {
   created_at: "2026-05-07T00:00:00.000Z",
 };
 
+const task = {
+  id: "550e8400-e29b-41d4-a716-446655440301",
+  user_id: area.user_id,
+  area_id: area.id,
+  project_id: null,
+  source_capture_item_id: null,
+  title: "Call dentist tomorrow",
+  description: null,
+  status: "active",
+  priority_score: null,
+  priority_confidence: 0.78,
+  task_type: null,
+  energy_type: null,
+  estimated_minutes_low: 30,
+  estimated_minutes_high: 60,
+  due_at: null,
+  definition_of_done: "Complete the first useful move and note the outcome.",
+  first_tiny_step: "Open the notes",
+  created_at: "2026-05-07T00:00:00.000Z",
+  updated_at: "2026-05-07T00:00:00.000Z",
+};
+
+const project = {
+  id: "550e8400-e29b-41d4-a716-446655440401",
+  user_id: area.user_id,
+  area_id: area.id,
+  title: "Volunteer ops system project",
+  description: "Draft created from capture: Need a project to organize volunteer ops system",
+  status: "active",
+  created_at: "2026-05-07T00:00:00.000Z",
+  updated_at: "2026-05-07T00:00:00.000Z",
+};
+
+function SeedCapture({ text }: { text: string }) {
+  const { submitCaptureText } = useWorkflow();
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    submitCaptureText(text, "area-main-job");
+  }, [submitCaptureText, text]);
+
+  return null;
+}
+
 function renderWithWorkflow(ui: React.ReactElement) {
   return render(<WorkflowProvider>{ui}</WorkflowProvider>);
 }
@@ -58,6 +110,7 @@ function renderWithWorkflow(ui: React.ReactElement) {
 describe("Phase 4A Supabase persistence UI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     mocks.createSupabaseBrowserClient.mockReturnValue(mocks.supabaseClient);
   });
 
@@ -135,5 +188,90 @@ describe("Phase 4A Supabase persistence UI", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Capture was not saved");
     expect(alert).toHaveTextContent("Sign in before saving captures to Supabase.");
+  });
+
+  it("accepting a task draft creates a task through Supabase", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    mocks.createTask.mockResolvedValue({
+      provider: "supabase",
+      task,
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Call dentist tomorrow" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accept task draft" }));
+
+    await waitFor(() => {
+      expect(mocks.createTask).toHaveBeenCalledWith(mocks.supabaseClient, {
+        area_id: area.id,
+        source_capture_item_id: null,
+        title: "Call dentist tomorrow",
+        description: "Draft created from capture: Call dentist tomorrow",
+        priority_confidence: 0.78,
+        estimated_minutes_low: 30,
+        estimated_minutes_high: 60,
+        first_tiny_step: "Clarify the next concrete step for: Call dentist tomorrow",
+      });
+    });
+  });
+
+  it("accepting a project draft creates a project through Supabase", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    mocks.createProject.mockResolvedValue({
+      provider: "supabase",
+      project,
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Need a project to organize volunteer ops system" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Accept project draft" }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.createProject).toHaveBeenCalledWith(mocks.supabaseClient, {
+        area_id: area.id,
+        title: "organize volunteer ops system",
+        description:
+          "Draft created from capture: Need a project to organize volunteer ops system",
+      });
+    });
+  });
+
+  it("rejecting a draft does not create a Supabase task or project", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Call dentist tomorrow" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject task draft" }));
+
+    await waitFor(() => {
+      expect(mocks.createTask).not.toHaveBeenCalled();
+      expect(mocks.createProject).not.toHaveBeenCalled();
+    });
   });
 });

@@ -65,6 +65,22 @@ async function deleteCaptureByText(client: SupabaseClient, rawText: string) {
   }
 }
 
+async function deleteTaskByTitle(client: SupabaseClient, title: string) {
+  const { error } = await client.from("tasks").delete().eq("title", title);
+
+  if (error) {
+    throw new Error(`Could not clean up task '${title}': ${error.message}`);
+  }
+}
+
+async function deleteProjectByTitle(client: SupabaseClient, title: string) {
+  const { error } = await client.from("projects").delete().eq("title", title);
+
+  if (error) {
+    throw new Error(`Could not clean up project '${title}': ${error.message}`);
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -151,6 +167,102 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     });
 
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A access own tasks and projects but not user B rows", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userATaskTitle = `rls-user-a-task-${suffix}`;
+    const userBTaskTitle = `rls-user-b-task-${suffix}`;
+    const userAProjectTitle = `rls-user-a-project-${suffix}`;
+    const userBProjectTitle = `rls-user-b-project-${suffix}`;
+
+    try {
+      const { error: insertATaskError } = await userAClient.from("tasks").insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: userATaskTitle,
+        status: "active",
+      });
+      expect(insertATaskError).toBeNull();
+
+      const { error: insertBTaskError } = await userBClient.from("tasks").insert({
+        user_id: userB.id,
+        area_id: userB.areaId,
+        title: userBTaskTitle,
+        status: "active",
+      });
+      expect(insertBTaskError).toBeNull();
+
+      const { error: insertAProjectError } = await userAClient
+        .from("projects")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: userAProjectTitle,
+          status: "active",
+        });
+      expect(insertAProjectError).toBeNull();
+
+      const { error: insertBProjectError } = await userBClient
+        .from("projects")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          title: userBProjectTitle,
+          status: "active",
+        });
+      expect(insertBProjectError).toBeNull();
+
+      const { data: visibleTasksToA, error: selectTasksAError } = await userAClient
+        .from("tasks")
+        .select("user_id,title")
+        .in("title", [userATaskTitle, userBTaskTitle])
+        .order("title", { ascending: true });
+      expect(selectTasksAError).toBeNull();
+      expect(visibleTasksToA).toEqual([
+        { user_id: userA.id, title: userATaskTitle },
+      ]);
+
+      const { data: visibleProjectsToA, error: selectProjectsAError } =
+        await userAClient
+          .from("projects")
+          .select("user_id,title")
+          .in("title", [userAProjectTitle, userBProjectTitle])
+          .order("title", { ascending: true });
+      expect(selectProjectsAError).toBeNull();
+      expect(visibleProjectsToA).toEqual([
+        { user_id: userA.id, title: userAProjectTitle },
+      ]);
+    } finally {
+      await deleteTaskByTitle(userAClient, userATaskTitle);
+      await deleteTaskByTitle(userBClient, userBTaskTitle);
+      await deleteProjectByTitle(userAClient, userAProjectTitle);
+      await deleteProjectByTitle(userBClient, userBProjectTitle);
+    }
+  });
+
+  it("prevents user A from inserting tasks and projects for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { error: taskError } = await userAClient.from("tasks").insert({
+      user_id: userB.id,
+      area_id: userB.areaId,
+      title: `rls-cross-user-task-${suffix}`,
+      status: "active",
+    });
+
+    const { error: projectError } = await userAClient.from("projects").insert({
+      user_id: userB.id,
+      area_id: userB.areaId,
+      title: `rls-cross-user-project-${suffix}`,
+      status: "active",
+    });
+
+    expect(taskError?.message).toMatch(/row-level security|violates row-level/i);
+    expect(projectError?.message).toMatch(/row-level security|violates row-level/i);
   });
 });
 
