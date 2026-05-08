@@ -14,7 +14,7 @@ describe("HomePage", () => {
     render(<HomePage />);
     expect(screen.getByText("Quick Capture")).toBeDefined();
     expect(
-      screen.getByPlaceholderText("What's on your mind? Type anything...")
+      screen.getByText(/Use the Capture screen in the navigation above/)
     ).toBeDefined();
   });
 });
