@@ -397,6 +397,21 @@ When working as an AI coding agent:
 
 If uncertain, choose the safer and simpler path.
 
+## Branch Discipline
+
+- `main` must stay passing.
+- Only one human-owned feature branch should be active at a time.
+- Agent-created branches must have one narrow purpose.
+- Do not create broad branches like `feature/app`, `phase-4`, or `fix-everything`.
+- Close stale PRs instead of continuously rebasing them.
+- Before starting a new task, check open PRs and active branches.
+- Every PR must state:
+  - purpose
+  - files changed
+  - tests run
+  - risks
+  - rollback plan
+
 ## Reference Links
 
 These documents are intentionally grounded in stable platform capabilities, not hardcoded vendor-specific hype.
