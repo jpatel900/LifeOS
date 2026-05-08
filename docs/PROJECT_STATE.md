@@ -26,6 +26,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Added local Supabase seed data for two Auth users and canonical starter areas, plus a local login page for RLS-backed Phase 4A smoke tests
 - Aligned canonical V1 default areas across Phase 2 mock data, Phase 4A provider mock data, Supabase seed data, and tests: Main Job, Personal, Volunteer Work, Side Project.
 - Phase 2 mock workflow restores `WorkflowState` from `sessionStorage`; the mock ID counter is resynced from persisted entities (`syncWorkflowIdCounterFromState`) on load and after each state update so generated IDs (`capture-*`, `task-*`, etc.) never reuse numeric suffixes after refresh or reset
+- Added opt-in local Supabase RLS tests for Phase 4A `areas` and `capture_items`: user A can access own rows, cannot see user B rows, anon reads are denied, and cross-user capture inserts are blocked.
 
 ## Known issues
 
@@ -37,11 +38,10 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 ## Next recommended tasks
 
 1. Manually smoke `/login` with `user_a@example.test` / `password123`, then verify `/settings/areas` reads four canonical areas and `/capture` saves a raw capture.
-2. Add focused two-user RLS integration tests using seeded `user_a@example.test` and `user_b@example.test`.
-3. Start the next approved phase only after updating requirements/acceptance criteria; do not extend Phase 4A into tasks/projects/proposals/calendar persistence.
-4. Add conflict detection tests.
-5. Improve mobile task capture.
-6. Add review log.
+2. Start the next approved phase only after updating requirements/acceptance criteria; do not extend Phase 4A into tasks/projects/proposals/calendar persistence.
+3. Add conflict detection tests.
+4. Improve mobile task capture.
+5. Add review log.
 
 ## Important implementation notes
 
@@ -56,4 +56,5 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Phase 4A does not add OpenAI, Google Calendar, Edge Functions, task/project persistence, proposal persistence, or calendar persistence. Browser Supabase code uses only the public URL and anon key.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
+- `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`.
 - `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.

@@ -55,6 +55,24 @@ npx supabase db reset
 
 `supabase/seed.sql` inserts local test users and starter areas for Phase 4A smoke tests. Use `user_a@example.test` with password `password123` at `/login`, then verify `/settings/areas` and `/capture`.
 
+Run the opt-in local RLS tests after the stack is running and the database has been reset:
+
+```powershell
+$env:RUN_SUPABASE_RLS_TESTS = "1"
+$env:NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321"
+$env:NEXT_PUBLIC_SUPABASE_ANON_KEY = "<ANON_KEY from supabase status -o env>"
+pnpm --filter @lifeos/web test -- phase4aRls.local
+```
+
+```bash
+RUN_SUPABASE_RLS_TESTS=1 \
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
+NEXT_PUBLIC_SUPABASE_ANON_KEY="<ANON_KEY from supabase status -o env>" \
+pnpm --filter @lifeos/web test -- phase4aRls.local
+```
+
+The default `pnpm test` run skips this suite because it requires Docker-backed local Supabase and seeded Auth users.
+
 ## Monorepo commands
 
 Run from the repository root after `pnpm install`.
