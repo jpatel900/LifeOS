@@ -1,8 +1,10 @@
 "use client";
 
+import { AppShell } from "../components/AppShell";
+
 export default function HomePage() {
   return (
-    <main style={{ padding: "2rem", maxWidth: "800px", margin: "0 auto" }}>
+    <AppShell>
       <h1>LifeOS</h1>
       <p>Area-scoped personal workflow cockpit</p>
       <section style={{ marginTop: "2rem" }}>
@@ -39,6 +41,6 @@ export default function HomePage() {
           </button>
         </form>
       </section>
-    </main>
+    </AppShell>
   );
 }
