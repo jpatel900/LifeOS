@@ -48,3 +48,4 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Phase 4A does not add OpenAI, Google Calendar, Edge Functions, task persistence, or proposal persistence.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, and Volunteer Work areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
+- `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.

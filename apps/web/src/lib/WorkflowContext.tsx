@@ -101,6 +101,12 @@ interface WorkflowContextValue {
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
+function createSyncedInitialState() {
+  const initial = createInitialWorkflowState();
+  syncWorkflowIdCounterFromState(initial);
+  return initial;
+}
+
 function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
     case "submitCapture":

@@ -334,6 +334,7 @@ A task is done when:
 - errors are recoverable
 - user action is explicit for external writes
 - docs updated if behavior changed
+- completion handoff includes proof: files changed, tests run, limitations, and docs updated status
 - acceptance criteria are explicitly listed and all are satisfied
 
 If acceptance criteria were missing at task start, define them first, then implement.
