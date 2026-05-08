@@ -4,7 +4,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary";
 }
 
-export function Button({ variant = "primary", children, style, ...props }: ButtonProps) {
+export function Button({
+  variant = "primary",
+  children,
+  style,
+  ...props
+}: ButtonProps) {
   const baseStyle: React.CSSProperties = {
     padding: "0.75rem 1.5rem",
     fontSize: "1rem",

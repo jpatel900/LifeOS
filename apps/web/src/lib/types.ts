@@ -1,5 +1,18 @@
 import type { Area as SharedArea, Task as SharedTask } from "@lifeos/types";
 
+export type { Phase2TimeBlockProposal as TimeBlockProposal } from "@lifeos/schemas";
+
+/**
+ * Phase 2 shell seed areas (human-readable ids). Not the same shape as persisted `Area` rows.
+ */
+export interface Phase2MockArea {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
 export type Area = SharedArea;
 
 export type Task = SharedTask & {
@@ -18,18 +31,6 @@ export interface Project {
   description?: string | null;
   status: "active" | "paused" | "done" | "dropped";
   created_at: string;
-}
-
-export interface TimeBlockProposal {
-  id: string;
-  user_id: string;
-  area_id: string;
-  task_id: string | null;
-  proposed_start: string;
-  proposed_end: string;
-  rationale: string;
-  conflict: boolean;
-  status: "proposed" | "accepted" | "rejected";
 }
 
 export interface CalendarBlock {

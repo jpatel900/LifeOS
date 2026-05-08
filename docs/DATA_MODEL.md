@@ -53,19 +53,19 @@ Health / Audit
 
 Purpose: user-defined life/work scopes.
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid pk | generated |
-| user_id | uuid | owner |
-| name | text | e.g. Main Job |
-| slug | text | unique per user |
-| description | text nullable | optional |
-| color | text nullable | UI color |
-| icon | text nullable | emoji/icon key |
-| sort_order | int | user ordering |
-| is_active | boolean | archive without deletion |
-| created_at | timestamptz | generated |
-| updated_at | timestamptz | generated |
+| Column      | Type          | Notes                    |
+| ----------- | ------------- | ------------------------ |
+| id          | uuid pk       | generated                |
+| user_id     | uuid          | owner                    |
+| name        | text          | e.g. Main Job            |
+| slug        | text          | unique per user          |
+| description | text nullable | optional                 |
+| color       | text nullable | UI color                 |
+| icon        | text nullable | emoji/icon key           |
+| sort_order  | int           | user ordering            |
+| is_active   | boolean       | archive without deletion |
+| created_at  | timestamptz   | generated                |
+| updated_at  | timestamptz   | generated                |
 
 Constraints:
 
@@ -85,16 +85,16 @@ Indexes:
 
 Purpose: fallback policy values.
 
-| Column | Type |
-|---|---|
-| user_id | uuid pk |
-| default_priority_policy_json | jsonb |
-| default_time_policy_json | jsonb |
-| default_duration_policy_json | jsonb |
-| default_health_thresholds_json | jsonb |
-| default_approval_rules_json | jsonb |
-| created_at | timestamptz |
-| updated_at | timestamptz |
+| Column                         | Type        |
+| ------------------------------ | ----------- |
+| user_id                        | uuid pk     |
+| default_priority_policy_json   | jsonb       |
+| default_time_policy_json       | jsonb       |
+| default_duration_policy_json   | jsonb       |
+| default_health_thresholds_json | jsonb       |
+| default_approval_rules_json    | jsonb       |
+| created_at                     | timestamptz |
+| updated_at                     | timestamptz |
 
 ## 4. Workflow Tables
 
@@ -102,17 +102,17 @@ Purpose: fallback policy values.
 
 Purpose: raw input before interpretation.
 
-| Column | Type | Notes |
-|---|---|---|
-| id | uuid pk | generated |
-| user_id | uuid | owner |
-| area_id | uuid nullable | optional initial/inferred area |
-| raw_text | text | captured text/transcript |
-| raw_audio_ref | text nullable | storage path if audio used |
-| capture_mode | text | text, audio, import |
-| inferred_area_confidence | numeric nullable | 0-1 |
-| status | text | new, parsed, triage_required, resolved, archived |
-| created_at | timestamptz | generated |
+| Column                   | Type             | Notes                                            |
+| ------------------------ | ---------------- | ------------------------------------------------ |
+| id                       | uuid pk          | generated                                        |
+| user_id                  | uuid             | owner                                            |
+| area_id                  | uuid nullable    | optional initial/inferred area                   |
+| raw_text                 | text             | captured text/transcript                         |
+| raw_audio_ref            | text nullable    | storage path if audio used                       |
+| capture_mode             | text             | text, audio, import                              |
+| inferred_area_confidence | numeric nullable | 0-1                                              |
+| status                   | text             | new, parsed, triage_required, resolved, archived |
+| created_at               | timestamptz      | generated                                        |
 
 Indexes:
 
@@ -126,26 +126,26 @@ Indexes:
 
 Purpose: structured sense-making before planning.
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| source_capture_item_id | uuid |
-| likely_objective | text |
-| problem_type | text |
-| complexity_level | text |
-| knowns_json | jsonb |
-| unknowns_json | jsonb |
-| assumptions_json | jsonb |
-| constraints_json | jsonb |
-| risks_json | jsonb |
-| dependencies_json | jsonb |
-| recommended_first_move | text |
-| what_not_to_do_yet_json | jsonb |
-| confidence_score | numeric |
-| review_trigger | text |
-| created_at | timestamptz |
+| Column                  | Type          |
+| ----------------------- | ------------- |
+| id                      | uuid pk       |
+| user_id                 | uuid          |
+| area_id                 | uuid nullable |
+| source_capture_item_id  | uuid          |
+| likely_objective        | text          |
+| problem_type            | text          |
+| complexity_level        | text          |
+| knowns_json             | jsonb         |
+| unknowns_json           | jsonb         |
+| assumptions_json        | jsonb         |
+| constraints_json        | jsonb         |
+| risks_json              | jsonb         |
+| dependencies_json       | jsonb         |
+| recommended_first_move  | text          |
+| what_not_to_do_yet_json | jsonb         |
+| confidence_score        | numeric       |
+| review_trigger          | text          |
+| created_at              | timestamptz   |
 
 Notes:
 
@@ -158,19 +158,19 @@ Notes:
 
 Purpose: track unknowns that need answers.
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| source_type | text |
-| source_id | uuid |
-| question | text |
-| why_it_matters | text |
-| answer_status | text |
-| answer_text | text nullable |
-| created_at | timestamptz |
-| resolved_at | timestamptz nullable |
+| Column         | Type                 |
+| -------------- | -------------------- |
+| id             | uuid pk              |
+| user_id        | uuid                 |
+| area_id        | uuid nullable        |
+| source_type    | text                 |
+| source_id      | uuid                 |
+| question       | text                 |
+| why_it_matters | text                 |
+| answer_status  | text                 |
+| answer_text    | text nullable        |
+| created_at     | timestamptz          |
+| resolved_at    | timestamptz nullable |
 
 Statuses:
 
@@ -183,16 +183,16 @@ Statuses:
 
 ### 4.4 `projects`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| title | text |
+| Column      | Type          |
+| ----------- | ------------- |
+| id          | uuid pk       |
+| user_id     | uuid          |
+| area_id     | uuid          |
+| title       | text          |
 | description | text nullable |
-| status | text |
-| created_at | timestamptz |
-| updated_at | timestamptz |
+| status      | text          |
+| created_at  | timestamptz   |
+| updated_at  | timestamptz   |
 
 Statuses:
 
@@ -210,27 +210,27 @@ Indexes:
 
 ### 4.5 `tasks`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| project_id | uuid nullable |
-| source_capture_item_id | uuid nullable |
-| title | text |
-| description | text nullable |
-| status | text |
-| priority_score | numeric nullable |
-| priority_confidence | numeric nullable |
-| task_type | text nullable |
-| energy_type | text nullable |
-| estimated_minutes_low | int nullable |
-| estimated_minutes_high | int nullable |
-| due_at | timestamptz nullable |
-| definition_of_done | text nullable |
-| first_tiny_step | text nullable |
-| created_at | timestamptz |
-| updated_at | timestamptz |
+| Column                 | Type                 |
+| ---------------------- | -------------------- |
+| id                     | uuid pk              |
+| user_id                | uuid                 |
+| area_id                | uuid                 |
+| project_id             | uuid nullable        |
+| source_capture_item_id | uuid nullable        |
+| title                  | text                 |
+| description            | text nullable        |
+| status                 | text                 |
+| priority_score         | numeric nullable     |
+| priority_confidence    | numeric nullable     |
+| task_type              | text nullable        |
+| energy_type            | text nullable        |
+| estimated_minutes_low  | int nullable         |
+| estimated_minutes_high | int nullable         |
+| due_at                 | timestamptz nullable |
+| definition_of_done     | text nullable        |
+| first_tiny_step        | text nullable        |
+| created_at             | timestamptz          |
+| updated_at             | timestamptz          |
 
 Statuses:
 
@@ -254,19 +254,19 @@ Indexes:
 
 Purpose: local schedule proposals before external calendar mutation.
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| task_id | uuid nullable |
-| proposed_start | timestamptz |
-| proposed_end | timestamptz |
-| rationale_json | jsonb |
-| conflict_flag | boolean |
+| Column                | Type           |
+| --------------------- | -------------- |
+| id                    | uuid pk        |
+| user_id               | uuid           |
+| area_id               | uuid           |
+| task_id               | uuid nullable  |
+| proposed_start        | timestamptz    |
+| proposed_end          | timestamptz    |
+| rationale_json        | jsonb          |
+| conflict_flag         | boolean        |
 | conflict_details_json | jsonb nullable |
-| status | text |
-| created_at | timestamptz |
+| status                | text           |
+| created_at            | timestamptz    |
 
 Statuses:
 
@@ -287,19 +287,19 @@ Indexes:
 
 Purpose: app-owned scheduled blocks, optionally linked to Google Calendar.
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| proposal_id | uuid nullable |
-| task_id | uuid nullable |
+| Column          | Type          |
+| --------------- | ------------- |
+| id              | uuid pk       |
+| user_id         | uuid          |
+| area_id         | uuid          |
+| proposal_id     | uuid nullable |
+| task_id         | uuid nullable |
 | google_event_id | text nullable |
-| start_at | timestamptz |
-| end_at | timestamptz |
-| status | text |
-| created_at | timestamptz |
-| updated_at | timestamptz |
+| start_at        | timestamptz   |
+| end_at          | timestamptz   |
+| status          | text          |
+| created_at      | timestamptz   |
+| updated_at      | timestamptz   |
 
 Statuses:
 
@@ -321,22 +321,22 @@ Indexes:
 
 Purpose: actual work outcomes.
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| task_id | uuid nullable |
-| calendar_block_id | uuid nullable |
-| planned_minutes | int nullable |
-| actual_minutes | int nullable |
-| paused_minutes | int nullable |
-| distraction_minutes | int nullable |
-| productivity_rating | int nullable |
-| energy_rating | text nullable |
-| outcome | text |
-| notes | text nullable |
-| created_at | timestamptz |
+| Column              | Type          |
+| ------------------- | ------------- |
+| id                  | uuid pk       |
+| user_id             | uuid          |
+| area_id             | uuid          |
+| task_id             | uuid nullable |
+| calendar_block_id   | uuid nullable |
+| planned_minutes     | int nullable  |
+| actual_minutes      | int nullable  |
+| paused_minutes      | int nullable  |
+| distraction_minutes | int nullable  |
+| productivity_rating | int nullable  |
+| energy_rating       | text nullable |
+| outcome             | text          |
+| notes               | text nullable |
+| created_at          | timestamptz   |
 
 Outcome values:
 
@@ -351,16 +351,16 @@ Outcome values:
 
 ### 4.9 `review_entries`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| review_type | text |
-| period_start | date |
-| period_end | date |
-| summary_json | jsonb |
-| created_at | timestamptz |
+| Column       | Type          |
+| ------------ | ------------- |
+| id           | uuid pk       |
+| user_id      | uuid          |
+| area_id      | uuid nullable |
+| review_type  | text          |
+| period_start | date          |
+| period_end   | date          |
+| summary_json | jsonb         |
+| created_at   | timestamptz   |
 
 Review types:
 
@@ -371,43 +371,43 @@ Review types:
 
 ### 5.1 `priority_profiles`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| declared_policy_json | jsonb |
-| learned_policy_json | jsonb |
-| last_reviewed_at | timestamptz nullable |
-| updated_at | timestamptz |
+| Column               | Type                 |
+| -------------------- | -------------------- |
+| id                   | uuid pk              |
+| user_id              | uuid                 |
+| area_id              | uuid                 |
+| declared_policy_json | jsonb                |
+| learned_policy_json  | jsonb                |
+| last_reviewed_at     | timestamptz nullable |
+| updated_at           | timestamptz          |
 
 ---
 
 ### 5.2 `time_preference_profiles`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| declared_windows_json | jsonb |
-| learned_windows_json | jsonb |
-| last_reviewed_at | timestamptz nullable |
-| updated_at | timestamptz |
+| Column                | Type                 |
+| --------------------- | -------------------- |
+| id                    | uuid pk              |
+| user_id               | uuid                 |
+| area_id               | uuid                 |
+| declared_windows_json | jsonb                |
+| learned_windows_json  | jsonb                |
+| last_reviewed_at      | timestamptz nullable |
+| updated_at            | timestamptz          |
 
 ---
 
 ### 5.3 `duration_profiles`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| task_type | text |
-| estimate_stats_json | jsonb |
-| sample_count | int |
-| last_updated_at | timestamptz |
+| Column              | Type        |
+| ------------------- | ----------- |
+| id                  | uuid pk     |
+| user_id             | uuid        |
+| area_id             | uuid        |
+| task_type           | text        |
+| estimate_stats_json | jsonb       |
+| sample_count        | int         |
+| last_updated_at     | timestamptz |
 
 Indexes:
 
@@ -417,32 +417,32 @@ Indexes:
 
 ### 5.4 `triage_learning_profiles`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid |
-| correction_patterns_json | jsonb |
-| confidence_thresholds_json | jsonb |
-| updated_at | timestamptz |
+| Column                     | Type        |
+| -------------------------- | ----------- |
+| id                         | uuid pk     |
+| user_id                    | uuid        |
+| area_id                    | uuid        |
+| correction_patterns_json   | jsonb       |
+| confidence_thresholds_json | jsonb       |
+| updated_at                 | timestamptz |
 
 ---
 
 ### 5.5 `suggestion_records`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| suggestion_type | text |
-| subject_type | text |
-| subject_id | uuid nullable |
-| suggestion_json | jsonb |
-| confidence | numeric nullable |
-| status | text |
-| created_at | timestamptz |
-| resolved_at | timestamptz nullable |
+| Column          | Type                 |
+| --------------- | -------------------- |
+| id              | uuid pk              |
+| user_id         | uuid                 |
+| area_id         | uuid nullable        |
+| suggestion_type | text                 |
+| subject_type    | text                 |
+| subject_id      | uuid nullable        |
+| suggestion_json | jsonb                |
+| confidence      | numeric nullable     |
+| status          | text                 |
+| created_at      | timestamptz          |
+| resolved_at     | timestamptz nullable |
 
 Statuses:
 
@@ -456,33 +456,33 @@ Statuses:
 
 ### 5.6 `override_records`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| subject_type | text |
-| subject_id | uuid |
-| override_type | text |
-| old_value_json | jsonb |
-| new_value_json | jsonb |
-| reason | text nullable |
-| created_at | timestamptz |
+| Column         | Type          |
+| -------------- | ------------- |
+| id             | uuid pk       |
+| user_id        | uuid          |
+| area_id        | uuid nullable |
+| subject_type   | text          |
+| subject_id     | uuid          |
+| override_type  | text          |
+| old_value_json | jsonb         |
+| new_value_json | jsonb         |
+| reason         | text nullable |
+| created_at     | timestamptz   |
 
 ## 6. Health and Audit Tables
 
 ### 6.1 `health_checks`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| subsystem | text |
-| status | text |
-| score | int |
-| details_json | jsonb |
-| checked_at | timestamptz |
+| Column       | Type          |
+| ------------ | ------------- |
+| id           | uuid pk       |
+| user_id      | uuid          |
+| area_id      | uuid nullable |
+| subsystem    | text          |
+| status       | text          |
+| score        | int           |
+| details_json | jsonb         |
+| checked_at   | timestamptz   |
 
 Statuses:
 
@@ -494,81 +494,81 @@ Statuses:
 
 ### 6.2 `health_incidents`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| subsystem | text |
-| severity | text |
-| incident_code | text |
-| details_json | jsonb |
-| status | text |
-| opened_at | timestamptz |
-| closed_at | timestamptz nullable |
+| Column        | Type                 |
+| ------------- | -------------------- |
+| id            | uuid pk              |
+| user_id       | uuid                 |
+| area_id       | uuid nullable        |
+| subsystem     | text                 |
+| severity      | text                 |
+| incident_code | text                 |
+| details_json  | jsonb                |
+| status        | text                 |
+| opened_at     | timestamptz          |
+| closed_at     | timestamptz nullable |
 
 ---
 
 ### 6.3 `repair_guides`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| subsystem | text |
-| incident_code | text |
-| guide_json | jsonb |
-| version | text |
-| created_at | timestamptz |
+| Column        | Type        |
+| ------------- | ----------- |
+| id            | uuid pk     |
+| subsystem     | text        |
+| incident_code | text        |
+| guide_json    | jsonb       |
+| version       | text        |
+| created_at    | timestamptz |
 
 ---
 
 ### 6.4 `external_write_events`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| provider | text |
-| operation | text |
-| target_type | text |
-| target_id | text nullable |
-| request_summary_json | jsonb |
-| result_status | text |
-| error_message | text nullable |
-| created_at | timestamptz |
+| Column               | Type          |
+| -------------------- | ------------- |
+| id                   | uuid pk       |
+| user_id              | uuid          |
+| area_id              | uuid nullable |
+| provider             | text          |
+| operation            | text          |
+| target_type          | text          |
+| target_id            | text nullable |
+| request_summary_json | jsonb         |
+| result_status        | text          |
+| error_message        | text nullable |
+| created_at           | timestamptz   |
 
 ---
 
 ### 6.5 `ai_recommendations`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| prompt_version | text |
-| schema_version | text |
-| recommendation_type | text |
-| input_summary_json | jsonb |
-| output_json | jsonb |
-| confidence | numeric nullable |
-| created_at | timestamptz |
+| Column              | Type             |
+| ------------------- | ---------------- |
+| id                  | uuid pk          |
+| user_id             | uuid             |
+| area_id             | uuid nullable    |
+| prompt_version      | text             |
+| schema_version      | text             |
+| recommendation_type | text             |
+| input_summary_json  | jsonb            |
+| output_json         | jsonb            |
+| confidence          | numeric nullable |
+| created_at          | timestamptz      |
 
 ---
 
 ### 6.6 `user_decisions`
 
-| Column | Type |
-|---|---|
-| id | uuid pk |
-| user_id | uuid |
-| area_id | uuid nullable |
-| decision_type | text |
-| subject_type | text |
-| subject_id | uuid nullable |
-| decision_value_json | jsonb |
-| created_at | timestamptz |
+| Column              | Type          |
+| ------------------- | ------------- |
+| id                  | uuid pk       |
+| user_id             | uuid          |
+| area_id             | uuid nullable |
+| decision_type       | text          |
+| subject_type        | text          |
+| subject_id          | uuid nullable |
+| decision_value_json | jsonb         |
+| created_at          | timestamptz   |
 
 ## 7. Relationship Summary
 

@@ -1,9 +1,9 @@
 import type {
-  Area,
   CalendarBlock,
   DailyReviewSummary,
   ExecutionSession,
   HealthCheck,
+  Phase2MockArea,
   Project,
   Task,
   TimeBlockProposal,
@@ -12,7 +12,7 @@ import type {
 
 export const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 
-export const areas: Area[] = [
+export const areas: Phase2MockArea[] = [
   {
     id: "area-main-job",
     user_id: MOCK_USER_ID,
@@ -70,36 +70,63 @@ export const tasks: Task[] = [
     user_id: MOCK_USER_ID,
     area_id: "area-main-job",
     title: "Review open tickets",
+    description: null,
     status: "active",
-    priority: 2,
-    estimate_minutes_low: 25,
-    estimate_minutes_high: 40,
+    priority_score: 2,
+    priority_confidence: null,
+    task_type: null,
+    energy_type: null,
+    estimated_minutes_low: 25,
+    estimated_minutes_high: 40,
+    due_at: null,
+    definition_of_done: null,
+    first_tiny_step: null,
     created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     project_id: "proj-main-1",
+    source_capture_item_id: null,
   },
   {
     id: "task-personal-1",
     user_id: MOCK_USER_ID,
     area_id: "area-personal",
     title: "Book dentist appointment",
-    status: "inbox",
-    priority: null,
-    estimate_minutes_low: 10,
-    estimate_minutes_high: 20,
+    description: null,
+    status: "draft",
+    priority_score: null,
+    priority_confidence: null,
+    task_type: null,
+    energy_type: null,
+    estimated_minutes_low: 10,
+    estimated_minutes_high: 20,
+    due_at: null,
+    definition_of_done: null,
+    first_tiny_step: null,
     created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     project_id: null,
+    source_capture_item_id: null,
   },
   {
     id: "task-volunteer-1",
     user_id: MOCK_USER_ID,
     area_id: "area-volunteer",
     title: "Email sponsors about event date",
+    description: null,
     status: "active",
-    priority: 3,
-    estimate_minutes_low: 30,
-    estimate_minutes_high: 60,
+    priority_score: 3,
+    priority_confidence: null,
+    task_type: null,
+    energy_type: null,
+    estimated_minutes_low: 30,
+    estimated_minutes_high: 60,
+    due_at: null,
+    definition_of_done: null,
+    first_tiny_step: null,
     created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
     project_id: "proj-volunteer-1",
+    source_capture_item_id: null,
   },
 ];
 
@@ -112,8 +139,9 @@ export const timeBlockProposals: TimeBlockProposal[] = [
     proposed_start: new Date().toISOString(),
     proposed_end: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     rationale: "Block focused time for triaging tickets.",
-    conflict: false,
+    conflict_flag: false,
     status: "proposed",
+    created_at: new Date().toISOString(),
   },
   {
     id: "proposal-2",
@@ -123,8 +151,9 @@ export const timeBlockProposals: TimeBlockProposal[] = [
     proposed_start: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
     proposed_end: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
     rationale: "Reach out to sponsors while they are likely online.",
-    conflict: true,
+    conflict_flag: true,
     status: "proposed",
+    created_at: new Date().toISOString(),
   },
 ];
 
@@ -224,7 +253,7 @@ export const healthChecks: HealthCheck[] = [
   },
 ];
 
-export function getAreaById(areaId: string | null | undefined): Area | undefined {
+export function getAreaById(areaId: string | null | undefined): Phase2MockArea | undefined {
   if (!areaId) return undefined;
   return areas.find((a) => a.id === areaId);
 }

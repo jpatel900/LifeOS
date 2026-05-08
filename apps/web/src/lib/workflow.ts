@@ -1,24 +1,29 @@
 import {
   MockParseCaptureResponseSchema,
-  TimeBlockProposalSchema,
-  type AmbiguityAssessmentResponse,
-  type CaptureItem,
+  Phase2TimeBlockProposalSchema,
   type MockParseCaptureResponse,
-  type TaskDraft,
-  type TimeBlockProposal,
-  type TimeBlockProposalDraft,
+  type Phase2AmbiguityAssessmentResponse,
+  type Phase2CaptureItem,
+  type Phase2TaskDraft,
+  type Phase2TimeBlockProposal,
+  type Phase2TimeBlockProposalDraft,
 } from "@lifeos/schemas";
 import { areas, healthChecks, MOCK_USER_ID } from "./mockData";
-import type { Area, CalendarBlock, ExecutionSession, Task } from "./types";
+import type {
+  CalendarBlock,
+  ExecutionSession,
+  Phase2MockArea,
+  Task,
+} from "./types";
 
 export interface WorkflowState {
-  areas: Area[];
-  captureItems: CaptureItem[];
-  taskDrafts: TaskDraft[];
-  ambiguityAssessments: AmbiguityAssessmentResponse[];
-  timeBlockProposalDrafts: TimeBlockProposalDraft[];
+  areas: Phase2MockArea[];
+  captureItems: Phase2CaptureItem[];
+  taskDrafts: Phase2TaskDraft[];
+  ambiguityAssessments: Phase2AmbiguityAssessmentResponse[];
+  timeBlockProposalDrafts: Phase2TimeBlockProposalDraft[];
   tasks: Task[];
-  timeBlockProposals: TimeBlockProposal[];
+  timeBlockProposals: Phase2TimeBlockProposal[];
   calendarBlocks: CalendarBlock[];
   executionSessions: ExecutionSession[];
   healthChecks: typeof healthChecks;
@@ -34,16 +39,43 @@ interface SubmitCaptureInput extends ParseCaptureInput {}
 
 let idCounter = 0;
 
-function nextId(prefix: string) {
-  const randomSuffix = globalThis.crypto?.randomUUID?.();
-  if (randomSuffix) {
-    return `${prefix}-${randomSuffix}`;
-  }
+/** IDs produced by `nextId` use these prefixes; used to resync the counter after hydration. */
+const WORKFLOW_GENERATED_ID =
+  /^(?:capture|task-draft|proposal-draft|ambiguity|task|proposal|block|session)-(\d+)$/;
 
+function maxWorkflowGeneratedIdSuffix(state: WorkflowState): number {
+  let max = 0;
+  const consider = (id: string | null | undefined) => {
+    if (!id) return;
+    const match = id.match(WORKFLOW_GENERATED_ID);
+    if (!match) return;
+    const n = Number.parseInt(match[1] ?? "0", 10);
+    if (!Number.isNaN(n)) max = Math.max(max, n);
+  };
+
+  for (const item of state.captureItems) consider(item.id);
+  for (const item of state.taskDrafts) consider(item.id);
+  for (const item of state.ambiguityAssessments) consider(item.id);
+  for (const item of state.timeBlockProposalDrafts) consider(item.id);
+  for (const item of state.tasks) consider(item.id);
+  for (const item of state.timeBlockProposals) consider(item.id);
+  for (const item of state.calendarBlocks) consider(item.id);
+  for (const item of state.executionSessions) consider(item.id);
+
+  return max;
+}
+
+/**
+ * Sets the module id counter from existing workflow entities (e.g. after sessionStorage restore
+ * or reset) so `nextId` never reuses a suffix already present in state.
+ */
+export function syncWorkflowIdCounterFromState(state: WorkflowState): void {
+  idCounter = maxWorkflowGeneratedIdSuffix(state);
+}
+
+function nextId(prefix: string) {
   idCounter += 1;
-  return `${prefix}-${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2)}-${idCounter}`;
+  return `${prefix}-${idCounter}`;
 }
 
 function nowIso() {
@@ -200,7 +232,7 @@ export function submitCapture(
 export function editDraft(
   state: WorkflowState,
   draftId: string,
-  changes: Pick<TaskDraft, "title" | "description">,
+  changes: Pick<Phase2TaskDraft, "title" | "description">,
 ): WorkflowState {
   return {
     ...state,
@@ -250,12 +282,17 @@ export function acceptDraft(state: WorkflowState, draftId: string): WorkflowStat
     title: draft.title,
     description: draft.description,
     status: "active",
-    priority: 2,
-    estimate_minutes_low: draft.estimated_minutes_low,
-    estimate_minutes_high: draft.estimated_minutes_high,
+    priority_score: 2,
+    priority_confidence: null,
+    task_type: null,
+    energy_type: null,
+    estimated_minutes_low: draft.estimated_minutes_low,
+    estimated_minutes_high: draft.estimated_minutes_high,
+    due_at: null,
     first_tiny_step: draft.first_tiny_step,
     definition_of_done: "Complete the first useful move and note the outcome.",
     created_at: nowIso(),
+    updated_at: nowIso(),
   };
 
   const matchingProposalDraft = state.timeBlockProposalDrafts.find(
@@ -263,7 +300,7 @@ export function acceptDraft(state: WorkflowState, draftId: string): WorkflowStat
   );
 
   const proposal = matchingProposalDraft
-    ? TimeBlockProposalSchema.parse({
+    ? Phase2TimeBlockProposalSchema.parse({
         id: nextId("proposal"),
         user_id: matchingProposalDraft.user_id,
         area_id: matchingProposalDraft.area_id,
@@ -301,13 +338,16 @@ export function acceptDraft(state: WorkflowState, draftId: string): WorkflowStat
 export function updateProposal(
   state: WorkflowState,
   proposalId: string,
-  changes: Pick<TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">,
+  changes: Pick<
+    Phase2TimeBlockProposal,
+    "proposed_start" | "proposed_end" | "rationale"
+  >,
 ): WorkflowState {
   return {
     ...state,
     timeBlockProposals: state.timeBlockProposals.map((proposal) =>
       proposal.id === proposalId
-        ? TimeBlockProposalSchema.parse({
+        ? Phase2TimeBlockProposalSchema.parse({
             ...proposal,
             ...changes,
             status: "edited",
@@ -379,7 +419,7 @@ export function startExecutionSession(
     area_id: task.area_id ?? "area-main-job",
     task_id: task.id,
     calendar_block_id: block?.id ?? null,
-    planned_minutes: task.estimate_minutes_high,
+    planned_minutes: task.estimated_minutes_high,
     actual_minutes: null,
     paused_minutes: 0,
     distraction_minutes: 0,

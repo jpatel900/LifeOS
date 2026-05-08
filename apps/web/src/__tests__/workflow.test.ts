@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { MOCK_USER_ID } from "@/lib/mockData";
 import {
   acceptDraft,
   createInitialWorkflowState,
@@ -43,33 +44,28 @@ describe("local mock workflow", () => {
     expect(state.timeBlockProposals[0].status).toBe("proposed");
   });
 
-  it("does not reuse generated IDs after a persisted session is reloaded", async () => {
+  it("does not reuse numeric suffixes after syncing from restored state", async () => {
     vi.resetModules();
-    const firstModule = await import("@/lib/workflow");
-    let persistedState = firstModule.submitCapture(
-      firstModule.createInitialWorkflowState(),
+    const wf = await import("@/lib/workflow");
+    const base = wf.createInitialWorkflowState();
+    base.captureItems = [
       {
-        rawText: "Draft the first capture before reload.",
-        areaId: "area-main-job",
+        id: "capture-5",
+        user_id: MOCK_USER_ID,
+        area_id: "area-main-job",
+        raw_text: "prior session",
+        capture_mode: "text",
+        inferred_area_confidence: 0.5,
+        status: "triage_required",
+        created_at: new Date().toISOString(),
       },
-    );
-
-    vi.resetModules();
-    const reloadedModule = await import("@/lib/workflow");
-    persistedState = reloadedModule.submitCapture(persistedState, {
-      rawText: "Draft the second capture after reload.",
+    ];
+    wf.syncWorkflowIdCounterFromState(base);
+    const next = wf.submitCapture(base, {
+      rawText: "New capture after reload.",
       areaId: "area-main-job",
     });
-
-    const captureIds = persistedState.captureItems.map((capture) => capture.id);
-    const draftIds = persistedState.taskDrafts.map((draft) => draft.id);
-    const proposalDraftIds = persistedState.timeBlockProposalDrafts.map(
-      (proposal) => proposal.id,
-    );
-
-    expect(new Set(captureIds).size).toBe(captureIds.length);
-    expect(new Set(draftIds).size).toBe(draftIds.length);
-    expect(new Set(proposalDraftIds).size).toBe(proposalDraftIds.length);
+    expect(next.captureItems[0].id).toBe("capture-6");
   });
 });
 

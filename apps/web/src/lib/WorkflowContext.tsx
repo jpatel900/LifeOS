@@ -8,7 +8,10 @@ import {
   useReducer,
   useState,
 } from "react";
-import type { TaskDraft, TimeBlockProposal } from "@lifeos/schemas";
+import type {
+  Phase2TaskDraft,
+  Phase2TimeBlockProposal,
+} from "@lifeos/schemas";
 import {
   acceptDraft,
   acceptProposal,
@@ -19,6 +22,7 @@ import {
   rejectProposal,
   startExecutionSession,
   submitCapture,
+  syncWorkflowIdCounterFromState,
   updateProposal,
   type WorkflowState,
 } from "./workflow";
@@ -43,7 +47,7 @@ type WorkflowAction =
   | {
       type: "editDraft";
       draftId: string;
-      changes: Pick<TaskDraft, "title" | "description">;
+      changes: Pick<Phase2TaskDraft, "title" | "description">;
     }
   | {
       type: "acceptProposal";
@@ -56,7 +60,10 @@ type WorkflowAction =
   | {
       type: "updateProposal";
       proposalId: string;
-      changes: Pick<TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">;
+      changes: Pick<
+        Phase2TimeBlockProposal,
+        "proposed_start" | "proposed_end" | "rationale"
+      >;
     }
   | {
       type: "startSession";
@@ -79,13 +86,13 @@ interface WorkflowContextValue {
   rejectTaskDraft: (draftId: string) => void;
   editTaskDraft: (
     draftId: string,
-    changes: Pick<TaskDraft, "title" | "description">,
+    changes: Pick<Phase2TaskDraft, "title" | "description">,
   ) => void;
   acceptLocalProposal: (proposalId: string) => void;
   rejectLocalProposal: (proposalId: string) => void;
   editLocalProposal: (
     proposalId: string,
-    changes: Pick<TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">,
+    changes: Pick<Phase2TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">,
   ) => void;
   startTaskSession: (taskId: string) => void;
   markSession: (status: ExecutionSession["status"]) => void;
@@ -126,18 +133,26 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
 
 function loadInitialState() {
   if (typeof window === "undefined") {
-    return createInitialWorkflowState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 
   const stored = window.sessionStorage.getItem(STORAGE_KEY);
   if (!stored) {
-    return createInitialWorkflowState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 
   try {
-    return JSON.parse(stored) as WorkflowState;
+    const parsed = JSON.parse(stored) as WorkflowState;
+    syncWorkflowIdCounterFromState(parsed);
+    return parsed;
   } catch {
-    return createInitialWorkflowState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 }
 
@@ -148,6 +163,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    syncWorkflowIdCounterFromState(state);
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
