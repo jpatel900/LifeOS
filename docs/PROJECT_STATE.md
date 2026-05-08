@@ -2,7 +2,7 @@
 
 ## Current status
 
-MVP supports task capture, area assignment, and manual scheduling. The Phase 2 mock vertical slice remains for session-only triage and scheduling mocks. Phase 4A adds Supabase-backed persistence for areas and raw capture items when env vars are set; without them, the data layer falls back to mocks.
+MVP supports task capture, area assignment, and manual scheduling. The Phase 2 mock vertical slice remains for session-only triage and scheduling mocks. Phase 4A is complete: `/settings/areas` reads Supabase-backed areas when public env vars and auth are configured, `/capture` inserts raw `capture_items` through Supabase when authenticated, and both flows fall back to mock mode when Supabase env vars are absent.
 
 ## Recently completed
 
@@ -22,6 +22,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Added a migration contract test that checks required Phase 3 tables, RLS policies, and index coverage
 - Added Supabase browser/server client helpers, provider-aware data functions, and `/settings/areas` plus `/capture` pages for Phase 4A (alongside Phase 2 mock workflow)
 - Updated shared Zod schemas to validate Phase 4A `areas` and `capture_items` rows at app boundaries
+- Added Phase 4A UI tests for Supabase-backed area reads, Supabase-backed capture saves, unauthenticated Supabase error states, and a static guard that browser persistence remains limited to `areas` and `capture_items` without service-role key references.
 - Added local Supabase seed data for two Auth users and canonical starter areas, plus a local login page for RLS-backed Phase 4A smoke tests
 - Aligned canonical V1 default areas across Phase 2 mock data, Phase 4A provider mock data, Supabase seed data, and tests: Main Job, Personal, Volunteer Work, Side Project.
 - Phase 2 mock workflow restores `WorkflowState` from `sessionStorage`; the mock ID counter is resynced from persisted entities (`syncWorkflowIdCounterFromState`) on load and after each state update so generated IDs (`capture-*`, `task-*`, etc.) never reuse numeric suffixes after refresh or reset
@@ -30,16 +31,17 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 
 - Rescheduling does not yet check all-day events.
 - Mobile layout needs improvement.
-- Supabase is scaffolded locally and Phase 4A UI can use it for areas/capture, but tasks, projects, proposals, calendar blocks, and review flows are not wired to Supabase yet.
+- Supabase is scaffolded locally and Phase 4A UI uses it only for areas/capture; tasks, projects, proposals, calendar blocks, and review flows are not wired to Supabase.
 - Supabase-backed capture saves require an authenticated Supabase user because RLS policies enforce `auth.uid() = user_id`.
 
 ## Next recommended tasks
 
 1. Manually smoke `/login` with `user_a@example.test` / `password123`, then verify `/settings/areas` reads four canonical areas and `/capture` saves a raw capture.
 2. Add focused two-user RLS integration tests using seeded `user_a@example.test` and `user_b@example.test`.
-3. Add conflict detection tests.
-4. Improve mobile task capture.
-5. Add review log.
+3. Start the next approved phase only after updating requirements/acceptance criteria; do not extend Phase 4A into tasks/projects/proposals/calendar persistence.
+4. Add conflict detection tests.
+5. Improve mobile task capture.
+6. Add review log.
 
 ## Important implementation notes
 
@@ -51,7 +53,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Phase 3 migration covers only the requested V1 tables: areas, capture items, projects, tasks, proposals, calendar blocks, execution sessions, review entries, health checks/incidents, suggestion records, and override records.
 - RLS policies use `to authenticated` and `((select auth.uid()) = user_id)`; area/project/task references use same-user composite foreign keys to reduce cross-user contamination risk.
 - Phase 4A data access falls back to mock data when `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing.
-- Phase 4A does not add OpenAI, Google Calendar, Edge Functions, task persistence, or proposal persistence.
+- Phase 4A does not add OpenAI, Google Calendar, Edge Functions, task/project persistence, proposal persistence, or calendar persistence. Browser Supabase code uses only the public URL and anon key.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
 - `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.
