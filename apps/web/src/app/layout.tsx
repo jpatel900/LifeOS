@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { AppShell } from "./components/AppShell";
 
 export const metadata: Metadata = {
   title: "LifeOS — Workflow Cockpit",

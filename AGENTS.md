@@ -4,11 +4,19 @@
 
 This file is for AI coding agents and future maintainers.
 
+## Documentation authority
+
+This file has the highest authority for Cursor/Codex agent behavior.
+
+See **README.md** for the canonical documentation order (implementation and product truth). The implementation authority docs are **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, and **TEST_PLAN.md**. **Architecture Decision Records** in `docs/adr/` amend or clarify **ARCHITECTURE.md** where they conflict. **LIFE_OS_WIKI.md** and **EXTRA_INFO_AND_RULES.md** are **background reference only**, not implementation authority.
+
 ## 1. Project Mission
 
 Build a private, one-user, low-cost AI-assisted workflow cockpit that turns messy input into structured work, stages scheduling decisions for approval, learns separately by area, and monitors its own health.
 
 The app must remain simple, maintainable, and safe.
+
+This is a personal-use system for one human operator, not a generalized autonomous platform.
 
 ## 2. Non-Negotiable Product Rules
 
@@ -22,6 +30,9 @@ The app must remain simple, maintainable, and safe.
 8. Do not build broad autonomous agent behavior in V1.
 9. Do not add background jobs unless clearly justified.
 10. Do not add new vendor services without documenting why.
+11. No feature is "done" until required tests pass for that change.
+12. Every implementation task must define acceptance criteria before coding starts.
+13. Do not expand scope beyond `REQUIREMENTS.md` without updating requirements first.
 
 ## 3. Build Priorities
 
@@ -35,6 +46,8 @@ Optimize in this order:
 6. future extensibility
 
 Do not optimize for cleverness.
+
+Default tie-breaker: choose the lower-cost and simpler architecture option.
 
 ## 4. Current V1 Scope
 
@@ -70,16 +83,20 @@ Do not build:
 - public SaaS billing
 - broad web browsing
 
+If a proposed feature resembles any "Do not build" item, reject or defer it unless `REQUIREMENTS.md` is explicitly revised and reviewed first.
+
 ## 5. Preferred Architecture
 
 Use:
 
 - Next.js frontend
-- Supabase Auth/Postgres/RLS
-- Supabase Edge Functions
+- **Next.js Route Handlers and Server Actions** for V1 app server logic (AI orchestration, validation, integration adapters)
+- Supabase Auth, Postgres, RLS, and Supabase tooling for **local database development**
 - OpenAI Responses API with Structured Outputs
 - Google Calendar API
 - minimal scheduled jobs
+
+**Supabase Edge Functions** are **not** the default V1 path for core APIs. Treat them as **V1.5 / later**, or use only when a **cron/scheduled** job or a **specific integration** cannot be implemented safely in Next server code (see `docs/adr/0001-v1-server-boundary.md`).
 
 Avoid:
 
@@ -88,6 +105,9 @@ Avoid:
 - complex workflow engines
 - multi-agent frameworks
 - hardcoded model names
+- architecture that increases operational overhead without clear V1 value
+
+Architecture principle: prefer one deployable web app plus typed functions over distributed services.
 
 ## 6. Repository Expectations
 
@@ -100,11 +120,17 @@ Expected structure:
 /packages/ui
 /packages/utils
 /supabase/migrations
-/supabase/functions
 /docs
+/docs/adr
 ```
 
 Keep shared schemas in `/packages/schemas`.
+
+Keep project documentation in `/docs`, except root-level files used by tooling or repository conventions such as `README.md` and `AGENTS.md`.
+
+`/docs/PROJECT_STATE.md` is the handoff file for future agents. At the start of each agent run, read it after `AGENTS.md` to understand current status, recent work, known issues, recommended next tasks, and implementation notes.
+
+After every major update, update `/docs/PROJECT_STATE.md` before finishing the run. Keep it concise and factual: current shipped or implemented behavior, recently completed work, known issues, next recommended tasks, and important implementation notes.
 
 ## 7. Schema and AI Rules
 
@@ -118,6 +144,14 @@ All mutation-producing AI calls must have:
 - error handling
 - audit record where relevant
 
+Schema-first development order for AI-backed features:
+
+1. define/update schema contract
+2. add schema validation tests (valid + invalid fixtures)
+3. implement function/prompt wiring
+4. persist only validated outputs
+5. log schema/prompt versions
+
 Required schemas:
 
 - `ParseCaptureResponse`
@@ -129,6 +163,7 @@ Required schemas:
 - `HealthNarrativeResponse`
 
 Never persist unvalidated AI output as committed app state.
+Never weaken schemas or validators to make tests pass.
 
 ## 8. Prompt Rules
 
@@ -195,10 +230,15 @@ Before marking work done:
 
 - unit tests pass
 - schema validation tests pass
-- integration tests pass for changed Edge Function
+- integration tests pass for changed **Route Handlers / Server Actions** (or Edge Functions, if used)
 - RLS tests pass if DB touched
 - E2E smoke test passes if UX flow touched
 - calendar write path tested with mock before real provider
+- `pnpm lint` passes
+- `pnpm type-check` passes
+- `pnpm test` passes
+
+Do not claim completion with "code compiles" alone. Test evidence is required.
 
 ## 13. Forbidden Changes Without Human Review
 
@@ -237,6 +277,8 @@ Do not hardcode exact model names throughout the app.
 ## 15. UX Rules
 
 The UX must support executive-function friction.
+
+**V1 primary workflow screens (six):** Capture, Triage, Calendar / Planning, Execute, Review, Health. **Settings** (areas, policies, integrations) is **secondary / admin** and does not count toward the six-primary limit in **NFR-005**.
 
 Design for:
 
@@ -292,19 +334,66 @@ A task is done when:
 - errors are recoverable
 - user action is explicit for external writes
 - docs updated if behavior changed
+- acceptance criteria are explicitly listed and all are satisfied
 
-## 18. Agent Behavior
+If acceptance criteria were missing at task start, define them first, then implement.
+
+## 18. Task Intake and Scope Control
+
+Before implementing any task, the agent must confirm:
+
+1. the task maps to an existing requirement in `REQUIREMENTS.md` (or a reviewed update exists)
+2. explicit acceptance criteria are written
+3. impacted schemas/tables/functions are identified
+4. required tests are identified
+5. risky surfaces (RLS, calendar writes, OAuth scopes, schema contracts) are flagged
+
+If any item is missing, stop implementation and resolve that gap first.
+
+## 19. Change Control for Feature Expansion
+
+Broad feature expansion is forbidden unless requirements are updated first.
+
+Examples of expansion requiring a requirements update:
+
+- new ingestion channels (email, messaging, browser capture)
+- autonomous external actions
+- new always-on/background intelligence
+- additional external vendors/services
+- multi-user or collaboration behavior
+- generalized multi-agent runtime inside the app
+
+Required sequence:
+
+1. update `REQUIREMENTS.md` with scope, non-goals, and acceptance criteria
+2. update related docs (`ARCHITECTURE.md`, `SECURITY_PRIVACY.md`, `TEST_PLAN.md`) as needed
+3. implement code changes
+4. verify tests
+
+## 20. Agent Behavior
 
 When working as an AI coding agent:
 
 - make small changes
+- read `AGENTS.md` and `docs/PROJECT_STATE.md` before planning substantial work
+- identify the exact implementation phase before coding
 - explain risky assumptions
 - prefer simple implementation
 - do not invent features
 - do not silently broaden scope
+- do not add integrations outside the current phase
+- if the active prompt says not to use plugins, follow that strictly
+- if the active prompt does not forbid plugins, plugins may be used only when appropriate to the task and phase
+- preserve mock mode when the phase is mock-first
 - ask for review when touching dangerous areas
 - run tests before claiming done
 - update docs if architecture/data model changes
+- enforce approval gates for any calendar write path
+- reject in-app multi-agent/runtime orchestration proposals for V1
+- keep solutions suitable for one-person personal use and low ongoing cost
+- update `docs/PROJECT_STATE.md` after every major update
+- provide proof in the final handoff, not explanations
+- include files changed, tests run, limitations, and docs updated status in the final handoff
 
 If uncertain, choose the safer and simpler path.
 
@@ -334,20 +423,21 @@ These documents are intentionally grounded in stable platform capabilities, not 
 
 ### Common commands
 
-| Action | Command |
-|--------|---------|
-| Install deps | `pnpm install` (from root) |
-| Dev server | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
-| Build | `pnpm build` |
-| Lint | `pnpm lint` |
-| Test | `pnpm test` |
-| Type-check | `pnpm type-check` |
+| Action         | Command                                         |
+| -------------- | ----------------------------------------------- |
+| Install deps   | `pnpm install` (from root)                      |
+| Dev server     | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
+| Build          | `pnpm build`                                    |
+| Lint           | `pnpm lint`                                     |
+| Test           | `pnpm test`                                     |
+| Type-check     | `pnpm type-check`                               |
+| Format         | `pnpm format` (Prettier, root only)             |
+| Format (check) | `pnpm format:check`                             |
 
 ### Notes for future agents
 
 - The dev server runs on `http://localhost:3000` by default.
 - `pnpm.onlyBuiltDependencies` in root `package.json` allows build scripts for `esbuild`, `sharp`, and `unrs-resolver` non-interactively.
 - The `.gitignore` is configured for JS/TS (not the auto-generated Python one from repo init).
-- Supabase local development is not yet configured; future work will add `supabase/config.toml` and migrations.
+- Supabase local development is scaffolded with `supabase/config.toml`, migrations, and `supabase/seed.sql`; V1 app server logic still belongs in Next.js per `docs/adr/0001-v1-server-boundary.md`.
 - No `.env` file is needed for basic dev server startup; external services (Supabase, OpenAI, Google Calendar) will require env vars when those integrations are built.
-
