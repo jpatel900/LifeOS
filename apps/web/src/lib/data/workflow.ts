@@ -76,6 +76,19 @@ export const mockAreas: Area[] = [
     created_at: "2026-05-07T00:00:00.000Z",
     updated_at: "2026-05-07T00:00:00.000Z",
   },
+  {
+    id: "00000000-0000-4000-8000-000000000104",
+    user_id: mockUserId,
+    name: "Side Project",
+    slug: "side-project",
+    description: "Independent builds, experiments, and optional projects.",
+    color: "#f97316",
+    icon: "rocket",
+    sort_order: 3,
+    is_active: true,
+    created_at: "2026-05-07T00:00:00.000Z",
+    updated_at: "2026-05-07T00:00:00.000Z",
+  },
 ];
 
 const areaColumns =

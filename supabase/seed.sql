@@ -125,6 +125,17 @@ values
     true
   ),
   (
+    '00000000-0000-4000-8000-000000000104',
+    '00000000-0000-4000-8000-000000000001',
+    'Side Project',
+    'side-project',
+    'Independent builds, experiments, and optional projects.',
+    '#f97316',
+    'rocket',
+    3,
+    true
+  ),
+  (
     '00000000-0000-4000-8000-000000000201',
     '00000000-0000-4000-8000-000000000002',
     'User B Private Area',

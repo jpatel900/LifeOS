@@ -120,8 +120,25 @@ describe("Supabase local database scaffold", () => {
     expect(seedSql).toContain("user_a@example.test");
     expect(seedSql).toContain("user_b@example.test");
     expect(seedSql).toContain("insert into public.areas");
-    expect(seedSql).toContain("main-job");
-    expect(seedSql).toContain("personal");
-    expect(seedSql).toContain("volunteer-work");
+    for (const token of [
+      "Main Job",
+      "main-job",
+      "#2563eb",
+      "briefcase",
+      "Personal",
+      "personal",
+      "#16a34a",
+      "home",
+      "Volunteer Work",
+      "volunteer-work",
+      "#9333ea",
+      "heart",
+      "Side Project",
+      "side-project",
+      "#f97316",
+      "rocket",
+    ]) {
+      expect(seedSql).toContain(token);
+    }
   });
 });

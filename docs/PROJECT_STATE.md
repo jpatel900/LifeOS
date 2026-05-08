@@ -22,7 +22,8 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Added a migration contract test that checks required Phase 3 tables, RLS policies, and index coverage
 - Added Supabase browser/server client helpers, provider-aware data functions, and `/settings/areas` plus `/capture` pages for Phase 4A (alongside Phase 2 mock workflow)
 - Updated shared Zod schemas to validate Phase 4A `areas` and `capture_items` rows at app boundaries
-- Added local Supabase seed data for two Auth users and starter areas, plus a local login page for RLS-backed Phase 4A smoke tests
+- Added local Supabase seed data for two Auth users and canonical starter areas, plus a local login page for RLS-backed Phase 4A smoke tests
+- Aligned canonical V1 default areas across Phase 2 mock data, Phase 4A provider mock data, Supabase seed data, and tests: Main Job, Personal, Volunteer Work, Side Project.
 - Phase 2 mock workflow restores `WorkflowState` from `sessionStorage`; the mock ID counter is resynced from persisted entities (`syncWorkflowIdCounterFromState`) on load and after each state update so generated IDs (`capture-*`, `task-*`, etc.) never reuse numeric suffixes after refresh or reset
 
 ## Known issues
@@ -34,7 +35,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 
 ## Next recommended tasks
 
-1. Manually smoke `/login` with `user_a@example.test` / `password123`, then verify `/settings/areas` reads three areas and `/capture` saves a raw capture.
+1. Manually smoke `/login` with `user_a@example.test` / `password123`, then verify `/settings/areas` reads four canonical areas and `/capture` saves a raw capture.
 2. Add focused two-user RLS integration tests using seeded `user_a@example.test` and `user_b@example.test`.
 3. Add conflict detection tests.
 4. Improve mobile task capture.
@@ -51,6 +52,6 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - RLS policies use `to authenticated` and `((select auth.uid()) = user_id)`; area/project/task references use same-user composite foreign keys to reduce cross-user contamination risk.
 - Phase 4A data access falls back to mock data when `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing.
 - Phase 4A does not add OpenAI, Google Calendar, Edge Functions, task persistence, or proposal persistence.
-- Local Supabase seed users both use password `password123`; User A has Main Job, Personal, and Volunteer Work areas, while User B has a private area for RLS isolation checks.
+- Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
 - `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.
