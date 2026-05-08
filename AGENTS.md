@@ -4,6 +4,12 @@
 
 This file is for AI coding agents and future maintainers.
 
+## Documentation authority
+
+This file has the highest authority for Cursor/Codex agent behavior.
+
+See **README.md** for the canonical documentation order (implementation and product truth). The implementation authority docs are **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, and **TEST_PLAN.md**. **Architecture Decision Records** in `docs/adr/` amend or clarify **ARCHITECTURE.md** where they conflict. **LIFE_OS_WIKI.md** and **EXTRA_INFO_AND_RULES.md** are **background reference only**, not implementation authority.
+
 ## 1. Project Mission
 
 Build a private, one-user, low-cost AI-assisted workflow cockpit that turns messy input into structured work, stages scheduling decisions for approval, learns separately by area, and monitors its own health.
@@ -84,11 +90,13 @@ If a proposed feature resembles any "Do not build" item, reject or defer it unle
 Use:
 
 - Next.js frontend
-- Supabase Auth/Postgres/RLS
-- Supabase Edge Functions
+- **Next.js Route Handlers and Server Actions** for V1 app server logic (AI orchestration, validation, integration adapters)
+- Supabase Auth, Postgres, RLS, and Supabase tooling for **local database development**
 - OpenAI Responses API with Structured Outputs
 - Google Calendar API
 - minimal scheduled jobs
+
+**Supabase Edge Functions** are **not** the default V1 path for core APIs. Treat them as **V1.5 / later**, or use only when a **cron/scheduled** job or a **specific integration** cannot be implemented safely in Next server code (see `docs/adr/0001-v1-server-boundary.md`).
 
 Avoid:
 
@@ -112,11 +120,17 @@ Expected structure:
 /packages/ui
 /packages/utils
 /supabase/migrations
-/supabase/functions
 /docs
+/docs/adr
 ```
 
 Keep shared schemas in `/packages/schemas`.
+
+Keep project documentation in `/docs`, except root-level files used by tooling or repository conventions such as `README.md` and `AGENTS.md`.
+
+`/docs/PROJECT_STATE.md` is the handoff file for future agents. At the start of each agent run, read it after `AGENTS.md` to understand current status, recent work, known issues, recommended next tasks, and implementation notes.
+
+After every major update, update `/docs/PROJECT_STATE.md` before finishing the run. Keep it concise and factual: current shipped or implemented behavior, recently completed work, known issues, next recommended tasks, and important implementation notes.
 
 ## 7. Schema and AI Rules
 
@@ -149,6 +163,7 @@ Required schemas:
 - `HealthNarrativeResponse`
 
 Never persist unvalidated AI output as committed app state.
+Never weaken schemas or validators to make tests pass.
 
 ## 8. Prompt Rules
 
@@ -215,10 +230,13 @@ Before marking work done:
 
 - unit tests pass
 - schema validation tests pass
-- integration tests pass for changed Edge Function
+- integration tests pass for changed **Route Handlers / Server Actions** (or Edge Functions, if used)
 - RLS tests pass if DB touched
 - E2E smoke test passes if UX flow touched
 - calendar write path tested with mock before real provider
+- `pnpm lint` passes
+- `pnpm type-check` passes
+- `pnpm test` passes
 
 Do not claim completion with "code compiles" alone. Test evidence is required.
 
@@ -259,6 +277,8 @@ Do not hardcode exact model names throughout the app.
 ## 15. UX Rules
 
 The UX must support executive-function friction.
+
+**V1 primary workflow screens (six):** Capture, Triage, Calendar / Planning, Execute, Review, Health. **Settings** (areas, policies, integrations) is **secondary / admin** and does not count toward the six-primary limit in **NFR-005**.
 
 Design for:
 
@@ -355,16 +375,25 @@ Required sequence:
 When working as an AI coding agent:
 
 - make small changes
+- read `AGENTS.md` and `docs/PROJECT_STATE.md` before planning substantial work
+- identify the exact implementation phase before coding
 - explain risky assumptions
 - prefer simple implementation
 - do not invent features
 - do not silently broaden scope
+- do not add integrations outside the current phase
+- if the active prompt says not to use plugins, follow that strictly
+- if the active prompt does not forbid plugins, plugins may be used only when appropriate to the task and phase
+- preserve mock mode when the phase is mock-first
 - ask for review when touching dangerous areas
 - run tests before claiming done
 - update docs if architecture/data model changes
 - enforce approval gates for any calendar write path
 - reject in-app multi-agent/runtime orchestration proposals for V1
 - keep solutions suitable for one-person personal use and low ongoing cost
+- update `docs/PROJECT_STATE.md` after every major update
+- provide proof in the final handoff, not explanations
+- include files changed, tests run, limitations, and docs updated status in the final handoff
 
 If uncertain, choose the safer and simpler path.
 
@@ -382,3 +411,33 @@ These documents are intentionally grounded in stable platform capabilities, not 
 - Vercel Cron Jobs / Hobby limits: [https://vercel.com/docs/cron-jobs/usage-and-pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)
 - Anthropic Building Effective Agents: [https://www.anthropic.com/research/building-effective-agents](https://www.anthropic.com/research/building-effective-agents)
 
+## Cursor Cloud specific instructions
+
+### Stack and tooling
+
+- **Monorepo**: pnpm workspaces + Turborepo
+- **Package manager**: pnpm (lockfile: `pnpm-lock.yaml`)
+- **Node.js**: v20 LTS (`.nvmrc` at root)
+- **Frontend**: Next.js 15 in `apps/web`
+- **Shared packages**: `packages/schemas` (zod), `packages/types`, `packages/ui`, `packages/utils`
+
+### Common commands
+
+| Action         | Command                                         |
+| -------------- | ----------------------------------------------- |
+| Install deps   | `pnpm install` (from root)                      |
+| Dev server     | `pnpm dev` (or `pnpm --filter @lifeos/web dev`) |
+| Build          | `pnpm build`                                    |
+| Lint           | `pnpm lint`                                     |
+| Test           | `pnpm test`                                     |
+| Type-check     | `pnpm type-check`                               |
+| Format         | `pnpm format` (Prettier, root only)             |
+| Format (check) | `pnpm format:check`                             |
+
+### Notes for future agents
+
+- The dev server runs on `http://localhost:3000` by default.
+- `pnpm.onlyBuiltDependencies` in root `package.json` allows build scripts for `esbuild`, `sharp`, and `unrs-resolver` non-interactively.
+- The `.gitignore` is configured for JS/TS (not the auto-generated Python one from repo init).
+- Supabase local development is scaffolded with `supabase/config.toml`, migrations, and `supabase/seed.sql`; V1 app server logic still belongs in Next.js per `docs/adr/0001-v1-server-boundary.md`.
+- No `.env` file is needed for basic dev server startup; external services (Supabase, OpenAI, Google Calendar) will require env vars when those integrations are built.
