@@ -8,9 +8,14 @@ import {
   useReducer,
   useState,
 } from "react";
-import type {
-  Phase2TaskDraft,
-  Phase2TimeBlockProposal,
+import {
+  Phase2AmbiguityAssessmentResponseSchema,
+  Phase2CaptureItemSchema,
+  Phase2TaskDraftSchema,
+  Phase2TimeBlockProposalDraftSchema,
+  Phase2TimeBlockProposalSchema,
+  type Phase2TaskDraft,
+  type Phase2TimeBlockProposal,
 } from "@lifeos/schemas";
 import {
   acceptDraft,
@@ -107,6 +112,171 @@ function createSyncedInitialState() {
   return initial;
 }
 
+const TASK_STATUSES = new Set([
+  "draft",
+  "active",
+  "scheduled",
+  "blocked",
+  "done",
+  "dropped",
+  "archived",
+]);
+const CALENDAR_BLOCK_STATUSES = new Set([
+  "scheduled",
+  "running",
+  "completed",
+  "missed",
+  "cancelled",
+]);
+const EXECUTION_SESSION_STATUSES = new Set([
+  "running",
+  "paused",
+  "completed",
+  "missed",
+  "distracted",
+  "stuck",
+  "stopped",
+]);
+const EXECUTION_OUTCOMES = new Set([
+  "completed",
+  "partial",
+  "stopped",
+  "distracted",
+  "blocked",
+  "skipped",
+]);
+const HEALTH_SUBSYSTEMS = new Set([
+  "auth",
+  "database",
+  "ai_parsing",
+  "calendar_connector",
+  "scheduler",
+  "priority_model",
+  "duration_model",
+  "time_preferences",
+]);
+const HEALTH_STATUSES = new Set(["healthy", "watch", "critical"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || isString(value);
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
+
+function isOptionalNullableNumber(value: unknown): value is number | null | undefined {
+  return value === undefined || isNullableNumber(value);
+}
+
+function isOneOf(value: unknown, allowed: Set<string>) {
+  return isString(value) && allowed.has(value);
+}
+
+function isArrayOf<T>(
+  value: unknown,
+  predicate: (item: unknown) => item is T,
+): value is T[] {
+  return Array.isArray(value) && value.every(predicate);
+}
+
+function isPhase2MockArea(value: unknown): value is WorkflowState["areas"][number] {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.user_id) &&
+    isString(value.name) &&
+    isString(value.color) &&
+    isString(value.created_at)
+  );
+}
+
+function isPhase2MockTask(value: unknown): value is WorkflowState["tasks"][number] {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.user_id) &&
+    isString(value.area_id) &&
+    isNullableString(value.project_id) &&
+    isNullableString(value.source_capture_item_id) &&
+    isString(value.title) &&
+    isNullableString(value.description) &&
+    isOneOf(value.status, TASK_STATUSES) &&
+    isNullableNumber(value.priority_score) &&
+    isNullableNumber(value.priority_confidence) &&
+    isNullableString(value.task_type) &&
+    isNullableString(value.energy_type) &&
+    isNullableNumber(value.estimated_minutes_low) &&
+    isNullableNumber(value.estimated_minutes_high) &&
+    isNullableString(value.due_at) &&
+    isNullableString(value.definition_of_done) &&
+    isNullableString(value.first_tiny_step) &&
+    isString(value.created_at) &&
+    isString(value.updated_at)
+  );
+}
+
+function isPhase2MockCalendarBlock(
+  value: unknown,
+): value is WorkflowState["calendarBlocks"][number] {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.user_id) &&
+    isString(value.area_id) &&
+    isNullableString(value.proposal_id) &&
+    isNullableString(value.task_id) &&
+    isNullableString(value.google_event_id) &&
+    isString(value.start_at) &&
+    isString(value.end_at) &&
+    isOneOf(value.status, CALENDAR_BLOCK_STATUSES) &&
+    isString(value.created_at) &&
+    isString(value.updated_at)
+  );
+}
+
+function isPhase2MockExecutionSession(
+  value: unknown,
+): value is WorkflowState["executionSessions"][number] {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.user_id) &&
+    isString(value.area_id) &&
+    isNullableString(value.task_id) &&
+    isNullableString(value.calendar_block_id) &&
+    isNullableNumber(value.planned_minutes) &&
+    isNullableNumber(value.actual_minutes) &&
+    isOptionalNullableNumber(value.paused_minutes) &&
+    isOptionalNullableNumber(value.distraction_minutes) &&
+    isOptionalNullableNumber(value.productivity_rating) &&
+    isOneOf(value.status, EXECUTION_SESSION_STATUSES) &&
+    isOneOf(value.outcome, EXECUTION_OUTCOMES) &&
+    (value.notes === undefined || isNullableString(value.notes))
+  );
+}
+
+function isPhase2MockHealthCheck(
+  value: unknown,
+): value is WorkflowState["healthChecks"][number] {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isOneOf(value.subsystem, HEALTH_SUBSYSTEMS) &&
+    isOneOf(value.status, HEALTH_STATUSES) &&
+    typeof value.score === "number" &&
+    isString(value.summary)
+  );
+}
+
 function isStoredWorkflowState(value: unknown): value is WorkflowState {
   if (!value || typeof value !== "object") {
     return false;
@@ -114,17 +284,37 @@ function isStoredWorkflowState(value: unknown): value is WorkflowState {
 
   const state = value as Partial<Record<keyof WorkflowState, unknown>>;
   return (
-    Array.isArray(state.areas) &&
-    Array.isArray(state.captureItems) &&
-    Array.isArray(state.taskDrafts) &&
-    Array.isArray(state.ambiguityAssessments) &&
-    Array.isArray(state.timeBlockProposalDrafts) &&
-    Array.isArray(state.tasks) &&
-    Array.isArray(state.timeBlockProposals) &&
-    Array.isArray(state.calendarBlocks) &&
-    Array.isArray(state.executionSessions) &&
-    Array.isArray(state.healthChecks) &&
-    Array.isArray(state.reviewLog)
+    isArrayOf(state.areas, isPhase2MockArea) &&
+    isArrayOf(
+      state.captureItems,
+      (item): item is WorkflowState["captureItems"][number] =>
+        Phase2CaptureItemSchema.safeParse(item).success,
+    ) &&
+    isArrayOf(
+      state.taskDrafts,
+      (item): item is WorkflowState["taskDrafts"][number] =>
+        Phase2TaskDraftSchema.safeParse(item).success,
+    ) &&
+    isArrayOf(
+      state.ambiguityAssessments,
+      (item): item is WorkflowState["ambiguityAssessments"][number] =>
+        Phase2AmbiguityAssessmentResponseSchema.safeParse(item).success,
+    ) &&
+    isArrayOf(
+      state.timeBlockProposalDrafts,
+      (item): item is WorkflowState["timeBlockProposalDrafts"][number] =>
+        Phase2TimeBlockProposalDraftSchema.safeParse(item).success,
+    ) &&
+    isArrayOf(state.tasks, isPhase2MockTask) &&
+    isArrayOf(
+      state.timeBlockProposals,
+      (item): item is WorkflowState["timeBlockProposals"][number] =>
+        Phase2TimeBlockProposalSchema.safeParse(item).success,
+    ) &&
+    isArrayOf(state.calendarBlocks, isPhase2MockCalendarBlock) &&
+    isArrayOf(state.executionSessions, isPhase2MockExecutionSession) &&
+    isArrayOf(state.healthChecks, isPhase2MockHealthCheck) &&
+    isArrayOf(state.reviewLog, isString)
   );
 }
 
