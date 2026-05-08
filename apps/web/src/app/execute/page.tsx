@@ -248,6 +248,36 @@ export default function ExecutePage() {
             Data source: <strong>{executeState.provider}</strong>
           </p>
         ) : null}
+        {actionState.status === "saving" ? (
+          <p role="status">Saving {actionState.label}...</p>
+        ) : null}
+        {actionState.status === "saved" ? (
+          <section
+            role="status"
+            style={{
+              border: "1px solid #86efac",
+              background: "#f0fdf4",
+              borderRadius: "8px",
+              padding: "1rem",
+            }}
+          >
+            {actionState.label} <strong>{actionState.provider}</strong>.
+          </section>
+        ) : null}
+        {actionState.status === "error" ? (
+          <section
+            role="alert"
+            style={{
+              border: "1px solid #fca5a5",
+              background: "#fef2f2",
+              borderRadius: "8px",
+              padding: "1rem",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Execution change was not saved</h2>
+            <p>{actionState.message}</p>
+          </section>
+        ) : null}
         <EmptyState
           title="No active block."
           description="Capture text, accept the draft in Triage, and accept a local proposal in Calendar to start a session here."
