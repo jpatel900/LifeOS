@@ -101,6 +101,12 @@ interface WorkflowContextValue {
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
 
+function createSyncedInitialState() {
+  const initial = createInitialWorkflowState();
+  syncWorkflowIdCounterFromState(initial);
+  return initial;
+}
+
 function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
     case "submitCapture":
@@ -133,16 +139,18 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
 
 function loadInitialState() {
   if (typeof window === "undefined") {
-    const initial = createInitialWorkflowState();
-    syncWorkflowIdCounterFromState(initial);
-    return initial;
+    return createSyncedInitialState();
   }
 
-  const stored = window.sessionStorage.getItem(STORAGE_KEY);
+  let stored: string | null;
+  try {
+    stored = window.sessionStorage.getItem(STORAGE_KEY);
+  } catch {
+    return createSyncedInitialState();
+  }
+
   if (!stored) {
-    const initial = createInitialWorkflowState();
-    syncWorkflowIdCounterFromState(initial);
-    return initial;
+    return createSyncedInitialState();
   }
 
   try {
@@ -150,9 +158,7 @@ function loadInitialState() {
     syncWorkflowIdCounterFromState(parsed);
     return parsed;
   } catch {
-    const initial = createInitialWorkflowState();
-    syncWorkflowIdCounterFromState(initial);
-    return initial;
+    return createSyncedInitialState();
   }
 }
 
@@ -164,7 +170,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     syncWorkflowIdCounterFromState(state);
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Persistence is a convenience cache; the in-memory workflow must remain usable.
+    }
   }, [state]);
 
   const value: WorkflowContextValue = {

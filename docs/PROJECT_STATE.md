@@ -19,6 +19,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Updated shared Zod schemas to validate Phase 4A `areas` and `capture_items` rows at app boundaries
 - Added local Supabase seed data for two Auth users and starter areas, plus a local login page for RLS-backed Phase 4A smoke tests
 - Phase 2 mock workflow restores `WorkflowState` from `sessionStorage`; the mock ID counter is resynced from persisted entities (`syncWorkflowIdCounterFromState`) on load and after each state update so generated IDs (`capture-*`, `task-*`, etc.) never reuse numeric suffixes after refresh or reset
+- Phase 2 mock workflow treats `sessionStorage` as best-effort only; blocked reads or quota-exceeded writes fall back to in-memory state instead of crashing the app shell
 
 ## Known issues
 
@@ -46,3 +47,4 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Phase 4A does not add OpenAI, Google Calendar, Edge Functions, task persistence, or proposal persistence.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, and Volunteer Work areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
+- `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.
