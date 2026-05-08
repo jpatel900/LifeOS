@@ -628,6 +628,43 @@ describe("workflow data provider", () => {
     expect(result.block?.status).toBe("running");
   });
 
+  it("rejects starting a session when the selected block belongs to another task", async () => {
+    const otherTaskId = "550e8400-e29b-41d4-a716-446655440399";
+    const mismatchedBlock = { ...blockRow, task_id: otherTaskId };
+
+    const taskSingle = vi.fn().mockResolvedValue({ data: taskRow, error: null });
+    const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
+    const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
+
+    const blockSingle = vi.fn().mockResolvedValue({
+      data: mismatchedBlock,
+      error: null,
+    });
+    const blockEq = vi.fn().mockReturnValue({ single: blockSingle });
+    const blockSelect = vi.fn().mockReturnValue({ eq: blockEq });
+
+    const sessionInsert = vi.fn();
+    const blockUpdate = vi.fn();
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: taskSelect };
+      if (table === "calendar_blocks") {
+        return { select: blockSelect, update: blockUpdate };
+      }
+      if (table === "execution_sessions") return { insert: sessionInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await expect(
+      createExecutionSession(authenticatedClient(from), {
+        task_id: taskId,
+        calendar_block_id: blockId,
+      }),
+    ).rejects.toThrow("Selected calendar block does not belong to this task.");
+
+    expect(sessionInsert).not.toHaveBeenCalled();
+    expect(blockUpdate).not.toHaveBeenCalled();
+  });
+
   it("completes an execution_session and marks task and block done", async () => {
     const completedSession = {
       ...runningSessionRow,
