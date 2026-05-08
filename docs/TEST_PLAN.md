@@ -378,6 +378,7 @@ Seed:
   - Main Job
   - Personal
   - Volunteer Work
+  - Side Project
 - Tasks:
   - simple task
   - vague project-like task

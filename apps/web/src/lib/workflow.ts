@@ -10,10 +10,10 @@ import {
 } from "@lifeos/schemas";
 import { areas, healthChecks, MOCK_USER_ID } from "./mockData";
 import type {
-  CalendarBlock,
-  ExecutionSession,
   Phase2MockArea,
-  Task,
+  Phase2MockCalendarBlock,
+  Phase2MockExecutionSession,
+  Phase2MockTask,
 } from "./types";
 
 export interface WorkflowState {
@@ -22,10 +22,10 @@ export interface WorkflowState {
   taskDrafts: Phase2TaskDraft[];
   ambiguityAssessments: Phase2AmbiguityAssessmentResponse[];
   timeBlockProposalDrafts: Phase2TimeBlockProposalDraft[];
-  tasks: Task[];
+  tasks: Phase2MockTask[];
   timeBlockProposals: Phase2TimeBlockProposal[];
-  calendarBlocks: CalendarBlock[];
-  executionSessions: ExecutionSession[];
+  calendarBlocks: Phase2MockCalendarBlock[];
+  executionSessions: Phase2MockExecutionSession[];
   healthChecks: typeof healthChecks;
   reviewLog: string[];
 }
@@ -273,7 +273,7 @@ export function acceptDraft(state: WorkflowState, draftId: string): WorkflowStat
     return state;
   }
 
-  const task: Task = {
+  const task: Phase2MockTask = {
     id: nextId("task"),
     user_id: draft.user_id,
     area_id: draft.area_id,
@@ -382,15 +382,19 @@ export function acceptProposal(
     return state;
   }
 
-  const block: CalendarBlock = {
+  const createdAt = nowIso();
+  const block: Phase2MockCalendarBlock = {
     id: nextId("block"),
     user_id: proposal.user_id,
     area_id: proposal.area_id,
     task_id: proposal.task_id,
     proposal_id: proposal.id,
+    google_event_id: null,
     start_at: proposal.proposed_start,
     end_at: proposal.proposed_end,
     status: "scheduled",
+    created_at: createdAt,
+    updated_at: createdAt,
   };
 
   return {
@@ -413,7 +417,7 @@ export function startExecutionSession(
   }
 
   const block = state.calendarBlocks.find((item) => item.task_id === taskId) ?? null;
-  const session: ExecutionSession = {
+  const session: Phase2MockExecutionSession = {
     id: nextId("session"),
     user_id: task.user_id,
     area_id: task.area_id ?? "area-main-job",
@@ -441,7 +445,7 @@ export function startExecutionSession(
 
 export function markCurrentSession(
   state: WorkflowState,
-  status: ExecutionSession["status"],
+  status: Phase2MockExecutionSession["status"],
 ): WorkflowState {
   const current = state.executionSessions[0];
   if (!current) {

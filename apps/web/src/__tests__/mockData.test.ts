@@ -3,10 +3,12 @@ import { areas } from "@/lib/mockData";
 
 describe("mockData", () => {
   it("includes the required seed areas", () => {
-    const names = areas.map((a) => a.name);
-    expect(names).toContain("Main Job");
-    expect(names).toContain("Personal");
-    expect(names).toContain("Volunteer Work");
+    expect(areas.map((area) => [area.id, area.name, area.color])).toEqual([
+      ["area-main-job", "Main Job", "#2563eb"],
+      ["area-personal", "Personal", "#16a34a"],
+      ["area-volunteer", "Volunteer Work", "#9333ea"],
+      ["area-side-project", "Side Project", "#f97316"],
+    ]);
   });
 });
 

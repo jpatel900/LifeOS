@@ -5,12 +5,19 @@
 -- Password for both local test users: password123
 
 insert into auth.users (
+  instance_id,
   id,
   aud,
   role,
   email,
   encrypted_password,
   email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change,
+  email_change_token_new,
+  email_change_token_current,
+  reauthentication_token,
   raw_app_meta_data,
   raw_user_meta_data,
   created_at,
@@ -20,12 +27,19 @@ insert into auth.users (
 )
 values
   (
+    '00000000-0000-0000-0000-000000000000',
     '00000000-0000-4000-8000-000000000001',
     'authenticated',
     'authenticated',
     'user_a@example.test',
     crypt('password123', gen_salt('bf')),
     now(),
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{"name":"User A"}'::jsonb,
     now(),
@@ -34,12 +48,19 @@ values
     false
   ),
   (
+    '00000000-0000-0000-0000-000000000000',
     '00000000-0000-4000-8000-000000000002',
     'authenticated',
     'authenticated',
     'user_b@example.test',
     crypt('password123', gen_salt('bf')),
     now(),
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{"name":"User B"}'::jsonb,
     now(),
@@ -122,6 +143,17 @@ values
     '#9333ea',
     'heart',
     2,
+    true
+  ),
+  (
+    '00000000-0000-4000-8000-000000000104',
+    '00000000-0000-4000-8000-000000000001',
+    'Side Project',
+    'side-project',
+    'Independent builds, experiments, and optional projects.',
+    '#f97316',
+    'rocket',
+    3,
     true
   ),
   (

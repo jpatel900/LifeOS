@@ -18,6 +18,7 @@ const WORKFLOW_AREA_BY_SLUG: Record<string, string> = {
   "main-job": "area-main-job",
   personal: "area-personal",
   "volunteer-work": "area-volunteer",
+  "side-project": "area-side-project",
 };
 
 type AreasState =

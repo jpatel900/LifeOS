@@ -26,7 +26,7 @@ import {
   updateProposal,
   type WorkflowState,
 } from "./workflow";
-import type { ExecutionSession } from "./types";
+import type { Phase2MockExecutionSession } from "./types";
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
@@ -71,7 +71,7 @@ type WorkflowAction =
     }
   | {
       type: "markSession";
-      status: ExecutionSession["status"];
+      status: Phase2MockExecutionSession["status"];
     }
   | {
       type: "reset";
@@ -95,7 +95,7 @@ interface WorkflowContextValue {
     changes: Pick<Phase2TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">,
   ) => void;
   startTaskSession: (taskId: string) => void;
-  markSession: (status: ExecutionSession["status"]) => void;
+  markSession: (status: Phase2MockExecutionSession["status"]) => void;
   resetWorkflow: () => void;
 }
 

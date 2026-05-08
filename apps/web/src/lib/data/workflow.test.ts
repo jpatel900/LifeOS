@@ -10,7 +10,14 @@ describe("workflow data provider", () => {
     const result = await listAreas(null);
 
     expect(result.provider).toBe("mock");
-    expect(result.areas.map((area) => area.name)).toContain("Main Job");
+    expect(
+      result.areas.map((area) => [area.name, area.slug, area.color, area.icon]),
+    ).toEqual([
+      ["Main Job", "main-job", "#2563eb", "briefcase"],
+      ["Personal", "personal", "#16a34a", "home"],
+      ["Volunteer Work", "volunteer-work", "#9333ea", "heart"],
+      ["Side Project", "side-project", "#f97316", "rocket"],
+    ]);
     expect(result.areas.every((area) => area.is_active)).toBe(true);
   });
 
