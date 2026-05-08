@@ -1,18 +1,26 @@
 import {
   AreaSchema,
+  CalendarBlockSchema,
   CaptureItemSchema,
+  CreateTimeBlockProposalInputSchema,
+  EditTimeBlockProposalInputSchema,
   CreateProjectInputSchema,
   CreateCaptureItemInputSchema,
   CreateTaskInputSchema,
   ProjectSchema,
   TaskSchema,
+  TimeBlockProposalSchema,
   type Area,
+  type CalendarBlock,
   type CaptureItem,
+  type CreateTimeBlockProposalInput,
+  type EditTimeBlockProposalInput,
   type CreateProjectInput,
   type CreateCaptureItemInput,
   type CreateTaskInput,
   type Project,
   type Task,
+  type TimeBlockProposal,
 } from "@lifeos/schemas";
 
 export type DataProvider = "mock" | "supabase";
@@ -40,6 +48,29 @@ export interface TaskCreateResult {
 export interface ProjectCreateResult {
   provider: DataProvider;
   project: Project;
+}
+
+export interface PlanningItemsResult {
+  provider: DataProvider;
+  tasks: Task[];
+  proposals: TimeBlockProposal[];
+  blocks: CalendarBlock[];
+}
+
+export interface TimeBlockProposalCreateResult {
+  provider: DataProvider;
+  proposal: TimeBlockProposal;
+}
+
+export interface TimeBlockProposalUpdateResult {
+  provider: DataProvider;
+  proposal: TimeBlockProposal;
+}
+
+export interface TimeBlockProposalAcceptResult {
+  provider: DataProvider;
+  proposal: TimeBlockProposal;
+  block: CalendarBlock;
 }
 
 export interface MinimalSupabaseClient {
@@ -121,6 +152,12 @@ const taskColumns =
 const projectColumns =
   "id,user_id,area_id,title,description,status,created_at,updated_at";
 
+const timeBlockProposalColumns =
+  "id,user_id,area_id,task_id,proposed_start,proposed_end,rationale_json,conflict_flag,conflict_details_json,status,created_at";
+
+const calendarBlockColumns =
+  "id,user_id,area_id,proposal_id,task_id,google_event_id,start_at,end_at,status,created_at,updated_at";
+
 function parseAreas(rows: unknown) {
   return AreaSchema.array().parse(rows);
 }
@@ -135,6 +172,26 @@ function parseTask(row: unknown) {
 
 function parseProject(row: unknown) {
   return ProjectSchema.parse(row);
+}
+
+function parseTimeBlockProposal(row: unknown) {
+  return TimeBlockProposalSchema.parse(row);
+}
+
+function parseTimeBlockProposals(rows: unknown) {
+  return TimeBlockProposalSchema.array().parse(rows);
+}
+
+function parseCalendarBlock(row: unknown) {
+  return CalendarBlockSchema.parse(row);
+}
+
+function parseCalendarBlocks(rows: unknown) {
+  return CalendarBlockSchema.array().parse(rows);
+}
+
+function parseTasks(rows: unknown) {
+  return TaskSchema.array().parse(rows);
 }
 
 function getSupabaseMessage(error: unknown) {
@@ -399,5 +456,332 @@ export async function createProject(
   return {
     provider: "supabase",
     project: parseProject(data),
+  };
+}
+
+export async function listPlanningItems(
+  client: MinimalSupabaseClient | null,
+): Promise<PlanningItemsResult> {
+  if (!client) {
+    return {
+      provider: "mock",
+      tasks: [],
+      proposals: [],
+      blocks: [],
+    };
+  }
+
+  await requireSupabaseUser(client, "Sign in before loading planning rows.");
+
+  const tasksQuery = client.from("tasks") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+  const proposalsQuery = client.from("time_block_proposals") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+  const blocksQuery = client.from("calendar_blocks") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+
+  const { data: tasks, error: tasksError } = await tasksQuery
+    .select(taskColumns)
+    .order("updated_at", { ascending: false })
+    .eq("status", "active");
+  if (tasksError) {
+    throw new Error(getSupabaseMessage(tasksError));
+  }
+
+  const { data: proposals, error: proposalsError } = await proposalsQuery
+    .select(timeBlockProposalColumns)
+    .order("proposed_start", { ascending: true });
+  if (proposalsError) {
+    throw new Error(getSupabaseMessage(proposalsError));
+  }
+
+  const { data: blocks, error: blocksError } = await blocksQuery
+    .select(calendarBlockColumns)
+    .order("start_at", { ascending: true });
+  if (blocksError) {
+    throw new Error(getSupabaseMessage(blocksError));
+  }
+
+  return {
+    provider: "supabase",
+    tasks: parseTasks(tasks),
+    proposals: parseTimeBlockProposals(proposals),
+    blocks: parseCalendarBlocks(blocks),
+  };
+}
+
+export async function createTimeBlockProposal(
+  client: MinimalSupabaseClient | null,
+  input: CreateTimeBlockProposalInput,
+): Promise<TimeBlockProposalCreateResult> {
+  const parsedInput = CreateTimeBlockProposalInputSchema.parse(input);
+
+  if (!client) {
+    const createdAt = new Date().toISOString();
+    return {
+      provider: "mock",
+      proposal: parseTimeBlockProposal({
+        id: crypto.randomUUID(),
+        user_id: mockUserId,
+        area_id: mockAreas[0]?.id,
+        task_id: parsedInput.task_id,
+        proposed_start: parsedInput.proposed_start,
+        proposed_end: parsedInput.proposed_end,
+        rationale_json: { note: parsedInput.rationale_note },
+        conflict_flag: false,
+        conflict_details_json: null,
+        status: "proposed",
+        created_at: createdAt,
+      }),
+    };
+  }
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before creating planning proposals.",
+  );
+
+  const taskQuery = client.from("tasks") as {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+
+  const { data: taskData, error: taskError } = await taskQuery
+    .select(taskColumns)
+    .eq("id", parsedInput.task_id)
+    .single();
+  if (taskError) {
+    throw new Error(getSupabaseMessage(taskError));
+  }
+  const task = parseTask(taskData);
+
+  const proposalQuery = client.from("time_block_proposals") as {
+    insert: (row: Record<string, unknown>) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+
+  const { data, error } = await proposalQuery
+    .insert({
+      user_id: user.id,
+      area_id: task.area_id,
+      task_id: task.id,
+      proposed_start: parsedInput.proposed_start,
+      proposed_end: parsedInput.proposed_end,
+      rationale_json: { note: parsedInput.rationale_note },
+      conflict_flag: false,
+      conflict_details_json: null,
+      status: "proposed",
+    })
+    .select(timeBlockProposalColumns)
+    .single();
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return {
+    provider: "supabase",
+    proposal: parseTimeBlockProposal(data),
+  };
+}
+
+export async function editTimeBlockProposal(
+  client: MinimalSupabaseClient | null,
+  proposalId: string,
+  input: EditTimeBlockProposalInput,
+): Promise<TimeBlockProposalUpdateResult> {
+  const parsedInput = EditTimeBlockProposalInputSchema.parse(input);
+
+  if (!client) {
+    throw new Error("Mock proposal edits use the local workflow context.");
+  }
+
+  await requireSupabaseUser(client, "Sign in before editing planning proposals.");
+
+  const query = client.from("time_block_proposals") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({
+      proposed_start: parsedInput.proposed_start,
+      proposed_end: parsedInput.proposed_end,
+      status: "edited",
+    })
+    .eq("id", proposalId)
+    .select(timeBlockProposalColumns)
+    .single();
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return {
+    provider: "supabase",
+    proposal: parseTimeBlockProposal(data),
+  };
+}
+
+export async function rejectTimeBlockProposal(
+  client: MinimalSupabaseClient | null,
+  proposalId: string,
+): Promise<TimeBlockProposalUpdateResult> {
+  if (!client) {
+    throw new Error("Mock proposal rejection uses the local workflow context.");
+  }
+
+  await requireSupabaseUser(client, "Sign in before rejecting planning proposals.");
+
+  const query = client.from("time_block_proposals") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({ status: "rejected" })
+    .eq("id", proposalId)
+    .select(timeBlockProposalColumns)
+    .single();
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return {
+    provider: "supabase",
+    proposal: parseTimeBlockProposal(data),
+  };
+}
+
+export async function acceptTimeBlockProposal(
+  client: MinimalSupabaseClient | null,
+  proposalId: string,
+): Promise<TimeBlockProposalAcceptResult> {
+  if (!client) {
+    throw new Error("Mock proposal acceptance uses the local workflow context.");
+  }
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before accepting planning proposals.",
+  );
+
+  const proposalReadQuery = client.from("time_block_proposals") as {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+  const { data: proposalData, error: proposalReadError } = await proposalReadQuery
+    .select(timeBlockProposalColumns)
+    .eq("id", proposalId)
+    .single();
+  if (proposalReadError) {
+    throw new Error(getSupabaseMessage(proposalReadError));
+  }
+  const proposal = parseTimeBlockProposal(proposalData);
+  if (proposal.status !== "proposed" && proposal.status !== "edited") {
+    throw new Error("Only proposed or edited proposals can be accepted.");
+  }
+
+  const proposalUpdateQuery = client.from("time_block_proposals") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+  const { data: acceptedData, error: acceptError } = await proposalUpdateQuery
+    .update({ status: "accepted" })
+    .eq("id", proposalId)
+    .select(timeBlockProposalColumns)
+    .single();
+  if (acceptError) {
+    throw new Error(getSupabaseMessage(acceptError));
+  }
+
+  const blockQuery = client.from("calendar_blocks") as {
+    insert: (row: Record<string, unknown>) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+  const { data: blockData, error: blockError } = await blockQuery
+    .insert({
+      user_id: user.id,
+      area_id: proposal.area_id,
+      proposal_id: proposal.id,
+      task_id: proposal.task_id,
+      google_event_id: null,
+      start_at: proposal.proposed_start,
+      end_at: proposal.proposed_end,
+      status: "scheduled",
+    })
+    .select(calendarBlockColumns)
+    .single();
+  if (blockError) {
+    throw new Error(getSupabaseMessage(blockError));
+  }
+
+  return {
+    provider: "supabase",
+    proposal: parseTimeBlockProposal(acceptedData),
+    block: parseCalendarBlock(blockData),
   };
 }

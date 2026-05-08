@@ -2,7 +2,7 @@
 
 ## Current status
 
-MVP supports task capture, area assignment, and manual scheduling. The Phase 2 mock vertical slice remains for session-only triage and scheduling mocks. Phase 4B is complete: `/settings/areas` reads Supabase-backed areas, `/capture` inserts raw `capture_items`, and `/triage` persists accepted task/project drafts to `tasks`/`projects` when public Supabase env vars and auth are configured. These flows fall back to mock mode when Supabase env vars are absent.
+MVP supports task capture, area assignment, and manual scheduling. The Phase 2 mock vertical slice remains for session-only fallback flows. Phase 4C is complete: `/settings/areas` reads Supabase-backed areas, `/capture` inserts raw `capture_items`, `/triage` persists accepted task/project drafts to `tasks`/`projects`, and `/calendar` can create/edit/reject/accept local `time_block_proposals` from persisted tasks. Accepting a persisted proposal creates a local `calendar_blocks` row only. These flows fall back to mock mode when Supabase env vars are absent.
 
 ## Recently completed
 
@@ -30,18 +30,23 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Added Phase 4B accepted-draft persistence: triage accepts task drafts into `tasks` and project drafts into `projects`, validates create inputs and returned rows with `@lifeos/schemas`, and leaves rejected/deferred drafts uncommitted.
 - Added a narrow Supabase migration granting authenticated Data API access for `areas`, `capture_items`, `projects`, and `tasks`; RLS policies remain unchanged.
 - Added Phase 4B tests for task/project acceptance, reject-without-create behavior, mock fallback, source-of-truth boundaries, and opt-in local RLS coverage for `tasks` and `projects`.
+- Added Phase 4C local planning persistence: `@lifeos/schemas` now validates proposal create/edit inputs, the data layer lists active tasks/proposals/blocks, creates proposals from persisted task rows, persists edit/reject/accept status changes, and inserts local `calendar_blocks` on acceptance.
+- `/calendar` now uses persisted planning rows when Supabase is configured/authenticated and preserves the existing Phase 2 mock planning path when Supabase config is absent.
+- Added a narrow Supabase migration granting authenticated Data API access for `time_block_proposals` and `calendar_blocks`; existing RLS policies remain unchanged.
+- Added Phase 4C tests for task-to-proposal, proposal edit/reject/accept-to-block, migration grants, UI persistence, mock fallback route smoke, and opt-in local RLS coverage for proposals/blocks.
 
 ## Known issues
 
 - Rescheduling does not yet check all-day events.
 - Mobile layout needs improvement.
-- Supabase is scaffolded locally and Phase 4B UI uses it for areas, capture, accepted tasks, and accepted projects; proposals, calendar blocks, execution sessions, and review flows are not wired to Supabase.
+- Supabase is scaffolded locally and Phase 4C UI uses it for areas, capture, accepted tasks/projects, local time-block proposals, and local calendar blocks; execution sessions and review flows are not wired to Supabase.
 - Supabase-backed capture and accepted-draft saves require an authenticated Supabase user because RLS policies enforce `auth.uid() = user_id`.
+- Persisted planning is local-only. There is still no Google Calendar API, free/busy query, OpenAI scheduling, autonomous scheduling, or conflict auto-solver in Phase 4C.
 
 ## Next recommended tasks
 
-1. Manually smoke `/login` with `user_a@example.test` / `password123`, then verify `/settings/areas` reads four canonical areas, `/capture` saves a raw capture, and `/triage` persists accepted task/project drafts.
-2. Start the next approved phase only after updating requirements/acceptance criteria; do not extend Phase 4B into proposal/calendar persistence without explicit scope.
+1. Manually smoke `/login` with `user_a@example.test` / `password123`, then verify `/settings/areas`, `/capture`, `/triage`, and `/calendar` against local Supabase.
+2. Start the next approved phase only after updating requirements/acceptance criteria; do not extend Phase 4C into Google Calendar/free-busy/external writes without explicit scope.
 3. Add conflict detection tests.
 4. Improve mobile task capture.
 5. Add review log.
@@ -55,10 +60,10 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Agent guidance is now aligned across `AGENTS.md` and `.cursor/rules/execution-discipline.mdc` for phase-first implementation and completion checks.
 - Phase 3 migration covers only the requested V1 tables: areas, capture items, projects, tasks, proposals, calendar blocks, execution sessions, review entries, health checks/incidents, suggestion records, and override records.
 - RLS policies use `to authenticated` and `((select auth.uid()) = user_id)`; area/project/task references use same-user composite foreign keys to reduce cross-user contamination risk.
-- Phase 4B data access falls back to mock data when `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing.
-- Phase 4B does not add OpenAI, Google Calendar, Edge Functions, proposal persistence, or calendar persistence. Browser Supabase code uses only the public URL and anon key.
+- Phase 4C data access falls back to mock data when `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing.
+- Phase 4C does not add OpenAI, Google Calendar, free/busy, Edge Functions, external writes, autonomous scheduling, or conflict solving. Browser Supabase code uses only the public URL and anon key.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
-- `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, and `projects`.
+- `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, `projects`, `time_block_proposals`, and `calendar_blocks`.
 - `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.
-- Triage maps Phase 2 mock area ids to persisted Phase 4 area slugs before saving accepted tasks/projects; local time-block proposal drafts remain session-only.
+- Triage maps Phase 2 mock area ids to persisted Phase 4 area slugs before saving accepted tasks/projects; `/calendar` creates persisted proposals from persisted task ids rather than from Phase 2 mock proposal draft ids.

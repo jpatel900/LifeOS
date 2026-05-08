@@ -80,5 +80,43 @@ export const CreateTaskInputSchema = z
 
 export type CreateTaskInput = z.input<typeof CreateTaskInputSchema>;
 
+function endAfterStart(input: { proposed_start: string; proposed_end: string }) {
+  return new Date(input.proposed_end).getTime() > new Date(input.proposed_start).getTime();
+}
+
+const proposalTimeRangeMessage = {
+  message: "proposed_end must be after proposed_start",
+  path: ["proposed_end"],
+};
+
+export const CreateTimeBlockProposalInputSchema = z
+  .object({
+    task_id: z.string().uuid(),
+    proposed_start: z.string().datetime(),
+    proposed_end: z.string().datetime(),
+    rationale_note: z
+      .string()
+      .trim()
+      .min(1)
+      .optional()
+      .default("Local planning proposal created from task duration."),
+  })
+  .refine(endAfterStart, proposalTimeRangeMessage);
+
+export type CreateTimeBlockProposalInput = z.input<
+  typeof CreateTimeBlockProposalInputSchema
+>;
+
+export const EditTimeBlockProposalInputSchema = z
+  .object({
+    proposed_start: z.string().datetime(),
+    proposed_end: z.string().datetime(),
+  })
+  .refine(endAfterStart, proposalTimeRangeMessage);
+
+export type EditTimeBlockProposalInput = z.input<
+  typeof EditTimeBlockProposalInputSchema
+>;
+
 export const CaptureSchema = CaptureItemSchema;
 export type Capture = CaptureItem;

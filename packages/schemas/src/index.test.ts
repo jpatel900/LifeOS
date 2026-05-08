@@ -5,6 +5,8 @@ import {
   CalendarBlockSchema,
   CaptureItemSchema,
   CreateCaptureItemInputSchema,
+  CreateTimeBlockProposalInputSchema,
+  EditTimeBlockProposalInputSchema,
   CreateProjectInputSchema,
   CreateTaskInputSchema,
   ExecutionSessionSchema,
@@ -100,6 +102,42 @@ describe("CreateTaskInputSchema", () => {
     expect(result.success ? result.data.first_tiny_step : "").toBe(
       "Open the event notes",
     );
+  });
+});
+
+describe("CreateTimeBlockProposalInputSchema", () => {
+  it("validates task-backed local proposal input", () => {
+    const result = CreateTimeBlockProposalInputSchema.safeParse({
+      task_id: uid,
+      proposed_start: "2026-05-08T16:00:00.000Z",
+      proposed_end: "2026-05-08T17:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.rationale_note : "").toBe(
+      "Local planning proposal created from task duration.",
+    );
+  });
+
+  it("rejects proposals where end is not after start", () => {
+    const result = CreateTimeBlockProposalInputSchema.safeParse({
+      task_id: uid,
+      proposed_start: "2026-05-08T17:00:00.000Z",
+      proposed_end: "2026-05-08T16:00:00.000Z",
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("EditTimeBlockProposalInputSchema", () => {
+  it("validates editable start and end before proposal acceptance", () => {
+    const result = EditTimeBlockProposalInputSchema.safeParse({
+      proposed_start: "2026-05-08T18:00:00.000Z",
+      proposed_end: "2026-05-08T19:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
   });
 });
 

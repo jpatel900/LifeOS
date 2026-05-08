@@ -81,6 +81,28 @@ async function deleteProjectByTitle(client: SupabaseClient, title: string) {
   }
 }
 
+async function deleteProposalByTaskId(client: SupabaseClient, taskId: string) {
+  const { error } = await client
+    .from("time_block_proposals")
+    .delete()
+    .eq("task_id", taskId);
+
+  if (error) {
+    throw new Error(`Could not clean up proposal for task '${taskId}': ${error.message}`);
+  }
+}
+
+async function deleteBlockByTaskId(client: SupabaseClient, taskId: string) {
+  const { error } = await client
+    .from("calendar_blocks")
+    .delete()
+    .eq("task_id", taskId);
+
+  if (error) {
+    throw new Error(`Could not clean up block for task '${taskId}': ${error.message}`);
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -263,6 +285,170 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
     expect(taskError?.message).toMatch(/row-level security|violates row-level/i);
     expect(projectError?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A access own proposals and blocks but not user B rows", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userATaskTitle = `rls-user-a-planning-task-${suffix}`;
+    const userBTaskTitle = `rls-user-b-planning-task-${suffix}`;
+    let userATaskId = "";
+    let userBTaskId = "";
+
+    try {
+      const { data: insertedATask, error: insertATaskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: userATaskTitle,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      expect(insertATaskError).toBeNull();
+      userATaskId = insertedATask!.id;
+
+      const { data: insertedBTask, error: insertBTaskError } = await userBClient
+        .from("tasks")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          title: userBTaskTitle,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      expect(insertBTaskError).toBeNull();
+      userBTaskId = insertedBTask!.id;
+
+      const { data: proposalA, error: insertProposalAError } = await userAClient
+        .from("time_block_proposals")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: userATaskId,
+          proposed_start: "2026-05-08T16:00:00.000Z",
+          proposed_end: "2026-05-08T17:00:00.000Z",
+          rationale_json: { note: "RLS user A" },
+          conflict_flag: false,
+          status: "proposed",
+        })
+        .select("id")
+        .single();
+      expect(insertProposalAError).toBeNull();
+
+      const { data: proposalB, error: insertProposalBError } = await userBClient
+        .from("time_block_proposals")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          task_id: userBTaskId,
+          proposed_start: "2026-05-08T18:00:00.000Z",
+          proposed_end: "2026-05-08T19:00:00.000Z",
+          rationale_json: { note: "RLS user B" },
+          conflict_flag: false,
+          status: "proposed",
+        })
+        .select("id")
+        .single();
+      expect(insertProposalBError).toBeNull();
+
+      const { error: insertBlockAError } = await userAClient
+        .from("calendar_blocks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          proposal_id: proposalA!.id,
+          task_id: userATaskId,
+          start_at: "2026-05-08T16:00:00.000Z",
+          end_at: "2026-05-08T17:00:00.000Z",
+          status: "scheduled",
+        });
+      expect(insertBlockAError).toBeNull();
+
+      const { error: insertBlockBError } = await userBClient
+        .from("calendar_blocks")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          proposal_id: proposalB!.id,
+          task_id: userBTaskId,
+          start_at: "2026-05-08T18:00:00.000Z",
+          end_at: "2026-05-08T19:00:00.000Z",
+          status: "scheduled",
+        });
+      expect(insertBlockBError).toBeNull();
+
+      const { data: visibleProposalsToA, error: selectProposalAError } =
+        await userAClient
+          .from("time_block_proposals")
+          .select("user_id,task_id")
+          .in("task_id", [userATaskId, userBTaskId])
+          .order("task_id", { ascending: true });
+      expect(selectProposalAError).toBeNull();
+      expect(visibleProposalsToA).toEqual([
+        { user_id: userA.id, task_id: userATaskId },
+      ]);
+
+      const { data: visibleBlocksToA, error: selectBlockAError } =
+        await userAClient
+          .from("calendar_blocks")
+          .select("user_id,task_id")
+          .in("task_id", [userATaskId, userBTaskId])
+          .order("task_id", { ascending: true });
+      expect(selectBlockAError).toBeNull();
+      expect(visibleBlocksToA).toEqual([
+        { user_id: userA.id, task_id: userATaskId },
+      ]);
+    } finally {
+      if (userATaskId) {
+        await deleteBlockByTaskId(userAClient, userATaskId);
+        await deleteProposalByTaskId(userAClient, userATaskId);
+      }
+      if (userBTaskId) {
+        await deleteBlockByTaskId(userBClient, userBTaskId);
+        await deleteProposalByTaskId(userBClient, userBTaskId);
+      }
+      await deleteTaskByTitle(userAClient, userATaskTitle);
+      await deleteTaskByTitle(userBClient, userBTaskTitle);
+    }
+  });
+
+  it("prevents user A from inserting or updating user B planning rows", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+
+    const { error: insertProposalError } = await userAClient
+      .from("time_block_proposals")
+      .insert({
+        user_id: userB.id,
+        area_id: userB.areaId,
+        task_id: null,
+        proposed_start: "2026-05-08T16:00:00.000Z",
+        proposed_end: "2026-05-08T17:00:00.000Z",
+        rationale_json: { note: "cross-user" },
+        conflict_flag: false,
+        status: "proposed",
+      });
+
+    const { error: insertBlockError } = await userAClient
+      .from("calendar_blocks")
+      .insert({
+        user_id: userB.id,
+        area_id: userB.areaId,
+        task_id: null,
+        start_at: "2026-05-08T16:00:00.000Z",
+        end_at: "2026-05-08T17:00:00.000Z",
+        status: "scheduled",
+      });
+
+    expect(insertProposalError?.message).toMatch(
+      /row-level security|violates row-level/i,
+    );
+    expect(insertBlockError?.message).toMatch(
+      /row-level security|violates row-level/i,
+    );
   });
 });
 

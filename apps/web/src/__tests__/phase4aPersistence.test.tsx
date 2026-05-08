@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area, CaptureItem } from "@lifeos/schemas";
+import CalendarPage from "../app/calendar/page";
 import CapturePage from "../app/capture/page";
 import AreasSettingsPage from "../app/settings/areas/page";
 import TriagePage from "../app/triage/page";
@@ -17,6 +18,11 @@ const mocks = vi.hoisted(() => {
     createCaptureItem: vi.fn(),
     createTask: vi.fn(),
     createProject: vi.fn(),
+    listPlanningItems: vi.fn(),
+    createTimeBlockProposal: vi.fn(),
+    editTimeBlockProposal: vi.fn(),
+    rejectTimeBlockProposal: vi.fn(),
+    acceptTimeBlockProposal: vi.fn(),
   };
 });
 
@@ -29,6 +35,11 @@ vi.mock("@/lib/data/workflow", () => ({
   createCaptureItem: mocks.createCaptureItem,
   createTask: mocks.createTask,
   createProject: mocks.createProject,
+  listPlanningItems: mocks.listPlanningItems,
+  createTimeBlockProposal: mocks.createTimeBlockProposal,
+  editTimeBlockProposal: mocks.editTimeBlockProposal,
+  rejectTimeBlockProposal: mocks.rejectTimeBlockProposal,
+  acceptTimeBlockProposal: mocks.acceptTimeBlockProposal,
 }));
 
 const area: Area = {
@@ -88,6 +99,36 @@ const project = {
   status: "active",
   created_at: "2026-05-07T00:00:00.000Z",
   updated_at: "2026-05-07T00:00:00.000Z",
+};
+
+const proposal = {
+  id: "550e8400-e29b-41d4-a716-446655440501",
+  user_id: area.user_id,
+  area_id: area.id,
+  task_id: task.id,
+  proposed_start: "2026-05-08T16:00:00.000Z",
+  proposed_end: "2026-05-08T17:00:00.000Z",
+  rationale_json: {
+    note: "Local planning proposal created from task duration.",
+  },
+  conflict_flag: false,
+  conflict_details_json: null,
+  status: "proposed",
+  created_at: "2026-05-08T15:00:00.000Z",
+};
+
+const block = {
+  id: "550e8400-e29b-41d4-a716-446655440601",
+  user_id: area.user_id,
+  area_id: area.id,
+  proposal_id: proposal.id,
+  task_id: task.id,
+  google_event_id: null,
+  start_at: proposal.proposed_start,
+  end_at: proposal.proposed_end,
+  status: "scheduled",
+  created_at: "2026-05-08T15:05:00.000Z",
+  updated_at: "2026-05-08T15:05:00.000Z",
 };
 
 function SeedCapture({ text }: { text: string }) {
@@ -273,5 +314,60 @@ describe("Phase 4A Supabase persistence UI", () => {
       expect(mocks.createTask).not.toHaveBeenCalled();
       expect(mocks.createProject).not.toHaveBeenCalled();
     });
+  });
+
+  it("creates persisted local planning proposals from persisted tasks", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [],
+      blocks: [],
+    });
+    mocks.createTimeBlockProposal.mockResolvedValue({
+      provider: "supabase",
+      proposal,
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Propose time" }));
+
+    await waitFor(() => {
+      expect(mocks.createTimeBlockProposal).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        expect.objectContaining({
+          task_id: task.id,
+        }),
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Proposal saved through supabase.");
+  });
+
+  it("accepting a persisted proposal creates a local calendar block", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [proposal],
+      blocks: [],
+    });
+    mocks.acceptTimeBlockProposal.mockResolvedValue({
+      provider: "supabase",
+      proposal: { ...proposal, status: "accepted" },
+      block,
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accept local block" }));
+
+    await waitFor(() => {
+      expect(mocks.acceptTimeBlockProposal).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        proposal.id,
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Local block created through supabase.");
   });
 });

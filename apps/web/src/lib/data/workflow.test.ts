@@ -1,11 +1,88 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  acceptTimeBlockProposal,
+  createTimeBlockProposal,
   createProject,
   createCaptureItem,
   createTask,
+  editTimeBlockProposal,
+  listPlanningItems,
+  rejectTimeBlockProposal,
   listAreas,
   type MinimalSupabaseClient,
 } from "./workflow";
+
+const userId = "550e8400-e29b-41d4-a716-446655440001";
+const areaId = "550e8400-e29b-41d4-a716-446655440101";
+const taskId = "550e8400-e29b-41d4-a716-446655440301";
+const proposalId = "550e8400-e29b-41d4-a716-446655440501";
+const blockId = "550e8400-e29b-41d4-a716-446655440601";
+const start = "2026-05-08T16:00:00.000Z";
+const end = "2026-05-08T17:00:00.000Z";
+
+const taskRow = {
+  id: taskId,
+  user_id: userId,
+  area_id: areaId,
+  project_id: null,
+  source_capture_item_id: null,
+  title: "Call dentist tomorrow",
+  description: null,
+  status: "active",
+  priority_score: null,
+  priority_confidence: 0.82,
+  task_type: null,
+  energy_type: null,
+  estimated_minutes_low: 30,
+  estimated_minutes_high: 60,
+  due_at: null,
+  definition_of_done: "Complete the first useful move and note the outcome.",
+  first_tiny_step: "Find the dentist number",
+  created_at: "2026-05-07T00:00:00.000Z",
+  updated_at: "2026-05-07T00:00:00.000Z",
+};
+
+const proposalRow = {
+  id: proposalId,
+  user_id: userId,
+  area_id: areaId,
+  task_id: taskId,
+  proposed_start: start,
+  proposed_end: end,
+  rationale_json: {
+    note: "Local planning proposal created from task duration.",
+  },
+  conflict_flag: false,
+  conflict_details_json: null,
+  status: "proposed",
+  created_at: "2026-05-08T15:00:00.000Z",
+};
+
+const blockRow = {
+  id: blockId,
+  user_id: userId,
+  area_id: areaId,
+  proposal_id: proposalId,
+  task_id: taskId,
+  google_event_id: null,
+  start_at: start,
+  end_at: end,
+  status: "scheduled",
+  created_at: "2026-05-08T15:05:00.000Z",
+  updated_at: "2026-05-08T15:05:00.000Z",
+};
+
+function authenticatedClient(from: MinimalSupabaseClient["from"]) {
+  return {
+    from,
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: { id: userId } },
+        error: null,
+      }),
+    },
+  } as unknown as MinimalSupabaseClient;
+}
 
 describe("workflow data provider", () => {
   it("lists mock areas when Supabase is not configured", async () => {
@@ -277,5 +354,177 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("mock");
     expect(result.project.title).toBe("Mock project");
     expect(result.project.status).toBe("active");
+  });
+
+  it("lists persisted planning tasks, proposals, and local blocks", async () => {
+    const tasksEq = vi.fn().mockResolvedValue({ data: [taskRow], error: null });
+    const tasksOrder = vi.fn().mockReturnValue({ eq: tasksEq });
+    const tasksSelect = vi.fn().mockReturnValue({ order: tasksOrder });
+
+    const proposalsOrder = vi
+      .fn()
+      .mockResolvedValue({ data: [proposalRow], error: null });
+    const proposalsSelect = vi.fn().mockReturnValue({ order: proposalsOrder });
+
+    const blocksOrder = vi.fn().mockResolvedValue({ data: [blockRow], error: null });
+    const blocksSelect = vi.fn().mockReturnValue({ order: blocksOrder });
+
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: tasksSelect };
+      if (table === "time_block_proposals") return { select: proposalsSelect };
+      if (table === "calendar_blocks") return { select: blocksSelect };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await listPlanningItems(authenticatedClient(from));
+
+    expect(from).toHaveBeenCalledWith("tasks");
+    expect(from).toHaveBeenCalledWith("time_block_proposals");
+    expect(from).toHaveBeenCalledWith("calendar_blocks");
+    expect(tasksEq).toHaveBeenCalledWith("status", "active");
+    expect(result.provider).toBe("supabase");
+    expect(result.tasks).toEqual([taskRow]);
+    expect(result.proposals).toEqual([proposalRow]);
+    expect(result.blocks).toEqual([blockRow]);
+  });
+
+  it("creates a local time_block_proposal from a persisted task", async () => {
+    const taskSingle = vi.fn().mockResolvedValue({ data: taskRow, error: null });
+    const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
+    const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
+
+    const proposalSingle = vi.fn().mockResolvedValue({
+      data: proposalRow,
+      error: null,
+    });
+    const proposalSelect = vi.fn().mockReturnValue({ single: proposalSingle });
+    const proposalInsert = vi.fn().mockReturnValue({ select: proposalSelect });
+
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: taskSelect };
+      if (table === "time_block_proposals") return { insert: proposalInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await createTimeBlockProposal(authenticatedClient(from), {
+      task_id: taskId,
+      proposed_start: start,
+      proposed_end: end,
+    });
+
+    expect(taskEq).toHaveBeenCalledWith("id", taskId);
+    expect(proposalInsert).toHaveBeenCalledWith({
+      user_id: userId,
+      area_id: areaId,
+      task_id: taskId,
+      proposed_start: start,
+      proposed_end: end,
+      rationale_json: {
+        note: "Local planning proposal created from task duration.",
+      },
+      conflict_flag: false,
+      conflict_details_json: null,
+      status: "proposed",
+    });
+    expect(result.provider).toBe("supabase");
+    expect(result.proposal.status).toBe("proposed");
+  });
+
+  it("edits proposal start and end before acceptance", async () => {
+    const edited = {
+      ...proposalRow,
+      proposed_start: "2026-05-08T18:00:00.000Z",
+      proposed_end: "2026-05-08T19:00:00.000Z",
+      status: "edited",
+    };
+    const single = vi.fn().mockResolvedValue({ data: edited, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+
+    const result = await editTimeBlockProposal(
+      authenticatedClient(from),
+      proposalId,
+      {
+        proposed_start: edited.proposed_start,
+        proposed_end: edited.proposed_end,
+      },
+    );
+
+    expect(from).toHaveBeenCalledWith("time_block_proposals");
+    expect(update).toHaveBeenCalledWith({
+      proposed_start: edited.proposed_start,
+      proposed_end: edited.proposed_end,
+      status: "edited",
+    });
+    expect(eq).toHaveBeenCalledWith("id", proposalId);
+    expect(result.proposal.status).toBe("edited");
+  });
+
+  it("rejects a local proposal through persisted status", async () => {
+    const rejected = { ...proposalRow, status: "rejected" };
+    const single = vi.fn().mockResolvedValue({ data: rejected, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+
+    const result = await rejectTimeBlockProposal(
+      authenticatedClient(from),
+      proposalId,
+    );
+
+    expect(update).toHaveBeenCalledWith({ status: "rejected" });
+    expect(result.proposal.status).toBe("rejected");
+  });
+
+  it("accepts a local proposal and creates a calendar_block without Google fields", async () => {
+    const proposalSingle = vi
+      .fn()
+      .mockResolvedValue({ data: proposalRow, error: null });
+    const proposalEq = vi.fn().mockReturnValue({ single: proposalSingle });
+    const proposalSelect = vi.fn().mockReturnValue({ eq: proposalEq });
+
+    const accepted = { ...proposalRow, status: "accepted" };
+    const acceptedSingle = vi
+      .fn()
+      .mockResolvedValue({ data: accepted, error: null });
+    const acceptedSelect = vi.fn().mockReturnValue({ single: acceptedSingle });
+    const acceptedEq = vi.fn().mockReturnValue({ select: acceptedSelect });
+    const proposalUpdate = vi.fn().mockReturnValue({ eq: acceptedEq });
+
+    const blockSingle = vi.fn().mockResolvedValue({ data: blockRow, error: null });
+    const blockSelect = vi.fn().mockReturnValue({ single: blockSingle });
+    const blockInsert = vi.fn().mockReturnValue({ select: blockSelect });
+
+    const from = vi.fn((table: string) => {
+      if (table === "time_block_proposals") {
+        return { select: proposalSelect, update: proposalUpdate };
+      }
+      if (table === "calendar_blocks") return { insert: blockInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await acceptTimeBlockProposal(
+      authenticatedClient(from),
+      proposalId,
+    );
+
+    expect(proposalEq).toHaveBeenCalledWith("id", proposalId);
+    expect(proposalUpdate).toHaveBeenCalledWith({ status: "accepted" });
+    expect(blockInsert).toHaveBeenCalledWith({
+      user_id: userId,
+      area_id: areaId,
+      proposal_id: proposalId,
+      task_id: taskId,
+      google_event_id: null,
+      start_at: start,
+      end_at: end,
+      status: "scheduled",
+    });
+    expect(result.proposal.status).toBe("accepted");
+    expect(result.block.google_event_id).toBeNull();
+    expect(result.block.status).toBe("scheduled");
   });
 });

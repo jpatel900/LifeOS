@@ -125,7 +125,14 @@ describe("Supabase local database scaffold", () => {
     const sql = loadAllMigrations();
 
     expect(sql).toContain("grant usage on schema public to authenticated");
-    for (const table of ["areas", "capture_items", "projects", "tasks"]) {
+    for (const table of [
+      "areas",
+      "capture_items",
+      "projects",
+      "tasks",
+      "time_block_proposals",
+      "calendar_blocks",
+    ]) {
       expect(sql).toContain(
         `grant select, insert, update, delete on table public.${table} to authenticated`,
       );
