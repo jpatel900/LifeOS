@@ -1,6 +1,8 @@
+"use client";
+
 export default function HomePage() {
   return (
-    <>
+    <main style={{ padding: "2rem", maxWidth: "800px", margin: "0 auto" }}>
       <h1>LifeOS</h1>
       <p>Area-scoped personal workflow cockpit</p>
       <section style={{ marginTop: "2rem" }}>
@@ -10,6 +12,6 @@ export default function HomePage() {
           2 mock structure flow. This home page is a simple welcome for the shell.
         </p>
       </section>
-    </>
+    </main>
   );
 }

@@ -139,18 +139,16 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
 
 function loadInitialState() {
   if (typeof window === "undefined") {
-    return createSyncedInitialState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 
-  let stored: string | null;
-  try {
-    stored = window.sessionStorage.getItem(STORAGE_KEY);
-  } catch {
-    return createSyncedInitialState();
-  }
-
+  const stored = window.sessionStorage.getItem(STORAGE_KEY);
   if (!stored) {
-    return createSyncedInitialState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 
   try {
@@ -158,7 +156,9 @@ function loadInitialState() {
     syncWorkflowIdCounterFromState(parsed);
     return parsed;
   } catch {
-    return createSyncedInitialState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 }
 
@@ -170,11 +170,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     syncWorkflowIdCounterFromState(state);
-    try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Persistence is a convenience cache; the in-memory workflow must remain usable.
-    }
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 
   const value: WorkflowContextValue = {

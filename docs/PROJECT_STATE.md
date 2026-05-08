@@ -6,6 +6,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 
 ## Recently completed
 
+- Merged `origin/main` into the inspection branch; resolved conflicts by adopting main’s codebase and dropping unused `getTasksByArea` / `getProposalsByArea` / `getCalendarBlocksByArea` from `mockData.ts` (UI uses workflow context instead).
 - Task CRUD (mock path)
 - Area model
 - Basic calendar draft creation (mock path)
@@ -19,7 +20,6 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 - Updated shared Zod schemas to validate Phase 4A `areas` and `capture_items` rows at app boundaries
 - Added local Supabase seed data for two Auth users and starter areas, plus a local login page for RLS-backed Phase 4A smoke tests
 - Phase 2 mock workflow restores `WorkflowState` from `sessionStorage`; the mock ID counter is resynced from persisted entities (`syncWorkflowIdCounterFromState`) on load and after each state update so generated IDs (`capture-*`, `task-*`, etc.) never reuse numeric suffixes after refresh or reset
-- Phase 2 mock workflow treats `sessionStorage` as best-effort only; blocked reads or quota-exceeded writes fall back to in-memory state instead of crashing the app shell
 
 ## Known issues
 
@@ -38,6 +38,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 
 ## Important implementation notes
 
+- Domain types in `@lifeos/types` are re-exports of Zod-inferred types from `@lifeos/schemas`; `packages/types/src/schema-type-parity.ts` is a compile-time check that `Area`, `Capture`/`CaptureItem`, and other re-exports stay aligned (fails `tsc` if `index.ts` is replaced with divergent manual interfaces).
 - Task status and TimeBlock status are separate.
 - Calendar events are never auto-deleted without confirmation.
 - Agent guidance is now aligned across `AGENTS.md` and `.cursor/rules/execution-discipline.mdc` for phase-first implementation and completion checks.
