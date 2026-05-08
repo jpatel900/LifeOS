@@ -96,15 +96,16 @@ export default function ExecutePage() {
   const persistedTasks = usesPersistedExecution ? executeState.tasks : [];
   const persistedBlocks = usesPersistedExecution ? executeState.blocks : [];
   const persistedSessions = usesPersistedExecution ? executeState.sessions : [];
-  const activePersistedSession = persistedSessions[0] ?? null;
+  const activePersistedSession =
+    persistedSessions.find(
+      (session) => session.outcome === "partial" || session.outcome === "distracted",
+    ) ?? null;
 
   const activeSession = usesPersistedExecution
     ? activePersistedSession
     : state.executionSessions[0] ?? null;
   const runnableTask = usesPersistedExecution
-    ? persistedTasks.find((task) => task.status === "active") ??
-      persistedTasks[0] ??
-      null
+    ? persistedTasks.find((task) => task.status === "active") ?? null
     : state.tasks.find((task) => task.status === "active") ?? state.tasks[0] ?? null;
   const activeTask = activeSession
     ? (usesPersistedExecution ? persistedTasks : state.tasks).find(
