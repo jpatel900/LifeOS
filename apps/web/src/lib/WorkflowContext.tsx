@@ -19,6 +19,7 @@ import {
   rejectProposal,
   startExecutionSession,
   submitCapture,
+  syncWorkflowIdCounterFromState,
   updateProposal,
   type WorkflowState,
 } from "./workflow";
@@ -126,18 +127,26 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
 
 function loadInitialState() {
   if (typeof window === "undefined") {
-    return createInitialWorkflowState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 
   const stored = window.sessionStorage.getItem(STORAGE_KEY);
   if (!stored) {
-    return createInitialWorkflowState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 
   try {
-    return JSON.parse(stored) as WorkflowState;
+    const parsed = JSON.parse(stored) as WorkflowState;
+    syncWorkflowIdCounterFromState(parsed);
+    return parsed;
   } catch {
-    return createInitialWorkflowState();
+    const initial = createInitialWorkflowState();
+    syncWorkflowIdCounterFromState(initial);
+    return initial;
   }
 }
 
@@ -148,6 +157,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    syncWorkflowIdCounterFromState(state);
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
 

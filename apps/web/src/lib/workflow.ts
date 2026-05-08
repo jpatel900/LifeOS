@@ -34,6 +34,40 @@ interface SubmitCaptureInput extends ParseCaptureInput {}
 
 let idCounter = 0;
 
+/** IDs produced by `nextId` use these prefixes; used to resync the counter after hydration. */
+const WORKFLOW_GENERATED_ID =
+  /^(?:capture|task-draft|proposal-draft|ambiguity|task|proposal|block|session)-(\d+)$/;
+
+function maxWorkflowGeneratedIdSuffix(state: WorkflowState): number {
+  let max = 0;
+  const consider = (id: string | null | undefined) => {
+    if (!id) return;
+    const match = id.match(WORKFLOW_GENERATED_ID);
+    if (!match) return;
+    const n = Number.parseInt(match[1] ?? "0", 10);
+    if (!Number.isNaN(n)) max = Math.max(max, n);
+  };
+
+  for (const item of state.captureItems) consider(item.id);
+  for (const item of state.taskDrafts) consider(item.id);
+  for (const item of state.ambiguityAssessments) consider(item.id);
+  for (const item of state.timeBlockProposalDrafts) consider(item.id);
+  for (const item of state.tasks) consider(item.id);
+  for (const item of state.timeBlockProposals) consider(item.id);
+  for (const item of state.calendarBlocks) consider(item.id);
+  for (const item of state.executionSessions) consider(item.id);
+
+  return max;
+}
+
+/**
+ * Sets the module id counter from existing workflow entities (e.g. after sessionStorage restore
+ * or reset) so `nextId` never reuses a suffix already present in state.
+ */
+export function syncWorkflowIdCounterFromState(state: WorkflowState): void {
+  idCounter = maxWorkflowGeneratedIdSuffix(state);
+}
+
 function nextId(prefix: string) {
   idCounter += 1;
   return `${prefix}-${idCounter}`;

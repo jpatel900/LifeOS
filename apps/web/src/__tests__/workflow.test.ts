@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { MOCK_USER_ID } from "@/lib/mockData";
 import {
   acceptDraft,
   createInitialWorkflowState,
@@ -41,6 +42,30 @@ describe("local mock workflow", () => {
     expect(state.timeBlockProposals).toHaveLength(1);
     expect(state.timeBlockProposals[0].task_id).toBe(state.tasks[0].id);
     expect(state.timeBlockProposals[0].status).toBe("proposed");
+  });
+
+  it("does not reuse numeric suffixes after syncing from restored state", async () => {
+    vi.resetModules();
+    const wf = await import("@/lib/workflow");
+    const base = wf.createInitialWorkflowState();
+    base.captureItems = [
+      {
+        id: "capture-5",
+        user_id: MOCK_USER_ID,
+        area_id: "area-main-job",
+        raw_text: "prior session",
+        capture_mode: "text",
+        inferred_area_confidence: 0.5,
+        status: "triage_required",
+        created_at: new Date().toISOString(),
+      },
+    ];
+    wf.syncWorkflowIdCounterFromState(base);
+    const next = wf.submitCapture(base, {
+      rawText: "New capture after reload.",
+      areaId: "area-main-job",
+    });
+    expect(next.captureItems[0].id).toBe("capture-6");
   });
 });
 

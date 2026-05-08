@@ -19,6 +19,10 @@ MVP supports task capture, area assignment, and manual scheduling.
 - Rescheduling does not yet check all-day events.
 - Mobile layout needs improvement.
 
+## Implementation notes (recent)
+
+- Phase 2 mock workflow restores `WorkflowState` from `sessionStorage`; the mock ID counter is resynced from persisted entities (`syncWorkflowIdCounterFromState`) on load and after each state update so generated IDs (`capture-*`, `task-*`, etc.) never reuse numeric suffixes after refresh or reset.
+
 ## Next recommended tasks
 
 1. Add conflict detection tests.
