@@ -10,7 +10,7 @@ describe("HomePage", () => {
     );
   });
 
-  it("mentions the capture screen", () => {
+  it("mentions quick capture", () => {
     render(<HomePage />);
     expect(screen.getByText("Quick Capture")).toBeDefined();
   });

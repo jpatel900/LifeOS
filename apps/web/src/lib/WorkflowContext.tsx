@@ -8,7 +8,10 @@ import {
   useReducer,
   useState,
 } from "react";
-import type { TaskDraft, TimeBlockProposal } from "@lifeos/schemas";
+import type {
+  Phase2TaskDraft,
+  Phase2TimeBlockProposal,
+} from "@lifeos/schemas";
 import {
   acceptDraft,
   acceptProposal,
@@ -44,7 +47,7 @@ type WorkflowAction =
   | {
       type: "editDraft";
       draftId: string;
-      changes: Pick<TaskDraft, "title" | "description">;
+      changes: Pick<Phase2TaskDraft, "title" | "description">;
     }
   | {
       type: "acceptProposal";
@@ -57,7 +60,10 @@ type WorkflowAction =
   | {
       type: "updateProposal";
       proposalId: string;
-      changes: Pick<TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">;
+      changes: Pick<
+        Phase2TimeBlockProposal,
+        "proposed_start" | "proposed_end" | "rationale"
+      >;
     }
   | {
       type: "startSession";
@@ -80,13 +86,13 @@ interface WorkflowContextValue {
   rejectTaskDraft: (draftId: string) => void;
   editTaskDraft: (
     draftId: string,
-    changes: Pick<TaskDraft, "title" | "description">,
+    changes: Pick<Phase2TaskDraft, "title" | "description">,
   ) => void;
   acceptLocalProposal: (proposalId: string) => void;
   rejectLocalProposal: (proposalId: string) => void;
   editLocalProposal: (
     proposalId: string,
-    changes: Pick<TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">,
+    changes: Pick<Phase2TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">,
   ) => void;
   startTaskSession: (taskId: string) => void;
   markSession: (status: ExecutionSession["status"]) => void;

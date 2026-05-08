@@ -28,7 +28,7 @@ describe("CapturePage", () => {
       "What's on your mind? Type anything...",
     );
     fireEvent.change(textarea, { target: { value: "Follow up with Alex" } });
-    fireEvent.click(screen.getByText("Structure"));
+    fireEvent.click(screen.getByText("Structure locally (Phase 2 mock)"));
     expect(
       screen.getByText(/Mock parser created a draft bundle/),
     ).toBeDefined();

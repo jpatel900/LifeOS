@@ -21,7 +21,7 @@ Principles:
 
 ## 2. Primary Navigation
 
-V1 screens:
+**Primary workflow screens (six, per NFR-005):**
 
 - Capture
 - Triage
@@ -29,7 +29,8 @@ V1 screens:
 - Execute
 - Review
 - Health
-- Settings
+
+**Secondary / admin:** Settings (areas, policies, integrations) — supports the app but is not one of the six primary workflow screens.
 
 Suggested route map:
 
@@ -222,7 +223,7 @@ Write approved block to Google Calendar safely.
    - calendar
    - conflict warning if any
 3. User confirms.
-4. Edge Function writes event.
+4. Next.js server code (Route Handler or Server Action) writes the event via the calendar adapter.
 5. App stores Google event ID.
 6. App creates audit log.
 
