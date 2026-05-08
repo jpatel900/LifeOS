@@ -25,7 +25,7 @@ function loadInitialMigration() {
   expect(existsSync(migrationsDir)).toBe(true);
 
   const migrationFile = readdirSync(migrationsDir).find((file) =>
-    file.endsWith("_init_v1_schema.sql")
+    file.endsWith("_create_v1_core_tables.sql"),
   );
 
   expect(migrationFile).toBeDefined();
@@ -53,7 +53,6 @@ describe("Supabase local database scaffold", () => {
       expect(sql).toContain(`on public.${table} for insert to authenticated`);
       expect(sql).toContain(`on public.${table} for update to authenticated`);
       expect(sql).toContain(`on public.${table} for delete to authenticated`);
-      expect(sql).toContain(`create index ${table}_user_id_idx`);
     }
   });
 
@@ -61,35 +60,53 @@ describe("Supabase local database scaffold", () => {
     const sql = loadInitialMigration();
 
     const requiredIndexes = [
-      "areas_user_id_is_active_idx",
-      "capture_items_user_id_area_id_idx",
-      "capture_items_user_id_status_idx",
-      "capture_items_user_id_created_at_idx",
-      "projects_user_id_area_id_idx",
-      "projects_user_id_status_idx",
-      "tasks_user_id_area_id_idx",
-      "tasks_user_id_status_idx",
-      "tasks_user_id_due_at_idx",
-      "time_block_proposals_user_id_area_id_idx",
-      "time_block_proposals_user_id_status_idx",
-      "time_block_proposals_user_id_proposed_start_idx",
-      "calendar_blocks_user_id_area_id_idx",
-      "calendar_blocks_user_id_status_idx",
-      "calendar_blocks_user_id_start_at_idx",
-      "execution_sessions_user_id_area_id_idx",
-      "execution_sessions_user_id_created_at_idx",
-      "review_entries_user_id_area_id_idx",
-      "review_entries_user_id_period_start_idx",
-      "health_checks_user_id_area_id_idx",
-      "health_checks_user_id_checked_at_idx",
-      "health_incidents_user_id_area_id_idx",
-      "health_incidents_user_id_status_idx",
-      "health_incidents_user_id_opened_at_idx",
-      "suggestion_records_user_id_area_id_idx",
-      "suggestion_records_user_id_status_idx",
-      "suggestion_records_user_id_created_at_idx",
-      "override_records_user_id_area_id_idx",
-      "override_records_user_id_created_at_idx",
+      "areas_user_id_idx",
+      "areas_user_is_active_idx",
+      "areas_user_sort_order_idx",
+      "capture_items_user_created_at_idx",
+      "capture_items_user_area_id_idx",
+      "capture_items_user_status_idx",
+      "projects_user_id_idx",
+      "projects_user_area_status_idx",
+      "tasks_user_id_idx",
+      "tasks_user_area_status_idx",
+      "tasks_user_due_at_idx",
+      "tasks_user_project_id_idx",
+      "time_block_proposals_user_id_idx",
+      "time_block_proposals_user_area_status_idx",
+      "time_block_proposals_user_proposed_start_idx",
+      "time_block_proposals_user_task_id_idx",
+      "calendar_blocks_user_id_idx",
+      "calendar_blocks_user_area_status_idx",
+      "calendar_blocks_user_start_at_idx",
+      "calendar_blocks_user_google_event_id_idx",
+      "calendar_blocks_user_task_id_idx",
+      "execution_sessions_user_id_idx",
+      "execution_sessions_user_area_id_idx",
+      "execution_sessions_user_task_id_idx",
+      "execution_sessions_user_calendar_block_id_idx",
+      "execution_sessions_user_created_at_idx",
+      "review_entries_user_id_idx",
+      "review_entries_user_area_id_idx",
+      "review_entries_user_review_type_idx",
+      "review_entries_user_period_start_idx",
+      "health_checks_user_id_idx",
+      "health_checks_user_area_id_idx",
+      "health_checks_user_status_idx",
+      "health_checks_user_checked_at_idx",
+      "health_incidents_user_id_idx",
+      "health_incidents_user_area_id_idx",
+      "health_incidents_user_status_idx",
+      "health_incidents_user_opened_at_idx",
+      "suggestion_records_user_id_idx",
+      "suggestion_records_user_area_id_idx",
+      "suggestion_records_user_status_idx",
+      "suggestion_records_user_created_at_idx",
+      "suggestion_records_user_subject_idx",
+      "override_records_user_id_idx",
+      "override_records_user_area_id_idx",
+      "override_records_user_created_at_idx",
+      "override_records_user_subject_idx",
     ];
 
     for (const indexName of requiredIndexes) {

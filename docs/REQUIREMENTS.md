@@ -388,10 +388,6 @@ V1 will not include:
 
 ## 5. Requirement Risk Review
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 12a4bc5 (Persist areas and captures with Supabase)
 | Requirement      | Risk       | Decision                        |
 | ---------------- | ---------- | ------------------------------- |
 | Audio capture    | Medium     | Keep submit-based, not realtime |
@@ -401,10 +397,6 @@ V1 will not include:
 | Sense-making     | Medium     | Strict schema + triage          |
 | Area inference   | Medium     | Confidence + user correction    |
 | Cron jobs        | Medium     | Avoid unless necessary          |
-<<<<<<< HEAD
-=======
-
->>>>>>> 12a4bc5 (Persist areas and captures with Supabase)
 
 ## Reference Links
 
@@ -418,8 +410,4 @@ These documents are intentionally grounded in stable platform capabilities, not 
 - Google Calendar Freebusy: [https://developers.google.com/workspace/calendar/api/v3/reference/freebusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy)
 - Google Calendar Events Insert: [https://developers.google.com/workspace/calendar/api/v3/reference/events/insert](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)
 - Vercel Cron Jobs / Hobby limits: [https://vercel.com/docs/cron-jobs/usage-and-pricing](https://vercel.com/docs/cron-jobs/usage-and-pricing)
-<<<<<<< HEAD
 - Anthropic Building Effective Agents: [https://www.anthropic.com/research/building-effective-agents](https://www.anthropic.com/research/building-effective-agents)
-=======
-- Anthropic Building Effective Agents: [https://www.anthropic.com/research/building-effective-agents](https://www.anthropic.com/research/building-effective-agents)
->>>>>>> 12a4bc5 (Persist areas and captures with Supabase)

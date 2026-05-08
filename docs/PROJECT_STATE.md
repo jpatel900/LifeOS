@@ -2,21 +2,23 @@
 
 ## Current status
 
-MVP supports task capture, area assignment, and manual scheduling through the Phase 2 mock vertical slice. Phase 4A now has Supabase-backed persistence for areas and raw capture items while keeping mock mode when Supabase env vars are missing.
+MVP supports task capture, area assignment, and manual scheduling. The Phase 2 mock vertical slice remains for session-only triage and scheduling mocks. Phase 4A adds Supabase-backed persistence for areas and raw capture items when env vars are set; without them, the data layer falls back to mocks.
 
 ## Recently completed
 
-- Task CRUD
+- Task CRUD (mock path)
 - Area model
-- Basic calendar draft creation
+- Basic calendar draft creation (mock path)
 - Added always-on Cursor execution discipline rule for phase gating, plugin restrictions, mock preservation, schema strictness, required validation commands, and final risk/file summary expectations
 - Refined plugin policy: strict no-plugin compliance when a prompt forbids plugins; otherwise plugins are allowed when appropriate to task and phase
 - Added completion proof requirement for agent work: final handoff must show changed files, tests run, limitations, and docs-updated status
+- Phase 2 mock workflow uses dedicated schema exports (`Phase2TimeBlockProposal`, etc.) separate from DB entity schemas in `@lifeos/schemas`
 - Added local Supabase scaffold with `supabase/config.toml`, initial V1 schema migration, RLS policies, and seed guidance
 - Added a migration contract test that checks required Phase 3 tables, RLS policies, and index coverage
-- Added Supabase browser/server client helpers, provider-aware data functions, and `/settings/areas` plus `/capture` pages for Phase 4A
+- Added Supabase browser/server client helpers, provider-aware data functions, and `/settings/areas` plus `/capture` pages for Phase 4A (alongside Phase 2 mock workflow)
 - Updated shared Zod schemas to validate Phase 4A `areas` and `capture_items` rows at app boundaries
 - Added local Supabase seed data for two Auth users and starter areas, plus a local login page for RLS-backed Phase 4A smoke tests
+- Phase 2 mock workflow restores `WorkflowState` from `sessionStorage`; the mock ID counter is resynced from persisted entities (`syncWorkflowIdCounterFromState`) on load and after each state update so generated IDs (`capture-*`, `task-*`, etc.) never reuse numeric suffixes after refresh or reset
 
 ## Known issues
 
@@ -31,6 +33,7 @@ MVP supports task capture, area assignment, and manual scheduling through the Ph
 2. Add focused two-user RLS integration tests using seeded `user_a@example.test` and `user_b@example.test`.
 3. Add conflict detection tests.
 4. Improve mobile task capture.
+5. Add review log.
 
 ## Important implementation notes
 

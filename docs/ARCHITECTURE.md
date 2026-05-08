@@ -88,7 +88,15 @@ Adding another backend beyond Next + Supabase data would increase cost, deployme
 /docs
   /adr
     0001-v1-server-boundary.md
-  (authoritative product/tech docs may live at repo root; see README.md)
+  PROJECT_STATE.md
+  PROJECT_BRIEF.md
+  REQUIREMENTS.md
+  ARCHITECTURE.md
+  DATA_MODEL.md
+  LIFE_OS_WIKI.md
+  UX_FLOWS.md
+  TEST_PLAN.md
+  SECURITY_PRIVACY.md
 ```
 
 Core workflows in V1 are implemented under `apps/web` (not under `supabase/functions`). Edge Functions under `/supabase/functions` are **V1.5+ / optional**, unless an ADR documents a V1 exception (cron or integration).

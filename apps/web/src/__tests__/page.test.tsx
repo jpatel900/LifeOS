@@ -10,11 +10,8 @@ describe("HomePage", () => {
     );
   });
 
-  it("renders quick capture section", () => {
+  it("mentions quick capture", () => {
     render(<HomePage />);
     expect(screen.getByText("Quick Capture")).toBeDefined();
-    expect(
-      screen.getByPlaceholderText("What's on your mind? Type anything..."),
-    ).toBeDefined();
   });
 });

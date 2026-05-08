@@ -114,6 +114,12 @@ Expected structure:
 
 Keep shared schemas in `/packages/schemas`.
 
+Keep project documentation in `/docs`, except root-level files used by tooling or repository conventions such as `README.md` and `AGENTS.md`.
+
+`/docs/PROJECT_STATE.md` is the handoff file for future agents. At the start of each agent run, read it after `AGENTS.md` to understand current status, recent work, known issues, recommended next tasks, and implementation notes.
+
+After every major update, update `/docs/PROJECT_STATE.md` before finishing the run. Keep it concise and factual: current shipped or implemented behavior, recently completed work, known issues, next recommended tasks, and important implementation notes.
+
 ## 7. Schema and AI Rules
 
 All mutation-producing AI calls must have:
@@ -137,6 +143,7 @@ Required schemas:
 - `HealthNarrativeResponse`
 
 Never persist unvalidated AI output as committed app state.
+Never weaken schemas or validators to make tests pass.
 
 ## 8. Prompt Rules
 
@@ -207,6 +214,9 @@ Before marking work done:
 - RLS tests pass if DB touched
 - E2E smoke test passes if UX flow touched
 - calendar write path tested with mock before real provider
+- `pnpm lint` passes
+- `pnpm type-check` passes
+- `pnpm test` passes
 
 ## 13. Forbidden Changes Without Human Review
 
@@ -302,19 +312,29 @@ A task is done when:
 - errors are recoverable
 - user action is explicit for external writes
 - docs updated if behavior changed
+- completion handoff includes proof: files changed, tests run, limitations, and docs updated status
 
 ## 18. Agent Behavior
 
 When working as an AI coding agent:
 
 - make small changes
+- read `AGENTS.md` and `docs/PROJECT_STATE.md` before planning substantial work
+- identify the exact implementation phase before coding
 - explain risky assumptions
 - prefer simple implementation
 - do not invent features
 - do not silently broaden scope
+- do not add integrations outside the current phase
+- if the active prompt says not to use plugins, follow that strictly
+- if the active prompt does not forbid plugins, plugins may be used only when appropriate to the task and phase
+- preserve mock mode when the phase is mock-first
 - ask for review when touching dangerous areas
 - run tests before claiming done
 - update docs if architecture/data model changes
+- update `docs/PROJECT_STATE.md` after every major update
+- provide proof in the final handoff, not explanations
+- include files changed, tests run, limitations, and docs updated status in the final handoff
 
 If uncertain, choose the safer and simpler path.
 

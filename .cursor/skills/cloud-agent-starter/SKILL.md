@@ -24,12 +24,14 @@ The highest-risk invariants are:
 - Area is a first-class scope object, and learning is area-scoped unless deliberately global.
 - Health scores are deterministic; AI may explain them but must not invent scores.
 
-Before changing behavior, read `AGENTS.md` plus the relevant docs:
+Before changing behavior, read `AGENTS.md`, `docs/PROJECT_STATE.md`, plus the relevant docs:
 
-- Product and scope: `PROJECT_BRIEF.md`, `REQUIREMENTS.md`, `LIFE_OS_WIKI.md`
-- Architecture and data: `ARCHITECTURE.md`, `DATA_MODEL.md`
-- UX and tests: `UX_FLOWS.md`, `TEST_PLAN.md`
-- Security: `SECURITY_PRIVACY.md`
+- Product and scope: `docs/PROJECT_BRIEF.md`, `docs/REQUIREMENTS.md`, `docs/LIFE_OS_WIKI.md`
+- Architecture and data: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`
+- UX and tests: `docs/UX_FLOWS.md`, `docs/TEST_PLAN.md`
+- Security: `docs/SECURITY_PRIVACY.md`
+
+After every major update, refresh `docs/PROJECT_STATE.md` with the current status, recently completed work, known issues, next recommended tasks, and important implementation notes.
 
 Current repo note: at the time this skill was created, the repository is documentation-only. There is no `package.json`, `apps/web`, `supabase/config.toml`, lockfile, or runnable test suite yet. If that is still true, validate documentation changes with `git diff --check` and targeted review instead of inventing app commands.
 

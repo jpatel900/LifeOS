@@ -2,7 +2,6 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppShell } from "../../components/AppShell";
 import { createSupabaseBrowserClient } from "../../lib/supabase/browser";
 
 type LoginState =
@@ -45,7 +44,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <h1>Local Supabase Login</h1>
       <p>
         Use the seeded local test user to smoke-test RLS-backed areas and raw
@@ -109,6 +108,6 @@ export default function LoginPage() {
           <p>{state.message}</p>
         </section>
       ) : null}
-    </AppShell>
+    </>
   );
 }

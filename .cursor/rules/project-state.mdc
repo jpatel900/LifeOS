@@ -1,0 +1,18 @@
+---
+description: Keep PROJECT_STATE.md current for agent handoffs
+alwaysApply: true
+---
+
+# Project State Handoff
+
+At the start of each agent run, read `AGENTS.md` and `docs/PROJECT_STATE.md` before planning substantial work.
+
+After every major update, refresh `docs/PROJECT_STATE.md` before finishing. Keep it concise and factual:
+
+- current status
+- recently completed work
+- known issues
+- next recommended tasks
+- important implementation notes
+
+Do not turn the state file into a changelog. It should help the next agent resume without rediscovering the project.
