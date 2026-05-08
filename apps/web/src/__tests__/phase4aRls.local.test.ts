@@ -125,6 +125,17 @@ async function deleteReviewByMarker(client: SupabaseClient, marker: string) {
   }
 }
 
+async function deleteHealthByMarker(client: SupabaseClient, marker: string) {
+  const { error } = await client
+    .from("health_checks")
+    .delete()
+    .contains("details_json", { marker });
+
+  if (error) {
+    throw new Error(`Could not clean up health check '${marker}': ${error.message}`);
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -665,6 +676,69 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     expect(insertReviewError?.message).toMatch(
       /row-level security|violates row-level/i,
     );
+  });
+
+  it("lets user A access own health checks but not user B rows", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userAMarker = `rls-user-a-health-${suffix}`;
+    const userBMarker = `rls-user-b-health-${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("health_checks")
+        .insert({
+          user_id: userA.id,
+          area_id: null,
+          subsystem: "Phase 4E RLS user A",
+          status: "healthy",
+          score: 100,
+          details_json: { marker: userAMarker },
+        });
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("health_checks")
+        .insert({
+          user_id: userB.id,
+          area_id: null,
+          subsystem: "Phase 4E RLS user B",
+          status: "watch",
+          score: 50,
+          details_json: { marker: userBMarker },
+        });
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("health_checks")
+        .select("user_id,details_json")
+        .in("subsystem", ["Phase 4E RLS user A", "Phase 4E RLS user B"])
+        .order("subsystem", { ascending: true });
+
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        { user_id: userA.id, details_json: { marker: userAMarker } },
+      ]);
+    } finally {
+      await deleteHealthByMarker(userAClient, userAMarker);
+      await deleteHealthByMarker(userBClient, userBMarker);
+    }
+  });
+
+  it("prevents user A from inserting health checks for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+
+    const { error } = await userAClient.from("health_checks").insert({
+      user_id: userB.id,
+      area_id: null,
+      subsystem: "Phase 4E cross-user health",
+      status: "critical",
+      score: 0,
+      details_json: { marker: "cross-user" },
+    });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
   });
 });
 

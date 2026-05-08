@@ -2,7 +2,7 @@
 
 ## Current status
 
-MVP supports task capture, area assignment, manual scheduling, execution tracking, and basic review logging. The Phase 2 mock vertical slice remains for fallback flows. Phase 4D is complete: `/settings/areas` reads Supabase-backed areas, `/capture` inserts raw `capture_items`, `/triage` persists accepted task/project drafts to `tasks`/`projects`, `/calendar` can create/edit/reject/accept local `time_block_proposals` from persisted tasks, `/execute` persists `execution_sessions`, and `/review` can create `review_entries` from persisted tasks/blocks/sessions. These flows fall back to mock mode when Supabase env vars are absent.
+MVP supports task capture, area assignment, manual scheduling, execution tracking, basic review logging, and deterministic health checks. The Phase 2 mock vertical slice remains for fallback flows. Phase 4E is complete: `/settings/areas` reads Supabase-backed areas, `/capture` inserts raw `capture_items`, `/triage` persists accepted task/project drafts to `tasks`/`projects`, `/calendar` can create/edit/reject/accept local `time_block_proposals` from persisted tasks, `/execute` persists `execution_sessions`, `/review` can create `review_entries` from persisted tasks/blocks/sessions, and `/health` shows deterministic subsystem checks from mock/Supabase/auth/app-state signals. These flows fall back to mock mode when Supabase env vars are absent.
 
 ## Recently completed
 
@@ -37,14 +37,17 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 - Added Phase 4D execution/review persistence: `@lifeos/schemas` validates execution start/mark and review-entry inputs, the data layer persists `execution_sessions` and `review_entries`, `/execute` can start and mark persisted sessions, and `/review` reads persisted tasks/blocks/sessions before creating daily review entries.
 - Added a narrow Supabase migration granting authenticated Data API access for `execution_sessions` and `review_entries`; existing RLS policies remain unchanged.
 - Added Phase 4D tests for starting/completing/missing execution sessions, related task/block status updates, persisted review entry creation, route smoke coverage, and opt-in local RLS coverage for execution/review rows.
+- Added Phase 4E deterministic health dashboard: `/health` now checks mock mode availability, Supabase config, auth/session state, area readability, capture persistence readability, AI parser not-configured status, and Google Calendar not-configured status without AI scoring.
+- Added best-effort `health_checks` persistence for authenticated Supabase users, plus a narrow authenticated Data API grant for `health_checks`; existing RLS policies remain unchanged.
+- Added helper tests for health status construction/persistence fallback, route smoke coverage for async health loading, static no-OpenAI/service-role guard coverage for the health path, migration grant coverage, and opt-in local RLS coverage for `health_checks`.
 
 ## Known issues
 
 - Rescheduling does not yet check all-day events.
 - Mobile layout needs improvement.
-- Supabase is scaffolded locally and Phase 4D UI uses it for areas, capture, accepted tasks/projects, local time-block proposals, local calendar blocks, execution sessions, and review entries.
+- Supabase is scaffolded locally and Phase 4E UI uses it for areas, capture, accepted tasks/projects, local time-block proposals, local calendar blocks, execution sessions, review entries, and health check snapshots.
 - Supabase-backed capture and accepted-draft saves require an authenticated Supabase user because RLS policies enforce `auth.uid() = user_id`.
-- Persisted planning and execution remain local-only. There is still no Google Calendar API, free/busy query, OpenAI scheduling/review summary, autonomous scheduling, background job, advanced analytics, or conflict auto-solver in Phase 4D.
+- Persisted planning, execution, review, and health remain local-only. There is still no Google Calendar API, free/busy query, OpenAI parser/review/health narrative, autonomous scheduling, background job, advanced analytics, or conflict auto-solver in Phase 4E.
 
 ## Next recommended tasks
 
@@ -64,9 +67,9 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 - Phase 3 migration covers only the requested V1 tables: areas, capture items, projects, tasks, proposals, calendar blocks, execution sessions, review entries, health checks/incidents, suggestion records, and override records.
 - RLS policies use `to authenticated` and `((select auth.uid()) = user_id)`; area/project/task references use same-user composite foreign keys to reduce cross-user contamination risk.
 - Phase 4D data access falls back to mock data when `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing.
-- Phase 4D does not add OpenAI, Google Calendar, free/busy, Edge Functions, external writes, autonomous scheduling, background jobs, advanced analytics, or conflict solving. Browser Supabase code uses only the public URL and anon key.
+- Phase 4E does not add OpenAI, Google Calendar, free/busy, Edge Functions, external writes, autonomous scheduling, background jobs, advanced analytics, or conflict solving. Browser Supabase code uses only the public URL and anon key.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
-- `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, `projects`, `time_block_proposals`, `calendar_blocks`, `execution_sessions`, and `review_entries`.
+- `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, `projects`, `time_block_proposals`, `calendar_blocks`, `execution_sessions`, `review_entries`, and `health_checks`.
 - `WorkflowProvider` should remain usable when browser storage is unavailable; persistence failures are intentionally swallowed after ID-counter sync.
 - Triage maps Phase 2 mock area ids to persisted Phase 4 area slugs before saving accepted tasks/projects; `/calendar` creates persisted proposals from persisted task ids rather than from Phase 2 mock proposal draft ids.

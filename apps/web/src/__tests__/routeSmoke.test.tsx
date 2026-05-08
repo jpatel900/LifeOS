@@ -62,7 +62,8 @@ describe("workflow route provider wiring", () => {
       _name === "triage" ||
       _name === "calendar" ||
       _name === "execute" ||
-      _name === "review"
+      _name === "review" ||
+      _name === "health"
     ) {
       expect(await screen.findByText("mock")).toBeDefined();
     }
