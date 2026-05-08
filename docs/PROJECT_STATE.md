@@ -41,6 +41,7 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 - Added Phase 4E deterministic health dashboard: `/health` now checks mock mode availability, Supabase config, auth/session state, area readability, capture persistence readability, AI parser not-configured status, and Google Calendar not-configured status without AI scoring.
 - Added best-effort `health_checks` persistence for authenticated Supabase users, plus a narrow authenticated Data API grant for `health_checks`; existing RLS policies remain unchanged.
 - Added helper tests for health status construction/persistence fallback, route smoke coverage for async health loading, static no-OpenAI/service-role guard coverage for the health path, migration grant coverage, and opt-in local RLS coverage for `health_checks`.
+- Added initial AI parse-capture scaffolding under `apps/web/src/lib/ai`: response contract wrapper, prompt builder, and an injectable Responses API helper that validates `ParseCaptureResponse` before returning it. It is not wired into capture UI or persistence yet.
 
 ## Known issues
 
@@ -48,7 +49,7 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 - Mobile layout needs improvement.
 - Supabase is scaffolded locally and Phase 4E UI uses it for areas, capture, accepted tasks/projects, local time-block proposals, local calendar blocks, execution sessions, review entries, and health check snapshots.
 - Supabase-backed capture and accepted-draft saves require an authenticated Supabase user because RLS policies enforce `auth.uid() = user_id`.
-- Persisted planning, execution, review, and health remain local-only. There is still no Google Calendar API, free/busy query, OpenAI parser/review/health narrative, autonomous scheduling, background job, advanced analytics, or conflict auto-solver in Phase 4E.
+- Persisted planning, execution, review, and health remain local-only. There is still no Google Calendar API, free/busy query, wired OpenAI parser/review/health narrative, autonomous scheduling, background job, advanced analytics, or conflict auto-solver in Phase 4E.
 
 ## Next recommended tasks
 
@@ -69,6 +70,7 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 - RLS policies use `to authenticated` and `((select auth.uid()) = user_id)`; area/project/task references use same-user composite foreign keys to reduce cross-user contamination risk.
 - Phase 4D data access falls back to mock data when `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` is missing.
 - Phase 4E does not add OpenAI, Google Calendar, free/busy, Edge Functions, external writes, autonomous scheduling, background jobs, advanced analytics, or conflict solving. Browser Supabase code uses only the public URL and anon key.
+- The AI parse-capture helper is server-side scaffolding only; do not call it from browser components or persist its output without the existing triage validation/approval path.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
 - `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, `projects`, `time_block_proposals`, `calendar_blocks`, `execution_sessions`, `review_entries`, and `health_checks`.
