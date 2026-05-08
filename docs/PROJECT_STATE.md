@@ -7,6 +7,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 ## Recently completed
 
 - Restored app route/provider integrity after the merge-conflict cleanup: root layout delegates to the client `apps/web/src/app/components/AppShell.tsx`, workflow routes render under `WorkflowProvider`, and the stale duplicate `apps/web/src/components/AppShell.tsx` was removed.
+- Cleaned up AppShell/type source-of-truth drift: added a static guard for the single AppShell import boundary and renamed app-local Phase 2 mock/session view models so canonical entity types remain owned by `@lifeos/schemas`.
 - Added route smoke coverage that renders workflow pages through the real app shell/provider instead of only manually wrapping pages in `WorkflowProvider`.
 - Hardened `WorkflowProvider` so blocked or unavailable `sessionStorage` falls back to in-memory workflow state instead of crashing the app.
 - Merged `origin/main` into the inspection branch; resolved conflicts by adopting main’s codebase and dropping unused `getTasksByArea` / `getProposalsByArea` / `getCalendarBlocksByArea` from `mockData.ts` (UI uses workflow context instead).
@@ -42,6 +43,7 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 ## Important implementation notes
 
 - Domain types in `@lifeos/types` are re-exports of Zod-inferred types from `@lifeos/schemas`; `packages/types/src/schema-type-parity.ts` is a compile-time check that `Area`, `Capture`/`CaptureItem`, and other re-exports stay aligned (fails `tsc` if `index.ts` is replaced with divergent manual interfaces).
+- App-local mock/session-only types use `Phase2Mock...` names in `apps/web/src/lib/types.ts`; do not reintroduce canonical names like `Task`, `Project`, `CalendarBlock`, `ExecutionSession`, or `HealthCheck` there.
 - Task status and TimeBlock status are separate.
 - Calendar events are never auto-deleted without confirmation.
 - Agent guidance is now aligned across `AGENTS.md` and `.cursor/rules/execution-discipline.mdc` for phase-first implementation and completion checks.

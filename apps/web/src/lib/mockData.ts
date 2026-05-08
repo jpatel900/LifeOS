@@ -1,13 +1,13 @@
 import type {
-  CalendarBlock,
-  DailyReviewSummary,
-  ExecutionSession,
-  HealthCheck,
+  Phase2MockCalendarBlock,
+  Phase2MockDailyReviewSummary,
+  Phase2MockExecutionSession,
   Phase2MockArea,
-  Project,
-  Task,
-  TimeBlockProposal,
-  WeeklyReviewSummary,
+  Phase2MockHealthCheck,
+  Phase2MockProject,
+  Phase2MockTask,
+  Phase2MockTimeBlockProposal,
+  Phase2MockWeeklyReviewSummary,
 } from "./types";
 
 export const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
@@ -43,7 +43,7 @@ export const areas: Phase2MockArea[] = [
   },
 ];
 
-export const projects: Project[] = [
+export const projects: Phase2MockProject[] = [
   {
     id: "proj-main-1",
     user_id: MOCK_USER_ID,
@@ -52,6 +52,7 @@ export const projects: Project[] = [
     description: "Draft and circulate Q2 planning document.",
     status: "active",
     created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
   {
     id: "proj-volunteer-1",
@@ -61,10 +62,11 @@ export const projects: Project[] = [
     description: "Prepare for upcoming volunteer fundraiser.",
     status: "active",
     created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
 ];
 
-export const tasks: Task[] = [
+export const tasks: Phase2MockTask[] = [
   {
     id: "task-main-1",
     user_id: MOCK_USER_ID,
@@ -130,7 +132,7 @@ export const tasks: Task[] = [
   },
 ];
 
-export const timeBlockProposals: TimeBlockProposal[] = [
+export const timeBlockProposals: Phase2MockTimeBlockProposal[] = [
   {
     id: "proposal-1",
     user_id: MOCK_USER_ID,
@@ -157,20 +159,23 @@ export const timeBlockProposals: TimeBlockProposal[] = [
   },
 ];
 
-export const calendarBlocks: CalendarBlock[] = [
+export const calendarBlocks: Phase2MockCalendarBlock[] = [
   {
     id: "block-1",
     user_id: MOCK_USER_ID,
     area_id: "area-main-job",
     task_id: "task-main-1",
     proposal_id: "proposal-1",
+    google_event_id: null,
     start_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     end_at: new Date().toISOString(),
     status: "completed",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   },
 ];
 
-export const executionSessions: ExecutionSession[] = [
+export const executionSessions: Phase2MockExecutionSession[] = [
   {
     id: "session-1",
     user_id: MOCK_USER_ID,
@@ -188,7 +193,7 @@ export const executionSessions: ExecutionSession[] = [
   },
 ];
 
-export const dailyReview: DailyReviewSummary = {
+export const dailyReview: Phase2MockDailyReviewSummary = {
   id: "daily-1",
   date: new Date().toISOString().slice(0, 10),
   completedCount: 3,
@@ -197,7 +202,7 @@ export const dailyReview: DailyReviewSummary = {
   note: "A few blocks slipped, but progress is steady.",
 };
 
-export const weeklyReview: WeeklyReviewSummary = {
+export const weeklyReview: Phase2MockWeeklyReviewSummary = {
   id: "weekly-1",
   weekOf: new Date().toISOString().slice(0, 10),
   areaSummaries: [
@@ -222,7 +227,7 @@ export const weeklyReview: WeeklyReviewSummary = {
   ],
 };
 
-export const healthChecks: HealthCheck[] = [
+export const healthChecks: Phase2MockHealthCheck[] = [
   {
     id: "health-auth",
     subsystem: "auth",

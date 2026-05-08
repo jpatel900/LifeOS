@@ -1,9 +1,16 @@
-import type { Area as SharedArea, Task as SharedTask } from "@lifeos/types";
+import type {
+  CalendarBlock as SharedCalendarBlock,
+  Project as SharedProject,
+  Task as SharedTask,
+} from "@lifeos/types";
 
-export type { Phase2TimeBlockProposal as TimeBlockProposal } from "@lifeos/schemas";
+export type {
+  Phase2TimeBlockProposal as Phase2MockTimeBlockProposal,
+} from "@lifeos/schemas";
 
 /**
- * Phase 2 shell seed areas (human-readable ids). Not the same shape as persisted `Area` rows.
+ * Phase 2 mock-only UI view models. These are deliberately not canonical domain
+ * entity exports; runtime/persisted entity types remain owned by `@lifeos/schemas`.
  */
 export interface Phase2MockArea {
   id: string;
@@ -13,38 +20,13 @@ export interface Phase2MockArea {
   created_at: string;
 }
 
-export type Area = SharedArea;
+export type Phase2MockTask = SharedTask;
 
-export type Task = SharedTask & {
-  project_id?: string | null;
-  source_capture_item_id?: string | null;
-  description?: string | null;
-  first_tiny_step?: string | null;
-  definition_of_done?: string | null;
-};
+export type Phase2MockProject = SharedProject;
 
-export interface Project {
-  id: string;
-  user_id: string;
-  area_id: string;
-  title: string;
-  description?: string | null;
-  status: "active" | "paused" | "done" | "dropped";
-  created_at: string;
-}
+export type Phase2MockCalendarBlock = SharedCalendarBlock;
 
-export interface CalendarBlock {
-  id: string;
-  user_id: string;
-  area_id: string;
-  task_id: string | null;
-  proposal_id: string | null;
-  start_at: string;
-  end_at: string;
-  status: "scheduled" | "running" | "completed" | "missed";
-}
-
-export interface ExecutionSession {
+export interface Phase2MockExecutionSession {
   id: string;
   user_id: string;
   area_id: string;
@@ -67,7 +49,7 @@ export interface ExecutionSession {
   notes?: string | null;
 }
 
-export interface DailyReviewSummary {
+export interface Phase2MockDailyReviewSummary {
   id: string;
   date: string;
   completedCount: number;
@@ -76,7 +58,7 @@ export interface DailyReviewSummary {
   note?: string;
 }
 
-export interface WeeklyReviewSummary {
+export interface Phase2MockWeeklyReviewSummary {
   id: string;
   weekOf: string;
   areaSummaries: {
@@ -87,7 +69,7 @@ export interface WeeklyReviewSummary {
   }[];
 }
 
-export interface HealthCheck {
+export interface Phase2MockHealthCheck {
   id: string;
   subsystem:
     | "auth"
