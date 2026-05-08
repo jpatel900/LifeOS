@@ -112,8 +112,9 @@ export const timeBlockProposals: TimeBlockProposal[] = [
     proposed_start: new Date().toISOString(),
     proposed_end: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     rationale: "Block focused time for triaging tickets.",
-    conflict: false,
+    conflict_flag: false,
     status: "proposed",
+    created_at: new Date().toISOString(),
   },
   {
     id: "proposal-2",
@@ -123,8 +124,9 @@ export const timeBlockProposals: TimeBlockProposal[] = [
     proposed_start: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
     proposed_end: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
     rationale: "Reach out to sponsors while they are likely online.",
-    conflict: true,
+    conflict_flag: true,
     status: "proposed",
+    created_at: new Date().toISOString(),
   },
 ];
 

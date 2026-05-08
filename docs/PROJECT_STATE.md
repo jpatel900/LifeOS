@@ -6,6 +6,7 @@ MVP supports task capture, area assignment, and manual scheduling.
 
 ## Recently completed
 
+- Aligned web mock `TimeBlockProposal` with `@lifeos/schemas` (`conflict_flag`, `created_at`) via re-export to avoid duplicate type shapes.
 - Task CRUD
 - Area model
 - Basic calendar draft creation
