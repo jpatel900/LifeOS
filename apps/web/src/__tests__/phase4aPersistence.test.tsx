@@ -1,9 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area, CaptureItem } from "@lifeos/schemas";
+import CalendarPage from "../app/calendar/page";
 import CapturePage from "../app/capture/page";
+import ExecutePage from "../app/execute/page";
+import ReviewPage from "../app/review/page";
 import AreasSettingsPage from "../app/settings/areas/page";
-import { WorkflowProvider } from "@/lib/WorkflowContext";
+import TriagePage from "../app/triage/page";
+import { useEffect, useRef } from "react";
+import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 
 const mocks = vi.hoisted(() => {
   const supabaseClient = { client: "supabase-browser-client" };
@@ -13,6 +18,17 @@ const mocks = vi.hoisted(() => {
     createSupabaseBrowserClient: vi.fn(() => supabaseClient),
     listAreas: vi.fn(),
     createCaptureItem: vi.fn(),
+    createTask: vi.fn(),
+    createProject: vi.fn(),
+    listPlanningItems: vi.fn(),
+    createTimeBlockProposal: vi.fn(),
+    editTimeBlockProposal: vi.fn(),
+    rejectTimeBlockProposal: vi.fn(),
+    acceptTimeBlockProposal: vi.fn(),
+    listExecutionReviewItems: vi.fn(),
+    createExecutionSession: vi.fn(),
+    markExecutionSession: vi.fn(),
+    createReviewEntry: vi.fn(),
   };
 });
 
@@ -23,6 +39,17 @@ vi.mock("@/lib/supabase/browser", () => ({
 vi.mock("@/lib/data/workflow", () => ({
   listAreas: mocks.listAreas,
   createCaptureItem: mocks.createCaptureItem,
+  createTask: mocks.createTask,
+  createProject: mocks.createProject,
+  listPlanningItems: mocks.listPlanningItems,
+  createTimeBlockProposal: mocks.createTimeBlockProposal,
+  editTimeBlockProposal: mocks.editTimeBlockProposal,
+  rejectTimeBlockProposal: mocks.rejectTimeBlockProposal,
+  acceptTimeBlockProposal: mocks.acceptTimeBlockProposal,
+  listExecutionReviewItems: mocks.listExecutionReviewItems,
+  createExecutionSession: mocks.createExecutionSession,
+  markExecutionSession: mocks.markExecutionSession,
+  createReviewEntry: mocks.createReviewEntry,
 }));
 
 const area: Area = {
@@ -51,6 +78,116 @@ const capture: CaptureItem = {
   created_at: "2026-05-07T00:00:00.000Z",
 };
 
+const task = {
+  id: "550e8400-e29b-41d4-a716-446655440301",
+  user_id: area.user_id,
+  area_id: area.id,
+  project_id: null,
+  source_capture_item_id: null,
+  title: "Call dentist tomorrow",
+  description: null,
+  status: "active",
+  priority_score: null,
+  priority_confidence: 0.78,
+  task_type: null,
+  energy_type: null,
+  estimated_minutes_low: 30,
+  estimated_minutes_high: 60,
+  due_at: null,
+  definition_of_done: "Complete the first useful move and note the outcome.",
+  first_tiny_step: "Open the notes",
+  created_at: "2026-05-07T00:00:00.000Z",
+  updated_at: "2026-05-07T00:00:00.000Z",
+};
+
+const project = {
+  id: "550e8400-e29b-41d4-a716-446655440401",
+  user_id: area.user_id,
+  area_id: area.id,
+  title: "Volunteer ops system project",
+  description: "Draft created from capture: Need a project to organize volunteer ops system",
+  status: "active",
+  created_at: "2026-05-07T00:00:00.000Z",
+  updated_at: "2026-05-07T00:00:00.000Z",
+};
+
+const proposal = {
+  id: "550e8400-e29b-41d4-a716-446655440501",
+  user_id: area.user_id,
+  area_id: area.id,
+  task_id: task.id,
+  proposed_start: "2026-05-08T16:00:00.000Z",
+  proposed_end: "2026-05-08T17:00:00.000Z",
+  rationale_json: {
+    note: "Local planning proposal created from task duration.",
+  },
+  conflict_flag: false,
+  conflict_details_json: null,
+  status: "proposed",
+  created_at: "2026-05-08T15:00:00.000Z",
+};
+
+const block = {
+  id: "550e8400-e29b-41d4-a716-446655440601",
+  user_id: area.user_id,
+  area_id: area.id,
+  proposal_id: proposal.id,
+  task_id: task.id,
+  google_event_id: null,
+  start_at: proposal.proposed_start,
+  end_at: proposal.proposed_end,
+  status: "scheduled",
+  created_at: "2026-05-08T15:05:00.000Z",
+  updated_at: "2026-05-08T15:05:00.000Z",
+};
+
+const session = {
+  id: "550e8400-e29b-41d4-a716-446655440701",
+  user_id: area.user_id,
+  area_id: area.id,
+  task_id: task.id,
+  calendar_block_id: block.id,
+  planned_minutes: 60,
+  actual_minutes: null,
+  paused_minutes: 0,
+  distraction_minutes: 0,
+  productivity_rating: null,
+  energy_rating: null,
+  outcome: "partial",
+  notes: null,
+  created_at: "2026-05-08T16:05:00.000Z",
+};
+
+const reviewEntry = {
+  id: "550e8400-e29b-41d4-a716-446655440801",
+  user_id: area.user_id,
+  area_id: null,
+  review_type: "daily",
+  period_start: "2026-05-08",
+  period_end: "2026-05-08",
+  summary_json: {
+    completed_sessions: 1,
+    missed_sessions: 0,
+    distracted_sessions: 0,
+    open_tasks: 1,
+    scheduled_blocks: 1,
+  },
+  created_at: "2026-05-08T23:00:00.000Z",
+};
+
+function SeedCapture({ text }: { text: string }) {
+  const { submitCaptureText } = useWorkflow();
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    submitCaptureText(text, "area-main-job");
+  }, [submitCaptureText, text]);
+
+  return null;
+}
+
 function renderWithWorkflow(ui: React.ReactElement) {
   return render(<WorkflowProvider>{ui}</WorkflowProvider>);
 }
@@ -58,6 +195,7 @@ function renderWithWorkflow(ui: React.ReactElement) {
 describe("Phase 4A Supabase persistence UI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.sessionStorage.clear();
     mocks.createSupabaseBrowserClient.mockReturnValue(mocks.supabaseClient);
   });
 
@@ -135,5 +273,270 @@ describe("Phase 4A Supabase persistence UI", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Capture was not saved");
     expect(alert).toHaveTextContent("Sign in before saving captures to Supabase.");
+  });
+
+  it("accepting a task draft creates a task through Supabase", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    mocks.createTask.mockResolvedValue({
+      provider: "supabase",
+      task,
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Call dentist tomorrow" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accept task draft" }));
+
+    await waitFor(() => {
+      expect(mocks.createTask).toHaveBeenCalledWith(mocks.supabaseClient, {
+        area_id: area.id,
+        source_capture_item_id: null,
+        title: "Call dentist tomorrow",
+        description: "Draft created from capture: Call dentist tomorrow",
+        priority_confidence: 0.78,
+        estimated_minutes_low: 30,
+        estimated_minutes_high: 60,
+        first_tiny_step: "Clarify the next concrete step for: Call dentist tomorrow",
+      });
+    });
+  });
+
+  it("accepting a project draft creates a project through Supabase", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    mocks.createProject.mockResolvedValue({
+      provider: "supabase",
+      project,
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Need a project to organize volunteer ops system" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Accept project draft" }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.createProject).toHaveBeenCalledWith(mocks.supabaseClient, {
+        area_id: area.id,
+        title: "organize volunteer ops system",
+        description:
+          "Draft created from capture: Need a project to organize volunteer ops system",
+      });
+    });
+  });
+
+  it("rejecting a draft does not create a Supabase task or project", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Call dentist tomorrow" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reject task draft" }));
+
+    await waitFor(() => {
+      expect(mocks.createTask).not.toHaveBeenCalled();
+      expect(mocks.createProject).not.toHaveBeenCalled();
+    });
+  });
+
+  it("creates persisted local planning proposals from persisted tasks", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [],
+      blocks: [],
+    });
+    mocks.createTimeBlockProposal.mockResolvedValue({
+      provider: "supabase",
+      proposal,
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Propose time" }));
+
+    await waitFor(() => {
+      expect(mocks.createTimeBlockProposal).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        expect.objectContaining({
+          task_id: task.id,
+        }),
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Proposal saved through supabase.");
+  });
+
+  it("accepting a persisted proposal creates a local calendar block", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [proposal],
+      blocks: [],
+    });
+    mocks.acceptTimeBlockProposal.mockResolvedValue({
+      provider: "supabase",
+      proposal: { ...proposal, status: "accepted" },
+      block,
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accept local block" }));
+
+    await waitFor(() => {
+      expect(mocks.acceptTimeBlockProposal).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        proposal.id,
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Local block created through supabase.");
+  });
+
+  it("starts a persisted execution session from a scheduled task block", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [block],
+      sessions: [],
+      reviewEntries: [],
+    });
+    mocks.createExecutionSession.mockResolvedValue({
+      provider: "supabase",
+      session,
+      block: { ...block, status: "running" },
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
+
+    await waitFor(() => {
+      expect(mocks.createExecutionSession).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        {
+          task_id: task.id,
+          calendar_block_id: block.id,
+        },
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Session started through supabase.");
+  });
+
+  it("completes a persisted execution session", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [{ ...block, status: "running" }],
+      sessions: [session],
+      reviewEntries: [],
+    });
+    mocks.markExecutionSession.mockResolvedValue({
+      provider: "supabase",
+      session: { ...session, outcome: "completed", actual_minutes: 60 },
+      block: { ...block, status: "completed" },
+      task: { ...task, status: "done" },
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Complete" }));
+
+    await waitFor(() => {
+      expect(mocks.markExecutionSession).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        session.id,
+        { status: "completed" },
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Session marked completed through supabase.");
+  });
+
+  it("marks a persisted execution session missed", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [{ ...block, status: "running" }],
+      sessions: [session],
+      reviewEntries: [],
+    });
+    mocks.markExecutionSession.mockResolvedValue({
+      provider: "supabase",
+      session: { ...session, outcome: "skipped" },
+      block: { ...block, status: "missed" },
+      task: null,
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Mark missed" }));
+
+    await waitFor(() => {
+      expect(mocks.markExecutionSession).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        session.id,
+        { status: "missed" },
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Session marked missed through supabase.");
+  });
+
+  it("creates a persisted review entry from review data", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [block],
+      sessions: [{ ...session, outcome: "completed" }],
+      reviewEntries: [],
+    });
+    mocks.createReviewEntry.mockResolvedValue({
+      provider: "supabase",
+      reviewEntry,
+    });
+
+    renderWithWorkflow(<ReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create daily review" }));
+
+    await waitFor(() => {
+      expect(mocks.createReviewEntry).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        expect.objectContaining({
+          review_type: "daily",
+          area_id: null,
+          summary_json: expect.objectContaining({
+            completed_sessions: 1,
+            open_tasks: 1,
+          }),
+        }),
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Review entry created through supabase.");
   });
 });

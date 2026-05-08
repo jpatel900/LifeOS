@@ -33,6 +33,13 @@ function loadInitialMigration() {
   return readFileSync(resolve(migrationsDir, migrationFile!), "utf8");
 }
 
+function loadAllMigrations() {
+  return readdirSync(migrationsDir)
+    .filter((file) => file.endsWith(".sql"))
+    .map((file) => readFileSync(resolve(migrationsDir, file), "utf8"))
+    .join("\n");
+}
+
 function loadSeedSql() {
   return readFileSync(resolve(supabaseDir, "seed.sql"), "utf8");
 }
@@ -111,6 +118,27 @@ describe("Supabase local database scaffold", () => {
 
     for (const indexName of requiredIndexes) {
       expect(sql).toContain(`create index ${indexName}`);
+    }
+  });
+
+  it("grants authenticated Data API access for Phase 4 persistence tables", () => {
+    const sql = loadAllMigrations();
+
+    expect(sql).toContain("grant usage on schema public to authenticated");
+    for (const table of [
+      "areas",
+      "capture_items",
+      "projects",
+      "tasks",
+      "time_block_proposals",
+      "calendar_blocks",
+      "execution_sessions",
+      "review_entries",
+      "health_checks",
+    ]) {
+      expect(sql).toContain(
+        `grant select, insert, update, delete on table public.${table} to authenticated`,
+      );
     }
   });
 

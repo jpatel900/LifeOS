@@ -95,7 +95,7 @@ describe("WorkflowProvider storage fallback", () => {
     expect(screen.getByTestId("capture-count")).toHaveTextContent("0");
   });
 
-  it("falls back to initial state when stored workflow items are malformed", () => {
+  it("falls back to initial state when stored workflow items are malformed", async () => {
     const invalidState = {
       ...createInitialWorkflowState(),
       taskDrafts: [
@@ -146,7 +146,7 @@ describe("WorkflowProvider storage fallback", () => {
       </WorkflowProvider>,
     );
 
-    expect(screen.getByText("Nothing to triage right now.")).toBeDefined();
+    expect(await screen.findByText("Nothing to triage right now.")).toBeDefined();
   });
 
   it("keeps the workflow usable when sessionStorage cannot be written", () => {

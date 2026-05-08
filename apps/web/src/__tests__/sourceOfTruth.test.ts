@@ -25,24 +25,24 @@ describe("source-of-truth boundaries", () => {
     expect(localTypes).toContain("Phase 2 mock-only UI view models");
   });
 
-  it("keeps Phase 4A Supabase browser persistence limited to areas and capture_items", () => {
+  it("keeps Phase 4E Supabase browser persistence limited to approved local workflow tables", () => {
     const files = [
       "apps/web/src/lib/data/workflow.ts",
+      "apps/web/src/lib/data/health.ts",
       "apps/web/src/lib/supabase/browser.ts",
       "apps/web/src/lib/supabase/config.ts",
       "apps/web/src/app/capture/page.tsx",
       "apps/web/src/app/settings/areas/page.tsx",
+      "apps/web/src/app/triage/page.tsx",
+      "apps/web/src/app/calendar/page.tsx",
+      "apps/web/src/app/health/page.tsx",
     ].map(readRepoFile);
     const source = files.join("\n");
 
     expect(source).not.toMatch(/service[_-]?role|SUPABASE_SERVICE/i);
+    expect(source).not.toMatch(/openai|OPENAI/);
 
-    for (const table of [
-      "projects",
-      "tasks",
-      "time_block_proposals",
-      "calendar_blocks",
-    ]) {
+    for (const table of ["external_write_events", "ai_recommendations"]) {
       expect(source).not.toContain(`from("${table}")`);
       expect(source).not.toContain(`from('${table}')`);
     }

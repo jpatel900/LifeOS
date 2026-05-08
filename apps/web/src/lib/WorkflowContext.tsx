@@ -11,6 +11,7 @@ import {
 import {
   Phase2AmbiguityAssessmentResponseSchema,
   Phase2CaptureItemSchema,
+  Phase2ProjectDraftSchema,
   Phase2TaskDraftSchema,
   Phase2TimeBlockProposalDraftSchema,
   Phase2TimeBlockProposalSchema,
@@ -19,11 +20,13 @@ import {
 } from "@lifeos/schemas";
 import {
   acceptDraft,
+  acceptProjectDraft,
   acceptProposal,
   createInitialWorkflowState,
   editDraft,
   markCurrentSession,
   rejectDraft,
+  rejectProjectDraft,
   rejectProposal,
   startExecutionSession,
   submitCapture,
@@ -46,7 +49,15 @@ type WorkflowAction =
       draftId: string;
     }
   | {
+      type: "acceptProjectDraft";
+      draftId: string;
+    }
+  | {
       type: "rejectDraft";
+      draftId: string;
+    }
+  | {
+      type: "rejectProjectDraft";
       draftId: string;
     }
   | {
@@ -88,7 +99,9 @@ interface WorkflowContextValue {
   setSelectedAreaId: (areaId: string | null) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
   acceptTaskDraft: (draftId: string) => void;
+  acceptProjectDraft: (draftId: string) => void;
   rejectTaskDraft: (draftId: string) => void;
+  rejectProjectDraft: (draftId: string) => void;
   editTaskDraft: (
     draftId: string,
     changes: Pick<Phase2TaskDraft, "title" | "description">,
@@ -121,6 +134,7 @@ const TASK_STATUSES = new Set([
   "dropped",
   "archived",
 ]);
+const PROJECT_STATUSES = new Set(["active", "paused", "done", "dropped", "archived"]);
 const CALENDAR_BLOCK_STATUSES = new Set([
   "scheduled",
   "running",
@@ -224,6 +238,22 @@ function isPhase2MockTask(value: unknown): value is WorkflowState["tasks"][numbe
   );
 }
 
+function isPhase2MockProject(
+  value: unknown,
+): value is WorkflowState["projects"][number] {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.user_id) &&
+    isString(value.area_id) &&
+    isString(value.title) &&
+    isNullableString(value.description) &&
+    isOneOf(value.status, PROJECT_STATUSES) &&
+    isString(value.created_at) &&
+    isString(value.updated_at)
+  );
+}
+
 function isPhase2MockCalendarBlock(
   value: unknown,
 ): value is WorkflowState["calendarBlocks"][number] {
@@ -296,6 +326,11 @@ function isStoredWorkflowState(value: unknown): value is WorkflowState {
         Phase2TaskDraftSchema.safeParse(item).success,
     ) &&
     isArrayOf(
+      state.projectDrafts,
+      (item): item is WorkflowState["projectDrafts"][number] =>
+        Phase2ProjectDraftSchema.safeParse(item).success,
+    ) &&
+    isArrayOf(
       state.ambiguityAssessments,
       (item): item is WorkflowState["ambiguityAssessments"][number] =>
         Phase2AmbiguityAssessmentResponseSchema.safeParse(item).success,
@@ -305,6 +340,7 @@ function isStoredWorkflowState(value: unknown): value is WorkflowState {
       (item): item is WorkflowState["timeBlockProposalDrafts"][number] =>
         Phase2TimeBlockProposalDraftSchema.safeParse(item).success,
     ) &&
+    isArrayOf(state.projects, isPhase2MockProject) &&
     isArrayOf(state.tasks, isPhase2MockTask) &&
     isArrayOf(
       state.timeBlockProposals,
@@ -318,6 +354,18 @@ function isStoredWorkflowState(value: unknown): value is WorkflowState {
   );
 }
 
+function normalizeStoredWorkflowState(value: unknown): unknown {
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    projectDrafts: value.projectDrafts ?? [],
+    projects: value.projects ?? [],
+  };
+}
+
 function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
     case "submitCapture":
@@ -327,8 +375,12 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
       });
     case "acceptDraft":
       return acceptDraft(state, action.draftId);
+    case "acceptProjectDraft":
+      return acceptProjectDraft(state, action.draftId);
     case "rejectDraft":
       return rejectDraft(state, action.draftId);
+    case "rejectProjectDraft":
+      return rejectProjectDraft(state, action.draftId);
     case "editDraft":
       return editDraft(state, action.draftId, action.changes);
     case "acceptProposal":
@@ -359,7 +411,7 @@ function loadInitialState() {
       return createSyncedInitialState();
     }
 
-    const parsed = JSON.parse(stored) as WorkflowState;
+    const parsed = normalizeStoredWorkflowState(JSON.parse(stored));
     if (!isStoredWorkflowState(parsed)) {
       return createSyncedInitialState();
     }
@@ -393,7 +445,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     submitCaptureText: (rawText, areaId) =>
       dispatch({ type: "submitCapture", rawText, areaId }),
     acceptTaskDraft: (draftId) => dispatch({ type: "acceptDraft", draftId }),
+    acceptProjectDraft: (draftId) =>
+      dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => dispatch({ type: "rejectDraft", draftId }),
+    rejectProjectDraft: (draftId) =>
+      dispatch({ type: "rejectProjectDraft", draftId }),
     editTaskDraft: (draftId, changes) =>
       dispatch({ type: "editDraft", draftId, changes }),
     acceptLocalProposal: (proposalId) =>

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { MOCK_USER_ID } from "@/lib/mockData";
 import {
+  acceptProjectDraft,
   acceptDraft,
   createInitialWorkflowState,
   mockParseCapture,
@@ -42,6 +43,33 @@ describe("local mock workflow", () => {
     expect(state.timeBlockProposals).toHaveLength(1);
     expect(state.timeBlockProposals[0].task_id).toBe(state.tasks[0].id);
     expect(state.timeBlockProposals[0].status).toBe("proposed");
+  });
+
+  it("moves a project-like capture through triage into an accepted project", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Need a project to organize volunteer ops system.",
+      areaId: "area-volunteer",
+    });
+
+    expect(state.projectDrafts).toHaveLength(1);
+
+    state = acceptProjectDraft(state, state.projectDrafts[0].id);
+
+    expect(state.projectDrafts[0].status).toBe("accepted");
+    expect(state.projects).toHaveLength(1);
+    expect(state.projects[0].title).toBe("organize volunteer ops system");
+    expect(state.projects[0].status).toBe("active");
+  });
+
+  it("does not create a project draft for simple task-like captures", () => {
+    const parsed = mockParseCapture({
+      rawText: "Call dentist tomorrow.",
+      areaId: "area-personal",
+    });
+
+    expect(parsed.projectDraft).toBeNull();
   });
 
   it("does not reuse numeric suffixes after syncing from restored state", async () => {

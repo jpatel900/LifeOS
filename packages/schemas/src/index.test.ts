@@ -5,6 +5,13 @@ import {
   CalendarBlockSchema,
   CaptureItemSchema,
   CreateCaptureItemInputSchema,
+  CreateExecutionSessionInputSchema,
+  CreateReviewEntryInputSchema,
+  CreateTimeBlockProposalInputSchema,
+  EditTimeBlockProposalInputSchema,
+  MarkExecutionSessionInputSchema,
+  CreateProjectInputSchema,
+  CreateTaskInputSchema,
   ExecutionSessionSchema,
   HealthCheckSchema,
   ParseCaptureResponseSchema,
@@ -60,6 +67,124 @@ describe("CreateCaptureItemInputSchema", () => {
     expect(result.success ? result.data.raw_text : "").toBe(
       "Call dentist tomorrow"
     );
+  });
+});
+
+describe("CreateProjectInputSchema", () => {
+  it("trims and validates accepted project draft input", () => {
+    const result = CreateProjectInputSchema.safeParse({
+      area_id: uid,
+      title: "  Volunteer ops cleanup  ",
+      description: "  Bring loose ends under control.  ",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.title : "").toBe("Volunteer ops cleanup");
+    expect(result.success ? result.data.description : "").toBe(
+      "Bring loose ends under control.",
+    );
+  });
+});
+
+describe("CreateTaskInputSchema", () => {
+  it("trims and validates accepted task draft input", () => {
+    const result = CreateTaskInputSchema.safeParse({
+      area_id: uid,
+      source_capture_item_id: uid2,
+      title: "  Draft sponsor email  ",
+      description: "",
+      priority_confidence: 0.78,
+      estimated_minutes_low: 15,
+      estimated_minutes_high: 45,
+      first_tiny_step: "  Open the event notes  ",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.title : "").toBe("Draft sponsor email");
+    expect(result.success ? result.data.description : "x").toBeNull();
+    expect(result.success ? result.data.first_tiny_step : "").toBe(
+      "Open the event notes",
+    );
+  });
+});
+
+describe("CreateTimeBlockProposalInputSchema", () => {
+  it("validates task-backed local proposal input", () => {
+    const result = CreateTimeBlockProposalInputSchema.safeParse({
+      task_id: uid,
+      proposed_start: "2026-05-08T16:00:00.000Z",
+      proposed_end: "2026-05-08T17:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.rationale_note : "").toBe(
+      "Local planning proposal created from task duration.",
+    );
+  });
+
+  it("rejects proposals where end is not after start", () => {
+    const result = CreateTimeBlockProposalInputSchema.safeParse({
+      task_id: uid,
+      proposed_start: "2026-05-08T17:00:00.000Z",
+      proposed_end: "2026-05-08T16:00:00.000Z",
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("EditTimeBlockProposalInputSchema", () => {
+  it("validates editable start and end before proposal acceptance", () => {
+    const result = EditTimeBlockProposalInputSchema.safeParse({
+      proposed_start: "2026-05-08T18:00:00.000Z",
+      proposed_end: "2026-05-08T19:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("CreateExecutionSessionInputSchema", () => {
+  it("validates task-backed execution start input", () => {
+    const result = CreateExecutionSessionInputSchema.safeParse({
+      task_id: uid,
+      calendar_block_id: uid2,
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("MarkExecutionSessionInputSchema", () => {
+  it("validates supported execution session marks", () => {
+    for (const status of [
+      "completed",
+      "missed",
+      "distracted",
+      "paused",
+      "stuck",
+    ] as const) {
+      const result = MarkExecutionSessionInputSchema.safeParse({ status });
+      expect(result.success).toBe(true);
+    }
+  });
+});
+
+describe("CreateReviewEntryInputSchema", () => {
+  it("validates daily review entry creation input", () => {
+    const result = CreateReviewEntryInputSchema.safeParse({
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      area_id: null,
+      summary_json: {
+        completed_sessions: 1,
+        missed_sessions: 0,
+        open_tasks: 2,
+      },
+    });
+
+    expect(result.success).toBe(true);
   });
 });
 

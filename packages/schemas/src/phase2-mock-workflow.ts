@@ -34,6 +34,20 @@ export const Phase2TaskDraftSchema = z.object({
 
 export type Phase2TaskDraft = z.infer<typeof Phase2TaskDraftSchema>;
 
+export const Phase2ProjectDraftSchema = z.object({
+  id: z.string().min(1),
+  user_id: z.string().min(1),
+  capture_item_id: z.string().min(1),
+  area_id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+  status: z.enum(["pending", "accepted", "rejected"]),
+  created_at: z.string().datetime(),
+});
+
+export type Phase2ProjectDraft = z.infer<typeof Phase2ProjectDraftSchema>;
+
 export const Phase2AmbiguityAssessmentResponseSchema = z.object({
   id: z.string().min(1),
   user_id: z.string().min(1),
@@ -95,6 +109,7 @@ export const MockParseCaptureResponseSchema = z.object({
   schema_version: z.literal("phase2.mock.v1"),
   captureItem: Phase2CaptureItemSchema,
   taskDraft: Phase2TaskDraftSchema,
+  projectDraft: Phase2ProjectDraftSchema.nullable(),
   ambiguityAssessment: Phase2AmbiguityAssessmentResponseSchema,
   firstSuggestedAction: z.string().min(1),
   timeBlockProposalDraft: Phase2TimeBlockProposalDraftSchema,

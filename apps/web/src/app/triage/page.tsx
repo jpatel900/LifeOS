@@ -1,13 +1,162 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import type { Area } from "@lifeos/schemas";
 import { Button } from "@lifeos/ui";
 import { EmptyState } from "../components/EmptyState";
 import { getAreaById } from "@/lib/mockData";
+import {
+  createProject,
+  createTask,
+  listAreas,
+  type DataProvider,
+} from "@/lib/data/workflow";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
+const WORKFLOW_AREA_SLUG_BY_ID: Record<string, string> = {
+  "area-main-job": "main-job",
+  "area-personal": "personal",
+  "area-volunteer": "volunteer-work",
+  "area-side-project": "side-project",
+};
+
+type LoadState =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; provider: DataProvider; areas: Area[] };
+
+type SaveState =
+  | { status: "idle" }
+  | { status: "saving"; label: string }
+  | { status: "saved"; label: string; provider: DataProvider }
+  | { status: "error"; message: string };
+
+function resolvePersistedAreaId(workflowAreaId: string, areas: Area[]) {
+  const slug = WORKFLOW_AREA_SLUG_BY_ID[workflowAreaId];
+  const area = areas.find((item) => item.slug === slug) ?? areas[0];
+
+  if (!area) {
+    throw new Error("Create an active area before accepting triage drafts.");
+  }
+
+  return area.id;
+}
+
 export default function TriagePage() {
-  const { state, acceptTaskDraft, rejectTaskDraft, editTaskDraft } = useWorkflow();
+  const {
+    state,
+    acceptTaskDraft,
+    acceptProjectDraft,
+    rejectTaskDraft,
+    rejectProjectDraft,
+    editTaskDraft,
+  } = useWorkflow();
+  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const triageCandidates = state.taskDrafts.filter((draft) => draft.status === "pending");
+  const projectCandidates = state.projectDrafts.filter(
+    (draft) => draft.status === "pending",
+  );
+  const totalCandidates = triageCandidates.length + projectCandidates.length;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAreas() {
+      try {
+        const result = await listAreas(createSupabaseBrowserClient());
+        if (!cancelled) {
+          setLoadState({
+            status: "ready",
+            provider: result.provider,
+            areas: result.areas,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadState({
+            status: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unable to load triage persistence context.",
+          });
+        }
+      }
+    }
+
+    void loadAreas();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleAcceptTaskDraft(draftId: string) {
+    const draft = state.taskDrafts.find((item) => item.id === draftId);
+    if (!draft) return;
+    if (loadState.status !== "ready") {
+      setSaveState({ status: "error", message: "Triage data source is not ready." });
+      return;
+    }
+
+    setSaveState({ status: "saving", label: draft.title });
+    try {
+      const result = await createTask(createSupabaseBrowserClient(), {
+        area_id: resolvePersistedAreaId(draft.area_id, loadState.areas),
+        source_capture_item_id: null,
+        title: draft.title,
+        description: draft.description,
+        priority_confidence: draft.confidence,
+        estimated_minutes_low: draft.estimated_minutes_low,
+        estimated_minutes_high: draft.estimated_minutes_high,
+        first_tiny_step: draft.first_tiny_step,
+      });
+      acceptTaskDraft(draftId);
+      setSaveState({
+        status: "saved",
+        label: result.task.title,
+        provider: result.provider,
+      });
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to accept task draft.",
+      });
+    }
+  }
+
+  async function handleAcceptProjectDraft(draftId: string) {
+    const draft = state.projectDrafts.find((item) => item.id === draftId);
+    if (!draft) return;
+    if (loadState.status !== "ready") {
+      setSaveState({ status: "error", message: "Triage data source is not ready." });
+      return;
+    }
+
+    setSaveState({ status: "saving", label: draft.title });
+    try {
+      const result = await createProject(createSupabaseBrowserClient(), {
+        area_id: resolvePersistedAreaId(draft.area_id, loadState.areas),
+        title: draft.title,
+        description: draft.description,
+      });
+      acceptProjectDraft(draftId);
+      setSaveState({
+        status: "saved",
+        label: result.project.title,
+        provider: result.provider,
+      });
+    } catch (error) {
+      setSaveState({
+        status: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to accept project draft.",
+      });
+    }
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -15,11 +164,67 @@ export default function TriagePage() {
         <h1>Triage</h1>
         <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
           Review uncertain items before they enter your real task list. Accepting a
-          draft creates a local task and a proposed time block.
+          task or project draft commits that object; local proposal drafts remain session-only.
         </p>
       </section>
 
-      {triageCandidates.length === 0 ? (
+      {loadState.status === "loading" ? <p role="status">Loading triage context...</p> : null}
+
+      {loadState.status === "ready" ? (
+        <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
+          Data source: <strong>{loadState.provider}</strong>
+        </p>
+      ) : null}
+
+      {loadState.status === "error" ? (
+        <section
+          role="alert"
+          style={{
+            border: "1px solid #fca5a5",
+            background: "#fef2f2",
+            borderRadius: "8px",
+            padding: "1rem",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Triage context could not load</h2>
+          <p>{loadState.message}</p>
+        </section>
+      ) : null}
+
+      {saveState.status === "saving" ? (
+        <p role="status">Accepting {saveState.label}...</p>
+      ) : null}
+
+      {saveState.status === "saved" ? (
+        <section
+          role="status"
+          style={{
+            border: "1px solid #86efac",
+            background: "#f0fdf4",
+            borderRadius: "8px",
+            padding: "1rem",
+          }}
+        >
+          Accepted {saveState.label} through <strong>{saveState.provider}</strong>.
+        </section>
+      ) : null}
+
+      {saveState.status === "error" ? (
+        <section
+          role="alert"
+          style={{
+            border: "1px solid #fca5a5",
+            background: "#fef2f2",
+            borderRadius: "8px",
+            padding: "1rem",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Draft was not accepted</h2>
+          <p>{saveState.message}</p>
+        </section>
+      ) : null}
+
+      {totalCandidates === 0 ? (
         <EmptyState
           title="Nothing to triage right now."
           description="When AI parsing is added, low-confidence drafts will appear here for review."
@@ -120,8 +325,9 @@ export default function TriagePage() {
                 >
                   <Button
                     type="button"
-                    onClick={() => acceptTaskDraft(task.id)}
-                    aria-label="Accept draft"
+                    onClick={() => void handleAcceptTaskDraft(task.id)}
+                    aria-label="Accept task draft"
+                    disabled={saveState.status === "saving"}
                   >
                     Accept
                   </Button>
@@ -140,7 +346,7 @@ export default function TriagePage() {
                   <Button
                     type="button"
                     onClick={() => rejectTaskDraft(task.id)}
-                    aria-label="Reject draft"
+                    aria-label="Reject task draft"
                   >
                     Reject
                   </Button>
@@ -167,6 +373,95 @@ export default function TriagePage() {
                     aria-label="Reassign area"
                   >
                     Reassign area
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          {projectCandidates.map((project) => {
+            const area = getAreaById(project.area_id);
+            return (
+              <div
+                key={project.id}
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "0.75rem",
+                  padding: "0.75rem 1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    alignItems: "baseline",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: "0.95rem",
+                        fontWeight: 500,
+                        marginBottom: 4,
+                      }}
+                    >
+                      {project.title}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "#6b7280",
+                        display: "flex",
+                        gap: "0.75rem",
+                      }}
+                    >
+                      <span>Classification: project draft (mock)</span>
+                      {area ? <span>Area suggestion: {area.name}</span> : null}
+                      <span>Confidence: {Math.round(project.confidence * 100)}%</span>
+                    </div>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "#b45309",
+                      backgroundColor: "#fffbeb",
+                      borderRadius: "999px",
+                      padding: "0.1rem 0.6rem",
+                    }}
+                  >
+                    Needs triage
+                  </span>
+                </div>
+                {project.description ? (
+                  <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
+                    {project.description}
+                  </p>
+                ) : null}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
+                    marginTop: "0.25rem",
+                  }}
+                >
+                  <Button
+                    type="button"
+                    onClick={() => void handleAcceptProjectDraft(project.id)}
+                    aria-label="Accept project draft"
+                    disabled={saveState.status === "saving"}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => rejectProjectDraft(project.id)}
+                    aria-label="Reject project draft"
+                  >
+                    Reject
                   </Button>
                 </div>
               </div>
