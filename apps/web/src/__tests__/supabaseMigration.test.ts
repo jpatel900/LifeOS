@@ -132,6 +132,8 @@ describe("Supabase local database scaffold", () => {
       "tasks",
       "time_block_proposals",
       "calendar_blocks",
+      "execution_sessions",
+      "review_entries",
     ]) {
       expect(sql).toContain(
         `grant select, insert, update, delete on table public.${table} to authenticated`,

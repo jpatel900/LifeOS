@@ -58,7 +58,12 @@ describe("workflow route provider wiring", () => {
 
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
     expect(screen.getByLabelText("Current area context")).toHaveTextContent("Area:");
-    if (_name === "triage" || _name === "calendar") {
+    if (
+      _name === "triage" ||
+      _name === "calendar" ||
+      _name === "execute" ||
+      _name === "review"
+    ) {
       expect(await screen.findByText("mock")).toBeDefined();
     }
   });

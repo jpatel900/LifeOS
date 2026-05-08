@@ -103,6 +103,28 @@ async function deleteBlockByTaskId(client: SupabaseClient, taskId: string) {
   }
 }
 
+async function deleteSessionByTaskId(client: SupabaseClient, taskId: string) {
+  const { error } = await client
+    .from("execution_sessions")
+    .delete()
+    .eq("task_id", taskId);
+
+  if (error) {
+    throw new Error(`Could not clean up session for task '${taskId}': ${error.message}`);
+  }
+}
+
+async function deleteReviewByMarker(client: SupabaseClient, marker: string) {
+  const { error } = await client
+    .from("review_entries")
+    .delete()
+    .contains("summary_json", { marker });
+
+  if (error) {
+    throw new Error(`Could not clean up review '${marker}': ${error.message}`);
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -447,6 +469,200 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       /row-level security|violates row-level/i,
     );
     expect(insertBlockError?.message).toMatch(
+      /row-level security|violates row-level/i,
+    );
+  });
+
+  it("lets user A access own execution sessions and review entries but not user B rows", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userATaskTitle = `rls-user-a-execution-task-${suffix}`;
+    const userBTaskTitle = `rls-user-b-execution-task-${suffix}`;
+    const userAReviewMarker = `rls-user-a-review-${suffix}`;
+    const userBReviewMarker = `rls-user-b-review-${suffix}`;
+    let userATaskId = "";
+    let userBTaskId = "";
+    let userABlockId = "";
+    let userBBlockId = "";
+
+    try {
+      const { data: insertedATask, error: insertATaskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: userATaskTitle,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      expect(insertATaskError).toBeNull();
+      userATaskId = insertedATask!.id;
+
+      const { data: insertedBTask, error: insertBTaskError } = await userBClient
+        .from("tasks")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          title: userBTaskTitle,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      expect(insertBTaskError).toBeNull();
+      userBTaskId = insertedBTask!.id;
+
+      const { data: insertedABlock, error: insertBlockAError } =
+        await userAClient
+          .from("calendar_blocks")
+          .insert({
+            user_id: userA.id,
+            area_id: userA.areaId,
+            task_id: userATaskId,
+            start_at: "2026-05-08T16:00:00.000Z",
+            end_at: "2026-05-08T17:00:00.000Z",
+            status: "scheduled",
+          })
+          .select("id")
+          .single();
+      expect(insertBlockAError).toBeNull();
+      userABlockId = insertedABlock!.id;
+
+      const { data: insertedBBlock, error: insertBlockBError } =
+        await userBClient
+          .from("calendar_blocks")
+          .insert({
+            user_id: userB.id,
+            area_id: userB.areaId,
+            task_id: userBTaskId,
+            start_at: "2026-05-08T18:00:00.000Z",
+            end_at: "2026-05-08T19:00:00.000Z",
+            status: "scheduled",
+          })
+          .select("id")
+          .single();
+      expect(insertBlockBError).toBeNull();
+      userBBlockId = insertedBBlock!.id;
+
+      const { error: insertSessionAError } = await userAClient
+        .from("execution_sessions")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: userATaskId,
+          calendar_block_id: userABlockId,
+          planned_minutes: 60,
+          paused_minutes: 0,
+          distraction_minutes: 0,
+          outcome: "partial",
+        });
+      expect(insertSessionAError).toBeNull();
+
+      const { error: insertSessionBError } = await userBClient
+        .from("execution_sessions")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          task_id: userBTaskId,
+          calendar_block_id: userBBlockId,
+          planned_minutes: 60,
+          paused_minutes: 0,
+          distraction_minutes: 0,
+          outcome: "partial",
+        });
+      expect(insertSessionBError).toBeNull();
+
+      const { error: insertReviewAError } = await userAClient
+        .from("review_entries")
+        .insert({
+          user_id: userA.id,
+          area_id: null,
+          review_type: "daily",
+          period_start: "2026-05-08",
+          period_end: "2026-05-08",
+          summary_json: { marker: userAReviewMarker },
+        });
+      expect(insertReviewAError).toBeNull();
+
+      const { error: insertReviewBError } = await userBClient
+        .from("review_entries")
+        .insert({
+          user_id: userB.id,
+          area_id: null,
+          review_type: "daily",
+          period_start: "2026-05-08",
+          period_end: "2026-05-08",
+          summary_json: { marker: userBReviewMarker },
+        });
+      expect(insertReviewBError).toBeNull();
+
+      const { data: visibleSessionsToA, error: selectSessionAError } =
+        await userAClient
+          .from("execution_sessions")
+          .select("user_id,task_id")
+          .in("task_id", [userATaskId, userBTaskId])
+          .order("task_id", { ascending: true });
+      expect(selectSessionAError).toBeNull();
+      expect(visibleSessionsToA).toEqual([
+        { user_id: userA.id, task_id: userATaskId },
+      ]);
+
+      const { data: visibleReviewsToA, error: selectReviewAError } =
+        await userAClient
+          .from("review_entries")
+          .select("user_id,summary_json")
+          .contains("summary_json", { marker: userAReviewMarker });
+      expect(selectReviewAError).toBeNull();
+      expect(visibleReviewsToA).toEqual([
+        { user_id: userA.id, summary_json: { marker: userAReviewMarker } },
+      ]);
+    } finally {
+      if (userATaskId) {
+        await deleteSessionByTaskId(userAClient, userATaskId);
+        await deleteBlockByTaskId(userAClient, userATaskId);
+      }
+      if (userBTaskId) {
+        await deleteSessionByTaskId(userBClient, userBTaskId);
+        await deleteBlockByTaskId(userBClient, userBTaskId);
+      }
+      await deleteReviewByMarker(userAClient, userAReviewMarker);
+      await deleteReviewByMarker(userBClient, userBReviewMarker);
+      await deleteTaskByTitle(userAClient, userATaskTitle);
+      await deleteTaskByTitle(userBClient, userBTaskTitle);
+    }
+  });
+
+  it("prevents user A from inserting execution and review rows for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const { error: insertSessionError } = await userAClient
+      .from("execution_sessions")
+      .insert({
+        user_id: userB.id,
+        area_id: userB.areaId,
+        task_id: null,
+        calendar_block_id: null,
+        planned_minutes: 60,
+        paused_minutes: 0,
+        distraction_minutes: 0,
+        outcome: "partial",
+      });
+
+    const { error: insertReviewError } = await userAClient
+      .from("review_entries")
+      .insert({
+        user_id: userB.id,
+        area_id: null,
+        review_type: "daily",
+        period_start: "2026-05-08",
+        period_end: "2026-05-08",
+        summary_json: { marker: "cross-user" },
+      });
+
+    expect(insertSessionError?.message).toMatch(
+      /row-level security|violates row-level/i,
+    );
+    expect(insertReviewError?.message).toMatch(
       /row-level security|violates row-level/i,
     );
   });

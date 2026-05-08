@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { CaptureItemSchema, type CaptureItem } from "./entities";
+import { REVIEW_TYPES } from "./constants";
+import { JsonValueSchema } from "./json";
 
 export * from "./constants";
 export * from "./json";
@@ -116,6 +118,49 @@ export const EditTimeBlockProposalInputSchema = z
 
 export type EditTimeBlockProposalInput = z.input<
   typeof EditTimeBlockProposalInputSchema
+>;
+
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");
+
+export const CreateExecutionSessionInputSchema = z.object({
+  task_id: z.string().uuid(),
+  calendar_block_id: z.string().uuid().nullable().optional(),
+});
+
+export type CreateExecutionSessionInput = z.input<
+  typeof CreateExecutionSessionInputSchema
+>;
+
+export const MarkExecutionSessionInputSchema = z.object({
+  status: z.enum(["completed", "missed", "distracted", "paused", "stuck"]),
+});
+
+export type MarkExecutionSessionInput = z.input<
+  typeof MarkExecutionSessionInputSchema
+>;
+
+export const CreateReviewEntryInputSchema = z
+  .object({
+    area_id: z.string().uuid().nullable(),
+    review_type: z.enum(REVIEW_TYPES),
+    period_start: isoDate,
+    period_end: isoDate,
+    summary_json: JsonValueSchema,
+  })
+  .refine(
+    (input) =>
+      new Date(input.period_end).getTime() >=
+      new Date(input.period_start).getTime(),
+    {
+      message: "period_end must be on or after period_start",
+      path: ["period_end"],
+    },
+  );
+
+export type CreateReviewEntryInput = z.input<
+  typeof CreateReviewEntryInputSchema
 >;
 
 export const CaptureSchema = CaptureItemSchema;

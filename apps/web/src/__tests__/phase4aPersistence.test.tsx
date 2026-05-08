@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area, CaptureItem } from "@lifeos/schemas";
 import CalendarPage from "../app/calendar/page";
 import CapturePage from "../app/capture/page";
+import ExecutePage from "../app/execute/page";
+import ReviewPage from "../app/review/page";
 import AreasSettingsPage from "../app/settings/areas/page";
 import TriagePage from "../app/triage/page";
 import { useEffect, useRef } from "react";
@@ -23,6 +25,10 @@ const mocks = vi.hoisted(() => {
     editTimeBlockProposal: vi.fn(),
     rejectTimeBlockProposal: vi.fn(),
     acceptTimeBlockProposal: vi.fn(),
+    listExecutionReviewItems: vi.fn(),
+    createExecutionSession: vi.fn(),
+    markExecutionSession: vi.fn(),
+    createReviewEntry: vi.fn(),
   };
 });
 
@@ -40,6 +46,10 @@ vi.mock("@/lib/data/workflow", () => ({
   editTimeBlockProposal: mocks.editTimeBlockProposal,
   rejectTimeBlockProposal: mocks.rejectTimeBlockProposal,
   acceptTimeBlockProposal: mocks.acceptTimeBlockProposal,
+  listExecutionReviewItems: mocks.listExecutionReviewItems,
+  createExecutionSession: mocks.createExecutionSession,
+  markExecutionSession: mocks.markExecutionSession,
+  createReviewEntry: mocks.createReviewEntry,
 }));
 
 const area: Area = {
@@ -129,6 +139,40 @@ const block = {
   status: "scheduled",
   created_at: "2026-05-08T15:05:00.000Z",
   updated_at: "2026-05-08T15:05:00.000Z",
+};
+
+const session = {
+  id: "550e8400-e29b-41d4-a716-446655440701",
+  user_id: area.user_id,
+  area_id: area.id,
+  task_id: task.id,
+  calendar_block_id: block.id,
+  planned_minutes: 60,
+  actual_minutes: null,
+  paused_minutes: 0,
+  distraction_minutes: 0,
+  productivity_rating: null,
+  energy_rating: null,
+  outcome: "partial",
+  notes: null,
+  created_at: "2026-05-08T16:05:00.000Z",
+};
+
+const reviewEntry = {
+  id: "550e8400-e29b-41d4-a716-446655440801",
+  user_id: area.user_id,
+  area_id: null,
+  review_type: "daily",
+  period_start: "2026-05-08",
+  period_end: "2026-05-08",
+  summary_json: {
+    completed_sessions: 1,
+    missed_sessions: 0,
+    distracted_sessions: 0,
+    open_tasks: 1,
+    scheduled_blocks: 1,
+  },
+  created_at: "2026-05-08T23:00:00.000Z",
 };
 
 function SeedCapture({ text }: { text: string }) {
@@ -369,5 +413,130 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Local block created through supabase.");
+  });
+
+  it("starts a persisted execution session from a scheduled task block", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [block],
+      sessions: [],
+      reviewEntries: [],
+    });
+    mocks.createExecutionSession.mockResolvedValue({
+      provider: "supabase",
+      session,
+      block: { ...block, status: "running" },
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
+
+    await waitFor(() => {
+      expect(mocks.createExecutionSession).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        {
+          task_id: task.id,
+          calendar_block_id: block.id,
+        },
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Session started through supabase.");
+  });
+
+  it("completes a persisted execution session", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [{ ...block, status: "running" }],
+      sessions: [session],
+      reviewEntries: [],
+    });
+    mocks.markExecutionSession.mockResolvedValue({
+      provider: "supabase",
+      session: { ...session, outcome: "completed", actual_minutes: 60 },
+      block: { ...block, status: "completed" },
+      task: { ...task, status: "done" },
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Complete" }));
+
+    await waitFor(() => {
+      expect(mocks.markExecutionSession).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        session.id,
+        { status: "completed" },
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Session marked completed through supabase.");
+  });
+
+  it("marks a persisted execution session missed", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [{ ...block, status: "running" }],
+      sessions: [session],
+      reviewEntries: [],
+    });
+    mocks.markExecutionSession.mockResolvedValue({
+      provider: "supabase",
+      session: { ...session, outcome: "skipped" },
+      block: { ...block, status: "missed" },
+      task: null,
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Mark missed" }));
+
+    await waitFor(() => {
+      expect(mocks.markExecutionSession).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        session.id,
+        { status: "missed" },
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Session marked missed through supabase.");
+  });
+
+  it("creates a persisted review entry from review data", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [block],
+      sessions: [{ ...session, outcome: "completed" }],
+      reviewEntries: [],
+    });
+    mocks.createReviewEntry.mockResolvedValue({
+      provider: "supabase",
+      reviewEntry,
+    });
+
+    renderWithWorkflow(<ReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create daily review" }));
+
+    await waitFor(() => {
+      expect(mocks.createReviewEntry).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        expect.objectContaining({
+          review_type: "daily",
+          area_id: null,
+          summary_json: expect.objectContaining({
+            completed_sessions: 1,
+            open_tasks: 1,
+          }),
+        }),
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Review entry created through supabase.");
   });
 });

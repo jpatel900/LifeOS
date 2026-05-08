@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   acceptTimeBlockProposal,
+  createReviewEntry,
   createTimeBlockProposal,
   createProject,
   createCaptureItem,
+  createExecutionSession,
   createTask,
   editTimeBlockProposal,
+  listExecutionReviewItems,
   listPlanningItems,
+  markExecutionSession,
   rejectTimeBlockProposal,
   listAreas,
   type MinimalSupabaseClient,
@@ -17,6 +21,8 @@ const areaId = "550e8400-e29b-41d4-a716-446655440101";
 const taskId = "550e8400-e29b-41d4-a716-446655440301";
 const proposalId = "550e8400-e29b-41d4-a716-446655440501";
 const blockId = "550e8400-e29b-41d4-a716-446655440601";
+const sessionId = "550e8400-e29b-41d4-a716-446655440701";
+const reviewId = "550e8400-e29b-41d4-a716-446655440801";
 const start = "2026-05-08T16:00:00.000Z";
 const end = "2026-05-08T17:00:00.000Z";
 
@@ -70,6 +76,40 @@ const blockRow = {
   status: "scheduled",
   created_at: "2026-05-08T15:05:00.000Z",
   updated_at: "2026-05-08T15:05:00.000Z",
+};
+
+const runningSessionRow = {
+  id: sessionId,
+  user_id: userId,
+  area_id: areaId,
+  task_id: taskId,
+  calendar_block_id: blockId,
+  planned_minutes: 60,
+  actual_minutes: null,
+  paused_minutes: 0,
+  distraction_minutes: 0,
+  productivity_rating: null,
+  energy_rating: null,
+  outcome: "partial",
+  notes: null,
+  created_at: "2026-05-08T16:05:00.000Z",
+};
+
+const reviewRow = {
+  id: reviewId,
+  user_id: userId,
+  area_id: null,
+  review_type: "daily",
+  period_start: "2026-05-08",
+  period_end: "2026-05-08",
+  summary_json: {
+    completed_sessions: 1,
+    missed_sessions: 0,
+    distracted_sessions: 0,
+    open_tasks: 1,
+    scheduled_blocks: 1,
+  },
+  created_at: "2026-05-08T23:00:00.000Z",
 };
 
 function authenticatedClient(from: MinimalSupabaseClient["from"]) {
@@ -526,5 +566,276 @@ describe("workflow data provider", () => {
     expect(result.proposal.status).toBe("accepted");
     expect(result.block.google_event_id).toBeNull();
     expect(result.block.status).toBe("scheduled");
+  });
+
+  it("starts an execution_session for a persisted task and block", async () => {
+    const taskSingle = vi.fn().mockResolvedValue({ data: taskRow, error: null });
+    const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
+    const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
+
+    const blockSingle = vi.fn().mockResolvedValue({ data: blockRow, error: null });
+    const blockEq = vi.fn().mockReturnValue({ single: blockSingle });
+    const blockSelect = vi.fn().mockReturnValue({ eq: blockEq });
+
+    const runningBlock = { ...blockRow, status: "running" };
+    const blockUpdateSingle = vi.fn().mockResolvedValue({
+      data: runningBlock,
+      error: null,
+    });
+    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
+
+    const sessionSingle = vi.fn().mockResolvedValue({
+      data: runningSessionRow,
+      error: null,
+    });
+    const sessionSelect = vi.fn().mockReturnValue({ single: sessionSingle });
+    const sessionInsert = vi.fn().mockReturnValue({ select: sessionSelect });
+
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: taskSelect };
+      if (table === "calendar_blocks") {
+        return { select: blockSelect, update: blockUpdate };
+      }
+      if (table === "execution_sessions") return { insert: sessionInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await createExecutionSession(authenticatedClient(from), {
+      task_id: taskId,
+      calendar_block_id: blockId,
+    });
+
+    expect(sessionInsert).toHaveBeenCalledWith({
+      user_id: userId,
+      area_id: areaId,
+      task_id: taskId,
+      calendar_block_id: blockId,
+      planned_minutes: 60,
+      actual_minutes: null,
+      paused_minutes: 0,
+      distraction_minutes: 0,
+      productivity_rating: null,
+      energy_rating: null,
+      outcome: "partial",
+      notes: null,
+    });
+    expect(blockUpdate).toHaveBeenCalledWith({ status: "running" });
+    expect(blockUpdateEq).toHaveBeenCalledWith("id", blockId);
+    expect(result.provider).toBe("supabase");
+    expect(result.session.outcome).toBe("partial");
+    expect(result.block?.status).toBe("running");
+  });
+
+  it("completes an execution_session and marks task and block done", async () => {
+    const completedSession = {
+      ...runningSessionRow,
+      actual_minutes: 60,
+      productivity_rating: 4,
+      outcome: "completed",
+    };
+    const completedBlock = { ...blockRow, status: "completed" };
+    const completedTask = { ...taskRow, status: "done" };
+
+    const sessionSingle = vi.fn().mockResolvedValue({
+      data: runningSessionRow,
+      error: null,
+    });
+    const sessionEq = vi.fn().mockReturnValue({ single: sessionSingle });
+    const sessionSelect = vi.fn().mockReturnValue({ eq: sessionEq });
+
+    const sessionUpdateSingle = vi.fn().mockResolvedValue({
+      data: completedSession,
+      error: null,
+    });
+    const sessionUpdateSelect = vi.fn().mockReturnValue({
+      single: sessionUpdateSingle,
+    });
+    const sessionUpdateEq = vi.fn().mockReturnValue({
+      select: sessionUpdateSelect,
+    });
+    const sessionUpdate = vi.fn().mockReturnValue({ eq: sessionUpdateEq });
+
+    const blockUpdateSingle = vi.fn().mockResolvedValue({
+      data: completedBlock,
+      error: null,
+    });
+    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
+
+    const taskUpdateSingle = vi.fn().mockResolvedValue({
+      data: completedTask,
+      error: null,
+    });
+    const taskUpdateSelect = vi.fn().mockReturnValue({ single: taskUpdateSingle });
+    const taskUpdateEq = vi.fn().mockReturnValue({ select: taskUpdateSelect });
+    const taskUpdate = vi.fn().mockReturnValue({ eq: taskUpdateEq });
+
+    const from = vi.fn((table: string) => {
+      if (table === "execution_sessions") {
+        return { select: sessionSelect, update: sessionUpdate };
+      }
+      if (table === "calendar_blocks") return { update: blockUpdate };
+      if (table === "tasks") return { update: taskUpdate };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await markExecutionSession(
+      authenticatedClient(from),
+      sessionId,
+      { status: "completed" },
+    );
+
+    expect(sessionUpdate).toHaveBeenCalledWith({
+      outcome: "completed",
+      actual_minutes: 60,
+      paused_minutes: 0,
+      distraction_minutes: 0,
+      productivity_rating: 4,
+      notes: null,
+    });
+    expect(blockUpdate).toHaveBeenCalledWith({ status: "completed" });
+    expect(taskUpdate).toHaveBeenCalledWith({ status: "done" });
+    expect(result.session.outcome).toBe("completed");
+    expect(result.block?.status).toBe("completed");
+    expect(result.task?.status).toBe("done");
+  });
+
+  it("marks missed execution sessions and updates the related block only", async () => {
+    const missedSession = { ...runningSessionRow, outcome: "skipped" };
+    const missedBlock = { ...blockRow, status: "missed" };
+
+    const sessionSingle = vi.fn().mockResolvedValue({
+      data: runningSessionRow,
+      error: null,
+    });
+    const sessionEq = vi.fn().mockReturnValue({ single: sessionSingle });
+    const sessionSelect = vi.fn().mockReturnValue({ eq: sessionEq });
+
+    const sessionUpdateSingle = vi.fn().mockResolvedValue({
+      data: missedSession,
+      error: null,
+    });
+    const sessionUpdateSelect = vi.fn().mockReturnValue({
+      single: sessionUpdateSingle,
+    });
+    const sessionUpdateEq = vi.fn().mockReturnValue({
+      select: sessionUpdateSelect,
+    });
+    const sessionUpdate = vi.fn().mockReturnValue({ eq: sessionUpdateEq });
+
+    const blockUpdateSingle = vi.fn().mockResolvedValue({
+      data: missedBlock,
+      error: null,
+    });
+    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
+    const taskUpdate = vi.fn();
+
+    const from = vi.fn((table: string) => {
+      if (table === "execution_sessions") {
+        return { select: sessionSelect, update: sessionUpdate };
+      }
+      if (table === "calendar_blocks") return { update: blockUpdate };
+      if (table === "tasks") return { update: taskUpdate };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await markExecutionSession(
+      authenticatedClient(from),
+      sessionId,
+      { status: "missed" },
+    );
+
+    expect(sessionUpdate).toHaveBeenCalledWith({
+      outcome: "skipped",
+      actual_minutes: null,
+      paused_minutes: 0,
+      distraction_minutes: 0,
+      productivity_rating: null,
+      notes: null,
+    });
+    expect(blockUpdate).toHaveBeenCalledWith({ status: "missed" });
+    expect(taskUpdate).not.toHaveBeenCalled();
+    expect(result.session.outcome).toBe("skipped");
+    expect(result.block?.status).toBe("missed");
+  });
+
+  it("lists persisted tasks, blocks, sessions, and review entries for review", async () => {
+    const tasksOrder = vi.fn().mockResolvedValue({ data: [taskRow], error: null });
+    const tasksSelect = vi.fn().mockReturnValue({ order: tasksOrder });
+    const blocksOrder = vi.fn().mockResolvedValue({ data: [blockRow], error: null });
+    const blocksSelect = vi.fn().mockReturnValue({ order: blocksOrder });
+    const sessionsOrder = vi
+      .fn()
+      .mockResolvedValue({ data: [runningSessionRow], error: null });
+    const sessionsSelect = vi.fn().mockReturnValue({ order: sessionsOrder });
+    const reviewsOrder = vi.fn().mockResolvedValue({ data: [reviewRow], error: null });
+    const reviewsSelect = vi.fn().mockReturnValue({ order: reviewsOrder });
+
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: tasksSelect };
+      if (table === "calendar_blocks") return { select: blocksSelect };
+      if (table === "execution_sessions") return { select: sessionsSelect };
+      if (table === "review_entries") return { select: reviewsSelect };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await listExecutionReviewItems(authenticatedClient(from));
+
+    expect(result.provider).toBe("supabase");
+    expect(result.tasks).toEqual([taskRow]);
+    expect(result.blocks).toEqual([blockRow]);
+    expect(result.sessions).toEqual([runningSessionRow]);
+    expect(result.reviewEntries).toEqual([reviewRow]);
+  });
+
+  it("creates a persisted daily review entry from validated summary data", async () => {
+    const single = vi.fn().mockResolvedValue({ data: reviewRow, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    const result = await createReviewEntry(authenticatedClient(from), {
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      area_id: null,
+      summary_json: reviewRow.summary_json,
+    });
+
+    expect(from).toHaveBeenCalledWith("review_entries");
+    expect(insert).toHaveBeenCalledWith({
+      user_id: userId,
+      area_id: null,
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      summary_json: reviewRow.summary_json,
+    });
+    expect(result.provider).toBe("supabase");
+    expect(result.reviewEntry.review_type).toBe("daily");
+  });
+
+  it("keeps execution and review helpers working in mock mode", async () => {
+    const sessionResult = await createExecutionSession(null, {
+      task_id: taskId,
+      calendar_block_id: blockId,
+    });
+    const reviewResult = await createReviewEntry(null, {
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      area_id: null,
+      summary_json: reviewRow.summary_json,
+    });
+
+    expect(sessionResult.provider).toBe("mock");
+    expect(sessionResult.session.task_id).toBe(taskId);
+    expect(reviewResult.provider).toBe("mock");
+    expect(reviewResult.reviewEntry.summary_json).toEqual(reviewRow.summary_json);
   });
 });

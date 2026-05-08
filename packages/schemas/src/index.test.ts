@@ -5,8 +5,11 @@ import {
   CalendarBlockSchema,
   CaptureItemSchema,
   CreateCaptureItemInputSchema,
+  CreateExecutionSessionInputSchema,
+  CreateReviewEntryInputSchema,
   CreateTimeBlockProposalInputSchema,
   EditTimeBlockProposalInputSchema,
+  MarkExecutionSessionInputSchema,
   CreateProjectInputSchema,
   CreateTaskInputSchema,
   ExecutionSessionSchema,
@@ -135,6 +138,50 @@ describe("EditTimeBlockProposalInputSchema", () => {
     const result = EditTimeBlockProposalInputSchema.safeParse({
       proposed_start: "2026-05-08T18:00:00.000Z",
       proposed_end: "2026-05-08T19:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("CreateExecutionSessionInputSchema", () => {
+  it("validates task-backed execution start input", () => {
+    const result = CreateExecutionSessionInputSchema.safeParse({
+      task_id: uid,
+      calendar_block_id: uid2,
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("MarkExecutionSessionInputSchema", () => {
+  it("validates supported execution session marks", () => {
+    for (const status of [
+      "completed",
+      "missed",
+      "distracted",
+      "paused",
+      "stuck",
+    ] as const) {
+      const result = MarkExecutionSessionInputSchema.safeParse({ status });
+      expect(result.success).toBe(true);
+    }
+  });
+});
+
+describe("CreateReviewEntryInputSchema", () => {
+  it("validates daily review entry creation input", () => {
+    const result = CreateReviewEntryInputSchema.safeParse({
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      area_id: null,
+      summary_json: {
+        completed_sessions: 1,
+        missed_sessions: 0,
+        open_tasks: 2,
+      },
     });
 
     expect(result.success).toBe(true);
