@@ -131,7 +131,7 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
     case "markSession":
       return markCurrentSession(state, action.status);
     case "reset":
-      return createInitialWorkflowState();
+      return createSyncedInitialState();
     default:
       return state;
   }
@@ -139,26 +139,20 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
 
 function loadInitialState() {
   if (typeof window === "undefined") {
-    const initial = createInitialWorkflowState();
-    syncWorkflowIdCounterFromState(initial);
-    return initial;
-  }
-
-  const stored = window.sessionStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    const initial = createInitialWorkflowState();
-    syncWorkflowIdCounterFromState(initial);
-    return initial;
+    return createSyncedInitialState();
   }
 
   try {
+    const stored = window.sessionStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      return createSyncedInitialState();
+    }
+
     const parsed = JSON.parse(stored) as WorkflowState;
     syncWorkflowIdCounterFromState(parsed);
     return parsed;
   } catch {
-    const initial = createInitialWorkflowState();
-    syncWorkflowIdCounterFromState(initial);
-    return initial;
+    return createSyncedInitialState();
   }
 }
 
@@ -170,7 +164,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     syncWorkflowIdCounterFromState(state);
-    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Workflow state must remain usable when browser storage is blocked.
+    }
   }, [state]);
 
   const value: WorkflowContextValue = {

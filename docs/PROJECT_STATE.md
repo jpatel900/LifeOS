@@ -6,6 +6,9 @@ MVP supports task capture, area assignment, and manual scheduling. The Phase 2 m
 
 ## Recently completed
 
+- Restored app route/provider integrity after the merge-conflict cleanup: root layout delegates to the client `apps/web/src/app/components/AppShell.tsx`, workflow routes render under `WorkflowProvider`, and the stale duplicate `apps/web/src/components/AppShell.tsx` was removed.
+- Added route smoke coverage that renders workflow pages through the real app shell/provider instead of only manually wrapping pages in `WorkflowProvider`.
+- Hardened `WorkflowProvider` so blocked or unavailable `sessionStorage` falls back to in-memory workflow state instead of crashing the app.
 - Merged `origin/main` into the inspection branch; resolved conflicts by adopting main’s codebase and dropping unused `getTasksByArea` / `getProposalsByArea` / `getCalendarBlocksByArea` from `mockData.ts` (UI uses workflow context instead).
 - Task CRUD (mock path)
 - Area model

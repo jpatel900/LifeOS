@@ -12,8 +12,9 @@ function renderCapturePage() {
 }
 
 describe("CapturePage", () => {
-  it("renders capture heading and textarea", () => {
+  it("renders capture heading and textarea", async () => {
     renderCapturePage();
+    expect(await screen.findByText("mock")).toBeDefined();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "Capture",
     );
@@ -22,8 +23,9 @@ describe("CapturePage", () => {
     ).toBeDefined();
   });
 
-  it("shows mock structured output when structuring text", () => {
+  it("shows mock structured output when structuring text", async () => {
     renderCapturePage();
+    expect(await screen.findByText("mock")).toBeDefined();
     const textarea = screen.getByPlaceholderText(
       "What's on your mind? Type anything...",
     );
