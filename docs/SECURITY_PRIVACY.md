@@ -86,10 +86,14 @@ Rules:
 - tokens stored encrypted/server-side through provider-supported mechanisms
 - Phase 7B stores Google Calendar connection metadata only; OAuth token storage
   is deferred until an explicit encrypted-token storage implementation exists
+- Phase 7C uses a short-lived sealed HttpOnly cookie only to carry the
+  initiating Supabase access token across the Google redirect so the callback
+  can write metadata through normal RLS, then clears that cookie immediately
 - never log tokens
 - never send tokens to AI
 - never expose tokens to frontend
-- support disconnect/revoke path later
+- Phase 7C disconnect is local metadata-only; explicit Google-side revoke remains
+  a later token-storage/revoke phase
 
 ## 6. AI Privacy Rules
 

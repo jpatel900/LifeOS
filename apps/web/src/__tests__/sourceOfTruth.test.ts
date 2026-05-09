@@ -35,6 +35,7 @@ describe("source-of-truth boundaries", () => {
       "apps/web/src/lib/supabase/config.ts",
       "apps/web/src/app/capture/page.tsx",
       "apps/web/src/app/settings/areas/page.tsx",
+      "apps/web/src/app/settings/areas/GoogleCalendarConnectionPanel.tsx",
       "apps/web/src/app/triage/page.tsx",
       "apps/web/src/app/calendar/page.tsx",
       "apps/web/src/app/health/page.tsx",
@@ -58,22 +59,34 @@ describe("source-of-truth boundaries", () => {
     }
   });
 
-  it("does not add Google Calendar OAuth or API routes in Phase 7B", () => {
-    expect(() =>
-      readRepoFile("apps/web/src/app/api/google-calendar/route.ts"),
-    ).toThrow();
+  it("keeps Google Calendar OAuth on server routes only in Phase 7C", () => {
+    const clientFiles = [
+      "apps/web/src/app/settings/areas/page.tsx",
+      "apps/web/src/app/settings/areas/GoogleCalendarConnectionPanel.tsx",
+      "apps/web/src/lib/supabase/browser.ts",
+    ].map(readRepoFile);
+    const clientSource = clientFiles.join("\n");
+
     expect(() =>
       readRepoFile("apps/web/src/app/api/google-calendar/connect/route.ts"),
-    ).toThrow();
+    ).not.toThrow();
     expect(() =>
       readRepoFile("apps/web/src/app/api/google-calendar/callback/route.ts"),
-    ).toThrow();
+    ).not.toThrow();
+    expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/connection/route.ts"),
+    ).not.toThrow();
+    expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/disconnect/route.ts"),
+    ).not.toThrow();
     expect(() =>
       readRepoFile("apps/web/src/app/api/google-calendar/freebusy/route.ts"),
     ).toThrow();
     expect(() =>
       readRepoFile("apps/web/src/app/api/google-calendar/write-event/route.ts"),
     ).toThrow();
+    expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/oauth["']/);
+    expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/server["']/);
   });
 
   it("keeps OpenAI parsing behind the server parse-capture route", () => {

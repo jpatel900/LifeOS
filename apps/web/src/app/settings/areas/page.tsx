@@ -9,6 +9,7 @@ import {
 } from "../../../lib/data/workflow";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
 
 type LoadState =
   | { status: "loading" }
@@ -118,6 +119,8 @@ export default function AreasSettingsPage() {
           )}
         </section>
       ) : null}
+
+      <GoogleCalendarConnectionPanel />
 
       <section
         style={{
