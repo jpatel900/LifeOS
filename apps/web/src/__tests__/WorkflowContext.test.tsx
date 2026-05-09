@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import TriagePage from "../app/triage/page";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
@@ -36,6 +37,24 @@ function WorkflowProbe() {
       >
         Add capture
       </button>
+    </div>
+  );
+}
+
+function HydrationProbe() {
+  const { state } = useWorkflow();
+  const firstRenderCaptureCount = useRef<number | null>(null);
+
+  if (firstRenderCaptureCount.current === null) {
+    firstRenderCaptureCount.current = state.captureItems.length;
+  }
+
+  return (
+    <div>
+      <span data-testid="first-render-capture-count">
+        {firstRenderCaptureCount.current}
+      </span>
+      <span data-testid="capture-count">{state.captureItems.length}</span>
     </div>
   );
 }
@@ -165,5 +184,40 @@ describe("WorkflowProvider storage fallback", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add capture" }));
 
     expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+  });
+
+  it("hydrates persisted workflow state after the first render", async () => {
+    const storedState = {
+      ...createInitialWorkflowState(),
+      captureItems: [
+        {
+          id: "capture-9",
+          user_id: "user-1",
+          area_id: "area-main-job",
+          raw_text: "Persisted capture from previous session",
+          raw_audio_ref: null,
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "triage_required",
+          created_at: "2026-05-08T14:00:00.000Z",
+        },
+      ],
+    };
+
+    replaceSessionStorage({
+      getItem: vi.fn(() => JSON.stringify(storedState)),
+    });
+
+    render(
+      <WorkflowProvider>
+        <HydrationProbe />
+      </WorkflowProvider>,
+    );
+
+    expect(screen.getByTestId("first-render-capture-count")).toHaveTextContent("0");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+    });
   });
 });

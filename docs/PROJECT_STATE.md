@@ -6,6 +6,8 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 
 ## Recently completed
 
+- Fixed `/capture` hydration mismatch caused by session-restored workflow state: `WorkflowProvider` now initializes with deterministic state for SSR/first CSR render, restores persisted session workflow in a post-mount effect, and only writes back to `sessionStorage` after hydration completes.
+- Added `WorkflowProvider` regression coverage proving persisted capture items hydrate after first render (instead of being injected into first client render), preventing SSR/CSR markup divergence on `/capture`.
 - Added a critical bug-fix branch on top of Phase 4E: persisted execution now ignores terminal/non-active rows when choosing the current Execute target, keeps completion feedback visible after the target becomes inactive, rejects mismatched task/calendar-block execution links, and groups Review area summaries with persisted Supabase area ids.
 - Added regression coverage for non-active persisted Execute tasks, persisted Review area rollups, and same-user mismatched execution task/block inputs.
 - Restored app route/provider integrity after the merge-conflict cleanup: root layout delegates to the client `apps/web/src/app/components/AppShell.tsx`, workflow routes render under `WorkflowProvider`, and the stale duplicate `apps/web/src/components/AppShell.tsx` was removed.
@@ -67,6 +69,7 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 
 ## Important implementation notes
 
+- `WorkflowProvider` must keep SSR and first client render structurally identical. Session persistence restore belongs in a client effect boundary, not reducer initialization, so `/capture` and other workflow routes do not hydrate with mismatched markup when mock/session data exists.
 - Domain types in `@lifeos/types` are re-exports of Zod-inferred types from `@lifeos/schemas`; `packages/types/src/schema-type-parity.ts` is a compile-time check that `Area`, `Capture`/`CaptureItem`, and other re-exports stay aligned (fails `tsc` if `index.ts` is replaced with divergent manual interfaces).
 - App-local mock/session-only types use `Phase2Mock...` names in `apps/web/src/lib/types.ts`; do not reintroduce canonical names like `Task`, `Project`, `CalendarBlock`, `ExecutionSession`, or `HealthCheck` there.
 - Task status and TimeBlock status are separate.

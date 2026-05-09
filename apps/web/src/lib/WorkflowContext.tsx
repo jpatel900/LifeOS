@@ -42,6 +42,10 @@ const STORAGE_KEY = "lifeos.phase2.workflow";
 
 type WorkflowAction =
   | {
+      type: "hydrate";
+      state: WorkflowState;
+    }
+  | {
       type: "submitCapture";
       rawText: string;
       areaId: string | null;
@@ -375,6 +379,8 @@ function normalizeStoredWorkflowState(value: unknown): unknown {
 
 function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
   switch (action.type) {
+    case "hydrate":
+      return action.state;
     case "submitCapture":
       return submitCapture(state, {
         rawText: action.rawText,
@@ -409,43 +415,62 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
   }
 }
 
-function loadInitialState() {
+function loadStoredStateFromSession(): WorkflowState | null {
   if (typeof window === "undefined") {
-    return createSyncedInitialState();
+    return null;
   }
 
   try {
     const stored = window.sessionStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      return createSyncedInitialState();
+      return null;
     }
 
     const parsed = normalizeStoredWorkflowState(JSON.parse(stored));
     if (!isStoredWorkflowState(parsed)) {
-      return createSyncedInitialState();
+      return null;
     }
 
     syncWorkflowIdCounterFromState(parsed);
     return parsed;
   } catch {
-    return createSyncedInitialState();
+    return null;
   }
 }
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(workflowReducer, undefined, loadInitialState);
+  const [state, dispatch] = useReducer(workflowReducer, undefined, createSyncedInitialState);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(
     state.areas[0]?.id ?? null,
   );
+  const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
 
   useEffect(() => {
+    const restoredState = loadStoredStateFromSession();
+    if (restoredState) {
+      dispatch({ type: "hydrate", state: restoredState });
+      setSelectedAreaId((current) => {
+        if (current && restoredState.areas.some((area) => area.id === current)) {
+          return current;
+        }
+        return restoredState.areas[0]?.id ?? null;
+      });
+    }
+    setHasHydratedFromStorage(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedFromStorage) {
+      return;
+    }
+
     syncWorkflowIdCounterFromState(state);
     try {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
       // Workflow state must remain usable when browser storage is blocked.
     }
-  }, [state]);
+  }, [hasHydratedFromStorage, state]);
 
   const value: WorkflowContextValue = {
     state,
