@@ -446,6 +446,22 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent("Session started through supabase.");
   });
 
+  it("does not start persisted execution when every task is already non-active", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [{ ...task, status: "done" }],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    expect(await screen.findByText("No active block.")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
+    expect(mocks.createExecutionSession).not.toHaveBeenCalled();
+  });
+
   it("completes a persisted execution session", async () => {
     mocks.listExecutionReviewItems.mockResolvedValue({
       provider: "supabase",
@@ -514,6 +530,10 @@ describe("Phase 4A Supabase persistence UI", () => {
       sessions: [{ ...session, outcome: "completed" }],
       reviewEntries: [],
     });
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
     mocks.createReviewEntry.mockResolvedValue({
       provider: "supabase",
       reviewEntry,
@@ -538,5 +558,25 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Review entry created through supabase.");
+  });
+
+  it("rolls up persisted review rows by persisted area ids", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [block],
+      sessions: [{ ...session, outcome: "completed" }],
+      reviewEntries: [],
+    });
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(<ReviewPage />);
+
+    expect(await screen.findByText("Main Job")).toBeDefined();
+    expect(screen.getByText("Open tasks: 1")).toBeDefined();
+    expect(screen.getByText("Sessions recorded: 1")).toBeDefined();
   });
 });

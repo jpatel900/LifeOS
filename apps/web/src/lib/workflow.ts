@@ -17,6 +17,7 @@ import type {
   Phase2MockProject,
   Phase2MockTask,
 } from "./types";
+import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
 
 export interface WorkflowState {
   areas: Phase2MockArea[];
@@ -269,6 +270,25 @@ export function submitCapture(
       ...state.timeBlockProposalDrafts,
     ],
     reviewLog: [`Captured: ${parsed.taskDraft.title}`, ...state.reviewLog],
+  };
+}
+
+export function appendParsedWorkflowResult(
+  state: WorkflowState,
+  parsed: ParsedWorkflowResult,
+): WorkflowState {
+  return {
+    ...state,
+    captureItems: [parsed.captureItem, ...state.captureItems],
+    taskDrafts: [...parsed.taskDrafts, ...state.taskDrafts],
+    projectDrafts: [...parsed.projectDrafts, ...state.projectDrafts],
+    ambiguityAssessments: parsed.ambiguityAssessment
+      ? [parsed.ambiguityAssessment, ...state.ambiguityAssessments]
+      : state.ambiguityAssessments,
+    reviewLog: [
+      `Parsed capture: ${parsed.captureItem.raw_text}`,
+      ...state.reviewLog,
+    ],
   };
 }
 

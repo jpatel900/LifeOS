@@ -25,9 +25,9 @@ export const Phase2TaskDraftSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable(),
   confidence: z.number().min(0).max(1),
-  estimated_minutes_low: z.number().int().positive(),
-  estimated_minutes_high: z.number().int().positive(),
-  first_tiny_step: z.string().min(1),
+  estimated_minutes_low: z.number().int().positive().nullable(),
+  estimated_minutes_high: z.number().int().positive().nullable(),
+  first_tiny_step: z.string().min(1).nullable(),
   status: z.enum(["pending", "accepted", "rejected"]),
   created_at: z.string().datetime(),
 });
