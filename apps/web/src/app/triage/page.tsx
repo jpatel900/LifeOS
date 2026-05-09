@@ -43,6 +43,14 @@ function resolvePersistedAreaId(workflowAreaId: string, areas: Area[]) {
   return area.id;
 }
 
+function sourceCaptureIdForPersistence(captureItemId: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    captureItemId,
+  )
+    ? captureItemId
+    : null;
+}
+
 export default function TriagePage() {
   const {
     state,
@@ -105,7 +113,7 @@ export default function TriagePage() {
     try {
       const result = await createTask(createSupabaseBrowserClient(), {
         area_id: resolvePersistedAreaId(draft.area_id, loadState.areas),
-        source_capture_item_id: null,
+        source_capture_item_id: sourceCaptureIdForPersistence(draft.capture_item_id),
         title: draft.title,
         description: draft.description,
         priority_confidence: draft.confidence,

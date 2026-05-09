@@ -381,27 +381,46 @@ describe("ParseCaptureResponseSchema", () => {
     const result = ParseCaptureResponseSchema.safeParse({
       schema_version: "1.0",
       prompt_version: "parse-capture-v1",
+      parse_status: "needs_clarification",
+      overall_confidence: 0.62,
+      triage_required: true,
+      triage_reasons: ["Area unclear between Personal and Volunteer"],
       drafts: [
         {
           draft_type: "task_draft",
           title: "Short task",
+          description: null,
           area_slug_suggestion: null,
+          first_tiny_step: "Brain dump into bullets",
+          estimated_minutes_low: null,
+          estimated_minutes_high: null,
+          due_at: null,
           confidence: 0.9,
         },
         {
           draft_type: "project_draft",
           title: "Website refresh",
+          description: null,
           area_slug_suggestion: null,
           confidence: 0.62,
         },
-        {
-          draft_type: "ambiguity_assessment",
-          likely_objective: "Reduce chaos",
-          recommended_first_move: "Brain dump into bullets",
-          confidence: 0.4,
-        },
       ],
-      ambiguities: ["Area unclear between Personal and Volunteer"],
+      clarification_questions: ["Which area should own this?"],
+      ambiguity_assessment: {
+        likely_objective: "Reduce chaos",
+        problem_type: "project",
+        complexity_level: "moderate",
+        knowns: ["Website refresh was mentioned."],
+        unknowns: ["Owning area"],
+        assumptions: [],
+        constraints: [],
+        risks: [],
+        dependencies: [],
+        recommended_first_move: "Brain dump into bullets",
+        what_not_to_do_yet: ["Do not schedule before triage."],
+        confidence: 0.4,
+        review_trigger: "Area unclear between Personal and Volunteer",
+      },
     });
 
     expect(result.success).toBe(true);
