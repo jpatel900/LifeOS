@@ -60,6 +60,12 @@ function safeParserFailureMessage(status: ParseCaptureRuntimeStatus) {
   return "Parsing failed safely. You can retry with the mock parser.";
 }
 
+function logSafeParseFailure(error: unknown) {
+  const errorType =
+    error instanceof Error && error.name ? error.name : "UnknownError";
+  console.error("parse-capture route failed safely", { errorType });
+}
+
 export async function GET() {
   const status = getParseCaptureStatus();
 
@@ -85,7 +91,7 @@ export async function POST(request: Request) {
       status: status.status,
     });
   } catch (error) {
-    console.error("parse-capture route failed safely", error);
+    logSafeParseFailure(error);
 
     return Response.json(
       {

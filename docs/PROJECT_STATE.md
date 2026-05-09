@@ -6,6 +6,10 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 
 ## Recently completed
 
+- Hardened Phase 5 parse-capture server boundaries and error safety: parser route logging now emits only sanitized error type metadata (no raw provider/internal message payload), and parser modules include explicit server-runtime guards to block browser execution paths.
+- Added route-level regression coverage for `/api/parse-capture` (`apps/web/src/app/api/parse-capture/route.test.ts`) validating parser-status GET behavior, forced mock fallback when AI is unavailable, non-leaky safe error responses, and sanitized error logging on both parser and request-validation failures.
+- Added contract-drift guard coverage in `apps/web/src/lib/ai/parseCapture.test.ts` to assert JSON structured-output schema keys stay aligned with `ParseCaptureResponseSchema` keys and prompt-declared `parse_status` literals.
+- Added static source-of-truth guard coverage requiring explicit server-runtime checks in parser modules (`apps/web/src/__tests__/sourceOfTruth.test.ts`).
 - Added Phase 5D parser regression fixtures for both AI structured-output and mock-fallback coverage: `apps/web/src/lib/ai/fixtures/parseCaptureFixtures.ts` now includes simple task, ambiguous project, multi-area ambiguity, proposed-time-block candidate task, blocker/missing-info, low-confidence, and messy brain-dump fixtures.
 - Added offline parser regression tests in `apps/web/src/lib/ai/parseCaptureRegression.test.ts` to assert all fixtures validate against `ParseCaptureResponseSchema`, low-confidence/clarification cases route to triage, invalid enum/invalid draft shape fail validation, and mocked Responses API payloads parse without live OpenAI calls.
 - Added schema-level regression coverage in `packages/schemas/src/parse-capture.regression.test.ts` for valid fixture shapes and explicit invalid enum/shape rejection.

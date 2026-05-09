@@ -38,6 +38,15 @@ export interface ParseCaptureStatusResult {
   preferredParser: "ai" | "mock";
 }
 
+function assertServerRuntime() {
+  const isVitest =
+    typeof process !== "undefined" &&
+    (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+  if (typeof window !== "undefined" && !isVitest) {
+    throw new Error("parseCaptureService must run on the server.");
+  }
+}
+
 function isAiParserEnabled(
   env: Partial<NodeJS.ProcessEnv>,
 ) {
@@ -71,6 +80,8 @@ function resolveParseCaptureModel(env: Partial<NodeJS.ProcessEnv>) {
 export function getParseCaptureStatus(
   env: Partial<NodeJS.ProcessEnv> = process.env,
 ): ParseCaptureStatusResult {
+  assertServerRuntime();
+
   if (!isAiParserEnabled(env)) {
     return { status: "mock", preferredParser: "mock" };
   }
@@ -149,6 +160,8 @@ export async function parseCaptureWithFallback(
   input: ParseCaptureServiceInput,
   options: ParseCaptureServiceOptions = {},
 ): Promise<ParseCaptureServiceResult> {
+  assertServerRuntime();
+
   const rawText = input.rawText.trim();
   if (!rawText) {
     throw new Error("Capture text is required for parsing.");

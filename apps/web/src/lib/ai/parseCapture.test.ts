@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { ParseCaptureResponseSchema } from "@lifeos/schemas";
 import {
   PARSE_CAPTURE_PROMPT_VERSION,
   buildParseCaptureMessages,
@@ -6,6 +7,7 @@ import {
 import {
   PARSE_CAPTURE_SCHEMA_VERSION,
   parseCaptureResponseFormat,
+  parseCaptureResponseJsonSchema,
   validateParseCaptureResponse,
 } from "./contracts/parseCapture";
 import { buildParseCaptureRequest, parseCapture } from "./parseCapture";
@@ -17,6 +19,9 @@ interface DraftJsonSchema {
 interface ResponseJsonSchema {
   required: string[];
   properties: {
+    parse_status: {
+      enum: string[];
+    };
     drafts: {
       items: {
         anyOf: DraftJsonSchema[];
@@ -117,6 +122,30 @@ describe("parse capture AI contract", () => {
       "ambiguity_assessment",
     ]);
     expect(schema.properties.drafts.items.anyOf[0]?.required).toContain("due_at");
+  });
+
+  it("keeps JSON schema, Zod schema, and prompt status literals aligned", () => {
+    const schema = parseCaptureResponseJsonSchema as unknown as ResponseJsonSchema;
+    const zodShape = (
+      ParseCaptureResponseSchema as unknown as { shape: Record<string, unknown> }
+    ).shape;
+    const zodKeys = Object.keys(zodShape).sort();
+    const jsonKeys = [...schema.required].sort();
+    const expectedStatus = [
+      "parsed",
+      "needs_clarification",
+      "unsupported",
+      "low_confidence",
+    ];
+    const systemPrompt = buildParseCaptureMessages({
+      rawText: "test",
+    })[0]?.content;
+
+    expect(jsonKeys).toEqual(zodKeys);
+    expect(schema.properties.parse_status.enum).toEqual(expectedStatus);
+    for (const status of expectedStatus) {
+      expect(systemPrompt).toContain(status);
+    }
   });
 
   it("posts the request and validates the parsed output", async () => {

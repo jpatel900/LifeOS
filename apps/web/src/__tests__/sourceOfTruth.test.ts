@@ -66,4 +66,14 @@ describe("source-of-truth boundaries", () => {
     const route = readRepoFile("apps/web/src/app/api/parse-capture/route.ts");
     expect(route).toContain('from "@/lib/ai/parseCaptureService"');
   });
+
+  it("marks parser modules with explicit server runtime guards", () => {
+    const parser = readRepoFile("apps/web/src/lib/ai/parseCapture.ts");
+    const service = readRepoFile("apps/web/src/lib/ai/parseCaptureService.ts");
+
+    expect(parser).toContain("function assertServerRuntime()");
+    expect(parser).toContain("parseCapture must run on the server.");
+    expect(service).toContain("function assertServerRuntime()");
+    expect(service).toContain("parseCaptureService must run on the server.");
+  });
 });

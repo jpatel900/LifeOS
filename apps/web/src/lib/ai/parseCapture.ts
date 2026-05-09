@@ -37,6 +37,15 @@ interface ResponsesApiResponseBody {
   output?: unknown;
 }
 
+function assertServerRuntime() {
+  const isVitest =
+    typeof process !== "undefined" &&
+    (process.env.VITEST === "true" || process.env.NODE_ENV === "test");
+  if (typeof window !== "undefined" && !isVitest) {
+    throw new Error("parseCapture must run on the server.");
+  }
+}
+
 export function buildParseCaptureRequest(input: BuildParseCaptureRequestInput) {
   const rawText = input.rawText.trim();
   if (!rawText) {
@@ -84,6 +93,8 @@ export async function parseCapture(
   input: ParseCaptureInput,
   options: ParseCaptureOptions = {},
 ): Promise<ParseCaptureResponse> {
+  assertServerRuntime();
+
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is required for AI capture parsing.");
