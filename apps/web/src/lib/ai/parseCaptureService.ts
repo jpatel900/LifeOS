@@ -27,6 +27,36 @@ export interface ParseCaptureServiceResult {
   response: ParseCaptureResponse;
 }
 
+function isAiParserEnabled(
+  env: Partial<NodeJS.ProcessEnv>,
+) {
+  const raw = env.AI_PARSE_CAPTURE_ENABLED?.trim().toLowerCase();
+  if (!raw) {
+    return true;
+  }
+
+  return !["0", "false", "off", "no"].includes(raw);
+}
+
+function resolveParseCaptureModel(env: Partial<NodeJS.ProcessEnv>) {
+  const standard = env.AI_MODEL_STANDARD?.trim();
+  if (standard) {
+    return standard;
+  }
+
+  const cheap = env.AI_MODEL_CHEAP?.trim();
+  if (cheap) {
+    return cheap;
+  }
+
+  const strong = env.AI_MODEL_STRONG?.trim();
+  if (strong) {
+    return strong;
+  }
+
+  return null;
+}
+
 function makeTitle(rawText: string) {
   const normalized = rawText
     .trim()
@@ -96,16 +126,18 @@ export async function parseCaptureWithFallback(
   const env = options.env ?? process.env;
   const apiKey = env.OPENAI_API_KEY;
 
-  if (!apiKey) {
+  if (!isAiParserEnabled(env) || !apiKey) {
     return {
       parser: "mock",
       response: buildMockResponse(rawText),
     };
   }
 
-  const model = env.AI_MODEL_STANDARD;
+  const model = resolveParseCaptureModel(env);
   if (!model) {
-    throw new Error("AI_MODEL_STANDARD is required when OPENAI_API_KEY is configured.");
+    throw new Error(
+      "One of AI_MODEL_STANDARD, AI_MODEL_CHEAP, or AI_MODEL_STRONG is required when OPENAI_API_KEY is configured.",
+    );
   }
 
   const response = await (options.parseCaptureImpl ?? parseCapture)(

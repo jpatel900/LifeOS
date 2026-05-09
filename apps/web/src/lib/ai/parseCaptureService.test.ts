@@ -82,6 +82,46 @@ describe("parse capture server service", () => {
     );
   });
 
+  it("falls back to AI_MODEL_CHEAP when AI_MODEL_STANDARD is not set", async () => {
+    const parseCaptureImpl = vi.fn(async () => aiResponse);
+
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        env: {
+          OPENAI_API_KEY: "test-key",
+          AI_MODEL_CHEAP: "cheap-model",
+        },
+        parseCaptureImpl,
+      },
+    );
+
+    expect(result).toEqual({ parser: "ai", response: aiResponse });
+    expect(parseCaptureImpl).toHaveBeenCalledWith(
+      { rawText: "Email Taylor about launch notes", areaContext: undefined },
+      { apiKey: "test-key", model: "cheap-model" },
+    );
+  });
+
+  it("uses the mock parser fallback when AI parsing is explicitly disabled", async () => {
+    const parseCaptureImpl = vi.fn(async () => aiResponse);
+
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        env: {
+          OPENAI_API_KEY: "test-key",
+          AI_MODEL_STANDARD: "standard-model",
+          AI_PARSE_CAPTURE_ENABLED: "false",
+        },
+        parseCaptureImpl,
+      },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(parseCaptureImpl).not.toHaveBeenCalled();
+  });
+
   it("marks low-confidence AI output for triage after raw capture persistence", () => {
     const result = buildParsedWorkflowResult({
       response: {

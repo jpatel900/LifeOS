@@ -148,4 +148,34 @@ describe("parse capture AI contract", () => {
       }),
     );
   });
+
+  it("rejects invalid structured output from the Responses API", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        output_text: JSON.stringify({
+          schema_version: PARSE_CAPTURE_SCHEMA_VERSION,
+          prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
+          parse_status: "parsed",
+          overall_confidence: 2,
+          triage_required: false,
+          triage_reasons: [],
+          drafts: [],
+          clarification_questions: [],
+          ambiguity_assessment: null,
+        }),
+      }),
+    })) as unknown as typeof fetch;
+
+    await expect(
+      parseCapture(
+        { rawText: "Need to email Taylor about launch notes." },
+        {
+          apiKey: "test-key",
+          model: "standard-model",
+          fetchImpl,
+        },
+      ),
+    ).rejects.toThrow(/failed schema validation/i);
+  });
 });

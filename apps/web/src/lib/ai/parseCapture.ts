@@ -118,5 +118,20 @@ export async function parseCapture(
     throw new Error("AI capture parsing response did not include output text.");
   }
 
-  return validateParseCaptureResponse(JSON.parse(outputText));
+  let parsedOutput: unknown;
+  try {
+    parsedOutput = JSON.parse(outputText);
+  } catch {
+    throw new Error("AI capture parsing response was not valid JSON.");
+  }
+
+  try {
+    return validateParseCaptureResponse(parsedOutput);
+  } catch (error) {
+    throw new Error(
+      `AI capture parsing response failed schema validation: ${
+        error instanceof Error ? error.message : "unknown validation error"
+      }`,
+    );
+  }
 }

@@ -59,7 +59,9 @@ describe("source-of-truth boundaries", () => {
 
     expect(clientSource).not.toMatch(/from ["']@\/lib\/ai\/parseCapture["']/);
     expect(clientSource).not.toMatch(/from ["']\.\/parseCapture["']/);
-    expect(clientSource).not.toMatch(/OPENAI_API_KEY|AI_MODEL_STANDARD/);
+    expect(clientSource).not.toMatch(
+      /OPENAI_API_KEY|AI_MODEL_CHEAP|AI_MODEL_STANDARD|AI_MODEL_STRONG|AI_PARSE_CAPTURE_ENABLED/,
+    );
 
     const route = readRepoFile("apps/web/src/app/api/parse-capture/route.ts");
     expect(route).toContain('from "@/lib/ai/parseCaptureService"');
