@@ -16,6 +16,7 @@ export interface ParseCaptureServiceInput {
 
 export interface ParseCaptureServiceOptions {
   env?: Partial<NodeJS.ProcessEnv>;
+  forceMock?: boolean;
   parseCaptureImpl?: (
     input: ParseCaptureServiceInput,
     options: Pick<ParseCaptureOptions, "apiKey" | "model">,
@@ -25,6 +26,16 @@ export interface ParseCaptureServiceOptions {
 export interface ParseCaptureServiceResult {
   parser: "ai" | "mock";
   response: ParseCaptureResponse;
+}
+
+export type ParseCaptureRuntimeStatus =
+  | "mock"
+  | "ai_configured"
+  | "ai_unavailable";
+
+export interface ParseCaptureStatusResult {
+  status: ParseCaptureRuntimeStatus;
+  preferredParser: "ai" | "mock";
 }
 
 function isAiParserEnabled(
@@ -55,6 +66,26 @@ function resolveParseCaptureModel(env: Partial<NodeJS.ProcessEnv>) {
   }
 
   return null;
+}
+
+export function getParseCaptureStatus(
+  env: Partial<NodeJS.ProcessEnv> = process.env,
+): ParseCaptureStatusResult {
+  if (!isAiParserEnabled(env)) {
+    return { status: "mock", preferredParser: "mock" };
+  }
+
+  const apiKey = env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    return { status: "ai_unavailable", preferredParser: "mock" };
+  }
+
+  const model = resolveParseCaptureModel(env);
+  if (!model) {
+    return { status: "ai_unavailable", preferredParser: "mock" };
+  }
+
+  return { status: "ai_configured", preferredParser: "ai" };
 }
 
 function makeTitle(rawText: string) {
@@ -124,6 +155,13 @@ export async function parseCaptureWithFallback(
   }
 
   const env = options.env ?? process.env;
+  if (options.forceMock) {
+    return {
+      parser: "mock",
+      response: buildMockResponse(rawText),
+    };
+  }
+
   const apiKey = env.OPENAI_API_KEY;
 
   if (!isAiParserEnabled(env) || !apiKey) {

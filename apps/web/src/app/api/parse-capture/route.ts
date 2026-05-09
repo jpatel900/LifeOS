@@ -1,8 +1,8 @@
-import { parseCaptureWithFallback } from "@/lib/ai/parseCaptureService";
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Unable to parse capture.";
-}
+import {
+  getParseCaptureStatus,
+  parseCaptureWithFallback,
+  type ParseCaptureRuntimeStatus,
+} from "@/lib/ai/parseCaptureService";
 
 function parseRequestBody(body: unknown) {
   if (!body || typeof body !== "object") {
@@ -16,6 +16,15 @@ function parseRequestBody(body: unknown) {
 
   if (record.areaContext !== undefined && !Array.isArray(record.areaContext)) {
     throw new Error("areaContext must be an array when provided.");
+  }
+
+  let parserMode: "auto" | "mock" = "auto";
+  if (record.parserMode !== undefined) {
+    if (record.parserMode === "auto" || record.parserMode === "mock") {
+      parserMode = record.parserMode;
+    } else {
+      throw new Error("parserMode must be auto or mock when provided.");
+    }
   }
 
   const areaItems = Array.isArray(record.areaContext) ? record.areaContext : undefined;
@@ -39,24 +48,51 @@ function parseRequestBody(body: unknown) {
   return {
     rawText: record.rawText.trim(),
     areaContext,
+    parserMode,
   };
 }
 
+function safeParserFailureMessage(status: ParseCaptureRuntimeStatus) {
+  if (status === "ai_unavailable") {
+    return "AI parser is unavailable right now. You can retry with the mock parser.";
+  }
+
+  return "Parsing failed safely. You can retry with the mock parser.";
+}
+
+export async function GET() {
+  const status = getParseCaptureStatus();
+
+  return Response.json({
+    ok: true,
+    status: status.status,
+    preferredParser: status.preferredParser,
+  });
+}
+
 export async function POST(request: Request) {
+  const status = getParseCaptureStatus();
+
   try {
     const input = parseRequestBody(await request.json());
-    const result = await parseCaptureWithFallback(input);
+    const forceMock = input.parserMode === "mock" || status.status === "ai_unavailable";
+    const result = await parseCaptureWithFallback(input, { forceMock });
 
     return Response.json({
       ok: true,
       parser: result.parser,
       response: result.response,
+      status: status.status,
     });
   } catch (error) {
+    console.error("parse-capture route failed safely", error);
+
     return Response.json(
       {
         ok: false,
-        error: `Raw capture was saved, but parsing failed safely: ${errorMessage(error)}`,
+        error: safeParserFailureMessage(status.status),
+        can_retry_with_mock: true,
+        status: status.status,
       },
       { status: 502 },
     );

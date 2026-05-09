@@ -1,8 +1,12 @@
-import type { ParseCaptureResponse } from "@lifeos/schemas";
+import {
+  ParseCaptureResponseSchema,
+  type ParseCaptureResponse,
+} from "@lifeos/schemas";
 import { describe, expect, it, vi } from "vitest";
 import { PARSE_CAPTURE_SCHEMA_VERSION } from "./contracts/parseCapture";
 import { PARSE_CAPTURE_PROMPT_VERSION } from "./prompts/parseCapturePrompt";
 import {
+  getParseCaptureStatus,
   parseCaptureWithFallback,
 } from "./parseCaptureService";
 import { buildParsedWorkflowResult } from "./parseCaptureWorkflow";
@@ -44,6 +48,42 @@ const persistedCapture = {
 };
 
 describe("parse capture server service", () => {
+  it("reports parser status as configured when AI is enabled and model+key are present", () => {
+    const status = getParseCaptureStatus({
+      OPENAI_API_KEY: "test-key",
+      AI_MODEL_STANDARD: "standard-model",
+    });
+
+    expect(status).toEqual({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+  });
+
+  it("reports parser status as unavailable when AI is enabled but missing model", () => {
+    const status = getParseCaptureStatus({
+      OPENAI_API_KEY: "test-key",
+    });
+
+    expect(status).toEqual({
+      status: "ai_unavailable",
+      preferredParser: "mock",
+    });
+  });
+
+  it("reports parser status as mock when AI parsing is disabled", () => {
+    const status = getParseCaptureStatus({
+      OPENAI_API_KEY: "test-key",
+      AI_MODEL_STANDARD: "standard-model",
+      AI_PARSE_CAPTURE_ENABLED: "false",
+    });
+
+    expect(status).toEqual({
+      status: "mock",
+      preferredParser: "mock",
+    });
+  });
+
   it("uses the mock parser fallback when no API key is configured", async () => {
     const parseCaptureImpl = vi.fn();
 
@@ -59,6 +99,29 @@ describe("parse capture server service", () => {
     expect(parseCaptureImpl).not.toHaveBeenCalled();
     expect(result.response.schema_version).toBe(PARSE_CAPTURE_SCHEMA_VERSION);
     expect(result.response.drafts[0]?.draft_type).toBe("task_draft");
+  });
+
+  it("keeps mock parser outputs schema-valid across representative capture fixtures", async () => {
+    const rawInputs = [
+      "Follow up with Alex about event sponsorship.",
+      "Need to get volunteer ops under control before next event. Too many loose ends.",
+      "Main Job + Side Project overlap: auth flow notes and deployment checklist.",
+      "Plan a 45-minute prep block for Monday planning packet.",
+      "Blocked: vendor ownership unclear, missing contract detail.",
+      "idk maybe do admin things but not sure where this belongs",
+      "brain dump: taxes, project notes, dentist, invoices, family logistics",
+    ];
+
+    for (const rawText of rawInputs) {
+      const result = await parseCaptureWithFallback(
+        { rawText },
+        { env: { AI_MODEL_STANDARD: "standard-model" } },
+      );
+
+      expect(result.parser).toBe("mock");
+      expect(ParseCaptureResponseSchema.safeParse(result.response).success).toBe(true);
+      expect(result.response.triage_required).toBe(true);
+    }
   });
 
   it("uses the AI parser when an API key and model tier are configured", async () => {
@@ -113,6 +176,25 @@ describe("parse capture server service", () => {
           OPENAI_API_KEY: "test-key",
           AI_MODEL_STANDARD: "standard-model",
           AI_PARSE_CAPTURE_ENABLED: "false",
+        },
+        parseCaptureImpl,
+      },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(parseCaptureImpl).not.toHaveBeenCalled();
+  });
+
+  it("uses the mock parser when forced by route/UI recovery", async () => {
+    const parseCaptureImpl = vi.fn(async () => aiResponse);
+
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        forceMock: true,
+        env: {
+          OPENAI_API_KEY: "test-key",
+          AI_MODEL_STANDARD: "standard-model",
         },
         parseCaptureImpl,
       },

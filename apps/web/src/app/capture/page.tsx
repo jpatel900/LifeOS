@@ -35,12 +35,45 @@ type SaveState =
 
 type ParseState =
   | { status: "idle" }
-  | { status: "parsing" }
-  | { status: "parsed"; parser: "ai" | "mock"; draftCount: number }
-  | { status: "error"; message: string };
+  | { status: "parsing"; parserMode: "auto" | "mock" }
+  | {
+      status: "parsed";
+      parser: "ai" | "mock";
+      draftCount: number;
+      triageRequired: boolean;
+      lowConfidence: boolean;
+    }
+  | { status: "error"; message: string; canRetryWithMock: boolean };
+
+type ParserStatusState =
+  | { status: "loading" }
+  | { status: "error" }
+  | {
+      status: "ready";
+      parserStatus: "mock" | "ai_configured" | "ai_unavailable";
+      preferredParser: "ai" | "mock";
+    };
 
 type ParseCaptureApiResponse =
-  | { ok: true; parser: "ai" | "mock"; response: ParseCaptureResponse }
+  | {
+      ok: true;
+      parser: "ai" | "mock";
+      response: ParseCaptureResponse;
+      status: "mock" | "ai_configured" | "ai_unavailable";
+    }
+  | {
+      ok: false;
+      error: string;
+      can_retry_with_mock?: boolean;
+      status?: "mock" | "ai_configured" | "ai_unavailable";
+    };
+
+type ParseCaptureStatusApiResponse =
+  | {
+      ok: true;
+      status: "mock" | "ai_configured" | "ai_unavailable";
+      preferredParser: "ai" | "mock";
+    }
   | { ok: false; error: string };
 
 export default function CapturePage() {
@@ -57,8 +90,12 @@ export default function CapturePage() {
   });
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [parseState, setParseState] = useState<ParseState>({ status: "idle" });
+  const [parserStatusState, setParserStatusState] = useState<ParserStatusState>({
+    status: "loading",
+  });
   const [text, setText] = useState("");
   const [areaId, setAreaId] = useState<string | null>(null);
+  const [lastSavedCapture, setLastSavedCapture] = useState<CaptureItem | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,6 +137,38 @@ export default function CapturePage() {
     };
   }, [setSelectedAreaId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadParserStatus() {
+      try {
+        const result = await fetch("/api/parse-capture");
+        const body = (await result.json()) as ParseCaptureStatusApiResponse;
+        if (!result.ok || !body.ok) {
+          throw new Error("Parser status unavailable.");
+        }
+
+        if (!cancelled) {
+          setParserStatusState({
+            status: "ready",
+            parserStatus: body.status,
+            preferredParser: body.preferredParser,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setParserStatusState({ status: "error" });
+        }
+      }
+    }
+
+    void loadParserStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function handleAreaChange(nextAreaId: string) {
     const idOrEmpty = nextAreaId || null;
     setAreaId(idOrEmpty);
@@ -136,60 +205,82 @@ export default function CapturePage() {
     }
   }
 
+  const areas = areasState.status === "ready" ? areasState.areas : [];
+  const provider = areasState.status === "ready" ? areasState.provider : null;
+
+  async function parseCaptureForSavedCapture(
+    savedCapture: CaptureItem,
+    parserMode: "auto" | "mock",
+  ) {
+    const parseResult = await fetch("/api/parse-capture", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rawText: savedCapture.raw_text,
+        parserMode,
+        areaContext: areas.map((area) => ({
+          slug: area.slug,
+          name: area.name,
+        })),
+      }),
+    });
+    const body = (await parseResult.json()) as ParseCaptureApiResponse;
+    if (!parseResult.ok || !body.ok) {
+      setParseState({
+        status: "error",
+        message: "Capture was saved, but parsing failed safely. Retry with mock parser.",
+        canRetryWithMock: Boolean(!body.ok && body.can_retry_with_mock),
+      });
+      return;
+    }
+
+    const workflowResult = buildParsedWorkflowResult({
+      response: body.response,
+      capture: savedCapture,
+      workflowAreaId: selectedAreaId,
+    });
+    addParsedWorkflowResult(workflowResult);
+    setParseState({
+      status: "parsed",
+      parser: body.parser,
+      draftCount: workflowResult.taskDrafts.length + workflowResult.projectDrafts.length,
+      triageRequired: workflowResult.captureItem.status === "triage_required",
+      lowConfidence: body.response.parse_status === "low_confidence",
+    });
+  }
+
   async function handleSaveAndParse() {
-    setParseState({ status: "parsing" });
-    let captureWasSaved = false;
+    setParseState({ status: "parsing", parserMode: "auto" });
 
     try {
       const captureResult = await createCaptureItem(createSupabaseBrowserClient(), {
         raw_text: text,
         area_id: areaId,
       });
-      captureWasSaved = true;
+      setLastSavedCapture(captureResult.capture);
       setSaveState({
         status: "saved",
         provider: captureResult.provider,
         capture: captureResult.capture,
       });
 
-      const parseResult = await fetch("/api/parse-capture", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rawText: text,
-          areaContext: areas.map((area) => ({
-            slug: area.slug,
-            name: area.name,
-          })),
-        }),
-      });
-      const body = (await parseResult.json()) as ParseCaptureApiResponse;
-      if (!parseResult.ok || !body.ok) {
-        throw new Error(body.ok ? "Unable to parse capture." : body.error);
-      }
-
-      const workflowResult = buildParsedWorkflowResult({
-        response: body.response,
-        capture: captureResult.capture,
-        workflowAreaId: selectedAreaId,
-      });
-      addParsedWorkflowResult(workflowResult);
-      setParseState({
-        status: "parsed",
-        parser: body.parser,
-        draftCount:
-          workflowResult.taskDrafts.length + workflowResult.projectDrafts.length,
-      });
-    } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "Unable to save and parse capture.";
+      await parseCaptureForSavedCapture(captureResult.capture, "auto");
+    } catch {
       setParseState({
         status: "error",
-        message: captureWasSaved
-          ? `Capture saved, but parsing failed safely: ${detail}`
-          : detail,
+        message: "Capture save or parse failed safely. Please retry.",
+        canRetryWithMock: false,
       });
     }
+  }
+
+  async function handleRetryWithMockParser() {
+    if (!lastSavedCapture) {
+      return;
+    }
+
+    setParseState({ status: "parsing", parserMode: "mock" });
+    await parseCaptureForSavedCapture(lastSavedCapture, "mock");
   }
 
   function handleStructure() {
@@ -199,8 +290,22 @@ export default function CapturePage() {
     submitCaptureText(text, selectedAreaId);
   }
 
-  const areas = areasState.status === "ready" ? areasState.areas : [];
-  const provider = areasState.status === "ready" ? areasState.provider : null;
+  const parserStatusLabel = parserStatusState.status === "ready"
+    ? parserStatusState.parserStatus === "ai_configured"
+      ? "AI parser configured"
+      : parserStatusState.parserStatus === "ai_unavailable"
+      ? "AI parser unavailable"
+      : "Mock parser"
+    : parserStatusState.status === "loading"
+    ? "Checking parser status..."
+    : "Parser status unavailable";
+  const parserStatusDetail = parserStatusState.status === "ready"
+    ? parserStatusState.parserStatus === "ai_configured"
+      ? "Save and parse will use AI by default."
+      : parserStatusState.parserStatus === "ai_unavailable"
+      ? "Save and parse will use the mock parser safely."
+      : "AI parsing is disabled. Save and parse will use the mock parser."
+    : "Capture can still be saved and structured with the local mock parser.";
 
   const visibleCaptures = state.captureItems.filter((capture) => {
     if (!selectedAreaId) return true;
@@ -219,6 +324,22 @@ export default function CapturePage() {
           Save raw text through the data layer, then optionally parse it into
           reviewable task/project drafts. The Phase 2 mock parser remains available.
         </p>
+      </section>
+
+      <section
+        role="status"
+        style={{
+          border: "1px solid #d1d5db",
+          background: "#f9fafb",
+          borderRadius: "8px",
+          padding: "0.75rem 1rem",
+          maxWidth: "720px",
+        }}
+      >
+        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
+          Parser status: {parserStatusLabel}
+        </div>
+        <div style={{ fontSize: "0.9rem", color: "#4b5563" }}>{parserStatusDetail}</div>
       </section>
 
       {areasState.status === "loading" ? (
@@ -343,7 +464,11 @@ export default function CapturePage() {
               alignSelf: "flex-start",
             }}
           >
-            {parseState.status === "parsing" ? "Saving and parsing..." : "Save and parse"}
+            {parseState.status === "parsing"
+              ? parseState.parserMode === "mock"
+                ? "Retrying with mock parser..."
+                : "Saving and parsing..."
+              : "Save and parse"}
           </button>
         </form>
 
@@ -439,6 +564,17 @@ export default function CapturePage() {
             Parser: <strong>{parseState.parser}</strong>. Drafts routed to triage:{" "}
             <strong>{parseState.draftCount}</strong>.
           </p>
+          {parseState.triageRequired ? (
+            <p style={{ marginBottom: 0 }}>
+              {parseState.lowConfidence
+                ? "Drafts were routed to triage because confidence is low."
+                : "Drafts were routed to triage for review before acceptance."}
+            </p>
+          ) : (
+            <p style={{ marginBottom: 0 }}>
+              Capture is parseable and drafts are still reviewable in triage before acceptance.
+            </p>
+          )}
         </section>
       ) : null}
 
@@ -452,8 +588,25 @@ export default function CapturePage() {
             padding: "1rem",
           }}
         >
-          <h2 style={{ marginTop: 0 }}>Capture parse failed</h2>
+          <h2 style={{ marginTop: 0 }}>Capture parse failed safely</h2>
           <p>{parseState.message}</p>
+          {parseState.canRetryWithMock && lastSavedCapture ? (
+            <button
+              type="button"
+              onClick={() => void handleRetryWithMockParser()}
+              style={{
+                padding: "0.5rem 0.9rem",
+                fontSize: "0.9rem",
+                borderRadius: "8px",
+                border: "1px solid #991b1b",
+                background: "white",
+                color: "#991b1b",
+                cursor: "pointer",
+              }}
+            >
+              Retry with mock parser
+            </button>
+          ) : null}
         </section>
       ) : null}
 

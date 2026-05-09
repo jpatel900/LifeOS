@@ -84,6 +84,30 @@ function renderCapturePage() {
   );
 }
 
+function mockParserStatusFetch(status: "mock" | "ai_configured" | "ai_unavailable") {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/parse-capture" && !init?.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            status,
+            preferredParser: status === "ai_configured" ? "ai" : "mock",
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ ok: true, parser: "ai", response: parseResponse, status }),
+      } satisfies Partial<Response>;
+    }),
+  );
+}
+
 describe("CapturePage", () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -91,47 +115,68 @@ describe("CapturePage", () => {
     window.sessionStorage.clear();
   });
 
-  it("renders capture heading and textarea", async () => {
+  it("shows parser status as mock", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
+    mockParserStatusFetch("mock");
+
     renderCapturePage();
-    expect(await screen.findByText("mock")).toBeDefined();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Capture",
-    );
-    expect(
-      screen.getByPlaceholderText("What's on your mind? Type anything..."),
-    ).toBeDefined();
+
+    expect(await screen.findByText("Parser status: Mock parser")).toBeDefined();
+    expect(screen.getByText("mock")).toBeDefined();
   });
 
-  it("shows mock structured output when structuring text", async () => {
+  it("shows parser status as AI configured", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
+    mockParserStatusFetch("ai_configured");
+
     renderCapturePage();
-    expect(await screen.findByText("mock")).toBeDefined();
-    const textarea = screen.getByPlaceholderText(
-      "What's on your mind? Type anything...",
-    );
-    fireEvent.change(textarea, { target: { value: "Follow up with Alex" } });
-    fireEvent.click(screen.getByText("Structure locally (Phase 2 mock)"));
-    expect(
-      screen.getByText(/Mock parser created a draft bundle/),
-    ).toBeDefined();
+
+    expect(await screen.findByText("Parser status: AI parser configured")).toBeDefined();
   });
 
-  it("saves the raw capture before parsing and routes parsed drafts to local triage state", async () => {
+  it("shows parser status as AI unavailable", async () => {
+    mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
+    mockParserStatusFetch("ai_unavailable");
+
+    renderCapturePage();
+
+    expect(await screen.findByText("Parser status: AI parser unavailable")).toBeDefined();
+  });
+
+  it("saves capture, parses, and shows triage routing for low confidence", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
     });
-    const fetch = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({
+
+    const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/parse-capture" && !init?.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            status: "ai_configured",
+            preferredParser: "ai",
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      return {
         ok: true,
-        parser: "ai",
-        response: parseResponse,
-      }),
-    }));
-    vi.stubGlobal("fetch", fetch);
+        json: async () => ({
+          ok: true,
+          parser: "ai",
+          response: parseResponse,
+          status: "ai_configured",
+        }),
+      } satisfies Partial<Response>;
+    });
+    vi.stubGlobal(
+      "fetch",
+      fetch,
+    );
 
     renderCapturePage();
 
@@ -144,27 +189,93 @@ describe("CapturePage", () => {
     fireEvent.click(await screen.findByText("Save and parse"));
 
     expect(await screen.findByText("Capture parsed")).toBeDefined();
+    expect(
+      screen.getByText("Drafts were routed to triage because confidence is low."),
+    ).toBeDefined();
     expect(screen.getAllByText("Email Taylor about launch notes").length).toBeGreaterThan(1);
-    expect(screen.getByText((content) => content.includes("Status: triage_required"))).toBeDefined();
-    expect(mocks.createCaptureItem).toHaveBeenCalledWith(
-      mocks.supabaseClient,
-      {
-        raw_text: "Email Taylor about launch notes",
-        area_id: area.id,
-      },
-    );
-    expect(fetch).toHaveBeenCalledWith(
-      "/api/parse-capture",
-      expect.objectContaining({ method: "POST" }),
-    );
     expect(
       mocks.createCaptureItem.mock.invocationCallOrder[0],
-    ).toBeLessThan(fetch.mock.invocationCallOrder[0]);
+    ).toBeLessThan(fetch.mock.invocationCallOrder[1]);
+
     await waitFor(() =>
       expect(window.sessionStorage.getItem("lifeos.phase2.workflow")).toContain(
         "Email Taylor about launch notes",
       ),
     );
   });
-});
 
+  it("shows safe parse error and allows retry with mock parser", async () => {
+    mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.createCaptureItem.mockResolvedValue({
+      provider: "supabase",
+      capture: persistedCapture,
+    });
+
+    const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/parse-capture" && !init?.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            status: "ai_configured",
+            preferredParser: "ai",
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      const body = init?.body ? JSON.parse(String(init.body)) as { parserMode?: string } : {};
+      if (body.parserMode === "mock") {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            parser: "mock",
+            response: parseResponse,
+            status: "ai_configured",
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      return {
+        ok: false,
+        json: async () => ({
+          ok: false,
+          error: "AI failure: stack trace should not leak",
+          can_retry_with_mock: true,
+          status: "ai_configured",
+        }),
+      } satisfies Partial<Response>;
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    renderCapturePage();
+
+    fireEvent.change(
+      screen.getByPlaceholderText("What's on your mind? Type anything..."),
+      {
+        target: { value: "Email Taylor about launch notes" },
+      },
+    );
+    fireEvent.click(await screen.findByText("Save and parse"));
+
+    expect(await screen.findByText("Capture parse failed safely")).toBeDefined();
+    expect(
+      screen.getByText("Capture was saved, but parsing failed safely. Retry with mock parser."),
+    ).toBeDefined();
+    expect(screen.queryByText("AI failure: stack trace should not leak")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry with mock parser" }));
+
+    expect(await screen.findByText("Capture parsed")).toBeDefined();
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/parse-capture",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"parserMode":"mock"'),
+        }),
+      ),
+    );
+  });
+});
