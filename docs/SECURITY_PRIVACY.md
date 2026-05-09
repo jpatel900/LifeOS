@@ -84,6 +84,8 @@ Rules:
 ### 5.3 OAuth Token Handling
 
 - tokens stored encrypted/server-side through provider-supported mechanisms
+- Phase 7B stores Google Calendar connection metadata only; OAuth token storage
+  is deferred until an explicit encrypted-token storage implementation exists
 - never log tokens
 - never send tokens to AI
 - never expose tokens to frontend

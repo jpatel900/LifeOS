@@ -55,7 +55,9 @@ describe("Supabase local database scaffold", () => {
 
     for (const table of scopedTables) {
       expect(sql).toContain(`create table public.${table}`);
-      expect(sql).toContain(`alter table public.${table} enable row level security`);
+      expect(sql).toContain(
+        `alter table public.${table} enable row level security`,
+      );
       expect(sql).toContain(`on public.${table} for select to authenticated`);
       expect(sql).toContain(`on public.${table} for insert to authenticated`);
       expect(sql).toContain(`on public.${table} for update to authenticated`);
@@ -140,6 +142,41 @@ describe("Supabase local database scaffold", () => {
         `grant select, insert, update, delete on table public.${table} to authenticated`,
       );
     }
+  });
+
+  it("adds Phase 7B calendar connection and external-write audit scaffolding", () => {
+    const sql = loadAllMigrations();
+
+    for (const table of [
+      "google_calendar_connections",
+      "external_write_events",
+    ]) {
+      expect(sql).toContain(`create table public.${table}`);
+      expect(sql).toContain(
+        `alter table public.${table} enable row level security`,
+      );
+      expect(sql).toContain(`on public.${table} for select to authenticated`);
+      expect(sql).toContain(`on public.${table} for insert to authenticated`);
+      expect(sql).toContain(`on public.${table} for update to authenticated`);
+      expect(sql).toContain(`on public.${table} for delete to authenticated`);
+      expect(sql).toContain(
+        `grant select, insert, update, delete on table public.${table} to authenticated`,
+      );
+    }
+
+    expect(sql).toContain(
+      "constraint google_calendar_connections_user_id_key unique (user_id)",
+    );
+    expect(sql).toContain(
+      "constraint google_calendar_connections_provider_check check (provider = 'google_calendar')",
+    );
+    expect(sql).toContain(
+      "constraint external_write_events_area_fk foreign key (area_id, user_id)",
+    );
+    expect(sql).toContain(
+      "constraint external_write_events_result_status_check check (result_status in ('pending', 'succeeded', 'failed'))",
+    );
+    expect(sql).not.toMatch(/refresh_token|access_token|client_secret/i);
   });
 
   it("seeds local authenticated users and starter areas for Phase 4A smoke tests", () => {

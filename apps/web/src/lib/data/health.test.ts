@@ -34,16 +34,24 @@ describe("health dashboard data provider", () => {
       "Google Calendar",
     ]);
     expect(checkBySubsystem(result.checks, "mock mode").status).toBe("healthy");
-    expect(checkBySubsystem(result.checks, "supabase config").status).toBe("watch");
+    expect(checkBySubsystem(result.checks, "supabase config").status).toBe(
+      "watch",
+    );
     expect(checkBySubsystem(result.checks, "areas").summary).toContain(
       "mock areas",
     );
     expect(checkBySubsystem(result.checks, "AI parser").summary).toContain(
       "not configured",
     );
-    expect(checkBySubsystem(result.checks, "Google Calendar").summary).toContain(
-      "not configured",
-    );
+    expect(
+      checkBySubsystem(result.checks, "Google Calendar").summary,
+    ).toContain("not configured");
+    expect(
+      checkBySubsystem(result.checks, "Google Calendar").details,
+    ).toMatchObject({
+      configured: false,
+      connection_present: false,
+    });
   });
 
   it("separates configured Supabase from missing auth/session state", async () => {
@@ -68,7 +76,9 @@ describe("health dashboard data provider", () => {
     expect(checkBySubsystem(result.checks, "supabase config").status).toBe(
       "healthy",
     );
-    expect(checkBySubsystem(result.checks, "auth session").status).toBe("watch");
+    expect(checkBySubsystem(result.checks, "auth session").status).toBe(
+      "watch",
+    );
     expect(checkBySubsystem(result.checks, "areas").status).toBe("watch");
     expect(checkBySubsystem(result.checks, "capture persistence").status).toBe(
       "watch",
@@ -188,5 +198,23 @@ describe("health dashboard data provider", () => {
     expect(result.persistence).toBe("unavailable");
     expect(result.persistenceMessage).toBe("permission denied");
     expect(checkBySubsystem(result.checks, "areas").status).toBe("watch");
+  });
+
+  it("keeps Google Calendar health deterministic when config exists without OAuth connection metadata", async () => {
+    const result = await getHealthDashboard(null, {
+      now: () => fixedNow,
+      supabaseConfigured: false,
+      googleCalendarConfigured: true,
+      googleCalendarConnectionPresent: false,
+    });
+
+    const calendar = checkBySubsystem(result.checks, "Google Calendar");
+    expect(calendar.status).toBe("watch");
+    expect(calendar.score).toBe(70);
+    expect(calendar.summary).toContain("no connection metadata");
+    expect(calendar.details).toMatchObject({
+      configured: true,
+      connection_present: false,
+    });
   });
 });

@@ -4,6 +4,8 @@ import {
   CALENDAR_BLOCK_STATUSES,
   CAPTURE_ITEM_STATUSES,
   EXECUTION_SESSION_OUTCOMES,
+  EXTERNAL_WRITE_RESULT_STATUSES,
+  GOOGLE_CALENDAR_CONNECTION_STATUSES,
   HEALTH_CHECK_STATUSES,
   PROJECT_STATUSES,
   REVIEW_TYPES,
@@ -182,3 +184,38 @@ export const HealthCheckSchema = z.object({
 });
 
 export type HealthCheck = z.infer<typeof HealthCheckSchema>;
+
+export const GoogleCalendarConnectionSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  provider: z.literal("google_calendar"),
+  calendar_id: z.string().min(1),
+  granted_scopes_json: JsonValueSchema,
+  status: z.enum(GOOGLE_CALENDAR_CONNECTION_STATUSES),
+  first_write_warning_acknowledged_at: z.string().datetime().nullable(),
+  connected_at: z.string().datetime().nullable(),
+  disconnected_at: z.string().datetime().nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+
+export type GoogleCalendarConnection = z.infer<
+  typeof GoogleCalendarConnectionSchema
+>;
+
+export const ExternalWriteEventSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  area_id: z.string().uuid().nullable(),
+  provider: z.string().min(1),
+  operation: z.string().min(1),
+  target_type: z.string().min(1),
+  target_id: z.string().nullable(),
+  request_summary_json: JsonValueSchema,
+  result_summary_json: JsonValueSchema,
+  result_status: z.enum(EXTERNAL_WRITE_RESULT_STATUSES),
+  error_message: z.string().nullable(),
+  created_at: z.string().datetime(),
+});
+
+export type ExternalWriteEvent = z.infer<typeof ExternalWriteEventSchema>;

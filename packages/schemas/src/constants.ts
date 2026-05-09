@@ -56,3 +56,16 @@ export const EXECUTION_SESSION_OUTCOMES = [
 export const REVIEW_TYPES = ["daily", "weekly"] as const;
 
 export const HEALTH_CHECK_STATUSES = ["healthy", "watch", "critical"] as const;
+
+export const GOOGLE_CALENDAR_CONNECTION_STATUSES = [
+  "metadata_only",
+  "connected",
+  "disconnected",
+  "error",
+] as const;
+
+export const EXTERNAL_WRITE_RESULT_STATUSES = [
+  "pending",
+  "succeeded",
+  "failed",
+] as const;

@@ -13,7 +13,9 @@ describe("source-of-truth boundaries", () => {
     const layout = readRepoFile("apps/web/src/app/layout.tsx");
 
     expect(layout).toContain('from "./components/AppShell"');
-    expect(() => readRepoFile("apps/web/src/components/AppShell.tsx")).toThrow();
+    expect(() =>
+      readRepoFile("apps/web/src/components/AppShell.tsx"),
+    ).toThrow();
   });
 
   it("does not export app-local types with canonical schema entity names", () => {
@@ -25,7 +27,7 @@ describe("source-of-truth boundaries", () => {
     expect(localTypes).toContain("Phase 2 mock-only UI view models");
   });
 
-  it("keeps Phase 4E Supabase browser persistence limited to approved local workflow tables", () => {
+  it("keeps browser persistence away from server-only calendar audit tables and secrets", () => {
     const files = [
       "apps/web/src/lib/data/workflow.ts",
       "apps/web/src/lib/data/health.ts",
@@ -41,11 +43,37 @@ describe("source-of-truth boundaries", () => {
 
     expect(source).not.toMatch(/service[_-]?role|SUPABASE_SERVICE/i);
     expect(source).not.toMatch(/openai|OPENAI/);
+    expect(source).not.toMatch(
+      /GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|GOOGLE_REDIRECT_URI|GOOGLE_TOKEN_ENCRYPTION_KEY/,
+    );
+    expect(source).not.toMatch(/googleapis|calendar\.events|freebusy/i);
 
-    for (const table of ["external_write_events", "ai_recommendations"]) {
+    for (const table of [
+      "google_calendar_connections",
+      "external_write_events",
+      "ai_recommendations",
+    ]) {
       expect(source).not.toContain(`from("${table}")`);
       expect(source).not.toContain(`from('${table}')`);
     }
+  });
+
+  it("does not add Google Calendar OAuth or API routes in Phase 7B", () => {
+    expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/route.ts"),
+    ).toThrow();
+    expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/connect/route.ts"),
+    ).toThrow();
+    expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/callback/route.ts"),
+    ).toThrow();
+    expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/freebusy/route.ts"),
+    ).toThrow();
+    expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/write-event/route.ts"),
+    ).toThrow();
   });
 
   it("keeps OpenAI parsing behind the server parse-capture route", () => {
@@ -75,5 +103,12 @@ describe("source-of-truth boundaries", () => {
     expect(parser).toContain("parseCapture must run on the server.");
     expect(service).toContain("function assertServerRuntime()");
     expect(service).toContain("parseCaptureService must run on the server.");
+  });
+
+  it("keeps Google Calendar config marked server-only", () => {
+    const config = readRepoFile("apps/web/src/lib/googleCalendar/config.ts");
+
+    expect(config).toContain("function assertServerRuntime()");
+    expect(config).toContain("Google Calendar config must stay server-only.");
   });
 });

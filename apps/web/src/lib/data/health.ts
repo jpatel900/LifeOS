@@ -41,6 +41,7 @@ interface HealthDashboardOptions {
   supabaseConfigured?: boolean;
   aiParserConfigured?: boolean;
   googleCalendarConfigured?: boolean;
+  googleCalendarConnectionPresent?: boolean;
 }
 
 const areaColumns =
@@ -119,6 +120,56 @@ function integrationCheck(
       });
 }
 
+function googleCalendarCheck(options: HealthDashboardOptions) {
+  const configured = options.googleCalendarConfigured ?? false;
+  const connectionPresent = options.googleCalendarConnectionPresent ?? false;
+
+  if (!configured) {
+    return makeCheck(
+      "health-google-calendar",
+      "Google Calendar",
+      "watch",
+      50,
+      "Google Calendar is not configured; planning remains local-only.",
+      {
+        configured: false,
+        connection_present: false,
+        repair_steps: ["Configure this integration in a later approved phase."],
+      },
+    );
+  }
+
+  if (!connectionPresent) {
+    return makeCheck(
+      "health-google-calendar",
+      "Google Calendar",
+      "watch",
+      70,
+      "Google Calendar config is present, but no connection metadata is active.",
+      {
+        configured: true,
+        connection_present: false,
+        repair_steps: [
+          "Connect Google Calendar in a later approved OAuth phase.",
+        ],
+      },
+    );
+  }
+
+  return makeCheck(
+    "health-google-calendar",
+    "Google Calendar",
+    "healthy",
+    100,
+    "Google Calendar connection metadata is active.",
+    {
+      configured: true,
+      connection_present: true,
+      repair_steps: [],
+    },
+  );
+}
+
 async function readAreas(client: MinimalHealthSupabaseClient) {
   const query = client.from("areas") as {
     select: (columns: string) => {
@@ -167,9 +218,7 @@ async function persistHealthChecks(
   checkedAt: string,
 ) {
   const query = client.from("health_checks") as {
-    insert: (
-      rows: Record<string, unknown>[],
-    ) => Promise<{ error: unknown }>;
+    insert: (rows: Record<string, unknown>[]) => Promise<{ error: unknown }>;
   };
 
   const { error } = await query.insert(
@@ -217,7 +266,10 @@ export async function getHealthDashboard(
         "watch",
         60,
         "No Supabase session is active because Supabase config is missing.",
-        { authenticated: false, repair_steps: ["Configure Supabase and sign in."] },
+        {
+          authenticated: false,
+          repair_steps: ["Configure Supabase and sign in."],
+        },
       ),
       makeCheck(
         "health-areas",
@@ -241,12 +293,7 @@ export async function getHealthDashboard(
         options.aiParserConfigured ?? false,
         "AI parser is not configured in Phase 4E; parsing remains deterministic mock logic.",
       ),
-      integrationCheck(
-        "health-google-calendar",
-        "Google Calendar",
-        options.googleCalendarConfigured ?? false,
-        "Google Calendar is not configured in Phase 4E; planning remains local-only.",
-      ),
+      googleCalendarCheck(options),
     );
 
     return {
@@ -321,7 +368,11 @@ export async function getHealthDashboard(
               "healthy",
               100,
               `${areas.length} active area${areas.length === 1 ? "" : "s"} readable from Supabase.`,
-              { source: "supabase", active_area_count: areas.length, repair_steps: [] },
+              {
+                source: "supabase",
+                active_area_count: areas.length,
+                repair_steps: [],
+              },
             )
           : makeCheck(
               "health-areas",
@@ -343,8 +394,13 @@ export async function getHealthDashboard(
           "areas",
           "critical",
           0,
-          error instanceof Error ? error.message : "Unable to read Supabase areas.",
-          { source: "supabase", repair_steps: ["Check local Supabase and RLS access."] },
+          error instanceof Error
+            ? error.message
+            : "Unable to read Supabase areas.",
+          {
+            source: "supabase",
+            repair_steps: ["Check local Supabase and RLS access."],
+          },
         ),
       );
     }
@@ -406,12 +462,7 @@ export async function getHealthDashboard(
       options.aiParserConfigured ?? false,
       "AI parser is not configured in Phase 4E; parsing remains deterministic mock logic.",
     ),
-    integrationCheck(
-      "health-google-calendar",
-      "Google Calendar",
-      options.googleCalendarConfigured ?? false,
-      "Google Calendar is not configured in Phase 4E; planning remains local-only.",
-    ),
+    googleCalendarCheck(options),
   );
 
   if (!userId) {

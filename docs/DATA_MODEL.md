@@ -42,6 +42,7 @@ Health / Audit
   ├─ health_checks
   ├─ health_incidents
   ├─ repair_guides
+  ├─ google_calendar_connections
   ├─ external_write_events
   ├─ ai_recommendations
   └─ user_decisions
@@ -524,6 +525,9 @@ Statuses:
 
 ### 6.4 `external_write_events`
 
+Purpose: audit log for attempted or completed external writes. Phase 7B creates
+the table but does not add Google API calls.
+
 | Column               | Type          |
 | -------------------- | ------------- |
 | id                   | uuid pk       |
@@ -534,13 +538,48 @@ Statuses:
 | target_type          | text          |
 | target_id            | text nullable |
 | request_summary_json | jsonb         |
+| result_summary_json  | jsonb         |
 | result_status        | text          |
 | error_message        | text nullable |
 | created_at           | timestamptz   |
 
 ---
 
-### 6.5 `ai_recommendations`
+### 6.5 `google_calendar_connections`
+
+Purpose: server-owned Google Calendar connection metadata. Phase 7B intentionally
+does not store OAuth tokens because encrypted token storage is a later explicit
+implementation decision.
+
+| Column                              | Type                 |
+| ----------------------------------- | -------------------- |
+| id                                  | uuid pk              |
+| user_id                             | uuid unique          |
+| provider                            | text                 |
+| calendar_id                         | text                 |
+| granted_scopes_json                 | jsonb                |
+| status                              | text                 |
+| first_write_warning_acknowledged_at | timestamptz nullable |
+| connected_at                        | timestamptz nullable |
+| disconnected_at                     | timestamptz nullable |
+| created_at                          | timestamptz          |
+| updated_at                          | timestamptz          |
+
+Statuses:
+
+- metadata_only
+- connected
+- disconnected
+- error
+
+Indexes:
+
+- `(user_id)`
+- `(user_id, status)`
+
+---
+
+### 6.6 `ai_recommendations`
 
 | Column              | Type             |
 | ------------------- | ---------------- |
@@ -557,7 +596,7 @@ Statuses:
 
 ---
 
-### 6.6 `user_decisions`
+### 6.7 `user_decisions`
 
 | Column              | Type          |
 | ------------------- | ------------- |

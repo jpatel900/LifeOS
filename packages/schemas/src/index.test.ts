@@ -13,6 +13,8 @@ import {
   CreateProjectInputSchema,
   CreateTaskInputSchema,
   ExecutionSessionSchema,
+  ExternalWriteEventSchema,
+  GoogleCalendarConnectionSchema,
   HealthCheckSchema,
   ParseCaptureResponseSchema,
   ProjectSchema,
@@ -65,7 +67,7 @@ describe("CreateCaptureItemInputSchema", () => {
 
     expect(result.success).toBe(true);
     expect(result.success ? result.data.raw_text : "").toBe(
-      "Call dentist tomorrow"
+      "Call dentist tomorrow",
     );
   });
 });
@@ -79,7 +81,9 @@ describe("CreateProjectInputSchema", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(result.success ? result.data.title : "").toBe("Volunteer ops cleanup");
+    expect(result.success ? result.data.title : "").toBe(
+      "Volunteer ops cleanup",
+    );
     expect(result.success ? result.data.description : "").toBe(
       "Bring loose ends under control.",
     );
@@ -347,6 +351,92 @@ describe("HealthCheckSchema", () => {
       checked_at: "2024-01-01T12:00:00.000Z",
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("GoogleCalendarConnectionSchema", () => {
+  it("validates metadata-only Google Calendar connection rows without tokens", () => {
+    const result = GoogleCalendarConnectionSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      provider: "google_calendar",
+      calendar_id: "primary",
+      granted_scopes_json: [
+        "https://www.googleapis.com/auth/calendar.freebusy",
+        "https://www.googleapis.com/auth/calendar.events.owned",
+      ],
+      status: "metadata_only",
+      first_write_warning_acknowledged_at: null,
+      connected_at: null,
+      disconnected_at: null,
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unsupported calendar providers", () => {
+    const result = GoogleCalendarConnectionSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      provider: "gmail",
+      calendar_id: "primary",
+      granted_scopes_json: [],
+      status: "metadata_only",
+      first_write_warning_acknowledged_at: null,
+      connected_at: null,
+      disconnected_at: null,
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ExternalWriteEventSchema", () => {
+  it("validates external write audit rows without provider secret material", () => {
+    const result = ExternalWriteEventSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      provider: "google_calendar",
+      operation: "events.insert",
+      target_type: "calendar_block",
+      target_id: uid,
+      request_summary_json: {
+        calendar_id: "primary",
+        has_google_event_id: false,
+      },
+      result_summary_json: {
+        stored_google_event_id: false,
+      },
+      result_status: "failed",
+      error_message: "Google Calendar insert failed safely.",
+      created_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unsupported external write result statuses", () => {
+    const result = ExternalWriteEventSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      provider: "google_calendar",
+      operation: "events.insert",
+      target_type: "calendar_block",
+      target_id: null,
+      request_summary_json: {},
+      result_summary_json: {},
+      result_status: "done",
+      error_message: null,
+      created_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 

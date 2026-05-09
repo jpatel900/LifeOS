@@ -2,7 +2,7 @@
 
 ## Current status
 
-MVP supports task capture, area assignment, optional AI/mock parse capture, manual scheduling, execution tracking, basic review logging, and deterministic health checks. The Phase 2 mock vertical slice remains for fallback flows. Phase 5 parse capture is wired through a server route: `/capture` can persist raw `capture_items` first, then call the server-only Responses API parser when `OPENAI_API_KEY` and `AI_MODEL_STANDARD` are configured and `AI_PARSE_CAPTURE_ENABLED` is not disabled, or fall back to the mock parser when no API key is present or AI parsing is disabled. Parsed task/project drafts are local triage staging state for now, not durable draft rows; durability begins when triage accepts them into `tasks`/`projects`. Phase 4E persistence remains in place: `/settings/areas` reads Supabase-backed areas, `/triage` persists accepted task/project drafts to `tasks`/`projects`, `/calendar` can create/edit/reject/accept local `time_block_proposals` from persisted tasks, `/execute` persists `execution_sessions`, `/review` can create `review_entries` from persisted tasks/blocks/sessions, and `/health` shows deterministic subsystem checks from mock/Supabase/auth/app-state signals. These flows fall back to mock mode when Supabase env vars are absent.
+MVP supports task capture, area assignment, optional AI/mock parse capture, manual scheduling, execution tracking, basic review logging, and deterministic health checks. The Phase 2 mock vertical slice remains for fallback flows. Phase 5 parse capture is wired through a server route: `/capture` can persist raw `capture_items` first, then call the server-only Responses API parser when `OPENAI_API_KEY` and `AI_MODEL_STANDARD` are configured and `AI_PARSE_CAPTURE_ENABLED` is not disabled, or fall back to the mock parser when no API key is present or AI parsing is disabled. Parsed task/project drafts are local triage staging state for now, not durable draft rows; durability begins when triage accepts them into `tasks`/`projects`. Phase 4E persistence remains in place: `/settings/areas` reads Supabase-backed areas, `/triage` persists accepted task/project drafts to `tasks`/`projects`, `/calendar` can create/edit/reject/accept local `time_block_proposals` from persisted tasks, `/execute` persists `execution_sessions`, `/review` can create `review_entries` from persisted tasks/blocks/sessions, and `/health` shows deterministic subsystem checks from mock/Supabase/auth/app-state signals. Phase 7B adds database/schema scaffolding for Google Calendar connection metadata and external write audit logging, but no OAuth routes, Google API calls, free/busy checks, or event writes. These flows fall back to mock mode when Supabase or Google env vars are absent.
 
 ## Recently completed
 
@@ -63,6 +63,7 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 - Tightened `ParseCaptureResponseSchema` for V1 Structured Outputs: explicit `parse_status`, top-level confidence/triage routing, required nullable fields, task/project drafts only, top-level clarification questions, and a nullable structured ambiguity assessment.
 - Added guardrails for the intended Phase 5 staging model: `/capture` tests verify raw capture save happens before parsing and parsed drafts route into local triage state, while source-of-truth tests keep OpenAI parsing behind the server route.
 - Added Phase 5B parser control and error hardening: `AI_PARSE_CAPTURE_ENABLED=false` now forces mock fallback even when `OPENAI_API_KEY` exists, Responses API invalid structured output is rejected with explicit schema-validation errors, and source-of-truth guards now check all AI env var names (`AI_MODEL_CHEAP`, `AI_MODEL_STANDARD`, `AI_MODEL_STRONG`) stay out of browser code.
+- Added Phase 7B Google Calendar scaffolding only: `google_calendar_connections` stores connection metadata without OAuth token columns, `external_write_events` provides user-scoped audit rows, shared schemas validate both row shapes, `.env.example` documents server-only Google env names without requiring them, and health checks keep Google Calendar as a deterministic optional integration status.
 
 ## Known issues
 
@@ -71,12 +72,12 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 - Mobile layout needs improvement.
 - Supabase is scaffolded locally and Phase 4E UI uses it for areas, capture, accepted tasks/projects, local time-block proposals, local calendar blocks, execution sessions, review entries, and health check snapshots.
 - Supabase-backed capture and accepted-draft saves require an authenticated Supabase user because RLS policies enforce `auth.uid() = user_id`.
-- Persisted planning, execution, review, and health remain local-only. There is still no Google Calendar API, free/busy query, review/health narrative AI, autonomous scheduling, background job, advanced analytics, or conflict auto-solver.
+- Persisted planning, execution, review, and health remain local-only. Phase 7B added Google Calendar metadata/audit scaffolding only; there is still no OAuth connect/callback flow, Google Calendar API call, free/busy query, calendar event insert, review/health narrative AI, autonomous scheduling, background job, advanced analytics, or conflict auto-solver.
 
 ## Next recommended tasks
 
 1. Manually smoke `/login` with `user_a@example.test` / `password123`, then verify `/settings/areas`, `/capture` Save and parse, `/triage`, `/calendar`, `/execute`, and `/review` against local Supabase.
-2. Start the next approved phase only after updating requirements/acceptance criteria; do not extend Phase 4C into Google Calendar/free-busy/external writes without explicit scope.
+2. Start Phase 7C only after explicit scope approval; keep it limited to OAuth connect/callback/disconnect and connection status, with no free/busy or calendar writes.
 3. Add conflict detection tests.
 4. Improve mobile task capture.
 5. Add review log.
@@ -101,7 +102,8 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 - Do not add durable draft persistence tables unless requirements explicitly change. Current intended flow is durable raw capture -> local parsed drafts -> durable accepted task/project.
 - Local Supabase seed users both use password `password123`; User A has Main Job, Personal, Volunteer Work, and Side Project areas, while User B has a private area for RLS isolation checks.
 - `supabase db reset` has been verified locally after the seed update.
-- `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, `projects`, `time_block_proposals`, `calendar_blocks`, `execution_sessions`, `review_entries`, and `health_checks`.
+- `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, `projects`, `time_block_proposals`, `calendar_blocks`, `execution_sessions`, `review_entries`, `health_checks`, `google_calendar_connections`, and `external_write_events`.
+- Phase 7B does not store Google OAuth tokens. `google_calendar_connections` is metadata-only until an explicit encrypted token storage PR lands, and `external_write_events` should store summaries only, never raw Google payloads or secrets.
 - `WorkflowProvider` should remain usable when browser storage is unavailable or contains invalid mock workflow state; persistence failures are intentionally swallowed after ID-counter sync.
 - Triage maps Phase 2 mock area ids to persisted Phase 4 area slugs before saving accepted tasks/projects; `/calendar` creates persisted proposals from persisted task ids rather than from Phase 2 mock proposal draft ids.
 - `/execute` should only auto-select active persisted tasks or non-terminal persisted execution sessions; completed/skipped/blocked rows must not become the next runnable target.
