@@ -47,4 +47,21 @@ describe("source-of-truth boundaries", () => {
       expect(source).not.toContain(`from('${table}')`);
     }
   });
+
+  it("keeps OpenAI parsing behind the server parse-capture route", () => {
+    const clientFiles = [
+      "apps/web/src/app/capture/page.tsx",
+      "apps/web/src/lib/WorkflowContext.tsx",
+      "apps/web/src/lib/workflow.ts",
+      "apps/web/src/lib/ai/parseCaptureWorkflow.ts",
+    ].map(readRepoFile);
+    const clientSource = clientFiles.join("\n");
+
+    expect(clientSource).not.toMatch(/from ["']@\/lib\/ai\/parseCapture["']/);
+    expect(clientSource).not.toMatch(/from ["']\.\/parseCapture["']/);
+    expect(clientSource).not.toMatch(/OPENAI_API_KEY|AI_MODEL_STANDARD/);
+
+    const route = readRepoFile("apps/web/src/app/api/parse-capture/route.ts");
+    expect(route).toContain('from "@/lib/ai/parseCaptureService"');
+  });
 });
