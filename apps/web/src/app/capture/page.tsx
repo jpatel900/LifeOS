@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import type { Area, CaptureItem } from "@lifeos/schemas";
+import type { Area, CaptureItem, ParseCaptureResponse } from "@lifeos/schemas";
 import { Button } from "@lifeos/ui";
 import { EmptyState } from "../components/EmptyState";
+import { buildParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 import { getAreaById } from "@/lib/mockData";
 import {
   createCaptureItem,
@@ -32,18 +33,30 @@ type SaveState =
   | { status: "saved"; provider: DataProvider; capture: CaptureItem }
   | { status: "error"; message: string };
 
+type ParseState =
+  | { status: "idle" }
+  | { status: "parsing" }
+  | { status: "parsed"; parser: "ai" | "mock"; draftCount: number }
+  | { status: "error"; message: string };
+
+type ParseCaptureApiResponse =
+  | { ok: true; parser: "ai" | "mock"; response: ParseCaptureResponse }
+  | { ok: false; error: string };
+
 export default function CapturePage() {
   const {
     state,
     selectedAreaId,
     setSelectedAreaId,
     submitCaptureText,
+    addParsedWorkflowResult,
   } = useWorkflow();
 
   const [areasState, setAreasState] = useState<AreasState>({
     status: "loading",
   });
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
+  const [parseState, setParseState] = useState<ParseState>({ status: "idle" });
   const [text, setText] = useState("");
   const [areaId, setAreaId] = useState<string | null>(null);
 
@@ -123,6 +136,62 @@ export default function CapturePage() {
     }
   }
 
+  async function handleSaveAndParse() {
+    setParseState({ status: "parsing" });
+    let captureWasSaved = false;
+
+    try {
+      const captureResult = await createCaptureItem(createSupabaseBrowserClient(), {
+        raw_text: text,
+        area_id: areaId,
+      });
+      captureWasSaved = true;
+      setSaveState({
+        status: "saved",
+        provider: captureResult.provider,
+        capture: captureResult.capture,
+      });
+
+      const parseResult = await fetch("/api/parse-capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rawText: text,
+          areaContext: areas.map((area) => ({
+            slug: area.slug,
+            name: area.name,
+          })),
+        }),
+      });
+      const body = (await parseResult.json()) as ParseCaptureApiResponse;
+      if (!parseResult.ok || !body.ok) {
+        throw new Error(body.ok ? "Unable to parse capture." : body.error);
+      }
+
+      const workflowResult = buildParsedWorkflowResult({
+        response: body.response,
+        capture: captureResult.capture,
+        workflowAreaId: selectedAreaId,
+      });
+      addParsedWorkflowResult(workflowResult);
+      setParseState({
+        status: "parsed",
+        parser: body.parser,
+        draftCount:
+          workflowResult.taskDrafts.length + workflowResult.projectDrafts.length,
+      });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Unable to save and parse capture.";
+      setParseState({
+        status: "error",
+        message: captureWasSaved
+          ? `Capture saved, but parsing failed safely: ${detail}`
+          : detail,
+      });
+    }
+  }
+
   function handleStructure() {
     if (!text.trim()) {
       return;
@@ -147,8 +216,8 @@ export default function CapturePage() {
       <section>
         <h1>Capture</h1>
         <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
-          Save raw text through the data layer (Phase 4A), then optionally run the Phase 2
-          mock parser for drafts and triage — local session only, no external AI.
+          Save raw text through the data layer, then optionally parse it into
+          reviewable task/project drafts. The Phase 2 mock parser remains available.
         </p>
       </section>
 
@@ -259,6 +328,23 @@ export default function CapturePage() {
           >
             {saveState.status === "saving" ? "Saving..." : "Save capture"}
           </button>
+          <button
+            type="button"
+            onClick={() => void handleSaveAndParse()}
+            disabled={parseState.status === "parsing"}
+            style={{
+              padding: "0.75rem 1.25rem",
+              fontSize: "1rem",
+              borderRadius: "8px",
+              border: "1px solid #111827",
+              background: "white",
+              color: "#111827",
+              cursor: parseState.status === "parsing" ? "wait" : "pointer",
+              alignSelf: "flex-start",
+            }}
+          >
+            {parseState.status === "parsing" ? "Saving and parsing..." : "Save and parse"}
+          </button>
         </form>
 
         <div
@@ -335,6 +421,39 @@ export default function CapturePage() {
         >
           <h2 style={{ marginTop: 0 }}>Capture was not saved</h2>
           <p>{saveState.message}</p>
+        </section>
+      ) : null}
+
+      {parseState.status === "parsed" ? (
+        <section
+          role="status"
+          style={{
+            border: "1px solid #bfdbfe",
+            background: "#eff6ff",
+            borderRadius: "8px",
+            padding: "1rem",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Capture parsed</h2>
+          <p>
+            Parser: <strong>{parseState.parser}</strong>. Drafts routed to triage:{" "}
+            <strong>{parseState.draftCount}</strong>.
+          </p>
+        </section>
+      ) : null}
+
+      {parseState.status === "error" ? (
+        <section
+          role="alert"
+          style={{
+            border: "1px solid #fca5a5",
+            background: "#fef2f2",
+            borderRadius: "8px",
+            padding: "1rem",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Capture parse failed</h2>
+          <p>{parseState.message}</p>
         </section>
       ) : null}
 

@@ -21,6 +21,7 @@ import {
 import {
   acceptDraft,
   acceptProjectDraft,
+  appendParsedWorkflowResult,
   acceptProposal,
   createInitialWorkflowState,
   editDraft,
@@ -35,6 +36,7 @@ import {
   type WorkflowState,
 } from "./workflow";
 import type { Phase2MockExecutionSession } from "./types";
+import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
@@ -43,6 +45,10 @@ type WorkflowAction =
       type: "submitCapture";
       rawText: string;
       areaId: string | null;
+    }
+  | {
+      type: "appendParsedWorkflowResult";
+      parsed: ParsedWorkflowResult;
     }
   | {
       type: "acceptDraft";
@@ -98,6 +104,7 @@ interface WorkflowContextValue {
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
+  addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
   acceptTaskDraft: (draftId: string) => void;
   acceptProjectDraft: (draftId: string) => void;
   rejectTaskDraft: (draftId: string) => void;
@@ -373,6 +380,8 @@ function workflowReducer(state: WorkflowState, action: WorkflowAction): Workflow
         rawText: action.rawText,
         areaId: action.areaId,
       });
+    case "appendParsedWorkflowResult":
+      return appendParsedWorkflowResult(state, action.parsed);
     case "acceptDraft":
       return acceptDraft(state, action.draftId);
     case "acceptProjectDraft":
@@ -444,6 +453,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSelectedAreaId,
     submitCaptureText: (rawText, areaId) =>
       dispatch({ type: "submitCapture", rawText, areaId }),
+    addParsedWorkflowResult: (parsed) =>
+      dispatch({ type: "appendParsedWorkflowResult", parsed }),
     acceptTaskDraft: (draftId) => dispatch({ type: "acceptDraft", draftId }),
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
