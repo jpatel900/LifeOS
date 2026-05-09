@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CalendarBlock, ExecutionSession, ReviewEntry, Task } from "@lifeos/schemas";
+import type {
+  Area,
+  CalendarBlock,
+  ExecutionSession,
+  ReviewEntry,
+  Task,
+} from "@lifeos/schemas";
 import { Button } from "@lifeos/ui";
 import { EmptyState } from "../components/EmptyState";
 import {
   createReviewEntry,
+  listAreas,
   listExecutionReviewItems,
   type DataProvider,
 } from "@/lib/data/workflow";
@@ -23,6 +30,7 @@ type ReviewState =
       blocks: CalendarBlock[];
       sessions: ExecutionSession[];
       reviewEntries: ReviewEntry[];
+      areas: Area[];
     };
 
 type ActionState =
@@ -45,7 +53,10 @@ export default function ReviewPage() {
 
     async function loadReviewItems() {
       try {
-        const result = await listExecutionReviewItems(createSupabaseBrowserClient());
+        const client = createSupabaseBrowserClient();
+        const result = await listExecutionReviewItems(client);
+        const areasResult =
+          result.provider === "supabase" ? await listAreas(client) : null;
         if (!cancelled) {
           setReviewState({
             status: "ready",
@@ -54,6 +65,7 @@ export default function ReviewPage() {
             blocks: result.blocks,
             sessions: result.sessions,
             reviewEntries: result.reviewEntries,
+            areas: areasResult?.areas ?? [],
           });
         }
       } catch (error) {
@@ -82,6 +94,7 @@ export default function ReviewPage() {
     ? reviewState.sessions
     : state.executionSessions;
   const reviewEntries = usesPersistedReview ? reviewState.reviewEntries : [];
+  const areas = usesPersistedReview ? reviewState.areas : state.areas;
 
   const completed = sessions.filter((session) =>
     "status" in session
@@ -100,7 +113,7 @@ export default function ReviewPage() {
     "status" in session ? session.status === "stuck" : session.outcome === "blocked",
   );
   const openTasks = tasks.filter((task) => task.status === "active");
-  const areaSummaries = state.areas.map((area) => {
+  const areaSummaries = areas.map((area) => {
     const areaTasks = tasks.filter((task) => task.area_id === area.id);
     const areaSessions = sessions.filter((session) => session.area_id === area.id);
     return {

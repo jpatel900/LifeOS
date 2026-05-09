@@ -1005,6 +1005,9 @@ export async function createExecutionSession(
       .single();
     if (blockError) throw new Error(getSupabaseMessage(blockError));
     block = parseCalendarBlock(blockData);
+    if (block.task_id !== task.id || block.area_id !== task.area_id) {
+      throw new Error("Selected calendar block does not belong to this task.");
+    }
   }
 
   const sessionQuery = client.from("execution_sessions") as {

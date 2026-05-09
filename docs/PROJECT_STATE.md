@@ -6,6 +6,8 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 
 ## Recently completed
 
+- Added a critical bug-fix branch on top of Phase 4E: persisted execution now ignores terminal/non-active rows when choosing the current Execute target, keeps completion feedback visible after the target becomes inactive, rejects mismatched task/calendar-block execution links, and groups Review area summaries with persisted Supabase area ids.
+- Added regression coverage for non-active persisted Execute tasks, persisted Review area rollups, and same-user mismatched execution task/block inputs.
 - Restored app route/provider integrity after the merge-conflict cleanup: root layout delegates to the client `apps/web/src/app/components/AppShell.tsx`, workflow routes render under `WorkflowProvider`, and the stale duplicate `apps/web/src/components/AppShell.tsx` was removed.
 - Cleaned up AppShell/type source-of-truth drift: added a static guard for the single AppShell import boundary and renamed app-local Phase 2 mock/session view models so canonical entity types remain owned by `@lifeos/schemas`.
 - Added route smoke coverage that renders workflow pages through the real app shell/provider instead of only manually wrapping pages in `WorkflowProvider`.
@@ -44,6 +46,7 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 
 ## Known issues
 
+- Supabase multi-step workflow writes are still issued as separate client requests; future work should move proposal acceptance and execution transitions into transactional server/RPC boundaries if stronger atomicity is required.
 - Rescheduling does not yet check all-day events.
 - Mobile layout needs improvement.
 - Supabase is scaffolded locally and Phase 4E UI uses it for areas, capture, accepted tasks/projects, local time-block proposals, local calendar blocks, execution sessions, review entries, and health check snapshots.
@@ -74,3 +77,5 @@ MVP supports task capture, area assignment, manual scheduling, execution trackin
 - `apps/web/src/__tests__/phase4aRls.local.test.ts` is skipped by default; run it with `RUN_SUPABASE_RLS_TESTS=1`, local Supabase URL, and the local anon key from `supabase status -o env`. It now covers `areas`, `capture_items`, `tasks`, `projects`, `time_block_proposals`, `calendar_blocks`, `execution_sessions`, `review_entries`, and `health_checks`.
 - `WorkflowProvider` should remain usable when browser storage is unavailable or contains invalid mock workflow state; persistence failures are intentionally swallowed after ID-counter sync.
 - Triage maps Phase 2 mock area ids to persisted Phase 4 area slugs before saving accepted tasks/projects; `/calendar` creates persisted proposals from persisted task ids rather than from Phase 2 mock proposal draft ids.
+- `/execute` should only auto-select active persisted tasks or non-terminal persisted execution sessions; completed/skipped/blocked rows must not become the next runnable target.
+- `/review` must use persisted area ids/names when summarizing Supabase-backed tasks and execution sessions; Phase 2 mock area ids only apply to mock workflow state.

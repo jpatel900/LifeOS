@@ -96,15 +96,16 @@ export default function ExecutePage() {
   const persistedTasks = usesPersistedExecution ? executeState.tasks : [];
   const persistedBlocks = usesPersistedExecution ? executeState.blocks : [];
   const persistedSessions = usesPersistedExecution ? executeState.sessions : [];
-  const activePersistedSession = persistedSessions[0] ?? null;
+  const activePersistedSession =
+    persistedSessions.find(
+      (session) => session.outcome === "partial" || session.outcome === "distracted",
+    ) ?? null;
 
   const activeSession = usesPersistedExecution
     ? activePersistedSession
     : state.executionSessions[0] ?? null;
   const runnableTask = usesPersistedExecution
-    ? persistedTasks.find((task) => task.status === "active") ??
-      persistedTasks[0] ??
-      null
+    ? persistedTasks.find((task) => task.status === "active") ?? null
     : state.tasks.find((task) => task.status === "active") ?? state.tasks[0] ?? null;
   const activeTask = activeSession
     ? (usesPersistedExecution ? persistedTasks : state.tasks).find(
@@ -246,6 +247,36 @@ export default function ExecutePage() {
           <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
             Data source: <strong>{executeState.provider}</strong>
           </p>
+        ) : null}
+        {actionState.status === "saving" ? (
+          <p role="status">Saving {actionState.label}...</p>
+        ) : null}
+        {actionState.status === "saved" ? (
+          <section
+            role="status"
+            style={{
+              border: "1px solid #86efac",
+              background: "#f0fdf4",
+              borderRadius: "8px",
+              padding: "1rem",
+            }}
+          >
+            {actionState.label} <strong>{actionState.provider}</strong>.
+          </section>
+        ) : null}
+        {actionState.status === "error" ? (
+          <section
+            role="alert"
+            style={{
+              border: "1px solid #fca5a5",
+              background: "#fef2f2",
+              borderRadius: "8px",
+              padding: "1rem",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Execution change was not saved</h2>
+            <p>{actionState.message}</p>
+          </section>
         ) : null}
         <EmptyState
           title="No active block."
