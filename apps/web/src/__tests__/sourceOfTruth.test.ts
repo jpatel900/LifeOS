@@ -85,15 +85,25 @@ describe("source-of-truth boundaries", () => {
       readRepoFile("apps/web/src/app/api/google-calendar/freebusy/route.ts"),
     ).not.toThrow();
     expect(() =>
-      readRepoFile("apps/web/src/app/api/google-calendar/create-event/route.ts"),
+      readRepoFile(
+        "apps/web/src/app/api/google-calendar/create-event/route.ts",
+      ),
     ).not.toThrow();
     expect(() =>
       readRepoFile("apps/web/src/app/api/google-calendar/write-event/route.ts"),
     ).toThrow();
-    expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/oauth["']/);
-    expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/server["']/);
-    expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/freebusy["']/);
-    expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/events["']/);
+    expect(clientSource).not.toMatch(
+      /from ["']@\/lib\/googleCalendar\/oauth["']/,
+    );
+    expect(clientSource).not.toMatch(
+      /from ["']@\/lib\/googleCalendar\/server["']/,
+    );
+    expect(clientSource).not.toMatch(
+      /from ["']@\/lib\/googleCalendar\/freebusy["']/,
+    );
+    expect(clientSource).not.toMatch(
+      /from ["']@\/lib\/googleCalendar\/events["']/,
+    );
 
     const freebusyRoute = readRepoFile(
       "apps/web/src/app/api/google-calendar/freebusy/route.ts",

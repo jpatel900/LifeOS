@@ -258,8 +258,9 @@ export const healthChecks: Phase2MockHealthCheck[] = [
   },
 ];
 
-export function getAreaById(areaId: string | null | undefined): Phase2MockArea | undefined {
+export function getAreaById(
+  areaId: string | null | undefined,
+): Phase2MockArea | undefined {
   if (!areaId) return undefined;
   return areas.find((a) => a.id === areaId);
 }
-

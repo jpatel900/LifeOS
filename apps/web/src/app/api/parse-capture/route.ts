@@ -27,7 +27,9 @@ function parseRequestBody(body: unknown) {
     }
   }
 
-  const areaItems = Array.isArray(record.areaContext) ? record.areaContext : undefined;
+  const areaItems = Array.isArray(record.areaContext)
+    ? record.areaContext
+    : undefined;
   const areaContext = areaItems?.map((item) => {
     if (
       !item ||
@@ -81,7 +83,8 @@ export async function POST(request: Request) {
 
   try {
     const input = parseRequestBody(await request.json());
-    const forceMock = input.parserMode === "mock" || status.status === "ai_unavailable";
+    const forceMock =
+      input.parserMode === "mock" || status.status === "ai_unavailable";
     const result = await parseCaptureWithFallback(input, { forceMock });
 
     return Response.json({

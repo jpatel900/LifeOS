@@ -96,4 +96,3 @@ describe("local mock workflow", () => {
     expect(next.captureItems[0].id).toBe("capture-6");
   });
 });
-

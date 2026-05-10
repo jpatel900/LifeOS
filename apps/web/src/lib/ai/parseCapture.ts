@@ -1,5 +1,8 @@
 import type { ParseCaptureResponse } from "@lifeos/schemas";
-import { parseCaptureResponseFormat, validateParseCaptureResponse } from "./contracts/parseCapture";
+import {
+  parseCaptureResponseFormat,
+  validateParseCaptureResponse,
+} from "./contracts/parseCapture";
 import {
   buildParseCaptureMessages,
   type ParseCaptureAreaContext,

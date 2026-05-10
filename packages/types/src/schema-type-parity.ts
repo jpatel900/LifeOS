@@ -10,11 +10,10 @@ import type {
   CaptureItem as TypesCaptureItem,
 } from "./index";
 
-type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y
-  ? 1
-  : 2
-  ? true
-  : false;
+type Equal<X, Y> =
+  (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2
+    ? true
+    : false;
 
 type Expect<T extends true> = T;
 

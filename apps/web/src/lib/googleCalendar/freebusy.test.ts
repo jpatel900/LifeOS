@@ -74,7 +74,9 @@ describe("Google Calendar free/busy helper", () => {
       scope: null,
       tokenType: "Bearer",
     });
-    mocks.encryptGoogleCalendarToken.mockReturnValue("encrypted-refreshed-access");
+    mocks.encryptGoogleCalendarToken.mockReturnValue(
+      "encrypted-refreshed-access",
+    );
     vi.mocked(fetch).mockResolvedValue(
       new Response(
         JSON.stringify({

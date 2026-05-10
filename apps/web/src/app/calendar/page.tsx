@@ -56,7 +56,8 @@ type GoogleCalendarConnectionResponse = {
 
 function nextLocalSlot(task: Task) {
   const start = new Date(Date.now() + 60 * 60 * 1000);
-  const minutes = task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
+  const minutes =
+    task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
   const end = new Date(start.getTime() + minutes * 60 * 1000);
 
   return {
@@ -65,7 +66,9 @@ function nextLocalSlot(task: Task) {
   };
 }
 
-function proposalRationale(proposal: TimeBlockProposal | { rationale: string }) {
+function proposalRationale(
+  proposal: TimeBlockProposal | { rationale: string },
+) {
   if ("rationale" in proposal) {
     return proposal.rationale;
   }
@@ -125,7 +128,9 @@ export default function CalendarPage() {
   const [planningState, setPlanningState] = useState<PlanningState>({
     status: "loading",
   });
-  const [actionState, setActionState] = useState<ActionState>({ status: "idle" });
+  const [actionState, setActionState] = useState<ActionState>({
+    status: "idle",
+  });
   const [googleConnectionState, setGoogleConnectionState] =
     useState<GoogleConnectionState>({ status: "loading" });
   const [acknowledgeFirstWriteWarning, setAcknowledgeFirstWriteWarning] =
@@ -247,10 +252,13 @@ export default function CalendarPage() {
     setActionState({ status: "saving", label: task.title });
 
     try {
-      const result = await createTimeBlockProposal(createSupabaseBrowserClient(), {
-        task_id: task.id,
-        ...nextLocalSlot(task),
-      });
+      const result = await createTimeBlockProposal(
+        createSupabaseBrowserClient(),
+        {
+          task_id: task.id,
+          ...nextLocalSlot(task),
+        },
+      );
 
       setPlanningState((current) =>
         current.status === "ready" && current.provider === "supabase"
@@ -474,17 +482,24 @@ export default function CalendarPage() {
     if (usesPersistedPlanning || !selectedAreaId) return true;
     return block.area_id === selectedAreaId;
   });
-  const hasAny = persistedTasks.length > 0 || proposals.length > 0 || blocks.length > 0;
+  const hasAny =
+    persistedTasks.length > 0 || proposals.length > 0 || blocks.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section>
         <h1>Calendar / Planning</h1>
-        <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
+        <p
+          style={{
+            marginTop: "0.25rem",
+            color: "#4b5563",
+            fontSize: "0.95rem",
+          }}
+        >
           This view keeps local time-block proposals as the source of truth.
           Google Calendar conflict checks are optional and advisory only when a
-          server-side connection exists. Accepting a proposal still creates a local
-          scheduled block only.
+          server-side connection exists. Accepting a proposal still creates a
+          local scheduled block only.
         </p>
       </section>
 
@@ -523,7 +538,9 @@ export default function CalendarPage() {
             padding: "1rem",
           }}
         >
-          <h2 style={{ marginTop: 0 }}>Google Calendar status could not load</h2>
+          <h2 style={{ marginTop: 0 }}>
+            Google Calendar status could not load
+          </h2>
           <p>{googleConnectionState.message}</p>
         </section>
       ) : null}
@@ -664,7 +681,9 @@ export default function CalendarPage() {
                     : getAreaById(proposal.area_id);
                   const conflictSummary = proposalConflictSummary(proposal);
                   const task = usesPersistedPlanning
-                    ? persistedTasks.find((item) => item.id === proposal.task_id)
+                    ? persistedTasks.find(
+                        (item) => item.id === proposal.task_id,
+                      )
                     : state.tasks.find((item) => item.id === proposal.task_id);
                   const googleBlock = usesPersistedPlanning
                     ? blocks.find(
@@ -705,11 +724,13 @@ export default function CalendarPage() {
                         {task?.title ?? "Unassigned block"}
                       </div>
                       <div style={{ color: "#6b7280" }}>
-                        {new Date(proposal.proposed_start).toLocaleTimeString()} -{" "}
-                        {new Date(proposal.proposed_end).toLocaleTimeString()}
+                        {new Date(proposal.proposed_start).toLocaleTimeString()}{" "}
+                        - {new Date(proposal.proposed_end).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div style={{ color: "#6b7280" }}>Area: {area.name}</div>
+                        <div style={{ color: "#6b7280" }}>
+                          Area: {area.name}
+                        </div>
                       ) : null}
                       <div style={{ color: "#4b5563" }}>
                         {proposalRationale(proposal)}
@@ -740,8 +761,9 @@ export default function CalendarPage() {
                             }
                           />
                           <span>
-                            I understand this creates an event in Google Calendar.
-                            If the write fails, the local proposal stays unchanged.
+                            I understand this creates an event in Google
+                            Calendar. If the write fails, the local proposal
+                            stays unchanged.
                           </span>
                         </label>
                       ) : null}
@@ -789,7 +811,9 @@ export default function CalendarPage() {
                         </Button>
                         <Button
                           type="button"
-                          onClick={() => void handleCreateGoogleEvent(proposal.id)}
+                          onClick={() =>
+                            void handleCreateGoogleEvent(proposal.id)
+                          }
                           disabled={
                             actionState.status === "saving" ||
                             !googleWriteAllowed
@@ -817,7 +841,9 @@ export default function CalendarPage() {
                           type="button"
                           onClick={() =>
                             usesPersistedPlanning
-                              ? void handleEditProposal(proposal as TimeBlockProposal)
+                              ? void handleEditProposal(
+                                  proposal as TimeBlockProposal,
+                                )
                               : editLocalProposal(proposal.id, {
                                   proposed_start: editedStart.toISOString(),
                                   proposed_end: editedEnd.toISOString(),
@@ -910,7 +936,9 @@ export default function CalendarPage() {
                         {new Date(block.end_at).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div style={{ color: "#6b7280" }}>Area: {area.name}</div>
+                        <div style={{ color: "#6b7280" }}>
+                          Area: {area.name}
+                        </div>
                       ) : null}
                       <span style={{ fontSize: "0.7rem", color: "#6b7280" }}>
                         Status: {block.status}
@@ -924,11 +952,13 @@ export default function CalendarPage() {
         </div>
       )}
 
-      <section style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}>
+      <section
+        style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}
+      >
         <p style={{ margin: 0 }}>
-          Time proposals stay local first. Free/busy checks are manual and advisory
-          only. No Google Calendar events, OpenAI scheduling, autonomous
-          rescheduling, or background calendar changes happen here.
+          Time proposals stay local first. Free/busy checks are manual and
+          advisory only. No Google Calendar events, OpenAI scheduling,
+          autonomous rescheduling, or background calendar changes happen here.
         </p>
       </section>
     </div>

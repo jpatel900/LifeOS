@@ -39,9 +39,7 @@ function formatAreaContext(areaContext: ParseCaptureAreaContext[] | undefined) {
     return "No area context was provided.";
   }
 
-  return areaContext
-    .map((area) => `- ${area.slug}: ${area.name}`)
-    .join("\n");
+  return areaContext.map((area) => `- ${area.slug}: ${area.name}`).join("\n");
 }
 
 export function buildParseCaptureMessages(

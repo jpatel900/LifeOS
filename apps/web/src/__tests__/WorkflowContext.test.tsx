@@ -33,7 +33,9 @@ function WorkflowProbe() {
       <span data-testid="capture-count">{state.captureItems.length}</span>
       <button
         type="button"
-        onClick={() => submitCaptureText("Follow up with Alex", "area-main-job")}
+        onClick={() =>
+          submitCaptureText("Follow up with Alex", "area-main-job")
+        }
       >
         Add capture
       </button>
@@ -165,7 +167,9 @@ describe("WorkflowProvider storage fallback", () => {
       </WorkflowProvider>,
     );
 
-    expect(await screen.findByText("Nothing to triage right now.")).toBeDefined();
+    expect(
+      await screen.findByText("Nothing to triage right now."),
+    ).toBeDefined();
   });
 
   it("keeps the workflow usable when sessionStorage cannot be written", () => {
@@ -214,7 +218,9 @@ describe("WorkflowProvider storage fallback", () => {
       </WorkflowProvider>,
     );
 
-    expect(screen.getByTestId("first-render-capture-count")).toHaveTextContent("0");
+    expect(screen.getByTestId("first-render-capture-count")).toHaveTextContent(
+      "0",
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId("capture-count")).toHaveTextContent("1");

@@ -20,6 +20,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 1) Foundation
 
 ### FND-001 — Monorepo/app skeleton and shared package layout
+
 - **Goal:** Establish the expected repo structure (`apps/web`, `packages/*`, `supabase/*`, `docs`) and baseline toolchain.
 - **Files likely touched:** `apps/web/*`, `packages/schemas/*`, `packages/types/*`, `packages/ui/*`, `packages/utils/*`, `supabase/*`, root config files.
 - **Dependencies:** None.
@@ -35,6 +36,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### FND-002 — Environment variable contract and config guardrails
+
 - **Goal:** Define and document required env vars (AI model tiers, Supabase, calendar integration) with safe defaults and startup validation.
 - **Files likely touched:** `.env.example`, `apps/web/*config*`, `apps/web/*env*`, `docs/*`.
 - **Dependencies:** FND-001.
@@ -48,6 +50,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### FND-003 — Shared schema/versioning conventions and doc baseline
+
 - **Goal:** Add schema-first conventions (schema version, prompt version, validation pattern) before feature implementation.
 - **Files likely touched:** `packages/schemas/*`, `packages/types/*`, `docs/*`, `AGENTS.md` references if needed.
 - **Dependencies:** FND-001.
@@ -63,6 +66,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 2) Data Model
 
 ### DM-001 — Initial migration set for core scope/workflow tables
+
 - **Goal:** Create initial Postgres migrations for `areas`, `global_defaults`, `capture_items`, `projects`, `tasks`, `time_block_proposals`, `calendar_blocks`, `execution_sessions`, `review_entries`.
 - **Files likely touched:** `supabase/migrations/*`, `DATA_MODEL.md` (if adjustments required).
 - **Dependencies:** FND-001.
@@ -76,6 +80,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Cursor/local review preferred** (DB structure risk).
 
 ### DM-002 — Meta-learning, audit, and health tables
+
 - **Goal:** Add remaining tables: `ambiguity_assessments`, `discovery_questions`, profiles, suggestions/overrides, `health_checks`, `health_incidents`, `repair_guides`, `external_write_events`, `ai_recommendations`, `user_decisions`.
 - **Files likely touched:** `supabase/migrations/*`, `DATA_MODEL.md`.
 - **Dependencies:** DM-001.
@@ -88,6 +93,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Cursor/local review preferred**.
 
 ### DM-003 — Shared TypeScript types generated/aligned with schema
+
 - **Goal:** Ensure app/runtime types are consistent with DB and shared schema objects.
 - **Files likely touched:** `packages/types/*`, `packages/schemas/*`, optional generated type outputs.
 - **Dependencies:** DM-001, DM-002.
@@ -103,6 +109,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 3) Auth/Security
 
 ### SEC-001 — RLS enablement and policies for all user-owned tables
+
 - **Goal:** Enforce deny-by-default data isolation using `auth.uid() = user_id` policy pattern.
 - **Files likely touched:** `supabase/migrations/*` (RLS + policies), `SECURITY_PRIVACY.md` notes if needed.
 - **Dependencies:** DM-001, DM-002.
@@ -116,6 +123,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Must stay in Cursor/local review** (forbidden-change zone).
 
 ### SEC-002 — Auth-guarded route shell and session gating
+
 - **Goal:** Protect app routes except login and enforce authenticated session behavior.
 - **Files likely touched:** `apps/web/app/*`, auth middleware/guards, auth client setup.
 - **Dependencies:** FND-001, SEC-001.
@@ -129,6 +137,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex** (with local verification).
 
 ### SEC-003 — External write safety contract (approval gate + audit hook)
+
 - **Goal:** Define backend write contract requiring explicit approval flag and audit event creation for external actions.
 - **Files likely touched:** `packages/types/*`, `packages/schemas/*`, server function stubs, `docs/*`.
 - **Dependencies:** SEC-001.
@@ -146,6 +155,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 4) Mock UI Flows
 
 ### UI-001 — Navigation scaffold for V1 routes
+
 - **Goal:** Create basic routes/screens: capture, triage, calendar/planning, execute, daily review, weekly review, health, settings.
 - **Files likely touched:** `apps/web/app/*`, `apps/web/components/*`.
 - **Dependencies:** FND-001, SEC-002.
@@ -158,6 +168,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### UI-002 — First-time setup flow (areas + optional calendar connect placeholder)
+
 - **Goal:** Implement lightweight onboarding with default areas and optional integration step.
 - **Files likely touched:** `apps/web/app/*`, `apps/web/components/*`, seed/init logic.
 - **Dependencies:** UI-001, DM-001.
@@ -171,6 +182,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### UI-003 — Mocked Capture → Triage → Accept flow (no real AI yet)
+
 - **Goal:** Deliver UX skeleton using deterministic mock data for parsed drafts and triage actions.
 - **Files likely touched:** `apps/web/app/capture/*`, `apps/web/app/triage/*`, mock adapters.
 - **Dependencies:** UI-001, DM-001.
@@ -188,6 +200,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 5) AI Parsing
 
 ### AI-001 — Implement V1 structured schemas in `packages/schemas`
+
 - **Goal:** Create required AI output schemas (`ParseCaptureResponse`, `AmbiguityAssessmentResponse`, etc.) with strict validation.
 - **Files likely touched:** `packages/schemas/*`, `packages/types/*`.
 - **Dependencies:** FND-003.
@@ -200,6 +213,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### AI-002 — `parse_capture` function with mock AI adapter
+
 - **Goal:** Implement parse flow with deterministic mock adapter first, including raw-capture-first persistence and recoverable errors.
 - **Files likely touched:** `supabase/functions/parse_capture/*`, `apps/web` integration points, `packages/schemas/*`.
 - **Dependencies:** DM-001, AI-001.
@@ -213,6 +227,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### AI-003 — Real AI adapter wiring with privacy and validation controls
+
 - **Goal:** Replace mock adapter with Responses API structured outputs, enforce `store: false` where supported, schema validation, and version logging.
 - **Files likely touched:** AI adapter modules, `supabase/functions/parse_capture/*`, env/config files.
 - **Dependencies:** AI-002, FND-002.
@@ -231,6 +246,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 6) Calendar Proposal Flow
 
 ### CAL-001 — Local time-block proposal engine (no external writes)
+
 - **Goal:** Implement proposal generation from task + area preferences + optional free/busy checks, with conflict flagging.
 - **Files likely touched:** `supabase/functions/propose_blocks/*`, planning UI files, relevant schema/types.
 - **Dependencies:** AI-002, DM-001, UI-003.
@@ -244,6 +260,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### CAL-002 — Approval-gated calendar write function + idempotency
+
 - **Goal:** Implement `approve_calendar_write` with explicit approval check, duplicate prevention, and `external_write_events` logging.
 - **Files likely touched:** `supabase/functions/approve_calendar_write/*`, calendar adapter wrapper, audit table usage.
 - **Dependencies:** CAL-001, SEC-003, DM-002.
@@ -258,6 +275,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Must stay in Cursor/local review** (critical external write logic).
 
 ### CAL-003 — Calendar UI confirm flow and error recovery
+
 - **Goal:** Add final confirmation UX, visible write result, and retry-safe failure handling.
 - **Files likely touched:** `apps/web/app/calendar/*`, `apps/web/components/*`.
 - **Dependencies:** CAL-002.
@@ -275,6 +293,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 7) Execution/Session Tracking
 
 ### EXE-001 — Execute screen and single-task session controls
+
 - **Goal:** Build one-task execution UI (timer, pause, distracted, stuck, complete/stop, quick capture side panel).
 - **Files likely touched:** `apps/web/app/execute/*`, shared UI components.
 - **Dependencies:** UI-001, DM-001.
@@ -288,6 +307,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### EXE-002 — `mark_block_result` and session persistence
+
 - **Goal:** Persist execution outcomes and update block status/logs for completed/missed/partial sessions.
 - **Files likely touched:** `supabase/functions/mark_block_result/*`, data write adapters.
 - **Dependencies:** EXE-001, DM-001.
@@ -301,6 +321,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### EXE-003 — Missed block recovery proposal loop
+
 - **Goal:** Implement UX + backend path to mark missed and create replacement proposals without autonomous write.
 - **Files likely touched:** `apps/web/app/calendar/*`, `supabase/functions/propose_blocks/*`, state transition code.
 - **Dependencies:** EXE-002, CAL-001.
@@ -317,6 +338,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 8) Review/Health
 
 ### RVH-001 — Daily/weekly review data and UI flows
+
 - **Goal:** Implement review screens showing completed/missed/moved/blocked/open items and area-level weekly patterns.
 - **Files likely touched:** `apps/web/app/review/*`, review query/services, `review_entries` usage.
 - **Dependencies:** EXE-002, CAL-001.
@@ -330,6 +352,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### RVH-002 — Deterministic health engine + incidents
+
 - **Goal:** Implement rule-based health scoring and incident tracking by subsystem and area.
 - **Files likely touched:** `supabase/functions/health_check/*`, health scoring modules, health UI.
 - **Dependencies:** DM-002, SEC-001.
@@ -343,6 +366,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### RVH-003 — AI narrative layer for health/review explanations (non-authoritative)
+
 - **Goal:** Add optional AI-generated explanation text that never controls scores or external actions.
 - **Files likely touched:** review/health AI adapters, schema files, UI display components.
 - **Dependencies:** RVH-001, RVH-002, AI-003.
@@ -359,6 +383,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 ## 9) Deployment
 
 ### DEP-001 — Preview environment wiring (web + Supabase project strategy)
+
 - **Goal:** Define and implement preview deployment with separated environment configuration.
 - **Files likely touched:** deployment configs, environment docs, CI config.
 - **Dependencies:** FND-002, SEC-002.
@@ -371,6 +396,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### DEP-002 — CI checks as merge gate
+
 - **Goal:** Add mandatory checks: lint, typecheck, unit, integration, schema tests, and RLS tests where applicable.
 - **Files likely touched:** CI workflow config, test scripts, package scripts.
 - **Dependencies:** Core test suites from prior phases.
@@ -383,6 +409,7 @@ Each ticket includes goal, likely files, dependencies, acceptance criteria, requ
 - **Execution safety:** **Safe for Codex**.
 
 ### DEP-003 — Production readiness checklist and runbook
+
 - **Goal:** Create go-live checklist covering security/privacy, calendar safety, rollback, and operational checks.
 - **Files likely touched:** `docs/*` runbook/checklist files, root README links.
 - **Dependencies:** SEC-001, CAL-002, DEP-002.

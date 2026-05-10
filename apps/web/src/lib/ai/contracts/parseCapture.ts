@@ -110,10 +110,7 @@ export const parseCaptureResponseJsonSchema: JsonSchema = {
     drafts: {
       type: "array",
       items: {
-        anyOf: [
-          taskDraftSchema,
-          projectDraftSchema,
-        ],
+        anyOf: [taskDraftSchema, projectDraftSchema],
       },
     },
     clarification_questions: { type: "array", items: { type: "string" } },
@@ -142,10 +139,14 @@ export const parseCaptureResponseFormat = {
   schema: parseCaptureResponseJsonSchema,
 } as const;
 
-export function validateParseCaptureResponse(payload: unknown): ParseCaptureResponse {
+export function validateParseCaptureResponse(
+  payload: unknown,
+): ParseCaptureResponse {
   const result = ParseCaptureResponseSchema.safeParse(payload);
   if (!result.success) {
-    throw new Error(`Parse capture response failed validation: ${result.error.message}`);
+    throw new Error(
+      `Parse capture response failed validation: ${result.error.message}`,
+    );
   }
 
   return result.data;

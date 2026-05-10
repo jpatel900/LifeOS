@@ -41,7 +41,9 @@ describe("workflow route provider wiring", () => {
 
     expect(await screen.findByText("mock")).toBeDefined();
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
-    expect(screen.getByRole("heading", { level: 1, name: "Capture" })).toBeDefined();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Capture" }),
+    ).toBeDefined();
     expect(
       screen.getByPlaceholderText("What's on your mind? Type anything..."),
     ).toBeDefined();
@@ -53,19 +55,24 @@ describe("workflow route provider wiring", () => {
     ["execute", () => <ExecutePage />],
     ["review", () => <ReviewPage />],
     ["health", () => <HealthPage />],
-  ])("renders the %s route without a manual WorkflowProvider", async (_name, createPage) => {
-    renderThroughAppShell(createPage());
+  ])(
+    "renders the %s route without a manual WorkflowProvider",
+    async (_name, createPage) => {
+      renderThroughAppShell(createPage());
 
-    expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
-    expect(screen.getByLabelText("Current area context")).toHaveTextContent("Area:");
-    if (
-      _name === "triage" ||
-      _name === "calendar" ||
-      _name === "execute" ||
-      _name === "review" ||
-      _name === "health"
-    ) {
-      expect(await screen.findByText("mock")).toBeDefined();
-    }
-  });
+      expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
+      expect(screen.getByLabelText("Current area context")).toHaveTextContent(
+        "Area:",
+      );
+      if (
+        _name === "triage" ||
+        _name === "calendar" ||
+        _name === "execute" ||
+        _name === "review" ||
+        _name === "health"
+      ) {
+        expect(await screen.findByText("mock")).toBeDefined();
+      }
+    },
+  );
 });

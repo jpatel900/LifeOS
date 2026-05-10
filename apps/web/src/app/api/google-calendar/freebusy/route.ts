@@ -68,8 +68,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "Connect Google Calendar before checking proposal conflicts.",
+          error: "Connect Google Calendar before checking proposal conflicts.",
         },
         { status: 409 },
       );

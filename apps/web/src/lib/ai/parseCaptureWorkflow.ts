@@ -104,33 +104,37 @@ export function buildParsedWorkflowResult(
     }));
 
   const assessment = input.response.ambiguity_assessment;
-  const ambiguityAssessment: Phase2AmbiguityAssessmentResponse | null = assessment
-    ? {
-        id: makeId("ambiguity"),
-        user_id: input.capture.user_id,
-        area_id: input.workflowAreaId,
-        source_capture_item_id: input.capture.id,
-        likely_objective: assessment.likely_objective ?? input.capture.raw_text,
-        possible_workstreams: input.response.drafts.map((draft) => draft.title),
-        knowns: assessment.knowns,
-        unknowns: assessment.unknowns,
-        assumptions: assessment.assumptions,
-        constraints: assessment.constraints,
-        risks: assessment.risks,
-        dependencies: assessment.dependencies,
-        recommended_first_move:
-          assessment.recommended_first_move ??
-          input.response.clarification_questions[0] ??
-          "Review this capture in triage.",
-        what_not_to_do_yet: assessment.what_not_to_do_yet,
-        confidence_score: assessment.confidence,
-        review_trigger:
-          assessment.review_trigger ??
-          input.response.triage_reasons[0] ??
-          "Review in triage.",
-        created_at: new Date().toISOString(),
-      }
-    : null;
+  const ambiguityAssessment: Phase2AmbiguityAssessmentResponse | null =
+    assessment
+      ? {
+          id: makeId("ambiguity"),
+          user_id: input.capture.user_id,
+          area_id: input.workflowAreaId,
+          source_capture_item_id: input.capture.id,
+          likely_objective:
+            assessment.likely_objective ?? input.capture.raw_text,
+          possible_workstreams: input.response.drafts.map(
+            (draft) => draft.title,
+          ),
+          knowns: assessment.knowns,
+          unknowns: assessment.unknowns,
+          assumptions: assessment.assumptions,
+          constraints: assessment.constraints,
+          risks: assessment.risks,
+          dependencies: assessment.dependencies,
+          recommended_first_move:
+            assessment.recommended_first_move ??
+            input.response.clarification_questions[0] ??
+            "Review this capture in triage.",
+          what_not_to_do_yet: assessment.what_not_to_do_yet,
+          confidence_score: assessment.confidence,
+          review_trigger:
+            assessment.review_trigger ??
+            input.response.triage_reasons[0] ??
+            "Review in triage.",
+          created_at: new Date().toISOString(),
+        }
+      : null;
 
   return {
     captureItem,

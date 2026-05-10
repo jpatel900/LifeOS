@@ -152,7 +152,9 @@ export function createInitialWorkflowState(): WorkflowState {
   };
 }
 
-export function mockParseCapture(input: ParseCaptureInput): MockParseCaptureResponse {
+export function mockParseCapture(
+  input: ParseCaptureInput,
+): MockParseCaptureResponse {
   const rawText = input.rawText.trim();
   if (!rawText) {
     throw new Error("Capture text is required.");
@@ -216,7 +218,11 @@ export function mockParseCapture(input: ParseCaptureInput): MockParseCaptureResp
       area_id: areaId,
       source_capture_item_id: captureItemId,
       likely_objective: title,
-      possible_workstreams: ["Clarify goal", "Identify owner", "Schedule first move"],
+      possible_workstreams: [
+        "Clarify goal",
+        "Identify owner",
+        "Schedule first move",
+      ],
       knowns: [rawText],
       unknowns: ["Exact deadline", "Definition of done"],
       assumptions: ["This should become a task before being scheduled."],
@@ -224,7 +230,9 @@ export function mockParseCapture(input: ParseCaptureInput): MockParseCaptureResp
       risks: ["Scheduling before clarifying details may create rework."],
       dependencies: ["User review in triage."],
       recommended_first_move: firstMove,
-      what_not_to_do_yet: ["Do not create a full plan before clarifying the first move."],
+      what_not_to_do_yet: [
+        "Do not create a full plan before clarifying the first move.",
+      ],
       confidence_score: 0.72,
       review_trigger: "Review in triage before committing task.",
       created_at: createdAt,
@@ -305,7 +313,10 @@ export function editDraft(
   };
 }
 
-export function rejectDraft(state: WorkflowState, draftId: string): WorkflowState {
+export function rejectDraft(
+  state: WorkflowState,
+  draftId: string,
+): WorkflowState {
   const draft = state.taskDrafts.find((d) => d.id === draftId);
   return {
     ...state,
@@ -349,7 +360,8 @@ export function acceptProjectDraft(
   }
 
   const existingProject = state.projects.find(
-    (project) => project.title === draft.title && project.area_id === draft.area_id,
+    (project) =>
+      project.title === draft.title && project.area_id === draft.area_id,
   );
   if (existingProject) {
     return state;
@@ -382,7 +394,10 @@ export function acceptProjectDraft(
   };
 }
 
-export function acceptDraft(state: WorkflowState, draftId: string): WorkflowState {
+export function acceptDraft(
+  state: WorkflowState,
+  draftId: string,
+): WorkflowState {
   const draft = state.taskDrafts.find((item) => item.id === draftId);
   if (!draft || draft.status !== "pending") {
     return state;
@@ -483,7 +498,9 @@ export function rejectProposal(
   state: WorkflowState,
   proposalId: string,
 ): WorkflowState {
-  const proposal = state.timeBlockProposals.find((item) => item.id === proposalId);
+  const proposal = state.timeBlockProposals.find(
+    (item) => item.id === proposalId,
+  );
   return {
     ...state,
     timeBlockProposals: state.timeBlockProposals.map((item) =>
@@ -499,7 +516,9 @@ export function acceptProposal(
   state: WorkflowState,
   proposalId: string,
 ): WorkflowState {
-  const proposal = state.timeBlockProposals.find((item) => item.id === proposalId);
+  const proposal = state.timeBlockProposals.find(
+    (item) => item.id === proposalId,
+  );
   if (!proposal || proposal.status === "accepted") {
     return state;
   }
@@ -525,7 +544,10 @@ export function acceptProposal(
       item.id === proposalId ? { ...item, status: "accepted" } : item,
     ),
     calendarBlocks: [block, ...state.calendarBlocks],
-    reviewLog: [`Accepted local proposal for task ${proposal.task_id}`, ...state.reviewLog],
+    reviewLog: [
+      `Accepted local proposal for task ${proposal.task_id}`,
+      ...state.reviewLog,
+    ],
   };
 }
 
@@ -538,7 +560,8 @@ export function startExecutionSession(
     return state;
   }
 
-  const block = state.calendarBlocks.find((item) => item.task_id === taskId) ?? null;
+  const block =
+    state.calendarBlocks.find((item) => item.task_id === taskId) ?? null;
   const session: Phase2MockExecutionSession = {
     id: nextId("session"),
     user_id: task.user_id,
@@ -593,15 +616,15 @@ export function markCurrentSession(
             ...session,
             status,
             outcome,
-            actual_minutes: status === "completed" ? 45 : session.actual_minutes,
+            actual_minutes:
+              status === "completed" ? 45 : session.actual_minutes,
             distraction_minutes:
               status === "distracted" ? 10 : session.distraction_minutes,
             paused_minutes: status === "paused" ? 5 : session.paused_minutes,
-            productivity_rating: status === "completed" ? 4 : session.productivity_rating,
+            productivity_rating:
+              status === "completed" ? 4 : session.productivity_rating,
             notes:
-              status === "stuck"
-                ? "Need a smaller next step."
-                : session.notes,
+              status === "stuck" ? "Need a smaller next step." : session.notes,
           }
         : session,
     ),
@@ -620,4 +643,3 @@ export function markCurrentSession(
     reviewLog: [`Session marked ${status}`, ...state.reviewLog],
   };
 }
-

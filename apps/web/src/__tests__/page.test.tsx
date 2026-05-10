@@ -6,7 +6,7 @@ describe("HomePage", () => {
   it("renders the heading", () => {
     render(<HomePage />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "LifeOS"
+      "LifeOS",
     );
   });
 
@@ -14,7 +14,7 @@ describe("HomePage", () => {
     render(<HomePage />);
     expect(screen.getByText("Quick Capture")).toBeDefined();
     expect(
-      screen.getByText(/Use the Capture screen in the navigation above/)
+      screen.getByText(/Use the Capture screen in the navigation above/),
     ).toBeDefined();
   });
 });

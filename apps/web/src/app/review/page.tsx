@@ -45,8 +45,12 @@ function todayIsoDate() {
 
 export default function ReviewPage() {
   const { state } = useWorkflow();
-  const [reviewState, setReviewState] = useState<ReviewState>({ status: "loading" });
-  const [actionState, setActionState] = useState<ActionState>({ status: "idle" });
+  const [reviewState, setReviewState] = useState<ReviewState>({
+    status: "loading",
+  });
+  const [actionState, setActionState] = useState<ActionState>({
+    status: "idle",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +77,9 @@ export default function ReviewPage() {
           setReviewState({
             status: "error",
             message:
-              error instanceof Error ? error.message : "Unable to load review rows.",
+              error instanceof Error
+                ? error.message
+                : "Unable to load review rows.",
           });
         }
       }
@@ -89,7 +95,9 @@ export default function ReviewPage() {
   const usesPersistedReview =
     reviewState.status === "ready" && reviewState.provider === "supabase";
   const tasks = usesPersistedReview ? reviewState.tasks : state.tasks;
-  const blocks = usesPersistedReview ? reviewState.blocks : state.calendarBlocks;
+  const blocks = usesPersistedReview
+    ? reviewState.blocks
+    : state.calendarBlocks;
   const sessions = usesPersistedReview
     ? reviewState.sessions
     : state.executionSessions;
@@ -102,7 +110,9 @@ export default function ReviewPage() {
       : session.outcome === "completed",
   );
   const missed = sessions.filter((session) =>
-    "status" in session ? session.status === "missed" : session.outcome === "skipped",
+    "status" in session
+      ? session.status === "missed"
+      : session.outcome === "skipped",
   );
   const distracted = sessions.filter((session) =>
     "status" in session
@@ -110,12 +120,16 @@ export default function ReviewPage() {
       : session.outcome === "distracted",
   );
   const stuck = sessions.filter((session) =>
-    "status" in session ? session.status === "stuck" : session.outcome === "blocked",
+    "status" in session
+      ? session.status === "stuck"
+      : session.outcome === "blocked",
   );
   const openTasks = tasks.filter((task) => task.status === "active");
   const areaSummaries = areas.map((area) => {
     const areaTasks = tasks.filter((task) => task.area_id === area.id);
-    const areaSessions = sessions.filter((session) => session.area_id === area.id);
+    const areaSessions = sessions.filter(
+      (session) => session.area_id === area.id,
+    );
     return {
       area,
       open: areaTasks.filter((task) => task.status === "active").length,
@@ -129,7 +143,8 @@ export default function ReviewPage() {
     distracted_sessions: distracted.length,
     stuck_sessions: stuck.length,
     open_tasks: openTasks.length,
-    scheduled_blocks: blocks.filter((block) => block.status === "scheduled").length,
+    scheduled_blocks: blocks.filter((block) => block.status === "scheduled")
+      .length,
   };
 
   async function handleCreateDailyReview() {
@@ -158,7 +173,9 @@ export default function ReviewPage() {
       setActionState({
         status: "error",
         message:
-          error instanceof Error ? error.message : "Unable to create review entry.",
+          error instanceof Error
+            ? error.message
+            : "Unable to create review entry.",
       });
     }
   }
@@ -167,9 +184,15 @@ export default function ReviewPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section>
         <h1>Review</h1>
-        <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
-          Review summarizes tasks, local blocks, and execution sessions. No AI or
-          external integrations are called in Phase 4D.
+        <p
+          style={{
+            marginTop: "0.25rem",
+            color: "#4b5563",
+            fontSize: "0.95rem",
+          }}
+        >
+          Review summarizes tasks, local blocks, and execution sessions. No AI
+          or external integrations are called in Phase 4D.
         </p>
       </section>
 
@@ -257,14 +280,18 @@ export default function ReviewPage() {
             padding: "0.75rem 1rem",
           }}
         >
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Daily review</h2>
+          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
+            Daily review
+          </h2>
           {state.captureItems.length === 0 && sessions.length === 0 ? (
             <EmptyState
               title="No daily review yet."
               description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
             />
           ) : (
-            <ul style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}>
+            <ul
+              style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}
+            >
               <li>Captured: {state.captureItems.length}</li>
               <li>Accepted tasks: {tasks.length}</li>
               <li>Completed sessions: {completed.length}</li>
@@ -282,44 +309,55 @@ export default function ReviewPage() {
             border: "1px solid #e5e7eb",
             padding: "0.75rem 1rem",
           }}
-          >
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>Weekly review</h2>
+        >
+          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
+            Weekly review
+          </h2>
           {tasks.length === 0 ? (
             <EmptyState
               title="No weekly review yet."
               description="Area-level patterns will appear here once you accept tasks and run sessions."
             />
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
               {areaSummaries
-                .filter((summary) => summary.open + summary.done + summary.sessions > 0)
+                .filter(
+                  (summary) =>
+                    summary.open + summary.done + summary.sessions > 0,
+                )
                 .map((summary) => {
-                const area = getAreaById(summary.area.id);
-                return (
-                  <div
-                    key={summary.area.id}
-                    style={{
-                      borderRadius: "0.75rem",
-                      border: "1px solid #e5e7eb",
-                      padding: "0.5rem 0.75rem",
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    <div style={{ fontWeight: 500 }}>
-                      {area?.name ?? summary.area.name}
+                  const area = getAreaById(summary.area.id);
+                  return (
+                    <div
+                      key={summary.area.id}
+                      style={{
+                        borderRadius: "0.75rem",
+                        border: "1px solid #e5e7eb",
+                        padding: "0.5rem 0.75rem",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      <div style={{ fontWeight: 500 }}>
+                        {area?.name ?? summary.area.name}
+                      </div>
+                      <div style={{ color: "#6b7280" }}>
+                        Open tasks: {summary.open}
+                      </div>
+                      <div style={{ color: "#6b7280" }}>
+                        Completed tasks: {summary.done}
+                      </div>
+                      <div style={{ color: "#6b7280" }}>
+                        Sessions recorded: {summary.sessions}
+                      </div>
                     </div>
-                    <div style={{ color: "#6b7280" }}>
-                      Open tasks: {summary.open}
-                    </div>
-                    <div style={{ color: "#6b7280" }}>
-                      Completed tasks: {summary.done}
-                    </div>
-                    <div style={{ color: "#6b7280" }}>
-                      Sessions recorded: {summary.sessions}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </div>
@@ -354,4 +392,3 @@ export default function ReviewPage() {
     </div>
   );
 }
-

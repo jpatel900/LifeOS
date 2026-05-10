@@ -93,7 +93,9 @@ describe("Google Calendar settings panel", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/mock.local mode remains available|mock.local mode remains intact/i),
+        screen.getByText(
+          /mock.local mode remains available|mock.local mode remains intact/i,
+        ),
       ).toBeDefined();
     });
     expect(

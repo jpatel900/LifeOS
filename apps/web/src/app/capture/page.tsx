@@ -90,12 +90,16 @@ export default function CapturePage() {
   });
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [parseState, setParseState] = useState<ParseState>({ status: "idle" });
-  const [parserStatusState, setParserStatusState] = useState<ParserStatusState>({
-    status: "loading",
-  });
+  const [parserStatusState, setParserStatusState] = useState<ParserStatusState>(
+    {
+      status: "loading",
+    },
+  );
   const [text, setText] = useState("");
   const [areaId, setAreaId] = useState<string | null>(null);
-  const [lastSavedCapture, setLastSavedCapture] = useState<CaptureItem | null>(null);
+  const [lastSavedCapture, setLastSavedCapture] = useState<CaptureItem | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -172,9 +176,10 @@ export default function CapturePage() {
   function handleAreaChange(nextAreaId: string) {
     const idOrEmpty = nextAreaId || null;
     setAreaId(idOrEmpty);
-    const area = areasState.status === "ready"
-      ? areasState.areas.find((a) => a.id === idOrEmpty)
-      : undefined;
+    const area =
+      areasState.status === "ready"
+        ? areasState.areas.find((a) => a.id === idOrEmpty)
+        : undefined;
     if (area) {
       const wf = WORKFLOW_AREA_BY_SLUG[area.slug];
       if (wf) setSelectedAreaId(wf);
@@ -228,7 +233,8 @@ export default function CapturePage() {
     if (!parseResult.ok || !body.ok) {
       setParseState({
         status: "error",
-        message: "Capture was saved, but parsing failed safely. Retry with mock parser.",
+        message:
+          "Capture was saved, but parsing failed safely. Retry with mock parser.",
         canRetryWithMock: Boolean(!body.ok && body.can_retry_with_mock),
       });
       return;
@@ -243,7 +249,8 @@ export default function CapturePage() {
     setParseState({
       status: "parsed",
       parser: body.parser,
-      draftCount: workflowResult.taskDrafts.length + workflowResult.projectDrafts.length,
+      draftCount:
+        workflowResult.taskDrafts.length + workflowResult.projectDrafts.length,
       triageRequired: workflowResult.captureItem.status === "triage_required",
       lowConfidence: body.response.parse_status === "low_confidence",
     });
@@ -253,10 +260,13 @@ export default function CapturePage() {
     setParseState({ status: "parsing", parserMode: "auto" });
 
     try {
-      const captureResult = await createCaptureItem(createSupabaseBrowserClient(), {
-        raw_text: text,
-        area_id: areaId,
-      });
+      const captureResult = await createCaptureItem(
+        createSupabaseBrowserClient(),
+        {
+          raw_text: text,
+          area_id: areaId,
+        },
+      );
       setLastSavedCapture(captureResult.capture);
       setSaveState({
         status: "saved",
@@ -290,22 +300,24 @@ export default function CapturePage() {
     submitCaptureText(text, selectedAreaId);
   }
 
-  const parserStatusLabel = parserStatusState.status === "ready"
-    ? parserStatusState.parserStatus === "ai_configured"
-      ? "AI parser configured"
-      : parserStatusState.parserStatus === "ai_unavailable"
-      ? "AI parser unavailable"
-      : "Mock parser"
-    : parserStatusState.status === "loading"
-    ? "Checking parser status..."
-    : "Parser status unavailable";
-  const parserStatusDetail = parserStatusState.status === "ready"
-    ? parserStatusState.parserStatus === "ai_configured"
-      ? "Save and parse will use AI by default."
-      : parserStatusState.parserStatus === "ai_unavailable"
-      ? "Save and parse will use the mock parser safely."
-      : "AI parsing is disabled. Save and parse will use the mock parser."
-    : "Capture can still be saved and structured with the local mock parser.";
+  const parserStatusLabel =
+    parserStatusState.status === "ready"
+      ? parserStatusState.parserStatus === "ai_configured"
+        ? "AI parser configured"
+        : parserStatusState.parserStatus === "ai_unavailable"
+          ? "AI parser unavailable"
+          : "Mock parser"
+      : parserStatusState.status === "loading"
+        ? "Checking parser status..."
+        : "Parser status unavailable";
+  const parserStatusDetail =
+    parserStatusState.status === "ready"
+      ? parserStatusState.parserStatus === "ai_configured"
+        ? "Save and parse will use AI by default."
+        : parserStatusState.parserStatus === "ai_unavailable"
+          ? "Save and parse will use the mock parser safely."
+          : "AI parsing is disabled. Save and parse will use the mock parser."
+      : "Capture can still be saved and structured with the local mock parser.";
 
   const visibleCaptures = state.captureItems.filter((capture) => {
     if (!selectedAreaId) return true;
@@ -320,9 +332,16 @@ export default function CapturePage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section>
         <h1>Capture</h1>
-        <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
+        <p
+          style={{
+            marginTop: "0.25rem",
+            color: "#4b5563",
+            fontSize: "0.95rem",
+          }}
+        >
           Save raw text through the data layer, then optionally parse it into
-          reviewable task/project drafts. The Phase 2 mock parser remains available.
+          reviewable task/project drafts. The Phase 2 mock parser remains
+          available.
         </p>
       </section>
 
@@ -339,7 +358,9 @@ export default function CapturePage() {
         <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
           Parser status: {parserStatusLabel}
         </div>
-        <div style={{ fontSize: "0.9rem", color: "#4b5563" }}>{parserStatusDetail}</div>
+        <div style={{ fontSize: "0.9rem", color: "#4b5563" }}>
+          {parserStatusDetail}
+        </div>
       </section>
 
       {areasState.status === "loading" ? (
@@ -369,7 +390,10 @@ export default function CapturePage() {
           maxWidth: "720px",
         }}
       >
-        <label htmlFor="raw_capture" style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+        <label
+          htmlFor="raw_capture"
+          style={{ fontSize: "0.9rem", fontWeight: 500 }}
+        >
           Raw capture
         </label>
         <textarea
@@ -398,7 +422,9 @@ export default function CapturePage() {
             border: "1px solid #e5e7eb",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "1.05rem" }}>Persist raw capture (Phase 4A)</h2>
+          <h2 style={{ margin: 0, fontSize: "1.05rem" }}>
+            Persist raw capture (Phase 4A)
+          </h2>
           {provider ? (
             <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
               Data source: <strong>{provider}</strong>
@@ -429,7 +455,8 @@ export default function CapturePage() {
 
           {areasState.status === "ready" && areas.length === 0 ? (
             <p style={{ fontSize: "0.9rem" }}>
-              No active areas are available yet. You can still save an unscoped capture.
+              No active areas are available yet. You can still save an unscoped
+              capture.
             </p>
           ) : null}
 
@@ -482,8 +509,8 @@ export default function CapturePage() {
           }}
         >
           <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-            Phase 2 mock uses the area picker in the header (synced from your saved-area slug
-            when possible).
+            Phase 2 mock uses the area picker in the header (synced from your
+            saved-area slug when possible).
           </div>
           <Button type="button" onClick={handleStructure}>
             Structure locally (Phase 2 mock)
@@ -506,10 +533,15 @@ export default function CapturePage() {
               Mock parser created a draft bundle.
             </div>
             <div>Task draft: {latestDraft.title}</div>
-            <div>First suggested action: {latestAssessment.recommended_first_move}</div>
+            <div>
+              First suggested action: {latestAssessment.recommended_first_move}
+            </div>
             <div>
               Possible local block:{" "}
-              {new Date(latestProposalDraft.proposed_start).toLocaleTimeString()} –{" "}
+              {new Date(
+                latestProposalDraft.proposed_start,
+              ).toLocaleTimeString()}{" "}
+              –{" "}
               {new Date(latestProposalDraft.proposed_end).toLocaleTimeString()}
             </div>
           </div>
@@ -561,8 +593,8 @@ export default function CapturePage() {
         >
           <h2 style={{ marginTop: 0 }}>Capture parsed</h2>
           <p>
-            Parser: <strong>{parseState.parser}</strong>. Drafts routed to triage:{" "}
-            <strong>{parseState.draftCount}</strong>.
+            Parser: <strong>{parseState.parser}</strong>. Drafts routed to
+            triage: <strong>{parseState.draftCount}</strong>.
           </p>
           {parseState.triageRequired ? (
             <p style={{ marginBottom: 0 }}>
@@ -572,7 +604,8 @@ export default function CapturePage() {
             </p>
           ) : (
             <p style={{ marginBottom: 0 }}>
-              Capture is parseable and drafts are still reviewable in triage before acceptance.
+              Capture is parseable and drafts are still reviewable in triage
+              before acceptance.
             </p>
           )}
         </section>

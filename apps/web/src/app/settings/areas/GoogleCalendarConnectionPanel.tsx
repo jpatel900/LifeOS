@@ -155,9 +155,8 @@ export function GoogleCalendarConnectionPanel() {
   const [actionState, setActionState] = useState<GoogleCalendarActionState>({
     status: "idle",
   });
-  const [flashMessage, setFlashMessage] = useState<ReturnType<
-    typeof getFlashMessage
-  >>(null);
+  const [flashMessage, setFlashMessage] =
+    useState<ReturnType<typeof getFlashMessage>>(null);
 
   useEffect(() => {
     setFlashMessage(getFlashMessage());
@@ -344,7 +343,8 @@ export function GoogleCalendarConnectionPanel() {
           method: "POST",
           headers: getAccessTokenHeader(accessToken),
         });
-        const body = (await response.json()) as GoogleCalendarConnectionResponse;
+        const body =
+          (await response.json()) as GoogleCalendarConnectionResponse;
 
         if (!response.ok || !body.ok) {
           throw new Error(
@@ -432,7 +432,8 @@ export function GoogleCalendarConnectionPanel() {
 
           {panelState.connection?.granted_scopes_json?.length ? (
             <p style={{ fontSize: "0.9rem", color: "#334155" }}>
-              Granted scopes: {panelState.connection.granted_scopes_json.join(", ")}
+              Granted scopes:{" "}
+              {panelState.connection.granted_scopes_json.join(", ")}
             </p>
           ) : null}
 
@@ -468,9 +469,15 @@ export function GoogleCalendarConnectionPanel() {
           </div>
 
           {!panelState.configured ? (
-            <p style={{ marginBottom: 0, marginTop: "0.75rem", color: "#7c2d12" }}>
-              Missing server config is non-fatal. Mock/local mode still works without
-              Google env vars.
+            <p
+              style={{
+                marginBottom: 0,
+                marginTop: "0.75rem",
+                color: "#7c2d12",
+              }}
+            >
+              Missing server config is non-fatal. Mock/local mode still works
+              without Google env vars.
             </p>
           ) : null}
         </>

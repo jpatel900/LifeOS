@@ -4,9 +4,7 @@ import type {
   Task as SharedTask,
 } from "@lifeos/types";
 
-export type {
-  Phase2TimeBlockProposal as Phase2MockTimeBlockProposal,
-} from "@lifeos/schemas";
+export type { Phase2TimeBlockProposal as Phase2MockTimeBlockProposal } from "@lifeos/schemas";
 
 /**
  * Phase 2 mock-only UI view models. These are deliberately not canonical domain
@@ -45,7 +43,13 @@ export interface Phase2MockExecutionSession {
     | "distracted"
     | "stuck"
     | "stopped";
-  outcome: "completed" | "partial" | "stopped" | "distracted" | "blocked" | "skipped";
+  outcome:
+    | "completed"
+    | "partial"
+    | "stopped"
+    | "distracted"
+    | "blocked"
+    | "skipped";
   notes?: string | null;
 }
 
@@ -84,4 +88,3 @@ export interface Phase2MockHealthCheck {
   score: number;
   summary: string;
 }
-

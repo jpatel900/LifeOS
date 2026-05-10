@@ -169,14 +169,15 @@ describe("workflow data provider", () => {
       error: null,
     });
 
-    const result = await listAreas(
-      { from, auth: { getUser } } as unknown as MinimalSupabaseClient
-    );
+    const result = await listAreas({
+      from,
+      auth: { getUser },
+    } as unknown as MinimalSupabaseClient);
 
     expect(getUser).toHaveBeenCalled();
     expect(from).toHaveBeenCalledWith("areas");
     expect(select).toHaveBeenCalledWith(
-      "id,user_id,name,slug,description,color,icon,sort_order,is_active,created_at,updated_at"
+      "id,user_id,name,slug,description,color,icon,sort_order,is_active,created_at,updated_at",
     );
     expect(order).toHaveBeenCalledWith("sort_order", { ascending: true });
     expect(eq).toHaveBeenCalledWith("is_active", true);
@@ -192,7 +193,10 @@ describe("workflow data provider", () => {
     });
 
     await expect(
-      listAreas({ from, auth: { getUser } } as unknown as MinimalSupabaseClient)
+      listAreas({
+        from,
+        auth: { getUser },
+      } as unknown as MinimalSupabaseClient),
     ).rejects.toThrow("Sign in before loading areas from Supabase.");
     expect(from).not.toHaveBeenCalled();
   });
@@ -224,7 +228,7 @@ describe("workflow data provider", () => {
 
     const result = await createCaptureItem(
       { from, auth: { getUser } } as unknown as MinimalSupabaseClient,
-      { raw_text: "Call dentist tomorrow", area_id: null }
+      { raw_text: "Call dentist tomorrow", area_id: null },
     );
 
     expect(from).toHaveBeenCalledWith("capture_items");
@@ -268,7 +272,8 @@ describe("workflow data provider", () => {
         estimated_minutes_low: 10,
         estimated_minutes_high: 20,
         due_at: null,
-        definition_of_done: "Complete the first useful move and note the outcome.",
+        definition_of_done:
+          "Complete the first useful move and note the outcome.",
         first_tiny_step: "Find the dentist number",
         created_at: "2026-05-07T00:00:00.000Z",
         updated_at: "2026-05-07T00:00:00.000Z",
@@ -296,7 +301,7 @@ describe("workflow data provider", () => {
         estimated_minutes_low: 10,
         estimated_minutes_high: 20,
         first_tiny_step: "Find the dentist number",
-      }
+      },
     );
 
     expect(from).toHaveBeenCalledWith("tasks");
@@ -315,7 +320,8 @@ describe("workflow data provider", () => {
       estimated_minutes_low: 10,
       estimated_minutes_high: 20,
       due_at: null,
-      definition_of_done: "Complete the first useful move and note the outcome.",
+      definition_of_done:
+        "Complete the first useful move and note the outcome.",
       first_tiny_step: "Find the dentist number",
     });
     expect(result.provider).toBe("supabase");
@@ -352,7 +358,7 @@ describe("workflow data provider", () => {
         area_id: "550e8400-e29b-41d4-a716-446655440101",
         title: "Volunteer ops cleanup",
         description: "Bring the event prep system under control.",
-      }
+      },
     );
 
     expect(from).toHaveBeenCalledWith("projects");
@@ -406,7 +412,9 @@ describe("workflow data provider", () => {
       .mockResolvedValue({ data: [proposalRow], error: null });
     const proposalsSelect = vi.fn().mockReturnValue({ order: proposalsOrder });
 
-    const blocksOrder = vi.fn().mockResolvedValue({ data: [blockRow], error: null });
+    const blocksOrder = vi
+      .fn()
+      .mockResolvedValue({ data: [blockRow], error: null });
     const blocksSelect = vi.fn().mockReturnValue({ order: blocksOrder });
 
     const from = vi.fn((table: string) => {
@@ -429,7 +437,9 @@ describe("workflow data provider", () => {
   });
 
   it("creates a local time_block_proposal from a persisted task", async () => {
-    const taskSingle = vi.fn().mockResolvedValue({ data: taskRow, error: null });
+    const taskSingle = vi
+      .fn()
+      .mockResolvedValue({ data: taskRow, error: null });
     const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
     const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
 
@@ -534,7 +544,9 @@ describe("workflow data provider", () => {
     const acceptedEq = vi.fn().mockReturnValue({ select: acceptedSelect });
     const proposalUpdate = vi.fn().mockReturnValue({ eq: acceptedEq });
 
-    const blockSingle = vi.fn().mockResolvedValue({ data: blockRow, error: null });
+    const blockSingle = vi
+      .fn()
+      .mockResolvedValue({ data: blockRow, error: null });
     const blockSelect = vi.fn().mockReturnValue({ single: blockSingle });
     const blockInsert = vi.fn().mockReturnValue({ select: blockSelect });
 
@@ -569,11 +581,15 @@ describe("workflow data provider", () => {
   });
 
   it("starts an execution_session for a persisted task and block", async () => {
-    const taskSingle = vi.fn().mockResolvedValue({ data: taskRow, error: null });
+    const taskSingle = vi
+      .fn()
+      .mockResolvedValue({ data: taskRow, error: null });
     const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
     const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
 
-    const blockSingle = vi.fn().mockResolvedValue({ data: blockRow, error: null });
+    const blockSingle = vi
+      .fn()
+      .mockResolvedValue({ data: blockRow, error: null });
     const blockEq = vi.fn().mockReturnValue({ single: blockSingle });
     const blockSelect = vi.fn().mockReturnValue({ eq: blockEq });
 
@@ -582,8 +598,12 @@ describe("workflow data provider", () => {
       data: runningBlock,
       error: null,
     });
-    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
-    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdateSelect = vi
+      .fn()
+      .mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi
+      .fn()
+      .mockReturnValue({ select: blockUpdateSelect });
     const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
 
     const sessionSingle = vi.fn().mockResolvedValue({
@@ -632,7 +652,9 @@ describe("workflow data provider", () => {
     const otherTaskId = "550e8400-e29b-41d4-a716-446655440399";
     const mismatchedBlock = { ...blockRow, task_id: otherTaskId };
 
-    const taskSingle = vi.fn().mockResolvedValue({ data: taskRow, error: null });
+    const taskSingle = vi
+      .fn()
+      .mockResolvedValue({ data: taskRow, error: null });
     const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
     const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
 
@@ -655,8 +677,12 @@ describe("workflow data provider", () => {
       data: runningMismatchedBlock,
       error: null,
     });
-    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
-    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdateSelect = vi
+      .fn()
+      .mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi
+      .fn()
+      .mockReturnValue({ select: blockUpdateSelect });
     const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
     const from = vi.fn((table: string) => {
       if (table === "tasks") return { select: taskSelect };
@@ -711,15 +737,21 @@ describe("workflow data provider", () => {
       data: completedBlock,
       error: null,
     });
-    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
-    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdateSelect = vi
+      .fn()
+      .mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi
+      .fn()
+      .mockReturnValue({ select: blockUpdateSelect });
     const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
 
     const taskUpdateSingle = vi.fn().mockResolvedValue({
       data: completedTask,
       error: null,
     });
-    const taskUpdateSelect = vi.fn().mockReturnValue({ single: taskUpdateSingle });
+    const taskUpdateSelect = vi
+      .fn()
+      .mockReturnValue({ single: taskUpdateSingle });
     const taskUpdateEq = vi.fn().mockReturnValue({ select: taskUpdateSelect });
     const taskUpdate = vi.fn().mockReturnValue({ eq: taskUpdateEq });
 
@@ -780,8 +812,12 @@ describe("workflow data provider", () => {
       data: missedBlock,
       error: null,
     });
-    const blockUpdateSelect = vi.fn().mockReturnValue({ single: blockUpdateSingle });
-    const blockUpdateEq = vi.fn().mockReturnValue({ select: blockUpdateSelect });
+    const blockUpdateSelect = vi
+      .fn()
+      .mockReturnValue({ single: blockUpdateSingle });
+    const blockUpdateEq = vi
+      .fn()
+      .mockReturnValue({ select: blockUpdateSelect });
     const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
     const taskUpdate = vi.fn();
 
@@ -815,15 +851,21 @@ describe("workflow data provider", () => {
   });
 
   it("lists persisted tasks, blocks, sessions, and review entries for review", async () => {
-    const tasksOrder = vi.fn().mockResolvedValue({ data: [taskRow], error: null });
+    const tasksOrder = vi
+      .fn()
+      .mockResolvedValue({ data: [taskRow], error: null });
     const tasksSelect = vi.fn().mockReturnValue({ order: tasksOrder });
-    const blocksOrder = vi.fn().mockResolvedValue({ data: [blockRow], error: null });
+    const blocksOrder = vi
+      .fn()
+      .mockResolvedValue({ data: [blockRow], error: null });
     const blocksSelect = vi.fn().mockReturnValue({ order: blocksOrder });
     const sessionsOrder = vi
       .fn()
       .mockResolvedValue({ data: [runningSessionRow], error: null });
     const sessionsSelect = vi.fn().mockReturnValue({ order: sessionsOrder });
-    const reviewsOrder = vi.fn().mockResolvedValue({ data: [reviewRow], error: null });
+    const reviewsOrder = vi
+      .fn()
+      .mockResolvedValue({ data: [reviewRow], error: null });
     const reviewsSelect = vi.fn().mockReturnValue({ order: reviewsOrder });
 
     const from = vi.fn((table: string) => {
@@ -886,6 +928,8 @@ describe("workflow data provider", () => {
     expect(sessionResult.provider).toBe("mock");
     expect(sessionResult.session.task_id).toBe(taskId);
     expect(reviewResult.provider).toBe("mock");
-    expect(reviewResult.reviewEntry.summary_json).toEqual(reviewRow.summary_json);
+    expect(reviewResult.reviewEntry.summary_json).toEqual(
+      reviewRow.summary_json,
+    );
   });
 });

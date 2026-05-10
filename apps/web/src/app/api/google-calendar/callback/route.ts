@@ -41,14 +41,10 @@ function buildSettingsRedirect(request: Request, key: string, value: string) {
 }
 
 function clearOAuthCookie(response: NextResponse) {
-  response.cookies.set(
-    GOOGLE_CALENDAR_OAUTH_STATE_COOKIE,
-    "",
-    {
-      ...getGoogleCalendarOAuthStateCookieOptions(),
-      maxAge: 0,
-    },
-  );
+  response.cookies.set(GOOGLE_CALENDAR_OAUTH_STATE_COOKIE, "", {
+    ...getGoogleCalendarOAuthStateCookieOptions(),
+    maxAge: 0,
+  });
 }
 
 async function markConnectionError(
@@ -134,7 +130,7 @@ export async function GET(request: Request) {
     );
     const encryptedRefreshToken = tokenResponse.refreshToken
       ? encryptGoogleCalendarToken(tokenResponse.refreshToken)
-      : storedConnection?.encrypted_refresh_token ?? null;
+      : (storedConnection?.encrypted_refresh_token ?? null);
 
     if (!encryptedRefreshToken) {
       await markConnectionError(
@@ -153,20 +149,23 @@ export async function GET(request: Request) {
       return response;
     }
 
-    await upsertGoogleCalendarConnectionForAccessToken(statePayload.accessToken, {
-      calendar_id: storedConnection?.calendar_id ?? "primary",
-      connected_at: new Date().toISOString(),
-      disconnected_at: null,
-      encrypted_access_token: encryptedAccessToken,
-      encrypted_refresh_token: encryptedRefreshToken,
-      granted_scopes_json: tokenResponse.scope,
-      status: "connected",
-      token_expires_at: buildGoogleAccessTokenExpiresAt(
-        tokenResponse.expiresIn,
-      ),
-      token_type: tokenResponse.tokenType,
-      user_id: user.id,
-    });
+    await upsertGoogleCalendarConnectionForAccessToken(
+      statePayload.accessToken,
+      {
+        calendar_id: storedConnection?.calendar_id ?? "primary",
+        connected_at: new Date().toISOString(),
+        disconnected_at: null,
+        encrypted_access_token: encryptedAccessToken,
+        encrypted_refresh_token: encryptedRefreshToken,
+        granted_scopes_json: tokenResponse.scope,
+        status: "connected",
+        token_expires_at: buildGoogleAccessTokenExpiresAt(
+          tokenResponse.expiresIn,
+        ),
+        token_type: tokenResponse.tokenType,
+        user_id: user.id,
+      },
+    );
 
     const response = NextResponse.redirect(
       buildSettingsRedirect(request, "googleCalendar", "connected"),

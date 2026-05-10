@@ -14,7 +14,9 @@ export function EmptyState({ title, description }: EmptyStateProps) {
         color: "#4b5563",
       }}
     >
-      <div style={{ fontWeight: 500, marginBottom: description ? "0.25rem" : 0 }}>
+      <div
+        style={{ fontWeight: 500, marginBottom: description ? "0.25rem" : 0 }}
+      >
         {title}
       </div>
       {description ? (
@@ -23,4 +25,3 @@ export function EmptyState({ title, description }: EmptyStateProps) {
     </div>
   );
 }
-
