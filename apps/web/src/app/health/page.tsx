@@ -49,13 +49,21 @@ export default function HealthPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section>
         <h1>Health</h1>
-        <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
-          Deterministic subsystem checks from current app state. No AI is used to score
-          health.
+        <p
+          style={{
+            marginTop: "0.25rem",
+            color: "#4b5563",
+            fontSize: "0.95rem",
+          }}
+        >
+          Deterministic subsystem checks from current app state. No AI is used
+          to score health.
         </p>
       </section>
 
-      {state.status === "loading" ? <p role="status">Loading health...</p> : null}
+      {state.status === "loading" ? (
+        <p role="status">Loading health...</p>
+      ) : null}
 
       {state.status === "error" ? (
         <section
@@ -190,4 +198,3 @@ export default function HealthPage() {
     </div>
   );
 }
-

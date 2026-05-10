@@ -20,9 +20,13 @@ const persistedCapture: CaptureItem = {
 
 describe("parse capture regression fixtures", () => {
   it("validates all regression fixtures against ParseCaptureResponseSchema", () => {
-    for (const [name, fixture] of Object.entries(parseCaptureRegressionFixtures)) {
+    for (const [name, fixture] of Object.entries(
+      parseCaptureRegressionFixtures,
+    )) {
       const result = ParseCaptureResponseSchema.safeParse(fixture);
-      expect(result.success, `fixture failed schema validation: ${name}`).toBe(true);
+      expect(result.success, `fixture failed schema validation: ${name}`).toBe(
+        true,
+      );
       expect(validateParseCaptureResponse(fixture)).toEqual(fixture);
     }
   });
@@ -37,7 +41,9 @@ describe("parse capture regression fixtures", () => {
 
     expect(parsed.captureItem.status).toBe("triage_required");
     expect(parsed.captureItem.inferred_area_confidence).toBe(0.39);
-    expect(parsed.triageReasons).toContain("Overall confidence is below threshold.");
+    expect(parsed.triageReasons).toContain(
+      "Overall confidence is below threshold.",
+    );
   });
 
   it("routes clarification-heavy output to triage", () => {
@@ -99,4 +105,3 @@ describe("parse capture regression fixtures", () => {
     }
   });
 });
-

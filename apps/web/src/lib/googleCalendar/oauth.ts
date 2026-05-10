@@ -158,7 +158,11 @@ export function sealGoogleCalendarOAuthStateCookie(payload: {
   }
 
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", deriveKey(config.clientSecret), iv);
+  const cipher = createCipheriv(
+    "aes-256-gcm",
+    deriveKey(config.clientSecret),
+    iv,
+  );
   const plaintext = Buffer.from(
     JSON.stringify({
       accessToken: payload.accessToken,
@@ -215,7 +219,11 @@ export function isGoogleCalendarOAuthStateValid(
   payload: GoogleOAuthStatePayload | null,
   expectedState: string | null,
 ) {
-  if (!payload || !isNonEmptyString(expectedState) || payload.state !== expectedState) {
+  if (
+    !payload ||
+    !isNonEmptyString(expectedState) ||
+    payload.state !== expectedState
+  ) {
     return false;
   }
 
@@ -270,9 +278,10 @@ export async function exchangeGoogleCalendarCode(
     cache: "no-store",
   });
 
-  const payload = (await response.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
 
   if (!response.ok) {
     throw new Error("Google token exchange failed.");
@@ -331,9 +340,10 @@ export async function refreshGoogleCalendarAccessToken(
     cache: "no-store",
   });
 
-  const payload = (await response.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
 
   if (!response.ok) {
     throw new Error("Google access token refresh failed.");
@@ -355,9 +365,7 @@ export async function refreshGoogleCalendarAccessToken(
       ? payload.refresh_token
       : null,
     scope:
-      typeof payload.scope === "string"
-        ? splitScopes(payload.scope)
-        : null,
+      typeof payload.scope === "string" ? splitScopes(payload.scope) : null,
     tokenType: payload.token_type,
   };
 }

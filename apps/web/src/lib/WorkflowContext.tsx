@@ -121,7 +121,10 @@ interface WorkflowContextValue {
   rejectLocalProposal: (proposalId: string) => void;
   editLocalProposal: (
     proposalId: string,
-    changes: Pick<Phase2TimeBlockProposal, "proposed_start" | "proposed_end" | "rationale">,
+    changes: Pick<
+      Phase2TimeBlockProposal,
+      "proposed_start" | "proposed_end" | "rationale"
+    >,
   ) => void;
   startTaskSession: (taskId: string) => void;
   markSession: (status: Phase2MockExecutionSession["status"]) => void;
@@ -145,7 +148,13 @@ const TASK_STATUSES = new Set([
   "dropped",
   "archived",
 ]);
-const PROJECT_STATUSES = new Set(["active", "paused", "done", "dropped", "archived"]);
+const PROJECT_STATUSES = new Set([
+  "active",
+  "paused",
+  "done",
+  "dropped",
+  "archived",
+]);
 const CALENDAR_BLOCK_STATUSES = new Set([
   "scheduled",
   "running",
@@ -198,7 +207,9 @@ function isNullableNumber(value: unknown): value is number | null {
   return value === null || typeof value === "number";
 }
 
-function isOptionalNullableNumber(value: unknown): value is number | null | undefined {
+function isOptionalNullableNumber(
+  value: unknown,
+): value is number | null | undefined {
   return value === undefined || isNullableNumber(value);
 }
 
@@ -213,7 +224,9 @@ function isArrayOf<T>(
   return Array.isArray(value) && value.every(predicate);
 }
 
-function isPhase2MockArea(value: unknown): value is WorkflowState["areas"][number] {
+function isPhase2MockArea(
+  value: unknown,
+): value is WorkflowState["areas"][number] {
   return (
     isRecord(value) &&
     isString(value.id) &&
@@ -224,7 +237,9 @@ function isPhase2MockArea(value: unknown): value is WorkflowState["areas"][numbe
   );
 }
 
-function isPhase2MockTask(value: unknown): value is WorkflowState["tasks"][number] {
+function isPhase2MockTask(
+  value: unknown,
+): value is WorkflowState["tasks"][number] {
   return (
     isRecord(value) &&
     isString(value.id) &&
@@ -377,7 +392,10 @@ function normalizeStoredWorkflowState(value: unknown): unknown {
   };
 }
 
-function workflowReducer(state: WorkflowState, action: WorkflowAction): WorkflowState {
+function workflowReducer(
+  state: WorkflowState,
+  action: WorkflowAction,
+): WorkflowState {
   switch (action.type) {
     case "hydrate":
       return action.state;
@@ -439,7 +457,11 @@ function loadStoredStateFromSession(): WorkflowState | null {
 }
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(workflowReducer, undefined, createSyncedInitialState);
+  const [state, dispatch] = useReducer(
+    workflowReducer,
+    undefined,
+    createSyncedInitialState,
+  );
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(
     state.areas[0]?.id ?? null,
   );
@@ -450,7 +472,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     if (restoredState) {
       dispatch({ type: "hydrate", state: restoredState });
       setSelectedAreaId((current) => {
-        if (current && restoredState.areas.some((area) => area.id === current)) {
+        if (
+          current &&
+          restoredState.areas.some((area) => area.id === current)
+        ) {
           return current;
         }
         return restoredState.areas[0]?.id ?? null;
@@ -500,7 +525,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <WorkflowContext.Provider value={value}>{children}</WorkflowContext.Provider>
+    <WorkflowContext.Provider value={value}>
+      {children}
+    </WorkflowContext.Provider>
   );
 }
 
@@ -511,4 +538,3 @@ export function useWorkflow() {
   }
   return value;
 }
-

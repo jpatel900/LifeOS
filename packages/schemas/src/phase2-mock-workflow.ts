@@ -103,7 +103,9 @@ export const Phase2TimeBlockProposalSchema = z.object({
   created_at: z.string().datetime(),
 });
 
-export type Phase2TimeBlockProposal = z.infer<typeof Phase2TimeBlockProposalSchema>;
+export type Phase2TimeBlockProposal = z.infer<
+  typeof Phase2TimeBlockProposalSchema
+>;
 
 export const MockParseCaptureResponseSchema = z.object({
   schema_version: z.literal("phase2.mock.v1"),
@@ -115,4 +117,6 @@ export const MockParseCaptureResponseSchema = z.object({
   timeBlockProposalDraft: Phase2TimeBlockProposalDraftSchema,
 });
 
-export type MockParseCaptureResponse = z.infer<typeof MockParseCaptureResponseSchema>;
+export type MockParseCaptureResponse = z.infer<
+  typeof MockParseCaptureResponseSchema
+>;

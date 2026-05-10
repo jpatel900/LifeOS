@@ -68,7 +68,9 @@ export async function resolveGoogleCalendarAccessToken(params: {
     connection.encrypted_refresh_token,
   );
   const refreshed = await refreshGoogleCalendarAccessToken({ refreshToken });
-  const encryptedAccessToken = encryptGoogleCalendarToken(refreshed.accessToken);
+  const encryptedAccessToken = encryptGoogleCalendarToken(
+    refreshed.accessToken,
+  );
   const encryptedRefreshToken = refreshed.refreshToken
     ? encryptGoogleCalendarToken(refreshed.refreshToken)
     : connection.encrypted_refresh_token;
@@ -80,7 +82,8 @@ export async function resolveGoogleCalendarAccessToken(params: {
     encrypted_access_token: encryptedAccessToken,
     encrypted_refresh_token: encryptedRefreshToken,
     granted_scopes_json:
-      refreshed.scope ?? (Array.isArray(connection.granted_scopes_json)
+      refreshed.scope ??
+      (Array.isArray(connection.granted_scopes_json)
         ? connection.granted_scopes_json
         : []),
     status: "connected",

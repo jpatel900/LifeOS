@@ -62,7 +62,9 @@ export default function TriagePage() {
   } = useWorkflow();
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
-  const triageCandidates = state.taskDrafts.filter((draft) => draft.status === "pending");
+  const triageCandidates = state.taskDrafts.filter(
+    (draft) => draft.status === "pending",
+  );
   const projectCandidates = state.projectDrafts.filter(
     (draft) => draft.status === "pending",
   );
@@ -105,7 +107,10 @@ export default function TriagePage() {
     const draft = state.taskDrafts.find((item) => item.id === draftId);
     if (!draft) return;
     if (loadState.status !== "ready") {
-      setSaveState({ status: "error", message: "Triage data source is not ready." });
+      setSaveState({
+        status: "error",
+        message: "Triage data source is not ready.",
+      });
       return;
     }
 
@@ -113,7 +118,9 @@ export default function TriagePage() {
     try {
       const result = await createTask(createSupabaseBrowserClient(), {
         area_id: resolvePersistedAreaId(draft.area_id, loadState.areas),
-        source_capture_item_id: sourceCaptureIdForPersistence(draft.capture_item_id),
+        source_capture_item_id: sourceCaptureIdForPersistence(
+          draft.capture_item_id,
+        ),
         title: draft.title,
         description: draft.description,
         priority_confidence: draft.confidence,
@@ -131,7 +138,9 @@ export default function TriagePage() {
       setSaveState({
         status: "error",
         message:
-          error instanceof Error ? error.message : "Unable to accept task draft.",
+          error instanceof Error
+            ? error.message
+            : "Unable to accept task draft.",
       });
     }
   }
@@ -140,7 +149,10 @@ export default function TriagePage() {
     const draft = state.projectDrafts.find((item) => item.id === draftId);
     if (!draft) return;
     if (loadState.status !== "ready") {
-      setSaveState({ status: "error", message: "Triage data source is not ready." });
+      setSaveState({
+        status: "error",
+        message: "Triage data source is not ready.",
+      });
       return;
     }
 
@@ -161,7 +173,9 @@ export default function TriagePage() {
       setSaveState({
         status: "error",
         message:
-          error instanceof Error ? error.message : "Unable to accept project draft.",
+          error instanceof Error
+            ? error.message
+            : "Unable to accept project draft.",
       });
     }
   }
@@ -170,13 +184,22 @@ export default function TriagePage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section>
         <h1>Triage</h1>
-        <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
-          Review uncertain items before they enter your real task list. Accepting a
-          task or project draft commits that object; local proposal drafts remain session-only.
+        <p
+          style={{
+            marginTop: "0.25rem",
+            color: "#4b5563",
+            fontSize: "0.95rem",
+          }}
+        >
+          Review uncertain items before they enter your real task list.
+          Accepting a task or project draft commits that object; local proposal
+          drafts remain session-only.
         </p>
       </section>
 
-      {loadState.status === "loading" ? <p role="status">Loading triage context...</p> : null}
+      {loadState.status === "loading" ? (
+        <p role="status">Loading triage context...</p>
+      ) : null}
 
       {loadState.status === "ready" ? (
         <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
@@ -213,7 +236,8 @@ export default function TriagePage() {
             padding: "1rem",
           }}
         >
-          Accepted {saveState.label} through <strong>{saveState.provider}</strong>.
+          Accepted {saveState.label} through{" "}
+          <strong>{saveState.provider}</strong>.
         </section>
       ) : null}
 
@@ -290,7 +314,9 @@ export default function TriagePage() {
                     >
                       <span>Classification: task draft (mock)</span>
                       {area ? <span>Area suggestion: {area.name}</span> : null}
-                      <span>Confidence: {Math.round(task.confidence * 100)}%</span>
+                      <span>
+                        Confidence: {Math.round(task.confidence * 100)}%
+                      </span>
                     </div>
                   </div>
                   <span
@@ -316,10 +342,13 @@ export default function TriagePage() {
                     }}
                   >
                     <div style={{ fontWeight: 500 }}>Ambiguity assessment</div>
-                    <div>First useful move: {assessment.recommended_first_move}</div>
+                    <div>
+                      First useful move: {assessment.recommended_first_move}
+                    </div>
                     <div>Unknowns: {assessment.unknowns.join(", ")}</div>
                     <div>
-                      What not to do yet: {assessment.what_not_to_do_yet.join(", ")}
+                      What not to do yet:{" "}
+                      {assessment.what_not_to_do_yet.join(", ")}
                     </div>
                   </div>
                 ) : null}
@@ -428,7 +457,9 @@ export default function TriagePage() {
                     >
                       <span>Classification: project draft (mock)</span>
                       {area ? <span>Area suggestion: {area.name}</span> : null}
-                      <span>Confidence: {Math.round(project.confidence * 100)}%</span>
+                      <span>
+                        Confidence: {Math.round(project.confidence * 100)}%
+                      </span>
                     </div>
                   </div>
                   <span
@@ -444,7 +475,9 @@ export default function TriagePage() {
                   </span>
                 </div>
                 {project.description ? (
-                  <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
+                  <p
+                    style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}
+                  >
                     {project.description}
                   </p>
                 ) : null}
@@ -480,4 +513,3 @@ export default function TriagePage() {
     </div>
   );
 }
-

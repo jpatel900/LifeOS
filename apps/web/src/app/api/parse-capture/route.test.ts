@@ -123,7 +123,9 @@ describe("parse-capture route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(502);
-    expect(body.error).toBe("Parsing failed safely. You can retry with the mock parser.");
+    expect(body.error).toBe(
+      "Parsing failed safely. You can retry with the mock parser.",
+    );
     expect(body.can_retry_with_mock).toBe(true);
     expect(body.status).toBe("ai_configured");
     expect(errorSpy).toHaveBeenCalledWith("parse-capture route failed safely", {
@@ -131,4 +133,3 @@ describe("parse-capture route", () => {
     });
   });
 });
-

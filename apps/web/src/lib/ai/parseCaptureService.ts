@@ -3,9 +3,7 @@ import {
   type ParseCaptureResponse,
 } from "@lifeos/schemas";
 import { parseCapture, type ParseCaptureOptions } from "./parseCapture";
-import {
-  PARSE_CAPTURE_SCHEMA_VERSION,
-} from "./contracts/parseCapture";
+import { PARSE_CAPTURE_SCHEMA_VERSION } from "./contracts/parseCapture";
 import { PARSE_CAPTURE_PROMPT_VERSION } from "./prompts/parseCapturePrompt";
 import type { ParseCaptureAreaContext } from "./prompts/parseCapturePrompt";
 
@@ -47,9 +45,7 @@ function assertServerRuntime() {
   }
 }
 
-function isAiParserEnabled(
-  env: Partial<NodeJS.ProcessEnv>,
-) {
+function isAiParserEnabled(env: Partial<NodeJS.ProcessEnv>) {
   const raw = env.AI_PARSE_CAPTURE_ENABLED?.trim().toLowerCase();
   if (!raw) {
     return true;
@@ -121,7 +117,9 @@ function buildMockResponse(rawText: string): ParseCaptureResponse {
     parse_status: "parsed",
     overall_confidence: 0.78,
     triage_required: true,
-    triage_reasons: ["Mock parser output requires user review before persistence."],
+    triage_reasons: [
+      "Mock parser output requires user review before persistence.",
+    ],
     drafts: [
       {
         draft_type: "task_draft",
@@ -135,7 +133,9 @@ function buildMockResponse(rawText: string): ParseCaptureResponse {
         confidence: 0.78,
       },
     ],
-    clarification_questions: ["What deadline or definition of done should this use?"],
+    clarification_questions: [
+      "What deadline or definition of done should this use?",
+    ],
     ambiguity_assessment: {
       likely_objective: title,
       problem_type: "task",

@@ -121,13 +121,18 @@ describe("parse capture AI contract", () => {
       "clarification_questions",
       "ambiguity_assessment",
     ]);
-    expect(schema.properties.drafts.items.anyOf[0]?.required).toContain("due_at");
+    expect(schema.properties.drafts.items.anyOf[0]?.required).toContain(
+      "due_at",
+    );
   });
 
   it("keeps JSON schema, Zod schema, and prompt status literals aligned", () => {
-    const schema = parseCaptureResponseJsonSchema as unknown as ResponseJsonSchema;
+    const schema =
+      parseCaptureResponseJsonSchema as unknown as ResponseJsonSchema;
     const zodShape = (
-      ParseCaptureResponseSchema as unknown as { shape: Record<string, unknown> }
+      ParseCaptureResponseSchema as unknown as {
+        shape: Record<string, unknown>;
+      }
     ).shape;
     const zodKeys = Object.keys(zodShape).sort();
     const jsonKeys = [...schema.required].sort();

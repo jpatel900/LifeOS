@@ -77,16 +77,16 @@ The default `pnpm test` run skips this suite because it requires Docker-backed l
 
 Run from the repository root after `pnpm install`.
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm install` | Install dependencies |
-| `pnpm dev` | Runs the Next.js app through Turborepo (`http://localhost:3000`) |
-| `pnpm --filter @lifeos/web dev` | Run only the web app |
-| `pnpm build` | Builds all workspaces |
-| `pnpm lint` | Lint / type validation for configured workspaces |
-| `pnpm type-check` | TypeScript checks |
-| `pnpm test` | Vitest suites |
-| `pnpm format` | Format the repo when configured |
-| `pnpm format:check` | Check formatting when configured |
+| Command                         | Purpose                                                          |
+| ------------------------------- | ---------------------------------------------------------------- |
+| `pnpm install`                  | Install dependencies                                             |
+| `pnpm dev`                      | Runs the Next.js app through Turborepo (`http://localhost:3000`) |
+| `pnpm --filter @lifeos/web dev` | Run only the web app                                             |
+| `pnpm build`                    | Builds all workspaces                                            |
+| `pnpm lint`                     | Lint / type validation for configured workspaces                 |
+| `pnpm type-check`               | TypeScript checks                                                |
+| `pnpm test`                     | Vitest suites                                                    |
+| `pnpm format`                   | Format the repo when configured                                  |
+| `pnpm format:check`             | Check formatting when configured                                 |
 
 Filter a single workspace with commands such as `pnpm --filter @lifeos/web test`.

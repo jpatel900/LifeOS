@@ -54,14 +54,18 @@ export default function ExecutePage() {
   const [executeState, setExecuteState] = useState<ExecuteState>({
     status: "loading",
   });
-  const [actionState, setActionState] = useState<ActionState>({ status: "idle" });
+  const [actionState, setActionState] = useState<ActionState>({
+    status: "idle",
+  });
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadExecutionItems() {
       try {
-        const result = await listExecutionReviewItems(createSupabaseBrowserClient());
+        const result = await listExecutionReviewItems(
+          createSupabaseBrowserClient(),
+        );
         if (!cancelled) {
           setExecuteState({
             status: "ready",
@@ -98,24 +102,30 @@ export default function ExecutePage() {
   const persistedSessions = usesPersistedExecution ? executeState.sessions : [];
   const activePersistedSession =
     persistedSessions.find(
-      (session) => session.outcome === "partial" || session.outcome === "distracted",
+      (session) =>
+        session.outcome === "partial" || session.outcome === "distracted",
     ) ?? null;
 
   const activeSession = usesPersistedExecution
     ? activePersistedSession
-    : state.executionSessions[0] ?? null;
+    : (state.executionSessions[0] ?? null);
   const runnableTask = usesPersistedExecution
-    ? persistedTasks.find((task) => task.status === "active") ?? null
-    : state.tasks.find((task) => task.status === "active") ?? state.tasks[0] ?? null;
+    ? (persistedTasks.find((task) => task.status === "active") ?? null)
+    : (state.tasks.find((task) => task.status === "active") ??
+      state.tasks[0] ??
+      null);
   const activeTask = activeSession
-    ? (usesPersistedExecution ? persistedTasks : state.tasks).find(
+    ? ((usesPersistedExecution ? persistedTasks : state.tasks).find(
         (task) => task.id === activeSession.task_id,
-      ) ?? runnableTask
+      ) ?? runnableTask)
     : runnableTask;
-  const blocks = usesPersistedExecution ? persistedBlocks : state.calendarBlocks;
+  const blocks = usesPersistedExecution
+    ? persistedBlocks
+    : state.calendarBlocks;
   const activeBlock = activeSession?.calendar_block_id
-    ? blocks.find((block) => block.id === activeSession.calendar_block_id) ?? null
-    : blocks.find((block) => block.task_id === activeTask?.id) ?? null;
+    ? (blocks.find((block) => block.id === activeSession.calendar_block_id) ??
+      null)
+    : (blocks.find((block) => block.task_id === activeTask?.id) ?? null);
   const area = activeTask ? getAreaById(activeTask.area_id) : null;
 
   async function handleStart() {
@@ -128,10 +138,13 @@ export default function ExecutePage() {
 
     setActionState({ status: "saving", label: "session" });
     try {
-      const result = await createExecutionSession(createSupabaseBrowserClient(), {
-        task_id: activeTask.id,
-        calendar_block_id: activeBlock?.id ?? null,
-      });
+      const result = await createExecutionSession(
+        createSupabaseBrowserClient(),
+        {
+          task_id: activeTask.id,
+          calendar_block_id: activeBlock?.id ?? null,
+        },
+      );
       setExecuteState((current) =>
         current.status === "ready" && current.provider === "supabase"
           ? {
@@ -165,7 +178,11 @@ export default function ExecutePage() {
       return;
     }
 
-    if (!activePersistedSession || status === "running" || status === "stopped") {
+    if (
+      !activePersistedSession ||
+      status === "running" ||
+      status === "stopped"
+    ) {
       return;
     }
 
@@ -222,8 +239,8 @@ export default function ExecutePage() {
               fontSize: "0.95rem",
             }}
           >
-            Focus on one block at a time. Persisted sessions load when Supabase is
-            configured; mock mode remains session-only.
+            Focus on one block at a time. Persisted sessions load when Supabase
+            is configured; mock mode remains session-only.
           </p>
         </section>
         {executeState.status === "loading" ? (
@@ -290,9 +307,15 @@ export default function ExecutePage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section>
         <h1>Execute</h1>
-        <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
-          Single-task execution mode. Supabase rows are used when configured; otherwise
-          buttons adjust local mock state only.
+        <p
+          style={{
+            marginTop: "0.25rem",
+            color: "#4b5563",
+            fontSize: "0.95rem",
+          }}
+        >
+          Single-task execution mode. Supabase rows are used when configured;
+          otherwise buttons adjust local mock state only.
         </p>
       </section>
 
@@ -364,7 +387,9 @@ export default function ExecutePage() {
               </div>
             ) : null}
           </div>
-          <div style={{ fontSize: "0.8rem", color: "#6b7280", textAlign: "right" }}>
+          <div
+            style={{ fontSize: "0.8rem", color: "#6b7280", textAlign: "right" }}
+          >
             <div>
               {activeBlock
                 ? `${new Date(activeBlock.start_at).toLocaleTimeString()} – ${new Date(
@@ -376,9 +401,10 @@ export default function ExecutePage() {
               Status:{" "}
               {usesPersistedExecution
                 ? persistedOutcomeLabel(activePersistedSession)
-                : (activeSession as Phase2MockExecutionSession | null)?.status ??
+                : ((activeSession as Phase2MockExecutionSession | null)
+                    ?.status ??
                   activeBlock?.status ??
-                  "ready"}
+                  "ready")}
             </div>
           </div>
         </div>
@@ -392,7 +418,9 @@ export default function ExecutePage() {
             color: "#1d4ed8",
           }}
         >
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>First tiny step</div>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>
+            First tiny step
+          </div>
           <div>
             {activeTask.first_tiny_step ??
               "Pick one small, concrete action you can do in the next few minutes."}
@@ -419,9 +447,12 @@ export default function ExecutePage() {
             >
               Session state (mock)
             </div>
-            <div style={{ fontSize: "1.5rem", fontVariantNumeric: "tabular-nums" }}>
+            <div
+              style={{ fontSize: "1.5rem", fontVariantNumeric: "tabular-nums" }}
+            >
               {!usesPersistedExecution &&
-              (activeSession as Phase2MockExecutionSession | null)?.status === "running"
+              (activeSession as Phase2MockExecutionSession | null)?.status ===
+                "running"
                 ? "00:25:00"
                 : "00:00:00"}
             </div>
@@ -499,18 +530,23 @@ export default function ExecutePage() {
           >
             <div>Planned: {activeSession.planned_minutes ?? 0} min</div>
             <div>Actual: {activeSession.actual_minutes ?? 0} min</div>
-            {"status" in activeSession ? <div>Status: {activeSession.status}</div> : null}
+            {"status" in activeSession ? (
+              <div>Status: {activeSession.status}</div>
+            ) : null}
             <div>Outcome: {activeSession.outcome}</div>
             <div>Paused: {activeSession.paused_minutes ?? 0} min</div>
             <div>Distracted: {activeSession.distraction_minutes ?? 0} min</div>
             {activeSession.productivity_rating ? (
-              <div>Productivity rating: {activeSession.productivity_rating}/5</div>
+              <div>
+                Productivity rating: {activeSession.productivity_rating}/5
+              </div>
             ) : null}
-            {activeSession.notes ? <div>Notes: {activeSession.notes}</div> : null}
+            {activeSession.notes ? (
+              <div>Notes: {activeSession.notes}</div>
+            ) : null}
           </div>
         </section>
       ) : null}
     </div>
   );
 }
-

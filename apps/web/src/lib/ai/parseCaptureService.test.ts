@@ -119,7 +119,9 @@ describe("parse capture server service", () => {
       );
 
       expect(result.parser).toBe("mock");
-      expect(ParseCaptureResponseSchema.safeParse(result.response).success).toBe(true);
+      expect(
+        ParseCaptureResponseSchema.safeParse(result.response).success,
+      ).toBe(true);
       expect(result.response.triage_required).toBe(true);
     }
   });

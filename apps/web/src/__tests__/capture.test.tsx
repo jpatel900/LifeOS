@@ -84,7 +84,9 @@ function renderCapturePage() {
   );
 }
 
-function mockParserStatusFetch(status: "mock" | "ai_configured" | "ai_unavailable") {
+function mockParserStatusFetch(
+  status: "mock" | "ai_configured" | "ai_unavailable",
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: string | URL, init?: RequestInit) => {
@@ -102,7 +104,12 @@ function mockParserStatusFetch(status: "mock" | "ai_configured" | "ai_unavailabl
 
       return {
         ok: true,
-        json: async () => ({ ok: true, parser: "ai", response: parseResponse, status }),
+        json: async () => ({
+          ok: true,
+          parser: "ai",
+          response: parseResponse,
+          status,
+        }),
       } satisfies Partial<Response>;
     }),
   );
@@ -131,7 +138,9 @@ describe("CapturePage", () => {
 
     renderCapturePage();
 
-    expect(await screen.findByText("Parser status: AI parser configured")).toBeDefined();
+    expect(
+      await screen.findByText("Parser status: AI parser configured"),
+    ).toBeDefined();
   });
 
   it("shows parser status as AI unavailable", async () => {
@@ -140,7 +149,9 @@ describe("CapturePage", () => {
 
     renderCapturePage();
 
-    expect(await screen.findByText("Parser status: AI parser unavailable")).toBeDefined();
+    expect(
+      await screen.findByText("Parser status: AI parser unavailable"),
+    ).toBeDefined();
   });
 
   it("saves capture, parses, and shows triage routing for low confidence", async () => {
@@ -173,10 +184,7 @@ describe("CapturePage", () => {
         }),
       } satisfies Partial<Response>;
     });
-    vi.stubGlobal(
-      "fetch",
-      fetch,
-    );
+    vi.stubGlobal("fetch", fetch);
 
     renderCapturePage();
 
@@ -190,12 +198,16 @@ describe("CapturePage", () => {
 
     expect(await screen.findByText("Capture parsed")).toBeDefined();
     expect(
-      screen.getByText("Drafts were routed to triage because confidence is low."),
+      screen.getByText(
+        "Drafts were routed to triage because confidence is low.",
+      ),
     ).toBeDefined();
-    expect(screen.getAllByText("Email Taylor about launch notes").length).toBeGreaterThan(1);
     expect(
-      mocks.createCaptureItem.mock.invocationCallOrder[0],
-    ).toBeLessThan(fetch.mock.invocationCallOrder[1]);
+      screen.getAllByText("Email Taylor about launch notes").length,
+    ).toBeGreaterThan(1);
+    expect(mocks.createCaptureItem.mock.invocationCallOrder[0]).toBeLessThan(
+      fetch.mock.invocationCallOrder[1],
+    );
 
     await waitFor(() =>
       expect(window.sessionStorage.getItem("lifeos.phase2.workflow")).toContain(
@@ -224,7 +236,9 @@ describe("CapturePage", () => {
         } satisfies Partial<Response>;
       }
 
-      const body = init?.body ? JSON.parse(String(init.body)) as { parserMode?: string } : {};
+      const body = init?.body
+        ? (JSON.parse(String(init.body)) as { parserMode?: string })
+        : {};
       if (body.parserMode === "mock") {
         return {
           ok: true,
@@ -259,13 +273,21 @@ describe("CapturePage", () => {
     );
     fireEvent.click(await screen.findByText("Save and parse"));
 
-    expect(await screen.findByText("Capture parse failed safely")).toBeDefined();
     expect(
-      screen.getByText("Capture was saved, but parsing failed safely. Retry with mock parser."),
+      await screen.findByText("Capture parse failed safely"),
     ).toBeDefined();
-    expect(screen.queryByText("AI failure: stack trace should not leak")).toBeNull();
+    expect(
+      screen.getByText(
+        "Capture was saved, but parsing failed safely. Retry with mock parser.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.queryByText("AI failure: stack trace should not leak"),
+    ).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Retry with mock parser" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry with mock parser" }),
+    );
 
     expect(await screen.findByText("Capture parsed")).toBeDefined();
     await waitFor(() =>

@@ -18,13 +18,10 @@ const navLinks = [
 
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const {
-    state,
-    selectedAreaId,
-    setSelectedAreaId,
-    submitCaptureText,
-  } = useWorkflow();
-  const currentArea = state.areas.find((a) => a.id === selectedAreaId) ?? state.areas[0];
+  const { state, selectedAreaId, setSelectedAreaId, submitCaptureText } =
+    useWorkflow();
+  const currentArea =
+    state.areas.find((a) => a.id === selectedAreaId) ?? state.areas[0];
   const [now, setNow] = useState("--:--:--");
 
   useEffect(() => {
@@ -116,7 +113,9 @@ function AppChrome({ children }: { children: ReactNode }) {
             <select
               aria-label="Current area"
               value={selectedAreaId ?? ""}
-              onChange={(event) => setSelectedAreaId(event.target.value || null)}
+              onChange={(event) =>
+                setSelectedAreaId(event.target.value || null)
+              }
               style={{
                 borderRadius: "999px",
                 border: "1px solid #d1d5db",
@@ -133,13 +132,18 @@ function AppChrome({ children }: { children: ReactNode }) {
             </select>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>Local time</div>
+            <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+              Local time
+            </div>
             <div>{now}</div>
           </div>
           <Button
             type="button"
             onClick={() =>
-              submitCaptureText("Quick capture: sort this thought later.", selectedAreaId)
+              submitCaptureText(
+                "Quick capture: sort this thought later.",
+                selectedAreaId,
+              )
             }
           >
             Quick capture
@@ -174,4 +178,3 @@ export function AppShell({ children }: { children: ReactNode }) {
     </WorkflowProvider>
   );
 }
-

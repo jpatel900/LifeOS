@@ -50,7 +50,12 @@ export type ParseCaptureDraft = z.infer<typeof ParseCaptureDraftSchema>;
 export const ParseCaptureResponseSchema = z.object({
   schema_version: z.literal("1.0"),
   prompt_version: z.string().min(1),
-  parse_status: z.enum(["parsed", "needs_clarification", "unsupported", "low_confidence"]),
+  parse_status: z.enum([
+    "parsed",
+    "needs_clarification",
+    "unsupported",
+    "low_confidence",
+  ]),
   overall_confidence: z.number().min(0).max(1),
   triage_required: z.boolean(),
   triage_reasons: z.array(z.string()),

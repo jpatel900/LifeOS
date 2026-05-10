@@ -131,11 +131,9 @@ export interface MinimalSupabaseClient {
   auth?: {
     getSession?: () => Promise<{
       data: {
-        session:
-          | {
-              access_token: string;
-            }
-          | null;
+        session: {
+          access_token: string;
+        } | null;
       };
       error: { message: string } | null;
     }>;
@@ -314,23 +312,26 @@ async function requireSupabaseUser(
 }
 
 export async function listAreas(
-  client: MinimalSupabaseClient | null
+  client: MinimalSupabaseClient | null,
 ): Promise<AreaListResult> {
   if (!client) {
     return { provider: "mock", areas: mockAreas };
   }
 
-  await requireSupabaseUser(client, "Sign in before loading areas from Supabase.");
+  await requireSupabaseUser(
+    client,
+    "Sign in before loading areas from Supabase.",
+  );
 
   const query = client.from("areas") as {
     select: (columns: string) => {
       order: (
         column: string,
-        options: { ascending: boolean }
+        options: { ascending: boolean },
       ) => {
         eq: (
           column: string,
-          value: boolean
+          value: boolean,
         ) => Promise<{ data: unknown; error: unknown }>;
       };
     };
@@ -353,7 +354,7 @@ export async function listAreas(
 
 export async function createCaptureItem(
   client: MinimalSupabaseClient | null,
-  input: CreateCaptureItemInput
+  input: CreateCaptureItemInput,
 ): Promise<CaptureCreateResult> {
   const parsedInput = CreateCaptureItemInputSchema.parse(input);
 
@@ -712,7 +713,10 @@ export async function editTimeBlockProposal(
     throw new Error("Mock proposal edits use the local workflow context.");
   }
 
-  await requireSupabaseUser(client, "Sign in before editing planning proposals.");
+  await requireSupabaseUser(
+    client,
+    "Sign in before editing planning proposals.",
+  );
 
   const query = client.from("time_block_proposals") as {
     update: (row: Record<string, unknown>) => {
@@ -754,7 +758,10 @@ export async function rejectTimeBlockProposal(
     throw new Error("Mock proposal rejection uses the local workflow context.");
   }
 
-  await requireSupabaseUser(client, "Sign in before rejecting planning proposals.");
+  await requireSupabaseUser(
+    client,
+    "Sign in before rejecting planning proposals.",
+  );
 
   const query = client.from("time_block_proposals") as {
     update: (row: Record<string, unknown>) => {
@@ -789,7 +796,9 @@ export async function acceptTimeBlockProposal(
   proposalId: string,
 ): Promise<TimeBlockProposalAcceptResult> {
   if (!client) {
-    throw new Error("Mock proposal acceptance uses the local workflow context.");
+    throw new Error(
+      "Mock proposal acceptance uses the local workflow context.",
+    );
   }
 
   const user = await requireSupabaseUser(
@@ -807,10 +816,11 @@ export async function acceptTimeBlockProposal(
       };
     };
   };
-  const { data: proposalData, error: proposalReadError } = await proposalReadQuery
-    .select(timeBlockProposalColumns)
-    .eq("id", proposalId)
-    .single();
+  const { data: proposalData, error: proposalReadError } =
+    await proposalReadQuery
+      .select(timeBlockProposalColumns)
+      .eq("id", proposalId)
+      .single();
   if (proposalReadError) {
     throw new Error(getSupabaseMessage(proposalReadError));
   }
@@ -909,9 +919,10 @@ export async function checkTimeBlockProposalConflict(
     },
     body: JSON.stringify(parsedInput),
   });
-  const payload = (await response.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
 
   if (!response.ok) {
     throw new Error(
@@ -968,9 +979,10 @@ export async function createGoogleCalendarEventFromProposal(
     },
     body: JSON.stringify(parsedInput),
   });
-  const payload = (await response.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
 
   if (!response.ok) {
     throw new Error(
@@ -987,7 +999,9 @@ export async function createGoogleCalendarEventFromProposal(
       : block.google_event_id;
 
   if (!googleEventId) {
-    throw new Error("Google Calendar event response did not include an event id.");
+    throw new Error(
+      "Google Calendar event response did not include an event id.",
+    );
   }
 
   return {
@@ -1309,7 +1323,10 @@ export async function markExecutionSession(
     return { provider: "mock", session, block: null, task: null };
   }
 
-  await requireSupabaseUser(client, "Sign in before updating execution sessions.");
+  await requireSupabaseUser(
+    client,
+    "Sign in before updating execution sessions.",
+  );
 
   const sessionReadQuery = client.from("execution_sessions") as {
     select: (columns: string) => {
@@ -1347,14 +1364,16 @@ export async function markExecutionSession(
       .eq("id", sessionId)
       .select(executionSessionColumns)
       .single();
-  if (sessionUpdateError) throw new Error(getSupabaseMessage(sessionUpdateError));
+  if (sessionUpdateError)
+    throw new Error(getSupabaseMessage(sessionUpdateError));
 
   let updatedBlock: CalendarBlock | null = null;
   if (
     currentSession.calendar_block_id &&
     (parsedInput.status === "completed" || parsedInput.status === "missed")
   ) {
-    const blockStatus = parsedInput.status === "completed" ? "completed" : "missed";
+    const blockStatus =
+      parsedInput.status === "completed" ? "completed" : "missed";
     const blockUpdateQuery = client.from("calendar_blocks") as {
       update: (row: Record<string, unknown>) => {
         eq: (

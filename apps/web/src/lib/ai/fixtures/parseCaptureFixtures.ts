@@ -2,7 +2,10 @@ import type { ParseCaptureResponse } from "@lifeos/schemas";
 import { PARSE_CAPTURE_SCHEMA_VERSION } from "../contracts/parseCapture";
 import { PARSE_CAPTURE_PROMPT_VERSION } from "../prompts/parseCapturePrompt";
 
-export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse> = {
+export const parseCaptureRegressionFixtures: Record<
+  string,
+  ParseCaptureResponse
+> = {
   simpleTask: {
     schema_version: PARSE_CAPTURE_SCHEMA_VERSION,
     prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
@@ -14,9 +17,11 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
       {
         draft_type: "task_draft",
         title: "Email Alex about event sponsorship follow-up",
-        description: "Send the sponsor follow-up with the latest attendee estimate.",
+        description:
+          "Send the sponsor follow-up with the latest attendee estimate.",
         area_slug_suggestion: "volunteer-work",
-        first_tiny_step: "Open the sponsor thread and paste the update template.",
+        first_tiny_step:
+          "Open the sponsor thread and paste the update template.",
         estimated_minutes_low: 15,
         estimated_minutes_high: 25,
         due_at: "2026-05-10T15:00:00.000Z",
@@ -32,12 +37,15 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
     parse_status: "needs_clarification",
     overall_confidence: 0.61,
     triage_required: true,
-    triage_reasons: ["Capture mixes goals and execution details without one clear objective."],
+    triage_reasons: [
+      "Capture mixes goals and execution details without one clear objective.",
+    ],
     drafts: [
       {
         draft_type: "project_draft",
         title: "Stabilize volunteer operations workflow",
-        description: "Consolidate event prep, staffing, and sponsorship tracking into one flow.",
+        description:
+          "Consolidate event prep, staffing, and sponsorship tracking into one flow.",
         area_slug_suggestion: "volunteer-work",
         confidence: 0.61,
       },
@@ -53,18 +61,25 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
         confidence: 0.67,
       },
     ],
-    clarification_questions: ["What does success look like for this ops reset in one sentence?"],
+    clarification_questions: [
+      "What does success look like for this ops reset in one sentence?",
+    ],
     ambiguity_assessment: {
-      likely_objective: "Reduce operational chaos before the next volunteer event.",
+      likely_objective:
+        "Reduce operational chaos before the next volunteer event.",
       problem_type: "project",
       complexity_level: "complex",
-      knowns: ["Operations feel fragmented.", "Next event timeline is approaching."],
+      knowns: [
+        "Operations feel fragmented.",
+        "Next event timeline is approaching.",
+      ],
       unknowns: ["Single owner", "Scope boundary", "Success metric"],
       assumptions: ["Current process is inconsistent across events."],
       constraints: ["No broad tool migration this week."],
       risks: ["Prematurely committing to a full redesign."],
       dependencies: ["Volunteer lead availability"],
-      recommended_first_move: "Define objective and non-goals before task expansion.",
+      recommended_first_move:
+        "Define objective and non-goals before task expansion.",
       what_not_to_do_yet: ["Do not create a full roadmap before triage."],
       confidence: 0.58,
       review_trigger: "Objective and scope are still ambiguous.",
@@ -81,16 +96,20 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
       {
         draft_type: "task_draft",
         title: "Draft architecture notes for auth flow",
-        description: "Capture decisions that impact both personal project and work implementation.",
+        description:
+          "Capture decisions that impact both personal project and work implementation.",
         area_slug_suggestion: null,
-        first_tiny_step: "Split notes into work-owned and side-project-owned sections.",
+        first_tiny_step:
+          "Split notes into work-owned and side-project-owned sections.",
         estimated_minutes_low: 20,
         estimated_minutes_high: 40,
         due_at: null,
         confidence: 0.6,
       },
     ],
-    clarification_questions: ["Should this live under Main Job or Side Project?"],
+    clarification_questions: [
+      "Should this live under Main Job or Side Project?",
+    ],
     ambiguity_assessment: {
       likely_objective: "Separate mixed ownership work into one clear area.",
       problem_type: "decision",
@@ -136,12 +155,15 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
     parse_status: "needs_clarification",
     overall_confidence: 0.52,
     triage_required: true,
-    triage_reasons: ["Critical missing info: owner and external dependency are unknown."],
+    triage_reasons: [
+      "Critical missing info: owner and external dependency are unknown.",
+    ],
     drafts: [
       {
         draft_type: "task_draft",
         title: "Unblock vendor contract follow-up",
-        description: "A dependency is blocked but responsible owner is missing.",
+        description:
+          "A dependency is blocked but responsible owner is missing.",
         area_slug_suggestion: "main-job",
         first_tiny_step: null,
         estimated_minutes_low: null,
@@ -150,7 +172,9 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
         confidence: 0.52,
       },
     ],
-    clarification_questions: ["Who owns vendor follow-up and what is the blocker detail?"],
+    clarification_questions: [
+      "Who owns vendor follow-up and what is the blocker detail?",
+    ],
     ambiguity_assessment: {
       likely_objective: "Resolve blocker ownership before scheduling.",
       problem_type: "unknown",
@@ -187,7 +211,9 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
         confidence: 0.39,
       },
     ],
-    clarification_questions: ["What concrete outcome do you want from this capture?"],
+    clarification_questions: [
+      "What concrete outcome do you want from this capture?",
+    ],
     ambiguity_assessment: null,
   },
   messyBrainDump: {
@@ -196,7 +222,9 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
     parse_status: "needs_clarification",
     overall_confidence: 0.64,
     triage_required: true,
-    triage_reasons: ["Capture contains multiple unrelated threads and emotional overload."],
+    triage_reasons: [
+      "Capture contains multiple unrelated threads and emotional overload.",
+    ],
     drafts: [
       {
         draft_type: "task_draft",
@@ -217,15 +245,19 @@ export const parseCaptureRegressionFixtures: Record<string, ParseCaptureResponse
       complexity_level: "moderate",
       knowns: ["Multiple concerns are mixed."],
       unknowns: ["Priority order", "Deadline-critical item"],
-      assumptions: ["Small selection-first strategy is safer than broad planning."],
+      assumptions: [
+        "Small selection-first strategy is safer than broad planning.",
+      ],
       constraints: ["Limit first move to 30 minutes."],
       risks: ["Trying to solve everything in one pass."],
       dependencies: [],
-      recommended_first_move: "Choose one urgent thread and draft a single next action.",
-      what_not_to_do_yet: ["Do not create tasks for every line in the dump yet."],
+      recommended_first_move:
+        "Choose one urgent thread and draft a single next action.",
+      what_not_to_do_yet: [
+        "Do not create tasks for every line in the dump yet.",
+      ],
       confidence: 0.63,
       review_trigger: "Overloaded capture needs triage-first reduction.",
     },
   },
 };
-

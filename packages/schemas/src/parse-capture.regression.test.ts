@@ -110,13 +110,18 @@ describe("ParseCaptureResponseSchema regression fixtures", () => {
       overall_confidence: 0.8,
       triage_required: false,
       triage_reasons: [],
-      drafts: [{ draft_type: "task_draft", title: "Incomplete", confidence: 0.8 }],
+      drafts: [
+        { draft_type: "task_draft", title: "Incomplete", confidence: 0.8 },
+      ],
       clarification_questions: [],
       ambiguity_assessment: null,
     };
 
-    expect(ParseCaptureResponseSchema.safeParse(invalidEnum).success).toBe(false);
-    expect(ParseCaptureResponseSchema.safeParse(invalidShape).success).toBe(false);
+    expect(ParseCaptureResponseSchema.safeParse(invalidEnum).success).toBe(
+      false,
+    );
+    expect(ParseCaptureResponseSchema.safeParse(invalidShape).success).toBe(
+      false,
+    );
   });
 });
-

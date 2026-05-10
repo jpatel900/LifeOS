@@ -110,7 +110,8 @@ const project = {
   user_id: area.user_id,
   area_id: area.id,
   title: "Volunteer ops system project",
-  description: "Draft created from capture: Need a project to organize volunteer ops system",
+  description:
+    "Draft created from capture: Need a project to organize volunteer ops system",
   status: "active",
   created_at: "2026-05-07T00:00:00.000Z",
   updated_at: "2026-05-07T00:00:00.000Z",
@@ -228,7 +229,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Areas could not load");
-    expect(alert).toHaveTextContent("Sign in before loading areas from Supabase.");
+    expect(alert).toHaveTextContent(
+      "Sign in before loading areas from Supabase.",
+    );
   });
 
   it("saves capture_items through Supabase from the capture page", async () => {
@@ -244,16 +247,21 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CapturePage />);
 
     fireEvent.change(
-      await screen.findByPlaceholderText("What's on your mind? Type anything..."),
+      await screen.findByPlaceholderText(
+        "What's on your mind? Type anything...",
+      ),
       { target: { value: "Call dentist tomorrow" } },
     );
     fireEvent.click(screen.getByRole("button", { name: "Save capture" }));
 
     await waitFor(() => {
-      expect(mocks.createCaptureItem).toHaveBeenCalledWith(mocks.supabaseClient, {
-        raw_text: "Call dentist tomorrow",
-        area_id: area.id,
-      });
+      expect(mocks.createCaptureItem).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        {
+          raw_text: "Call dentist tomorrow",
+          area_id: area.id,
+        },
+      );
     });
     expect(await screen.findByText("Capture saved")).toBeDefined();
     expect(screen.getAllByText("supabase")).toHaveLength(2);
@@ -271,14 +279,18 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CapturePage />);
 
     fireEvent.change(
-      await screen.findByPlaceholderText("What's on your mind? Type anything..."),
+      await screen.findByPlaceholderText(
+        "What's on your mind? Type anything...",
+      ),
       { target: { value: "Call dentist tomorrow" } },
     );
     fireEvent.click(screen.getByRole("button", { name: "Save capture" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Capture was not saved");
-    expect(alert).toHaveTextContent("Sign in before saving captures to Supabase.");
+    expect(alert).toHaveTextContent(
+      "Sign in before saving captures to Supabase.",
+    );
   });
 
   it("accepting a task draft creates a task through Supabase", async () => {
@@ -298,7 +310,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Accept task draft" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Accept task draft" }),
+    );
 
     await waitFor(() => {
       expect(mocks.createTask).toHaveBeenCalledWith(mocks.supabaseClient, {
@@ -309,7 +323,8 @@ describe("Phase 4A Supabase persistence UI", () => {
         priority_confidence: 0.78,
         estimated_minutes_low: 30,
         estimated_minutes_high: 60,
-        first_tiny_step: "Clarify the next concrete step for: Call dentist tomorrow",
+        first_tiny_step:
+          "Clarify the next concrete step for: Call dentist tomorrow",
       });
     });
   });
@@ -358,7 +373,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Reject task draft" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Reject task draft" }),
+    );
 
     await waitFor(() => {
       expect(mocks.createTask).not.toHaveBeenCalled();
@@ -380,7 +397,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Propose time" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Propose time" }),
+    );
 
     await waitFor(() => {
       expect(mocks.createTimeBlockProposal).toHaveBeenCalledWith(
@@ -409,7 +428,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Accept local block" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Accept local block" }),
+    );
 
     await waitFor(() => {
       expect(mocks.acceptTimeBlockProposal).toHaveBeenCalledWith(
@@ -447,7 +468,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     expect(await screen.findByText("Conflict not checked")).toBeDefined();
-    fireEvent.click(await screen.findByRole("button", { name: "Check conflict" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Check conflict" }),
+    );
 
     await waitFor(() => {
       expect(mocks.checkTimeBlockProposalConflict).toHaveBeenCalledWith(
@@ -471,12 +494,16 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Check conflict" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Check conflict" }),
+    );
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Planning change was not saved");
     expect(alert).toHaveTextContent("Google Calendar is not connected.");
-    expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("creates a Google Calendar event from an explicitly approved persisted proposal", async () => {
@@ -489,7 +516,9 @@ describe("Phase 4A Supabase persistence UI", () => {
         }),
       },
     };
-    mocks.createSupabaseBrowserClient.mockReturnValue(supabaseClientWithSession);
+    mocks.createSupabaseBrowserClient.mockReturnValue(
+      supabaseClientWithSession,
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -549,7 +578,9 @@ describe("Phase 4A Supabase persistence UI", () => {
         }),
       },
     };
-    mocks.createSupabaseBrowserClient.mockReturnValue(supabaseClientWithSession);
+    mocks.createSupabaseBrowserClient.mockReturnValue(
+      supabaseClientWithSession,
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
@@ -663,7 +694,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Session marked completed through supabase.");
+    expect(status).toHaveTextContent(
+      "Session marked completed through supabase.",
+    );
   });
 
   it("marks a persisted execution session missed", async () => {
@@ -715,7 +748,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<ReviewPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Create daily review" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Create daily review" }),
+    );
 
     await waitFor(() => {
       expect(mocks.createReviewEntry).toHaveBeenCalledWith(

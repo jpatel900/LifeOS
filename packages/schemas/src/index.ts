@@ -64,7 +64,8 @@ export const CreateTaskInputSchema = z
       input.estimated_minutes_high === null ||
       input.estimated_minutes_high >= input.estimated_minutes_low,
     {
-      message: "estimated_minutes_high must be greater than or equal to estimated_minutes_low",
+      message:
+        "estimated_minutes_high must be greater than or equal to estimated_minutes_low",
       path: ["estimated_minutes_high"],
     },
   )
@@ -77,13 +78,20 @@ export const CreateTaskInputSchema = z
     energy_type: input.energy_type ?? null,
     due_at: input.due_at ?? null,
     definition_of_done:
-      input.definition_of_done ?? "Complete the first useful move and note the outcome.",
+      input.definition_of_done ??
+      "Complete the first useful move and note the outcome.",
   }));
 
 export type CreateTaskInput = z.input<typeof CreateTaskInputSchema>;
 
-function endAfterStart(input: { proposed_start: string; proposed_end: string }) {
-  return new Date(input.proposed_end).getTime() > new Date(input.proposed_start).getTime();
+function endAfterStart(input: {
+  proposed_start: string;
+  proposed_end: string;
+}) {
+  return (
+    new Date(input.proposed_end).getTime() >
+    new Date(input.proposed_start).getTime()
+  );
 }
 
 const proposalTimeRangeMessage = {
