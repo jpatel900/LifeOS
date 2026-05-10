@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  getGoogleCalendarConnectionForAccessToken,
+  getGoogleCalendarStoredConnectionForAccessToken,
   upsertGoogleCalendarConnectionForAccessToken,
 } from "@/lib/googleCalendar/server";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
@@ -36,17 +36,21 @@ export async function POST(request: Request) {
   try {
     const { user } = await requireSupabaseServerUser(accessToken);
     const { connection } =
-      await getGoogleCalendarConnectionForAccessToken(accessToken);
+      await getGoogleCalendarStoredConnectionForAccessToken(accessToken);
 
     const updatedConnection = connection
       ? await upsertGoogleCalendarConnectionForAccessToken(accessToken, {
           calendar_id: connection.calendar_id,
           connected_at: connection.connected_at,
           disconnected_at: new Date().toISOString(),
+          encrypted_access_token: null,
+          encrypted_refresh_token: null,
           granted_scopes_json: Array.isArray(connection.granted_scopes_json)
             ? (connection.granted_scopes_json as string[])
             : [],
           status: "disconnected",
+          token_expires_at: null,
+          token_type: null,
           user_id: user.id,
         })
       : null;
@@ -56,7 +60,7 @@ export async function POST(request: Request) {
       connection: updatedConnection,
       status: "disconnected",
       message:
-        "LifeOS cleared local Google Calendar connection metadata. Phase 7C does not persist Google tokens, so revoke access from your Google account separately if needed.",
+        "LifeOS cleared local Google Calendar token material and connection metadata. Google-side revoke still lives in your Google account if you want to remove consent there too.",
     });
   } catch (error) {
     return NextResponse.json(

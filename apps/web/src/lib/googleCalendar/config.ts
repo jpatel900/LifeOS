@@ -10,7 +10,7 @@ export interface GoogleCalendarConfig {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
-  tokenEncryptionKey: string | null;
+  tokenEncryptionKey: string;
 }
 
 function assertServerRuntime() {
@@ -34,8 +34,14 @@ export function getGoogleCalendarConfig(
   const clientId = env.GOOGLE_CLIENT_ID;
   const clientSecret = env.GOOGLE_CLIENT_SECRET;
   const redirectUri = env.GOOGLE_REDIRECT_URI;
+  const tokenEncryptionKey = env.GOOGLE_TOKEN_ENCRYPTION_KEY;
 
-  if (!hasText(clientId) || !hasText(clientSecret) || !hasText(redirectUri)) {
+  if (
+    !hasText(clientId) ||
+    !hasText(clientSecret) ||
+    !hasText(redirectUri) ||
+    !hasText(tokenEncryptionKey)
+  ) {
     return null;
   }
 
@@ -43,9 +49,7 @@ export function getGoogleCalendarConfig(
     clientId,
     clientSecret,
     redirectUri,
-    tokenEncryptionKey: hasText(env.GOOGLE_TOKEN_ENCRYPTION_KEY)
-      ? env.GOOGLE_TOKEN_ENCRYPTION_KEY
-      : null,
+    tokenEncryptionKey,
   };
 }
 

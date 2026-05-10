@@ -547,9 +547,9 @@ the table but does not add Google API calls.
 
 ### 6.5 `google_calendar_connections`
 
-Purpose: server-owned Google Calendar connection metadata. Phase 7B intentionally
-does not store OAuth tokens because encrypted token storage is a later explicit
-implementation decision.
+Purpose: server-owned Google Calendar connection state, including encrypted
+server-only OAuth token material for later free/busy and approval-gated write
+phases.
 
 | Column                              | Type                 |
 | ----------------------------------- | -------------------- |
@@ -557,11 +557,15 @@ implementation decision.
 | user_id                             | uuid unique          |
 | provider                            | text                 |
 | calendar_id                         | text                 |
+| encrypted_access_token              | text nullable        |
+| encrypted_refresh_token             | text nullable        |
 | granted_scopes_json                 | jsonb                |
 | status                              | text                 |
 | first_write_warning_acknowledged_at | timestamptz nullable |
 | connected_at                        | timestamptz nullable |
 | disconnected_at                     | timestamptz nullable |
+| token_expires_at                    | timestamptz nullable |
+| token_type                          | text nullable        |
 | created_at                          | timestamptz          |
 | updated_at                          | timestamptz          |
 
@@ -571,6 +575,12 @@ Statuses:
 - connected
 - disconnected
 - error
+
+Notes:
+
+- Token ciphertext must remain server-only and never appear in client payloads.
+- `metadata_only` remains the downgrade state for older rows that were created
+  before encrypted token storage existed.
 
 Indexes:
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getGoogleCalendarConnectionForAccessToken: vi.fn(),
+  getGoogleCalendarStoredConnectionForAccessToken: vi.fn(),
   requireSupabaseServerUser: vi.fn(),
   upsertGoogleCalendarConnectionForAccessToken: vi.fn(),
 }));
@@ -11,8 +11,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/googleCalendar/server", () => ({
-  getGoogleCalendarConnectionForAccessToken:
-    mocks.getGoogleCalendarConnectionForAccessToken,
+  getGoogleCalendarStoredConnectionForAccessToken:
+    mocks.getGoogleCalendarStoredConnectionForAccessToken,
   upsertGoogleCalendarConnectionForAccessToken:
     mocks.upsertGoogleCalendarConnectionForAccessToken,
 }));
@@ -40,12 +40,14 @@ describe("google-calendar disconnect route", () => {
     mocks.requireSupabaseServerUser.mockResolvedValue({
       user: { id: "550e8400-e29b-41d4-a716-446655440001" },
     });
-    mocks.getGoogleCalendarConnectionForAccessToken.mockResolvedValue({
+    mocks.getGoogleCalendarStoredConnectionForAccessToken.mockResolvedValue({
       connection: {
         id: "550e8400-e29b-41d4-a716-446655440401",
         user_id: "550e8400-e29b-41d4-a716-446655440001",
         provider: "google_calendar",
         calendar_id: "primary",
+        encrypted_access_token: "encrypted-google-access-token",
+        encrypted_refresh_token: "encrypted-google-refresh-token",
         granted_scopes_json: [
           "https://www.googleapis.com/auth/calendar.freebusy",
           "https://www.googleapis.com/auth/calendar.events.owned",
@@ -54,6 +56,8 @@ describe("google-calendar disconnect route", () => {
         first_write_warning_acknowledged_at: null,
         connected_at: "2026-05-09T00:00:00.000Z",
         disconnected_at: null,
+        token_expires_at: "2026-05-09T01:00:00.000Z",
+        token_type: "Bearer",
         created_at: "2026-05-09T00:00:00.000Z",
         updated_at: "2026-05-09T00:00:00.000Z",
       },
@@ -63,6 +67,8 @@ describe("google-calendar disconnect route", () => {
       user_id: "550e8400-e29b-41d4-a716-446655440001",
       provider: "google_calendar",
       calendar_id: "primary",
+      encrypted_access_token: null,
+      encrypted_refresh_token: null,
       granted_scopes_json: [
         "https://www.googleapis.com/auth/calendar.freebusy",
         "https://www.googleapis.com/auth/calendar.events.owned",
@@ -71,6 +77,8 @@ describe("google-calendar disconnect route", () => {
       first_write_warning_acknowledged_at: null,
       connected_at: "2026-05-09T00:00:00.000Z",
       disconnected_at: "2026-05-09T01:00:00.000Z",
+      token_expires_at: null,
+      token_type: null,
       created_at: "2026-05-09T00:00:00.000Z",
       updated_at: "2026-05-09T01:00:00.000Z",
     });
@@ -92,7 +100,11 @@ describe("google-calendar disconnect route", () => {
     ).toHaveBeenCalledWith(
       "supabase-access-token",
       expect.objectContaining({
+        encrypted_access_token: null,
+        encrypted_refresh_token: null,
         status: "disconnected",
+        token_expires_at: null,
+        token_type: null,
         user_id: "550e8400-e29b-41d4-a716-446655440001",
       }),
     );

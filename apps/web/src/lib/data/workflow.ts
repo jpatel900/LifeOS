@@ -1,6 +1,7 @@
 import {
   AreaSchema,
   CalendarBlockSchema,
+  CheckTimeBlockProposalConflictInputSchema,
   CaptureItemSchema,
   CreateExecutionSessionInputSchema,
   CreateTimeBlockProposalInputSchema,
@@ -83,6 +84,13 @@ export interface TimeBlockProposalAcceptResult {
   block: CalendarBlock;
 }
 
+export interface TimeBlockProposalConflictCheckResult {
+  provider: DataProvider;
+  proposal: TimeBlockProposal;
+  hasConflict: boolean;
+  checkedAt: string;
+}
+
 export interface ExecutionReviewItemsResult {
   provider: DataProvider;
   tasks: Task[];
@@ -112,6 +120,16 @@ export interface ReviewEntryCreateResult {
 export interface MinimalSupabaseClient {
   from: (table: string) => unknown;
   auth?: {
+    getSession?: () => Promise<{
+      data: {
+        session:
+          | {
+              access_token: string;
+            }
+          | null;
+      };
+      error: { message: string } | null;
+    }>;
     getUser: () => Promise<{
       data: { user: { id: string } | null };
       error: { message: string } | null;
@@ -841,6 +859,67 @@ export async function acceptTimeBlockProposal(
     provider: "supabase",
     proposal: parseTimeBlockProposal(acceptedData),
     block: parseCalendarBlock(blockData),
+  };
+}
+
+export async function checkTimeBlockProposalConflict(
+  client: MinimalSupabaseClient | null,
+  proposalId: string,
+): Promise<TimeBlockProposalConflictCheckResult> {
+  const parsedInput = CheckTimeBlockProposalConflictInputSchema.parse({
+    proposal_id: proposalId,
+  });
+
+  if (!client) {
+    throw new Error(
+      "Google Calendar conflict checks require Supabase configuration.",
+    );
+  }
+
+  if (!client.auth?.getSession) {
+    throw new Error("Supabase auth is unavailable.");
+  }
+
+  const { data, error } = await client.auth.getSession();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const accessToken = data.session?.access_token?.trim();
+
+  if (!accessToken) {
+    throw new Error("Sign in before checking Google Calendar conflicts.");
+  }
+
+  const response = await fetch("/api/google-calendar/freebusy", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(parsedInput),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | Record<string, unknown>
+    | null;
+
+  if (!response.ok) {
+    throw new Error(
+      typeof payload?.error === "string"
+        ? payload.error
+        : "Google Calendar conflict check failed.",
+    );
+  }
+
+  return {
+    provider: "supabase",
+    proposal: parseTimeBlockProposal(payload?.proposal),
+    hasConflict: Boolean(payload?.has_conflict),
+    checkedAt:
+      typeof payload?.checked_at === "string"
+        ? payload.checked_at
+        : new Date().toISOString(),
   };
 }
 

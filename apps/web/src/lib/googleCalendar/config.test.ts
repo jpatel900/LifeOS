@@ -19,18 +19,30 @@ describe("Google Calendar server config", () => {
     expect(isGoogleCalendarConfigured(env)).toBe(false);
   });
 
-  it("returns server-only Google Calendar config without requiring token encryption yet", () => {
+  it("stays disabled when the token encryption key is missing", () => {
     const env = {
       GOOGLE_CLIENT_ID: "client-id",
       GOOGLE_CLIENT_SECRET: "client-secret",
       GOOGLE_REDIRECT_URI: "http://localhost:3000/api/google-calendar/callback",
     };
 
+    expect(getGoogleCalendarConfig(env)).toBeNull();
+    expect(isGoogleCalendarConfigured(env)).toBe(false);
+  });
+
+  it("returns server-only Google Calendar config when secure token storage is configured", () => {
+    const env = {
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_REDIRECT_URI: "http://localhost:3000/api/google-calendar/callback",
+      GOOGLE_TOKEN_ENCRYPTION_KEY: "token-encryption-key",
+    };
+
     expect(getGoogleCalendarConfig(env)).toEqual({
       clientId: "client-id",
       clientSecret: "client-secret",
       redirectUri: "http://localhost:3000/api/google-calendar/callback",
-      tokenEncryptionKey: null,
+      tokenEncryptionKey: "token-encryption-key",
     });
     expect(isGoogleCalendarConfigured(env)).toBe(true);
   });

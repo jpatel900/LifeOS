@@ -26,7 +26,7 @@ export async function GET(request: Request) {
       connection: null,
       status: "disconnected",
       message:
-        "Google Calendar is not configured on this server. Mock/local mode remains available.",
+        "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key when you want real Google integration. Mock/local mode remains available.",
     });
   }
 
@@ -54,10 +54,10 @@ export async function GET(request: Request) {
       status: connection?.status === "connected" ? "connected" : connection?.status === "error" ? "error" : "disconnected",
       message:
         connection?.status === "connected"
-          ? "Google Calendar consent metadata is connected. Phase 7C still does not enable free/busy or event writes."
+          ? "Google Calendar is connected with encrypted server-only token storage. Free/busy checks and calendar writes still remain disabled until later phases."
           : connection?.status === "error"
             ? "The last Google Calendar OAuth callback failed safely. Reconnect to try again."
-            : "Google Calendar is ready to connect, but no active connection metadata exists yet.",
+            : "Google Calendar is ready to connect, but no active encrypted token connection exists yet.",
     });
   } catch (error) {
     return NextResponse.json(

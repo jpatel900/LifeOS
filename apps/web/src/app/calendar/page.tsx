@@ -6,6 +6,7 @@ import { Button } from "@lifeos/ui";
 import { EmptyState } from "../components/EmptyState";
 import {
   acceptTimeBlockProposal,
+  checkTimeBlockProposalConflict,
   createTimeBlockProposal,
   editTimeBlockProposal,
   listPlanningItems,
@@ -60,6 +61,37 @@ function proposalRationale(proposal: TimeBlockProposal | { rationale: string }) 
   }
 
   return "Local planning proposal.";
+}
+
+function proposalConflictSummary(proposal: TimeBlockProposal) {
+  const details = proposal.conflict_details_json;
+  const hasCheckedConflict =
+    details &&
+    typeof details === "object" &&
+    !Array.isArray(details) &&
+    typeof (details as Record<string, unknown>).checked_at === "string";
+
+  if (proposal.conflict_flag) {
+    return {
+      label: "Conflict flagged",
+      backgroundColor: "#fee2e2",
+      color: "#b91c1c",
+    };
+  }
+
+  if (hasCheckedConflict) {
+    return {
+      label: "No conflict detected",
+      backgroundColor: "#dcfce7",
+      color: "#166534",
+    };
+  }
+
+  return {
+    label: "Conflict not checked",
+    backgroundColor: "#e5e7eb",
+    color: "#374151",
+  };
 }
 
 export default function CalendarPage() {
@@ -247,6 +279,40 @@ export default function CalendarPage() {
     }
   }
 
+  async function handleCheckConflict(proposalId: string) {
+    setActionState({ status: "saving", label: "conflict check" });
+    try {
+      const result = await checkTimeBlockProposalConflict(
+        createSupabaseBrowserClient(),
+        proposalId,
+      );
+
+      setPlanningState((current) =>
+        current.status === "ready" && current.provider === "supabase"
+          ? {
+              ...current,
+              proposals: current.proposals.map((item) =>
+                item.id === result.proposal.id ? result.proposal : item,
+              ),
+            }
+          : current,
+      );
+      setActionState({
+        status: "saved",
+        label: "Conflict checked through",
+        provider: result.provider,
+      });
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to check Google Calendar conflict.",
+      });
+    }
+  }
+
   const persistedTasks = usesPersistedPlanning ? planningState.tasks : [];
   const proposals = (
     usesPersistedPlanning ? planningState.proposals : state.timeBlockProposals
@@ -267,9 +333,10 @@ export default function CalendarPage() {
       <section>
         <h1>Calendar / Planning</h1>
         <p style={{ marginTop: "0.25rem", color: "#4b5563", fontSize: "0.95rem" }}>
-          This view shows local time-block proposals and app-owned blocks only. No
-          external calendar integration is active in this phase. Accepting a proposal
-          creates a local scheduled block only.
+          This view keeps local time-block proposals as the source of truth.
+          Google Calendar conflict checks are optional and advisory only when a
+          server-side connection exists. Accepting a proposal still creates a local
+          scheduled block only.
         </p>
       </section>
 
@@ -334,7 +401,7 @@ export default function CalendarPage() {
       {!hasAny ? (
         <EmptyState
           title="No time-block proposals yet."
-          description="When you propose time for tasks, local-only blocks will appear here. External calendars are not connected in Phase 4C."
+          description="When you propose time for tasks, local blocks appear here first. Google Calendar conflict checks are optional and do not create events."
         />
       ) : (
         <div
@@ -432,6 +499,7 @@ export default function CalendarPage() {
                   const area = usesPersistedPlanning
                     ? null
                     : getAreaById(proposal.area_id);
+                  const conflictSummary = proposalConflictSummary(proposal);
                   const task = usesPersistedPlanning
                     ? persistedTasks.find((item) => item.id === proposal.task_id)
                     : state.tasks.find((item) => item.id === proposal.task_id);
@@ -476,31 +544,17 @@ export default function CalendarPage() {
                         <span style={{ fontSize: "0.7rem", color: "#6b7280" }}>
                           Status: {proposal.status}
                         </span>
-                        {proposal.conflict_flag ? (
-                          <span
-                            style={{
-                              fontSize: "0.7rem",
-                              color: "#b91c1c",
-                              backgroundColor: "#fee2e2",
-                              borderRadius: "999px",
-                              padding: "0.05rem 0.5rem",
-                            }}
-                          >
-                            Conflict flagged
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              fontSize: "0.7rem",
-                              color: "#166534",
-                              backgroundColor: "#dcfce7",
-                              borderRadius: "999px",
-                              padding: "0.05rem 0.5rem",
-                            }}
-                          >
-                            No conflict detected
-                          </span>
-                        )}
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            color: conflictSummary.color,
+                            backgroundColor: conflictSummary.backgroundColor,
+                            borderRadius: "999px",
+                            padding: "0.05rem 0.5rem",
+                          }}
+                        >
+                          {conflictSummary.label}
+                        </span>
                       </div>
                       <div
                         style={{
@@ -512,12 +566,27 @@ export default function CalendarPage() {
                       >
                         <Button
                           type="button"
+                          onClick={() => void handleCheckConflict(proposal.id)}
+                          disabled={
+                            !usesPersistedPlanning ||
+                            actionState.status === "saving" ||
+                            (proposal.status !== "proposed" &&
+                              proposal.status !== "edited")
+                          }
+                        >
+                          Check conflict
+                        </Button>
+                        <Button
+                          type="button"
                           onClick={() =>
                             usesPersistedPlanning
                               ? void handleAcceptProposal(proposal.id)
                               : acceptLocalProposal(proposal.id)
                           }
-                          disabled={proposal.status === "accepted"}
+                          disabled={
+                            actionState.status === "saving" ||
+                            proposal.status === "accepted"
+                          }
                         >
                           Accept local block
                         </Button>
@@ -535,6 +604,7 @@ export default function CalendarPage() {
                                 })
                           }
                           disabled={
+                            actionState.status === "saving" ||
                             proposal.status === "accepted" ||
                             proposal.status === "rejected"
                           }
@@ -549,6 +619,7 @@ export default function CalendarPage() {
                               : rejectLocalProposal(proposal.id)
                           }
                           disabled={
+                            actionState.status === "saving" ||
                             proposal.status === "accepted" ||
                             proposal.status === "rejected"
                           }
@@ -632,8 +703,9 @@ export default function CalendarPage() {
 
       <section style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}>
         <p style={{ margin: 0 }}>
-          Planning remains local-only in Phase 4C. No Google Calendar, free/busy,
-          OpenAI, or autonomous scheduling path is active here.
+          Time proposals stay local first. Free/busy checks are manual and advisory
+          only. No Google Calendar events, OpenAI scheduling, autonomous
+          rescheduling, or background calendar changes happen here.
         </p>
       </section>
     </div>

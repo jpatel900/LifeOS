@@ -176,7 +176,13 @@ describe("Supabase local database scaffold", () => {
     expect(sql).toContain(
       "constraint external_write_events_result_status_check check (result_status in ('pending', 'succeeded', 'failed'))",
     );
-    expect(sql).not.toMatch(/refresh_token|access_token|client_secret/i);
+    expect(sql).toContain("encrypted_access_token text");
+    expect(sql).toContain("encrypted_refresh_token text");
+    expect(sql).toContain("token_expires_at timestamptz");
+    expect(sql).toContain("token_type text");
+    expect(sql).not.toMatch(/(^|[^a-z_])access_token([^a-z_]|$)/i);
+    expect(sql).not.toMatch(/(^|[^a-z_])refresh_token([^a-z_]|$)/i);
+    expect(sql).not.toMatch(/client_secret/i);
   });
 
   it("seeds local authenticated users and starter areas for Phase 4A smoke tests", () => {

@@ -62,7 +62,7 @@ function getFlashMessage() {
     return {
       severity: "success" as const,
       message:
-        "Google Calendar OAuth completed. Phase 7C stores consent metadata only; free/busy and event writes remain disabled.",
+        "Google Calendar OAuth completed. Tokens are stored encrypted on the server only. Free/busy checks and event writes remain disabled until later phases.",
     };
   }
 
@@ -70,7 +70,7 @@ function getFlashMessage() {
     return {
       severity: "error" as const,
       message:
-        "Google Calendar is not configured on this server. Add server-only Google OAuth env vars before connecting.",
+        "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key before connecting.",
     };
   }
 
@@ -103,6 +103,14 @@ function getFlashMessage() {
       severity: "error" as const,
       message:
         "Google Calendar OAuth callback failed safely. No calendar writes were attempted.",
+    };
+  }
+
+  if (errorCode === "refresh_token_missing") {
+    return {
+      severity: "error" as const,
+      message:
+        "Google Calendar did not return a usable refresh token, so LifeOS refused to activate the connection. Reconnect and re-consent before continuing.",
     };
   }
 
@@ -351,7 +359,7 @@ export function GoogleCalendarConnectionPanel() {
         connected: false,
         connection: null,
         message:
-          "LifeOS marked Google Calendar as disconnected locally. Phase 7C does not store Google tokens, so revocation still lives in your Google account.",
+          "LifeOS cleared the local Google Calendar connection and encrypted token material. Google-side revocation still lives in your Google account if you want to remove consent there too.",
         severity: "info",
       });
       setActionState({ status: "idle" });
@@ -382,8 +390,8 @@ export function GoogleCalendarConnectionPanel() {
     >
       <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Google Calendar</h2>
       <p style={{ marginTop: 0, color: "#475569", fontSize: "0.92rem" }}>
-        Phase 7C adds consent and connection metadata only. This page does not run
-        free/busy checks, write events, or store Google OAuth tokens.
+        This page can store Google OAuth tokens encrypted on the server only. It
+        still does not run free/busy checks or write Google Calendar events.
       </p>
 
       {flashMessage ? (

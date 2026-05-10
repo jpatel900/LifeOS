@@ -815,8 +815,12 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
           user_id: userA.id,
           provider: "google_calendar",
           calendar_id: "primary",
+          encrypted_access_token: "encrypted-user-a-access-token",
+          encrypted_refresh_token: "encrypted-user-a-refresh-token",
           granted_scopes_json: [],
           status: "metadata_only",
+          token_expires_at: "2026-05-09T01:00:00.000Z",
+          token_type: "Bearer",
         });
       expect(insertConnectionAError).toBeNull();
 
@@ -826,8 +830,12 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
           user_id: userB.id,
           provider: "google_calendar",
           calendar_id: "primary",
+          encrypted_access_token: "encrypted-user-b-access-token",
+          encrypted_refresh_token: "encrypted-user-b-refresh-token",
           granted_scopes_json: [],
           status: "metadata_only",
+          token_expires_at: "2026-05-09T01:00:00.000Z",
+          token_type: "Bearer",
         });
       expect(insertConnectionBError).toBeNull();
 
@@ -866,14 +874,18 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       const { data: visibleConnectionsToA, error: selectConnectionAError } =
         await userAClient
           .from("google_calendar_connections")
-          .select("user_id,provider,status")
+          .select("user_id,provider,status,encrypted_access_token,encrypted_refresh_token,token_expires_at,token_type")
           .eq("provider", "google_calendar");
       expect(selectConnectionAError).toBeNull();
       expect(visibleConnectionsToA).toEqual([
         {
+          encrypted_access_token: "encrypted-user-a-access-token",
+          encrypted_refresh_token: "encrypted-user-a-refresh-token",
           user_id: userA.id,
           provider: "google_calendar",
           status: "metadata_only",
+          token_expires_at: "2026-05-09T01:00:00+00:00",
+          token_type: "Bearer",
         },
       ]);
 
@@ -909,8 +921,12 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         user_id: userB.id,
         provider: "google_calendar",
         calendar_id: "primary",
+        encrypted_access_token: "encrypted-cross-user-access-token",
+        encrypted_refresh_token: "encrypted-cross-user-refresh-token",
         granted_scopes_json: [],
         status: "metadata_only",
+        token_expires_at: "2026-05-09T01:00:00.000Z",
+        token_type: "Bearer",
       });
 
     const { error: auditError } = await userAClient

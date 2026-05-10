@@ -83,17 +83,23 @@ Rules:
 
 ### 5.3 OAuth Token Handling
 
-- tokens stored encrypted/server-side through provider-supported mechanisms
-- Phase 7B stores Google Calendar connection metadata only; OAuth token storage
-  is deferred until an explicit encrypted-token storage implementation exists
+- Google Calendar OAuth tokens are stored encrypted server-side only
+- Phase 7B stores connection metadata only; the later token-storage phase adds
+  encrypted `encrypted_access_token` and `encrypted_refresh_token` columns plus
+  `token_expires_at` and `token_type` metadata on
+  `google_calendar_connections`
 - Phase 7C uses a short-lived sealed HttpOnly cookie only to carry the
   initiating Supabase access token across the Google redirect so the callback
-  can write metadata through normal RLS, then clears that cookie immediately
+  can write connection state through normal RLS, then clears that cookie
+  immediately
+- if Google does not return a usable refresh token and no prior encrypted
+  refresh token exists, the callback must fail safely and keep the connection
+  inactive
 - never log tokens
 - never send tokens to AI
 - never expose tokens to frontend
-- Phase 7C disconnect is local metadata-only; explicit Google-side revoke remains
-  a later token-storage/revoke phase
+- disconnect clears local encrypted token material and connection state;
+  explicit Google-side revoke remains a later revoke phase
 
 ## 6. AI Privacy Rules
 

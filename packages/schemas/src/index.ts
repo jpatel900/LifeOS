@@ -120,6 +120,14 @@ export type EditTimeBlockProposalInput = z.input<
   typeof EditTimeBlockProposalInputSchema
 >;
 
+export const CheckTimeBlockProposalConflictInputSchema = z.object({
+  proposal_id: z.string().uuid(),
+});
+
+export type CheckTimeBlockProposalConflictInput = z.input<
+  typeof CheckTimeBlockProposalConflictInputSchema
+>;
+
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");

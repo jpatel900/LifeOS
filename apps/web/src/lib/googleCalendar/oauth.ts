@@ -37,6 +37,18 @@ export interface GoogleOAuthTokenResponse {
   tokenType: string;
 }
 
+interface RefreshGoogleAccessTokenParams {
+  refreshToken: string;
+}
+
+export interface GoogleRefreshTokenResponse {
+  accessToken: string;
+  expiresIn: number;
+  refreshToken: string | null;
+  scope: string[] | null;
+  tokenType: string;
+}
+
 function assertServerRuntime() {
   const isTestRuntime =
     process.env.VITEST === "true" || process.env.NODE_ENV === "test";
@@ -121,6 +133,7 @@ export function buildGoogleCalendarAuthorizeUrl(state: string) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", GOOGLE_CALENDAR_SCOPES.join(" "));
   url.searchParams.set("state", state);
+  url.searchParams.set("access_type", "offline");
   url.searchParams.set("include_granted_scopes", "true");
 
   return url.toString();
@@ -283,6 +296,68 @@ export async function exchangeGoogleCalendarCode(
     scope: splitScopes(
       typeof payload.scope === "string" ? payload.scope : undefined,
     ),
+    tokenType: payload.token_type,
+  };
+}
+
+export async function refreshGoogleCalendarAccessToken(
+  params: RefreshGoogleAccessTokenParams,
+): Promise<GoogleRefreshTokenResponse> {
+  assertServerRuntime();
+
+  if (!isNonEmptyString(params.refreshToken)) {
+    throw new Error("Google Calendar refresh token is required.");
+  }
+
+  const config = getGoogleCalendarConfig();
+
+  if (!config) {
+    throw new Error("Google Calendar is not configured.");
+  }
+
+  const body = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    grant_type: "refresh_token",
+    refresh_token: params.refreshToken,
+  });
+
+  const response = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+    cache: "no-store",
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | Record<string, unknown>
+    | null;
+
+  if (!response.ok) {
+    throw new Error("Google access token refresh failed.");
+  }
+
+  if (
+    !payload ||
+    !isNonEmptyString(payload.access_token) ||
+    typeof payload.expires_in !== "number" ||
+    !isNonEmptyString(payload.token_type)
+  ) {
+    throw new Error("Google access token refresh returned an invalid payload.");
+  }
+
+  return {
+    accessToken: payload.access_token,
+    expiresIn: payload.expires_in,
+    refreshToken: isNonEmptyString(payload.refresh_token)
+      ? payload.refresh_token
+      : null,
+    scope:
+      typeof payload.scope === "string"
+        ? splitScopes(payload.scope)
+        : null,
     tokenType: payload.token_type,
   };
 }

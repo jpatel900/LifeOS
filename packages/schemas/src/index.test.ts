@@ -9,6 +9,7 @@ import {
   CreateReviewEntryInputSchema,
   CreateTimeBlockProposalInputSchema,
   EditTimeBlockProposalInputSchema,
+  CheckTimeBlockProposalConflictInputSchema,
   MarkExecutionSessionInputSchema,
   CreateProjectInputSchema,
   CreateTaskInputSchema,
@@ -145,6 +146,24 @@ describe("EditTimeBlockProposalInputSchema", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe("CheckTimeBlockProposalConflictInputSchema", () => {
+  it("validates proposal ids for manual conflict checks", () => {
+    const result = CheckTimeBlockProposalConflictInputSchema.safeParse({
+      proposal_id: uid,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid proposal ids", () => {
+    const result = CheckTimeBlockProposalConflictInputSchema.safeParse({
+      proposal_id: "not-a-uuid",
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 

@@ -60,7 +60,7 @@ describe("google-calendar connect route", () => {
       clientId: "client-id",
       clientSecret: "client-secret",
       redirectUri: "http://localhost:3000/api/google-calendar/callback",
-      tokenEncryptionKey: null,
+      tokenEncryptionKey: "token-encryption-key",
     });
     mocks.requireSupabaseServerUser.mockResolvedValue({
       user: { id: "550e8400-e29b-41d4-a716-446655440001" },

@@ -8,9 +8,14 @@ import {
   readGoogleCalendarOAuthStateCookie,
 } from "@/lib/googleCalendar/oauth";
 import {
+  getGoogleCalendarStoredConnectionForAccessToken,
   upsertGoogleCalendarConnectionForAccessToken,
 } from "@/lib/googleCalendar/server";
 import { requireSupabaseServerUser } from "@/lib/supabase/server";
+import {
+  buildGoogleAccessTokenExpiresAt,
+  encryptGoogleCalendarToken,
+} from "@/lib/googleCalendar/tokens";
 
 function getCookieValue(cookieHeader: string | null, name: string) {
   if (!cookieHeader) {
@@ -119,14 +124,47 @@ export async function GET(request: Request) {
       return response;
     }
 
+    const { connection: storedConnection } =
+      await getGoogleCalendarStoredConnectionForAccessToken(
+        statePayload.accessToken,
+      );
     const tokenResponse = await exchangeGoogleCalendarCode({ code });
+    const encryptedAccessToken = encryptGoogleCalendarToken(
+      tokenResponse.accessToken,
+    );
+    const encryptedRefreshToken = tokenResponse.refreshToken
+      ? encryptGoogleCalendarToken(tokenResponse.refreshToken)
+      : storedConnection?.encrypted_refresh_token ?? null;
+
+    if (!encryptedRefreshToken) {
+      await markConnectionError(
+        statePayload.accessToken,
+        user.id,
+        tokenResponse.scope,
+      );
+      const response = NextResponse.redirect(
+        buildSettingsRedirect(
+          request,
+          "googleCalendarError",
+          "refresh_token_missing",
+        ),
+      );
+      clearOAuthCookie(response);
+      return response;
+    }
 
     await upsertGoogleCalendarConnectionForAccessToken(statePayload.accessToken, {
-      calendar_id: "primary",
+      calendar_id: storedConnection?.calendar_id ?? "primary",
       connected_at: new Date().toISOString(),
       disconnected_at: null,
+      encrypted_access_token: encryptedAccessToken,
+      encrypted_refresh_token: encryptedRefreshToken,
       granted_scopes_json: tokenResponse.scope,
       status: "connected",
+      token_expires_at: buildGoogleAccessTokenExpiresAt(
+        tokenResponse.expiresIn,
+      ),
+      token_type: tokenResponse.tokenType,
       user_id: user.id,
     });
 

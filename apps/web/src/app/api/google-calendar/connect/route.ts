@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error:
-          "Google Calendar is not configured on this server. Add server-only Google OAuth env vars before connecting.",
+          "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key before connecting.",
       },
       { status: 503 },
     );

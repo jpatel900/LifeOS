@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  buildGoogleCalendarAuthorizeUrl,
   createGoogleCalendarOAuthState,
   isGoogleCalendarOAuthStateValid,
   readGoogleCalendarOAuthStateCookie,
@@ -13,6 +14,13 @@ describe("Google Calendar OAuth helpers", () => {
     process.env.GOOGLE_CLIENT_SECRET = "client-secret";
     process.env.GOOGLE_REDIRECT_URI =
       "http://localhost:3000/api/google-calendar/callback";
+    process.env.GOOGLE_TOKEN_ENCRYPTION_KEY = "token-encryption-key";
+  });
+
+  it("requests offline access for Google Calendar OAuth", () => {
+    const url = new URL(buildGoogleCalendarAuthorizeUrl("state-123"));
+
+    expect(url.searchParams.get("access_type")).toBe("offline");
   });
 
   it("round-trips a sealed OAuth state cookie payload", () => {
