@@ -88,6 +88,10 @@ Rules:
 ### 5.3 OAuth Token Handling
 
 - Google Calendar OAuth tokens are stored encrypted server-side only
+- encrypted Google OAuth token columns are not granted to authenticated browser
+  Data API clients; server routes that need token material must validate the
+  Supabase user token first, then use the server-only Supabase service-role key
+  filtered to that `user_id`
 - Phase 7B stores connection metadata only; the later token-storage phase adds
   encrypted `encrypted_access_token` and `encrypted_refresh_token` columns plus
   `token_expires_at` and `token_type` metadata on
@@ -104,6 +108,9 @@ Rules:
 - never expose tokens to frontend
 - disconnect clears local encrypted token material and connection state;
   explicit Google-side revoke remains a later revoke phase
+- the Supabase service-role key is server-only; never prefix it with
+  `NEXT_PUBLIC_`, never import service-role helpers from client components, and
+  never use service-role access without an explicit same-user check
 
 ## 6. AI Privacy Rules
 
@@ -178,6 +185,17 @@ Rules:
 6. UI reflects success/failure.
 
 No shortcut around this.
+
+Phase 7F hardening:
+
+- `external_write_events` is route-owned for writes; authenticated browser
+  clients may read own audit summaries but must not insert/update/delete audit
+  rows directly.
+- Google Calendar event inserts use a deterministic event id derived from the
+  local proposal id, so retrying the same approved proposal does not create a
+  second external event.
+- `calendar_blocks.proposal_id` is unique to prevent duplicate local scheduled
+  blocks for the same proposal.
 
 ## 8. Logging Policy
 

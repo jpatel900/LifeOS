@@ -159,9 +159,6 @@ describe("Supabase local database scaffold", () => {
       expect(sql).toContain(`on public.${table} for insert to authenticated`);
       expect(sql).toContain(`on public.${table} for update to authenticated`);
       expect(sql).toContain(`on public.${table} for delete to authenticated`);
-      expect(sql).toContain(
-        `grant select, insert, update, delete on table public.${table} to authenticated`,
-      );
     }
 
     expect(sql).toContain(
@@ -183,6 +180,32 @@ describe("Supabase local database scaffold", () => {
     expect(sql).not.toMatch(/(^|[^a-z_])access_token([^a-z_]|$)/i);
     expect(sql).not.toMatch(/(^|[^a-z_])refresh_token([^a-z_]|$)/i);
     expect(sql).not.toMatch(/client_secret/i);
+  });
+
+  it("hardens Phase 7 calendar token and audit Data API grants", () => {
+    const sql = loadAllMigrations();
+
+    expect(sql).toContain(
+      "revoke select, insert, update, delete on table public.google_calendar_connections from authenticated",
+    );
+    expect(sql).toMatch(
+      /grant select \(\s*id,\s*user_id,\s*provider,\s*calendar_id,\s*granted_scopes_json,\s*status,\s*first_write_warning_acknowledged_at,\s*connected_at,\s*disconnected_at,\s*created_at,\s*updated_at\s*\) on table public\.google_calendar_connections to authenticated/,
+    );
+    expect(sql).toContain(
+      "revoke insert, update, delete on table public.external_write_events from authenticated",
+    );
+    expect(sql).toContain(
+      "grant select on table public.external_write_events to authenticated",
+    );
+    expect(sql).toContain(
+      "grant select, insert, update, delete on table public.google_calendar_connections to service_role",
+    );
+    expect(sql).toContain(
+      "grant select, insert, update, delete on table public.external_write_events to service_role",
+    );
+    expect(sql).toContain(
+      "constraint calendar_blocks_proposal_id_key unique (proposal_id)",
+    );
   });
 
   it("seeds local authenticated users and starter areas for Phase 4A smoke tests", () => {

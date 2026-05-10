@@ -35,21 +35,27 @@ describe("Google Calendar event insert helper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn());
-    mocks.resolveGoogleCalendarAccessToken.mockResolvedValue("google-access-token");
+    mocks.resolveGoogleCalendarAccessToken.mockResolvedValue(
+      "google-access-token",
+    );
   });
 
   it("maps a local proposal to a minimal Google Calendar event insert body", async () => {
+    const proposalId = "550e8400-e29b-41d4-a716-446655440501";
     vi.mocked(fetch).mockResolvedValue(
-      new Response(JSON.stringify({ id: "google-event-1" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({ id: "lifeos550e8400e29b41d4a716446655440501" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
 
     const result = await insertGoogleCalendarEventForConnection({
       connection,
       description: "Created by LifeOS.",
-      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      proposalId,
       proposedEnd: "2026-05-10T17:00:00.000Z",
       proposedStart: "2026-05-10T16:00:00.000Z",
       supabaseAccessToken: "supabase-access-token",
@@ -57,7 +63,7 @@ describe("Google Calendar event insert helper", () => {
       title: "Call dentist tomorrow",
     });
 
-    expect(result.googleEventId).toBe("google-event-1");
+    expect(result.googleEventId).toBe("lifeos550e8400e29b41d4a716446655440501");
     expect(fetch).toHaveBeenCalledWith(
       "https://www.googleapis.com/calendar/v3/calendars/primary/events",
       expect.objectContaining({
@@ -70,6 +76,7 @@ describe("Google Calendar event insert helper", () => {
 
     const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0]?.[1]?.body));
     expect(body).toMatchObject({
+      id: "lifeos550e8400e29b41d4a716446655440501",
       summary: "Call dentist tomorrow",
       description: "Created by LifeOS.",
       start: {
@@ -83,12 +90,34 @@ describe("Google Calendar event insert helper", () => {
       eventType: "default",
       extendedProperties: {
         private: {
-          lifeos_proposal_id: "550e8400-e29b-41d4-a716-446655440501",
+          lifeos_proposal_id: proposalId,
         },
       },
     });
     expect(body.attendees).toBeUndefined();
     expect(body.conferenceData).toBeUndefined();
     expect(body.recurrence).toBeUndefined();
+  });
+
+  it("treats a deterministic Google event id conflict as an idempotent insert result", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 409 } }), {
+        status: 409,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await insertGoogleCalendarEventForConnection({
+      connection,
+      description: null,
+      proposalId: "550e8400-e29b-41d4-a716-446655440501",
+      proposedEnd: "2026-05-10T17:00:00.000Z",
+      proposedStart: "2026-05-10T16:00:00.000Z",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/Toronto",
+      title: "Call dentist tomorrow",
+    });
+
+    expect(result.googleEventId).toBe("lifeos550e8400e29b41d4a716446655440501");
   });
 });

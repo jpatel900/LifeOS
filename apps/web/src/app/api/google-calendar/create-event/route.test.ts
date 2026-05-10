@@ -108,7 +108,10 @@ const connection = {
   updated_at: "2026-05-09T00:00:00.000Z",
 };
 
-function request(body: Record<string, unknown>, token = "supabase-access-token") {
+function request(
+  body: Record<string, unknown>,
+  token = "supabase-access-token",
+) {
   return new Request("http://localhost/api/google-calendar/create-event", {
     method: "POST",
     headers: {
@@ -211,12 +214,12 @@ describe("google-calendar create-event route", () => {
         timezone: "America/Toronto",
       }),
     );
-    expect(mocks.createCalendarBlockForProposalForAccessToken).toHaveBeenCalledWith(
-      "supabase-access-token",
-      proposal,
-      "google-event-1",
-    );
-    expect(mocks.updateExternalWriteEventResultForAccessToken).toHaveBeenCalledWith(
+    expect(
+      mocks.createCalendarBlockForProposalForAccessToken,
+    ).toHaveBeenCalledWith("supabase-access-token", proposal, "google-event-1");
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).toHaveBeenCalledWith(
       "supabase-access-token",
       "550e8400-e29b-41d4-a716-446655440701",
       expect.objectContaining({
@@ -241,14 +244,54 @@ describe("google-calendar create-event route", () => {
 
     expect(response.status).toBe(502);
     expect(body.ok).toBe(false);
-    expect(mocks.createCalendarBlockForProposalForAccessToken).not.toHaveBeenCalled();
-    expect(mocks.markTimeBlockProposalAcceptedForAccessToken).not.toHaveBeenCalled();
-    expect(mocks.updateExternalWriteEventResultForAccessToken).toHaveBeenCalledWith(
+    expect(
+      mocks.createCalendarBlockForProposalForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.markTimeBlockProposalAcceptedForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).toHaveBeenCalledWith(
       "supabase-access-token",
       "550e8400-e29b-41d4-a716-446655440701",
       expect.objectContaining({
         errorMessage: "Google Calendar event insert failed.",
         resultStatus: "failed",
+      }),
+    );
+  });
+
+  it("logs failure when Google insert succeeds but local google_event_id storage fails", async () => {
+    mocks.createCalendarBlockForProposalForAccessToken.mockRejectedValue(
+      new Error("calendar_blocks insert failed."),
+    );
+
+    const response = await POST(
+      request({
+        proposal_id: proposal.id,
+        approved: true,
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body.ok).toBe(false);
+    expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalled();
+    expect(
+      mocks.markTimeBlockProposalAcceptedForAccessToken,
+    ).not.toHaveBeenCalled();
+    expect(
+      mocks.updateExternalWriteEventResultForAccessToken,
+    ).toHaveBeenCalledWith(
+      "supabase-access-token",
+      "550e8400-e29b-41d4-a716-446655440701",
+      expect.objectContaining({
+        errorMessage: "calendar_blocks insert failed.",
+        resultStatus: "failed",
+        resultSummary: {
+          google_event_id_stored: false,
+        },
       }),
     );
   });
@@ -264,7 +307,9 @@ describe("google-calendar create-event route", () => {
     );
 
     expect(response.status).toBe(409);
-    expect(mocks.createPendingExternalWriteEventForAccessToken).not.toHaveBeenCalled();
+    expect(
+      mocks.createPendingExternalWriteEventForAccessToken,
+    ).not.toHaveBeenCalled();
     expect(mocks.insertGoogleCalendarEventForConnection).not.toHaveBeenCalled();
   });
 

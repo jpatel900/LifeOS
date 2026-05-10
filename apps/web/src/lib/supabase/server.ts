@@ -5,6 +5,22 @@ interface CreateSupabaseServerClientOptions {
   accessToken?: string | null;
 }
 
+type SupabaseServiceEnv = {
+  [key: string]: string | undefined;
+  NEXT_PUBLIC_SUPABASE_URL?: string;
+  NEXT_PUBLIC_SUPABASE_ANON_KEY?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+};
+
+function assertServerRuntime() {
+  const isTestRuntime =
+    process.env.VITEST === "true" || process.env.NODE_ENV === "test";
+
+  if (typeof window !== "undefined" && !isTestRuntime) {
+    throw new Error("Supabase server helpers must stay server-only.");
+  }
+}
+
 function normalizeAccessToken(accessToken?: string | null) {
   if (typeof accessToken !== "string") {
     return null;
@@ -17,6 +33,8 @@ function normalizeAccessToken(accessToken?: string | null) {
 export function createSupabaseServerClient(
   options: CreateSupabaseServerClientOptions = {},
 ): SupabaseClient | null {
+  assertServerRuntime();
+
   const config = getSupabaseConfig();
   const accessToken = normalizeAccessToken(options.accessToken);
 
@@ -39,7 +57,39 @@ export function createSupabaseServerClient(
   });
 }
 
+export function createSupabaseServiceRoleClient(
+  env: SupabaseServiceEnv = process.env,
+): SupabaseClient | null {
+  assertServerRuntime();
+
+  const config = getSupabaseConfig(env);
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!config || !serviceRoleKey) {
+    return null;
+  }
+
+  return createClient(config.url, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
+export function requireSupabaseServiceRoleClient() {
+  const client = createSupabaseServiceRoleClient();
+
+  if (!client) {
+    throw new Error("Supabase service role key is not configured.");
+  }
+
+  return client;
+}
+
 export async function requireSupabaseServerUser(accessToken: string) {
+  assertServerRuntime();
+
   const client = createSupabaseServerClient({ accessToken });
 
   if (!client) {

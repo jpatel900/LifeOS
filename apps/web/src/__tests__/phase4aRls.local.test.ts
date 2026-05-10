@@ -798,131 +798,33 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
   });
 
-  it("lets user A access own Google Calendar connection and audit rows but not user B rows", async () => {
+  it("prevents authenticated clients from reading Google token ciphertext columns", async () => {
     const userAClient = await signIn(userA.email, userA.password);
-    const userBClient = await signIn(userB.email, userB.password);
-    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const userAMarker = `rls-user-a-external-write-${suffix}`;
-    const userBMarker = `rls-user-b-external-write-${suffix}`;
 
-    await deleteGoogleConnection(userAClient);
-    await deleteGoogleConnection(userBClient);
+    const { error: safeMetadataError } = await userAClient
+      .from("google_calendar_connections")
+      .select("user_id,provider,status,calendar_id")
+      .eq("provider", "google_calendar");
+    expect(safeMetadataError).toBeNull();
 
-    try {
-      const { error: insertConnectionAError } = await userAClient
-        .from("google_calendar_connections")
-        .insert({
-          user_id: userA.id,
-          provider: "google_calendar",
-          calendar_id: "primary",
-          encrypted_access_token: "encrypted-user-a-access-token",
-          encrypted_refresh_token: "encrypted-user-a-refresh-token",
-          granted_scopes_json: [],
-          status: "metadata_only",
-          token_expires_at: "2026-05-09T01:00:00.000Z",
-          token_type: "Bearer",
-        });
-      expect(insertConnectionAError).toBeNull();
-
-      const { error: insertConnectionBError } = await userBClient
-        .from("google_calendar_connections")
-        .insert({
-          user_id: userB.id,
-          provider: "google_calendar",
-          calendar_id: "primary",
-          encrypted_access_token: "encrypted-user-b-access-token",
-          encrypted_refresh_token: "encrypted-user-b-refresh-token",
-          granted_scopes_json: [],
-          status: "metadata_only",
-          token_expires_at: "2026-05-09T01:00:00.000Z",
-          token_type: "Bearer",
-        });
-      expect(insertConnectionBError).toBeNull();
-
-      const { error: insertAuditAError } = await userAClient
-        .from("external_write_events")
-        .insert({
-          user_id: userA.id,
-          area_id: null,
-          provider: "google_calendar",
-          operation: "events.insert",
-          target_type: "calendar_block",
-          target_id: null,
-          request_summary_json: { marker: userAMarker },
-          result_summary_json: {},
-          result_status: "failed",
-          error_message: "mock failure",
-        });
-      expect(insertAuditAError).toBeNull();
-
-      const { error: insertAuditBError } = await userBClient
-        .from("external_write_events")
-        .insert({
-          user_id: userB.id,
-          area_id: null,
-          provider: "google_calendar",
-          operation: "events.insert",
-          target_type: "calendar_block",
-          target_id: null,
-          request_summary_json: { marker: userBMarker },
-          result_summary_json: {},
-          result_status: "failed",
-          error_message: "mock failure",
-        });
-      expect(insertAuditBError).toBeNull();
-
-      const { data: visibleConnectionsToA, error: selectConnectionAError } =
-        await userAClient
-          .from("google_calendar_connections")
-          .select("user_id,provider,status,encrypted_access_token,encrypted_refresh_token,token_expires_at,token_type")
-          .eq("provider", "google_calendar");
-      expect(selectConnectionAError).toBeNull();
-      expect(visibleConnectionsToA).toEqual([
-        {
-          encrypted_access_token: "encrypted-user-a-access-token",
-          encrypted_refresh_token: "encrypted-user-a-refresh-token",
-          user_id: userA.id,
-          provider: "google_calendar",
-          status: "metadata_only",
-          token_expires_at: "2026-05-09T01:00:00+00:00",
-          token_type: "Bearer",
-        },
-      ]);
-
-      const { data: visibleAuditToA, error: selectAuditAError } =
-        await userAClient
-          .from("external_write_events")
-          .select("user_id,request_summary_json")
-          .in("result_status", ["failed"])
-          .order("created_at", { ascending: true });
-      expect(selectAuditAError).toBeNull();
-      expect(visibleAuditToA).toContainEqual({
-        user_id: userA.id,
-        request_summary_json: { marker: userAMarker },
-      });
-      expect(visibleAuditToA).not.toContainEqual({
-        user_id: userB.id,
-        request_summary_json: { marker: userBMarker },
-      });
-    } finally {
-      await deleteExternalWriteByMarker(userAClient, userAMarker);
-      await deleteExternalWriteByMarker(userBClient, userBMarker);
-      await deleteGoogleConnection(userAClient);
-      await deleteGoogleConnection(userBClient);
-    }
+    const { error: tokenColumnError } = await userAClient
+      .from("google_calendar_connections")
+      .select("encrypted_access_token,encrypted_refresh_token")
+      .eq("provider", "google_calendar");
+    expect(tokenColumnError?.message).toMatch(/permission denied/i);
   });
 
-  it("prevents user A from inserting Google Calendar scaffolding rows for user B", async () => {
+  it("prevents authenticated clients from inserting Google Calendar token and audit rows", async () => {
     const userAClient = await signIn(userA.email, userA.password);
 
     const { error: connectionError } = await userAClient
       .from("google_calendar_connections")
       .insert({
-        user_id: userB.id,
+        user_id: userA.id,
         provider: "google_calendar",
         calendar_id: "primary",
-        encrypted_access_token: "encrypted-cross-user-access-token",
-        encrypted_refresh_token: "encrypted-cross-user-refresh-token",
+        encrypted_access_token: "encrypted-user-a-access-token",
+        encrypted_refresh_token: "encrypted-user-a-refresh-token",
         granted_scopes_json: [],
         status: "metadata_only",
         token_expires_at: "2026-05-09T01:00:00.000Z",
@@ -932,7 +834,7 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     const { error: auditError } = await userAClient
       .from("external_write_events")
       .insert({
-        user_id: userB.id,
+        user_id: userA.id,
         area_id: null,
         provider: "google_calendar",
         operation: "events.insert",
@@ -944,12 +846,8 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         error_message: "cross-user",
       });
 
-    expect(connectionError?.message).toMatch(
-      /row-level security|violates row-level/i,
-    );
-    expect(auditError?.message).toMatch(
-      /row-level security|violates row-level/i,
-    );
+    expect(connectionError?.message).toMatch(/permission denied/i);
+    expect(auditError?.message).toMatch(/permission denied/i);
   });
 });
 

@@ -2,10 +2,20 @@ import {
   ExternalWriteEventSchema,
   type ExternalWriteEvent,
 } from "@lifeos/schemas";
-import { requireSupabaseServerUser } from "@/lib/supabase/server";
+import {
+  requireSupabaseServiceRoleClient,
+  requireSupabaseServerUser,
+} from "@/lib/supabase/server";
 
 const externalWriteEventColumns =
   "id,user_id,area_id,provider,operation,target_type,target_id,request_summary_json,result_summary_json,result_status,error_message,created_at";
+
+type ExternalWriteUpdateChain = {
+  eq: (column: string, value: string) => ExternalWriteUpdateChain;
+  select: (columns: string) => {
+    single: () => Promise<{ data: unknown; error: unknown }>;
+  };
+};
 
 function assertServerRuntime() {
   const isTestRuntime =
@@ -46,7 +56,13 @@ export async function createPendingExternalWriteEventForAccessToken(
 ) {
   assertServerRuntime();
 
-  const { client } = await requireSupabaseServerUser(accessToken);
+  const { user } = await requireSupabaseServerUser(accessToken);
+
+  if (user.id !== row.userId) {
+    throw new Error("External write audit user mismatch.");
+  }
+
+  const client = requireSupabaseServiceRoleClient();
   const query = client.from("external_write_events") as unknown as {
     insert: (values: Record<string, unknown>) => {
       select: (columns: string) => {
@@ -89,18 +105,10 @@ export async function updateExternalWriteEventResultForAccessToken(
 ) {
   assertServerRuntime();
 
-  const { client } = await requireSupabaseServerUser(accessToken);
+  const { user } = await requireSupabaseServerUser(accessToken);
+  const client = requireSupabaseServiceRoleClient();
   const query = client.from("external_write_events") as unknown as {
-    update: (values: Record<string, unknown>) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        select: (columns: string) => {
-          single: () => Promise<{ data: unknown; error: unknown }>;
-        };
-      };
-    };
+    update: (values: Record<string, unknown>) => ExternalWriteUpdateChain;
   };
 
   const { data, error } = await query
@@ -110,6 +118,7 @@ export async function updateExternalWriteEventResultForAccessToken(
       result_summary_json: row.resultSummary,
     })
     .eq("id", auditEventId)
+    .eq("user_id", user.id)
     .select(externalWriteEventColumns)
     .single();
 

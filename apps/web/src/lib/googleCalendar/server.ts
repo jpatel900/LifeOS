@@ -4,6 +4,7 @@ import {
 } from "@lifeos/schemas";
 import {
   createSupabaseServerClient,
+  requireSupabaseServiceRoleClient,
   requireSupabaseServerUser,
 } from "@/lib/supabase/server";
 
@@ -147,15 +148,22 @@ export async function getGoogleCalendarStoredConnectionForAccessToken(
 ) {
   assertServerRuntime();
 
-  const { client, user } = await requireSupabaseServerUser(accessToken);
+  const { user } = await requireSupabaseServerUser(accessToken);
+  const client = requireSupabaseServiceRoleClient();
   const query = client.from("google_calendar_connections") as unknown as {
     select: (columns: string) => {
-      maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+      };
     };
   };
 
   const { data, error } = await query
     .select(googleCalendarStoredConnectionColumns)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (error) {
@@ -174,11 +182,13 @@ export async function upsertGoogleCalendarConnectionForAccessToken(
 ) {
   assertServerRuntime();
 
-  const client = createSupabaseServerClient({ accessToken });
+  const { user } = await requireSupabaseServerUser(accessToken);
 
-  if (!client) {
-    throw new Error("Supabase is not configured.");
+  if (user.id !== row.user_id) {
+    throw new Error("Google Calendar connection user mismatch.");
   }
+
+  const client = requireSupabaseServiceRoleClient();
 
   const query = client.from("google_calendar_connections") as unknown as {
     upsert: (
@@ -240,11 +250,13 @@ export async function acknowledgeGoogleCalendarFirstWriteWarningForAccessToken(
 ) {
   assertServerRuntime();
 
-  const client = createSupabaseServerClient({ accessToken });
+  const { user } = await requireSupabaseServerUser(accessToken);
 
-  if (!client) {
-    throw new Error("Supabase is not configured.");
+  if (user.id !== userId) {
+    throw new Error("Google Calendar connection user mismatch.");
   }
+
+  const client = requireSupabaseServiceRoleClient();
 
   const query = client.from("google_calendar_connections") as unknown as {
     update: (values: Record<string, unknown>) => {

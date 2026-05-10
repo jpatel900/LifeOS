@@ -124,7 +124,10 @@ export async function updateTimeBlockProposalConflictForAccessToken(
   return parseTimeBlockProposal(data);
 }
 
-export async function getTaskForAccessToken(accessToken: string, taskId: string) {
+export async function getTaskForAccessToken(
+  accessToken: string,
+  taskId: string,
+) {
   assertServerRuntime();
 
   const { client } = await requireSupabaseServerUser(accessToken);
@@ -190,7 +193,10 @@ export async function createCalendarBlockForProposalForAccessToken(
 
   const { client } = await requireSupabaseServerUser(accessToken);
   const query = client.from("calendar_blocks") as unknown as {
-    insert: (row: Record<string, unknown>) => {
+    upsert: (
+      row: Record<string, unknown>,
+      options: { onConflict: string },
+    ) => {
       select: (columns: string) => {
         single: () => Promise<{ data: unknown; error: unknown }>;
       };
@@ -198,16 +204,19 @@ export async function createCalendarBlockForProposalForAccessToken(
   };
 
   const { data, error } = await query
-    .insert({
-      area_id: proposal.area_id,
-      end_at: proposal.proposed_end,
-      google_event_id: googleEventId,
-      proposal_id: proposal.id,
-      start_at: proposal.proposed_start,
-      status: "scheduled",
-      task_id: proposal.task_id,
-      user_id: proposal.user_id,
-    })
+    .upsert(
+      {
+        area_id: proposal.area_id,
+        end_at: proposal.proposed_end,
+        google_event_id: googleEventId,
+        proposal_id: proposal.id,
+        start_at: proposal.proposed_start,
+        status: "scheduled",
+        task_id: proposal.task_id,
+        user_id: proposal.user_id,
+      },
+      { onConflict: "proposal_id" },
+    )
     .select(calendarBlockColumns)
     .single();
 

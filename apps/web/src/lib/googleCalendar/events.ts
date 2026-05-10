@@ -33,11 +33,22 @@ function requireNonEmptyText(value: unknown, message: string) {
   return value.trim();
 }
 
+function buildDeterministicGoogleEventId(proposalId: string) {
+  const compactId = proposalId.replace(/-/g, "").toLowerCase();
+
+  if (!/^[0-9a-f]{32}$/.test(compactId)) {
+    throw new Error("Google Calendar event insert requires a proposal UUID.");
+  }
+
+  return `lifeos${compactId}`;
+}
+
 export async function insertGoogleCalendarEventForConnection(
   params: InsertGoogleCalendarEventParams,
 ): Promise<InsertGoogleCalendarEventResult> {
   assertServerRuntime();
 
+  const eventId = buildDeterministicGoogleEventId(params.proposalId);
   const accessToken = await resolveGoogleCalendarAccessToken({
     connection: params.connection,
     supabaseAccessToken: params.supabaseAccessToken,
@@ -52,6 +63,7 @@ export async function insertGoogleCalendarEventForConnection(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        id: eventId,
         summary: params.title,
         description: params.description ?? undefined,
         start: {
@@ -72,9 +84,14 @@ export async function insertGoogleCalendarEventForConnection(
       cache: "no-store",
     },
   );
-  const payload = (await response.json().catch(() => null)) as
-    | Record<string, unknown>
-    | null;
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+
+  if (response.status === 409) {
+    return { googleEventId: eventId };
+  }
 
   if (!response.ok) {
     throw new Error("Google Calendar event insert failed.");
