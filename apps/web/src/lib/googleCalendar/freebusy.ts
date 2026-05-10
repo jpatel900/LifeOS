@@ -47,9 +47,10 @@ function isAccessTokenExpired(tokenExpiresAt: string | null) {
   return expiresAt <= Date.now() + ACCESS_TOKEN_REFRESH_BUFFER_MS;
 }
 
-async function resolveGoogleAccessToken(
-  params: CheckGoogleCalendarFreeBusyForConnectionParams,
-) {
+export async function resolveGoogleCalendarAccessToken(params: {
+  connection: GoogleCalendarStoredConnection;
+  supabaseAccessToken: string;
+}) {
   const { connection, supabaseAccessToken } = params;
 
   if (
@@ -124,7 +125,7 @@ export async function checkGoogleCalendarFreeBusyForConnection(
 ): Promise<GoogleCalendarFreeBusyCheckResult> {
   assertServerRuntime();
 
-  const accessToken = await resolveGoogleAccessToken(params);
+  const accessToken = await resolveGoogleCalendarAccessToken(params);
   const response = await fetch(GOOGLE_CALENDAR_FREEBUSY_URL, {
     method: "POST",
     headers: {

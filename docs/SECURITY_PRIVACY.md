@@ -80,6 +80,10 @@ Rules:
 - Every write creates `external_write_events` record.
 - Show final confirmation before write.
 - Failed writes must not mark block scheduled.
+- Phase 7E creates Google Calendar events only from existing persisted local
+  proposals after an explicit user click. It does not update/delete external
+  events, sync calendar contents, invite attendees, add Google Meet, or run
+  background mutation.
 
 ### 5.3 OAuth Token Handling
 

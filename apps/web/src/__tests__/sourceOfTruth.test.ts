@@ -59,10 +59,12 @@ describe("source-of-truth boundaries", () => {
     }
   });
 
-  it("keeps Google Calendar integration on server routes only through Phase 7D", () => {
+  it("keeps Google Calendar integration on server routes only through Phase 7E", () => {
     const clientFiles = [
+      "apps/web/src/app/calendar/page.tsx",
       "apps/web/src/app/settings/areas/page.tsx",
       "apps/web/src/app/settings/areas/GoogleCalendarConnectionPanel.tsx",
+      "apps/web/src/lib/data/workflow.ts",
       "apps/web/src/lib/supabase/browser.ts",
     ].map(readRepoFile);
     const clientSource = clientFiles.join("\n");
@@ -83,17 +85,28 @@ describe("source-of-truth boundaries", () => {
       readRepoFile("apps/web/src/app/api/google-calendar/freebusy/route.ts"),
     ).not.toThrow();
     expect(() =>
+      readRepoFile("apps/web/src/app/api/google-calendar/create-event/route.ts"),
+    ).not.toThrow();
+    expect(() =>
       readRepoFile("apps/web/src/app/api/google-calendar/write-event/route.ts"),
     ).toThrow();
     expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/oauth["']/);
     expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/server["']/);
     expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/freebusy["']/);
+    expect(clientSource).not.toMatch(/from ["']@\/lib\/googleCalendar\/events["']/);
 
     const freebusyRoute = readRepoFile(
       "apps/web/src/app/api/google-calendar/freebusy/route.ts",
     );
     expect(freebusyRoute).not.toMatch(/events\.insert|calendar\.events/i);
     expect(freebusyRoute).not.toMatch(/from ["']@\/lib\/ai\//);
+
+    const createEventRoute = readRepoFile(
+      "apps/web/src/app/api/google-calendar/create-event/route.ts",
+    );
+    expect(createEventRoute).toContain("approved");
+    expect(createEventRoute).toContain("createPendingExternalWriteEvent");
+    expect(createEventRoute).not.toMatch(/from ["']@\/lib\/ai\//);
   });
 
   it("keeps OpenAI parsing behind the server parse-capture route", () => {

@@ -7,6 +7,7 @@ import { EmptyState } from "../components/EmptyState";
 import {
   acceptTimeBlockProposal,
   checkTimeBlockProposalConflict,
+  createGoogleCalendarEventFromProposal,
   createTimeBlockProposal,
   editTimeBlockProposal,
   listPlanningItems,
@@ -33,6 +34,25 @@ type ActionState =
   | { status: "saving"; label: string }
   | { status: "saved"; label: string; provider: DataProvider }
   | { status: "error"; message: string };
+
+type GoogleConnectionState =
+  | { status: "loading" }
+  | {
+      status: "ready";
+      connected: boolean;
+      firstWriteWarningAcknowledged: boolean;
+    }
+  | { status: "error"; message: string };
+
+type GoogleCalendarConnectionResponse = {
+  ok: boolean;
+  connection?: {
+    first_write_warning_acknowledged_at: string | null;
+    status: "connected" | "disconnected" | "error" | "metadata_only";
+  } | null;
+  status?: "connected" | "disconnected" | "error";
+  error?: string;
+};
 
 function nextLocalSlot(task: Task) {
   const start = new Date(Date.now() + 60 * 60 * 1000);
@@ -106,6 +126,10 @@ export default function CalendarPage() {
     status: "loading",
   });
   const [actionState, setActionState] = useState<ActionState>({ status: "idle" });
+  const [googleConnectionState, setGoogleConnectionState] =
+    useState<GoogleConnectionState>({ status: "loading" });
+  const [acknowledgeFirstWriteWarning, setAcknowledgeFirstWriteWarning] =
+    useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +160,80 @@ export default function CalendarPage() {
     }
 
     void loadPlanningItems();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGoogleConnection() {
+      const client = createSupabaseBrowserClient();
+
+      if (!client?.auth?.getSession) {
+        if (!cancelled) {
+          setGoogleConnectionState({
+            status: "ready",
+            connected: false,
+            firstWriteWarningAcknowledged: false,
+          });
+        }
+        return;
+      }
+
+      const { data, error } = await client.auth.getSession();
+
+      if (error || !data.session?.access_token) {
+        if (!cancelled) {
+          setGoogleConnectionState({
+            status: "ready",
+            connected: false,
+            firstWriteWarningAcknowledged: false,
+          });
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/google-calendar/connection", {
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+        });
+        const payload =
+          (await response.json()) as GoogleCalendarConnectionResponse;
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(
+            payload.error ?? "Google Calendar connection could not load.",
+          );
+        }
+
+        if (!cancelled) {
+          setGoogleConnectionState({
+            status: "ready",
+            connected: payload.status === "connected",
+            firstWriteWarningAcknowledged: Boolean(
+              payload.connection?.first_write_warning_acknowledged_at,
+            ),
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setGoogleConnectionState({
+            status: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Google Calendar connection could not load.",
+          });
+        }
+      }
+    }
+
+    void loadGoogleConnection();
 
     return () => {
       cancelled = true;
@@ -313,6 +411,56 @@ export default function CalendarPage() {
     }
   }
 
+  async function handleCreateGoogleEvent(proposalId: string) {
+    setActionState({ status: "saving", label: "Google Calendar event" });
+    try {
+      const result = await createGoogleCalendarEventFromProposal(
+        createSupabaseBrowserClient(),
+        {
+          acknowledge_first_write_warning: acknowledgeFirstWriteWarning,
+          approved: true,
+          proposal_id: proposalId,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        },
+      );
+
+      setPlanningState((current) =>
+        current.status === "ready" && current.provider === "supabase"
+          ? {
+              ...current,
+              proposals: current.proposals.map((item) =>
+                item.id === result.proposal.id ? result.proposal : item,
+              ),
+              blocks: current.blocks.some((item) => item.id === result.block.id)
+                ? current.blocks.map((item) =>
+                    item.id === result.block.id ? result.block : item,
+                  )
+                : [result.block, ...current.blocks],
+            }
+          : current,
+      );
+      setGoogleConnectionState((current) =>
+        current.status === "ready"
+          ? { ...current, firstWriteWarningAcknowledged: true }
+          : current,
+      );
+      setAcknowledgeFirstWriteWarning(false);
+      setActionState({
+        status: "saved",
+        label: "Google Calendar event created through",
+        provider: result.provider,
+      });
+    } catch (error) {
+      setActionState({
+        status: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to create Google Calendar event.",
+      });
+    }
+  }
+
   const persistedTasks = usesPersistedPlanning ? planningState.tasks : [];
   const proposals = (
     usesPersistedPlanning ? planningState.proposals : state.timeBlockProposals
@@ -362,6 +510,21 @@ export default function CalendarPage() {
         >
           <h2 style={{ marginTop: 0 }}>Planning rows could not load</h2>
           <p>{planningState.message}</p>
+        </section>
+      ) : null}
+
+      {googleConnectionState.status === "error" ? (
+        <section
+          role="alert"
+          style={{
+            border: "1px solid #fca5a5",
+            background: "#fef2f2",
+            borderRadius: "8px",
+            padding: "1rem",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Google Calendar status could not load</h2>
+          <p>{googleConnectionState.message}</p>
         </section>
       ) : null}
 
@@ -503,6 +666,23 @@ export default function CalendarPage() {
                   const task = usesPersistedPlanning
                     ? persistedTasks.find((item) => item.id === proposal.task_id)
                     : state.tasks.find((item) => item.id === proposal.task_id);
+                  const googleBlock = usesPersistedPlanning
+                    ? blocks.find(
+                        (item) =>
+                          item.proposal_id === proposal.id &&
+                          item.google_event_id,
+                      )
+                    : null;
+                  const googleWriteAllowed =
+                    usesPersistedPlanning &&
+                    googleConnectionState.status === "ready" &&
+                    googleConnectionState.connected &&
+                    !googleBlock &&
+                    (googleConnectionState.firstWriteWarningAcknowledged ||
+                      acknowledgeFirstWriteWarning) &&
+                    (proposal.status === "proposed" ||
+                      proposal.status === "edited" ||
+                      proposal.status === "accepted");
                   const editedStart = new Date(proposal.proposed_start);
                   editedStart.setMinutes(editedStart.getMinutes() + 30);
                   const editedEnd = new Date(proposal.proposed_end);
@@ -534,6 +714,37 @@ export default function CalendarPage() {
                       <div style={{ color: "#4b5563" }}>
                         {proposalRationale(proposal)}
                       </div>
+                      {usesPersistedPlanning &&
+                      googleConnectionState.status === "ready" &&
+                      googleConnectionState.connected &&
+                      !googleConnectionState.firstWriteWarningAcknowledged ? (
+                        <label
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            alignItems: "flex-start",
+                            color: "#92400e",
+                            background: "#fffbeb",
+                            border: "1px solid #fcd34d",
+                            borderRadius: "8px",
+                            padding: "0.5rem",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={acknowledgeFirstWriteWarning}
+                            onChange={(event) =>
+                              setAcknowledgeFirstWriteWarning(
+                                event.currentTarget.checked,
+                              )
+                            }
+                          />
+                          <span>
+                            I understand this creates an event in Google Calendar.
+                            If the write fails, the local proposal stays unchanged.
+                          </span>
+                        </label>
+                      ) : null}
                       <div
                         style={{
                           display: "flex",
@@ -575,6 +786,18 @@ export default function CalendarPage() {
                           }
                         >
                           Check conflict
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => void handleCreateGoogleEvent(proposal.id)}
+                          disabled={
+                            actionState.status === "saving" ||
+                            !googleWriteAllowed
+                          }
+                        >
+                          {googleBlock
+                            ? "Google event created"
+                            : "Create Google Calendar event"}
                         </Button>
                         <Button
                           type="button"

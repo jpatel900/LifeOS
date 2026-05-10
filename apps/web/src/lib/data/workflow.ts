@@ -4,6 +4,7 @@ import {
   CheckTimeBlockProposalConflictInputSchema,
   CaptureItemSchema,
   CreateExecutionSessionInputSchema,
+  CreateGoogleCalendarEventInputSchema,
   CreateTimeBlockProposalInputSchema,
   EditTimeBlockProposalInputSchema,
   CreateProjectInputSchema,
@@ -20,6 +21,7 @@ import {
   type CalendarBlock,
   type CaptureItem,
   type CreateExecutionSessionInput,
+  type CreateGoogleCalendarEventInput,
   type CreateTimeBlockProposalInput,
   type EditTimeBlockProposalInput,
   type CreateProjectInput,
@@ -89,6 +91,13 @@ export interface TimeBlockProposalConflictCheckResult {
   proposal: TimeBlockProposal;
   hasConflict: boolean;
   checkedAt: string;
+}
+
+export interface GoogleCalendarEventCreateResult {
+  provider: DataProvider;
+  proposal: TimeBlockProposal;
+  block: CalendarBlock;
+  googleEventId: string;
 }
 
 export interface ExecutionReviewItemsResult {
@@ -920,6 +929,72 @@ export async function checkTimeBlockProposalConflict(
       typeof payload?.checked_at === "string"
         ? payload.checked_at
         : new Date().toISOString(),
+  };
+}
+
+export async function createGoogleCalendarEventFromProposal(
+  client: MinimalSupabaseClient | null,
+  input: CreateGoogleCalendarEventInput,
+): Promise<GoogleCalendarEventCreateResult> {
+  const parsedInput = CreateGoogleCalendarEventInputSchema.parse(input);
+
+  if (!client) {
+    throw new Error(
+      "Google Calendar event creation requires Supabase configuration.",
+    );
+  }
+
+  if (!client.auth?.getSession) {
+    throw new Error("Supabase auth is unavailable.");
+  }
+
+  const { data, error } = await client.auth.getSession();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const accessToken = data.session?.access_token?.trim();
+
+  if (!accessToken) {
+    throw new Error("Sign in before creating Google Calendar events.");
+  }
+
+  const response = await fetch("/api/google-calendar/create-event", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(parsedInput),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | Record<string, unknown>
+    | null;
+
+  if (!response.ok) {
+    throw new Error(
+      typeof payload?.error === "string"
+        ? payload.error
+        : "Google Calendar event could not be created.",
+    );
+  }
+
+  const block = parseCalendarBlock(payload?.block);
+  const googleEventId =
+    typeof payload?.google_event_id === "string"
+      ? payload.google_event_id
+      : block.google_event_id;
+
+  if (!googleEventId) {
+    throw new Error("Google Calendar event response did not include an event id.");
+  }
+
+  return {
+    provider: "supabase",
+    proposal: parseTimeBlockProposal(payload?.proposal),
+    block,
+    googleEventId,
   };
 }
 

@@ -51,10 +51,15 @@ export async function GET(request: Request) {
       ok: true,
       configured: true,
       connection,
-      status: connection?.status === "connected" ? "connected" : connection?.status === "error" ? "error" : "disconnected",
+      status:
+        connection?.status === "connected"
+          ? "connected"
+          : connection?.status === "error"
+            ? "error"
+            : "disconnected",
       message:
         connection?.status === "connected"
-          ? "Google Calendar is connected with encrypted server-only token storage. Free/busy checks and calendar writes still remain disabled until later phases."
+          ? "Google Calendar is connected with encrypted server-only token storage. Free/busy checks and event creation run only from explicit user actions."
           : connection?.status === "error"
             ? "The last Google Calendar OAuth callback failed safely. Reconnect to try again."
             : "Google Calendar is ready to connect, but no active encrypted token connection exists yet.",

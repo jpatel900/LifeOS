@@ -17,6 +17,7 @@ type GoogleCalendarConnectionRow = {
   disconnected_at: string | null;
   encrypted_access_token?: string | null;
   encrypted_refresh_token?: string | null;
+  first_write_warning_acknowledged_at?: string | null;
   granted_scopes_json: string[];
   status: "connected" | "disconnected" | "error" | "metadata_only";
   token_expires_at?: string | null;
@@ -216,8 +217,53 @@ export async function upsertGoogleCalendarConnectionForAccessToken(
     values.token_type = row.token_type ?? null;
   }
 
+  if ("first_write_warning_acknowledged_at" in row) {
+    values.first_write_warning_acknowledged_at =
+      row.first_write_warning_acknowledged_at ?? null;
+  }
+
   const { data, error } = await query
     .upsert(values, { onConflict: "user_id" })
+    .select(googleCalendarConnectionColumns)
+    .single();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return parseGoogleCalendarConnection(data);
+}
+
+export async function acknowledgeGoogleCalendarFirstWriteWarningForAccessToken(
+  accessToken: string,
+  userId: string,
+) {
+  assertServerRuntime();
+
+  const client = createSupabaseServerClient({ accessToken });
+
+  if (!client) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const query = client.from("google_calendar_connections") as unknown as {
+    update: (values: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({
+      first_write_warning_acknowledged_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
     .select(googleCalendarConnectionColumns)
     .single();
 

@@ -6,6 +6,7 @@ import {
   CaptureItemSchema,
   CreateCaptureItemInputSchema,
   CreateExecutionSessionInputSchema,
+  CreateGoogleCalendarEventInputSchema,
   CreateReviewEntryInputSchema,
   CreateTimeBlockProposalInputSchema,
   EditTimeBlockProposalInputSchema,
@@ -161,6 +162,32 @@ describe("CheckTimeBlockProposalConflictInputSchema", () => {
   it("rejects invalid proposal ids", () => {
     const result = CheckTimeBlockProposalConflictInputSchema.safeParse({
       proposal_id: "not-a-uuid",
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("CreateGoogleCalendarEventInputSchema", () => {
+  it("requires explicit approval before Google Calendar event creation", () => {
+    const result = CreateGoogleCalendarEventInputSchema.safeParse({
+      proposal_id: uid,
+      approved: true,
+      acknowledge_first_write_warning: true,
+      timezone: "America/Toronto",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.approved : false).toBe(true);
+    expect(
+      result.success ? result.data.acknowledge_first_write_warning : false,
+    ).toBe(true);
+  });
+
+  it("rejects event creation input without approval", () => {
+    const result = CreateGoogleCalendarEventInputSchema.safeParse({
+      proposal_id: uid,
+      approved: false,
     });
 
     expect(result.success).toBe(false);

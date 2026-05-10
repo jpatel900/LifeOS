@@ -128,6 +128,17 @@ export type CheckTimeBlockProposalConflictInput = z.input<
   typeof CheckTimeBlockProposalConflictInputSchema
 >;
 
+export const CreateGoogleCalendarEventInputSchema = z.object({
+  proposal_id: z.string().uuid(),
+  approved: z.literal(true),
+  acknowledge_first_write_warning: z.boolean().optional().default(false),
+  timezone: z.string().trim().min(1).default("UTC"),
+});
+
+export type CreateGoogleCalendarEventInput = z.input<
+  typeof CreateGoogleCalendarEventInputSchema
+>;
+
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");

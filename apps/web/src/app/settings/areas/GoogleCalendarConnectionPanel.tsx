@@ -62,7 +62,7 @@ function getFlashMessage() {
     return {
       severity: "success" as const,
       message:
-        "Google Calendar OAuth completed. Tokens are stored encrypted on the server only. Free/busy checks and event writes remain disabled until later phases.",
+        "Google Calendar OAuth completed. Tokens are stored encrypted on the server only. Event creation still requires explicit approval from an existing local proposal.",
     };
   }
 
@@ -391,7 +391,7 @@ export function GoogleCalendarConnectionPanel() {
       <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Google Calendar</h2>
       <p style={{ marginTop: 0, color: "#475569", fontSize: "0.92rem" }}>
         This page can store Google OAuth tokens encrypted on the server only. It
-        still does not run free/busy checks or write Google Calendar events.
+        does not run background calendar mutation.
       </p>
 
       {flashMessage ? (

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     rejectTimeBlockProposal: vi.fn(),
     acceptTimeBlockProposal: vi.fn(),
     checkTimeBlockProposalConflict: vi.fn(),
+    createGoogleCalendarEventFromProposal: vi.fn(),
     listExecutionReviewItems: vi.fn(),
     createExecutionSession: vi.fn(),
     markExecutionSession: vi.fn(),
@@ -48,6 +49,8 @@ vi.mock("@/lib/data/workflow", () => ({
   rejectTimeBlockProposal: mocks.rejectTimeBlockProposal,
   acceptTimeBlockProposal: mocks.acceptTimeBlockProposal,
   checkTimeBlockProposalConflict: mocks.checkTimeBlockProposalConflict,
+  createGoogleCalendarEventFromProposal:
+    mocks.createGoogleCalendarEventFromProposal,
   listExecutionReviewItems: mocks.listExecutionReviewItems,
   createExecutionSession: mocks.createExecutionSession,
   markExecutionSession: mocks.markExecutionSession,
@@ -196,6 +199,7 @@ function renderWithWorkflow(ui: React.ReactElement) {
 
 describe("Phase 4A Supabase persistence UI", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
     window.sessionStorage.clear();
     mocks.createSupabaseBrowserClient.mockReturnValue(mocks.supabaseClient);
@@ -473,6 +477,116 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(alert).toHaveTextContent("Planning change was not saved");
     expect(alert).toHaveTextContent("Google Calendar is not connected.");
     expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(0);
+  });
+
+  it("creates a Google Calendar event from an explicitly approved persisted proposal", async () => {
+    const supabaseClientWithSession = {
+      ...mocks.supabaseClient,
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "supabase-access-token" } },
+          error: null,
+        }),
+      },
+    };
+    mocks.createSupabaseBrowserClient.mockReturnValue(supabaseClientWithSession);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            status: "connected",
+            connection: {
+              status: "connected",
+              first_write_warning_acknowledged_at: "2026-05-09T00:00:00.000Z",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [proposal],
+      blocks: [],
+    });
+    mocks.createGoogleCalendarEventFromProposal.mockResolvedValue({
+      provider: "supabase",
+      proposal: { ...proposal, status: "accepted" },
+      block: { ...block, google_event_id: "google-event-1" },
+      googleEventId: "google-event-1",
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Create Google Calendar event",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.createGoogleCalendarEventFromProposal).toHaveBeenCalledWith(
+        supabaseClientWithSession,
+        expect.objectContaining({
+          approved: true,
+          proposal_id: proposal.id,
+        }),
+      );
+    });
+    expect(await screen.findByText("Google event created")).toBeDefined();
+  });
+
+  it("requires first-write warning acknowledgement before enabling event creation", async () => {
+    const supabaseClientWithSession = {
+      ...mocks.supabaseClient,
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "supabase-access-token" } },
+          error: null,
+        }),
+      },
+    };
+    mocks.createSupabaseBrowserClient.mockReturnValue(supabaseClientWithSession);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            status: "connected",
+            connection: {
+              status: "connected",
+              first_write_warning_acknowledged_at: null,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [proposal],
+      blocks: [],
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    const createButton = await screen.findByRole("button", {
+      name: "Create Google Calendar event",
+    });
+    expect(createButton).toBeDisabled();
+
+    fireEvent.click(
+      await screen.findByLabelText(/I understand this creates an event/i),
+    );
+
+    await waitFor(() => {
+      expect(createButton).not.toBeDisabled();
+    });
   });
 
   it("starts a persisted execution session from a scheduled task block", async () => {
