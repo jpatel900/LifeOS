@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { getObservabilityHealthSnapshot } from "@/lib/observability";
 import {
   getHealthDashboard,
   type HealthDashboardCheck,
@@ -32,6 +33,10 @@ describe("health dashboard data provider", () => {
       "capture persistence",
       "AI parser",
       "Google Calendar",
+      "Observability privacy",
+      "Sentry",
+      "PostHog",
+      "Langfuse",
     ]);
     expect(checkBySubsystem(result.checks, "mock mode").status).toBe("healthy");
     expect(checkBySubsystem(result.checks, "supabase config").status).toBe(
@@ -52,6 +57,18 @@ describe("health dashboard data provider", () => {
       configured: false,
       connection_present: false,
     });
+    expect(
+      checkBySubsystem(result.checks, "Observability privacy").details,
+    ).toMatchObject({
+      network_telemetry_enabled: false,
+      session_replay_enabled: false,
+      autocapture_enabled: false,
+      ai_content_tracing_enabled: false,
+      transport_mode: "noop",
+    });
+    expect(checkBySubsystem(result.checks, "Sentry").status).toBe("healthy");
+    expect(checkBySubsystem(result.checks, "PostHog").status).toBe("healthy");
+    expect(checkBySubsystem(result.checks, "Langfuse").status).toBe("healthy");
   });
 
   it("separates configured Supabase from missing auth/session state", async () => {
@@ -216,5 +233,29 @@ describe("health dashboard data provider", () => {
       configured: true,
       connection_present: false,
     });
+  });
+
+  it("shows observability readiness safely without exposing config values", async () => {
+    const result = await getHealthDashboard(null, {
+      now: () => fixedNow,
+      supabaseConfigured: false,
+      observability: getObservabilityHealthSnapshot({
+        NODE_ENV: "production",
+        NEXT_PUBLIC_SENTRY_DSN: "https://abc@example.ingest.sentry.io/123",
+        NEXT_PUBLIC_POSTHOG_TOKEN: "phc_test_token",
+        LANGFUSE_SECRET_KEY: "sk-lf-secret",
+      }),
+    });
+
+    expect(checkBySubsystem(result.checks, "Sentry").summary).toContain(
+      "no-op mode",
+    );
+    expect(checkBySubsystem(result.checks, "PostHog").status).toBe("watch");
+    expect(checkBySubsystem(result.checks, "Langfuse").status).toBe("watch");
+
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("example.ingest.sentry.io/123");
+    expect(serialized).not.toContain("phc_test_token");
+    expect(serialized).not.toContain("sk-lf-secret");
   });
 });

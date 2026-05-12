@@ -8,6 +8,22 @@ function readRepoFile(path: string) {
   return readFileSync(resolve(repoRoot, path), "utf8");
 }
 
+function walkRepoFiles(relativePath: string): string[] {
+  const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
+  const currentPath = resolve(repoRoot, relativePath);
+
+  return readdirSync(currentPath).flatMap((entry: string) => {
+    const nextRelativePath = `${relativePath}/${entry}`.replace(/\\/g, "/");
+    const stats = statSync(resolve(repoRoot, nextRelativePath));
+
+    if (stats.isDirectory()) {
+      return walkRepoFiles(nextRelativePath);
+    }
+
+    return nextRelativePath;
+  });
+}
+
 describe("source-of-truth boundaries", () => {
   it("keeps AppShell singular and imported from the app shell boundary", () => {
     const layout = readRepoFile("apps/web/src/app/layout.tsx");
@@ -153,5 +169,17 @@ describe("source-of-truth boundaries", () => {
 
     expect(config).toContain("function assertServerRuntime()");
     expect(config).toContain("Google Calendar config must stay server-only.");
+  });
+
+  it("blocks direct vendor observability SDK imports outside the shared wrapper", () => {
+    const sourceFiles = walkRepoFiles("apps/web/src").filter((path) =>
+      /\.(ts|tsx)$/.test(path),
+    );
+    const vendorImportPattern =
+      /from ["'](?:@sentry\/|posthog-js|posthog-node|langfuse)/;
+
+    for (const file of sourceFiles) {
+      expect(readRepoFile(file)).not.toMatch(vendorImportPattern);
+    }
   });
 });

@@ -1,4 +1,9 @@
 import { AreaSchema, type HealthCheck } from "@lifeos/schemas";
+import {
+  getObservabilityHealthSnapshot,
+  type ObservabilityHealthSnapshot,
+  type ObservabilityProviderStatus,
+} from "@/lib/observability";
 import type { DataProvider } from "./workflow";
 
 type HealthStatus = HealthCheck["status"];
@@ -42,6 +47,7 @@ interface HealthDashboardOptions {
   aiParserConfigured?: boolean;
   googleCalendarConfigured?: boolean;
   googleCalendarConnectionPresent?: boolean;
+  observability?: ObservabilityHealthSnapshot;
 }
 
 const areaColumns =
@@ -170,6 +176,82 @@ function googleCalendarCheck(options: HealthDashboardOptions) {
   );
 }
 
+function getObservabilityCheckStatus(provider: ObservabilityProviderStatus) {
+  switch (provider.state) {
+    case "disabled":
+      return { status: "healthy" as const, score: 100 };
+    case "configured":
+      return { status: "healthy" as const, score: 100 };
+    case "missing_config":
+      return { status: "watch" as const, score: 60 };
+    case "invalid_config":
+      return { status: "watch" as const, score: 30 };
+  }
+}
+
+function getObservabilityProviderSummary(provider: ObservabilityProviderStatus) {
+  switch (provider.state) {
+    case "disabled":
+      return `${provider.provider} is disabled in Phase 8B; vendor telemetry stays off by default.`;
+    case "configured":
+      return `${provider.provider} config is present, but Phase 8B keeps transport in no-op mode.`;
+    case "missing_config":
+      return `${provider.provider} has partial configuration. Complete the config before any future enablement.`;
+    case "invalid_config":
+      return `${provider.provider} config is invalid. Phase 8B still keeps telemetry off, but the config should be fixed before enablement.`;
+  }
+}
+
+function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
+  const checks = [
+    makeCheck(
+      "health-observability-privacy",
+      "Observability privacy",
+      "healthy",
+      100,
+      "Replay, autocapture, AI content tracing, and network telemetry remain disabled in Phase 8B.",
+      {
+        ai_content_tracing_enabled:
+          snapshot.guardrails.aiContentTracingEnabled,
+        autocapture_enabled: snapshot.guardrails.autocaptureEnabled,
+        environment: snapshot.environmentName,
+        network_telemetry_enabled:
+          snapshot.guardrails.networkTelemetryEnabled,
+        session_replay_enabled: snapshot.guardrails.sessionReplayEnabled,
+        transport_mode: "noop",
+      },
+    ),
+  ];
+
+  for (const provider of snapshot.providers) {
+    const health = getObservabilityCheckStatus(provider);
+
+    checks.push(
+      makeCheck(
+        `health-observability-${provider.provider}`,
+        provider.provider === "posthog"
+          ? "PostHog"
+          : provider.provider === "langfuse"
+            ? "Langfuse"
+            : "Sentry",
+        health.status,
+        health.score,
+        getObservabilityProviderSummary(provider),
+        {
+          environment: snapshot.environmentName,
+          invalid_key_count: provider.invalidKeys.length,
+          missing_key_count: provider.missingKeys.length,
+          provider: provider.provider,
+          provider_state: provider.state,
+          transport_mode: provider.transportMode,
+        },
+      ),
+    );
+  }
+
+  return checks;
+}
+
 async function readAreas(client: MinimalHealthSupabaseClient) {
   const query = client.from("areas") as {
     select: (columns: string) => {
@@ -245,6 +327,8 @@ export async function getHealthDashboard(
   options: HealthDashboardOptions = {},
 ): Promise<HealthDashboardResult> {
   const checkedAt = (options.now ?? (() => new Date()))().toISOString();
+  const observability =
+    options.observability ?? getObservabilityHealthSnapshot();
   const supabaseConfigured = options.supabaseConfigured ?? client !== null;
   const checks: HealthDashboardCheck[] = [
     makeCheck(
@@ -294,6 +378,7 @@ export async function getHealthDashboard(
         "AI parser is not configured in Phase 4E; parsing remains deterministic mock logic.",
       ),
       googleCalendarCheck(options),
+      ...observabilityChecks(observability),
     );
 
     return {
@@ -463,6 +548,7 @@ export async function getHealthDashboard(
       "AI parser is not configured in Phase 4E; parsing remains deterministic mock logic.",
     ),
     googleCalendarCheck(options),
+    ...observabilityChecks(observability),
   );
 
   if (!userId) {
