@@ -6,6 +6,7 @@ import {
   sanitizeEventProperties,
   sanitizeObservabilityValue,
 } from "./sanitize";
+import { getObservabilityRuntime } from "./runtime";
 import type {
   CaptureErrorInput,
   CaptureEventInput,
@@ -41,18 +42,52 @@ function createNoopAdapter(status: ObservabilityProviderStatus) {
   return adapter;
 }
 
+function createSentryAdapter(status: ObservabilityProviderStatus) {
+  const runtime = getObservabilityRuntime();
+
+  if (
+    status.state !== "configured" ||
+    status.provider !== "sentry" ||
+    !runtime.captureException
+  ) {
+    return createNoopAdapter(status);
+  }
+
+  const adapter: ObservabilityAdapter = {
+    provider: "sentry",
+    status: {
+      ...status,
+      transportMode: runtime.transportMode,
+    },
+    async captureError(input) {
+      await runtime.captureException?.(input);
+    },
+    async flush() {
+      await runtime.flush?.();
+    },
+    async shutdown() {
+      await runtime.shutdown?.();
+    },
+  };
+
+  return adapter;
+}
+
 function getDefaultAdapters(env: ObservabilityEnv = process.env) {
-  return getObservabilityHealthSnapshot(env).providers.map(createNoopAdapter);
+  return getObservabilityHealthSnapshot(env).providers.map((status) =>
+    status.provider === "sentry"
+      ? createSentryAdapter(status)
+      : createNoopAdapter(status),
+  );
 }
 
 export function createObservability(
   options: CreateObservabilityOptions = {},
 ) {
-  const adapters = options.adapters ?? getDefaultAdapters(options.env);
-
-  const activeAdapters = adapters.filter(
-    (adapter) => adapter.status.state === "configured",
-  );
+  const getActiveAdapters = () =>
+    (options.adapters ?? getDefaultAdapters(options.env)).filter(
+      (adapter) => adapter.status.state === "configured",
+    );
 
   return {
     async captureError(input: CaptureErrorInput) {
@@ -62,7 +97,7 @@ export function createObservability(
         context: sanitizeObservabilityValue(input.context ?? {}),
       };
 
-      for (const adapter of activeAdapters) {
+      for (const adapter of getActiveAdapters()) {
         await adapter.captureError?.(payload);
       }
     },
@@ -73,7 +108,7 @@ export function createObservability(
         properties: sanitizeEventProperties(input.properties),
       };
 
-      for (const adapter of activeAdapters) {
+      for (const adapter of getActiveAdapters()) {
         await adapter.captureEvent?.(payload);
       }
     },
@@ -87,6 +122,8 @@ export function createObservability(
         operation: input.operation,
         metadata: sanitizeEventProperties(input.metadata),
       };
+
+      const activeAdapters = getActiveAdapters();
 
       if (activeAdapters.length === 0) {
         return run();
@@ -126,13 +163,13 @@ export function createObservability(
     },
 
     async flush() {
-      for (const adapter of activeAdapters) {
+      for (const adapter of getActiveAdapters()) {
         await adapter.flush?.();
       }
     },
 
     async shutdown() {
-      for (const adapter of activeAdapters) {
+      for (const adapter of getActiveAdapters()) {
         await adapter.shutdown?.();
       }
     },
@@ -161,5 +198,7 @@ export const shutdownObservability = defaultObservability.shutdown.bind(
 );
 
 export * from "./config";
+export * from "./runtime";
 export * from "./sanitize";
+export * from "./sentry";
 export * from "./types";

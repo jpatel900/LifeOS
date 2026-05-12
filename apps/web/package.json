@@ -15,6 +15,7 @@
     "@lifeos/types": "workspace:*",
     "@lifeos/ui": "workspace:*",
     "@lifeos/utils": "workspace:*",
+    "@sentry/nextjs": "^10.52.0",
     "@supabase/supabase-js": "^2",
     "next": "^15",
     "react": "^19",

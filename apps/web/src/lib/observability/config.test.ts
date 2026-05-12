@@ -37,6 +37,16 @@ describe("observability config helpers", () => {
 
     expect(sentry.state).toBe("configured");
     expect(sentry.invalidKeys).toEqual([]);
+    expect(sentry.transportMode).toBe("sentry_sdk");
+  });
+
+  it("treats server-only Sentry DSN as partial config because client capture is still absent", () => {
+    const sentry = getObservabilityProviderStatus("sentry", {
+      SENTRY_DSN: "https://abc@example.ingest.sentry.io/123",
+    });
+
+    expect(sentry.state).toBe("missing_config");
+    expect(sentry.missingKeys).toEqual(["NEXT_PUBLIC_SENTRY_DSN"]);
   });
 
   it("reports invalid_config when a provider host field is malformed", () => {
@@ -50,4 +60,3 @@ describe("observability config helpers", () => {
     expect(langfuse.invalidKeys).toEqual(["LANGFUSE_BASE_URL"]);
   });
 });
-

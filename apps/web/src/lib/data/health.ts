@@ -192,13 +192,17 @@ function getObservabilityCheckStatus(provider: ObservabilityProviderStatus) {
 function getObservabilityProviderSummary(provider: ObservabilityProviderStatus) {
   switch (provider.state) {
     case "disabled":
-      return `${provider.provider} is disabled in Phase 8B; vendor telemetry stays off by default.`;
+      return provider.provider === "sentry"
+        ? "Sentry DSN is absent; sanitized error export is disabled."
+        : `${provider.provider} is disabled; vendor telemetry stays off by default.`;
     case "configured":
-      return `${provider.provider} config is present, but Phase 8B keeps transport in no-op mode.`;
+      return provider.provider === "sentry"
+        ? "Sentry DSN is present; sanitized error capture is enabled with replay, tracing, and default PII off."
+        : `${provider.provider} config is present, but this provider remains disabled in the current phase.`;
     case "missing_config":
       return `${provider.provider} has partial configuration. Complete the config before any future enablement.`;
     case "invalid_config":
-      return `${provider.provider} config is invalid. Phase 8B still keeps telemetry off, but the config should be fixed before enablement.`;
+      return `${provider.provider} config is invalid. Fix the config before enablement.`;
   }
 }
 
@@ -209,7 +213,9 @@ function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
       "Observability privacy",
       "healthy",
       100,
-      "Replay, autocapture, AI content tracing, and network telemetry remain disabled in Phase 8B.",
+      snapshot.guardrails.networkTelemetryEnabled
+        ? "Selective Sentry error telemetry may be enabled, but replay, autocapture, tracing, and AI content export remain off."
+        : "Replay, autocapture, AI content tracing, and vendor telemetry remain disabled.",
       {
         ai_content_tracing_enabled:
           snapshot.guardrails.aiContentTracingEnabled,
@@ -218,7 +224,9 @@ function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
         network_telemetry_enabled:
           snapshot.guardrails.networkTelemetryEnabled,
         session_replay_enabled: snapshot.guardrails.sessionReplayEnabled,
-        transport_mode: "noop",
+        transport_mode:
+          snapshot.providers.find((provider) => provider.provider === "sentry")
+            ?.transportMode ?? "noop",
       },
     ),
   ];

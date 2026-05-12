@@ -152,6 +152,8 @@ describe("source-of-truth boundaries", () => {
 
     const route = readRepoFile("apps/web/src/app/api/parse-capture/route.ts");
     expect(route).toContain('from "@/lib/ai/parseCaptureService"');
+    expect(route).toContain('from "@/lib/observability"');
+    expect(route).not.toMatch(/from ["']@sentry\/nextjs["']/);
   });
 
   it("marks parser modules with explicit server runtime guards", () => {

@@ -12,6 +12,7 @@ export type ObservabilityEnv = {
   NEXT_PUBLIC_POSTHOG_HOST?: string;
   NEXT_PUBLIC_POSTHOG_TOKEN?: string;
   NEXT_PUBLIC_SENTRY_DSN?: string;
+  SENTRY_DSN?: string;
   LANGFUSE_BASE_URL?: string;
   LANGFUSE_PUBLIC_KEY?: string;
   LANGFUSE_SECRET_KEY?: string;
@@ -47,6 +48,12 @@ function hasAnyProviderSignal(
   provider: ObservabilityProvider,
   env: ObservabilityEnv,
 ) {
+  if (provider === "sentry") {
+    return Boolean(
+      readEnvValue(env, "NEXT_PUBLIC_SENTRY_DSN") ?? readEnvValue(env, "SENTRY_DSN"),
+    );
+  }
+
   return PROVIDER_REQUIREMENTS[provider].some((key) =>
     Boolean(readEnvValue(env, key)),
   );
@@ -75,6 +82,11 @@ function getInvalidKeys(
     const dsn = readEnvValue(env, "NEXT_PUBLIC_SENTRY_DSN");
     if (dsn && !validateUrlField(dsn)) {
       invalidKeys.push("NEXT_PUBLIC_SENTRY_DSN");
+    }
+
+    const serverDsn = readEnvValue(env, "SENTRY_DSN");
+    if (serverDsn && !validateUrlField(serverDsn)) {
+      invalidKeys.push("SENTRY_DSN");
     }
   }
 
@@ -118,7 +130,8 @@ export function getObservabilityProviderStatus(
     requiredKeys,
     missingKeys,
     invalidKeys,
-    transportMode: "noop",
+    transportMode:
+      provider === "sentry" && state === "configured" ? "sentry_sdk" : "noop",
   };
 }
 
@@ -133,10 +146,16 @@ export function getObservabilityProviderStatuses(
 export function getObservabilityHealthSnapshot(
   env: ObservabilityEnv = process.env,
 ): ObservabilityHealthSnapshot {
+  const providers = getObservabilityProviderStatuses(env);
+
   return {
-    providers: getObservabilityProviderStatuses(env),
-    guardrails: PHASE_8B_GUARDRAILS,
+    providers,
+    guardrails: {
+      ...PHASE_8B_GUARDRAILS,
+      networkTelemetryEnabled: providers.some(
+        (provider) => provider.transportMode !== "noop",
+      ),
+    },
     environmentName: readEnvValue(env, "NODE_ENV") ?? "development",
   };
 }
-

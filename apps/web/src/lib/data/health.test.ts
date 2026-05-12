@@ -248,8 +248,11 @@ describe("health dashboard data provider", () => {
     });
 
     expect(checkBySubsystem(result.checks, "Sentry").summary).toContain(
-      "no-op mode",
+      "sanitized error capture is enabled",
     );
+    expect(checkBySubsystem(result.checks, "Sentry").details).toMatchObject({
+      transport_mode: "sentry_sdk",
+    });
     expect(checkBySubsystem(result.checks, "PostHog").status).toBe("watch");
     expect(checkBySubsystem(result.checks, "Langfuse").status).toBe("watch");
 

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createObservability } from "./index";
+import {
+  registerObservabilityRuntime,
+  resetObservabilityRuntime,
+} from "./runtime";
 import type { ObservabilityAdapter } from "./types";
 
 describe("observability wrapper", () => {
@@ -82,5 +86,53 @@ describe("observability wrapper", () => {
         async () => ({ ok: true }),
       ),
     ).resolves.toEqual({ ok: true });
+  });
+
+  it("uses the registered Sentry runtime only when Sentry is configured", async () => {
+    const captureException = vi.fn();
+    const flush = vi.fn();
+    const shutdown = vi.fn();
+
+    resetObservabilityRuntime();
+    registerObservabilityRuntime({
+      transportMode: "sentry_sdk",
+      captureException,
+      flush,
+      shutdown,
+    });
+
+    const observability = createObservability({
+      env: {
+        NEXT_PUBLIC_SENTRY_DSN: "https://abc@example.ingest.sentry.io/123",
+      },
+    });
+
+    await observability.captureError({
+      feature: "parse_capture",
+      error: new Error("failure"),
+      context: {
+        route_pattern: "/api/parse-capture",
+        prompt: "never export this",
+      },
+    });
+    await observability.flush();
+    await observability.shutdown();
+
+    expect(captureException).toHaveBeenCalledWith({
+      feature: "parse_capture",
+      error: {
+        name: "Error",
+        message: "failure",
+        stack_present: true,
+      },
+      context: {
+        route_pattern: "/api/parse-capture",
+        prompt: "[REDACTED]",
+      },
+    });
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(shutdown).toHaveBeenCalledTimes(1);
+
+    resetObservabilityRuntime();
   });
 });

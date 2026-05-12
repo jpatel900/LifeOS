@@ -12,14 +12,14 @@ export interface ObservabilityProviderStatus {
   requiredKeys: string[];
   missingKeys: string[];
   invalidKeys: string[];
-  transportMode: "noop";
+  transportMode: "noop" | "sentry_sdk";
 }
 
 export interface ObservabilityGuardrails {
-  networkTelemetryEnabled: false;
-  sessionReplayEnabled: false;
-  autocaptureEnabled: false;
-  aiContentTracingEnabled: false;
+  networkTelemetryEnabled: boolean;
+  sessionReplayEnabled: boolean;
+  autocaptureEnabled: boolean;
+  aiContentTracingEnabled: boolean;
 }
 
 export interface ObservabilityHealthSnapshot {
@@ -81,4 +81,3 @@ export interface ObservabilityAdapter {
   flush?: () => Promise<void>;
   shutdown?: () => Promise<void>;
 }
-

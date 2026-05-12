@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  captureError: vi.fn(),
   getParseCaptureStatus: vi.fn(),
   parseCaptureWithFallback: vi.fn(),
 }));
@@ -8,6 +9,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/ai/parseCaptureService", () => ({
   getParseCaptureStatus: mocks.getParseCaptureStatus,
   parseCaptureWithFallback: mocks.parseCaptureWithFallback,
+}));
+
+vi.mock("@/lib/observability", () => ({
+  captureError: mocks.captureError,
 }));
 
 import { GET, POST } from "./route";
@@ -71,7 +76,7 @@ describe("parse-capture route", () => {
     );
   });
 
-  it("returns safe non-leaky failure response and sanitized log", async () => {
+  it("returns safe non-leaky failure response and sanitized observability capture", async () => {
     mocks.getParseCaptureStatus.mockReturnValue({
       status: "ai_configured",
       preferredParser: "ai",
@@ -79,7 +84,6 @@ describe("parse-capture route", () => {
     mocks.parseCaptureWithFallback.mockRejectedValue(
       new Error("internal provider failure: stack trace should never leak"),
     );
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
@@ -97,8 +101,14 @@ describe("parse-capture route", () => {
       can_retry_with_mock: true,
       status: "ai_configured",
     });
-    expect(errorSpy).toHaveBeenCalledWith("parse-capture route failed safely", {
-      errorType: "Error",
+    expect(mocks.captureError).toHaveBeenCalledWith({
+      feature: "parse_capture_route",
+      error: expect.any(Error),
+      context: {
+        environment: "server",
+        error_category: "route_handler_failure",
+        route_pattern: "/api/parse-capture",
+      },
     });
     expect(JSON.stringify(body)).not.toMatch(/stack trace|internal provider/i);
   });
@@ -108,7 +118,6 @@ describe("parse-capture route", () => {
       status: "ai_configured",
       preferredParser: "ai",
     });
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
@@ -128,8 +137,14 @@ describe("parse-capture route", () => {
     );
     expect(body.can_retry_with_mock).toBe(true);
     expect(body.status).toBe("ai_configured");
-    expect(errorSpy).toHaveBeenCalledWith("parse-capture route failed safely", {
-      errorType: "Error",
+    expect(mocks.captureError).toHaveBeenCalledWith({
+      feature: "parse_capture_route",
+      error: expect.any(Error),
+      context: {
+        environment: "server",
+        error_category: "route_handler_failure",
+        route_pattern: "/api/parse-capture",
+      },
     });
   });
 });

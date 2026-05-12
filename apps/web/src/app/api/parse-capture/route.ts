@@ -3,6 +3,7 @@ import {
   parseCaptureWithFallback,
   type ParseCaptureRuntimeStatus,
 } from "@/lib/ai/parseCaptureService";
+import { captureError } from "@/lib/observability";
 
 function parseRequestBody(body: unknown) {
   if (!body || typeof body !== "object") {
@@ -62,10 +63,16 @@ function safeParserFailureMessage(status: ParseCaptureRuntimeStatus) {
   return "Parsing failed safely. You can retry with the mock parser.";
 }
 
-function logSafeParseFailure(error: unknown) {
-  const errorType =
-    error instanceof Error && error.name ? error.name : "UnknownError";
-  console.error("parse-capture route failed safely", { errorType });
+async function logSafeParseFailure(error: unknown) {
+  await captureError({
+    feature: "parse_capture_route",
+    error,
+    context: {
+      environment: "server",
+      error_category: "route_handler_failure",
+      route_pattern: "/api/parse-capture",
+    },
+  });
 }
 
 export async function GET() {
@@ -94,7 +101,7 @@ export async function POST(request: Request) {
       status: status.status,
     });
   } catch (error) {
-    logSafeParseFailure(error);
+    await logSafeParseFailure(error);
 
     return Response.json(
       {
