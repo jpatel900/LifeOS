@@ -1,0 +1,17 @@
+---
+description: Run the Next-Phase Gate Review before major phase transitions or risky changes
+---
+
+# Next-Phase Gate Review
+
+Use this rule when the task is a phase-start review, a pre-PR or pre-merge gate, a large AI-generated change review, or a risky-surface review involving schemas, migrations, RLS, authentication, AI parsing, prompt contracts, calendar writes, environment/config, or deployment.
+
+Do not treat this as an every-run checklist for routine tasks.
+
+When it applies:
+
+- use `docs/skills/next-phase-gate-review.md`
+- keep the review diagnostic only
+- do not implement fixes unless explicitly asked
+- distinguish blockers from optional cleanup
+- prefer small, scoped cleanup over broad refactors

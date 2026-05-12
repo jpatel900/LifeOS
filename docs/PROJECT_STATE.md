@@ -6,6 +6,8 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 
 ## Recently completed
 
+- Added a canonical `docs/skills/next-phase-gate-review.md` review skill plus narrow `AGENTS.md` and Cursor-rule wiring so future agents run a diagnostic gate before new phases, risky-surface work, PR open, or merge; the review is explicitly diagnostic-only and must not implement fixes unless asked.
+- Added a compact `Agent Operating Contract` to `AGENTS.md` and mirrored only the always-on subset into `.cursor/rules/execution-discipline.mdc`; this tightened read-before-write, surgical-change, conflict-surfacing, checkpoint, deterministic-logic, and fail-visible expectations without adding new governance files, hooks, skills, CI, dependencies, or runtime code.
 - Added secure repo-local skill-routing layer.
 - Added `skill-router`, `skill-security-review`, and LifeOS-specific skills.
 - Updated `AGENTS.md` and Cursor execution discipline to prefer relevant trusted repo-local skills and review global skills before use.
@@ -93,6 +95,8 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 
 ## Important implementation notes
 
+- `docs/skills/next-phase-gate-review.md` is the canonical phase-boundary diagnostic review for this repo. Use it to assess fragility, duplication, production risk, missing tests/proof, and scope control, but do not let it turn into an implementation pass or a broad refactor plan.
+- The new `Agent Operating Contract` is governance-only. It reinforces existing LifeOS invariants and failure handling, but it does not change product requirements, architecture, runtime behavior, schema boundaries, validation standards, or approval-gated Google Calendar rules.
 - Future agents should run `.agents/skills/skill-router/SKILL.md` before substantial work.
 - Repo-local LifeOS skills are preferred over global skills.
 - Global/user-level skills should be treated as lower-trust and reviewed with `skill-security-review` before being followed.

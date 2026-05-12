@@ -5,10 +5,17 @@ alwaysApply: true
 
 # Execution Discipline
 
+Authority:
+
+- `AGENTS.md` is the behavioral source of truth; this file is only a compact always-on mirror.
+
 Before coding:
 
 - read `AGENTS.md`
+- read `docs/PROJECT_STATE.md` for current repo state
 - identify the exact implementation phase from `AGENTS.md` section 16
+- read before writing; do not guess about scope, phase, or existing boundaries
+- define success, touched surfaces, and risky surfaces before editing
 - Skill routing:
 - inspect available Agent Skills
 - use `skill-router` first if available
@@ -21,11 +28,22 @@ Before coding:
 - do not add integrations outside the current phase
 - if the active prompt says not to use plugins, follow that strictly
 - if the active prompt does not forbid plugins, plugins may be used only when appropriate to the task and phase
+- prefer existing repo conventions and the smallest change that works
 - preserve mock mode when the current phase is mock-first
+- keep deterministic product logic in code/config, not prompts
+- surface instruction or authority conflicts instead of averaging them away
 - never weaken schemas or validators to make tests pass
+- do not present partial or uncertain work as complete
+
+During coding:
+
+- make surgical changes only; no adjacent refactors or scope creep
+- checkpoint long or failing work
+- if the same approach fails twice, stop and change approach or surface the blocker
 
 Before marking work done, run:
 
+- `pnpm format:check`
 - `pnpm lint`
 - `pnpm type-check`
 - `pnpm test`
@@ -34,6 +52,8 @@ In the final handoff, include:
 
 - proof, not explanations
 - files changed
+- what was intentionally not added
 - tests run
 - limitations and follow-up checks
+- rollback plan
 - docs updated (or explicit statement that no docs changes were needed)

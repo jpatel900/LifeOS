@@ -322,7 +322,24 @@ Preferred order:
 15. health
 16. meta-learning logs
 
-## 17. Definition of Done
+## 17. Agent Operating Contract
+
+These rules convert common coding-agent failure modes into LifeOS-specific execution constraints.
+
+1. Read before writing: read `AGENTS.md`, `docs/PROJECT_STATE.md`, and the smallest set of authority docs needed for the task before editing; do not guess about phase, scope, or existing boundaries.
+2. Think before coding: confirm the task maps to current requirements, define acceptance criteria, identify impacted files/tests/risky surfaces, and stop if those are unclear.
+3. Make surgical changes only: prefer the smallest edit that fixes the stated problem; do not bundle refactors, doc rewrites, new tools, new dependencies, hooks, or adjacent feature work.
+4. Simplicity and convention beat novelty: prefer existing repo patterns, typed Next.js server boundaries, shared schemas, and current docs over clever new abstractions.
+5. Deterministic product logic stays in code and config: do not move health scoring, approval gates, scope rules, validation, or other deterministic product decisions into prompts or AI judgment.
+6. Surface conflicts instead of averaging them away: if user instructions, `AGENTS.md`, other authority docs, or repo state disagree, call out the conflict plainly and resolve it before coding.
+7. Preserve LifeOS invariants while executing: no silent feature expansion, no autonomous calendar mutation, no hidden business logic in prompts, no secrets in client code, no schema weakening, no raw-capture loss, no mock-path removal unless scope explicitly changes.
+8. Checkpoint long or risky work: after a meaningful chunk, verify direction against acceptance criteria and current repo state instead of continuing blindly through a long chain of edits.
+9. Stop after repeated failed attempts: if the same approach fails twice or the repo behaves unexpectedly, stop, surface the blocker, and change approach or ask for direction instead of thrashing.
+10. Tests are evidence, not the goal: run the required validation for the touched surface, but do not treat green tests as permission to ignore authority docs, product scope, or unsafe behavior.
+11. Fail visibly: do not present mocked, partial, skipped, uncertain, or unverified work as complete; state exactly what ran, what did not, and any remaining limitation or risk.
+12. Define done before claiming done: completion requires the requested behavior, proof from relevant checks, factual handoff notes, and `docs/PROJECT_STATE.md` updates when behavior or governance guidance changed.
+
+## 18. Definition of Done
 
 A task is done when:
 
@@ -339,7 +356,7 @@ A task is done when:
 
 If acceptance criteria were missing at task start, define them first, then implement.
 
-## 18. Task Intake and Scope Control
+## 19. Task Intake and Scope Control
 
 Before implementing any task, the agent must confirm:
 
@@ -351,7 +368,7 @@ Before implementing any task, the agent must confirm:
 
 If any item is missing, stop implementation and resolve that gap first.
 
-## 19. Change Control for Feature Expansion
+## 20. Change Control for Feature Expansion
 
 Broad feature expansion is forbidden unless requirements are updated first.
 
@@ -374,6 +391,9 @@ Required sequence:
 ## Skill Routing and Skill Security
 
 - Before substantial work, use `skill-router` if available.
+- Use `docs/skills/next-phase-gate-review.md` before starting a new phase, before opening a pull request, before merging, after large AI-generated changes, and before touching risky surfaces such as schemas, migrations, RLS, authentication, AI parsing, prompt contracts, calendar writes, environment/config, or deployment.
+- That review is diagnostic only: do not implement fixes from it unless explicitly asked.
+- The review must distinguish real blockers from optional cleanup and prefer small, scoped cleanup over broad refactors.
 - Prefer repo-local `.agents/skills` over global/user-level skills.
 - Use relevant skills automatically when the task clearly matches the skill description.
 - Do not wait for direct skill invocation when a trusted repo-local skill clearly applies.
@@ -384,7 +404,7 @@ Required sequence:
 - State selected skill(s) and why in the plan or first implementation note.
 - Load the smallest relevant skill set; do not dump all skills into context.
 
-## 20. Agent Behavior
+## 21. Agent Behavior
 
 When working as an AI coding agent:
 
