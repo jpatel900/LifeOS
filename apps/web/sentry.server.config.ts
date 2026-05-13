@@ -11,29 +11,31 @@ if (config) {
   Sentry.init(config as Parameters<typeof Sentry.init>[0]);
 
   registerObservabilityRuntime({
-    transportMode: "sentry_sdk",
-    captureException(input) {
-      const scopeContext = getSentryScopeContext(input.feature, input.context);
+    sentry: {
+      transportMode: "sentry_sdk",
+      captureException(input) {
+        const scopeContext = getSentryScopeContext(input.feature, input.context);
 
-      Sentry.withScope((scope) => {
-        for (const [key, value] of Object.entries(scopeContext.tags)) {
-          if (value !== null) {
-            scope.setTag(key, String(value));
+        Sentry.withScope((scope) => {
+          for (const [key, value] of Object.entries(scopeContext.tags)) {
+            if (value !== null) {
+              scope.setTag(key, String(value));
+            }
           }
-        }
 
-        for (const [key, value] of Object.entries(scopeContext.extra)) {
-          scope.setExtra(key, value);
-        }
+          for (const [key, value] of Object.entries(scopeContext.extra)) {
+            scope.setExtra(key, value);
+          }
 
-        Sentry.captureException(input.error);
-      });
-    },
-    async flush(timeoutMs = 2000) {
-      await Sentry.flush(timeoutMs);
-    },
-    async shutdown(timeoutMs = 2000) {
-      await Sentry.close(timeoutMs);
+          Sentry.captureException(input.error);
+        });
+      },
+      async flush(timeoutMs = 2000) {
+        await Sentry.flush(timeoutMs);
+      },
+      async shutdown(timeoutMs = 2000) {
+        await Sentry.close(timeoutMs);
+      },
     },
   });
 }

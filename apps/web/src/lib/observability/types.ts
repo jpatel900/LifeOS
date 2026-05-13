@@ -12,7 +12,7 @@ export interface ObservabilityProviderStatus {
   requiredKeys: string[];
   missingKeys: string[];
   invalidKeys: string[];
-  transportMode: "noop" | "sentry_sdk";
+  transportMode: "noop" | "sentry_sdk" | "posthog_js";
 }
 
 export interface ObservabilityGuardrails {
@@ -42,9 +42,29 @@ export interface CaptureErrorInput {
 }
 
 export interface CaptureEventInput {
-  event: string;
+  event: ObservabilityEventName;
   properties?: Record<string, unknown>;
 }
+
+export const OBSERVABILITY_EVENT_NAMES = [
+  "capture_submitted",
+  "parse_succeeded",
+  "parse_failed",
+  "triage_item_accepted",
+  "task_created",
+  "project_created",
+  "proposal_created",
+  "conflict_check_requested",
+  "calendar_write_approved",
+  "calendar_write_succeeded",
+  "calendar_write_failed",
+  "execution_started",
+  "execution_completed",
+  "review_submitted",
+  "health_viewed",
+] as const;
+
+export type ObservabilityEventName = (typeof OBSERVABILITY_EVENT_NAMES)[number];
 
 export interface TraceAiOperationInput {
   feature: string;

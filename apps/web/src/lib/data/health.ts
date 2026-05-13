@@ -194,10 +194,14 @@ function getObservabilityProviderSummary(provider: ObservabilityProviderStatus) 
     case "disabled":
       return provider.provider === "sentry"
         ? "Sentry DSN is absent; sanitized error export is disabled."
+        : provider.provider === "posthog"
+          ? "PostHog public config is absent; manual product analytics is disabled."
         : `${provider.provider} is disabled; vendor telemetry stays off by default.`;
     case "configured":
       return provider.provider === "sentry"
         ? "Sentry DSN is present; sanitized error capture is enabled with replay, tracing, and default PII off."
+        : provider.provider === "posthog"
+          ? "PostHog public config is present; manual analytics is enabled with autocapture, replay, heatmaps, dead clicks, and console logs off."
         : `${provider.provider} config is present, but this provider remains disabled in the current phase.`;
     case "missing_config":
       return `${provider.provider} has partial configuration. Complete the config before any future enablement.`;
@@ -214,7 +218,7 @@ function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
       "healthy",
       100,
       snapshot.guardrails.networkTelemetryEnabled
-        ? "Selective Sentry error telemetry may be enabled, but replay, autocapture, tracing, and AI content export remain off."
+        ? "Selective sanitized telemetry may be enabled, but replay, autocapture, tracing, and AI content export remain off."
         : "Replay, autocapture, AI content tracing, and vendor telemetry remain disabled.",
       {
         ai_content_tracing_enabled:

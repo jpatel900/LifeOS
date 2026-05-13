@@ -3,6 +3,8 @@ packages:
   - "packages/*"
 allowBuilds:
   '@sentry/cli': false
+  core-js: false
   esbuild: true
+  protobufjs: false
   sharp: true
   unrs-resolver: true

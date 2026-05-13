@@ -3,6 +3,7 @@ import {
   type ObservabilityEnv,
 } from "./config";
 import {
+  isAllowedObservabilityEventName,
   sanitizeEventProperties,
   sanitizeObservabilityValue,
 } from "./sanitize";
@@ -48,7 +49,7 @@ function createSentryAdapter(status: ObservabilityProviderStatus) {
   if (
     status.state !== "configured" ||
     status.provider !== "sentry" ||
-    !runtime.captureException
+    !runtime.sentry?.captureException
   ) {
     return createNoopAdapter(status);
   }
@@ -57,16 +58,47 @@ function createSentryAdapter(status: ObservabilityProviderStatus) {
     provider: "sentry",
     status: {
       ...status,
-      transportMode: runtime.transportMode,
+      transportMode: runtime.sentry.transportMode,
     },
     async captureError(input) {
-      await runtime.captureException?.(input);
+      await runtime.sentry?.captureException(input);
     },
     async flush() {
-      await runtime.flush?.();
+      await runtime.sentry?.flush?.();
     },
     async shutdown() {
-      await runtime.shutdown?.();
+      await runtime.sentry?.shutdown?.();
+    },
+  };
+
+  return adapter;
+}
+
+function createPostHogAdapter(status: ObservabilityProviderStatus) {
+  const runtime = getObservabilityRuntime();
+
+  if (
+    status.state !== "configured" ||
+    status.provider !== "posthog" ||
+    !runtime.posthog?.captureEvent
+  ) {
+    return createNoopAdapter(status);
+  }
+
+  const adapter: ObservabilityAdapter = {
+    provider: "posthog",
+    status: {
+      ...status,
+      transportMode: runtime.posthog.transportMode,
+    },
+    async captureEvent(input) {
+      await runtime.posthog?.captureEvent(input);
+    },
+    async flush() {
+      await runtime.posthog?.flush?.();
+    },
+    async shutdown() {
+      await runtime.posthog?.shutdown?.();
     },
   };
 
@@ -77,6 +109,8 @@ function getDefaultAdapters(env: ObservabilityEnv = process.env) {
   return getObservabilityHealthSnapshot(env).providers.map((status) =>
     status.provider === "sentry"
       ? createSentryAdapter(status)
+      : status.provider === "posthog"
+        ? createPostHogAdapter(status)
       : createNoopAdapter(status),
   );
 }
@@ -103,6 +137,10 @@ export function createObservability(
     },
 
     async captureEvent(input: CaptureEventInput) {
+      if (!isAllowedObservabilityEventName(input.event)) {
+        return;
+      }
+
       const payload = {
         event: input.event,
         properties: sanitizeEventProperties(input.properties),

@@ -1,7 +1,9 @@
 import type {
+  ObservabilityEventName,
   ObservabilityPrimitive,
   SanitizedObservabilityValue,
 } from "./types";
+import { OBSERVABILITY_EVENT_NAMES } from "./types";
 
 export const OBSERVABILITY_REDACTED_TEXT = "[REDACTED]";
 export const OBSERVABILITY_REDACTED_EMAIL = "[REDACTED_EMAIL]";
@@ -40,10 +42,15 @@ export const DANGEROUS_VALUE_PATTERNS = [
 ];
 
 const SAFE_EVENT_PROPERTY_KEYS = new Set([
+  "area_id",
+  "area_present",
+  "duration_bucket",
   "environment",
   "error_category",
   "error_type",
   "feature",
+  "item_type",
+  "latency_bucket",
   "model_tier",
   "operation",
   "parse_status",
@@ -54,6 +61,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   "schema_version",
   "status",
   "transport_mode",
+  "used_mock",
 ]);
 
 const SAFE_EVENT_PROPERTY_KEY_PATTERNS = [
@@ -170,6 +178,7 @@ function isSafeEventPropertyKey(key: string) {
 }
 
 function sanitizeEventScalar(
+  key: string,
   value: unknown,
 ): ObservabilityPrimitive | undefined {
   if (
@@ -184,7 +193,22 @@ function sanitizeEventScalar(
     return undefined;
   }
 
+  if (
+    key === "area_id" &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  ) {
+    return undefined;
+  }
+
   return sanitizeStringValue(value);
+}
+
+export function isAllowedObservabilityEventName(
+  event: string,
+): event is ObservabilityEventName {
+  return (OBSERVABILITY_EVENT_NAMES as readonly string[]).includes(event);
 }
 
 export function sanitizeEventProperties(
@@ -201,7 +225,7 @@ export function sanitizeEventProperties(
       continue;
     }
 
-    const sanitizedValue = sanitizeEventScalar(value);
+    const sanitizedValue = sanitizeEventScalar(key, value);
     if (sanitizedValue !== undefined) {
       sanitized[key] = sanitizedValue;
     }
@@ -209,4 +233,3 @@ export function sanitizeEventProperties(
 
   return sanitized;
 }
-

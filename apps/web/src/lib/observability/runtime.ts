@@ -1,8 +1,8 @@
 import type { SanitizedObservabilityValue } from "./types";
 
-export interface ObservabilityRuntimeHooks {
-  transportMode: "noop" | "sentry_sdk";
-  captureException?: (input: {
+interface SentryRuntimeHooks {
+  transportMode: "sentry_sdk";
+  captureException: (input: {
     error: SanitizedObservabilityValue;
     feature: string;
     context: SanitizedObservabilityValue;
@@ -11,22 +11,36 @@ export interface ObservabilityRuntimeHooks {
   shutdown?: (timeoutMs?: number) => void | Promise<void>;
 }
 
+interface PostHogRuntimeHooks {
+  transportMode: "posthog_js";
+  captureEvent: (input: {
+    event: string;
+    properties: Record<string, string | number | boolean | null>;
+  }) => void | Promise<void>;
+  flush?: () => void | Promise<void>;
+  shutdown?: () => void | Promise<void>;
+}
+
+export interface ObservabilityRuntimeHooks {
+  sentry?: SentryRuntimeHooks;
+  posthog?: PostHogRuntimeHooks;
+}
+
 declare global {
   var __LIFEOS_OBSERVABILITY_RUNTIME__: ObservabilityRuntimeHooks | undefined;
 }
 
 export function getObservabilityRuntime(): ObservabilityRuntimeHooks {
-  return (
-    globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ ?? {
-      transportMode: "noop",
-    }
-  );
+  return globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ ?? {};
 }
 
 export function registerObservabilityRuntime(
   hooks: ObservabilityRuntimeHooks,
 ) {
-  globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ = hooks;
+  globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ = {
+    ...(globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ ?? {}),
+    ...hooks,
+  };
 }
 
 export function resetObservabilityRuntime() {

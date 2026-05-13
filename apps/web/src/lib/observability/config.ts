@@ -131,7 +131,11 @@ export function getObservabilityProviderStatus(
     missingKeys,
     invalidKeys,
     transportMode:
-      provider === "sentry" && state === "configured" ? "sentry_sdk" : "noop",
+      provider === "sentry" && state === "configured"
+        ? "sentry_sdk"
+        : provider === "posthog" && state === "configured"
+          ? "posthog_js"
+          : "noop",
   };
 }
 
