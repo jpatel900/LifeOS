@@ -11,6 +11,7 @@ import {
   listAreas,
   type DataProvider,
 } from "@/lib/data/workflow";
+import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
@@ -201,6 +202,14 @@ export default function CapturePage() {
         provider: result.provider,
         capture: result.capture,
       });
+      void captureEvent({
+        event: "capture_submitted",
+        properties: {
+          area_present: Boolean(areaId),
+          feature: "capture",
+          status: result.capture.status,
+        },
+      });
     } catch (error) {
       setSaveState({
         status: "error",
@@ -231,6 +240,16 @@ export default function CapturePage() {
     });
     const body = (await parseResult.json()) as ParseCaptureApiResponse;
     if (!parseResult.ok || !body.ok) {
+      void captureEvent({
+        event: "parse_failed",
+        properties: {
+          area_present: Boolean(savedCapture.area_id),
+          error_category: "parse_failed_safely",
+          feature: "capture",
+          provider: parserMode === "mock" ? "mock" : "unknown",
+          used_mock: parserMode === "mock",
+        },
+      });
       setParseState({
         status: "error",
         message:
@@ -246,6 +265,18 @@ export default function CapturePage() {
       workflowAreaId: selectedAreaId,
     });
     addParsedWorkflowResult(workflowResult);
+    void captureEvent({
+      event: "parse_succeeded",
+      properties: {
+        area_present: Boolean(savedCapture.area_id),
+        feature: "capture",
+        prompt_version: body.response.prompt_version,
+        provider: body.parser,
+        schema_version: body.response.schema_version,
+        status: body.response.parse_status,
+        used_mock: body.parser === "mock",
+      },
+    });
     setParseState({
       status: "parsed",
       parser: body.parser,
@@ -273,9 +304,26 @@ export default function CapturePage() {
         provider: captureResult.provider,
         capture: captureResult.capture,
       });
+      void captureEvent({
+        event: "capture_submitted",
+        properties: {
+          area_present: Boolean(areaId),
+          feature: "capture",
+          status: captureResult.capture.status,
+        },
+      });
 
       await parseCaptureForSavedCapture(captureResult.capture, "auto");
     } catch {
+      void captureEvent({
+        event: "parse_failed",
+        properties: {
+          area_present: Boolean(areaId),
+          error_category: "capture_save_or_parse_failed",
+          feature: "capture",
+          used_mock: false,
+        },
+      });
       setParseState({
         status: "error",
         message: "Capture save or parse failed safely. Please retry.",

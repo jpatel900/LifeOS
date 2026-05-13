@@ -11,6 +11,7 @@ import {
   listAreas,
   type DataProvider,
 } from "@/lib/data/workflow";
+import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
@@ -134,6 +135,23 @@ export default function TriagePage() {
         label: result.task.title,
         provider: result.provider,
       });
+      void captureEvent({
+        event: "triage_item_accepted",
+        properties: {
+          area_present: true,
+          feature: "triage",
+          item_type: "task",
+          status: "accepted",
+        },
+      });
+      void captureEvent({
+        event: "task_created",
+        properties: {
+          area_present: true,
+          feature: "triage",
+          status: result.task.status,
+        },
+      });
     } catch (error) {
       setSaveState({
         status: "error",
@@ -168,6 +186,23 @@ export default function TriagePage() {
         status: "saved",
         label: result.project.title,
         provider: result.provider,
+      });
+      void captureEvent({
+        event: "triage_item_accepted",
+        properties: {
+          area_present: true,
+          feature: "triage",
+          item_type: "project",
+          status: "accepted",
+        },
+      });
+      void captureEvent({
+        event: "project_created",
+        properties: {
+          area_present: true,
+          feature: "triage",
+          status: result.project.status,
+        },
       });
     } catch (error) {
       setSaveState({

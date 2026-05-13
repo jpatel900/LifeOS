@@ -15,6 +15,7 @@ import {
   type DataProvider,
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
+import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
@@ -270,6 +271,14 @@ export default function CalendarPage() {
         label: "Proposal saved through",
         provider: result.provider,
       });
+      void captureEvent({
+        event: "proposal_created",
+        properties: {
+          area_present: Boolean(task.area_id),
+          feature: "calendar",
+          status: result.proposal.status,
+        },
+      });
     } catch (error) {
       setActionState({
         status: "error",
@@ -387,6 +396,13 @@ export default function CalendarPage() {
 
   async function handleCheckConflict(proposalId: string) {
     setActionState({ status: "saving", label: "conflict check" });
+    void captureEvent({
+      event: "conflict_check_requested",
+      properties: {
+        feature: "calendar",
+        status: "requested",
+      },
+    });
     try {
       const result = await checkTimeBlockProposalConflict(
         createSupabaseBrowserClient(),
@@ -421,6 +437,14 @@ export default function CalendarPage() {
 
   async function handleCreateGoogleEvent(proposalId: string) {
     setActionState({ status: "saving", label: "Google Calendar event" });
+    void captureEvent({
+      event: "calendar_write_approved",
+      properties: {
+        feature: "calendar",
+        provider: "google_calendar",
+        status: "approved",
+      },
+    });
     try {
       const result = await createGoogleCalendarEventFromProposal(
         createSupabaseBrowserClient(),
@@ -458,7 +482,24 @@ export default function CalendarPage() {
         label: "Google Calendar event created through",
         provider: result.provider,
       });
+      void captureEvent({
+        event: "calendar_write_succeeded",
+        properties: {
+          feature: "calendar",
+          provider: "google_calendar",
+          status: "succeeded",
+        },
+      });
     } catch (error) {
+      void captureEvent({
+        event: "calendar_write_failed",
+        properties: {
+          error_category: "google_calendar_write_failed",
+          feature: "calendar",
+          provider: "google_calendar",
+          status: "failed",
+        },
+      });
       setActionState({
         status: "error",
         message:
