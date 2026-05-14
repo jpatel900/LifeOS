@@ -21,9 +21,31 @@ interface PostHogRuntimeHooks {
   shutdown?: () => void | Promise<void>;
 }
 
+interface LangfuseRuntimeHooks {
+  transportMode: "langfuse_sdk";
+  traceAiOperation: <T>(
+    input: {
+      feature: string;
+      operation: string;
+      metadata: Record<string, string | number | boolean | null>;
+      finalizeMetadata?: (outcome: {
+        ok: true;
+        value: unknown;
+      } | {
+        ok: false;
+        error: unknown;
+      }) => Record<string, string | number | boolean | null>;
+    },
+    run: () => Promise<T>,
+  ) => Promise<T>;
+  flush?: () => void | Promise<void>;
+  shutdown?: () => void | Promise<void>;
+}
+
 export interface ObservabilityRuntimeHooks {
   sentry?: SentryRuntimeHooks;
   posthog?: PostHogRuntimeHooks;
+  langfuse?: LangfuseRuntimeHooks;
 }
 
 declare global {

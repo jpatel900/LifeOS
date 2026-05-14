@@ -81,7 +81,46 @@ describe("observability wrapper", () => {
       observability.traceParseCapture(
         {
           parser: "mock",
-          parseStatus: "parsed",
+        },
+        async () => ({ ok: true }),
+      ),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("stays non-blocking when provider env vars exist but runtime hooks are not registered", async () => {
+    resetObservabilityRuntime();
+
+    const observability = createObservability({
+      env: {
+        NEXT_PUBLIC_SENTRY_DSN: "https://abc@example.ingest.sentry.io/123",
+        NEXT_PUBLIC_POSTHOG_TOKEN: "phc_test_token",
+        NEXT_PUBLIC_POSTHOG_HOST: "https://us.i.posthog.com",
+        LANGFUSE_PUBLIC_KEY: "pk-lf-public",
+        LANGFUSE_SECRET_KEY: "sk-lf-secret",
+        LANGFUSE_BASE_URL: "https://cloud.langfuse.com",
+      },
+    });
+
+    await expect(
+      observability.captureError({
+        feature: "health",
+        error: new Error("failure"),
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      observability.captureEvent({
+        event: "health_viewed",
+        properties: {
+          feature: "health",
+          status: "opened",
+        },
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      observability.traceParseCapture(
+        {
+          parser: "mock",
+          provider: "mock",
         },
         async () => ({ ok: true }),
       ),
@@ -207,6 +246,96 @@ describe("observability wrapper", () => {
         status: "failed",
       },
     });
+
+    resetObservabilityRuntime();
+  });
+
+  it("routes metadata-only parse_capture traces through the registered Langfuse runtime", async () => {
+    const traceAiOperationSpy = vi.fn();
+    const traceAiOperation = async <T>(
+      input: {
+        feature: string;
+        operation: string;
+        metadata: Record<string, string | number | boolean | null>;
+        finalizeMetadata?: (outcome: {
+          ok: true;
+          value: unknown;
+        } | {
+          ok: false;
+          error: unknown;
+        }) => Record<string, string | number | boolean | null>;
+      },
+      run: () => Promise<T>,
+    ) => {
+      traceAiOperationSpy(input);
+      expect(input.metadata).toEqual({
+        fallback_used: false,
+        model_name: "gpt-4o-mini",
+        model_tier_label: "standard",
+        operation: "parse_capture",
+        parser: "ai",
+        provider: "openai",
+      });
+
+      const value = await run();
+
+      expect(input.finalizeMetadata?.({ ok: true, value })).toEqual({
+        input_token_count: 12,
+        output_token_count: 18,
+        parse_status: "parsed",
+        prompt_version: "parse_capture.v1",
+        schema_version: "1.0",
+        status: "succeeded",
+        total_token_count: 30,
+        validation_status: "validated",
+      });
+
+      return value;
+    };
+
+    resetObservabilityRuntime();
+    registerObservabilityRuntime({
+      langfuse: {
+        transportMode: "langfuse_sdk",
+        traceAiOperation,
+      },
+    });
+
+    const observability = createObservability({
+      env: {
+        LANGFUSE_PUBLIC_KEY: "pk-lf-public",
+        LANGFUSE_SECRET_KEY: "sk-lf-secret",
+        LANGFUSE_BASE_URL: "https://cloud.langfuse.com",
+      },
+    });
+
+    await observability.traceParseCapture(
+      {
+        parser: "ai",
+        provider: "openai",
+        metadata: {
+          fallback_used: false,
+          model_name: "gpt-4o-mini",
+          model_tier_label: "standard",
+          raw_text: "never export this",
+        },
+        finalizeMetadata: () => ({
+          input_token_count: 12,
+          output_token_count: 18,
+          parse_status: "parsed",
+          prompt: "never export this either",
+          prompt_version: "parse_capture.v1",
+          schema_version: "1.0",
+          status: "succeeded",
+          title: "private task title",
+          total_token_count: 30,
+          validation_status: "validated",
+        }),
+      },
+      async () => ({ ok: true }),
+    );
+
+    expect(traceAiOperationSpy).toHaveBeenCalledTimes(1);
 
     resetObservabilityRuntime();
   });

@@ -12,7 +12,7 @@ export interface ObservabilityProviderStatus {
   requiredKeys: string[];
   missingKeys: string[];
   invalidKeys: string[];
-  transportMode: "noop" | "sentry_sdk" | "posthog_js";
+  transportMode: "noop" | "sentry_sdk" | "posthog_js" | "langfuse_sdk";
 }
 
 export interface ObservabilityGuardrails {
@@ -70,13 +70,19 @@ export interface TraceAiOperationInput {
   feature: string;
   operation: string;
   metadata?: Record<string, unknown>;
+  finalizeMetadata?: (outcome: TraceAiOperationOutcome) => Record<string, unknown>;
 }
 
 export interface TraceParseCaptureInput {
   parser: "ai" | "mock";
-  parseStatus: string;
+  provider?: "openai" | "mock";
   metadata?: Record<string, unknown>;
+  finalizeMetadata?: (outcome: TraceAiOperationOutcome) => Record<string, unknown>;
 }
+
+export type TraceAiOperationOutcome =
+  | { ok: true; value: unknown }
+  | { ok: false; error: unknown };
 
 export interface ObservabilityAdapter {
   provider: ObservabilityProvider;
@@ -95,6 +101,9 @@ export interface ObservabilityAdapter {
       feature: string;
       operation: string;
       metadata: Record<string, ObservabilityPrimitive>;
+      finalizeMetadata?: (
+        outcome: TraceAiOperationOutcome,
+      ) => Record<string, ObservabilityPrimitive>;
     },
     run: () => Promise<T>,
   ) => Promise<T>;

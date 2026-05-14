@@ -10,7 +10,11 @@ import {
   parseCaptureResponseJsonSchema,
   validateParseCaptureResponse,
 } from "./contracts/parseCapture";
-import { buildParseCaptureRequest, parseCapture } from "./parseCapture";
+import {
+  buildParseCaptureRequest,
+  parseCapture,
+  parseCaptureDetailed,
+} from "./parseCapture";
 
 interface DraftJsonSchema {
   required: string[];
@@ -211,5 +215,41 @@ describe("parse capture AI contract", () => {
         },
       ),
     ).rejects.toThrow(/failed schema validation/i);
+  });
+
+  it("extracts optional model, token, and cost telemetry when available", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        model: "gpt-4o-mini-2026-05-01",
+        usage: {
+          input_tokens: 21,
+          output_tokens: 34,
+          total_tokens: 55,
+          total_cost_usd: 0.00042,
+        },
+        output_text: JSON.stringify(validPayload),
+      }),
+    })) as unknown as typeof fetch;
+
+    await expect(
+      parseCaptureDetailed(
+        { rawText: "Need to email Taylor about launch notes." },
+        {
+          apiKey: "test-key",
+          model: "standard-model",
+          fetchImpl,
+        },
+      ),
+    ).resolves.toEqual({
+      response: validPayload,
+      telemetry: {
+        estimatedCostUsd: 0.00042,
+        inputTokenCount: 21,
+        modelName: "gpt-4o-mini-2026-05-01",
+        outputTokenCount: 34,
+        totalTokenCount: 55,
+      },
+    });
   });
 });

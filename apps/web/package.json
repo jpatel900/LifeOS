@@ -11,10 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@langfuse/otel": "^5.3.0",
+    "@langfuse/tracing": "^5.3.0",
     "@lifeos/schemas": "workspace:*",
     "@lifeos/types": "workspace:*",
     "@lifeos/ui": "workspace:*",
     "@lifeos/utils": "workspace:*",
+    "@opentelemetry/sdk-node": "^0.217.0",
     "@sentry/nextjs": "^10.52.0",
     "@supabase/supabase-js": "^2",
     "next": "^15",

@@ -2,7 +2,14 @@ import {
   ParseCaptureResponseSchema,
   type ParseCaptureResponse,
 } from "@lifeos/schemas";
-import { parseCapture, type ParseCaptureOptions } from "./parseCapture";
+import { traceParseCapture } from "@/lib/observability";
+import {
+  parseCapture,
+  parseCaptureDetailed,
+  type ParseCaptureExecutionResult,
+  type ParseCaptureOptions,
+  type ParseCaptureTelemetry,
+} from "./parseCapture";
 import { PARSE_CAPTURE_SCHEMA_VERSION } from "./contracts/parseCapture";
 import { PARSE_CAPTURE_PROMPT_VERSION } from "./prompts/parseCapturePrompt";
 import type { ParseCaptureAreaContext } from "./prompts/parseCapturePrompt";
@@ -19,11 +26,13 @@ export interface ParseCaptureServiceOptions {
     input: ParseCaptureServiceInput,
     options: Pick<ParseCaptureOptions, "apiKey" | "model">,
   ) => Promise<ParseCaptureResponse>;
+  traceParseCaptureImpl?: typeof traceParseCapture;
 }
 
 export interface ParseCaptureServiceResult {
   parser: "ai" | "mock";
   response: ParseCaptureResponse;
+  telemetry?: ParseCaptureTelemetry;
 }
 
 export type ParseCaptureRuntimeStatus =
@@ -71,6 +80,69 @@ function resolveParseCaptureModel(env: Partial<NodeJS.ProcessEnv>) {
   }
 
   return null;
+}
+
+function resolveParseCaptureModelConfig(env: Partial<NodeJS.ProcessEnv>) {
+  const standard = env.AI_MODEL_STANDARD?.trim();
+  if (standard) {
+    return { model: standard, tierLabel: "standard" as const };
+  }
+
+  const cheap = env.AI_MODEL_CHEAP?.trim();
+  if (cheap) {
+    return { model: cheap, tierLabel: "cheap" as const };
+  }
+
+  const strong = env.AI_MODEL_STRONG?.trim();
+  if (strong) {
+    return { model: strong, tierLabel: "strong" as const };
+  }
+
+  return null;
+}
+
+function categorizeParseCaptureError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/capture text is required/i.test(message)) {
+    return "input_invalid";
+  }
+
+  if (/must run on the server/i.test(message)) {
+    return "server_boundary_violation";
+  }
+
+  if (/AI_MODEL_STANDARD|AI_MODEL_CHEAP|AI_MODEL_STRONG/i.test(message)) {
+    return "parser_config_missing_model";
+  }
+
+  if (/OPENAI_API_KEY/i.test(message)) {
+    return "provider_config_missing_api_key";
+  }
+
+  if (/request failed/i.test(message)) {
+    return "provider_request_failed";
+  }
+
+  if (/did not include output text/i.test(message)) {
+    return "provider_output_missing";
+  }
+
+  if (/not valid JSON/i.test(message)) {
+    return "provider_invalid_json";
+  }
+
+  if (/failed schema validation/i.test(message)) {
+    return "provider_schema_validation_failed";
+  }
+
+  return "unknown_error";
+}
+
+function getValidationStatus(error: unknown) {
+  return categorizeParseCaptureError(error) === "provider_schema_validation_failed"
+    ? "failed"
+    : "not_run";
 }
 
 export function getParseCaptureStatus(
@@ -168,39 +240,98 @@ export async function parseCaptureWithFallback(
   }
 
   const env = options.env ?? process.env;
-  if (options.forceMock) {
-    return {
-      parser: "mock",
-      response: buildMockResponse(rawText),
-    };
-  }
-
   const apiKey = env.OPENAI_API_KEY;
+  const aiEnabled = isAiParserEnabled(env);
+  const modelConfig = resolveParseCaptureModelConfig(env);
+  const parser =
+    options.forceMock || !aiEnabled || !apiKey ? ("mock" as const) : ("ai" as const);
 
-  if (!isAiParserEnabled(env) || !apiKey) {
-    return {
-      parser: "mock",
-      response: buildMockResponse(rawText),
-    };
-  }
-
-  const model = resolveParseCaptureModel(env);
-  if (!model) {
-    throw new Error(
-      "One of AI_MODEL_STANDARD, AI_MODEL_CHEAP, or AI_MODEL_STRONG is required when OPENAI_API_KEY is configured.",
-    );
-  }
-
-  const response = await (options.parseCaptureImpl ?? parseCapture)(
+  return (options.traceParseCaptureImpl ?? traceParseCapture)(
     {
-      rawText,
-      areaContext: input.areaContext,
+      parser,
+      provider: parser === "ai" ? "openai" : "mock",
+      metadata: {
+        fallback_used: parser === "mock",
+        model_name: parser === "ai" ? modelConfig?.model : undefined,
+        model_tier_label: parser === "ai" ? modelConfig?.tierLabel : undefined,
+      },
+      finalizeMetadata(outcome) {
+        if (outcome.ok) {
+          const result = outcome.value as ParseCaptureServiceResult;
+          return {
+            fallback_used: result.parser === "mock",
+            input_token_count: result.telemetry?.inputTokenCount,
+            model_name: result.telemetry?.modelName,
+            output_token_count: result.telemetry?.outputTokenCount,
+            parse_status: result.response.parse_status,
+            prompt_version: result.response.prompt_version,
+            schema_version: result.response.schema_version,
+            status: "succeeded",
+            total_token_count: result.telemetry?.totalTokenCount,
+            validation_status: "validated",
+            estimated_cost_usd: result.telemetry?.estimatedCostUsd,
+          };
+        }
+
+        return {
+          error_category: categorizeParseCaptureError(outcome.error),
+          fallback_used: parser === "mock",
+          status: "failed",
+          validation_status: getValidationStatus(outcome.error),
+        };
+      },
     },
-    {
-      apiKey,
-      model,
+    async () => {
+      if (parser === "mock") {
+        return {
+          parser: "mock",
+          response: buildMockResponse(rawText),
+        };
+      }
+
+      if (!modelConfig) {
+        throw new Error(
+          "One of AI_MODEL_STANDARD, AI_MODEL_CHEAP, or AI_MODEL_STRONG is required when OPENAI_API_KEY is configured.",
+        );
+      }
+
+      if (options.parseCaptureImpl) {
+        const response = await options.parseCaptureImpl(
+          {
+            rawText,
+            areaContext: input.areaContext,
+          },
+          {
+            apiKey,
+            model: modelConfig.model,
+          },
+        );
+
+        return {
+          parser: "ai",
+          response,
+          telemetry: {
+            modelName: modelConfig.model,
+          },
+        };
+      }
+
+      const result: ParseCaptureExecutionResult = await parseCaptureDetailed(
+        {
+          rawText,
+          areaContext: input.areaContext,
+        },
+        {
+          apiKey,
+          model: modelConfig.model,
+        },
+      );
+
+      return {
+        parser: "ai",
+        response: result.response,
+        telemetry: result.telemetry,
+      };
     },
   );
-
-  return { parser: "ai", response };
 }

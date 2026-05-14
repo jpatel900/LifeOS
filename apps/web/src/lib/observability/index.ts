@@ -105,12 +105,45 @@ function createPostHogAdapter(status: ObservabilityProviderStatus) {
   return adapter;
 }
 
+function createLangfuseAdapter(status: ObservabilityProviderStatus) {
+  const runtime = getObservabilityRuntime();
+
+  if (
+    status.state !== "configured" ||
+    status.provider !== "langfuse" ||
+    !runtime.langfuse?.traceAiOperation
+  ) {
+    return createNoopAdapter(status);
+  }
+
+  const adapter: ObservabilityAdapter = {
+    provider: "langfuse",
+    status: {
+      ...status,
+      transportMode: runtime.langfuse.transportMode,
+    },
+    async traceAiOperation(input, run) {
+      return runtime.langfuse?.traceAiOperation(input, run) ?? run();
+    },
+    async flush() {
+      await runtime.langfuse?.flush?.();
+    },
+    async shutdown() {
+      await runtime.langfuse?.shutdown?.();
+    },
+  };
+
+  return adapter;
+}
+
 function getDefaultAdapters(env: ObservabilityEnv = process.env) {
   return getObservabilityHealthSnapshot(env).providers.map((status) =>
     status.provider === "sentry"
       ? createSentryAdapter(status)
       : status.provider === "posthog"
         ? createPostHogAdapter(status)
+        : status.provider === "langfuse"
+          ? createLangfuseAdapter(status)
       : createNoopAdapter(status),
   );
 }
@@ -159,6 +192,10 @@ export function createObservability(
         feature: input.feature,
         operation: input.operation,
         metadata: sanitizeEventProperties(input.metadata),
+        finalizeMetadata: input.finalizeMetadata
+          ? (outcome: { ok: true; value: unknown } | { ok: false; error: unknown }) =>
+              sanitizeEventProperties(input.finalizeMetadata?.(outcome))
+          : undefined,
       };
 
       const activeAdapters = getActiveAdapters();
@@ -191,10 +228,12 @@ export function createObservability(
           feature: "parse_capture",
           operation: "parse_capture",
           metadata: {
-            provider: input.parser,
-            parse_status: input.parseStatus,
+            operation: "parse_capture",
+            parser: input.parser,
+            provider: input.provider ?? (input.parser === "ai" ? "openai" : "mock"),
             ...input.metadata,
           },
+          finalizeMetadata: input.finalizeMetadata,
         },
         run,
       );
@@ -236,6 +275,7 @@ export const shutdownObservability = defaultObservability.shutdown.bind(
 );
 
 export * from "./config";
+export * from "./langfuse";
 export * from "./runtime";
 export * from "./sanitize";
 export * from "./sentry";

@@ -41,6 +41,32 @@ describe("observability sanitizers", () => {
     ]);
   });
 
+  it("scrubs request-like nested metadata, headers, cookies, and calendar payloads", () => {
+    const sanitized = sanitizeObservabilityValue({
+      request: {
+        url: "https://example.com/api/google-calendar/create-event?code=secret",
+        headers: {
+          Authorization: "Bearer secret-token",
+          Cookie: "session=abc",
+          "X-Api-Key": "sk-secret-token",
+        },
+        body: {
+          raw_text: "private capture text",
+          calendar_title: "Board meeting",
+          nested: [{ refresh_token: "refresh-secret" }],
+        },
+      },
+    });
+
+    expect(sanitized).toEqual({
+      request: {
+        url: "https://example.com/api/google-calendar/create-event",
+        headers: OBSERVABILITY_REDACTED_TEXT,
+        body: OBSERVABILITY_REDACTED_TEXT,
+      },
+    });
+  });
+
   it("handles Error objects safely without exporting stacks", () => {
     const sanitized = sanitizeObservabilityValue(
       new Error("request failed for jay@example.com"),
@@ -58,6 +84,8 @@ describe("observability sanitizers", () => {
       provider: "sentry",
       status: "configured",
       area_present: true,
+      model_name: "gpt-4o-mini",
+      input_token_count: 12,
       raw_text: "this should not pass",
       arbitrary_payload: "drop me",
     });
@@ -66,6 +94,8 @@ describe("observability sanitizers", () => {
       provider: "sentry",
       status: "configured",
       area_present: true,
+      model_name: "gpt-4o-mini",
+      input_token_count: 12,
     });
   });
 

@@ -135,6 +135,8 @@ export function getObservabilityProviderStatus(
         ? "sentry_sdk"
         : provider === "posthog" && state === "configured"
           ? "posthog_js"
+          : provider === "langfuse" && state === "configured"
+            ? "langfuse_sdk"
           : "noop",
   };
 }

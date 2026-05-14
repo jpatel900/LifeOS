@@ -1,7 +1,8 @@
-import * as Sentry from "@sentry/nextjs";
+import { captureError } from "./src/lib/observability";
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("./langfuse.server.config");
     await import("./sentry.server.config");
   }
 
@@ -21,13 +22,15 @@ export function onRequestError(
 ) {
   const url = new URL(request.url);
 
-  Sentry.captureRequestError(
+  void captureError({
+    feature: "request_error",
     error,
-    {
-      path: url.pathname,
+    context: {
       method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
+      path: url.pathname,
+      route_path: context.routePath,
+      route_type: context.routeType,
+      router_kind: context.routerKind,
     },
-    context,
-  );
+  });
 }

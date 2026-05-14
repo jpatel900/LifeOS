@@ -60,11 +60,13 @@ describe("health dashboard data provider", () => {
     expect(
       checkBySubsystem(result.checks, "Observability privacy").details,
     ).toMatchObject({
+      active_provider_count: 0,
+      active_providers: [],
+      active_transport_modes: [],
       network_telemetry_enabled: false,
       session_replay_enabled: false,
       autocapture_enabled: false,
       ai_content_tracing_enabled: false,
-      transport_mode: "noop",
     });
     expect(checkBySubsystem(result.checks, "Sentry").status).toBe("healthy");
     expect(checkBySubsystem(result.checks, "PostHog").status).toBe("healthy");
@@ -261,4 +263,100 @@ describe("health dashboard data provider", () => {
     expect(serialized).not.toContain("phc_test_token");
     expect(serialized).not.toContain("sk-lf-secret");
   });
+
+  it.each([
+    {
+      label: "Sentry only",
+      env: {
+        NEXT_PUBLIC_SENTRY_DSN: "https://abc@example.ingest.sentry.io/123",
+      },
+      activeProviders: ["sentry"],
+      activeTransportModes: ["sentry_sdk"],
+      expectedStates: {
+        Sentry: "configured",
+        PostHog: "disabled",
+        Langfuse: "disabled",
+      },
+    },
+    {
+      label: "PostHog only",
+      env: {
+        NEXT_PUBLIC_POSTHOG_HOST: "https://us.i.posthog.com",
+        NEXT_PUBLIC_POSTHOG_TOKEN: "phc_test_token",
+      },
+      activeProviders: ["posthog"],
+      activeTransportModes: ["posthog_js"],
+      expectedStates: {
+        Sentry: "disabled",
+        PostHog: "configured",
+        Langfuse: "disabled",
+      },
+    },
+    {
+      label: "Langfuse only",
+      env: {
+        LANGFUSE_BASE_URL: "https://cloud.langfuse.com",
+        LANGFUSE_PUBLIC_KEY: "pk-lf-public",
+        LANGFUSE_SECRET_KEY: "sk-lf-secret",
+      },
+      activeProviders: ["langfuse"],
+      activeTransportModes: ["langfuse_sdk"],
+      expectedStates: {
+        Sentry: "disabled",
+        PostHog: "disabled",
+        Langfuse: "configured",
+      },
+    },
+    {
+      label: "all providers enabled",
+      env: {
+        NEXT_PUBLIC_SENTRY_DSN: "https://abc@example.ingest.sentry.io/123",
+        NEXT_PUBLIC_POSTHOG_HOST: "https://us.i.posthog.com",
+        NEXT_PUBLIC_POSTHOG_TOKEN: "phc_test_token",
+        LANGFUSE_BASE_URL: "https://cloud.langfuse.com",
+        LANGFUSE_PUBLIC_KEY: "pk-lf-public",
+        LANGFUSE_SECRET_KEY: "sk-lf-secret",
+      },
+      activeProviders: ["sentry", "posthog", "langfuse"],
+      activeTransportModes: ["sentry_sdk", "posthog_js", "langfuse_sdk"],
+      expectedStates: {
+        Sentry: "configured",
+        PostHog: "configured",
+        Langfuse: "configured",
+      },
+    },
+  ])(
+    "reports provider-state health safely for $label",
+    async ({ env, activeProviders, activeTransportModes, expectedStates }) => {
+      const result = await getHealthDashboard(null, {
+        now: () => fixedNow,
+        observability: getObservabilityHealthSnapshot(env),
+        supabaseConfigured: false,
+      });
+
+      expect(
+        checkBySubsystem(result.checks, "Observability privacy").details,
+      ).toMatchObject({
+        active_provider_count: activeProviders.length,
+        active_providers: activeProviders,
+        active_transport_modes: activeTransportModes,
+        network_telemetry_enabled: activeProviders.length > 0,
+      });
+      expect(checkBySubsystem(result.checks, "Sentry").details).toMatchObject({
+        provider_state: expectedStates.Sentry,
+      });
+      expect(checkBySubsystem(result.checks, "PostHog").details).toMatchObject({
+        provider_state: expectedStates.PostHog,
+      });
+      expect(checkBySubsystem(result.checks, "Langfuse").details).toMatchObject({
+        provider_state: expectedStates.Langfuse,
+      });
+
+      const serialized = JSON.stringify(result);
+      expect(serialized).not.toContain("example.ingest.sentry.io/123");
+      expect(serialized).not.toContain("phc_test_token");
+      expect(serialized).not.toContain("sk-lf-secret");
+      expect(serialized).not.toContain("pk-lf-public");
+    },
+  );
 });

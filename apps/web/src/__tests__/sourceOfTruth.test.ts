@@ -184,4 +184,75 @@ describe("source-of-truth boundaries", () => {
       expect(readRepoFile(file)).not.toMatch(vendorImportPattern);
     }
   });
+
+  it("limits direct vendor observability SDK imports to approved root bootstrap files", () => {
+    const sourceFiles = walkRepoFiles("apps/web").filter(
+      (path) =>
+        /\.(ts|tsx)$/.test(path) &&
+        !path.includes("/.next/") &&
+        !path.includes("/node_modules/"),
+    );
+    const vendorImportPattern =
+      /from ["'](?:@sentry\/|posthog-js|posthog-node|@langfuse\/|langfuse|@opentelemetry\/)/;
+    const allowlist = [
+      "apps/web/instrumentation-client.ts",
+      "apps/web/langfuse.server.config.ts",
+      "apps/web/sentry.edge.config.ts",
+      "apps/web/sentry.server.config.ts",
+    ];
+
+    const hits = sourceFiles.filter((file) =>
+      vendorImportPattern.test(readRepoFile(file)),
+    );
+
+    expect(hits.sort()).toEqual(allowlist.sort());
+  });
+
+  it("routes request errors through shared observability instead of direct vendor SDK calls", () => {
+    const instrumentation = readRepoFile("apps/web/instrumentation.ts");
+
+    expect(instrumentation).toContain('from "./src/lib/observability"');
+    expect(instrumentation).not.toMatch(/from ["']@sentry\/nextjs["']/);
+    expect(instrumentation).not.toContain("request.headers.entries()");
+  });
+
+  it("keeps Langfuse tracing scoped to parse_capture server code", () => {
+    const sourceFiles = walkRepoFiles("apps/web/src").filter(
+      (path) =>
+        /\.(ts|tsx)$/.test(path) &&
+        !path.endsWith(".test.ts") &&
+        !path.endsWith(".test.tsx"),
+    );
+    const traceUsageFiles = sourceFiles.filter((file) => {
+      if (file.startsWith("apps/web/src/lib/observability/")) {
+        return false;
+      }
+
+      return /traceParseCapture|traceAiOperation/.test(readRepoFile(file));
+    });
+
+    expect(traceUsageFiles).toEqual(["apps/web/src/lib/ai/parseCaptureService.ts"]);
+  });
+
+  it("keeps Langfuse secrets server-only and out of client bundles", () => {
+    const clientFiles = [
+      "apps/web/instrumentation-client.ts",
+      "apps/web/src/app/capture/page.tsx",
+      "apps/web/src/lib/WorkflowContext.tsx",
+      "apps/web/src/lib/workflow.ts",
+    ].map(readRepoFile);
+    const clientSource = clientFiles.join("\n");
+    const envExample = readRepoFile(".env.example");
+    const instrumentation = readRepoFile("apps/web/instrumentation.ts");
+
+    expect(clientSource).not.toMatch(
+      /LANGFUSE_PUBLIC_KEY|LANGFUSE_SECRET_KEY|LANGFUSE_BASE_URL|NEXT_PUBLIC_LANGFUSE/i,
+    );
+    expect(envExample).toContain("LANGFUSE_PUBLIC_KEY=");
+    expect(envExample).toContain("LANGFUSE_SECRET_KEY=");
+    expect(envExample).toContain("LANGFUSE_BASE_URL=");
+    expect(envExample).not.toMatch(/NEXT_PUBLIC_LANGFUSE/i);
+    expect(instrumentation).toContain('import("./langfuse.server.config")');
+    expect(() => readRepoFile("apps/web/langfuse.server.config.ts")).not.toThrow();
+  });
 });

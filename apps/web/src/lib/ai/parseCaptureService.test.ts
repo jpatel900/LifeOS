@@ -140,11 +140,87 @@ describe("parse capture server service", () => {
       },
     );
 
-    expect(result).toEqual({ parser: "ai", response: aiResponse });
+    expect(result).toEqual({
+      parser: "ai",
+      response: aiResponse,
+      telemetry: {
+        modelName: "standard-model",
+      },
+    });
     expect(parseCaptureImpl).toHaveBeenCalledWith(
       { rawText: "Email Taylor about launch notes", areaContext: undefined },
       { apiKey: "test-key", model: "standard-model" },
     );
+  });
+
+  it("emits safe metadata-only tracing for successful AI parses", async () => {
+    const originalFetch = global.fetch;
+    const traceParseCaptureImpl = vi.fn(async (input, run) => {
+      const value = await run();
+
+      expect(input.parser).toBe("ai");
+      expect(input.provider).toBe("openai");
+      expect(input.metadata).toEqual({
+        fallback_used: false,
+        model_name: "standard-model",
+        model_tier_label: "standard",
+      });
+      expect(input.finalizeMetadata?.({ ok: true, value })).toEqual({
+        fallback_used: false,
+        input_token_count: 12,
+        model_name: "gpt-4o-mini-2026-05-01",
+        output_token_count: 18,
+        parse_status: "parsed",
+        prompt_version: "parse_capture.v1",
+        schema_version: "1.0",
+        status: "succeeded",
+        total_token_count: 30,
+        validation_status: "validated",
+      });
+      expect(
+        JSON.stringify(input.finalizeMetadata?.({ ok: true, value })),
+      ).not.toMatch(/rawText|Taylor|launch notes/i);
+
+      return value;
+    });
+
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        model: "gpt-4o-mini-2026-05-01",
+        usage: {
+          input_tokens: 12,
+          output_tokens: 18,
+          total_tokens: 30,
+        },
+        output_text: JSON.stringify(aiResponse),
+      }),
+    })) as unknown as typeof fetch;
+
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          traceParseCaptureImpl,
+        },
+      ),
+    ).resolves.toEqual({
+      parser: "ai",
+      response: aiResponse,
+      telemetry: {
+        estimatedCostUsd: undefined,
+        inputTokenCount: 12,
+        modelName: "gpt-4o-mini-2026-05-01",
+        outputTokenCount: 18,
+        totalTokenCount: 30,
+      },
+    });
+
+    global.fetch = originalFetch;
   });
 
   it("falls back to AI_MODEL_CHEAP when AI_MODEL_STANDARD is not set", async () => {
@@ -161,7 +237,13 @@ describe("parse capture server service", () => {
       },
     );
 
-    expect(result).toEqual({ parser: "ai", response: aiResponse });
+    expect(result).toEqual({
+      parser: "ai",
+      response: aiResponse,
+      telemetry: {
+        modelName: "cheap-model",
+      },
+    });
     expect(parseCaptureImpl).toHaveBeenCalledWith(
       { rawText: "Email Taylor about launch notes", areaContext: undefined },
       { apiKey: "test-key", model: "cheap-model" },
@@ -185,6 +267,147 @@ describe("parse capture server service", () => {
 
     expect(result.parser).toBe("mock");
     expect(parseCaptureImpl).not.toHaveBeenCalled();
+  });
+
+  it("keeps mock parser fallback behavior unchanged when tracing is injected", async () => {
+    const traceParseCaptureImpl = vi.fn(async (input, run) => {
+      const value = await run();
+
+      expect(input.parser).toBe("mock");
+      expect(input.provider).toBe("mock");
+      expect(input.finalizeMetadata?.({ ok: true, value })).toMatchObject({
+        fallback_used: true,
+        parse_status: "parsed",
+        status: "succeeded",
+        validation_status: "validated",
+      });
+
+      return value;
+    });
+
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        env: { AI_MODEL_STANDARD: "standard-model" },
+        traceParseCaptureImpl,
+      },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(result.response.drafts[0]?.draft_type).toBe("task_draft");
+  });
+
+  it("emits a safe error category when AI parsing fails before validation", async () => {
+    const traceParseCaptureImpl = vi.fn(async (input, run) => {
+      try {
+        await run();
+      } catch (error) {
+        expect(input.finalizeMetadata?.({ ok: false, error })).toEqual({
+          error_category: "provider_invalid_json",
+          fallback_used: false,
+          status: "failed",
+          validation_status: "not_run",
+        });
+        expect(
+          JSON.stringify(input.finalizeMetadata?.({ ok: false, error })),
+        ).not.toMatch(/secret|Email Taylor/i);
+        throw error;
+      }
+
+      throw new Error("Expected AI parse failure.");
+    });
+
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          parseCaptureImpl: vi.fn(async () => {
+            throw new Error(
+              "AI capture parsing response was not valid JSON. secret payload",
+            );
+          }),
+          traceParseCaptureImpl,
+        },
+      ),
+    ).rejects.toThrow(/not valid JSON/i);
+  });
+
+  it("does not leak raw content when schema validation fails", async () => {
+    const traceParseCaptureImpl = vi.fn(async (input, run) => {
+      try {
+        await run();
+      } catch (error) {
+        expect(input.finalizeMetadata?.({ ok: false, error })).toEqual({
+          error_category: "provider_schema_validation_failed",
+          fallback_used: false,
+          status: "failed",
+          validation_status: "failed",
+        });
+        expect(
+          JSON.stringify(input.finalizeMetadata?.({ ok: false, error })),
+        ).not.toMatch(/Taylor|private task title|launch notes/i);
+        throw error;
+      }
+
+      throw new Error("Expected validation failure.");
+    });
+
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          parseCaptureImpl: vi.fn(async () => {
+            throw new Error(
+              "AI capture parsing response failed schema validation: private task title",
+            );
+          }),
+          traceParseCaptureImpl,
+        },
+      ),
+    ).rejects.toThrow(/failed schema validation/i);
+  });
+
+  it("keeps token and cost metadata optional when unavailable", async () => {
+    const traceParseCaptureImpl = vi.fn(async (input, run) => {
+      const value = await run();
+
+      expect(input.finalizeMetadata?.({ ok: true, value })).toEqual({
+        fallback_used: false,
+        model_name: "standard-model",
+        parse_status: "parsed",
+        prompt_version: "parse_capture.v1",
+        schema_version: "1.0",
+        status: "succeeded",
+        validation_status: "validated",
+      });
+
+      return value;
+    });
+
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          parseCaptureImpl: vi.fn(async () => aiResponse),
+          traceParseCaptureImpl,
+        },
+      ),
+    ).resolves.toMatchObject({
+      parser: "ai",
+      response: aiResponse,
+    });
   });
 
   it("uses the mock parser when forced by route/UI recovery", async () => {

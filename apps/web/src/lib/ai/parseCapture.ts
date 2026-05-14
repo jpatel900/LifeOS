@@ -27,6 +27,19 @@ export interface ParseCaptureOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface ParseCaptureTelemetry {
+  estimatedCostUsd?: number;
+  inputTokenCount?: number;
+  modelName?: string;
+  outputTokenCount?: number;
+  totalTokenCount?: number;
+}
+
+export interface ParseCaptureExecutionResult {
+  response: ParseCaptureResponse;
+  telemetry: ParseCaptureTelemetry;
+}
+
 interface ResponsesApiContentItem {
   text?: unknown;
 }
@@ -36,8 +49,10 @@ interface ResponsesApiOutputItem {
 }
 
 interface ResponsesApiResponseBody {
+  model?: unknown;
   output_text?: unknown;
   output?: unknown;
+  usage?: unknown;
 }
 
 function assertServerRuntime() {
@@ -92,10 +107,39 @@ function getOutputText(body: ResponsesApiResponseBody) {
   return null;
 }
 
-export async function parseCapture(
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getFiniteNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function extractTelemetry(
+  body: ResponsesApiResponseBody,
+  requestedModel: string,
+): ParseCaptureTelemetry {
+  const usage = isRecord(body.usage) ? body.usage : null;
+
+  return {
+    estimatedCostUsd:
+      getFiniteNumber(usage?.total_cost_usd) ??
+      getFiniteNumber(usage?.estimated_cost_usd) ??
+      getFiniteNumber(usage?.total_cost),
+    inputTokenCount: getFiniteNumber(usage?.input_tokens),
+    modelName:
+      typeof body.model === "string" && body.model.trim()
+        ? body.model.trim()
+        : requestedModel,
+    outputTokenCount: getFiniteNumber(usage?.output_tokens),
+    totalTokenCount: getFiniteNumber(usage?.total_tokens),
+  };
+}
+
+export async function parseCaptureDetailed(
   input: ParseCaptureInput,
   options: ParseCaptureOptions = {},
-): Promise<ParseCaptureResponse> {
+): Promise<ParseCaptureExecutionResult> {
   assertServerRuntime();
 
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
@@ -140,7 +184,10 @@ export async function parseCapture(
   }
 
   try {
-    return validateParseCaptureResponse(parsedOutput);
+    return {
+      response: validateParseCaptureResponse(parsedOutput),
+      telemetry: extractTelemetry(body, model),
+    };
   } catch (error) {
     throw new Error(
       `AI capture parsing response failed schema validation: ${
@@ -148,4 +195,11 @@ export async function parseCapture(
       }`,
     );
   }
+}
+
+export async function parseCapture(
+  input: ParseCaptureInput,
+  options: ParseCaptureOptions = {},
+): Promise<ParseCaptureResponse> {
+  return (await parseCaptureDetailed(input, options)).response;
 }
