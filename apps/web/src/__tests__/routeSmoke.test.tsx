@@ -6,6 +6,7 @@ import CalendarPage from "../app/calendar/page";
 import ExecutePage from "../app/execute/page";
 import HealthPage from "../app/health/page";
 import ReviewPage from "../app/review/page";
+import AreasSettingsPage from "../app/settings/areas/page";
 import TriagePage from "../app/triage/page";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
@@ -55,6 +56,7 @@ describe("workflow route provider wiring", () => {
     ["execute", () => <ExecutePage />],
     ["review", () => <ReviewPage />],
     ["health", () => <HealthPage />],
+    ["settings", () => <AreasSettingsPage />],
   ])(
     "renders the %s route without a manual WorkflowProvider",
     async (_name, createPage) => {
@@ -69,7 +71,8 @@ describe("workflow route provider wiring", () => {
         _name === "calendar" ||
         _name === "execute" ||
         _name === "review" ||
-        _name === "health"
+        _name === "health" ||
+        _name === "settings"
       ) {
         expect(await screen.findByText("mock")).toBeDefined();
       }

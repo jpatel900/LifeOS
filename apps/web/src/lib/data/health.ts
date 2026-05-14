@@ -87,6 +87,44 @@ function makeCheck(
   };
 }
 
+function informationalCheck(
+  id: string,
+  subsystem: string,
+  summary: string,
+  details: HealthDashboardCheck["details"] = {},
+) {
+  return makeCheck(id, subsystem, "healthy", 100, summary, {
+    informational: true,
+    repair_steps: [],
+    ...details,
+  });
+}
+
+function normalizeSupabaseFailureSummary(
+  message: string,
+  fallback: string,
+): string {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("jwt") ||
+    normalized.includes("token") ||
+    normalized.includes("auth")
+  ) {
+    return "Supabase authentication failed while checking this subsystem.";
+  }
+
+  if (normalized.includes("permission") || normalized.includes("rls")) {
+    return "Supabase denied access for this user/session.";
+  }
+
+  if (normalized.includes("network") || normalized.includes("fetch")) {
+    return "Supabase request failed before a response was returned.";
+  }
+
+  return fallback;
+}
+
 function configuredCheck(supabaseConfigured: boolean) {
   return supabaseConfigured
     ? makeCheck(
@@ -97,17 +135,13 @@ function configuredCheck(supabaseConfigured: boolean) {
         "Supabase public URL and anon key are present.",
         { repair_steps: [] },
       )
-    : makeCheck(
+    : informationalCheck(
         "health-supabase-config",
         "supabase config",
-        "watch",
-        60,
-        "Supabase config is missing; the app is using mock mode.",
+        "Supabase config is missing; local mock mode is active by design.",
         {
-          repair_steps: [
-            "Set NEXT_PUBLIC_SUPABASE_URL.",
-            "Set NEXT_PUBLIC_SUPABASE_ANON_KEY.",
-          ],
+          configured: false,
+          mode: "mock_only",
         },
       );
 }
@@ -120,9 +154,9 @@ function integrationCheck(
 ) {
   return configured
     ? makeCheck(id, subsystem, "healthy", 100, summary, { configured: true })
-    : makeCheck(id, subsystem, "watch", 50, summary, {
+    : informationalCheck(id, subsystem, summary, {
         configured: false,
-        repair_steps: ["Configure this integration in a later approved phase."],
+        mode: "optional_disabled",
       });
 }
 
@@ -131,33 +165,27 @@ function googleCalendarCheck(options: HealthDashboardOptions) {
   const connectionPresent = options.googleCalendarConnectionPresent ?? false;
 
   if (!configured) {
-    return makeCheck(
+    return informationalCheck(
       "health-google-calendar",
       "Google Calendar",
-      "watch",
-      50,
       "Google Calendar is not configured; planning remains local-only.",
       {
         configured: false,
         connection_present: false,
-        repair_steps: ["Configure this integration in a later approved phase."],
+        mode: "optional_disabled",
       },
     );
   }
 
   if (!connectionPresent) {
-    return makeCheck(
+    return informationalCheck(
       "health-google-calendar",
       "Google Calendar",
-      "watch",
-      70,
-      "Google Calendar config is present, but no connection metadata is active.",
+      "Google Calendar is configured, but no active connection metadata is present.",
       {
         configured: true,
         connection_present: false,
-        repair_steps: [
-          "Connect Google Calendar in a later approved OAuth phase.",
-        ],
+        mode: "disconnected_or_signed_out",
       },
     );
   }
@@ -333,7 +361,10 @@ async function persistHealthChecks(
   );
 
   if (error) {
-    return getErrorMessage(error);
+    return normalizeSupabaseFailureSummary(
+      getErrorMessage(error),
+      "Unable to persist health snapshot.",
+    );
   }
 
   return null;
@@ -361,15 +392,13 @@ export async function getHealthDashboard(
 
   if (!client) {
     checks.push(
-      makeCheck(
+      informationalCheck(
         "health-auth-session",
         "auth session",
-        "watch",
-        60,
         "No Supabase session is active because Supabase config is missing.",
         {
           authenticated: false,
-          repair_steps: ["Configure Supabase and sign in."],
+          mode: "mock_only",
         },
       ),
       makeCheck(
@@ -429,19 +458,24 @@ export async function getHealthDashboard(
           "auth session",
           "critical",
           0,
-          getErrorMessage(error),
+          normalizeSupabaseFailureSummary(
+            getErrorMessage(error),
+            "Unable to verify Supabase auth session.",
+          ),
           { authenticated: false, repair_steps: ["Sign in again."] },
         ),
       );
     } else if (!data.user) {
       checks.push(
-        makeCheck(
+        informationalCheck(
           "health-auth-session",
           "auth session",
-          "watch",
-          60,
           "Supabase is configured, but no user session is active.",
-          { authenticated: false, repair_steps: ["Sign in on /login."] },
+          {
+            authenticated: false,
+            mode: "signed_out",
+            repair_steps: ["Sign in on /login to check persisted-user rows."],
+          },
         ),
       );
     } else {
@@ -479,13 +513,14 @@ export async function getHealthDashboard(
           : makeCheck(
               "health-areas",
               "areas",
-              "watch",
-              65,
+              "healthy",
+              100,
               "Supabase areas are readable, but no active areas exist.",
               {
                 source: "supabase",
                 active_area_count: 0,
-                repair_steps: ["Create or reactivate at least one area."],
+                informational: true,
+                repair_steps: [],
               },
             ),
       );
@@ -496,9 +531,10 @@ export async function getHealthDashboard(
           "areas",
           "critical",
           0,
-          error instanceof Error
-            ? error.message
-            : "Unable to read Supabase areas.",
+          normalizeSupabaseFailureSummary(
+            error instanceof Error ? error.message : "",
+            "Unable to read Supabase areas.",
+          ),
           {
             source: "supabase",
             repair_steps: ["Check local Supabase and RLS access."],
@@ -526,9 +562,10 @@ export async function getHealthDashboard(
           "capture persistence",
           "critical",
           0,
-          error instanceof Error
-            ? error.message
-            : "Unable to check capture_items access.",
+          normalizeSupabaseFailureSummary(
+            error instanceof Error ? error.message : "",
+            "Unable to check capture_items access.",
+          ),
           {
             source: "supabase",
             repair_steps: ["Check capture_items grants, RLS, and auth state."],
@@ -538,21 +575,25 @@ export async function getHealthDashboard(
     }
   } else {
     checks.push(
-      makeCheck(
+      informationalCheck(
         "health-areas",
         "areas",
-        "watch",
-        60,
         "Sign in before checking Supabase areas.",
-        { source: "supabase", repair_steps: ["Sign in on /login."] },
+        {
+          source: "supabase",
+          mode: "signed_out",
+          repair_steps: ["Sign in on /login to check persisted-user rows."],
+        },
       ),
-      makeCheck(
+      informationalCheck(
         "health-capture-persistence",
         "capture persistence",
-        "watch",
-        60,
         "Sign in before checking capture_items persistence.",
-        { source: "supabase", repair_steps: ["Sign in on /login."] },
+        {
+          source: "supabase",
+          mode: "signed_out",
+          repair_steps: ["Sign in on /login to check persisted-user rows."],
+        },
       ),
     );
   }

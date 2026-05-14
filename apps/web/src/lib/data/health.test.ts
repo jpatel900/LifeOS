@@ -40,7 +40,7 @@ describe("health dashboard data provider", () => {
     ]);
     expect(checkBySubsystem(result.checks, "mock mode").status).toBe("healthy");
     expect(checkBySubsystem(result.checks, "supabase config").status).toBe(
-      "watch",
+      "healthy",
     );
     expect(checkBySubsystem(result.checks, "areas").summary).toContain(
       "mock areas",
@@ -96,11 +96,11 @@ describe("health dashboard data provider", () => {
       "healthy",
     );
     expect(checkBySubsystem(result.checks, "auth session").status).toBe(
-      "watch",
+      "healthy",
     );
-    expect(checkBySubsystem(result.checks, "areas").status).toBe("watch");
+    expect(checkBySubsystem(result.checks, "areas").status).toBe("healthy");
     expect(checkBySubsystem(result.checks, "capture persistence").status).toBe(
-      "watch",
+      "healthy",
     );
   });
 
@@ -215,8 +215,10 @@ describe("health dashboard data provider", () => {
     );
 
     expect(result.persistence).toBe("unavailable");
-    expect(result.persistenceMessage).toBe("permission denied");
-    expect(checkBySubsystem(result.checks, "areas").status).toBe("watch");
+    expect(result.persistenceMessage).toBe(
+      "Supabase denied access for this user/session.",
+    );
+    expect(checkBySubsystem(result.checks, "areas").status).toBe("healthy");
   });
 
   it("keeps Google Calendar health deterministic when config exists without OAuth connection metadata", async () => {
@@ -228,9 +230,9 @@ describe("health dashboard data provider", () => {
     });
 
     const calendar = checkBySubsystem(result.checks, "Google Calendar");
-    expect(calendar.status).toBe("watch");
-    expect(calendar.score).toBe(70);
-    expect(calendar.summary).toContain("no connection metadata");
+    expect(calendar.status).toBe("healthy");
+    expect(calendar.score).toBe(100);
+    expect(calendar.summary).toContain("no active connection metadata");
     expect(calendar.details).toMatchObject({
       configured: true,
       connection_present: false,
@@ -262,6 +264,32 @@ describe("health dashboard data provider", () => {
     expect(serialized).not.toContain("example.ingest.sentry.io/123");
     expect(serialized).not.toContain("phc_test_token");
     expect(serialized).not.toContain("sk-lf-secret");
+  });
+
+  it("normalizes auth/read failures without echoing raw sensitive text", async () => {
+    const secretLikeMessage =
+      "JWT expired for token sk-secret-123 and authorization failed";
+    const result = await getHealthDashboard(
+      {
+        from: vi.fn(),
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: { user: null },
+            error: { message: secretLikeMessage },
+          }),
+        },
+      } as MinimalHealthSupabaseClient,
+      {
+        now: () => fixedNow,
+        supabaseConfigured: true,
+      },
+    );
+
+    const auth = checkBySubsystem(result.checks, "auth session");
+    expect(auth.status).toBe("critical");
+    expect(auth.summary).toContain("authentication failed");
+    expect(auth.summary).not.toContain("sk-secret-123");
+    expect(JSON.stringify(result)).not.toContain(secretLikeMessage);
   });
 
   it.each([

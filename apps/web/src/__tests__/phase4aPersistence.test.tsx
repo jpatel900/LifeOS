@@ -234,6 +234,17 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
   });
 
+  it("shows an explicit empty-state message when persisted areas are readable but empty", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [],
+    });
+
+    renderWithWorkflow(<AreasSettingsPage />);
+
+    expect(await screen.findByText("No active areas yet.")).toBeDefined();
+  });
+
   it("saves capture_items through Supabase from the capture page", async () => {
     mocks.listAreas.mockResolvedValue({
       provider: "supabase",
@@ -411,6 +422,38 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Proposal saved through supabase.");
+  });
+
+  it("shows a planning load failure without crashing the page", async () => {
+    mocks.listPlanningItems.mockRejectedValue(
+      new Error("Sign in before loading planning rows from Supabase."),
+    );
+
+    renderWithWorkflow(<CalendarPage />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Planning rows could not load");
+    expect(alert).toHaveTextContent(
+      "Sign in before loading planning rows from Supabase.",
+    );
+  });
+
+  it("shows an explicit planning empty state when persisted rows are empty", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      proposals: [],
+      blocks: [],
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    expect(await screen.findByText("No time-block proposals yet.")).toBeDefined();
+    expect(
+      screen.getByText(
+        "When you propose time for tasks, local blocks appear here first. Google Calendar conflict checks are optional and do not create events.",
+      ),
+    ).toBeDefined();
   });
 
   it("accepting a persisted proposal creates a local calendar block", async () => {
@@ -716,6 +759,21 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent("Session started through supabase.");
   });
 
+  it("shows an execution load failure and keeps the no-active-block fallback visible", async () => {
+    mocks.listExecutionReviewItems.mockRejectedValue(
+      new Error("Sign in before loading execution rows from Supabase."),
+    );
+
+    renderWithWorkflow(<ExecutePage />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Execution rows could not load");
+    expect(alert).toHaveTextContent(
+      "Sign in before loading execution rows from Supabase.",
+    );
+    expect(screen.getByText("No active block.")).toBeDefined();
+  });
+
   it("does not start persisted execution when every task is already non-active", async () => {
     mocks.listExecutionReviewItems.mockResolvedValue({
       provider: "supabase",
@@ -908,5 +966,25 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     expect(await screen.findByText("Accepted tasks: 1")).toBeDefined();
     expect(screen.queryByText(/^Captured:/)).toBeNull();
+  });
+
+  it("shows local capture context in review when provider is mock", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "mock",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Local-only capture for review surface" />
+        <ReviewPage />
+      </>,
+    );
+
+    expect(await screen.findByText(/Data source:/)).toBeDefined();
+    expect(screen.getByText("Captured: 1")).toBeDefined();
   });
 });

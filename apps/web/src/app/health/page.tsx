@@ -37,12 +37,11 @@ export default function HealthPage() {
         }
       } catch (error) {
         if (!cancelled) {
+          void error;
           setState({
             status: "error",
             message:
-              error instanceof Error
-                ? error.message
-                : "Unable to load health checks.",
+              "Unable to load health checks right now. Verify auth/session and provider status, then retry.",
           });
         }
       }
