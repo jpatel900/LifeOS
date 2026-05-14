@@ -2,7 +2,7 @@
 
 Area-scoped personal workflow cockpit. The Phase 2 mock vertical slice stays available for local triage while Phase 4A adds Supabase-backed areas and raw capture persistence when env vars are configured.
 
-Project documentation lives in `docs/`. Start with `docs/PROJECT_STATE.md` for the current handoff state, then read the relevant product, architecture, data model, UX, test, and security docs from that folder.
+Project documentation lives in `docs/`. For bounded agent/developer orientation, start with `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context <area>`, then read `docs/PROJECT_STATE.md` and the relevant authority docs as needed. This helper is for orientation only and does not replace authority docs.
 
 ## Documentation authority order
 
@@ -83,6 +83,7 @@ Run from the repository root after `pnpm install`.
 | `pnpm dev`                      | Runs the Next.js app through Turborepo (`http://localhost:3000`) |
 | `pnpm --filter @lifeos/web dev` | Run only the web app                                             |
 | `pnpm build`                    | Builds all workspaces                                            |
+| `pnpm agent:context <area>`     | Print bounded repo context for one task area                     |
 | `pnpm lint`                     | Lint / type validation for configured workspaces                 |
 | `pnpm type-check`               | TypeScript checks                                                |
 | `pnpm test`                     | Vitest suites                                                    |
@@ -90,3 +91,7 @@ Run from the repository root after `pnpm install`.
 | `pnpm format:check`             | Check formatting when configured                                 |
 
 Filter a single workspace with commands such as `pnpm --filter @lifeos/web test`.
+
+Example orientation command: `pnpm agent:context capture`
+
+If you pass an unknown area, the script lists the available areas.

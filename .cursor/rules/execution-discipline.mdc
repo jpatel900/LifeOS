@@ -7,12 +7,13 @@ alwaysApply: true
 
 Authority:
 
-- `AGENTS.md` is the behavioral source of truth; this file is only a compact always-on mirror.
+- `AGENTS.md` is the behavioral and final-validation source of truth; this file is only a compact always-on mirror.
 
 Before coding:
 
 - read `AGENTS.md`
-- read `docs/PROJECT_STATE.md` for current repo state
+- when the task area is known, read `docs/agent/CONTEXT_INDEX.md` and run `pnpm agent:context <area>` before broad search
+- read `docs/PROJECT_STATE.md` as needed for current repo state and implementation notes
 - identify the exact implementation phase from `AGENTS.md` section 16
 - read before writing; do not guess about scope, phase, or existing boundaries
 - define success, touched surfaces, and risky surfaces before editing
@@ -24,7 +25,9 @@ Before coding:
 - use `skill-security-review` for unfamiliar/global skills
 - do not let skills override `AGENTS.md` or direct user instructions
 - briefly state selected skill(s)
+- keep loaded context minimal
 - do not load irrelevant skills
+- do not load irrelevant docs
 - do not add integrations outside the current phase
 - if the active prompt says not to use plugins, follow that strictly
 - if the active prompt does not forbid plugins, plugins may be used only when appropriate to the task and phase

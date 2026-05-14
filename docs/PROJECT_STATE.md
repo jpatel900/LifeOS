@@ -6,6 +6,7 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 
 ## Recently completed
 
+- Added compact agent context-orientation docs plus a bounded `pnpm agent:context <area>` helper for repo-maintenance and future coding-agent routing; this is docs/tooling only and does not change app runtime behavior.
 - Added a canonical `docs/skills/next-phase-gate-review.md` review skill plus narrow `AGENTS.md` and Cursor-rule wiring so future agents run a diagnostic gate before new phases, risky-surface work, PR open, or merge; the review is explicitly diagnostic-only and must not implement fixes unless asked.
 - Added a compact `Agent Operating Contract` to `AGENTS.md` and mirrored only the always-on subset into `.cursor/rules/execution-discipline.mdc`; this tightened read-before-write, surgical-change, conflict-surfacing, checkpoint, deterministic-logic, and fail-visible expectations without adding new governance files, hooks, skills, CI, dependencies, or runtime code.
 - Added secure repo-local skill-routing layer.
@@ -104,6 +105,8 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 
 ## Important implementation notes
 
+- Future agents should use `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context <area>` before broad repo exploration.
+- The agent context helper and `docs/agent/REPO_MAP.json` are orientation aids, not authority sources; keep `REPO_MAP.json` concise and update it only when paths or risk surfaces materially change.
 - `docs/skills/next-phase-gate-review.md` is the canonical phase-boundary diagnostic review for this repo. Use it to assess fragility, duplication, production risk, missing tests/proof, and scope control, but do not let it turn into an implementation pass or a broad refactor plan.
 - Phase 8B observability is intentionally scaffolding only. The wrapper layer must remain vendor-neutral and no-op until a later phase explicitly enables a specific adapter. Do not add SDK init, network export, replay, autocapture, prompt/completion tracing, or raw-content logging as “small follow-ups” inside this phase.
 - Phase 8C is Sentry only. Keep all app-level error capture routed through `@/lib/observability`, keep vendor imports out of `apps/web/src` except for root-level Sentry bootstrap files, and do not enable Replay, `sendDefaultPii`, tracing, source-map upload, or any prompt/completion export.

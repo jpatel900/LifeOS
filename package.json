@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo dev",
+    "agent:context": "node scripts/agent-context.mjs",
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "turbo test",

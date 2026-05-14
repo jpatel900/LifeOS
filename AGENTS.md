@@ -128,9 +128,21 @@ Keep shared schemas in `/packages/schemas`.
 
 Keep project documentation in `/docs`, except root-level files used by tooling or repository conventions such as `README.md` and `AGENTS.md`.
 
-`/docs/PROJECT_STATE.md` is the handoff file for future agents. At the start of each agent run, read it after `AGENTS.md` to understand current status, recent work, known issues, recommended next tasks, and implementation notes.
+`/docs/PROJECT_STATE.md` is the handoff file for future agents. At the start of each substantial agent run, start with the smallest relevant context (`docs/agent/CONTEXT_INDEX.md`, `pnpm agent:context <area>` when the task area is known), then read `/docs/PROJECT_STATE.md` as needed to confirm current status, recent work, known issues, recommended next tasks, and implementation notes.
 
 After every major update, update `/docs/PROJECT_STATE.md` before finishing the run. Keep it concise and factual: current shipped or implemented behavior, recently completed work, known issues, next recommended tasks, and important implementation notes.
+
+## 6A. Context Budget
+
+- `AGENTS.md` remains the highest authority for agent behavior.
+- Before broad repository search, use the smallest relevant context.
+- Start with `docs/agent/CONTEXT_INDEX.md`.
+- Use `pnpm agent:context <area>` when the task area is known.
+- Read `docs/PROJECT_STATE.md` only as needed for current status and implementation notes.
+- Do not read all docs by default.
+- Do not paste full logs or full files into handoffs unless necessary.
+- `docs/agent/CONTEXT_INDEX.md` and `docs/agent/REPO_MAP.json` are orientation aids, not authority documents.
+- Existing validation, security, RLS, schema, and calendar approval rules still apply.
 
 ## 7. Schema and AI Rules
 
@@ -326,7 +338,7 @@ Preferred order:
 
 These rules convert common coding-agent failure modes into LifeOS-specific execution constraints.
 
-1. Read before writing: read `AGENTS.md`, `docs/PROJECT_STATE.md`, and the smallest set of authority docs needed for the task before editing; do not guess about phase, scope, or existing boundaries.
+1. Read before writing: read `AGENTS.md`, start with the smallest relevant context (`docs/agent/CONTEXT_INDEX.md`, `pnpm agent:context <area>` when applicable), read `docs/PROJECT_STATE.md` as needed, and then the smallest set of authority docs needed for the task before editing; do not guess about phase, scope, or existing boundaries.
 2. Think before coding: confirm the task maps to current requirements, define acceptance criteria, identify impacted files/tests/risky surfaces, and stop if those are unclear.
 3. Make surgical changes only: prefer the smallest edit that fixes the stated problem; do not bundle refactors, doc rewrites, new tools, new dependencies, hooks, or adjacent feature work.
 4. Simplicity and convention beat novelty: prefer existing repo patterns, typed Next.js server boundaries, shared schemas, and current docs over clever new abstractions.
@@ -409,7 +421,7 @@ Required sequence:
 When working as an AI coding agent:
 
 - make small changes
-- read `AGENTS.md` and `docs/PROJECT_STATE.md` before planning substantial work
+- read `AGENTS.md`; start with `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context <area>` when the task area is known; read `docs/PROJECT_STATE.md` as needed before planning substantial work
 - identify the exact implementation phase before coding
 - explain risky assumptions
 - prefer simple implementation
