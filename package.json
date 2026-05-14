@@ -24,6 +24,9 @@
       "esbuild",
       "sharp",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "protobufjs": "^8.0.2"
+    }
   }
 }
