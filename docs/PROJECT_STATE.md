@@ -12,6 +12,7 @@ MVP supports task capture, area assignment, optional AI/mock parse capture, manu
 - Added secure repo-local skill-routing layer.
 - Added `skill-router`, `skill-security-review`, and LifeOS-specific skills.
 - Updated `AGENTS.md` and Cursor execution discipline to prefer relevant trusted repo-local skills and review global skills before use.
+- Added `docs/CODEX_SKILL_ROUTING.md` plus narrow references from `AGENTS.md`, `skill-router`, and Cursor execution discipline so Codex/plugin routing defaults stay compact, explicit, and token-efficient without broad governance rewrites.
 - Hardened Phase 5 parse-capture server boundaries and error safety: parser route logging now emits only sanitized error type metadata (no raw provider/internal message payload), and parser modules include explicit server-runtime guards to block browser execution paths.
 - Added route-level regression coverage for `/api/parse-capture` (`apps/web/src/app/api/parse-capture/route.test.ts`) validating parser-status GET behavior, forced mock fallback when AI is unavailable, non-leaky safe error responses, and sanitized error logging on both parser and request-validation failures.
 - Added contract-drift guard coverage in `apps/web/src/lib/ai/parseCapture.test.ts` to assert JSON structured-output schema keys stay aligned with `ParseCaptureResponseSchema` keys and prompt-declared `parse_status` literals.
