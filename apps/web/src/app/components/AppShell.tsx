@@ -109,9 +109,11 @@ function AppChrome({ children }: { children: ReactNode }) {
           }}
         >
           <div>
-            <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>Area</div>
+            <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+              Workflow area (session)
+            </div>
             <select
-              aria-label="Current area"
+              aria-label="Current workflow area (session)"
               value={selectedAreaId ?? ""}
               onChange={(event) =>
                 setSelectedAreaId(event.target.value || null)
@@ -163,7 +165,8 @@ function AppChrome({ children }: { children: ReactNode }) {
           aria-label="Current area context"
           style={{ marginBottom: "1rem", fontSize: "0.9rem", color: "#4b5563" }}
         >
-          <span style={{ fontWeight: 500 }}>Area:</span> {currentArea?.name}
+          <span style={{ fontWeight: 500 }}>Session workflow area:</span>{" "}
+          {currentArea?.name}
         </div>
         {children}
       </main>

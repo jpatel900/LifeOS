@@ -63,9 +63,9 @@ export default function AreasSettingsPage() {
           }}
         >
           Areas are first-class scopes for captures, tasks, scheduling, and
-          future learning. Phase 4A loads areas from the data layer; Phase 2
-          mock triage still uses separate session state tied to the shell header
-          picker.
+          future learning. The list below is persisted area data from the
+          current provider. The shell header workflow area picker controls local
+          session state used by capture/triage drafts.
         </p>
       </section>
 
@@ -96,7 +96,7 @@ export default function AreasSettingsPage() {
       {state.status === "ready" ? (
         <section style={{ marginTop: "0.5rem" }}>
           <p>
-            Data source: <strong>{state.provider}</strong>
+            Persisted area provider: <strong>{state.provider}</strong>
           </p>
 
           {state.areas.length === 0 ? (
@@ -140,18 +140,16 @@ export default function AreasSettingsPage() {
           backgroundColor: "#f8fafc",
         }}
       >
-        <h2 style={{ marginTop: 0, fontSize: "1rem" }}>
-          Phase 2 mock workflow
-        </h2>
+        <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Local session reset</h2>
         <p
           style={{ marginTop: "0.25rem", fontSize: "0.9rem", color: "#475569" }}
         >
-          Reset clears session-only triage and scheduling mocks (captures,
-          drafts, proposals in browser storage). It does not delete persisted
-          Phase 4A rows.
+          Reset clears local browser session workflow state (captures, drafts,
+          ambiguity assessments, and proposal drafts). It does not delete
+          persisted Supabase/mock-provider rows.
         </p>
         <Button type="button" variant="secondary" onClick={resetWorkflow}>
-          Reset local mock flow
+          Reset local session workflow
         </Button>
       </section>
     </div>

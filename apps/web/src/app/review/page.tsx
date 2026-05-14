@@ -104,6 +104,8 @@ export default function ReviewPage() {
     : state.executionSessions;
   const reviewEntries = usesPersistedReview ? reviewState.reviewEntries : [];
   const areas = usesPersistedReview ? reviewState.areas : state.areas;
+  const captureCount = usesPersistedReview ? null : state.captureItems.length;
+  const localReviewLog = usesPersistedReview ? [] : state.reviewLog;
 
   const completed = sessions.filter((session) =>
     "status" in session
@@ -293,7 +295,7 @@ export default function ReviewPage() {
           <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
             Daily review
           </h2>
-          {state.captureItems.length === 0 && sessions.length === 0 ? (
+          {captureCount === 0 && sessions.length === 0 ? (
             <EmptyState
               title="No daily review yet."
               description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
@@ -302,7 +304,7 @@ export default function ReviewPage() {
             <ul
               style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}
             >
-              <li>Captured: {state.captureItems.length}</li>
+              {captureCount !== null ? <li>Captured: {captureCount}</li> : null}
               <li>Accepted tasks: {tasks.length}</li>
               <li>Completed sessions: {completed.length}</li>
               <li>Missed sessions: {missed.length}</li>
@@ -387,13 +389,13 @@ export default function ReviewPage() {
           </ul>
         </section>
       ) : null}
-      {state.reviewLog.length > 0 ? (
+      {localReviewLog.length > 0 ? (
         <section>
           <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
             Local event log
           </h2>
           <ul style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}>
-            {state.reviewLog.map((entry, index) => (
+            {localReviewLog.map((entry, index) => (
               <li key={`${entry}-${index}`}>{entry}</li>
             ))}
           </ul>

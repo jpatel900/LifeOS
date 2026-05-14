@@ -62,7 +62,7 @@ describe("workflow route provider wiring", () => {
 
       expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
       expect(screen.getByLabelText("Current area context")).toHaveTextContent(
-        "Area:",
+        "Session workflow area:",
       );
       if (
         _name === "triage" ||

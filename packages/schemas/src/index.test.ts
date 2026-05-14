@@ -206,17 +206,38 @@ describe("CreateExecutionSessionInputSchema", () => {
 });
 
 describe("MarkExecutionSessionInputSchema", () => {
-  it("validates supported execution session marks", () => {
+  it("validates paused execution updates without terminal fields", () => {
+    const result = MarkExecutionSessionInputSchema.safeParse({
+      status: "paused",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("requires terminal fields for non-paused marks", () => {
     for (const status of [
       "completed",
       "missed",
       "distracted",
-      "paused",
       "stuck",
     ] as const) {
-      const result = MarkExecutionSessionInputSchema.safeParse({ status });
+      const result = MarkExecutionSessionInputSchema.safeParse({
+        status,
+        outcome: "completed",
+        actual_minutes: 42,
+        productivity_rating: 4,
+        notes: "solid focus",
+      });
       expect(result.success).toBe(true);
     }
+  });
+
+  it("rejects terminal marks missing required terminal fields", () => {
+    const result = MarkExecutionSessionInputSchema.safeParse({
+      status: "completed",
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 

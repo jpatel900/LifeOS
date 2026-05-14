@@ -156,6 +156,22 @@ describe("source-of-truth boundaries", () => {
     expect(route).not.toMatch(/from ["']@sentry\/nextjs["']/);
   });
 
+  it("keeps local-session versus persisted-source copy explicit on workflow surfaces", () => {
+    const appShell = readRepoFile("apps/web/src/app/components/AppShell.tsx");
+    const capture = readRepoFile("apps/web/src/app/capture/page.tsx");
+    const triage = readRepoFile("apps/web/src/app/triage/page.tsx");
+    const settings = readRepoFile("apps/web/src/app/settings/areas/page.tsx");
+
+    expect(appShell).toContain("Workflow area (session)");
+    expect(appShell).toContain("Session workflow area:");
+    expect(capture).toContain("Persisted provider:");
+    expect(capture).toContain("local session state only");
+    expect(triage).toContain("Persisted acceptance provider:");
+    expect(triage).toContain("Draft list source: <strong>local session</strong>");
+    expect(settings).toContain("Persisted area provider:");
+    expect(settings).toContain("Reset clears local browser session workflow state");
+  });
+
   it("marks parser modules with explicit server runtime guards", () => {
     const parser = readRepoFile("apps/web/src/lib/ai/parseCapture.ts");
     const service = readRepoFile("apps/web/src/lib/ai/parseCaptureService.ts");

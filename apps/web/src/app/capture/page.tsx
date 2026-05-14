@@ -14,14 +14,7 @@ import {
 import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
-
-/** Map Phase 4A seed area slugs to Phase 2 mock workflow area ids (mockData). */
-const WORKFLOW_AREA_BY_SLUG: Record<string, string> = {
-  "main-job": "area-main-job",
-  personal: "area-personal",
-  "volunteer-work": "area-volunteer",
-  "side-project": "area-side-project",
-};
+import { workflowAreaIdForSlug } from "@/lib/workflowAreaMapping";
 
 type AreasState =
   | { status: "loading" }
@@ -118,7 +111,7 @@ export default function CapturePage() {
           const first = result.areas[0];
           if (first) {
             setAreaId(first.id);
-            const wf = WORKFLOW_AREA_BY_SLUG[first.slug];
+            const wf = workflowAreaIdForSlug(first.slug);
             if (wf) setSelectedAreaId(wf);
           }
         }
@@ -182,7 +175,7 @@ export default function CapturePage() {
         ? areasState.areas.find((a) => a.id === idOrEmpty)
         : undefined;
     if (area) {
-      const wf = WORKFLOW_AREA_BY_SLUG[area.slug];
+      const wf = workflowAreaIdForSlug(area.slug);
       if (wf) setSelectedAreaId(wf);
     }
   }
@@ -387,9 +380,9 @@ export default function CapturePage() {
             fontSize: "0.95rem",
           }}
         >
-          Save raw text through the data layer, then optionally parse it into
-          reviewable task/project drafts. The Phase 2 mock parser remains
-          available.
+          Save capture and Save and parse write persisted capture rows through
+          the current data provider. Structure locally and Recent captures use
+          local session state only.
         </p>
       </section>
 
@@ -471,15 +464,15 @@ export default function CapturePage() {
           }}
         >
           <h2 style={{ margin: 0, fontSize: "1.05rem" }}>
-            Persist raw capture (Phase 4A)
+            Persist raw capture row
           </h2>
           {provider ? (
             <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-              Data source: <strong>{provider}</strong>
+              Persisted provider: <strong>{provider}</strong>
             </p>
           ) : null}
 
-          <label htmlFor="area_persist">Area for saved row</label>
+          <label htmlFor="area_persist">Area for persisted capture row</label>
           <select
             id="area_persist"
             value={areaId ?? ""}
@@ -500,6 +493,10 @@ export default function CapturePage() {
               </option>
             ))}
           </select>
+          <p style={{ margin: 0, fontSize: "0.85rem", color: "#6b7280" }}>
+            Selecting an area here also updates the header session workflow area
+            when a matching local workflow area exists.
+          </p>
 
           {areasState.status === "ready" && areas.length === 0 ? (
             <p style={{ fontSize: "0.9rem" }}>
@@ -557,11 +554,11 @@ export default function CapturePage() {
           }}
         >
           <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-            Phase 2 mock uses the area picker in the header (synced from your
-            saved-area slug when possible).
+            The header workflow area picker controls local session drafts and
+            the recent-captures list on this page.
           </div>
           <Button type="button" onClick={handleStructure}>
-            Structure locally (Phase 2 mock)
+            Structure locally (session only)
           </Button>
         </div>
 
@@ -692,11 +689,11 @@ export default function CapturePage() {
       ) : null}
 
       <section style={{ marginTop: "1rem" }}>
-        <h2>Recent captures (Phase 2 mock session)</h2>
+        <h2>Recent captures (local session only)</h2>
         {visibleCaptures.length === 0 ? (
           <EmptyState
-            title="Nothing captured yet for this mock area."
-            description="Use Structure locally to create raw capture, draft task, ambiguity assessment, and possible local block in session state."
+            title="No local session captures for this workflow area."
+            description="Use Structure locally to create session-only captures, drafts, ambiguity assessments, and proposal drafts."
           />
         ) : (
           <div
