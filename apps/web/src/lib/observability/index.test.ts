@@ -41,7 +41,7 @@ describe("observability wrapper", () => {
       context: { provider: "mock" },
     });
     await observability.captureEvent({
-      event: "parse_capture_attempted",
+      event: "parse_failed",
       properties: { provider: "mock" },
     });
     const value = await observability.traceAiOperation(
@@ -74,7 +74,7 @@ describe("observability wrapper", () => {
     ).resolves.toBeUndefined();
     await expect(
       observability.captureEvent({
-        event: "health_snapshot_loaded",
+        event: "health_viewed",
       }),
     ).resolves.toBeUndefined();
     await expect(
@@ -95,10 +95,12 @@ describe("observability wrapper", () => {
 
     resetObservabilityRuntime();
     registerObservabilityRuntime({
-      transportMode: "sentry_sdk",
-      captureException,
-      flush,
-      shutdown,
+      sentry: {
+        transportMode: "sentry_sdk",
+        captureException,
+        flush,
+        shutdown,
+      },
     });
 
     const observability = createObservability({
@@ -111,7 +113,7 @@ describe("observability wrapper", () => {
       feature: "parse_capture",
       error: new Error("failure"),
       context: {
-        route_pattern: "/api/parse-capture",
+        feature: "capture",
         prompt: "never export this",
       },
     });
@@ -126,12 +128,85 @@ describe("observability wrapper", () => {
         stack_present: true,
       },
       context: {
-        route_pattern: "/api/parse-capture",
+        feature: "capture",
         prompt: "[REDACTED]",
       },
     });
     expect(flush).toHaveBeenCalledTimes(1);
     expect(shutdown).toHaveBeenCalledTimes(1);
+
+    resetObservabilityRuntime();
+  });
+
+  it("drops analytics calls for events outside the approved taxonomy", async () => {
+    const captureEvent = vi.fn();
+
+    resetObservabilityRuntime();
+    registerObservabilityRuntime({
+      posthog: {
+        transportMode: "posthog_js",
+        captureEvent,
+      },
+    });
+
+    const observability = createObservability({
+      env: {
+        NEXT_PUBLIC_POSTHOG_TOKEN: "phc_test_token",
+        NEXT_PUBLIC_POSTHOG_HOST: "https://us.i.posthog.com",
+      },
+    });
+
+    await observability.captureEvent({
+      event: "not_allowed_event" as never,
+      properties: {
+        feature: "capture",
+        status: "submitted",
+      },
+    });
+
+    expect(captureEvent).not.toHaveBeenCalled();
+
+    resetObservabilityRuntime();
+  });
+
+  it("routes approved manual analytics through the registered PostHog runtime", async () => {
+    const captureEvent = vi.fn();
+
+    resetObservabilityRuntime();
+    registerObservabilityRuntime({
+      posthog: {
+        transportMode: "posthog_js",
+        captureEvent,
+      },
+    });
+
+    const observability = createObservability({
+      env: {
+        NEXT_PUBLIC_POSTHOG_TOKEN: "phc_test_token",
+        NEXT_PUBLIC_POSTHOG_HOST: "https://us.i.posthog.com",
+      },
+    });
+
+    await observability.captureEvent({
+      event: "calendar_write_failed",
+      properties: {
+        feature: "calendar",
+        provider: "google_calendar",
+        status: "failed",
+        error_category: "google_calendar_write_failed",
+        raw_text: "drop this",
+      },
+    });
+
+    expect(captureEvent).toHaveBeenCalledWith({
+      event: "calendar_write_failed",
+      properties: {
+        error_category: "google_calendar_write_failed",
+        feature: "calendar",
+        provider: "google_calendar",
+        status: "failed",
+      },
+    });
 
     resetObservabilityRuntime();
   });

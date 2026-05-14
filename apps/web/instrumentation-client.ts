@@ -49,16 +49,13 @@ const posthogConfig = getPostHogInitConfig();
 const posthogToken = getPostHogToken();
 
 if (posthogConfig && posthogToken) {
-  posthog.init(posthogToken, posthogConfig);
+  posthog.init(posthogToken, posthogConfig as Parameters<typeof posthog.init>[1]);
 
   registerObservabilityRuntime({
     posthog: {
       transportMode: "posthog_js",
       captureEvent(input) {
         posthog.capture(input.event, input.properties);
-      },
-      flush() {
-        posthog.flush();
       },
       shutdown() {
         posthog.reset();

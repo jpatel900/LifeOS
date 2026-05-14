@@ -5,6 +5,7 @@ import {
   getHealthDashboard,
   type HealthDashboardResult,
 } from "@/lib/data/health";
+import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type HealthLoadState =
@@ -23,6 +24,15 @@ export default function HealthPage() {
         const result = await getHealthDashboard(createSupabaseBrowserClient());
 
         if (!cancelled) {
+          void captureEvent({
+            event: "health_viewed",
+            properties: {
+              feature: "health",
+              provider: result.provider,
+              status: result.persistence,
+              used_mock: result.provider === "mock",
+            },
+          });
           setState({ status: "ready", result });
         }
       } catch (error) {

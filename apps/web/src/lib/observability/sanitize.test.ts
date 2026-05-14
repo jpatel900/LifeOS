@@ -57,7 +57,7 @@ describe("observability sanitizers", () => {
     const sanitized = sanitizeEventProperties({
       provider: "sentry",
       status: "configured",
-      route_pattern: "/api/parse-capture",
+      area_present: true,
       raw_text: "this should not pass",
       arbitrary_payload: "drop me",
     });
@@ -65,24 +65,30 @@ describe("observability sanitizers", () => {
     expect(sanitized).toEqual({
       provider: "sentry",
       status: "configured",
-      route_pattern: "/api/parse-capture",
+      area_present: true,
     });
   });
 
-  it("sanitizes allowed analytics properties that contain sensitive values", () => {
+  it("drops non-UUID area ids and keeps valid UUID metadata", () => {
     const sanitized = sanitizeEventProperties({
-      environment: "production",
-      route_pattern: "https://example.com/callback?code=abc123",
-      error_type: "jay@example.com",
-      retry_count: 2,
+      area_id: "not-a-uuid",
+      feature: "capture",
+      status: "submitted",
     });
 
     expect(sanitized).toEqual({
-      environment: "production",
-      route_pattern: "https://example.com/callback",
-      error_type: OBSERVABILITY_REDACTED_EMAIL,
-      retry_count: 2,
+      feature: "capture",
+      status: "submitted",
+    });
+
+    expect(
+      sanitizeEventProperties({
+        area_id: "550e8400-e29b-41d4-a716-446655440000",
+        feature: "capture",
+      }),
+    ).toEqual({
+      area_id: "550e8400-e29b-41d4-a716-446655440000",
+      feature: "capture",
     });
   });
 });
-

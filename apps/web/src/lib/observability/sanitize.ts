@@ -45,34 +45,16 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   "area_id",
   "area_present",
   "duration_bucket",
-  "environment",
   "error_category",
-  "error_type",
   "feature",
   "item_type",
   "latency_bucket",
-  "model_tier",
-  "operation",
-  "parse_status",
   "prompt_version",
   "provider",
-  "provider_state",
-  "route_pattern",
   "schema_version",
   "status",
-  "transport_mode",
   "used_mock",
 ]);
-
-const SAFE_EVENT_PROPERTY_KEY_PATTERNS = [
-  /^has_[a-z0-9_]+$/i,
-  /^is_[a-z0-9_]+$/i,
-  /^[a-z0-9_]+_bucket$/i,
-  /^[a-z0-9_]+_count$/i,
-  /^[a-z0-9_]+_flag$/i,
-  /^[a-z0-9_]+_state$/i,
-  /^[a-z0-9_]+_version$/i,
-];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -171,10 +153,7 @@ export function sanitizeObservabilityValue(
 }
 
 function isSafeEventPropertyKey(key: string) {
-  return (
-    SAFE_EVENT_PROPERTY_KEYS.has(key) ||
-    SAFE_EVENT_PROPERTY_KEY_PATTERNS.some((pattern) => pattern.test(key))
-  );
+  return SAFE_EVENT_PROPERTY_KEYS.has(key);
 }
 
 function sanitizeEventScalar(

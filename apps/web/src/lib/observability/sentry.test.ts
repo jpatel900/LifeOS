@@ -68,7 +68,6 @@ describe("sentry observability helpers", () => {
     });
     expect(sanitized.tags).toEqual({
       provider: "sentry",
-      route_pattern: "/api/parse-capture",
     });
     expect(sanitized.extra).toEqual({
       completion: OBSERVABILITY_REDACTED_TEXT,

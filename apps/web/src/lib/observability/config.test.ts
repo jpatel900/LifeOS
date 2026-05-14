@@ -40,6 +40,17 @@ describe("observability config helpers", () => {
     expect(sentry.transportMode).toBe("sentry_sdk");
   });
 
+  it("reports PostHog as configured only when public token and host are both present", () => {
+    const posthog = getObservabilityProviderStatus("posthog", {
+      NEXT_PUBLIC_POSTHOG_TOKEN: "phc_test_token",
+      NEXT_PUBLIC_POSTHOG_HOST: "https://us.i.posthog.com",
+    });
+
+    expect(posthog.state).toBe("configured");
+    expect(posthog.invalidKeys).toEqual([]);
+    expect(posthog.transportMode).toBe("posthog_js");
+  });
+
   it("treats server-only Sentry DSN as partial config because client capture is still absent", () => {
     const sentry = getObservabilityProviderStatus("sentry", {
       SENTRY_DSN: "https://abc@example.ingest.sentry.io/123",

@@ -35,7 +35,7 @@ export function getPostHogInitConfig(env: ObservabilityEnv = process.env) {
     logs: {
       captureConsoleLogs: false,
     },
-    persistence: "localStorage+cookie",
+    persistence: "localStorage+cookie" as const,
     rageclick: false,
   };
 }

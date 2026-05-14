@@ -17,6 +17,7 @@ import {
   type DataProvider,
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
+import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
@@ -169,6 +170,15 @@ export default function ReviewPage() {
           : current,
       );
       setActionState({ status: "saved", provider: result.provider });
+      void captureEvent({
+        event: "review_submitted",
+        properties: {
+          feature: "review",
+          provider: result.provider,
+          status: "submitted",
+          used_mock: result.provider === "mock",
+        },
+      });
     } catch (error) {
       setActionState({
         status: "error",

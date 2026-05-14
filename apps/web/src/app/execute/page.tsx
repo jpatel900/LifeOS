@@ -11,6 +11,7 @@ import {
   type DataProvider,
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
+import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import type { Phase2MockExecutionSession } from "@/lib/types";
@@ -133,6 +134,16 @@ export default function ExecutePage() {
 
     if (!usesPersistedExecution) {
       startTaskSession(activeTask.id);
+      void captureEvent({
+        event: "execution_started",
+        properties: {
+          area_present: Boolean(activeTask.area_id),
+          feature: "execute",
+          provider: "mock",
+          status: "started",
+          used_mock: true,
+        },
+      });
       return;
     }
 
@@ -163,6 +174,16 @@ export default function ExecutePage() {
         label: "Session started through",
         provider: result.provider,
       });
+      void captureEvent({
+        event: "execution_started",
+        properties: {
+          area_present: Boolean(activeTask.area_id),
+          feature: "execute",
+          provider: result.provider,
+          status: "started",
+          used_mock: false,
+        },
+      });
     } catch (error) {
       setActionState({
         status: "error",
@@ -175,6 +196,18 @@ export default function ExecutePage() {
   async function handleMark(status: Phase2MockExecutionSession["status"]) {
     if (!usesPersistedExecution) {
       markSession(status);
+      if (status === "completed") {
+        void captureEvent({
+          event: "execution_completed",
+          properties: {
+            area_present: Boolean(activeTask?.area_id),
+            feature: "execute",
+            provider: "mock",
+            status: "completed",
+            used_mock: true,
+          },
+        });
+      }
       return;
     }
 
@@ -218,6 +251,18 @@ export default function ExecutePage() {
         label: `Session marked ${markLabels[status].saved} through`,
         provider: result.provider,
       });
+      if (status === "completed") {
+        void captureEvent({
+          event: "execution_completed",
+          properties: {
+            area_present: Boolean(activeTask?.area_id),
+            feature: "execute",
+            provider: result.provider,
+            status: "completed",
+            used_mock: false,
+          },
+        });
+      }
     } catch (error) {
       setActionState({
         status: "error",
