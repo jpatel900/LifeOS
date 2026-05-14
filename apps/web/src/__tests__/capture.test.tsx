@@ -130,6 +130,16 @@ describe("CapturePage", () => {
 
     expect(await screen.findByText("Parser status: Mock parser")).toBeDefined();
     expect(screen.getByText("mock")).toBeDefined();
+    expect(
+      screen.getByText(
+        /Save capture and Save and parse write persisted capture rows through the current data provider/i,
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        /The header workflow area picker controls local session drafts and the recent-captures list on this page/i,
+      ),
+    ).toBeDefined();
   });
 
   it("shows parser status as AI configured", async () => {

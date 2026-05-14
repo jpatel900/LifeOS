@@ -1237,46 +1237,13 @@ export async function createExecutionSession(
 
 function executionMarkPatch(
   session: ExecutionSession,
-  status: MarkExecutionSessionInput["status"],
+  input: MarkExecutionSessionInput,
 ) {
-  if (status === "completed") {
-    return {
-      outcome: "completed",
-      actual_minutes: session.planned_minutes,
-      paused_minutes: session.paused_minutes ?? 0,
-      distraction_minutes: session.distraction_minutes ?? 0,
-      productivity_rating: 4,
-      notes: session.notes,
-    };
-  }
-
-  if (status === "missed") {
-    return {
-      outcome: "skipped",
-      actual_minutes: session.actual_minutes,
-      paused_minutes: session.paused_minutes ?? 0,
-      distraction_minutes: session.distraction_minutes ?? 0,
-      productivity_rating: session.productivity_rating,
-      notes: session.notes,
-    };
-  }
-
-  if (status === "distracted") {
-    return {
-      outcome: "distracted",
-      actual_minutes: session.actual_minutes,
-      paused_minutes: session.paused_minutes ?? 0,
-      distraction_minutes: Math.max(session.distraction_minutes ?? 0, 10),
-      productivity_rating: session.productivity_rating,
-      notes: session.notes,
-    };
-  }
-
-  if (status === "paused") {
+  if (input.status === "paused") {
     return {
       outcome: "partial",
       actual_minutes: session.actual_minutes,
-      paused_minutes: Math.max(session.paused_minutes ?? 0, 5),
+      paused_minutes: session.paused_minutes ?? 0,
       distraction_minutes: session.distraction_minutes ?? 0,
       productivity_rating: session.productivity_rating,
       notes: session.notes,
@@ -1284,12 +1251,12 @@ function executionMarkPatch(
   }
 
   return {
-    outcome: "blocked",
-    actual_minutes: session.actual_minutes,
+    outcome: input.outcome,
+    actual_minutes: input.actual_minutes,
     paused_minutes: session.paused_minutes ?? 0,
     distraction_minutes: session.distraction_minutes ?? 0,
-    productivity_rating: session.productivity_rating,
-    notes: "Need a smaller next step.",
+    productivity_rating: input.productivity_rating,
+    notes: input.notes,
   };
 }
 
@@ -1301,6 +1268,10 @@ export async function markExecutionSession(
   const parsedInput = MarkExecutionSessionInputSchema.parse(input);
 
   if (!client) {
+    const mockBaseSession = mockExecutionSession({
+      task_id: crypto.randomUUID(),
+    });
+    const mockPatch = executionMarkPatch(mockBaseSession, parsedInput);
     const session = parseExecutionSession({
       id: sessionId,
       user_id: mockUserId,
@@ -1308,16 +1279,13 @@ export async function markExecutionSession(
       task_id: null,
       calendar_block_id: null,
       planned_minutes: null,
-      actual_minutes: null,
+      actual_minutes: mockPatch.actual_minutes,
       paused_minutes: 0,
       distraction_minutes: 0,
-      productivity_rating: null,
+      productivity_rating: mockPatch.productivity_rating,
       energy_rating: null,
-      outcome: executionMarkPatch(
-        mockExecutionSession({ task_id: crypto.randomUUID() }),
-        parsedInput.status,
-      ).outcome,
-      notes: null,
+      outcome: mockPatch.outcome,
+      notes: mockPatch.notes,
       created_at: new Date().toISOString(),
     });
     return { provider: "mock", session, block: null, task: null };
@@ -1345,7 +1313,7 @@ export async function markExecutionSession(
   if (sessionReadError) throw new Error(getSupabaseMessage(sessionReadError));
   const currentSession = parseExecutionSession(sessionData);
 
-  const patch = executionMarkPatch(currentSession, parsedInput.status);
+  const patch = executionMarkPatch(currentSession, parsedInput);
   const sessionUpdateQuery = client.from("execution_sessions") as {
     update: (row: Record<string, unknown>) => {
       eq: (
@@ -1367,13 +1335,15 @@ export async function markExecutionSession(
   if (sessionUpdateError)
     throw new Error(getSupabaseMessage(sessionUpdateError));
 
+  const updatedSession = parseExecutionSession(updatedSessionData);
+
   let updatedBlock: CalendarBlock | null = null;
   if (
     currentSession.calendar_block_id &&
-    (parsedInput.status === "completed" || parsedInput.status === "missed")
+    (updatedSession.outcome === "completed" ||
+      updatedSession.outcome === "skipped")
   ) {
-    const blockStatus =
-      parsedInput.status === "completed" ? "completed" : "missed";
+    const blockStatus = updatedSession.outcome === "completed" ? "completed" : "missed";
     const blockUpdateQuery = client.from("calendar_blocks") as {
       update: (row: Record<string, unknown>) => {
         eq: (
@@ -1398,9 +1368,10 @@ export async function markExecutionSession(
   let updatedTask: Task | null = null;
   if (
     currentSession.task_id &&
-    (parsedInput.status === "completed" || parsedInput.status === "stuck")
+    (updatedSession.outcome === "completed" ||
+      updatedSession.outcome === "blocked")
   ) {
-    const taskStatus = parsedInput.status === "completed" ? "done" : "blocked";
+    const taskStatus = updatedSession.outcome === "completed" ? "done" : "blocked";
     const taskUpdateQuery = client.from("tasks") as {
       update: (row: Record<string, unknown>) => {
         eq: (
@@ -1424,7 +1395,7 @@ export async function markExecutionSession(
 
   return {
     provider: "supabase",
-    session: parseExecutionSession(updatedSessionData),
+    session: updatedSession,
     block: updatedBlock,
     task: updatedTask,
   };

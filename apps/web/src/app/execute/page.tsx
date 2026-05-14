@@ -33,6 +33,19 @@ type ActionState =
   | { status: "saved"; label: string; provider: DataProvider }
   | { status: "error"; message: string };
 
+type PersistedTerminalStatus = Extract<
+  Phase2MockExecutionSession["status"],
+  "completed" | "missed" | "distracted" | "stuck"
+>;
+
+type TerminalFormState = {
+  status: PersistedTerminalStatus;
+  outcome: ExecutionSession["outcome"];
+  actualMinutes: string;
+  productivityRating: string;
+  notes: string;
+};
+
 const markLabels: Record<
   Phase2MockExecutionSession["status"],
   { button: string; saved: string }
@@ -46,8 +59,40 @@ const markLabels: Record<
   stopped: { button: "Stop", saved: "stopped" },
 };
 
+const terminalOutcomeByStatus: Record<
+  PersistedTerminalStatus,
+  ExecutionSession["outcome"]
+> = {
+  completed: "completed",
+  missed: "skipped",
+  distracted: "distracted",
+  stuck: "blocked",
+};
+
+const terminalOutcomeOptions: Array<{
+  value: ExecutionSession["outcome"];
+  label: string;
+}> = [
+  { value: "completed", label: "Completed" },
+  { value: "partial", label: "Partial" },
+  { value: "blocked", label: "Blocked" },
+  { value: "skipped", label: "Skipped" },
+  { value: "distracted", label: "Distracted" },
+  { value: "stopped", label: "Stopped" },
+];
+
 function persistedOutcomeLabel(session: ExecutionSession | null) {
   return session ? session.outcome : "ready";
+}
+
+function createTerminalForm(status: PersistedTerminalStatus): TerminalFormState {
+  return {
+    status,
+    outcome: terminalOutcomeByStatus[status],
+    actualMinutes: "",
+    productivityRating: "",
+    notes: "",
+  };
 }
 
 export default function ExecutePage() {
@@ -58,6 +103,12 @@ export default function ExecutePage() {
   const [actionState, setActionState] = useState<ActionState>({
     status: "idle",
   });
+  const [terminalForm, setTerminalForm] = useState<TerminalFormState | null>(
+    null,
+  );
+  const [terminalFormError, setTerminalFormError] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -193,29 +244,18 @@ export default function ExecutePage() {
     }
   }
 
-  async function handleMark(status: Phase2MockExecutionSession["status"]) {
-    if (!usesPersistedExecution) {
-      markSession(status);
-      if (status === "completed") {
-        void captureEvent({
-          event: "execution_completed",
-          properties: {
-            area_present: Boolean(activeTask?.area_id),
-            feature: "execute",
-            provider: "mock",
-            status: "completed",
-            used_mock: true,
-          },
-        });
-      }
-      return;
-    }
-
-    if (
-      !activePersistedSession ||
-      status === "running" ||
-      status === "stopped"
-    ) {
+  async function persistMark(
+    status: Phase2MockExecutionSession["status"],
+    input:
+      | {
+          outcome: ExecutionSession["outcome"];
+          actual_minutes: number;
+          productivity_rating: number;
+          notes: string | null;
+        }
+      | undefined,
+  ) {
+    if (!activePersistedSession || status === "running" || status === "stopped") {
       return;
     }
 
@@ -224,7 +264,15 @@ export default function ExecutePage() {
       const result = await markExecutionSession(
         createSupabaseBrowserClient(),
         activePersistedSession.id,
-        { status },
+        status === "paused"
+          ? { status }
+          : {
+              status,
+              outcome: input?.outcome ?? null,
+              actual_minutes: input?.actual_minutes ?? null,
+              productivity_rating: input?.productivity_rating ?? null,
+              notes: input?.notes ?? null,
+            },
       );
       setExecuteState((current) =>
         current.status === "ready" && current.provider === "supabase"
@@ -251,7 +299,9 @@ export default function ExecutePage() {
         label: `Session marked ${markLabels[status].saved} through`,
         provider: result.provider,
       });
-      if (status === "completed") {
+      setTerminalForm(null);
+      setTerminalFormError(null);
+      if (result.session.outcome === "completed") {
         void captureEvent({
           event: "execution_completed",
           properties: {
@@ -270,6 +320,70 @@ export default function ExecutePage() {
           error instanceof Error ? error.message : "Unable to update session.",
       });
     }
+  }
+
+  async function handleMark(status: Phase2MockExecutionSession["status"]) {
+    if (!usesPersistedExecution) {
+      markSession(status);
+      if (status === "completed") {
+        void captureEvent({
+          event: "execution_completed",
+          properties: {
+            area_present: Boolean(activeTask?.area_id),
+            feature: "execute",
+            provider: "mock",
+            status: "completed",
+            used_mock: true,
+          },
+        });
+      }
+      return;
+    }
+
+    if (!activePersistedSession || status === "running" || status === "stopped") {
+      return;
+    }
+
+    if (status === "paused") {
+      await persistMark(status, undefined);
+      return;
+    }
+
+    setTerminalForm(createTerminalForm(status));
+    setTerminalFormError(null);
+  }
+
+  async function handleSubmitTerminalForm() {
+    if (!terminalForm) {
+      return;
+    }
+
+    const actualMinutes = Number.parseInt(terminalForm.actualMinutes, 10);
+    const productivityRating = Number.parseInt(
+      terminalForm.productivityRating,
+      10,
+    );
+
+    if (!Number.isFinite(actualMinutes) || actualMinutes < 0) {
+      setTerminalFormError("Enter actual duration in minutes (0 or more).");
+      return;
+    }
+
+    if (
+      !Number.isFinite(productivityRating) ||
+      productivityRating < 1 ||
+      productivityRating > 5
+    ) {
+      setTerminalFormError("Set productivity rating from 1 to 5.");
+      return;
+    }
+
+    await persistMark(terminalForm.status, {
+      outcome: terminalForm.outcome,
+      actual_minutes: actualMinutes,
+      productivity_rating: productivityRating,
+      notes: terminalForm.notes.trim() || null,
+    });
   }
 
   if (!activeTask) {
@@ -471,6 +585,21 @@ export default function ExecutePage() {
               "Pick one small, concrete action you can do in the next few minutes."}
           </div>
         </div>
+        <div
+          style={{
+            borderRadius: "0.75rem",
+            backgroundColor: "#f8fafc",
+            padding: "0.75rem 0.9rem",
+            fontSize: "0.9rem",
+            color: "#334155",
+          }}
+        >
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>Definition of done</div>
+          <div>
+            {activeTask.definition_of_done ??
+              "Complete the first useful move and note the outcome."}
+          </div>
+        </div>
 
         <div
           aria-label="Timer (mock only)"
@@ -513,56 +642,184 @@ export default function ExecutePage() {
             <Button
               type="button"
               onClick={() => void handleMark("paused")}
-              disabled={usesPersistedExecution && !activePersistedSession}
+              disabled={
+                actionState.status === "saving" ||
+                (usesPersistedExecution && !activePersistedSession)
+              }
             >
               Pause
             </Button>
             <Button
               type="button"
               onClick={() => void handleMark("distracted")}
-              disabled={usesPersistedExecution && !activePersistedSession}
+              disabled={
+                actionState.status === "saving" ||
+                (usesPersistedExecution && !activePersistedSession)
+              }
             >
               Mark distracted
             </Button>
             <Button
               type="button"
               onClick={() => void handleMark("stuck")}
-              disabled={usesPersistedExecution && !activePersistedSession}
+              disabled={
+                actionState.status === "saving" ||
+                (usesPersistedExecution && !activePersistedSession)
+              }
             >
               Mark stuck
             </Button>
             <Button
               type="button"
               onClick={() => void handleMark("completed")}
-              disabled={usesPersistedExecution && !activePersistedSession}
+              disabled={
+                actionState.status === "saving" ||
+                (usesPersistedExecution && !activePersistedSession)
+              }
             >
               Complete
             </Button>
             <Button
               type="button"
               onClick={() => void handleMark("missed")}
-              disabled={usesPersistedExecution && !activePersistedSession}
+              disabled={
+                actionState.status === "saving" ||
+                (usesPersistedExecution && !activePersistedSession)
+              }
             >
               Mark missed
             </Button>
             <Button
               type="button"
               onClick={() => void handleMark("stopped")}
-              disabled={usesPersistedExecution}
+              disabled={actionState.status === "saving" || usesPersistedExecution}
             >
               Stop
             </Button>
           </div>
         </div>
+        {usesPersistedExecution && terminalForm ? (
+          <section
+            aria-label="End session details"
+            style={{
+              borderRadius: "0.75rem",
+              border: "1px solid #bfdbfe",
+              backgroundColor: "#eff6ff",
+              padding: "0.75rem 1rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.65rem",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: "0.95rem" }}>
+              End session details
+            </h2>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              Outcome
+              <select
+                aria-label="End session outcome"
+                value={terminalForm.outcome}
+                onChange={(event) =>
+                  setTerminalForm((current) =>
+                    current
+                      ? {
+                          ...current,
+                          outcome: event.target
+                            .value as ExecutionSession["outcome"],
+                        }
+                      : current,
+                  )
+                }
+              >
+                {terminalOutcomeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              Actual duration (minutes)
+              <input
+                aria-label="Actual duration minutes"
+                type="number"
+                min={0}
+                value={terminalForm.actualMinutes}
+                onChange={(event) =>
+                  setTerminalForm((current) =>
+                    current
+                      ? { ...current, actualMinutes: event.target.value }
+                      : current,
+                  )
+                }
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              Productivity rating (1-5)
+              <input
+                aria-label="Productivity rating"
+                type="number"
+                min={1}
+                max={5}
+                value={terminalForm.productivityRating}
+                onChange={(event) =>
+                  setTerminalForm((current) =>
+                    current
+                      ? { ...current, productivityRating: event.target.value }
+                      : current,
+                  )
+                }
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              Notes (optional)
+              <textarea
+                aria-label="End session notes"
+                rows={2}
+                value={terminalForm.notes}
+                onChange={(event) =>
+                  setTerminalForm((current) =>
+                    current ? { ...current, notes: event.target.value } : current,
+                  )
+                }
+              />
+            </label>
+            {terminalFormError ? (
+              <p role="alert" style={{ margin: 0, color: "#b91c1c" }}>
+                {terminalFormError}
+              </p>
+            ) : null}
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <Button
+                type="button"
+                onClick={() => void handleSubmitTerminalForm()}
+                disabled={actionState.status === "saving"}
+              >
+                Save end session
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setTerminalForm(null);
+                  setTerminalFormError(null);
+                }}
+                disabled={actionState.status === "saving"}
+              >
+                Cancel
+              </Button>
+            </div>
+          </section>
+        ) : null}
       </section>
 
       {activeSession ? (
         <section
-          aria-label="Most recent execution summary (mock)"
+          aria-label="Most recent execution summary"
           style={{ maxWidth: "720px" }}
         >
           <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-            Recent execution (mock)
+            Recent execution summary
           </h2>
           <div
             style={{

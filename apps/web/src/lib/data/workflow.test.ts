@@ -707,9 +707,10 @@ describe("workflow data provider", () => {
   it("completes an execution_session and marks task and block done", async () => {
     const completedSession = {
       ...runningSessionRow,
-      actual_minutes: 60,
-      productivity_rating: 4,
+      actual_minutes: 53,
+      productivity_rating: 5,
       outcome: "completed",
+      notes: "Finished with minor context switching.",
     };
     const completedBlock = { ...blockRow, status: "completed" };
     const completedTask = { ...taskRow, status: "done" };
@@ -767,16 +768,22 @@ describe("workflow data provider", () => {
     const result = await markExecutionSession(
       authenticatedClient(from),
       sessionId,
-      { status: "completed" },
+      {
+        status: "completed",
+        outcome: "completed",
+        actual_minutes: 53,
+        productivity_rating: 5,
+        notes: "Finished with minor context switching.",
+      },
     );
 
     expect(sessionUpdate).toHaveBeenCalledWith({
       outcome: "completed",
-      actual_minutes: 60,
+      actual_minutes: 53,
       paused_minutes: 0,
       distraction_minutes: 0,
-      productivity_rating: 4,
-      notes: null,
+      productivity_rating: 5,
+      notes: "Finished with minor context switching.",
     });
     expect(blockUpdate).toHaveBeenCalledWith({ status: "completed" });
     expect(taskUpdate).toHaveBeenCalledWith({ status: "done" });
@@ -786,7 +793,13 @@ describe("workflow data provider", () => {
   });
 
   it("marks missed execution sessions and updates the related block only", async () => {
-    const missedSession = { ...runningSessionRow, outcome: "skipped" };
+    const missedSession = {
+      ...runningSessionRow,
+      outcome: "skipped",
+      actual_minutes: 8,
+      productivity_rating: 2,
+      notes: "Short attempt before interruption.",
+    };
     const missedBlock = { ...blockRow, status: "missed" };
 
     const sessionSingle = vi.fn().mockResolvedValue({
@@ -833,16 +846,22 @@ describe("workflow data provider", () => {
     const result = await markExecutionSession(
       authenticatedClient(from),
       sessionId,
-      { status: "missed" },
+      {
+        status: "missed",
+        outcome: "skipped",
+        actual_minutes: 8,
+        productivity_rating: 2,
+        notes: "Short attempt before interruption.",
+      },
     );
 
     expect(sessionUpdate).toHaveBeenCalledWith({
       outcome: "skipped",
-      actual_minutes: null,
+      actual_minutes: 8,
       paused_minutes: 0,
       distraction_minutes: 0,
-      productivity_rating: null,
-      notes: null,
+      productivity_rating: 2,
+      notes: "Short attempt before interruption.",
     });
     expect(blockUpdate).toHaveBeenCalledWith({ status: "missed" });
     expect(taskUpdate).not.toHaveBeenCalled();

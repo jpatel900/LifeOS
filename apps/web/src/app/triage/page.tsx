@@ -14,13 +14,7 @@ import {
 import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
-
-const WORKFLOW_AREA_SLUG_BY_ID: Record<string, string> = {
-  "area-main-job": "main-job",
-  "area-personal": "personal",
-  "area-volunteer": "volunteer-work",
-  "area-side-project": "side-project",
-};
+import { slugForWorkflowAreaId } from "@/lib/workflowAreaMapping";
 
 type LoadState =
   | { status: "loading" }
@@ -34,7 +28,7 @@ type SaveState =
   | { status: "error"; message: string };
 
 function resolvePersistedAreaId(workflowAreaId: string, areas: Area[]) {
-  const slug = WORKFLOW_AREA_SLUG_BY_ID[workflowAreaId];
+  const slug = slugForWorkflowAreaId(workflowAreaId);
   const area = areas.find((item) => item.slug === slug) ?? areas[0];
 
   if (!area) {
@@ -226,9 +220,10 @@ export default function TriagePage() {
             fontSize: "0.95rem",
           }}
         >
-          Review uncertain items before they enter your real task list.
-          Accepting a task or project draft commits that object; local proposal
-          drafts remain session-only.
+          Drafts listed here are local session state from capture parsing.
+          Accept writes persisted tasks/projects through the current data
+          provider; reject, defer, and reassign actions stay local session
+          changes.
         </p>
       </section>
 
@@ -238,7 +233,8 @@ export default function TriagePage() {
 
       {loadState.status === "ready" ? (
         <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-          Data source: <strong>{loadState.provider}</strong>
+          Persisted acceptance provider: <strong>{loadState.provider}</strong>.
+          Draft list source: <strong>local session</strong>.
         </p>
       ) : null}
 
@@ -294,7 +290,7 @@ export default function TriagePage() {
       {totalCandidates === 0 ? (
         <EmptyState
           title="Nothing to triage right now."
-          description="When AI parsing is added, low-confidence drafts will appear here for review."
+          description="No pending local session drafts. Use Capture to save and parse, or Structure locally."
         />
       ) : (
         <div
@@ -347,7 +343,7 @@ export default function TriagePage() {
                         gap: "0.75rem",
                       }}
                     >
-                      <span>Classification: task draft (mock)</span>
+                      <span>Classification: task draft (local session)</span>
                       {area ? <span>Area suggestion: {area.name}</span> : null}
                       <span>
                         Confidence: {Math.round(task.confidence * 100)}%
@@ -439,7 +435,7 @@ export default function TriagePage() {
                     onClick={() =>
                       editTaskDraft(task.id, {
                         title: task.title,
-                        description: `${task.description ?? ""}\nArea reassignment will be added when real area editing is available.`,
+                        description: `${task.description ?? ""}\nLocal session area reassignment note added.`,
                       })
                     }
                     aria-label="Reassign area"
@@ -490,7 +486,7 @@ export default function TriagePage() {
                         gap: "0.75rem",
                       }}
                     >
-                      <span>Classification: project draft (mock)</span>
+                      <span>Classification: project draft (local session)</span>
                       {area ? <span>Area suggestion: {area.name}</span> : null}
                       <span>
                         Confidence: {Math.round(project.confidence * 100)}%

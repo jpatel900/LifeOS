@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CaptureItemSchema, type CaptureItem } from "./entities";
-import { REVIEW_TYPES } from "./constants";
+import { EXECUTION_SESSION_OUTCOMES, REVIEW_TYPES } from "./constants";
 import { JsonValueSchema } from "./json";
 
 export * from "./constants";
@@ -160,9 +160,58 @@ export type CreateExecutionSessionInput = z.input<
   typeof CreateExecutionSessionInputSchema
 >;
 
-export const MarkExecutionSessionInputSchema = z.object({
-  status: z.enum(["completed", "missed", "distracted", "paused", "stuck"]),
-});
+export const MarkExecutionSessionInputSchema = z
+  .object({
+    status: z.enum(["completed", "missed", "distracted", "paused", "stuck"]),
+    outcome: z
+      .enum(EXECUTION_SESSION_OUTCOMES)
+      .nullish()
+      .transform((value) => value ?? null),
+    actual_minutes: z
+      .number()
+      .int()
+      .min(0)
+      .nullish()
+      .transform((value) => value ?? null),
+    productivity_rating: z
+      .number()
+      .int()
+      .min(1)
+      .max(5)
+      .nullish()
+      .transform((value) => value ?? null),
+    notes: optionalNullableTrimmedText,
+  })
+  .superRefine((input, context) => {
+    if (input.status === "paused") {
+      return;
+    }
+
+    if (input.outcome === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "outcome is required for terminal session updates",
+        path: ["outcome"],
+      });
+    }
+
+    if (input.actual_minutes === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "actual_minutes is required for terminal session updates",
+        path: ["actual_minutes"],
+      });
+    }
+
+    if (input.productivity_rating === null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "productivity_rating is required for terminal session updates",
+        path: ["productivity_rating"],
+      });
+    }
+  });
 
 export type MarkExecutionSessionInput = z.input<
   typeof MarkExecutionSessionInputSchema

@@ -215,7 +215,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<AreasSettingsPage />);
 
     expect(await screen.findByText("Main Job")).toBeDefined();
-    expect(screen.getByText("Data source:")).toBeDefined();
+    expect(screen.getByText("Persisted area provider:")).toBeDefined();
     expect(screen.getByText("supabase")).toBeDefined();
     expect(mocks.listAreas).toHaveBeenCalledWith(mocks.supabaseClient);
   });
@@ -685,12 +685,28 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<ExecutePage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Complete" }));
+    fireEvent.change(await screen.findByLabelText("Actual duration minutes"), {
+      target: { value: "58" },
+    });
+    fireEvent.change(await screen.findByLabelText("Productivity rating"), {
+      target: { value: "4" },
+    });
+    fireEvent.change(await screen.findByLabelText("End session notes"), {
+      target: { value: "Finished the planned block." },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save end session" }));
 
     await waitFor(() => {
       expect(mocks.markExecutionSession).toHaveBeenCalledWith(
         mocks.supabaseClient,
         session.id,
-        { status: "completed" },
+        {
+          status: "completed",
+          outcome: "completed",
+          actual_minutes: 58,
+          productivity_rating: 4,
+          notes: "Finished the planned block.",
+        },
       );
     });
     const status = await screen.findByRole("status");
@@ -717,12 +733,28 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<ExecutePage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Mark missed" }));
+    fireEvent.change(await screen.findByLabelText("Actual duration minutes"), {
+      target: { value: "5" },
+    });
+    fireEvent.change(await screen.findByLabelText("Productivity rating"), {
+      target: { value: "2" },
+    });
+    fireEvent.change(await screen.findByLabelText("End session notes"), {
+      target: { value: "Interrupted by another urgent item." },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Save end session" }));
 
     await waitFor(() => {
       expect(mocks.markExecutionSession).toHaveBeenCalledWith(
         mocks.supabaseClient,
         session.id,
-        { status: "missed" },
+        {
+          status: "missed",
+          outcome: "skipped",
+          actual_minutes: 5,
+          productivity_rating: 2,
+          notes: "Interrupted by another urgent item.",
+        },
       );
     });
     const status = await screen.findByRole("status");
@@ -787,5 +819,29 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(await screen.findByText("Main Job")).toBeDefined();
     expect(screen.getByText("Open tasks: 1")).toBeDefined();
     expect(screen.getByText("Sessions recorded: 1")).toBeDefined();
+  });
+
+  it("does not mix local session capture counts into persisted review summaries", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [block],
+      sessions: [{ ...session, outcome: "completed" }],
+      reviewEntries: [],
+    });
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Local capture should not appear in persisted review counts" />
+        <ReviewPage />
+      </>,
+    );
+
+    expect(await screen.findByText("Accepted tasks: 1")).toBeDefined();
+    expect(screen.queryByText(/^Captured:/)).toBeNull();
   });
 });
