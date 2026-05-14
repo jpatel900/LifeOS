@@ -8,16 +8,35 @@ function readRepoFile(path: string) {
   return readFileSync(resolve(repoRoot, path), "utf8");
 }
 
+const IGNORED_SCAN_DIRECTORIES = new Set([
+  ".next",
+  ".turbo",
+  ".vercel",
+  "build",
+  "coverage",
+  "dist",
+  "node_modules",
+  "playwright-report",
+  "test-results",
+]);
+
 function walkRepoFiles(relativePath: string): string[] {
-  const { readdirSync, statSync } = require("node:fs") as typeof import("node:fs");
+  const { readdirSync } = require("node:fs") as typeof import("node:fs");
   const currentPath = resolve(repoRoot, relativePath);
 
-  return readdirSync(currentPath).flatMap((entry: string) => {
-    const nextRelativePath = `${relativePath}/${entry}`.replace(/\\/g, "/");
-    const stats = statSync(resolve(repoRoot, nextRelativePath));
+  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
+    const nextRelativePath = `${relativePath}/${entry.name}`.replace(/\\/g, "/");
 
-    if (stats.isDirectory()) {
+    if (entry.isDirectory()) {
+      if (IGNORED_SCAN_DIRECTORIES.has(entry.name)) {
+        return [];
+      }
+
       return walkRepoFiles(nextRelativePath);
+    }
+
+    if (!entry.isFile()) {
+      return [];
     }
 
     return nextRelativePath;
