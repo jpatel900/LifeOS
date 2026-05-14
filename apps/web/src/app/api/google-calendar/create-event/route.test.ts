@@ -244,6 +244,9 @@ describe("google-calendar create-event route", () => {
 
     expect(response.status).toBe(502);
     expect(body.ok).toBe(false);
+    expect(body.error).toBe(
+      "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
+    );
     expect(
       mocks.createCalendarBlockForProposalForAccessToken,
     ).not.toHaveBeenCalled();
@@ -256,7 +259,8 @@ describe("google-calendar create-event route", () => {
       "supabase-access-token",
       "550e8400-e29b-41d4-a716-446655440701",
       expect.objectContaining({
-        errorMessage: "Google Calendar event insert failed.",
+        errorMessage:
+          "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
         resultStatus: "failed",
       }),
     );
@@ -277,6 +281,9 @@ describe("google-calendar create-event route", () => {
 
     expect(response.status).toBe(502);
     expect(body.ok).toBe(false);
+    expect(body.error).toBe(
+      "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
+    );
     expect(mocks.insertGoogleCalendarEventForConnection).toHaveBeenCalled();
     expect(
       mocks.markTimeBlockProposalAcceptedForAccessToken,
@@ -287,7 +294,8 @@ describe("google-calendar create-event route", () => {
       "supabase-access-token",
       "550e8400-e29b-41d4-a716-446655440701",
       expect.objectContaining({
-        errorMessage: "calendar_blocks insert failed.",
+        errorMessage:
+          "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
         resultStatus: "failed",
         resultSummary: {
           google_event_id_stored: false,

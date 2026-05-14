@@ -481,7 +481,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(await screen.findByText("Conflict flagged")).toBeDefined();
   });
 
-  it("shows a visible error when a conflict check fails without removing the proposal", async () => {
+  it("shows a visible disconnected-state error when conflict checks fail due to missing Google connection", async () => {
     mocks.listPlanningItems.mockResolvedValue({
       provider: "supabase",
       tasks: [task],
@@ -499,8 +499,13 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Planning change was not saved");
-    expect(alert).toHaveTextContent("Google Calendar is not connected.");
+    expect(alert).toHaveTextContent("Google Calendar is disconnected");
+    expect(alert).toHaveTextContent(
+      "A calendar connection is required before this Google Calendar action can run.",
+    );
+    expect(alert).toHaveTextContent(
+      "Connect Google Calendar in Settings, then retry.",
+    );
     expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(
       0,
     );
@@ -552,7 +557,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Create Google Calendar event",
+        name: "Approve + create Google event",
       }),
     );
 
@@ -566,6 +571,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     expect(await screen.findByText("Google event created")).toBeDefined();
+    expect(screen.getByText("Google write: Google event created")).toBeDefined();
   });
 
   it("requires first-write warning acknowledgement before enabling event creation", async () => {
@@ -607,17 +613,76 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     const createButton = await screen.findByRole("button", {
-      name: "Create Google Calendar event",
+      name: "Approve + create Google event",
     });
     expect(createButton).toBeDisabled();
 
     fireEvent.click(
-      await screen.findByLabelText(/I understand this creates an event/i),
+      await screen.findByLabelText(/First Google write approval/i),
     );
 
     await waitFor(() => {
       expect(createButton).not.toBeDisabled();
     });
+  });
+
+  it("shows explicit duplicate-write copy when a proposal already has a Google event", async () => {
+    const supabaseClientWithSession = {
+      ...mocks.supabaseClient,
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "supabase-access-token" } },
+          error: null,
+        }),
+      },
+    };
+    mocks.createSupabaseBrowserClient.mockReturnValue(
+      supabaseClientWithSession,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            status: "connected",
+            connection: {
+              status: "connected",
+              first_write_warning_acknowledged_at: "2026-05-09T00:00:00.000Z",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [proposal],
+      blocks: [],
+    });
+    mocks.createGoogleCalendarEventFromProposal.mockRejectedValue(
+      new Error(
+        "This proposal already has a Google Calendar event. Duplicate event creation is blocked.",
+      ),
+    );
+
+    renderWithWorkflow(<CalendarPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Approve + create Google event",
+      }),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Duplicate Google event blocked");
+    expect(alert).toHaveTextContent(
+      "already has a linked Google Calendar event",
+    );
+    expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("starts a persisted execution session from a scheduled task block", async () => {

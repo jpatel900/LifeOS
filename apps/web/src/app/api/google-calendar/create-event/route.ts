@@ -43,6 +43,39 @@ function safeErrorMessage(error: unknown) {
   return "Google Calendar event could not be created.";
 }
 
+function mapCreateEventFailure(error: unknown) {
+  const rawMessage = safeErrorMessage(error);
+
+  if (/sign in|jwt|auth/i.test(rawMessage)) {
+    return {
+      status: 401,
+      error: "Sign in before creating Google Calendar events.",
+    };
+  }
+
+  if (/proposal_id|approved/i.test(rawMessage)) {
+    return {
+      status: 400,
+      error:
+        "Google Calendar write request was invalid. Review proposal approval and try again.",
+    };
+  }
+
+  if (/already has a google calendar event|duplicate/i.test(rawMessage)) {
+    return {
+      status: 409,
+      error:
+        "This proposal already has a Google Calendar event. Duplicate event creation is blocked.",
+    };
+  }
+
+  return {
+    status: 502,
+    error:
+      "Google Calendar write failed. Local proposal data is unchanged. Review connection status and retry.",
+  };
+}
+
 function isEligibleProposalStatus(status: string) {
   return status === "proposed" || status === "edited" || status === "accepted";
 }
@@ -239,14 +272,14 @@ export async function POST(request: Request) {
       proposal: updatedProposal,
     });
   } catch (error) {
-    const message = safeErrorMessage(error);
+    const failure = mapCreateEventFailure(error);
 
     if (auditEventId) {
       await updateExternalWriteEventResultForAccessToken(
         accessToken,
         auditEventId,
         {
-          errorMessage: message,
+          errorMessage: failure.error,
           resultStatus: "failed",
           resultSummary: {
             google_event_id_stored: false,
@@ -255,19 +288,12 @@ export async function POST(request: Request) {
       ).catch(() => null);
     }
 
-    const status =
-      /sign in/i.test(message) || /jwt/i.test(message)
-        ? 401
-        : /proposal_id|approved/i.test(message)
-          ? 400
-          : 502;
-
     return NextResponse.json(
       {
         ok: false,
-        error: message,
+        error: failure.error,
       },
-      { status },
+      { status: failure.status },
     );
   }
 }

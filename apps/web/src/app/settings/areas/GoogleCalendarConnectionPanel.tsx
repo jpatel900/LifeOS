@@ -148,6 +148,52 @@ function getPanelColors(severity: "info" | "warning" | "error" | "success") {
   }
 }
 
+function normalizePanelFailure(rawMessage: string) {
+  const message = rawMessage.toLowerCase();
+
+  if (message.includes("not configured")) {
+    return {
+      severity: "warning" as const,
+      message:
+        "Google Calendar is not configured on this server. Local planning still works without Google integration.",
+    };
+  }
+
+  if (
+    message.includes("sign in before") ||
+    message.includes("auth") ||
+    message.includes("session")
+  ) {
+    return {
+      severity: "warning" as const,
+      message:
+        "Sign in before connecting Google Calendar. OAuth actions require an authenticated Supabase session.",
+    };
+  }
+
+  if (message.includes("could not start")) {
+    return {
+      severity: "error" as const,
+      message:
+        "Google Calendar OAuth could not start. No connection changes were applied.",
+    };
+  }
+
+  if (message.includes("could not be disconnected")) {
+    return {
+      severity: "error" as const,
+      message:
+        "Google Calendar disconnect failed. Existing connection state is unchanged.",
+    };
+  }
+
+  return {
+    severity: "error" as const,
+    message:
+      "Google Calendar status could not load right now. Local planning remains available.",
+  };
+}
+
 export function GoogleCalendarConnectionPanel() {
   const [panelState, setPanelState] = useState<GoogleCalendarPanelState>({
     status: "loading",
@@ -252,13 +298,19 @@ export function GoogleCalendarConnectionPanel() {
           });
         }
       } catch (fetchError) {
+        const normalized = normalizePanelFailure(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "Google Calendar connection status could not load.",
+        );
         if (!cancelled) {
           setPanelState({
-            status: "error",
-            message:
-              fetchError instanceof Error
-                ? fetchError.message
-                : "Google Calendar connection status could not load.",
+            status: "ready",
+            configured: true,
+            connected: false,
+            connection: null,
+            message: normalized.message,
+            severity: normalized.severity,
           });
         }
       }
@@ -323,12 +375,18 @@ export function GoogleCalendarConnectionPanel() {
 
       window.location.assign(payload.authorizeUrl);
     } catch (error) {
+      const normalized = normalizePanelFailure(
+        error instanceof Error
+          ? error.message
+          : "Google Calendar connection could not start.",
+      );
       setPanelState({
-        status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Google Calendar connection could not start.",
+        status: "ready",
+        configured: true,
+        connected: false,
+        connection: null,
+        message: normalized.message,
+        severity: normalized.severity,
       });
       setActionState({ status: "idle" });
     }
@@ -364,19 +422,25 @@ export function GoogleCalendarConnectionPanel() {
       });
       setActionState({ status: "idle" });
     } catch (error) {
+      const normalized = normalizePanelFailure(
+        error instanceof Error
+          ? error.message
+          : "Google Calendar could not be disconnected.",
+      );
       setPanelState({
-        status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Google Calendar could not be disconnected.",
+        status: "ready",
+        configured: true,
+        connected: true,
+        connection: null,
+        message: normalized.message,
+        severity: normalized.severity,
       });
       setActionState({ status: "idle" });
     }
   }
 
   const panelSeverity =
-    panelState.status === "ready" ? panelState.severity : "error";
+    panelState.status === "ready" ? panelState.severity : "warning";
   const colors = getPanelColors(panelSeverity);
 
   return (

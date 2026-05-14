@@ -18,6 +18,14 @@ function readBearerToken(request: Request) {
   return value.trim();
 }
 
+function safeErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Google Calendar connection status could not load.";
+}
+
 export async function GET(request: Request) {
   if (!getGoogleCalendarConfig()) {
     return NextResponse.json({
@@ -65,15 +73,17 @@ export async function GET(request: Request) {
             : "Google Calendar is ready to connect, but no active encrypted token connection exists yet.",
     });
   } catch (error) {
+    const message = safeErrorMessage(error);
+    const unauthenticated = /sign in|auth|jwt|session/i.test(message);
+
     return NextResponse.json(
       {
         ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Google Calendar connection status could not load.",
+        error: unauthenticated
+          ? "Sign in before loading Google Calendar connection status."
+          : "Google Calendar connection status could not load. Local planning is still available.",
       },
-      { status: 401 },
+      { status: unauthenticated ? 401 : 503 },
     );
   }
 }

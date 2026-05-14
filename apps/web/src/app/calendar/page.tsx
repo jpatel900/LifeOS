@@ -34,7 +34,12 @@ type ActionState =
   | { status: "idle" }
   | { status: "saving"; label: string }
   | { status: "saved"; label: string; provider: DataProvider }
-  | { status: "error"; message: string };
+  | {
+      status: "error";
+      title: string;
+      message: string;
+      nextStep: string;
+    };
 
 type GoogleConnectionState =
   | { status: "loading" }
@@ -115,6 +120,95 @@ function proposalConflictSummary(proposal: TimeBlockProposal) {
     label: "Conflict not checked",
     backgroundColor: "#e5e7eb",
     color: "#374151",
+  };
+}
+
+type CalendarActionKind =
+  | "proposal_mutation"
+  | "conflict_check"
+  | "google_write";
+
+function normalizeCalendarFailure(rawMessage: string, action: CalendarActionKind) {
+  const message = rawMessage.toLowerCase();
+
+  if (
+    message.includes("requires supabase configuration") ||
+    message.includes("not configured")
+  ) {
+    return {
+      title: "Google Calendar is not configured",
+      message:
+        "Google Calendar features are unavailable in this environment.",
+      nextStep:
+        "Keep local planning in this view or configure Google Calendar server env vars.",
+    };
+  }
+
+  if (
+    message.includes("sign in before") ||
+    message.includes("auth is unavailable") ||
+    message.includes("jwt")
+  ) {
+    return {
+      title: "Sign-in required",
+      message:
+        "This action requires an authenticated Supabase session.",
+      nextStep: "Sign in again, then retry the action.",
+    };
+  }
+
+  if (
+    message.includes("connect google calendar") ||
+    message.includes("is not connected") ||
+    message.includes("ready to connect") ||
+    message.includes("reconnect google calendar")
+  ) {
+    return {
+      title: "Google Calendar is disconnected",
+      message:
+        "A calendar connection is required before this Google Calendar action can run.",
+      nextStep: "Connect Google Calendar in Settings, then retry.",
+    };
+  }
+
+  if (
+    message.includes("already has a google calendar event") ||
+    message.includes("duplicate")
+  ) {
+    return {
+      title: "Duplicate Google event blocked",
+      message:
+        "This local proposal already has a linked Google Calendar event.",
+      nextStep:
+        "Use the existing scheduled block or create a new local proposal instead.",
+    };
+  }
+
+  if (action === "conflict_check") {
+    return {
+      title: "Conflict check failed",
+      message:
+        "LifeOS could not confirm Google Calendar availability for this proposal.",
+      nextStep:
+        "Keep the local proposal, review connection status, and retry the conflict check.",
+    };
+  }
+
+  if (action === "google_write") {
+    return {
+      title: "Google Calendar write failed",
+      message:
+        "No Google Calendar event was confirmed for this action.",
+      nextStep:
+        "Your local proposal is unchanged. Review connection/approval state and retry.",
+    };
+  }
+
+  return {
+    title: "Planning change was not saved",
+    message:
+      "LifeOS could not confirm this local planning update.",
+    nextStep: "Review state and retry.",
   };
 }
 
@@ -280,10 +374,15 @@ export default function CalendarPage() {
         },
       });
     } catch (error) {
+      const failure = normalizeCalendarFailure(
+        error instanceof Error ? error.message : "",
+        "proposal_mutation",
+      );
       setActionState({
         status: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to create proposal.",
+        title: failure.title,
+        message: failure.message,
+        nextStep: failure.nextStep,
       });
     }
   }
@@ -321,10 +420,15 @@ export default function CalendarPage() {
         provider: result.provider,
       });
     } catch (error) {
+      const failure = normalizeCalendarFailure(
+        error instanceof Error ? error.message : "",
+        "proposal_mutation",
+      );
       setActionState({
         status: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to edit proposal.",
+        title: failure.title,
+        message: failure.message,
+        nextStep: failure.nextStep,
       });
     }
   }
@@ -353,10 +457,15 @@ export default function CalendarPage() {
         provider: result.provider,
       });
     } catch (error) {
+      const failure = normalizeCalendarFailure(
+        error instanceof Error ? error.message : "",
+        "proposal_mutation",
+      );
       setActionState({
         status: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to reject proposal.",
+        title: failure.title,
+        message: failure.message,
+        nextStep: failure.nextStep,
       });
     }
   }
@@ -386,10 +495,15 @@ export default function CalendarPage() {
         provider: result.provider,
       });
     } catch (error) {
+      const failure = normalizeCalendarFailure(
+        error instanceof Error ? error.message : "",
+        "proposal_mutation",
+      );
       setActionState({
         status: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to accept proposal.",
+        title: failure.title,
+        message: failure.message,
+        nextStep: failure.nextStep,
       });
     }
   }
@@ -409,28 +523,48 @@ export default function CalendarPage() {
         proposalId,
       );
 
+      let storedConflictResult = false;
       setPlanningState((current) =>
         current.status === "ready" && current.provider === "supabase"
-          ? {
-              ...current,
-              proposals: current.proposals.map((item) =>
+          ? (() => {
+              const nextProposals = current.proposals.map((item) =>
                 item.id === result.proposal.id ? result.proposal : item,
-              ),
-            }
+              );
+              storedConflictResult = nextProposals.some(
+                (item) => item.id === result.proposal.id,
+              );
+              return {
+                ...current,
+                proposals: nextProposals,
+              };
+            })()
           : current,
       );
+      if (!storedConflictResult) {
+        setActionState({
+          status: "error",
+          title: "Conflict check result could not be confirmed",
+          message:
+            "LifeOS could not confirm the local proposal update after checking conflict status.",
+          nextStep: "Refresh this page and retry the conflict check.",
+        });
+        return;
+      }
       setActionState({
         status: "saved",
         label: "Conflict checked through",
         provider: result.provider,
       });
     } catch (error) {
+      const failure = normalizeCalendarFailure(
+        error instanceof Error ? error.message : "",
+        "conflict_check",
+      );
       setActionState({
         status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to check Google Calendar conflict.",
+        title: failure.title,
+        message: failure.message,
+        nextStep: failure.nextStep,
       });
     }
   }
@@ -456,21 +590,52 @@ export default function CalendarPage() {
         },
       );
 
+      let storedProposalUpdate = false;
+      let storedGoogleBlock = false;
       setPlanningState((current) =>
         current.status === "ready" && current.provider === "supabase"
-          ? {
-              ...current,
-              proposals: current.proposals.map((item) =>
+          ? (() => {
+              const nextProposals = current.proposals.map((item) =>
                 item.id === result.proposal.id ? result.proposal : item,
-              ),
-              blocks: current.blocks.some((item) => item.id === result.block.id)
+              );
+              const nextBlocks = current.blocks.some(
+                (item) => item.id === result.block.id,
+              )
                 ? current.blocks.map((item) =>
                     item.id === result.block.id ? result.block : item,
                   )
-                : [result.block, ...current.blocks],
-            }
+                : [result.block, ...current.blocks];
+
+              storedProposalUpdate = nextProposals.some(
+                (item) =>
+                  item.id === result.proposal.id &&
+                  item.status === result.proposal.status,
+              );
+              storedGoogleBlock = nextBlocks.some(
+                (item) =>
+                  item.id === result.block.id &&
+                  item.google_event_id === result.googleEventId,
+              );
+
+              return {
+                ...current,
+                proposals: nextProposals,
+                blocks: nextBlocks,
+              };
+            })()
           : current,
       );
+      if (!storedProposalUpdate || !storedGoogleBlock) {
+        setActionState({
+          status: "error",
+          title: "Google write result could not be confirmed",
+          message:
+            "LifeOS could not confirm the local post-write state.",
+          nextStep:
+            "Refresh this page, verify local proposal and block state, then retry if needed.",
+        });
+        return;
+      }
       setGoogleConnectionState((current) =>
         current.status === "ready"
           ? { ...current, firstWriteWarningAcknowledged: true }
@@ -500,12 +665,15 @@ export default function CalendarPage() {
           status: "failed",
         },
       });
+      const failure = normalizeCalendarFailure(
+        error instanceof Error ? error.message : "",
+        "google_write",
+      );
       setActionState({
         status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Unable to create Google Calendar event.",
+        title: failure.title,
+        message: failure.message,
+        nextStep: failure.nextStep,
       });
     }
   }
@@ -539,8 +707,9 @@ export default function CalendarPage() {
         >
           This view keeps local time-block proposals as the source of truth.
           Google Calendar conflict checks are optional and advisory only when a
-          server-side connection exists. Accepting a proposal still creates a
-          local scheduled block only.
+          server-side connection exists. Proposal state moves in four explicit
+          steps: local proposal, optional conflict check, explicit approval, and
+          optional Google write.
         </p>
       </section>
 
@@ -614,8 +783,11 @@ export default function CalendarPage() {
             padding: "1rem",
           }}
         >
-          <h2 style={{ marginTop: 0 }}>Planning change was not saved</h2>
+          <h2 style={{ marginTop: 0 }}>{actionState.title}</h2>
           <p>{actionState.message}</p>
+          <p style={{ marginBottom: 0, color: "#7f1d1d" }}>
+            Next step: {actionState.nextStep}
+          </p>
         </section>
       ) : null}
 
@@ -733,6 +905,21 @@ export default function CalendarPage() {
                           item.google_event_id,
                       )
                     : null;
+                  const googleWriteState = !usesPersistedPlanning
+                    ? "Unavailable in mock/session mode"
+                    : googleBlock
+                      ? "Google event created"
+                      : googleConnectionState.status === "loading"
+                        ? "Connection status loading"
+                        : googleConnectionState.status === "error"
+                          ? "Connection status unavailable"
+                          : !googleConnectionState.connected
+                            ? "Disconnected"
+                            : proposal.status !== "proposed" &&
+                                proposal.status !== "edited" &&
+                                proposal.status !== "accepted"
+                              ? "Not eligible from this proposal status"
+                              : "Ready after explicit approval";
                   const googleWriteAllowed =
                     usesPersistedPlanning &&
                     googleConnectionState.status === "ready" &&
@@ -802,9 +989,10 @@ export default function CalendarPage() {
                             }
                           />
                           <span>
-                            I understand this creates an event in Google
-                            Calendar. If the write fails, the local proposal
-                            stays unchanged.
+                            First Google write approval: I understand this
+                            button creates a real Google Calendar event only
+                            after explicit user approval. If the write fails,
+                            the local proposal stays unchanged.
                           </span>
                         </label>
                       ) : null}
@@ -816,7 +1004,7 @@ export default function CalendarPage() {
                         }}
                       >
                         <span style={{ fontSize: "0.7rem", color: "#6b7280" }}>
-                          Status: {proposal.status}
+                          Local proposal: {proposal.status}
                         </span>
                         <span
                           style={{
@@ -830,6 +1018,20 @@ export default function CalendarPage() {
                           {conflictSummary.label}
                         </span>
                       </div>
+                      <div style={{ fontSize: "0.7rem", color: "#4b5563" }}>
+                        Google write: {googleWriteState}
+                      </div>
+                      {usesPersistedPlanning ? (
+                        <div style={{ fontSize: "0.7rem", color: "#4b5563" }}>
+                          Approval gate: Explicit user click required before any
+                          external write.
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: "0.7rem", color: "#4b5563" }}>
+                          Approval gate: Not applicable in local mock/session
+                          mode.
+                        </div>
+                      )}
                       <div
                         style={{
                           display: "flex",
@@ -862,7 +1064,7 @@ export default function CalendarPage() {
                         >
                           {googleBlock
                             ? "Google event created"
-                            : "Create Google Calendar event"}
+                            : "Approve + create Google event"}
                         </Button>
                         <Button
                           type="button"

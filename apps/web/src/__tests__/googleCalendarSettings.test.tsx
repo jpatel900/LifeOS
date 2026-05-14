@@ -102,4 +102,51 @@ describe("Google Calendar settings panel", () => {
       screen.getByRole("button", { name: "Connect Google Calendar" }),
     ).toBeDisabled();
   });
+
+  it("shows an actionable unauthenticated message when no Supabase session is present", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+    mocks.createSupabaseBrowserClient.mockReturnValue({
+      auth: {
+        getSession: mocks.getSession,
+      },
+    });
+
+    render(<GoogleCalendarConnectionPanel />);
+
+    expect(
+      await screen.findByText(
+        /Sign in before connecting Google Calendar|OAuth actions require an authenticated Supabase session/i,
+      ),
+    ).toBeDefined();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("normalizes unexpected status-load failures without exposing raw route text", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "supabase-access-token",
+        },
+      },
+      error: null,
+    });
+    mocks.createSupabaseBrowserClient.mockReturnValue({
+      auth: {
+        getSession: mocks.getSession,
+      },
+    });
+    vi.mocked(fetch).mockRejectedValue(new Error("connection stack trace"));
+
+    render(<GoogleCalendarConnectionPanel />);
+
+    expect(
+      await screen.findByText(
+        /Google Calendar status could not load right now\. Local planning remains available\./i,
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText(/connection stack trace/i)).toBeNull();
+  });
 });
