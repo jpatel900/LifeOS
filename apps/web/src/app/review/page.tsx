@@ -8,7 +8,7 @@ import type {
   ReviewEntry,
   Task,
 } from "@lifeos/schemas";
-import { Button } from "@lifeos/ui";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "../components/EmptyState";
 import {
   createReviewEntry,
@@ -199,12 +199,12 @@ export default function ReviewPage() {
         <p
           style={{
             marginTop: "0.25rem",
-            color: "#4b5563",
+            color: "var(--muted-foreground)",
             fontSize: "0.95rem",
           }}
         >
-          Review summarizes tasks, local blocks, and execution sessions. No AI
-          or external integrations are called in Phase 4D.
+          Daily and weekly review surfaces what moved, what stalled, and what to
+          adjust next.
         </p>
       </section>
 
@@ -212,11 +212,14 @@ export default function ReviewPage() {
         <p role="status">Loading review context...</p>
       ) : null}
 
-      {reviewState.status === "ready" ? (
-        <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-          Data source: <strong>{reviewState.provider}</strong>
-        </p>
-      ) : null}
+      <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+        <summary>System details</summary>
+        {reviewState.status === "ready" ? (
+          <p style={{ margin: 0, marginTop: "0.5rem" }}>
+            Data source: <strong>{reviewState.provider}</strong>
+          </p>
+        ) : null}
+      </details>
 
       {reviewState.status === "error" ? (
         <section
@@ -288,7 +291,7 @@ export default function ReviewPage() {
         <div
           style={{
             borderRadius: "0.75rem",
-            border: "1px solid #e5e7eb",
+            border: "1px solid var(--border)",
             padding: "0.75rem 1rem",
           }}
         >
@@ -318,7 +321,7 @@ export default function ReviewPage() {
         <div
           style={{
             borderRadius: "0.75rem",
-            border: "1px solid #e5e7eb",
+            border: "1px solid var(--border)",
             padding: "0.75rem 1rem",
           }}
         >
@@ -350,7 +353,7 @@ export default function ReviewPage() {
                       key={summary.area.id}
                       style={{
                         borderRadius: "0.75rem",
-                        border: "1px solid #e5e7eb",
+                        border: "1px solid var(--border)",
                         padding: "0.5rem 0.75rem",
                         fontSize: "0.9rem",
                       }}
@@ -358,13 +361,13 @@ export default function ReviewPage() {
                       <div style={{ fontWeight: 500 }}>
                         {area?.name ?? summary.area.name}
                       </div>
-                      <div style={{ color: "#6b7280" }}>
+                      <div style={{ color: "var(--muted-foreground)" }}>
                         Open tasks: {summary.open}
                       </div>
-                      <div style={{ color: "#6b7280" }}>
+                      <div style={{ color: "var(--muted-foreground)" }}>
                         Completed tasks: {summary.done}
                       </div>
-                      <div style={{ color: "#6b7280" }}>
+                      <div style={{ color: "var(--muted-foreground)" }}>
                         Sessions recorded: {summary.sessions}
                       </div>
                     </div>
@@ -390,17 +393,18 @@ export default function ReviewPage() {
         </section>
       ) : null}
       {localReviewLog.length > 0 ? (
-        <section>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-            Local event log
-          </h2>
+        <details>
+          <summary style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
+            System details
+          </summary>
           <ul style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}>
             {localReviewLog.map((entry, index) => (
               <li key={`${entry}-${index}`}>{entry}</li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : null}
     </div>
   );
 }
+

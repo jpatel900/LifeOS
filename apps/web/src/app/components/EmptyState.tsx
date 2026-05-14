@@ -1,3 +1,5 @@
+import { Card, CardContent, CardDescription, CardTitle } from "@/components/ui/card";
+
 interface EmptyStateProps {
   title: string;
   description?: string;
@@ -5,23 +7,13 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description }: EmptyStateProps) {
   return (
-    <div
-      style={{
-        padding: "1.5rem",
-        borderRadius: "0.75rem",
-        border: "1px dashed #d1d5db",
-        backgroundColor: "#f9fafb",
-        color: "#4b5563",
-      }}
-    >
-      <div
-        style={{ fontWeight: 500, marginBottom: description ? "0.25rem" : 0 }}
-      >
-        {title}
-      </div>
-      {description ? (
-        <p style={{ margin: 0, fontSize: "0.9rem" }}>{description}</p>
-      ) : null}
-    </div>
+    <Card className="border-dashed">
+      <CardContent className="p-5">
+        <CardTitle className="text-base">{title}</CardTitle>
+        {description ? (
+          <CardDescription className="mt-1.5">{description}</CardDescription>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

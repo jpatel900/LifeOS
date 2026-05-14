@@ -2,6 +2,9 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { createSupabaseBrowserClient } from "../../lib/supabase/browser";
 
 type LoginState =
@@ -46,68 +49,45 @@ export default function LoginPage() {
   return (
     <>
       <h1>Local Supabase Login</h1>
-      <p>
-        Use the seeded local test user to smoke-test RLS-backed areas and raw
-        capture persistence.
-      </p>
+      <p>Sign in to test persisted workflow paths with local Supabase.</p>
 
       <form
         onSubmit={handleSubmit}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
         <label htmlFor="email">Email</label>
-        <input
+        <Input
           id="email"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           disabled={state.status === "submitting"}
-          style={{ padding: "0.75rem", borderRadius: "8px" }}
         />
 
         <label htmlFor="password">Password</label>
-        <input
+        <Input
           id="password"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           disabled={state.status === "submitting"}
-          style={{ padding: "0.75rem", borderRadius: "8px" }}
         />
 
-        <button
+        <Button
           type="submit"
           disabled={state.status === "submitting"}
-          style={{
-            padding: "0.75rem 1.5rem",
-            fontSize: "1rem",
-            borderRadius: "8px",
-            border: "none",
-            background: "#0070f3",
-            color: "white",
-            cursor: state.status === "submitting" ? "wait" : "pointer",
-            alignSelf: "flex-start",
-          }}
         >
           {state.status === "submitting" ? "Signing in..." : "Sign in"}
-        </button>
+        </Button>
       </form>
 
       {state.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-            marginTop: "1rem",
-          }}
-        >
-          <h2>Sign in failed</h2>
-          <p>{state.message}</p>
-        </section>
+        <Alert variant="destructive" style={{ marginTop: "1rem" }}>
+          <AlertTitle>Sign in failed</AlertTitle>
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
       ) : null}
     </>
   );
 }
+

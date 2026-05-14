@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CalendarBlock, ExecutionSession, Task } from "@lifeos/schemas";
-import { Button } from "@lifeos/ui";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "../components/EmptyState";
 import {
   createExecutionSession,
@@ -394,12 +394,11 @@ export default function ExecutePage() {
           <p
             style={{
               marginTop: "0.25rem",
-              color: "#4b5563",
+              color: "var(--muted-foreground)",
               fontSize: "0.95rem",
             }}
           >
-            Focus on one block at a time. Persisted sessions load when Supabase
-            is configured; mock mode remains session-only.
+            One current task. One first step. Keep forward motion visible.
           </p>
         </section>
         {executeState.status === "loading" ? (
@@ -419,11 +418,14 @@ export default function ExecutePage() {
             <p>{executeState.message}</p>
           </section>
         ) : null}
-        {executeState.status === "ready" ? (
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-            Data source: <strong>{executeState.provider}</strong>
-          </p>
-        ) : null}
+        <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+          <summary>System details</summary>
+          {executeState.status === "ready" ? (
+            <p style={{ margin: 0, marginTop: "0.5rem" }}>
+              Data source: <strong>{executeState.provider}</strong>
+            </p>
+          ) : null}
+        </details>
         {actionState.status === "saving" ? (
           <p role="status">Saving {actionState.label}...</p>
         ) : null}
@@ -466,23 +468,24 @@ export default function ExecutePage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <section>
         <h1>Execute</h1>
-        <p
-          style={{
-            marginTop: "0.25rem",
-            color: "#4b5563",
-            fontSize: "0.95rem",
-          }}
-        >
-          Single-task execution mode. Supabase rows are used when configured;
-          otherwise buttons adjust local mock state only.
-        </p>
-      </section>
-
-      {executeState.status === "ready" ? (
-        <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-          Data source: <strong>{executeState.provider}</strong>
-        </p>
-      ) : null}
+          <p
+            style={{
+              marginTop: "0.25rem",
+              color: "var(--muted-foreground)",
+              fontSize: "0.95rem",
+            }}
+          >
+            Single-task execution mode with clear controls and session feedback.
+          </p>
+        </section>
+      <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+        <summary>System details</summary>
+        {executeState.status === "ready" ? (
+          <p style={{ margin: 0, marginTop: "0.5rem" }}>
+            Data source: <strong>{executeState.provider}</strong>
+          </p>
+        ) : null}
+      </details>
 
       {actionState.status === "saving" ? (
         <p role="status">Saving {actionState.label}...</p>
@@ -520,7 +523,7 @@ export default function ExecutePage() {
       <section
         style={{
           borderRadius: "0.75rem",
-          border: "1px solid #e5e7eb",
+          border: "1px solid var(--border)",
           padding: "1rem 1.25rem",
           display: "flex",
           flexDirection: "column",
@@ -541,13 +544,13 @@ export default function ExecutePage() {
               {activeTask.title}
             </div>
             {area ? (
-              <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+              <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>
                 Area: {area.name}
               </div>
             ) : null}
           </div>
           <div
-            style={{ fontSize: "0.8rem", color: "#6b7280", textAlign: "right" }}
+            style={{ fontSize: "0.8rem", color: "var(--muted-foreground)", textAlign: "right" }}
           >
             <div>
               {activeBlock
@@ -588,7 +591,7 @@ export default function ExecutePage() {
         <div
           style={{
             borderRadius: "0.75rem",
-            backgroundColor: "#f8fafc",
+            backgroundColor: "var(--muted)",
             padding: "0.75rem 0.9rem",
             fontSize: "0.9rem",
             color: "#334155",
@@ -615,7 +618,7 @@ export default function ExecutePage() {
             <div
               style={{
                 fontSize: "0.75rem",
-                color: "#6b7280",
+                color: "var(--muted-foreground)",
                 marginBottom: "0.15rem",
               }}
             >
@@ -824,10 +827,10 @@ export default function ExecutePage() {
           <div
             style={{
               borderRadius: "0.75rem",
-              border: "1px solid #e5e7eb",
+              border: "1px solid var(--border)",
               padding: "0.75rem 1rem",
               fontSize: "0.9rem",
-              color: "#4b5563",
+              color: "var(--muted-foreground)",
             }}
           >
             <div>Planned: {activeSession.planned_minutes ?? 0} min</div>
@@ -852,3 +855,4 @@ export default function ExecutePage() {
     </div>
   );
 }
+

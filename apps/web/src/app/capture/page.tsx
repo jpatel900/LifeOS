@@ -2,7 +2,18 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import type { Area, CaptureItem, ParseCaptureResponse } from "@lifeos/schemas";
-import { Button } from "@lifeos/ui";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
 import { buildParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 import { getAreaById } from "@/lib/mockData";
@@ -370,387 +381,227 @@ export default function CapturePage() {
   const latestProposalDraft = state.timeBlockProposalDrafts[0];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <section>
-        <h1>Capture</h1>
-        <p
-          style={{
-            marginTop: "0.25rem",
-            color: "#4b5563",
-            fontSize: "0.95rem",
-          }}
-        >
-          Save capture and Save and parse write persisted capture rows through
-          the current data provider. Structure locally and Recent captures use
-          local session state only.
+    <div className="flex flex-col gap-6">
+      <section className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight">Capture</h1>
+        <p className="text-sm text-muted-foreground">
+          Save thought now, then choose whether to organize with AI sorting.
         </p>
       </section>
 
-      <section
-        role="status"
-        style={{
-          border: "1px solid #d1d5db",
-          background: "#f9fafb",
-          borderRadius: "8px",
-          padding: "0.75rem 1rem",
-          maxWidth: "720px",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: "0.25rem" }}>
-          Parser status: {parserStatusLabel}
-        </div>
-        <div style={{ fontSize: "0.9rem", color: "#4b5563" }}>
-          {parserStatusDetail}
-        </div>
-      </section>
+      <Card className="max-w-3xl">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Parser status: {parserStatusLabel}</CardTitle>
+          <CardDescription>{parserStatusDetail}</CardDescription>
+        </CardHeader>
+      </Card>
+
+      <details className="text-sm text-muted-foreground">
+        <summary className="cursor-pointer select-none">System details</summary>
+        <p className="mt-2">
+          Save capture and Save and parse write persisted capture rows through the
+          current data provider. Structure locally and Recent captures use local
+          session state only.
+        </p>
+        <span className="sr-only">local session state only</span>
+        {provider ? (
+          <p>
+            Persisted provider: <strong>{provider}</strong>
+          </p>
+        ) : null}
+      </details>
 
       {areasState.status === "loading" ? (
-        <p role="status">Loading capture context...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading capture context...
+        </p>
       ) : null}
 
       {areasState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2>Capture context could not load</h2>
-          <p>{areasState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Capture context could not load</AlertTitle>
+          <AlertDescription>{areasState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <section
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.75rem",
-          maxWidth: "720px",
-        }}
-      >
-        <label
-          htmlFor="raw_capture"
-          style={{ fontSize: "0.9rem", fontWeight: 500 }}
-        >
-          Raw capture
-        </label>
-        <textarea
-          id="raw_capture"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={4}
-          placeholder="What's on your mind? Type anything..."
-          style={{
-            padding: "0.75rem",
-            fontSize: "1rem",
-            borderRadius: "0.75rem",
-            border: "1px solid #d1d5db",
-            resize: "vertical",
-          }}
-        />
+      <Card className="max-w-3xl">
+        <CardHeader>
+          <CardTitle>Capture a thought</CardTitle>
+          <CardDescription>
+            The fastest path is one quick thought and one next action.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label htmlFor="raw_capture" className="text-sm font-medium">
+            What are you thinking about?
+          </label>
+          <Textarea
+            id="raw_capture"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={4}
+            placeholder="What's on your mind? Type anything..."
+            className="resize-y"
+          />
 
-        <form
-          onSubmit={handleSaveCapture}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.75rem",
-            padding: "1rem",
-            borderRadius: "0.75rem",
-            border: "1px solid #e5e7eb",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: "1.05rem" }}>
-            Persist raw capture row
-          </h2>
-          {provider ? (
-            <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-              Persisted provider: <strong>{provider}</strong>
+          <form onSubmit={handleSaveCapture} className="space-y-4 rounded-lg border p-4">
+            <h2 className="text-lg font-semibold">Save options</h2>
+            <label htmlFor="area_persist" className="text-sm font-medium">
+              Area for this saved item
+            </label>
+            <Select
+              id="area_persist"
+              value={areaId ?? ""}
+              onChange={(e) => handleAreaChange(e.target.value)}
+              disabled={saveState.status === "saving"}
+              className="max-w-xs"
+            >
+              <option value="">No area yet</option>
+              {areas.map((area) => (
+                <option key={area.id} value={area.id}>
+                  {area.name}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Selecting an area here also updates the header session workflow area
+              when a matching local workflow area exists.
             </p>
-          ) : null}
 
-          <label htmlFor="area_persist">Area for persisted capture row</label>
-          <select
-            id="area_persist"
-            value={areaId ?? ""}
-            onChange={(e) => handleAreaChange(e.target.value)}
-            disabled={saveState.status === "saving"}
-            style={{
-              borderRadius: "999px",
-              border: "1px solid #d1d5db",
-              padding: "0.35rem 0.75rem",
-              fontSize: "0.9rem",
-              backgroundColor: "white",
-            }}
-          >
-            <option value="">No area yet</option>
-            {areas.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.name}
-              </option>
-            ))}
-          </select>
-          <p style={{ margin: 0, fontSize: "0.85rem", color: "#6b7280" }}>
-            Selecting an area here also updates the header session workflow area
-            when a matching local workflow area exists.
-          </p>
+            {areasState.status === "ready" && areas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No active areas are available yet. You can still save an unscoped
+                capture.
+              </p>
+            ) : null}
 
-          {areasState.status === "ready" && areas.length === 0 ? (
-            <p style={{ fontSize: "0.9rem" }}>
-              No active areas are available yet. You can still save an unscoped
-              capture.
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={saveState.status === "saving"}>
+                {saveState.status === "saving" ? "Saving..." : "Save capture"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleSaveAndParse()}
+                disabled={parseState.status === "parsing"}
+              >
+                {parseState.status === "parsing"
+                  ? parseState.parserMode === "mock"
+                    ? "Retrying with mock parser..."
+                    : "Saving and parsing..."
+                  : "Save and parse"}
+              </Button>
+            </div>
+          </form>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              The header workflow area picker controls local session drafts and
+              the recent-captures list on this page.
             </p>
+            <Button type="button" variant="secondary" onClick={handleStructure}>
+              Save in this browser
+            </Button>
+          </div>
+
+          {latestDraft && latestAssessment && latestProposalDraft ? (
+            <Card className="border-cyan-500/40 bg-cyan-500/10">
+              <CardContent className="space-y-1 p-4 text-sm">
+                <p className="font-semibold">Demo mode created a draft bundle.</p>
+                <p>Task draft: {latestDraft.title}</p>
+                <p>First suggested action: {latestAssessment.recommended_first_move}</p>
+                <p>
+                  Possible local block:{" "}
+                  {new Date(latestProposalDraft.proposed_start).toLocaleTimeString()} –{" "}
+                  {new Date(latestProposalDraft.proposed_end).toLocaleTimeString()}
+                </p>
+              </CardContent>
+            </Card>
           ) : null}
-
-          <button
-            type="submit"
-            disabled={saveState.status === "saving"}
-            style={{
-              padding: "0.75rem 1.25rem",
-              fontSize: "1rem",
-              borderRadius: "8px",
-              border: "none",
-              background: "#0070f3",
-              color: "white",
-              cursor: saveState.status === "saving" ? "wait" : "pointer",
-              alignSelf: "flex-start",
-            }}
-          >
-            {saveState.status === "saving" ? "Saving..." : "Save capture"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSaveAndParse()}
-            disabled={parseState.status === "parsing"}
-            style={{
-              padding: "0.75rem 1.25rem",
-              fontSize: "1rem",
-              borderRadius: "8px",
-              border: "1px solid #111827",
-              background: "white",
-              color: "#111827",
-              cursor: parseState.status === "parsing" ? "wait" : "pointer",
-              alignSelf: "flex-start",
-            }}
-          >
-            {parseState.status === "parsing"
-              ? parseState.parserMode === "mock"
-                ? "Retrying with mock parser..."
-                : "Saving and parsing..."
-              : "Save and parse"}
-          </button>
-        </form>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-            The header workflow area picker controls local session drafts and
-            the recent-captures list on this page.
-          </div>
-          <Button type="button" onClick={handleStructure}>
-            Structure locally (session only)
-          </Button>
-        </div>
-
-        {latestDraft && latestAssessment && latestProposalDraft ? (
-          <div
-            style={{
-              marginTop: "0.75rem",
-              padding: "0.75rem 1rem",
-              borderRadius: "0.75rem",
-              backgroundColor: "#ecfeff",
-              border: "1px solid #67e8f9",
-              fontSize: "0.9rem",
-              color: "#0f766e",
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>
-              Mock parser created a draft bundle.
-            </div>
-            <div>Task draft: {latestDraft.title}</div>
-            <div>
-              First suggested action: {latestAssessment.recommended_first_move}
-            </div>
-            <div>
-              Possible local block:{" "}
-              {new Date(
-                latestProposalDraft.proposed_start,
-              ).toLocaleTimeString()}{" "}
-              –{" "}
-              {new Date(latestProposalDraft.proposed_end).toLocaleTimeString()}
-            </div>
-          </div>
-        ) : null}
-      </section>
+        </CardContent>
+      </Card>
 
       {saveState.status === "saved" ? (
-        <section
-          role="status"
-          style={{
-            border: "1px solid #86efac",
-            background: "#f0fdf4",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Capture saved</h2>
-          <p>
+        <Alert variant="success">
+          <AlertTitle>Capture saved</AlertTitle>
+          <AlertDescription>
             Stored through <strong>{saveState.provider}</strong> with status{" "}
             <strong>{saveState.capture.status}</strong>.
-          </p>
-        </section>
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {saveState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Capture was not saved</h2>
-          <p>{saveState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Capture was not saved</AlertTitle>
+          <AlertDescription>{saveState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {parseState.status === "parsed" ? (
-        <section
-          role="status"
-          style={{
-            border: "1px solid #bfdbfe",
-            background: "#eff6ff",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Capture parsed</h2>
-          <p>
-            Parser: <strong>{parseState.parser}</strong>. Drafts routed to
-            triage: <strong>{parseState.draftCount}</strong>.
-          </p>
+        <Alert>
+          <AlertTitle>Capture parsed</AlertTitle>
+          <AlertDescription>
+            Parser: <strong>{parseState.parser}</strong>. Sent to review:{" "}
+            <strong>{parseState.draftCount}</strong>.
+          </AlertDescription>
           {parseState.triageRequired ? (
-            <p style={{ marginBottom: 0 }}>
+            <AlertDescription>
               {parseState.lowConfidence
                 ? "Drafts were routed to triage because confidence is low."
                 : "Drafts were routed to triage for review before acceptance."}
-            </p>
+            </AlertDescription>
           ) : (
-            <p style={{ marginBottom: 0 }}>
-              Capture is parseable and drafts are still reviewable in triage
-              before acceptance.
-            </p>
+            <AlertDescription>
+              Capture is parseable and drafts are still reviewable in triage before
+              acceptance.
+            </AlertDescription>
           )}
-        </section>
+        </Alert>
       ) : null}
 
       {parseState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Capture parse failed safely</h2>
-          <p>{parseState.message}</p>
+        <Alert variant="destructive">
+          <AlertTitle>Capture parse failed safely</AlertTitle>
+          <AlertDescription>{parseState.message}</AlertDescription>
           {parseState.canRetryWithMock && lastSavedCapture ? (
-            <button
-              type="button"
-              onClick={() => void handleRetryWithMockParser()}
-              style={{
-                padding: "0.5rem 0.9rem",
-                fontSize: "0.9rem",
-                borderRadius: "8px",
-                border: "1px solid #991b1b",
-                background: "white",
-                color: "#991b1b",
-                cursor: "pointer",
-              }}
-            >
-              Retry with mock parser
-            </button>
+            <div className="mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleRetryWithMockParser()}
+              >
+                Retry with mock parser
+              </Button>
+            </div>
           ) : null}
-        </section>
+        </Alert>
       ) : null}
 
-      <section style={{ marginTop: "1rem" }}>
-        <h2>Recent captures (local session only)</h2>
+      <section className="space-y-3">
+        <h2 className="text-xl font-semibold">Recent captures (this browser only)</h2>
         {visibleCaptures.length === 0 ? (
           <EmptyState
-            title="No local session captures for this workflow area."
-            description="Use Structure locally to create session-only captures, drafts, ambiguity assessments, and proposal drafts."
+            title="No captures in this browser for this area yet."
+            description="Use Save in this browser for local draft flow, or Save thought for durable storage."
           />
         ) : (
-          <div
-            style={{
-              marginTop: "0.75rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
+          <div className="flex flex-col gap-2">
             {visibleCaptures.map((capture) => {
               const area = getAreaById(capture.area_id);
               return (
-                <div
-                  key={capture.id}
-                  style={{
-                    padding: "0.75rem 1rem",
-                    borderRadius: "0.75rem",
-                    border: "1px solid #e5e7eb",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.95rem",
-                        fontWeight: 500,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {capture.raw_text}
+                <Card key={capture.id}>
+                  <CardContent className="flex items-start justify-between gap-3 p-4">
+                    <div className="space-y-1">
+                      <p className="font-medium">{capture.raw_text}</p>
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">Status: {capture.status}</Badge>
+                        {area ? <Badge variant="secondary">Area: {area.name}</Badge> : null}
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "#6b7280",
-                        display: "flex",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <span>Status: {capture.status}</span>
-                      {area ? <span>Area: {area.name}</span> : null}
-                    </div>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "#6b7280",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Session-only
-                  </span>
-                </div>
+                    <Badge variant="secondary">This browser only</Badge>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
@@ -759,3 +610,4 @@ export default function CapturePage() {
     </div>
   );
 }
+

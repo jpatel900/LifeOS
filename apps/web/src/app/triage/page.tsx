@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { Area } from "@lifeos/schemas";
-import { Button } from "@lifeos/ui";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "../components/EmptyState";
 import { getAreaById } from "@/lib/mockData";
 import {
@@ -210,333 +213,203 @@ export default function TriagePage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <section>
-        <h1>Triage</h1>
-        <p
-          style={{
-            marginTop: "0.25rem",
-            color: "#4b5563",
-            fontSize: "0.95rem",
-          }}
-        >
-          Drafts listed here are local session state from capture parsing.
-          Accept writes persisted tasks/projects through the current data
-          provider; reject, defer, and reassign actions stay local session
-          changes.
+    <div className="flex flex-col gap-6">
+      <section className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight">Triage</h1>
+        <p className="text-sm text-muted-foreground">
+          Review suggestions, decide quickly, and keep momentum.
         </p>
       </section>
 
-      {loadState.status === "loading" ? (
-        <p role="status">Loading triage context...</p>
-      ) : null}
+      <details className="text-sm text-muted-foreground">
+        <summary className="cursor-pointer select-none">System details</summary>
+        {loadState.status === "ready" ? (
+          <p className="mt-2">
+            Persisted acceptance provider: <strong>{loadState.provider}</strong>.
+            Draft list source: <strong>local session</strong>.
+          </p>
+        ) : null}
+      </details>
 
-      {loadState.status === "ready" ? (
-        <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-          Persisted acceptance provider: <strong>{loadState.provider}</strong>.
-          Draft list source: <strong>local session</strong>.
+      {loadState.status === "loading" ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading triage context...
         </p>
       ) : null}
 
       {loadState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Triage context could not load</h2>
-          <p>{loadState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Triage context could not load</AlertTitle>
+          <AlertDescription>{loadState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {saveState.status === "saving" ? (
-        <p role="status">Accepting {saveState.label}...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Accepting {saveState.label}...
+        </p>
       ) : null}
 
       {saveState.status === "saved" ? (
-        <section
-          role="status"
-          style={{
-            border: "1px solid #86efac",
-            background: "#f0fdf4",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          Accepted {saveState.label} through{" "}
-          <strong>{saveState.provider}</strong>.
-        </section>
+        <Alert variant="success">
+          <AlertTitle>Saved</AlertTitle>
+          <AlertDescription>
+            Accepted {saveState.label} through <strong>{saveState.provider}</strong>.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {saveState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Draft was not accepted</h2>
-          <p>{saveState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Draft was not accepted</AlertTitle>
+          <AlertDescription>{saveState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {totalCandidates === 0 ? (
         <EmptyState
           title="Nothing to triage right now."
-          description="No pending local session drafts. Use Capture to save and parse, or Structure locally."
+          description="No pending suggestions in this browser. Capture something and send it to review."
         />
       ) : (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "0.75rem",
-          }}
-        >
+        <div className="flex flex-col gap-3">
           {triageCandidates.map((task) => {
             const area = getAreaById(task.area_id);
             const assessment = state.ambiguityAssessments.find(
               (item) => item.source_capture_item_id === task.capture_item_id,
             );
             return (
-              <div
-                key={task.id}
-                style={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "0.75rem",
-                  padding: "0.75rem 1rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.5rem",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "0.75rem",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.95rem",
-                        fontWeight: 500,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {task.title}
+              <Card key={task.id}>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg">{task.title}</CardTitle>
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">Task suggestion</Badge>
+                        {area ? <Badge variant="secondary">Area: {area.name}</Badge> : null}
+                        <Badge variant="warning">
+                          Confidence: {Math.round(task.confidence * 100)}%
+                        </Badge>
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "#6b7280",
-                        display: "flex",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <span>Classification: task draft (local session)</span>
-                      {area ? <span>Area suggestion: {area.name}</span> : null}
-                      <span>
-                        Confidence: {Math.round(task.confidence * 100)}%
-                      </span>
-                    </div>
+                    <Badge variant="warning">Needs review</Badge>
                   </div>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "#b45309",
-                      backgroundColor: "#fffbeb",
-                      borderRadius: "999px",
-                      padding: "0.1rem 0.6rem",
-                    }}
-                  >
-                    Needs triage
-                  </span>
-                </div>
-                {assessment ? (
-                  <div
-                    style={{
-                      borderRadius: "0.75rem",
-                      backgroundColor: "#f9fafb",
-                      padding: "0.5rem 0.75rem",
-                      fontSize: "0.85rem",
-                      color: "#4b5563",
-                    }}
-                  >
-                    <div style={{ fontWeight: 500 }}>Ambiguity assessment</div>
-                    <div>
-                      First useful move: {assessment.recommended_first_move}
-                    </div>
-                    <div>Unknowns: {assessment.unknowns.join(", ")}</div>
-                    <div>
-                      What not to do yet:{" "}
-                      {assessment.what_not_to_do_yet.join(", ")}
-                    </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {assessment ? (
+                    <Card className="bg-muted/40">
+                      <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
+                        <p className="font-medium text-foreground">Clarity notes</p>
+                        <p>First useful move: {assessment.recommended_first_move}</p>
+                        <p>Unknowns: {assessment.unknowns.join(", ")}</p>
+                        <p>What not to do yet: {assessment.what_not_to_do_yet.join(", ")}</p>
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => void handleAcceptTaskDraft(task.id)}
+                      aria-label="Accept task draft"
+                      disabled={saveState.status === "saving"}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        editTaskDraft(task.id, {
+                          title: `${task.title} (edited)`,
+                          description: task.description,
+                        })
+                      }
+                      aria-label="Edit draft"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        editTaskDraft(task.id, {
+                          title: task.title,
+                          description: `${task.description ?? ""}\nDeferred locally.`,
+                        })
+                      }
+                      aria-label="Defer draft"
+                    >
+                      Defer
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        editTaskDraft(task.id, {
+                          title: task.title,
+                          description: `${task.description ?? ""}\nLocal session area reassignment note added.`,
+                        })
+                      }
+                      aria-label="Reassign area"
+                    >
+                      Reassign
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => rejectTaskDraft(task.id)}
+                      aria-label="Reject task draft"
+                    >
+                      Reject
+                    </Button>
                   </div>
-                ) : null}
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                    marginTop: "0.25rem",
-                  }}
-                >
-                  <Button
-                    type="button"
-                    onClick={() => void handleAcceptTaskDraft(task.id)}
-                    aria-label="Accept task draft"
-                    disabled={saveState.status === "saving"}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      editTaskDraft(task.id, {
-                        title: `${task.title} (edited)`,
-                        description: task.description,
-                      })
-                    }
-                    aria-label="Edit draft"
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => rejectTaskDraft(task.id)}
-                    aria-label="Reject task draft"
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      editTaskDraft(task.id, {
-                        title: task.title,
-                        description: `${task.description ?? ""}\nDeferred locally.`,
-                      })
-                    }
-                    aria-label="Defer draft"
-                  >
-                    Defer
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      editTaskDraft(task.id, {
-                        title: task.title,
-                        description: `${task.description ?? ""}\nLocal session area reassignment note added.`,
-                      })
-                    }
-                    aria-label="Reassign area"
-                  >
-                    Reassign area
-                  </Button>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             );
           })}
           {projectCandidates.map((project) => {
             const area = getAreaById(project.area_id);
             return (
-              <div
-                key={project.id}
-                style={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "0.75rem",
-                  padding: "0.75rem 1rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.5rem",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "0.75rem",
-                    alignItems: "baseline",
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontSize: "0.95rem",
-                        fontWeight: 500,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {project.title}
+              <Card key={project.id}>
+                <CardHeader className="pb-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg">{project.title}</CardTitle>
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <Badge variant="outline">Project suggestion</Badge>
+                        {area ? <Badge variant="secondary">Area: {area.name}</Badge> : null}
+                        <Badge variant="warning">
+                          Confidence: {Math.round(project.confidence * 100)}%
+                        </Badge>
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "#6b7280",
-                        display: "flex",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <span>Classification: project draft (local session)</span>
-                      {area ? <span>Area suggestion: {area.name}</span> : null}
-                      <span>
-                        Confidence: {Math.round(project.confidence * 100)}%
-                      </span>
-                    </div>
+                    <Badge variant="warning">Needs review</Badge>
                   </div>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "#b45309",
-                      backgroundColor: "#fffbeb",
-                      borderRadius: "999px",
-                      padding: "0.1rem 0.6rem",
-                    }}
-                  >
-                    Needs triage
-                  </span>
-                </div>
-                {project.description ? (
-                  <p
-                    style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}
-                  >
-                    {project.description}
-                  </p>
-                ) : null}
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.5rem",
-                    marginTop: "0.25rem",
-                  }}
-                >
-                  <Button
-                    type="button"
-                    onClick={() => void handleAcceptProjectDraft(project.id)}
-                    aria-label="Accept project draft"
-                    disabled={saveState.status === "saving"}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => rejectProjectDraft(project.id)}
-                    aria-label="Reject project draft"
-                  >
-                    Reject
-                  </Button>
-                </div>
-              </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {project.description ? (
+                    <p className="text-sm text-muted-foreground">{project.description}</p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => void handleAcceptProjectDraft(project.id)}
+                      aria-label="Accept project draft"
+                      disabled={saveState.status === "saving"}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => rejectProjectDraft(project.id)}
+                      aria-label="Reject project draft"
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
@@ -544,3 +417,4 @@ export default function TriagePage() {
     </div>
   );
 }
+

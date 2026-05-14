@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { CalendarBlock, Task, TimeBlockProposal } from "@lifeos/schemas";
-import { Button } from "@lifeos/ui";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "../components/EmptyState";
 import {
   acceptTimeBlockProposal,
@@ -118,7 +118,7 @@ function proposalConflictSummary(proposal: TimeBlockProposal) {
 
   return {
     label: "Conflict not checked",
-    backgroundColor: "#e5e7eb",
+    backgroundColor: "var(--border)",
     color: "#374151",
   };
 }
@@ -701,15 +701,12 @@ export default function CalendarPage() {
         <p
           style={{
             marginTop: "0.25rem",
-            color: "#4b5563",
+            color: "var(--muted-foreground)",
             fontSize: "0.95rem",
           }}
         >
-          This view keeps local time-block proposals as the source of truth.
-          Google Calendar conflict checks are optional and advisory only when a
-          server-side connection exists. Proposal state moves in four explicit
-          steps: local proposal, optional conflict check, explicit approval, and
-          optional Google write.
+          Planned time blocks show up here first. Google Calendar writes happen
+          only after explicit approval.
         </p>
       </section>
 
@@ -717,11 +714,14 @@ export default function CalendarPage() {
         <p role="status">Loading planning context...</p>
       ) : null}
 
-      {planningState.status === "ready" ? (
-        <p style={{ margin: 0, fontSize: "0.9rem", color: "#4b5563" }}>
-          Data source: <strong>{planningState.provider}</strong>
-        </p>
-      ) : null}
+      <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+        <summary>System details</summary>
+        {planningState.status === "ready" ? (
+          <p style={{ margin: 0, marginTop: "0.5rem" }}>
+            Data source: <strong>{planningState.provider}</strong>
+          </p>
+        ) : null}
+      </details>
 
       {planningState.status === "error" ? (
         <section
@@ -808,7 +808,7 @@ export default function CalendarPage() {
             <section
               style={{
                 borderRadius: "0.75rem",
-                border: "1px solid #e5e7eb",
+                border: "1px solid var(--border)",
                 padding: "0.75rem 1rem",
               }}
             >
@@ -833,7 +833,7 @@ export default function CalendarPage() {
                     <div
                       key={task.id}
                       style={{
-                        border: "1px solid #e5e7eb",
+                        border: "1px solid var(--border)",
                         borderRadius: "0.75rem",
                         padding: "0.5rem 0.75rem",
                         fontSize: "0.85rem",
@@ -845,7 +845,7 @@ export default function CalendarPage() {
                     >
                       <div>
                         <div style={{ fontWeight: 500 }}>{task.title}</div>
-                        <div style={{ color: "#6b7280" }}>
+                        <div style={{ color: "var(--muted-foreground)" }}>
                           Estimate: {task.estimated_minutes_low ?? "?"}-
                           {task.estimated_minutes_high ?? "?"} min
                         </div>
@@ -867,7 +867,7 @@ export default function CalendarPage() {
           <section
             style={{
               borderRadius: "0.75rem",
-              border: "1px solid #e5e7eb",
+              border: "1px solid var(--border)",
               padding: "0.75rem 1rem",
             }}
           >
@@ -939,7 +939,7 @@ export default function CalendarPage() {
                     <div
                       key={proposal.id}
                       style={{
-                        border: "1px solid #e5e7eb",
+                        border: "1px solid var(--border)",
                         borderRadius: "0.75rem",
                         padding: "0.5rem 0.75rem",
                         fontSize: "0.85rem",
@@ -951,16 +951,16 @@ export default function CalendarPage() {
                       <div style={{ fontWeight: 500 }}>
                         {task?.title ?? "Unassigned block"}
                       </div>
-                      <div style={{ color: "#6b7280" }}>
+                      <div style={{ color: "var(--muted-foreground)" }}>
                         {new Date(proposal.proposed_start).toLocaleTimeString()}{" "}
                         - {new Date(proposal.proposed_end).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div style={{ color: "#6b7280" }}>
+                        <div style={{ color: "var(--muted-foreground)" }}>
                           Area: {area.name}
                         </div>
                       ) : null}
-                      <div style={{ color: "#4b5563" }}>
+                      <div style={{ color: "var(--muted-foreground)" }}>
                         {proposalRationale(proposal)}
                       </div>
                       {usesPersistedPlanning &&
@@ -1003,7 +1003,7 @@ export default function CalendarPage() {
                           marginTop: "0.25rem",
                         }}
                       >
-                        <span style={{ fontSize: "0.7rem", color: "#6b7280" }}>
+                        <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
                           Local proposal: {proposal.status}
                         </span>
                         <span
@@ -1018,16 +1018,16 @@ export default function CalendarPage() {
                           {conflictSummary.label}
                         </span>
                       </div>
-                      <div style={{ fontSize: "0.7rem", color: "#4b5563" }}>
+                      <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
                         Google write: {googleWriteState}
                       </div>
                       {usesPersistedPlanning ? (
-                        <div style={{ fontSize: "0.7rem", color: "#4b5563" }}>
+                        <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
                           Approval gate: Explicit user click required before any
                           external write.
                         </div>
                       ) : (
-                        <div style={{ fontSize: "0.7rem", color: "#4b5563" }}>
+                        <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
                           Approval gate: Not applicable in local mock/session
                           mode.
                         </div>
@@ -1129,7 +1129,7 @@ export default function CalendarPage() {
           <section
             style={{
               borderRadius: "0.75rem",
-              border: "1px solid #e5e7eb",
+              border: "1px solid var(--border)",
               padding: "0.75rem 1rem",
             }}
           >
@@ -1162,7 +1162,7 @@ export default function CalendarPage() {
                     <div
                       key={block.id}
                       style={{
-                        border: "1px solid #e5e7eb",
+                        border: "1px solid var(--border)",
                         borderRadius: "0.75rem",
                         padding: "0.5rem 0.75rem",
                         fontSize: "0.85rem",
@@ -1174,16 +1174,16 @@ export default function CalendarPage() {
                       <div style={{ fontWeight: 500 }}>
                         {task?.title ?? "Block without specific task"}
                       </div>
-                      <div style={{ color: "#6b7280" }}>
+                      <div style={{ color: "var(--muted-foreground)" }}>
                         {new Date(block.start_at).toLocaleTimeString()} -{" "}
                         {new Date(block.end_at).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div style={{ color: "#6b7280" }}>
+                        <div style={{ color: "var(--muted-foreground)" }}>
                           Area: {area.name}
                         </div>
                       ) : null}
-                      <span style={{ fontSize: "0.7rem", color: "#6b7280" }}>
+                      <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
                         Status: {block.status}
                       </span>
                     </div>
@@ -1196,7 +1196,7 @@ export default function CalendarPage() {
       )}
 
       <section
-        style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#6b7280" }}
+        style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "var(--muted-foreground)" }}
       >
         <p style={{ margin: 0 }}>
           Time proposals stay local first. Free/busy checks are manual and
@@ -1207,3 +1207,4 @@ export default function CalendarPage() {
     </div>
   );
 }
+

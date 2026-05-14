@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { Area } from "@lifeos/schemas";
-import { Button } from "@lifeos/ui";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listAreas, type DataProvider } from "../../../lib/data/workflow";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
@@ -52,106 +55,86 @@ export default function AreasSettingsPage() {
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <section>
-        <h1>Areas</h1>
-        <p
-          style={{
-            marginTop: "0.25rem",
-            color: "#4b5563",
-            fontSize: "0.95rem",
-          }}
-        >
-          Areas are first-class scopes for captures, tasks, scheduling, and
-          future learning. The list below is persisted area data from the
-          current provider. The shell header workflow area picker controls local
-          session state used by capture/triage drafts.
+    <div className="flex flex-col gap-6">
+      <section className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight">Areas</h1>
+        <p className="text-sm text-muted-foreground">
+          Areas are first-class workspace scopes for capture, planning, and review.
         </p>
       </section>
 
+      <details className="text-sm text-muted-foreground">
+        <summary className="cursor-pointer select-none">System details</summary>
+        {state.status === "ready" ? (
+          <p className="mt-2">
+            Persisted area provider: <strong>{state.provider}</strong>
+          </p>
+        ) : null}
+      </details>
+
       {state.status === "loading" ? (
-        <p role="status">Loading areas...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading areas...
+        </p>
       ) : null}
 
       {state.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Areas could not load</h2>
-          <p>{state.message}</p>
-          <p>
-            If Supabase is configured, make sure you are signed in and the local
-            stack is running. Without Supabase env vars, this page uses mock
-            areas.
-          </p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Areas could not load</AlertTitle>
+          <AlertDescription>
+            <p>{state.message}</p>
+            <p>
+              If Supabase is configured, make sure you are signed in and the local
+              stack is running. Without Supabase env vars, this page uses demo areas.
+            </p>
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {state.status === "ready" ? (
-        <section style={{ marginTop: "0.5rem" }}>
-          <p>
-            Persisted area provider: <strong>{state.provider}</strong>
-          </p>
-
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {state.areas.length === 0 ? (
-            <p>No active areas yet.</p>
+            <Card>
+              <CardContent className="p-5 text-sm text-muted-foreground">
+                No active areas yet.
+              </CardContent>
+            </Card>
           ) : (
-            <ul style={{ listStyle: "none", padding: 0 }}>
-              {state.areas.map((area) => (
-                <li
-                  key={area.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    borderRadius: "8px",
-                    padding: "1rem",
-                    marginBottom: "0.75rem",
-                  }}
-                >
-                  <h2 style={{ margin: "0 0 0.5rem", fontSize: "1.1rem" }}>
-                    {area.name}
-                  </h2>
-                  <p style={{ margin: 0 }}>
+            state.areas.map((area) => (
+              <Card key={area.id}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xl">{area.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <p className="text-muted-foreground">
                     {area.description ?? "No description yet."}
                   </p>
-                  <p style={{ color: "#666", marginBottom: 0 }}>
-                    Slug: {area.slug}
-                  </p>
-                </li>
-              ))}
-            </ul>
+                  <Badge variant="outline">Slug: {area.slug}</Badge>
+                </CardContent>
+              </Card>
+            ))
           )}
         </section>
       ) : null}
 
       <GoogleCalendarConnectionPanel />
 
-      <section
-        style={{
-          marginTop: "1rem",
-          padding: "1rem",
-          borderRadius: "8px",
-          border: "1px dashed #cbd5e1",
-          backgroundColor: "#f8fafc",
-        }}
-      >
-        <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Local session reset</h2>
-        <p
-          style={{ marginTop: "0.25rem", fontSize: "0.9rem", color: "#475569" }}
-        >
-          Reset clears local browser session workflow state (captures, drafts,
-          ambiguity assessments, and proposal drafts). It does not delete
-          persisted Supabase/mock-provider rows.
-        </p>
-        <Button type="button" variant="secondary" onClick={resetWorkflow}>
-          Reset local session workflow
-        </Button>
-      </section>
+      <Card className="border-dashed border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-lg">Local reset</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            Reset clears local browser session workflow state (captures, drafts,
+            ambiguity assessments, and proposal drafts). It does not delete
+            persisted Supabase/mock-provider rows.
+          </p>
+          <Button type="button" variant="destructive" onClick={resetWorkflow}>
+            Reset this browser only
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+

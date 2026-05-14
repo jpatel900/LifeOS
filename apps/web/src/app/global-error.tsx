@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import { captureError } from "@/lib/observability";
 
 export default function GlobalError({
@@ -32,8 +33,8 @@ export default function GlobalError({
           display: "grid",
           placeItems: "center",
           fontFamily: "system-ui, sans-serif",
-          background: "#f7f7f5",
-          color: "#18181b",
+          background: "var(--background)",
+          color: "var(--foreground)",
         }}
       >
         <main
@@ -47,20 +48,15 @@ export default function GlobalError({
           <p style={{ marginBottom: 20 }}>
             The error was captured through the privacy-safe observability layer.
           </p>
-          <button
+          <Button
+            variant="outline"
             onClick={() => reset()}
-            style={{
-              border: "1px solid #18181b",
-              borderRadius: 999,
-              background: "#fff",
-              padding: "10px 16px",
-              cursor: "pointer",
-            }}
           >
             Retry
-          </button>
+          </Button>
         </main>
       </body>
     </html>
   );
 }
+

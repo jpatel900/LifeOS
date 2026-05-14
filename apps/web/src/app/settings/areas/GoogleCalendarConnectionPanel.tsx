@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@lifeos/ui";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 interface GoogleCalendarConnectionSummary {
@@ -444,33 +447,25 @@ export function GoogleCalendarConnectionPanel() {
   const colors = getPanelColors(panelSeverity);
 
   return (
-    <section
-      style={{
-        border: `1px solid ${colors.border}`,
-        background: colors.background,
-        borderRadius: "8px",
-        padding: "1rem",
-      }}
-    >
-      <h2 style={{ marginTop: 0, marginBottom: "0.5rem" }}>Google Calendar</h2>
-      <p style={{ marginTop: 0, color: "#475569", fontSize: "0.92rem" }}>
-        This page can store Google OAuth tokens encrypted on the server only. It
-        does not run background calendar mutation.
-      </p>
+    <Card style={{ borderColor: colors.border, background: colors.background }}>
+      <CardHeader>
+        <CardTitle className="text-xl">Google Calendar</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Connection metadata is managed here. Real calendar writes still require
+          explicit approval from Planning.
+        </p>
 
       {flashMessage ? (
-        <div
-          role="status"
+        <Alert
           style={{
-            border: `1px solid ${getPanelColors(flashMessage.severity).border}`,
+            borderColor: getPanelColors(flashMessage.severity).border,
             background: getPanelColors(flashMessage.severity).background,
-            borderRadius: "8px",
-            padding: "0.75rem",
-            marginBottom: "0.75rem",
           }}
         >
-          {flashMessage.message}
-        </div>
+          <AlertDescription>{flashMessage.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {panelState.status === "loading" ? (
@@ -487,11 +482,12 @@ export function GoogleCalendarConnectionPanel() {
 
       {panelState.status === "ready" ? (
         <>
-          <p style={{ marginTop: 0 }}>
-            <strong>Connection status:</strong>{" "}
-            {panelState.connected ? "Connected" : "Disconnected"}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={panelState.connected ? "success" : "secondary"}>
+              {panelState.connected ? "Connected" : "Disconnected"}
+            </Badge>
             {panelState.connection?.status === "error" ? " (error)" : null}
-          </p>
+          </div>
           <p>{panelState.message}</p>
 
           {panelState.connection?.granted_scopes_json?.length ? (
@@ -533,19 +529,15 @@ export function GoogleCalendarConnectionPanel() {
           </div>
 
           {!panelState.configured ? (
-            <p
-              style={{
-                marginBottom: 0,
-                marginTop: "0.75rem",
-                color: "#7c2d12",
-              }}
-            >
+            <p className="mb-0 mt-3 text-sm text-amber-300">
               Missing server config is non-fatal. Mock/local mode still works
               without Google env vars.
             </p>
           ) : null}
         </>
       ) : null}
-    </section>
+      </CardContent>
+    </Card>
   );
 }
+
