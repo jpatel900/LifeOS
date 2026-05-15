@@ -52,19 +52,24 @@ function AppChrome({ children }: { children: ReactNode }) {
                 Personal workflow cockpit
               </Badge>
             </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <Button
-                type="button"
-                onClick={() =>
-                  submitCaptureText(
-                    "Quick capture: sort this thought later.",
-                    selectedAreaId,
-                  )
-                }
-              >
-                Quick Capture
-              </Button>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <Button
+                  type="button"
+                  onClick={() =>
+                    submitCaptureText(
+                      "Quick capture: sort this thought later.",
+                      selectedAreaId,
+                    )
+                  }
+                >
+                  Quick note
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saved in this browser until you organize it.
+              </p>
             </div>
           </div>
 

@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import type { CalendarBlock, ExecutionSession, Task } from "@lifeos/schemas";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
 import {
   createExecutionSession,
@@ -388,73 +393,50 @@ export default function ExecutePage() {
 
   if (!activeTask) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div className="flex flex-col gap-6">
         <section>
           <h1>Execute</h1>
-          <p
-            style={{
-              marginTop: "0.25rem",
-              color: "var(--muted-foreground)",
-              fontSize: "0.95rem",
-            }}
-          >
+          <p className="mt-1 text-[0.95rem] text-muted-foreground">
             One current task. One first step. Keep forward motion visible.
           </p>
         </section>
         {executeState.status === "loading" ? (
-          <p role="status">Loading execution context...</p>
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading execution context...
+          </p>
         ) : null}
         {executeState.status === "error" ? (
-          <section
-            role="alert"
-            style={{
-              border: "1px solid #fca5a5",
-              background: "#fef2f2",
-              borderRadius: "8px",
-              padding: "1rem",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Execution rows could not load</h2>
-            <p>{executeState.message}</p>
-          </section>
+          <Alert variant="destructive">
+            <AlertTitle>Execution rows could not load</AlertTitle>
+            <AlertDescription>{executeState.message}</AlertDescription>
+          </Alert>
         ) : null}
-        <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+        <details className="text-sm text-muted-foreground">
           <summary>System details</summary>
           {executeState.status === "ready" ? (
-            <p style={{ margin: 0, marginTop: "0.5rem" }}>
+            <p className="mt-2">
               Data source: <strong>{executeState.provider}</strong>
             </p>
           ) : null}
         </details>
         {actionState.status === "saving" ? (
-          <p role="status">Saving {actionState.label}...</p>
+          <p role="status" className="text-sm text-muted-foreground">
+            Saving {actionState.label}...
+          </p>
         ) : null}
         {actionState.status === "saved" ? (
-          <section
-            role="status"
-            style={{
-              border: "1px solid #86efac",
-              background: "#f0fdf4",
-              borderRadius: "8px",
-              padding: "1rem",
-            }}
-          >
-            {actionState.label} <strong>{actionState.provider}</strong>.
-          </section>
+          <Alert role="status" className="border-border bg-muted text-foreground">
+            <AlertTitle className="text-primary">Saved</AlertTitle>
+            <AlertDescription>
+              {actionState.label} <strong>{actionState.provider}</strong>.
+            </AlertDescription>
+          </Alert>
         ) : null}
         {actionState.status === "error" ? (
-          <section
-            role="alert"
-            style={{
-              border: "1px solid #fca5a5",
-              background: "#fef2f2",
-              borderRadius: "8px",
-              padding: "1rem",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Execution change was not saved</h2>
-            <p>{actionState.message}</p>
-          </section>
+          <Alert variant="destructive">
+            <AlertTitle>Execution change was not saved</AlertTitle>
+            <AlertDescription>{actionState.message}</AlertDescription>
+          </Alert>
         ) : null}
         <EmptyState
           title="No active block."
@@ -465,99 +447,64 @@ export default function ExecutePage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div className="flex flex-col gap-6">
       <section>
         <h1>Execute</h1>
-          <p
-            style={{
-              marginTop: "0.25rem",
-              color: "var(--muted-foreground)",
-              fontSize: "0.95rem",
-            }}
-          >
-            Single-task execution mode with clear controls and session feedback.
-          </p>
-        </section>
-      <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+        <p className="mt-1 text-[0.95rem] text-muted-foreground">
+          Single-task execution mode with clear controls and session feedback.
+        </p>
+      </section>
+      <details className="text-sm text-muted-foreground">
         <summary>System details</summary>
         {executeState.status === "ready" ? (
-          <p style={{ margin: 0, marginTop: "0.5rem" }}>
+          <p className="mt-2">
             Data source: <strong>{executeState.provider}</strong>
           </p>
         ) : null}
       </details>
 
       {actionState.status === "saving" ? (
-        <p role="status">Saving {actionState.label}...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Saving {actionState.label}...
+        </p>
       ) : null}
 
       {actionState.status === "saved" ? (
-        <section
-          role="status"
-          style={{
-            border: "1px solid #86efac",
-            background: "#f0fdf4",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          {actionState.label} <strong>{actionState.provider}</strong>.
-        </section>
+        <Alert role="status" className="border-border bg-muted text-foreground">
+          <AlertTitle className="text-primary">Saved</AlertTitle>
+          <AlertDescription>
+            {actionState.label} <strong>{actionState.provider}</strong>.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {actionState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Execution change was not saved</h2>
-          <p>{actionState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Execution change was not saved</AlertTitle>
+          <AlertDescription>{actionState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <section
-        style={{
-          borderRadius: "0.75rem",
-          border: "1px solid var(--border)",
-          padding: "1rem 1.25rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.75rem",
-          maxWidth: "720px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: "1rem",
-            alignItems: "baseline",
-          }}
-        >
+      <Card className="max-w-[720px]">
+        <CardContent className="flex flex-col gap-3 p-5">
+          <div className="flex items-baseline justify-between gap-4">
           <div>
-            <div style={{ fontWeight: 600, fontSize: "1.05rem" }}>
+              <div className="text-[1.05rem] font-semibold">
               {activeTask.title}
             </div>
             {area ? (
-              <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>
+                <div className="text-[0.85rem] text-muted-foreground">
                 Area: {area.name}
               </div>
             ) : null}
           </div>
-          <div
-            style={{ fontSize: "0.8rem", color: "var(--muted-foreground)", textAlign: "right" }}
-          >
+            <div className="text-right text-[0.8rem] text-muted-foreground">
             <div>
               {activeBlock
                 ? `${new Date(activeBlock.start_at).toLocaleTimeString()} – ${new Date(
                     activeBlock.end_at,
                   ).toLocaleTimeString()}`
-                : "Unscheduled local session"}
+                : "Unscheduled session in this browser"}
             </div>
             <div>
               Status:{" "}
@@ -571,16 +518,8 @@ export default function ExecutePage() {
           </div>
         </div>
 
-        <div
-          style={{
-            borderRadius: "0.75rem",
-            backgroundColor: "#eff6ff",
-            padding: "0.75rem 0.9rem",
-            fontSize: "0.9rem",
-            color: "#1d4ed8",
-          }}
-        >
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>
+          <div className="rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
+            <div className="mb-1 font-medium text-primary">
             First tiny step
           </div>
           <div>
@@ -588,16 +527,8 @@ export default function ExecutePage() {
               "Pick one small, concrete action you can do in the next few minutes."}
           </div>
         </div>
-        <div
-          style={{
-            borderRadius: "0.75rem",
-            backgroundColor: "var(--muted)",
-            padding: "0.75rem 0.9rem",
-            fontSize: "0.9rem",
-            color: "#334155",
-          }}
-        >
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>Definition of done</div>
+          <div className="rounded-lg border border-border bg-muted/80 p-3 text-sm text-foreground">
+            <div className="mb-1 font-medium text-muted-foreground">Definition of done</div>
           <div>
             {activeTask.definition_of_done ??
               "Complete the first useful move and note the outcome."}
@@ -605,28 +536,14 @@ export default function ExecutePage() {
         </div>
 
         <div
-          aria-label="Timer (mock only)"
-          style={{
-            marginTop: "0.5rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "1rem",
-          }}
+          aria-label="Timer (demo mode only)"
+            className="mt-2 flex items-center justify-between gap-4"
         >
           <div>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "var(--muted-foreground)",
-                marginBottom: "0.15rem",
-              }}
-            >
-              Session state (mock)
+              <div className="mb-0.5 text-xs text-muted-foreground">
+              Session state (demo mode)
             </div>
-            <div
-              style={{ fontSize: "1.5rem", fontVariantNumeric: "tabular-nums" }}
-            >
+              <div className="text-2xl [font-variant-numeric:tabular-nums]">
               {!usesPersistedExecution &&
               (activeSession as Phase2MockExecutionSession | null)?.status ===
                 "running"
@@ -634,7 +551,7 @@ export default function ExecutePage() {
                 : "00:00:00"}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               onClick={() => void handleStart()}
@@ -697,29 +614,26 @@ export default function ExecutePage() {
               onClick={() => void handleMark("stopped")}
               disabled={actionState.status === "saving" || usesPersistedExecution}
             >
-              Stop
+              {usesPersistedExecution ? "Stop (demo mode only)" : "Stop (this browser)"}
             </Button>
           </div>
         </div>
+          <p className="m-0 text-xs text-muted-foreground">
+          {usesPersistedExecution
+            ? "Stop is disabled here. Saved sessions need an end status and end-session details."
+            : "Stop only updates this browser in demo mode. It does not save a persisted end state."}
+        </p>
         {usesPersistedExecution && terminalForm ? (
-          <section
-            aria-label="End session details"
-            style={{
-              borderRadius: "0.75rem",
-              border: "1px solid #bfdbfe",
-              backgroundColor: "#eff6ff",
-              padding: "0.75rem 1rem",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.65rem",
-            }}
-          >
-            <h2 style={{ margin: 0, fontSize: "0.95rem" }}>
+            <section
+              aria-label="End session details"
+              className="flex flex-col gap-3 rounded-lg border border-border bg-muted/60 p-4"
+            >
+              <h2 className="m-0 text-[0.95rem] font-semibold">
               End session details
             </h2>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label className="flex flex-col gap-1.5 text-sm text-foreground">
               Outcome
-              <select
+                <Select
                 aria-label="End session outcome"
                 value={terminalForm.outcome}
                 onChange={(event) =>
@@ -739,11 +653,11 @@ export default function ExecutePage() {
                     {option.label}
                   </option>
                 ))}
-              </select>
+                </Select>
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label className="flex flex-col gap-1.5 text-sm text-foreground">
               Actual duration (minutes)
-              <input
+                <Input
                 aria-label="Actual duration minutes"
                 type="number"
                 min={0}
@@ -757,9 +671,9 @@ export default function ExecutePage() {
                 }
               />
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label className="flex flex-col gap-1.5 text-sm text-foreground">
               Productivity rating (1-5)
-              <input
+                <Input
                 aria-label="Productivity rating"
                 type="number"
                 min={1}
@@ -774,11 +688,12 @@ export default function ExecutePage() {
                 }
               />
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <label className="flex flex-col gap-1.5 text-sm text-foreground">
               Notes (optional)
-              <textarea
+                <Textarea
                 aria-label="End session notes"
                 rows={2}
+                className="min-h-[72px]"
                 value={terminalForm.notes}
                 onChange={(event) =>
                   setTerminalForm((current) =>
@@ -788,11 +703,11 @@ export default function ExecutePage() {
               />
             </label>
             {terminalFormError ? (
-              <p role="alert" style={{ margin: 0, color: "#b91c1c" }}>
+                <p role="alert" className="m-0 text-sm text-destructive">
                 {terminalFormError}
               </p>
             ) : null}
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 onClick={() => void handleSubmitTerminalForm()}
@@ -814,25 +729,15 @@ export default function ExecutePage() {
             </div>
           </section>
         ) : null}
-      </section>
+        </CardContent>
+      </Card>
 
       {activeSession ? (
-        <section
-          aria-label="Most recent execution summary"
-          style={{ maxWidth: "720px" }}
-        >
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-            Recent execution summary
-          </h2>
-          <div
-            style={{
-              borderRadius: "0.75rem",
-              border: "1px solid var(--border)",
-              padding: "0.75rem 1rem",
-              fontSize: "0.9rem",
-              color: "var(--muted-foreground)",
-            }}
-          >
+        <Card aria-label="Most recent execution summary" className="max-w-[720px]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Recent execution summary</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 text-sm text-muted-foreground">
             <div>Planned: {activeSession.planned_minutes ?? 0} min</div>
             <div>Actual: {activeSession.actual_minutes ?? 0} min</div>
             {"status" in activeSession ? (
@@ -849,8 +754,8 @@ export default function ExecutePage() {
             {activeSession.notes ? (
               <div>Notes: {activeSession.notes}</div>
             ) : null}
-          </div>
-        </section>
+          </CardContent>
+        </Card>
       ) : null}
     </div>
   );

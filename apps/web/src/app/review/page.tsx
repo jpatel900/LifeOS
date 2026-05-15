@@ -8,7 +8,9 @@ import type {
   ReviewEntry,
   Task,
 } from "@lifeos/schemas";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "../components/EmptyState";
 import {
   createReviewEntry,
@@ -193,80 +195,57 @@ export default function ReviewPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div className="flex flex-col gap-6">
       <section>
         <h1>Review</h1>
-        <p
-          style={{
-            marginTop: "0.25rem",
-            color: "var(--muted-foreground)",
-            fontSize: "0.95rem",
-          }}
-        >
+        <p className="mt-1 text-[0.95rem] text-muted-foreground">
           Daily and weekly review surfaces what moved, what stalled, and what to
           adjust next.
         </p>
       </section>
 
       {reviewState.status === "loading" ? (
-        <p role="status">Loading review context...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading review context...
+        </p>
       ) : null}
 
-      <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+      <details className="text-sm text-muted-foreground">
         <summary>System details</summary>
         {reviewState.status === "ready" ? (
-          <p style={{ margin: 0, marginTop: "0.5rem" }}>
+          <p className="mt-2">
             Data source: <strong>{reviewState.provider}</strong>
           </p>
         ) : null}
       </details>
 
       {reviewState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Review rows could not load</h2>
-          <p>{reviewState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Review rows could not load</AlertTitle>
+          <AlertDescription>{reviewState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {actionState.status === "saving" ? (
-        <p role="status">Creating daily review...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Creating daily review...
+        </p>
       ) : null}
 
       {actionState.status === "saved" ? (
-        <section
-          role="status"
-          style={{
-            border: "1px solid #86efac",
-            background: "#f0fdf4",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          Review entry created through <strong>{actionState.provider}</strong>.
-        </section>
+        <Alert role="status" className="border-border bg-muted text-foreground">
+          <AlertTitle className="text-primary">Saved</AlertTitle>
+          <AlertDescription>
+            Review entry created through <strong>{actionState.provider}</strong>.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {actionState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Review entry was not saved</h2>
-          <p>{actionState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Review entry was not saved</AlertTitle>
+          <AlertDescription>{actionState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {reviewState.status === "ready" ? (
@@ -281,108 +260,79 @@ export default function ReviewPage() {
         </div>
       ) : null}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: "1rem",
-        }}
-      >
-        <div
-          style={{
-            borderRadius: "0.75rem",
-            border: "1px solid var(--border)",
-            padding: "0.75rem 1rem",
-          }}
-        >
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-            Daily review
-          </h2>
-          {captureCount === 0 && sessions.length === 0 ? (
-            <EmptyState
-              title="No daily review yet."
-              description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
-            />
-          ) : (
-            <ul
-              style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}
-            >
-              {captureCount !== null ? <li>Captured: {captureCount}</li> : null}
-              <li>Accepted tasks: {tasks.length}</li>
-              <li>Completed sessions: {completed.length}</li>
-              <li>Missed sessions: {missed.length}</li>
-              <li>Distracted sessions: {distracted.length}</li>
-              <li>Stuck sessions: {stuck.length}</li>
-              <li>Still open: {openTasks.length}</li>
-            </ul>
-          )}
-        </div>
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Daily review</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {captureCount === 0 && sessions.length === 0 ? (
+              <EmptyState
+                title="No daily review yet."
+                description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
+              />
+            ) : (
+              <ul className="m-0 list-disc pl-5 text-sm text-foreground">
+                {captureCount !== null ? <li>Captured: {captureCount}</li> : null}
+                <li>Accepted tasks: {tasks.length}</li>
+                <li>Completed sessions: {completed.length}</li>
+                <li>Missed sessions: {missed.length}</li>
+                <li>Distracted sessions: {distracted.length}</li>
+                <li>Stuck sessions: {stuck.length}</li>
+                <li>Still open: {openTasks.length}</li>
+              </ul>
+            )}
+          </CardContent>
+        </Card>
 
-        <div
-          style={{
-            borderRadius: "0.75rem",
-            border: "1px solid var(--border)",
-            padding: "0.75rem 1rem",
-          }}
-        >
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-            Weekly review
-          </h2>
-          {tasks.length === 0 ? (
-            <EmptyState
-              title="No weekly review yet."
-              description="Area-level patterns will appear here once you accept tasks and run sessions."
-            />
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-              }}
-            >
-              {areaSummaries
-                .filter(
-                  (summary) =>
-                    summary.open + summary.done + summary.sessions > 0,
-                )
-                .map((summary) => {
-                  const area = getAreaById(summary.area.id);
-                  return (
-                    <div
-                      key={summary.area.id}
-                      style={{
-                        borderRadius: "0.75rem",
-                        border: "1px solid var(--border)",
-                        padding: "0.5rem 0.75rem",
-                        fontSize: "0.9rem",
-                      }}
-                    >
-                      <div style={{ fontWeight: 500 }}>
-                        {area?.name ?? summary.area.name}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Weekly review</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {tasks.length === 0 ? (
+              <EmptyState
+                title="No weekly review yet."
+                description="Area-level patterns will appear here once you accept tasks and run sessions."
+              />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {areaSummaries
+                  .filter(
+                    (summary) =>
+                      summary.open + summary.done + summary.sessions > 0,
+                  )
+                  .map((summary) => {
+                    const area = getAreaById(summary.area.id);
+                    return (
+                      <div
+                        key={summary.area.id}
+                        className="rounded-lg border border-border bg-card p-3 text-sm"
+                      >
+                        <div className="font-medium">
+                          {area?.name ?? summary.area.name}
+                        </div>
+                        <div className="text-muted-foreground">
+                          Open tasks: {summary.open}
+                        </div>
+                        <div className="text-muted-foreground">
+                          Completed tasks: {summary.done}
+                        </div>
+                        <div className="text-muted-foreground">
+                          Sessions recorded: {summary.sessions}
+                        </div>
                       </div>
-                      <div style={{ color: "var(--muted-foreground)" }}>
-                        Open tasks: {summary.open}
-                      </div>
-                      <div style={{ color: "var(--muted-foreground)" }}>
-                        Completed tasks: {summary.done}
-                      </div>
-                      <div style={{ color: "var(--muted-foreground)" }}>
-                        Sessions recorded: {summary.sessions}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-        </div>
+                    );
+                  })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
       {reviewEntries.length > 0 ? (
         <section>
-          <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-            Persisted review entries
-          </h2>
-          <ul style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}>
+          <h2 className="mb-2 text-base">Persisted review entries</h2>
+          <ul className="m-0 list-disc pl-5 text-sm text-foreground">
             {reviewEntries.map((entry) => (
               <li key={entry.id}>
                 {entry.review_type} review: {entry.period_start} to{" "}
@@ -394,10 +344,10 @@ export default function ReviewPage() {
       ) : null}
       {localReviewLog.length > 0 ? (
         <details>
-          <summary style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
+          <summary className="mb-2 text-base">
             System details
           </summary>
-          <ul style={{ paddingLeft: "1.25rem", margin: 0, fontSize: "0.9rem" }}>
+          <ul className="m-0 list-disc pl-5 text-sm text-foreground">
             {localReviewLog.map((entry, index) => (
               <li key={`${entry}-${index}`}>{entry}</li>
             ))}

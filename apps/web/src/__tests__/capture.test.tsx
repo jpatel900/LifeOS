@@ -137,7 +137,12 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        /The header workflow area picker controls local session drafts and the recent-captures list on this page/i,
+        /The header workflow area picker controls this browser draft flow and the recent-captures list on this page/i,
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        /Save in this browser and Recent captures stay in this browser only/i,
       ),
     ).toBeDefined();
   });

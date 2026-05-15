@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { CalendarBlock, Task, TimeBlockProposal } from "@lifeos/schemas";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "../components/EmptyState";
 import {
   acceptTimeBlockProposal,
@@ -17,6 +20,7 @@ import {
 import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
 type PlanningState =
@@ -103,23 +107,23 @@ function proposalConflictSummary(proposal: TimeBlockProposal) {
   if (proposal.conflict_flag) {
     return {
       label: "Conflict flagged",
-      backgroundColor: "#fee2e2",
-      color: "#b91c1c",
+      variant: "destructive" as const,
+      className: "",
     };
   }
 
   if (hasCheckedConflict) {
     return {
       label: "No conflict detected",
-      backgroundColor: "#dcfce7",
-      color: "#166534",
+      variant: "outline" as const,
+      className: "border-border bg-muted text-primary",
     };
   }
 
   return {
     label: "Conflict not checked",
-    backgroundColor: "var(--border)",
-    color: "#374151",
+    variant: "secondary" as const,
+    className: "",
   };
 }
 
@@ -695,100 +699,67 @@ export default function CalendarPage() {
     persistedTasks.length > 0 || proposals.length > 0 || blocks.length > 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div className="flex flex-col gap-6">
       <section>
         <h1>Calendar / Planning</h1>
-        <p
-          style={{
-            marginTop: "0.25rem",
-            color: "var(--muted-foreground)",
-            fontSize: "0.95rem",
-          }}
-        >
+        <p className="mt-1 text-[0.95rem] text-muted-foreground">
           Planned time blocks show up here first. Google Calendar writes happen
           only after explicit approval.
         </p>
       </section>
 
       {planningState.status === "loading" ? (
-        <p role="status">Loading planning context...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading planning context...
+        </p>
       ) : null}
 
-      <details style={{ fontSize: "0.9rem", color: "var(--muted-foreground)" }}>
+      <details className="text-sm text-muted-foreground">
         <summary>System details</summary>
         {planningState.status === "ready" ? (
-          <p style={{ margin: 0, marginTop: "0.5rem" }}>
+          <p className="mt-2">
             Data source: <strong>{planningState.provider}</strong>
           </p>
         ) : null}
       </details>
 
       {planningState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Planning rows could not load</h2>
-          <p>{planningState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Planning rows could not load</AlertTitle>
+          <AlertDescription>{planningState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {googleConnectionState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>
-            Google Calendar status could not load
-          </h2>
-          <p>{googleConnectionState.message}</p>
-        </section>
+        <Alert variant="destructive">
+          <AlertTitle>Google Calendar status could not load</AlertTitle>
+          <AlertDescription>{googleConnectionState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       {actionState.status === "saving" ? (
-        <p role="status">Saving {actionState.label}...</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Saving {actionState.label}...
+        </p>
       ) : null}
 
       {actionState.status === "saved" ? (
-        <section
-          role="status"
-          style={{
-            border: "1px solid #86efac",
-            background: "#f0fdf4",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          {actionState.label} <strong>{actionState.provider}</strong>.
-        </section>
+        <Alert role="status" className="border-border bg-muted text-foreground">
+          <AlertTitle className="text-primary">Saved</AlertTitle>
+          <AlertDescription>
+            {actionState.label} <strong>{actionState.provider}</strong>.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {actionState.status === "error" ? (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid #fca5a5",
-            background: "#fef2f2",
-            borderRadius: "8px",
-            padding: "1rem",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>{actionState.title}</h2>
-          <p>{actionState.message}</p>
-          <p style={{ marginBottom: 0, color: "#7f1d1d" }}>
+        <Alert variant="destructive">
+          <AlertTitle>{actionState.title}</AlertTitle>
+          <AlertDescription>{actionState.message}</AlertDescription>
+          <p className="text-sm font-medium text-destructive">
             Next step: {actionState.nextStep}
           </p>
-        </section>
+        </Alert>
       ) : null}
 
       {!hasAny ? (
@@ -797,55 +768,27 @@ export default function CalendarPage() {
           description="When you propose time for tasks, local blocks appear here first. Google Calendar conflict checks are optional and do not create events."
         />
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-            gap: "1rem",
-          }}
-        >
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           {usesPersistedPlanning ? (
-            <section
-              style={{
-                borderRadius: "0.75rem",
-                border: "1px solid var(--border)",
-                padding: "0.75rem 1rem",
-              }}
-            >
-              <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-                Tasks ready to schedule
-              </h2>
-              {persistedTasks.length === 0 ? (
-                <EmptyState
-                  title="No persisted active tasks."
-                  description="Accept task drafts in triage before proposing local time."
-                />
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.5rem",
-                    marginTop: "0.5rem",
-                  }}
-                >
-                  {persistedTasks.map((task) => (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Tasks ready to schedule</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                {persistedTasks.length === 0 ? (
+                  <EmptyState
+                    title="No persisted active tasks."
+                    description="Accept task drafts in triage before proposing local time."
+                  />
+                ) : (
+                  persistedTasks.map((task) => (
                     <div
                       key={task.id}
-                      style={{
-                        border: "1px solid var(--border)",
-                        borderRadius: "0.75rem",
-                        padding: "0.5rem 0.75rem",
-                        fontSize: "0.85rem",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: "0.75rem",
-                        alignItems: "center",
-                      }}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm"
                     >
                       <div>
-                        <div style={{ fontWeight: 500 }}>{task.title}</div>
-                        <div style={{ color: "var(--muted-foreground)" }}>
+                        <div className="font-medium">{task.title}</div>
+                        <div className="text-muted-foreground">
                           Estimate: {task.estimated_minutes_low ?? "?"}-
                           {task.estimated_minutes_high ?? "?"} min
                         </div>
@@ -858,37 +801,24 @@ export default function CalendarPage() {
                         Propose time
                       </Button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </section>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           ) : null}
 
-          <section
-            style={{
-              borderRadius: "0.75rem",
-              border: "1px solid var(--border)",
-              padding: "0.75rem 1rem",
-            }}
-          >
-            <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-              Proposals (local only)
-            </h2>
-            {proposals.length === 0 ? (
-              <EmptyState
-                title="No proposals."
-                description="Propose time from an active task to stage a local block."
-              />
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.5rem",
-                  marginTop: "0.5rem",
-                }}
-              >
-                {proposals.map((proposal) => {
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Proposals (local only)</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {proposals.length === 0 ? (
+                <EmptyState
+                  title="No proposals."
+                  description="Propose time from an active task to stage a local block."
+                />
+              ) : (
+                proposals.map((proposal) => {
                   const area = usesPersistedPlanning
                     ? null
                     : getAreaById(proposal.area_id);
@@ -938,49 +868,25 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={proposal.id}
-                      style={{
-                        border: "1px solid var(--border)",
-                        borderRadius: "0.75rem",
-                        padding: "0.5rem 0.75rem",
-                        fontSize: "0.85rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.25rem",
-                      }}
+                      className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 text-sm"
                     >
-                      <div style={{ fontWeight: 500 }}>
-                        {task?.title ?? "Unassigned block"}
-                      </div>
-                      <div style={{ color: "var(--muted-foreground)" }}>
+                      <div className="font-medium">{task?.title ?? "Unassigned block"}</div>
+                      <div className="text-muted-foreground">
                         {new Date(proposal.proposed_start).toLocaleTimeString()}{" "}
                         - {new Date(proposal.proposed_end).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div style={{ color: "var(--muted-foreground)" }}>
-                          Area: {area.name}
-                        </div>
+                        <div className="text-muted-foreground">Area: {area.name}</div>
                       ) : null}
-                      <div style={{ color: "var(--muted-foreground)" }}>
-                        {proposalRationale(proposal)}
-                      </div>
+                      <div className="text-muted-foreground">{proposalRationale(proposal)}</div>
                       {usesPersistedPlanning &&
                       googleConnectionState.status === "ready" &&
                       googleConnectionState.connected &&
                       !googleConnectionState.firstWriteWarningAcknowledged ? (
-                        <label
-                          style={{
-                            display: "flex",
-                            gap: "0.5rem",
-                            alignItems: "flex-start",
-                            color: "#92400e",
-                            background: "#fffbeb",
-                            border: "1px solid #fcd34d",
-                            borderRadius: "8px",
-                            padding: "0.5rem",
-                          }}
-                        >
+                        <label className="flex items-start gap-2 rounded-md border border-border bg-muted p-2 text-sm text-foreground">
                           <input
                             type="checkbox"
+                            className="mt-0.5 size-4 rounded border-input bg-background text-primary focus-visible:ring-2 focus-visible:ring-ring"
                             checked={acknowledgeFirstWriteWarning}
                             onChange={(event) =>
                               setAcknowledgeFirstWriteWarning(
@@ -996,50 +902,32 @@ export default function CalendarPage() {
                           </span>
                         </label>
                       ) : null}
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginTop: "0.25rem",
-                        }}
-                      >
-                        <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
                           Local proposal: {proposal.status}
                         </span>
-                        <span
-                          style={{
-                            fontSize: "0.7rem",
-                            color: conflictSummary.color,
-                            backgroundColor: conflictSummary.backgroundColor,
-                            borderRadius: "999px",
-                            padding: "0.05rem 0.5rem",
-                          }}
+                        <Badge
+                          variant={conflictSummary.variant}
+                          className={cn("text-[0.7rem]", conflictSummary.className)}
                         >
                           {conflictSummary.label}
-                        </span>
+                        </Badge>
                       </div>
-                      <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
+                      <div className="text-xs text-muted-foreground">
                         Google write: {googleWriteState}
                       </div>
                       {usesPersistedPlanning ? (
-                        <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
+                        <div className="text-xs text-muted-foreground">
                           Approval gate: Explicit user click required before any
                           external write.
                         </div>
                       ) : (
-                        <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
+                        <div className="text-xs text-muted-foreground">
                           Approval gate: Not applicable in local mock/session
                           mode.
                         </div>
                       )}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: "0.5rem",
-                          marginTop: "0.5rem",
-                        }}
-                      >
+                      <div className="mt-2 flex flex-wrap gap-2">
                         <Button
                           type="button"
                           onClick={() => void handleCheckConflict(proposal.id)}
@@ -1121,36 +1009,23 @@ export default function CalendarPage() {
                       </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
-          </section>
+                })
+              )}
+            </CardContent>
+          </Card>
 
-          <section
-            style={{
-              borderRadius: "0.75rem",
-              border: "1px solid var(--border)",
-              padding: "0.75rem 1rem",
-            }}
-          >
-            <h2 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
-              Scheduled blocks (local)
-            </h2>
-            {blocks.length === 0 ? (
-              <EmptyState
-                title="No scheduled blocks."
-                description="Blocks appear here after local proposal acceptance."
-              />
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.5rem",
-                  marginTop: "0.5rem",
-                }}
-              >
-                {blocks.map((block) => {
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Scheduled blocks (local)</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {blocks.length === 0 ? (
+                <EmptyState
+                  title="No scheduled blocks."
+                  description="Blocks appear here after local proposal acceptance."
+                />
+              ) : (
+                blocks.map((block) => {
                   const area = usesPersistedPlanning
                     ? null
                     : getAreaById(block.area_id);
@@ -1161,44 +1036,32 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={block.id}
-                      style={{
-                        border: "1px solid var(--border)",
-                        borderRadius: "0.75rem",
-                        padding: "0.5rem 0.75rem",
-                        fontSize: "0.85rem",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "0.25rem",
-                      }}
+                      className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 text-sm"
                     >
-                      <div style={{ fontWeight: 500 }}>
+                      <div className="font-medium">
                         {task?.title ?? "Block without specific task"}
                       </div>
-                      <div style={{ color: "var(--muted-foreground)" }}>
+                      <div className="text-muted-foreground">
                         {new Date(block.start_at).toLocaleTimeString()} -{" "}
                         {new Date(block.end_at).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div style={{ color: "var(--muted-foreground)" }}>
-                          Area: {area.name}
-                        </div>
+                        <div className="text-muted-foreground">Area: {area.name}</div>
                       ) : null}
-                      <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
+                      <span className="text-xs text-muted-foreground">
                         Status: {block.status}
                       </span>
                     </div>
                   );
-                })}
-              </div>
-            )}
-          </section>
+                })
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      <section
-        style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "var(--muted-foreground)" }}
-      >
-        <p style={{ margin: 0 }}>
+      <section className="mt-2 text-xs text-muted-foreground">
+        <p>
           Time proposals stay local first. Free/busy checks are manual and
           advisory only. No Google Calendar events, OpenAI scheduling,
           autonomous rescheduling, or background calendar changes happen here.

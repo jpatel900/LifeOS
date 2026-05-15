@@ -194,6 +194,28 @@ function SeedCapture({ text }: { text: string }) {
   return null;
 }
 
+function SeedAcceptedTask({ text }: { text: string }) {
+  const { submitCaptureText, state, acceptTaskDraft } = useWorkflow();
+  const captured = useRef(false);
+  const accepted = useRef(false);
+
+  useEffect(() => {
+    if (captured.current) return;
+    captured.current = true;
+    submitCaptureText(text, "area-main-job");
+  }, [submitCaptureText, text]);
+
+  useEffect(() => {
+    if (accepted.current) return;
+    const pendingDraft = state.taskDrafts.find((draft) => draft.status === "pending");
+    if (!pendingDraft) return;
+    accepted.current = true;
+    acceptTaskDraft(pendingDraft.id);
+  }, [acceptTaskDraft, state.taskDrafts]);
+
+  return null;
+}
+
 function renderWithWorkflow(ui: React.ReactElement) {
   return render(<WorkflowProvider>{ui}</WorkflowProvider>);
 }
@@ -392,6 +414,30 @@ describe("Phase 4A Supabase persistence UI", () => {
       expect(mocks.createTask).not.toHaveBeenCalled();
       expect(mocks.createProject).not.toHaveBeenCalled();
     });
+  });
+
+  it("labels triage note actions as browser-only notes, not workflow changes", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Call dentist tomorrow" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add defer note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add area note" }));
+
+    expect(
+      screen.getByText(
+        "Add defer note and Add area note only add notes in this browser. They do not change status or area yet.",
+      ),
+    ).toBeDefined();
+    expect(mocks.createTask).not.toHaveBeenCalled();
   });
 
   it("creates persisted local planning proposals from persisted tasks", async () => {
@@ -836,6 +882,54 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent(
       "Session marked completed through supabase.",
     );
+  });
+
+  it("explains that stop is demo-mode-only when execution is persisted", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [{ ...block, status: "running" }],
+      sessions: [session],
+      reviewEntries: [],
+    });
+
+    renderWithWorkflow(<ExecutePage />);
+
+    const stopButton = await screen.findByRole("button", {
+      name: "Stop (demo mode only)",
+    });
+    expect(stopButton).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Stop is disabled here. Saved sessions need an end status and end-session details.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("labels stop as browser-only in demo mode", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "mock",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedAcceptedTask text="Call dentist tomorrow" />
+        <ExecutePage />
+      </>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Stop (this browser)" }),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        "Stop only updates this browser in demo mode. It does not save a persisted end state.",
+      ),
+    ).toBeDefined();
   });
 
   it("marks a persisted execution session missed", async () => {

@@ -179,14 +179,19 @@ describe("source-of-truth boundaries", () => {
     const appShell = readRepoFile("apps/web/src/app/components/AppShell.tsx");
     const capture = readRepoFile("apps/web/src/app/capture/page.tsx");
     const triage = readRepoFile("apps/web/src/app/triage/page.tsx");
+    const execute = readRepoFile("apps/web/src/app/execute/page.tsx");
     const settings = readRepoFile("apps/web/src/app/settings/areas/page.tsx");
 
     expect(appShell).toContain("Workflow area (session)");
     expect(appShell).toContain("Session workflow area:");
+    expect(appShell).toContain("Saved in this browser until you organize it.");
     expect(capture).toContain("Persisted provider:");
-    expect(capture).toContain("local session state only");
+    expect(capture).toContain("this browser only");
     expect(triage).toContain("Persisted acceptance provider:");
-    expect(triage).toContain("Draft list source: <strong>local session</strong>");
+    expect(triage).toContain("Draft list source: <strong>this browser</strong>");
+    expect(triage).toContain("do not change status or area yet");
+    expect(execute).toContain("Stop (demo mode only)");
+    expect(execute).toContain("Stop (this browser)");
     expect(settings).toContain("Persisted area provider:");
     expect(settings).toContain("Reset clears local browser session workflow state");
   });

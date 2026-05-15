@@ -126,29 +126,29 @@ function getAccessTokenHeader(accessToken: string) {
   };
 }
 
-function getPanelColors(severity: "info" | "warning" | "error" | "success") {
+function getSeverityClasses(severity: "info" | "warning" | "error" | "success") {
   switch (severity) {
     case "success":
-      return {
-        background: "#ecfdf5",
-        border: "#86efac",
-      };
+      return "border-border bg-muted";
     case "warning":
-      return {
-        background: "#fffbeb",
-        border: "#fcd34d",
-      };
+      return "border-border bg-muted/80";
     case "error":
-      return {
-        background: "#fef2f2",
-        border: "#fca5a5",
-      };
+      return "border-destructive/40 bg-destructive/10";
     default:
-      return {
-        background: "#eff6ff",
-        border: "#93c5fd",
-      };
+      return "border-border bg-card";
   }
+}
+
+function getConnectionBadgeClasses(connected: boolean) {
+  return connected
+    ? {
+        variant: "outline" as const,
+        className: "border-border bg-muted text-primary",
+      }
+    : {
+        variant: "secondary" as const,
+        className: "",
+      };
 }
 
 function normalizePanelFailure(rawMessage: string) {
@@ -444,10 +444,13 @@ export function GoogleCalendarConnectionPanel() {
 
   const panelSeverity =
     panelState.status === "ready" ? panelState.severity : "warning";
-  const colors = getPanelColors(panelSeverity);
+  const panelClassName = getSeverityClasses(panelSeverity);
+  const connectionBadge = getConnectionBadgeClasses(
+    panelState.status === "ready" && panelState.connected,
+  );
 
   return (
-    <Card style={{ borderColor: colors.border, background: colors.background }}>
+    <Card className={panelClassName}>
       <CardHeader>
         <CardTitle className="text-xl">Google Calendar</CardTitle>
       </CardHeader>
@@ -457,85 +460,86 @@ export function GoogleCalendarConnectionPanel() {
           explicit approval from Planning.
         </p>
 
-      {flashMessage ? (
-        <Alert
-          style={{
-            borderColor: getPanelColors(flashMessage.severity).border,
-            background: getPanelColors(flashMessage.severity).background,
-          }}
-        >
-          <AlertDescription>{flashMessage.message}</AlertDescription>
-        </Alert>
-      ) : null}
+        {flashMessage ? (
+          <Alert className={getSeverityClasses(flashMessage.severity)}>
+            <AlertDescription>{flashMessage.message}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      {panelState.status === "loading" ? (
-        <p role="status">Loading Google Calendar connection...</p>
-      ) : null}
-
-      {panelState.status === "error" ? (
-        <div role="alert">
-          <p style={{ marginTop: 0, marginBottom: "0.75rem" }}>
-            {panelState.message}
+        {panelState.status === "loading" ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading Google Calendar connection...
           </p>
-        </div>
-      ) : null}
+        ) : null}
 
-      {panelState.status === "ready" ? (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={panelState.connected ? "success" : "secondary"}>
-              {panelState.connected ? "Connected" : "Disconnected"}
-            </Badge>
-            {panelState.connection?.status === "error" ? " (error)" : null}
-          </div>
-          <p>{panelState.message}</p>
+        {panelState.status === "error" ? (
+          <Alert variant="destructive">
+            <AlertDescription>{panelState.message}</AlertDescription>
+          </Alert>
+        ) : null}
 
-          {panelState.connection?.granted_scopes_json?.length ? (
-            <p style={{ fontSize: "0.9rem", color: "#334155" }}>
-              Granted scopes:{" "}
-              {panelState.connection.granted_scopes_json.join(", ")}
-            </p>
-          ) : null}
+        {panelState.status === "ready" ? (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant={connectionBadge.variant}
+                className={connectionBadge.className}
+              >
+                {panelState.connected ? "Connected" : "Disconnected"}
+              </Badge>
+              <Badge variant="outline" className="capitalize">
+                {panelState.severity}
+              </Badge>
+              {panelState.connection?.status === "error" ? " (error)" : null}
+            </div>
+            <p className="text-sm text-foreground">{panelState.message}</p>
 
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <Button
-              type="button"
-              onClick={handleConnect}
-              disabled={
-                actionState.status === "submitting" ||
-                !panelState.configured ||
-                panelState.connected
-              }
-            >
-              {actionState.status === "submitting" &&
-              actionState.action === "connect"
-                ? "Connecting..."
-                : "Connect Google Calendar"}
-            </Button>
+            {panelState.connection?.granted_scopes_json?.length ? (
+              <p className="text-sm text-muted-foreground">
+                Granted scopes:{" "}
+                {panelState.connection.granted_scopes_json.join(", ")}
+              </p>
+            ) : null}
 
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleDisconnect}
-              disabled={
-                actionState.status === "submitting" || !panelState.connected
-              }
-            >
-              {actionState.status === "submitting" &&
-              actionState.action === "disconnect"
-                ? "Disconnecting..."
-                : "Disconnect Google Calendar"}
-            </Button>
-          </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                onClick={handleConnect}
+                disabled={
+                  actionState.status === "submitting" ||
+                  !panelState.configured ||
+                  panelState.connected
+                }
+              >
+                {actionState.status === "submitting" &&
+                actionState.action === "connect"
+                  ? "Connecting..."
+                  : "Connect Google Calendar"}
+              </Button>
 
-          {!panelState.configured ? (
-            <p className="mb-0 mt-3 text-sm text-amber-300">
-              Missing server config is non-fatal. Mock/local mode still works
-              without Google env vars.
-            </p>
-          ) : null}
-        </>
-      ) : null}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleDisconnect}
+                disabled={
+                  actionState.status === "submitting" || !panelState.connected
+                }
+              >
+                {actionState.status === "submitting" &&
+                actionState.action === "disconnect"
+                  ? "Disconnecting..."
+                  : "Disconnect Google Calendar"}
+              </Button>
+            </div>
+
+            {!panelState.configured ? (
+              <p className="mb-0 mt-3 text-sm text-muted-foreground">
+                Missing server config is non-fatal. Mock/local mode still works
+                without Google env vars.
+              </p>
+            ) : null}
+          </>
+        ) : null}
       </CardContent>
     </Card>
   );

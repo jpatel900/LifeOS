@@ -50,6 +50,8 @@ describe("Google Calendar settings panel", () => {
 
     render(<GoogleCalendarConnectionPanel />);
 
+    expect(await screen.findByText("Disconnected")).toBeDefined();
+    expect(screen.getByText("info")).toBeDefined();
     expect(
       await screen.findByRole("button", { name: "Connect Google Calendar" }),
     ).toBeEnabled();
@@ -147,6 +149,7 @@ describe("Google Calendar settings panel", () => {
         /Google Calendar status could not load right now\. Local planning remains available\./i,
       ),
     ).toBeDefined();
+    expect(screen.getByText("error")).toBeDefined();
     expect(screen.queryByText(/connection stack trace/i)).toBeNull();
   });
 });

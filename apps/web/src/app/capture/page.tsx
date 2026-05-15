@@ -400,10 +400,10 @@ export default function CapturePage() {
         <summary className="cursor-pointer select-none">System details</summary>
         <p className="mt-2">
           Save capture and Save and parse write persisted capture rows through the
-          current data provider. Structure locally and Recent captures use local
-          session state only.
+          current data provider. Save in this browser and Recent captures stay in
+          this browser only.
         </p>
-        <span className="sr-only">local session state only</span>
+        <span className="sr-only">this browser only</span>
         {provider ? (
           <p>
             Persisted provider: <strong>{provider}</strong>
@@ -496,7 +496,7 @@ export default function CapturePage() {
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              The header workflow area picker controls local session drafts and
+              The header workflow area picker controls this browser draft flow and
               the recent-captures list on this page.
             </p>
             <Button type="button" variant="secondary" onClick={handleStructure}>

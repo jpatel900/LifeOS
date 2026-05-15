@@ -226,7 +226,7 @@ export default function TriagePage() {
         {loadState.status === "ready" ? (
           <p className="mt-2">
             Persisted acceptance provider: <strong>{loadState.provider}</strong>.
-            Draft list source: <strong>local session</strong>.
+            Draft list source: <strong>this browser</strong>.
           </p>
         ) : null}
       </details>
@@ -334,12 +334,12 @@ export default function TriagePage() {
                       onClick={() =>
                         editTaskDraft(task.id, {
                           title: task.title,
-                          description: `${task.description ?? ""}\nDeferred locally.`,
+                          description: `${task.description ?? ""}\nAdded note: review later.`,
                         })
                       }
-                      aria-label="Defer draft"
+                      aria-label="Add defer note"
                     >
-                      Defer
+                      Add defer note
                     </Button>
                     <Button
                       type="button"
@@ -347,12 +347,12 @@ export default function TriagePage() {
                       onClick={() =>
                         editTaskDraft(task.id, {
                           title: task.title,
-                          description: `${task.description ?? ""}\nLocal session area reassignment note added.`,
+                          description: `${task.description ?? ""}\nAdded note: consider changing area.`,
                         })
                       }
-                      aria-label="Reassign area"
+                      aria-label="Add area note"
                     >
-                      Reassign
+                      Add area note
                     </Button>
                     <Button
                       type="button"
@@ -363,6 +363,10 @@ export default function TriagePage() {
                       Reject
                     </Button>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Add defer note and Add area note only add notes in this browser.
+                    They do not change status or area yet.
+                  </p>
                 </CardContent>
               </Card>
             );
