@@ -23,7 +23,7 @@ export default function HomePage() {
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-3">
           <Button asChild>
-            <Link href="/capture">Capture now</Link>
+            <Link href="/capture">Save a thought</Link>
           </Button>
           <Button asChild variant="outline">
             <Link href="/execute">Continue current task</Link>
@@ -35,14 +35,13 @@ export default function HomePage() {
         <CardHeader>
           <CardTitle className="text-xl">Next action</CardTitle>
           <CardDescription>
-            Quick Capture: capture one thought, send it to review, then plan the
-            first block.
+            Start here when you are not sure what to do next.
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          <p className="sr-only">Quick Capture</p>
-          Use the Capture screen in the navigation above to save new thoughts and
-          send them to review.
+          <p>1. Save one thought in Capture.</p>
+          <p>2. Accept or reject it in Triage.</p>
+          <p>3. Propose one local time block in Calendar.</p>
         </CardContent>
       </Card>
     </main>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { CalendarBlock, Task, TimeBlockProposal } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -682,6 +683,15 @@ export default function CalendarPage() {
     }
   }
 
+  function handleReviewNextProposal() {
+    const nextItem = document.getElementById("planning-next-proposal");
+    if (!nextItem) {
+      return;
+    }
+
+    nextItem.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   const persistedTasks = usesPersistedPlanning ? planningState.tasks : [];
   const proposals = (
     usesPersistedPlanning ? planningState.proposals : state.timeBlockProposals
@@ -697,6 +707,9 @@ export default function CalendarPage() {
   });
   const hasAny =
     persistedTasks.length > 0 || proposals.length > 0 || blocks.length > 0;
+  const nextTaskForProposal = usesPersistedPlanning
+    ? (persistedTasks[0] ?? null)
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -707,6 +720,35 @@ export default function CalendarPage() {
           only after explicit approval.
         </p>
       </section>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Next action</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          {nextTaskForProposal ? (
+            <Button
+              type="button"
+              onClick={() => void handleCreateProposal(nextTaskForProposal)}
+              disabled={actionState.status === "saving"}
+            >
+              Propose time for next task
+            </Button>
+          ) : proposals.length > 0 ? (
+            <Button type="button" onClick={handleReviewNextProposal}>
+              Review next proposal
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link href="/triage">Get a task ready in Triage</Link>
+            </Button>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Choose one local block first. External writes require a separate
+            explicit approval click.
+          </p>
+        </CardContent>
+      </Card>
 
       {planningState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
@@ -764,8 +806,8 @@ export default function CalendarPage() {
 
       {!hasAny ? (
         <EmptyState
-          title="No time-block proposals yet."
-          description="When you propose time for tasks, local blocks appear here first. Google Calendar conflict checks are optional and do not create events."
+          title="No planned time blocks yet."
+          description="Planned time blocks will appear here after you propose time for a task. Google Calendar conflict checks are optional and do not create events."
         />
       ) : (
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
@@ -868,6 +910,7 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={proposal.id}
+                      id={proposal.id === proposals[0]?.id ? "planning-next-proposal" : undefined}
                       className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 text-sm"
                     >
                       <div className="font-medium">{task?.title ?? "Unassigned block"}</div>

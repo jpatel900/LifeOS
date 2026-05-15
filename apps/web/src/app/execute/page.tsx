@@ -439,8 +439,8 @@ export default function ExecutePage() {
           </Alert>
         ) : null}
         <EmptyState
-          title="No active block."
-          description="Capture text, accept the draft in Triage, and accept a local proposal in Calendar to start a session here."
+          title="No current task is in execution."
+          description="Plan one local block in Calendar or capture a task first. LifeOS does not invent scheduled work for you."
         />
       </div>
     );
@@ -451,7 +451,7 @@ export default function ExecutePage() {
       <section>
         <h1>Execute</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Single-task execution mode with clear controls and session feedback.
+          Focus on one current task and keep progress visible.
         </p>
       </section>
       <details className="text-sm text-muted-foreground">
@@ -487,6 +487,7 @@ export default function ExecutePage() {
 
       <Card className="max-w-[720px]">
         <CardContent className="flex flex-col gap-3 p-5">
+          <p className="text-sm font-medium text-primary">Current focus</p>
           <div className="flex items-baseline justify-between gap-4">
           <div>
               <div className="text-[1.05rem] font-semibold">
@@ -562,6 +563,7 @@ export default function ExecutePage() {
             <Button
               type="button"
               onClick={() => void handleMark("paused")}
+              variant="secondary"
               disabled={
                 actionState.status === "saving" ||
                 (usesPersistedExecution && !activePersistedSession)
@@ -572,6 +574,7 @@ export default function ExecutePage() {
             <Button
               type="button"
               onClick={() => void handleMark("distracted")}
+              variant="outline"
               disabled={
                 actionState.status === "saving" ||
                 (usesPersistedExecution && !activePersistedSession)
@@ -582,6 +585,7 @@ export default function ExecutePage() {
             <Button
               type="button"
               onClick={() => void handleMark("stuck")}
+              variant="outline"
               disabled={
                 actionState.status === "saving" ||
                 (usesPersistedExecution && !activePersistedSession)
@@ -602,6 +606,7 @@ export default function ExecutePage() {
             <Button
               type="button"
               onClick={() => void handleMark("missed")}
+              variant="outline"
               disabled={
                 actionState.status === "saving" ||
                 (usesPersistedExecution && !activePersistedSession)

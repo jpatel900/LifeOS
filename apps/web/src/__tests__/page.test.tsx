@@ -10,11 +10,12 @@ describe("HomePage", () => {
     );
   });
 
-  it("mentions quick capture", () => {
+  it("shows the primary capture CTA and next-step guidance", () => {
     render(<HomePage />);
-    expect(screen.getByText("Quick Capture")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Save a thought" })).toBeDefined();
     expect(
-      screen.getByText(/Use the Capture screen in the navigation above/),
+      screen.getByText("1. Save one thought in Capture."),
     ).toBeDefined();
+    expect(screen.getByText("2. Accept or reject it in Triage.")).toBeDefined();
   });
 });

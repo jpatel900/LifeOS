@@ -355,21 +355,21 @@ export default function CapturePage() {
   const parserStatusLabel =
     parserStatusState.status === "ready"
       ? parserStatusState.parserStatus === "ai_configured"
-        ? "AI parser configured"
+        ? "AI organization is ready"
         : parserStatusState.parserStatus === "ai_unavailable"
-          ? "AI parser unavailable"
-          : "Mock parser"
+          ? "AI organization is unavailable"
+          : "Local organization is ready"
       : parserStatusState.status === "loading"
-        ? "Checking parser status..."
-        : "Parser status unavailable";
+        ? "Checking organization options..."
+        : "Organization status unavailable";
   const parserStatusDetail =
     parserStatusState.status === "ready"
       ? parserStatusState.parserStatus === "ai_configured"
-        ? "Save and parse will use AI by default."
+        ? "Save and organize will use AI."
         : parserStatusState.parserStatus === "ai_unavailable"
-          ? "Save and parse will use the mock parser safely."
-          : "AI parsing is disabled. Save and parse will use the mock parser."
-      : "Capture can still be saved and structured with the local mock parser.";
+          ? "Save and organize will safely use local organization."
+          : "AI organization is off. Save and organize will use local organization."
+      : "You can still save thoughts and organize them in this browser.";
 
   const visibleCaptures = state.captureItems.filter((capture) => {
     if (!selectedAreaId) return true;
@@ -385,13 +385,15 @@ export default function CapturePage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Capture</h1>
         <p className="text-sm text-muted-foreground">
-          Save thought now, then choose whether to organize with AI sorting.
+          Save one thought now, then organize it if helpful.
         </p>
       </section>
 
       <Card className="max-w-3xl">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Parser status: {parserStatusLabel}</CardTitle>
+          <CardTitle className="text-base">
+            Organization help: {parserStatusLabel}
+          </CardTitle>
           <CardDescription>{parserStatusDetail}</CardDescription>
         </CardHeader>
       </Card>
@@ -399,9 +401,9 @@ export default function CapturePage() {
       <details className="text-sm text-muted-foreground">
         <summary className="cursor-pointer select-none">System details</summary>
         <p className="mt-2">
-          Save capture and Save and parse write persisted capture rows through the
-          current data provider. Save in this browser and Recent captures stay in
-          this browser only.
+          Save thought and Save and organize write persisted capture rows through
+          the current data provider. Save in this browser and recent captures stay
+          in this browser only.
         </p>
         <span className="sr-only">this browser only</span>
         {provider ? (
@@ -447,7 +449,7 @@ export default function CapturePage() {
           <form onSubmit={handleSaveCapture} className="space-y-4 rounded-lg border p-4">
             <h2 className="text-lg font-semibold">Save options</h2>
             <label htmlFor="area_persist" className="text-sm font-medium">
-              Area for this saved item
+              Area for this saved thought
             </label>
             <Select
               id="area_persist"
@@ -477,7 +479,7 @@ export default function CapturePage() {
 
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={saveState.status === "saving"}>
-                {saveState.status === "saving" ? "Saving..." : "Save capture"}
+                {saveState.status === "saving" ? "Saving..." : "Save thought"}
               </Button>
               <Button
                 type="button"
@@ -489,7 +491,7 @@ export default function CapturePage() {
                   ? parseState.parserMode === "mock"
                     ? "Retrying with mock parser..."
                     : "Saving and parsing..."
-                  : "Save and parse"}
+                  : "Save and organize"}
               </Button>
             </div>
           </form>
@@ -499,7 +501,7 @@ export default function CapturePage() {
               The header workflow area picker controls this browser draft flow and
               the recent-captures list on this page.
             </p>
-            <Button type="button" variant="secondary" onClick={handleStructure}>
+            <Button type="button" variant="ghost" onClick={handleStructure}>
               Save in this browser
             </Button>
           </div>

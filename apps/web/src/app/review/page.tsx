@@ -204,6 +204,28 @@ export default function ReviewPage() {
         </p>
       </section>
 
+      {reviewState.status === "ready" ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Next action</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => void handleCreateDailyReview()}
+              disabled={actionState.status === "saving"}
+            >
+              Create daily review
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              {reviewEntries.length === 0
+                ? "Start with one daily review to capture today's progress and blockers."
+                : "Create today's review when you are ready to log this day's outcomes."}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {reviewState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
           Loading review context...
@@ -248,22 +270,10 @@ export default function ReviewPage() {
         </Alert>
       ) : null}
 
-      {reviewState.status === "ready" ? (
-        <div>
-          <Button
-            type="button"
-            onClick={() => void handleCreateDailyReview()}
-            disabled={actionState.status === "saving"}
-          >
-            Create daily review
-          </Button>
-        </div>
-      ) : null}
-
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Daily review</CardTitle>
+            <CardTitle className="text-base">Daily snapshot</CardTitle>
           </CardHeader>
           <CardContent>
             {captureCount === 0 && sessions.length === 0 ? (
@@ -287,7 +297,7 @@ export default function ReviewPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Weekly review</CardTitle>
+            <CardTitle className="text-base">Weekly area patterns</CardTitle>
           </CardHeader>
           <CardContent>
             {tasks.length === 0 ? (
@@ -331,7 +341,7 @@ export default function ReviewPage() {
       </div>
       {reviewEntries.length > 0 ? (
         <section>
-          <h2 className="mb-2 text-base">Persisted review entries</h2>
+          <h2 className="mb-2 text-base">Saved review history</h2>
           <ul className="m-0 list-disc pl-5 text-sm text-foreground">
             {reviewEntries.map((entry) => (
               <li key={entry.id}>

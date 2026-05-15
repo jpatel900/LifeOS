@@ -128,11 +128,13 @@ describe("CapturePage", () => {
 
     renderCapturePage();
 
-    expect(await screen.findByText("Parser status: Mock parser")).toBeDefined();
+    expect(
+      await screen.findByText("Organization help: Local organization is ready"),
+    ).toBeDefined();
     expect(screen.getByText("mock")).toBeDefined();
     expect(
       screen.getByText(
-        /Save capture and Save and parse write persisted capture rows through the current data provider/i,
+        /Save thought and Save and organize write persisted capture rows through the current data provider/i,
       ),
     ).toBeDefined();
     expect(
@@ -154,7 +156,7 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Parser status: AI parser configured"),
+      await screen.findByText("Organization help: AI organization is ready"),
     ).toBeDefined();
   });
 
@@ -165,7 +167,7 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Parser status: AI parser unavailable"),
+      await screen.findByText("Organization help: AI organization is unavailable"),
     ).toBeDefined();
   });
 
@@ -209,7 +211,7 @@ describe("CapturePage", () => {
     fireEvent.change(textarea, {
       target: { value: "Email Taylor about launch notes" },
     });
-    fireEvent.click(await screen.findByText("Save and parse"));
+    fireEvent.click(await screen.findByText("Save and organize"));
 
     expect(await screen.findByText("Capture parsed")).toBeDefined();
     expect(
@@ -286,7 +288,7 @@ describe("CapturePage", () => {
         target: { value: "Email Taylor about launch notes" },
       },
     );
-    fireEvent.click(await screen.findByText("Save and parse"));
+    fireEvent.click(await screen.findByText("Save and organize"));
 
     expect(
       await screen.findByText("Capture parse failed safely"),

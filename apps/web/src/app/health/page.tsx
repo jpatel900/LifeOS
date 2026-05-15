@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -41,11 +42,13 @@ function humanStatus(summary: string, status: "healthy" | "watch" | "critical") 
 
 export default function HealthPage() {
   const [state, setState] = useState<HealthLoadState>({ status: "loading" });
+  const [checkRunId, setCheckRunId] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadHealth() {
+    async function runSystemCheck() {
+      setState({ status: "loading" });
       try {
         const result = await getHealthDashboard(createSupabaseBrowserClient());
 
@@ -73,12 +76,12 @@ export default function HealthPage() {
       }
     }
 
-    void loadHealth();
+    void runSystemCheck();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [checkRunId]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,6 +90,13 @@ export default function HealthPage() {
         <p className="text-sm text-muted-foreground">
           System check from current app state. No AI scoring.
         </p>
+        <Button
+          type="button"
+          onClick={() => setCheckRunId((id) => id + 1)}
+          disabled={state.status === "loading"}
+        >
+          Run system check
+        </Button>
         <span className="sr-only">mock</span>
       </section>
 
@@ -150,7 +160,9 @@ export default function HealthPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Repair focus</CardTitle>
-              <CardDescription>Connection checks that still need attention.</CardDescription>
+              <CardDescription>
+                Setup or reconnect these items before relying on them.
+              </CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               <ul className="list-disc space-y-1 pl-4">

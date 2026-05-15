@@ -285,7 +285,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       ),
       { target: { value: "Call dentist tomorrow" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save capture" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
     await waitFor(() => {
       expect(mocks.createCaptureItem).toHaveBeenCalledWith(
@@ -317,7 +317,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       ),
       { target: { value: "Call dentist tomorrow" } },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save capture" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Capture was not saved");
@@ -440,6 +440,18 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(mocks.createTask).not.toHaveBeenCalled();
   });
 
+  it("shows triage empty-state guidance with a capture next step", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(<TriagePage />);
+
+    expect(await screen.findByText("Nothing to triage right now.")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Go to Capture" })).toBeDefined();
+  });
+
   it("creates persisted local planning proposals from persisted tasks", async () => {
     mocks.listPlanningItems.mockResolvedValue({
       provider: "supabase",
@@ -494,10 +506,13 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    expect(await screen.findByText("No time-block proposals yet.")).toBeDefined();
+    expect(await screen.findByText("No planned time blocks yet.")).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Get a task ready in Triage" }),
+    ).toBeDefined();
     expect(
       screen.getByText(
-        "When you propose time for tasks, local blocks appear here first. Google Calendar conflict checks are optional and do not create events.",
+        "Planned time blocks will appear here after you propose time for a task. Google Calendar conflict checks are optional and do not create events.",
       ),
     ).toBeDefined();
   });
@@ -817,7 +832,12 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(alert).toHaveTextContent(
       "Sign in before loading execution rows from Supabase.",
     );
-    expect(screen.getByText("No active block.")).toBeDefined();
+    expect(screen.getByText("No current task is in execution.")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Plan one local block in Calendar or capture a task first. LifeOS does not invent scheduled work for you.",
+      ),
+    ).toBeDefined();
   });
 
   it("does not start persisted execution when every task is already non-active", async () => {
@@ -831,7 +851,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<ExecutePage />);
 
-    expect(await screen.findByText("No active block.")).toBeDefined();
+    expect(await screen.findByText("No current task is in execution.")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
     expect(mocks.createExecutionSession).not.toHaveBeenCalled();
   });

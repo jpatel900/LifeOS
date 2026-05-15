@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "../../components/EmptyState";
 import { listAreas, type DataProvider } from "../../../lib/data/workflow";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
@@ -94,11 +95,10 @@ export default function AreasSettingsPage() {
       {state.status === "ready" ? (
         <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {state.areas.length === 0 ? (
-            <Card>
-              <CardContent className="p-5 text-sm text-muted-foreground">
-                No active areas yet.
-              </CardContent>
-            </Card>
+            <EmptyState
+              title="No active areas yet."
+              description="Create or load an area before capture and planning so work has a clear scope."
+            />
           ) : (
             state.areas.map((area) => (
               <Card key={area.id}>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Area } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -67,6 +68,7 @@ export default function TriagePage() {
     (draft) => draft.status === "pending",
   );
   const totalCandidates = triageCandidates.length + projectCandidates.length;
+  const hasCandidates = totalCandidates > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -212,6 +214,15 @@ export default function TriagePage() {
     }
   }
 
+  function handleReviewNextItem() {
+    const nextItem = document.getElementById("triage-next-item");
+    if (!nextItem) {
+      return;
+    }
+
+    nextItem.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <section className="space-y-2">
@@ -220,6 +231,28 @@ export default function TriagePage() {
           Review suggestions, decide quickly, and keep momentum.
         </p>
       </section>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Next action</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-2">
+          {hasCandidates ? (
+            <Button type="button" onClick={handleReviewNextItem}>
+              Review next item
+            </Button>
+          ) : (
+            <Button asChild>
+              <Link href="/capture">Go to Capture</Link>
+            </Button>
+          )}
+          <p className="text-sm text-muted-foreground">
+            {hasCandidates
+              ? "Open the first pending suggestion and accept or reject it."
+              : "Nothing is waiting for review. Capture a thought to create the next triage item."}
+          </p>
+        </CardContent>
+      </Card>
 
       <details className="text-sm text-muted-foreground">
         <summary className="cursor-pointer select-none">System details</summary>
@@ -269,17 +302,17 @@ export default function TriagePage() {
       {totalCandidates === 0 ? (
         <EmptyState
           title="Nothing to triage right now."
-          description="No pending suggestions in this browser. Capture something and send it to review."
+          description="No pending suggestions in this browser. Go to Capture, save a thought, then return here to review it."
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {triageCandidates.map((task) => {
+          {triageCandidates.map((task, index) => {
             const area = getAreaById(task.area_id);
             const assessment = state.ambiguityAssessments.find(
               (item) => item.source_capture_item_id === task.capture_item_id,
             );
             return (
-              <Card key={task.id}>
+              <Card key={task.id} id={index === 0 ? "triage-next-item" : undefined}>
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="space-y-1">
