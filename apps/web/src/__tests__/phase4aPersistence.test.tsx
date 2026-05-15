@@ -237,7 +237,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<AreasSettingsPage />);
 
     expect(await screen.findByText("Main Job")).toBeDefined();
-    expect(screen.getByText("Persisted area provider:")).toBeDefined();
+    expect(screen.getByText("Storage mode:")).toBeDefined();
     expect(screen.getByText("supabase")).toBeDefined();
     expect(mocks.listAreas).toHaveBeenCalledWith(mocks.supabaseClient);
   });
@@ -297,7 +297,8 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     expect(await screen.findByText("Capture saved")).toBeDefined();
-    expect(screen.getAllByText("supabase")).toHaveLength(2);
+    expect(screen.getAllByText("Saved workspace").length).toBeGreaterThan(0);
+    expect(screen.getByText("Storage mode id:")).toBeDefined();
   });
 
   it("shows a clear capture save error when Supabase is unauthenticated", async () => {
@@ -479,7 +480,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Proposal saved through supabase.");
+    expect(status).toHaveTextContent("Proposal saved through Saved workspace.");
   });
 
   it("shows a planning load failure without crashing the page", async () => {
@@ -512,7 +513,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        "Planned time blocks will appear here after you propose time for a task. Google Calendar conflict checks are optional and do not create events.",
+        "Planned time blocks will appear here after you propose time for a task. Checking calendar conflicts is optional and does not create events.",
       ),
     ).toBeDefined();
   });
@@ -543,7 +544,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Local block created through supabase.");
+    expect(status).toHaveTextContent(
+      "Local block created through Saved workspace.",
+    );
   });
 
   it("checks a persisted proposal for conflicts and updates the badge", async () => {
@@ -573,7 +576,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     expect(await screen.findByText("Conflict not checked")).toBeDefined();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Check conflict" }),
+      await screen.findByRole("button", { name: "Check calendar conflicts" }),
     );
 
     await waitFor(() => {
@@ -599,7 +602,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Check conflict" }),
+      await screen.findByRole("button", { name: "Check calendar conflicts" }),
     );
 
     const alert = await screen.findByRole("alert");
@@ -661,7 +664,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Approve + create Google event",
+        name: "Create Google Calendar event",
       }),
     );
 
@@ -717,7 +720,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     const createButton = await screen.findByRole("button", {
-      name: "Approve + create Google event",
+      name: "Create Google Calendar event",
     });
     expect(createButton).toBeDisabled();
 
@@ -775,7 +778,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Approve + create Google event",
+        name: "Create Google Calendar event",
       }),
     );
 
@@ -817,7 +820,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Session started through supabase.");
+    expect(status).toHaveTextContent("Session started through Saved workspace.");
   });
 
   it("shows an execution load failure and keeps the no-active-block fallback visible", async () => {
@@ -900,7 +903,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Session marked completed through supabase.",
+      "Session marked completed through Saved workspace.",
     );
   });
 
@@ -947,7 +950,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        "Stop only updates this browser in demo mode. It does not save a persisted end state.",
+        "Stop only updates this browser in Demo mode. It does not save an end state.",
       ),
     ).toBeDefined();
   });
@@ -995,7 +998,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Session marked missed through supabase.");
+    expect(status).toHaveTextContent("Session marked missed through Saved workspace.");
   });
 
   it("creates a persisted review entry from review data", async () => {
@@ -1035,7 +1038,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Review entry created through supabase.");
+    expect(status).toHaveTextContent("Review entry created in Saved workspace.");
   });
 
   it("rolls up persisted review rows by persisted area ids", async () => {
@@ -1098,7 +1101,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByText(/Data source:/)).toBeDefined();
+    expect(await screen.findByText(/Storage mode:/)).toBeDefined();
     expect(screen.getByText("Captured: 1")).toBeDefined();
   });
 });

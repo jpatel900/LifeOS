@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import {
   getHealthDashboard,
+  type HealthPersistenceStatus,
   type HealthDashboardResult,
 } from "@/lib/data/health";
 import { captureEvent } from "@/lib/observability";
@@ -23,12 +24,34 @@ type HealthLoadState =
   | { status: "ready"; result: HealthDashboardResult }
   | { status: "error"; message: string };
 
+function storageModeLabel(mode: HealthDashboardResult["provider"]) {
+  return mode === "supabase" ? "Saved workspace" : "Demo mode";
+}
+
+function systemCheckSavedLabel(status: HealthPersistenceStatus) {
+  if (status === "persisted") return "Saved";
+  if (status === "skipped") return "Not saved";
+  if (status === "unavailable") return "Save failed";
+  return "Not applicable";
+}
+
+function toUserText(text: string) {
+  return text
+    .replace(/\bmock mode\b/gi, "Demo mode")
+    .replace(/\bAI parser\b/g, "AI sorting")
+    .replace(/deterministic/gi, "predictable");
+}
+
+function displaySubsystem(name: string) {
+  return toUserText(name);
+}
+
 function humanStatus(summary: string, status: "healthy" | "watch" | "critical") {
-  const lower = summary.toLowerCase();
+  const lower = toUserText(summary).toLowerCase();
   if (lower.includes("disabled") || lower.includes("optional")) {
     return { label: "Off by choice", variant: "secondary" as const };
   }
-  if (lower.includes("mock")) {
+  if (lower.includes("demo mode")) {
     return { label: "Demo mode", variant: "warning" as const };
   }
   if (status === "healthy") {
@@ -70,7 +93,7 @@ export default function HealthPage() {
           setState({
             status: "error",
             message:
-              "Unable to load health checks right now. Verify auth/session and provider status, then retry.",
+              "Unable to load health checks right now. Verify auth/session and storage mode, then retry.",
           });
         }
       }
@@ -123,15 +146,29 @@ export default function HealthPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2 text-sm">
-              <Badge variant="outline">Data source: {state.result.provider}</Badge>
-              <Badge variant="outline">System check: {state.result.persistence}</Badge>
+              <Badge variant="outline">
+                Storage mode: {storageModeLabel(state.result.provider)}
+              </Badge>
+              <Badge variant="outline">
+                System check saved:{" "}
+                {systemCheckSavedLabel(state.result.persistence)}
+              </Badge>
               {state.result.persistenceMessage ? (
                 <span className="text-muted-foreground">
-                  {state.result.persistenceMessage}
+                  {toUserText(state.result.persistenceMessage)}
                 </span>
               ) : null}
             </CardContent>
           </Card>
+          <details className="text-sm text-muted-foreground">
+            <summary className="cursor-pointer select-none">Developer details</summary>
+            <p className="mt-2">
+              Storage mode id: <strong>{state.result.provider}</strong>
+            </p>
+            <p>
+              System check saved id: <strong>{state.result.persistence}</strong>
+            </p>
+          </details>
 
           <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {state.result.checks.map((check) => {
@@ -140,7 +177,9 @@ export default function HealthPage() {
                 <Card key={check.id}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-lg capitalize">{check.subsystem}</CardTitle>
+                      <CardTitle className="text-lg capitalize">
+                        {displaySubsystem(check.subsystem)}
+                      </CardTitle>
                       <Badge variant={display.variant}>
                         {display.label}
                       </Badge>
@@ -150,7 +189,7 @@ export default function HealthPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground">
-                    {check.summary}
+                    {toUserText(check.summary)}
                   </CardContent>
                 </Card>
               );
@@ -170,7 +209,8 @@ export default function HealthPage() {
                   .filter((check) => check.status !== "healthy")
                   .map((check) => (
                     <li key={`${check.id}-repair`}>
-                      {check.subsystem}: {check.summary}
+                      {displaySubsystem(check.subsystem)}:{" "}
+                      {toUserText(check.summary)}
                     </li>
                   ))}
               </ul>
@@ -184,7 +224,7 @@ export default function HealthPage() {
         <Alert variant="success">
           <AlertTitle>No active warnings</AlertTitle>
           <AlertDescription>
-            All deterministic checks are healthy for this snapshot.
+            All Connection checks are healthy for this snapshot.
           </AlertDescription>
         </Alert>
       ) : null}

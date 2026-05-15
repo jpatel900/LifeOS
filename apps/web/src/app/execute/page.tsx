@@ -51,6 +51,10 @@ type TerminalFormState = {
   notes: string;
 };
 
+function storageModeLabel(mode: DataProvider) {
+  return mode === "supabase" ? "Saved workspace" : "Demo mode";
+}
+
 const markLabels: Record<
   Phase2MockExecutionSession["status"],
   { button: string; saved: string }
@@ -415,7 +419,16 @@ export default function ExecutePage() {
           <summary>System details</summary>
           {executeState.status === "ready" ? (
             <p className="mt-2">
-              Data source: <strong>{executeState.provider}</strong>
+              Storage mode:{" "}
+              <strong>{storageModeLabel(executeState.provider)}</strong>
+            </p>
+          ) : null}
+        </details>
+        <details className="text-sm text-muted-foreground">
+          <summary>Developer details</summary>
+          {executeState.status === "ready" ? (
+            <p className="mt-2">
+              Storage mode id: <strong>{executeState.provider}</strong>
             </p>
           ) : null}
         </details>
@@ -428,7 +441,8 @@ export default function ExecutePage() {
           <Alert role="status" className="border-border bg-muted text-foreground">
             <AlertTitle className="text-primary">Saved</AlertTitle>
             <AlertDescription>
-              {actionState.label} <strong>{actionState.provider}</strong>.
+              {actionState.label}{" "}
+              <strong>{storageModeLabel(actionState.provider)}</strong>.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -458,7 +472,15 @@ export default function ExecutePage() {
         <summary>System details</summary>
         {executeState.status === "ready" ? (
           <p className="mt-2">
-            Data source: <strong>{executeState.provider}</strong>
+            Storage mode: <strong>{storageModeLabel(executeState.provider)}</strong>
+          </p>
+        ) : null}
+      </details>
+      <details className="text-sm text-muted-foreground">
+        <summary>Developer details</summary>
+        {executeState.status === "ready" ? (
+          <p className="mt-2">
+            Storage mode id: <strong>{executeState.provider}</strong>
           </p>
         ) : null}
       </details>
@@ -473,7 +495,8 @@ export default function ExecutePage() {
         <Alert role="status" className="border-border bg-muted text-foreground">
           <AlertTitle className="text-primary">Saved</AlertTitle>
           <AlertDescription>
-            {actionState.label} <strong>{actionState.provider}</strong>.
+            {actionState.label}{" "}
+            <strong>{storageModeLabel(actionState.provider)}</strong>.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -626,7 +649,7 @@ export default function ExecutePage() {
           <p className="m-0 text-xs text-muted-foreground">
           {usesPersistedExecution
             ? "Stop is disabled here. Saved sessions need an end status and end-session details."
-            : "Stop only updates this browser in demo mode. It does not save a persisted end state."}
+            : "Stop only updates this browser in Demo mode. It does not save an end state."}
         </p>
         {usesPersistedExecution && terminalForm ? (
             <section

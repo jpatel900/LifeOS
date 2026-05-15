@@ -175,25 +175,41 @@ describe("source-of-truth boundaries", () => {
     expect(route).not.toMatch(/from ["']@sentry\/nextjs["']/);
   });
 
-  it("keeps local-session versus persisted-source copy explicit on workflow surfaces", () => {
+  it("keeps plain-language primary UX while preserving technical truth in disclosures", () => {
     const appShell = readRepoFile("apps/web/src/app/components/AppShell.tsx");
     const capture = readRepoFile("apps/web/src/app/capture/page.tsx");
     const triage = readRepoFile("apps/web/src/app/triage/page.tsx");
     const execute = readRepoFile("apps/web/src/app/execute/page.tsx");
+    const calendar = readRepoFile("apps/web/src/app/calendar/page.tsx");
+    const health = readRepoFile("apps/web/src/app/health/page.tsx");
     const settings = readRepoFile("apps/web/src/app/settings/areas/page.tsx");
 
     expect(appShell).toContain("Workflow area (session)");
     expect(appShell).toContain("Session workflow area:");
     expect(appShell).toContain("Saved in this browser until you organize it.");
-    expect(capture).toContain("Persisted provider:");
+    expect(capture).toContain("AI sorting is off");
+    expect(capture).toContain("Storage mode:");
+    expect(capture).toContain("Developer details");
+    expect(capture).toContain("Storage mode id:");
     expect(capture).toContain("this browser only");
-    expect(triage).toContain("Persisted acceptance provider:");
-    expect(triage).toContain("Draft list source: <strong>this browser</strong>");
+    expect(triage).toContain("Saved workspace:");
+    expect(triage).toContain("Drafts shown from this browser.");
+    expect(triage).toContain("Acceptance storage mode id:");
     expect(triage).toContain("do not change status or area yet");
+    expect(calendar).toContain("Check calendar conflicts");
+    expect(calendar).toContain("Create Google Calendar event");
+    expect(calendar).toContain("Developer details");
+    expect(calendar).toContain("Storage mode id:");
     expect(execute).toContain("Stop (demo mode only)");
     expect(execute).toContain("Stop (this browser)");
-    expect(settings).toContain("Persisted area provider:");
-    expect(settings).toContain("Reset clears local browser session workflow state");
+    expect(execute).toContain("Developer details");
+    expect(execute).toContain("Storage mode id:");
+    expect(health).toContain("Connection checks");
+    expect(health).toContain("Developer details");
+    expect(health).toContain("Storage mode id:");
+    expect(settings).toContain("Storage mode:");
+    expect(settings).toContain("Storage mode id:");
+    expect(settings).toContain("planned time blocks");
   });
 
   it("marks parser modules with explicit server runtime guards", () => {

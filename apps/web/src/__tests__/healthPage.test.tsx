@@ -116,7 +116,7 @@ describe("HealthPage", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Health checks could not load");
     expect(alert).toHaveTextContent(
-      "Unable to load health checks right now. Verify auth/session and provider status, then retry.",
+      "Unable to load health checks right now. Verify auth/session and storage mode, then retry.",
     );
     expect(alert).not.toHaveTextContent("sk-secret-123");
   });

@@ -40,7 +40,7 @@ describe("workflow route provider wiring", () => {
   it("renders the capture route through the real app shell provider", async () => {
     renderThroughAppShell(<CapturePage />);
 
-    expect(await screen.findByText("mock")).toBeDefined();
+    expect(await screen.findByText(/Organization help:/)).toBeDefined();
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Quick note" })).toBeDefined();
     expect(
@@ -70,16 +70,7 @@ describe("workflow route provider wiring", () => {
       expect(screen.getByLabelText("Current area context")).toHaveTextContent(
         "Session workflow area:",
       );
-      if (
-        _name === "triage" ||
-        _name === "calendar" ||
-        _name === "execute" ||
-        _name === "review" ||
-        _name === "health" ||
-        _name === "settings"
-      ) {
-        expect(await screen.findByText("mock")).toBeDefined();
-      }
+      expect(await screen.findByRole("heading", { level: 1 })).toBeDefined();
     },
   );
 });

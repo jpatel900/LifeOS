@@ -65,6 +65,10 @@ type GoogleCalendarConnectionResponse = {
   error?: string;
 };
 
+function storageModeLabel(mode: DataProvider) {
+  return mode === "supabase" ? "Saved workspace" : "Demo mode";
+}
+
 function nextLocalSlot(task: Task) {
   const start = new Date(Date.now() + 60 * 60 * 1000);
   const minutes =
@@ -191,11 +195,11 @@ function normalizeCalendarFailure(rawMessage: string, action: CalendarActionKind
 
   if (action === "conflict_check") {
     return {
-      title: "Conflict check failed",
+      title: "Calendar conflict check failed",
       message:
         "LifeOS could not confirm Google Calendar availability for this proposal.",
       nextStep:
-        "Keep the local proposal, review connection status, and retry the conflict check.",
+        "Keep the local proposal, review connection status, and retry Check calendar conflicts.",
     };
   }
 
@@ -514,7 +518,7 @@ export default function CalendarPage() {
   }
 
   async function handleCheckConflict(proposalId: string) {
-    setActionState({ status: "saving", label: "conflict check" });
+    setActionState({ status: "saving", label: "calendar conflict check" });
     void captureEvent({
       event: "conflict_check_requested",
       properties: {
@@ -548,16 +552,16 @@ export default function CalendarPage() {
       if (!storedConflictResult) {
         setActionState({
           status: "error",
-          title: "Conflict check result could not be confirmed",
+          title: "Calendar conflict check result could not be confirmed",
           message:
             "LifeOS could not confirm the local proposal update after checking conflict status.",
-          nextStep: "Refresh this page and retry the conflict check.",
+          nextStep: "Refresh this page and retry Check calendar conflicts.",
         });
         return;
       }
       setActionState({
         status: "saved",
-        label: "Conflict checked through",
+        label: "Calendar conflict checked in",
         provider: result.provider,
       });
     } catch (error) {
@@ -714,7 +718,7 @@ export default function CalendarPage() {
   return (
     <div className="flex flex-col gap-6">
       <section>
-        <h1>Calendar / Planning</h1>
+        <h1>Planning</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
           Planned time blocks show up here first. Google Calendar writes happen
           only after explicit approval.
@@ -736,7 +740,7 @@ export default function CalendarPage() {
             </Button>
           ) : proposals.length > 0 ? (
             <Button type="button" onClick={handleReviewNextProposal}>
-              Review next proposal
+              Review next planned time block
             </Button>
           ) : (
             <Button asChild>
@@ -760,7 +764,17 @@ export default function CalendarPage() {
         <summary>System details</summary>
         {planningState.status === "ready" ? (
           <p className="mt-2">
-            Data source: <strong>{planningState.provider}</strong>
+            Storage mode:{" "}
+            <strong>{storageModeLabel(planningState.provider)}</strong>
+          </p>
+        ) : null}
+      </details>
+
+      <details className="text-sm text-muted-foreground">
+        <summary>Developer details</summary>
+        {planningState.status === "ready" ? (
+          <p className="mt-2">
+            Storage mode id: <strong>{planningState.provider}</strong>
           </p>
         ) : null}
       </details>
@@ -789,7 +803,8 @@ export default function CalendarPage() {
         <Alert role="status" className="border-border bg-muted text-foreground">
           <AlertTitle className="text-primary">Saved</AlertTitle>
           <AlertDescription>
-            {actionState.label} <strong>{actionState.provider}</strong>.
+            {actionState.label}{" "}
+            <strong>{storageModeLabel(actionState.provider)}</strong>.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -807,7 +822,7 @@ export default function CalendarPage() {
       {!hasAny ? (
         <EmptyState
           title="No planned time blocks yet."
-          description="Planned time blocks will appear here after you propose time for a task. Google Calendar conflict checks are optional and do not create events."
+          description="Planned time blocks will appear here after you propose time for a task. Checking calendar conflicts is optional and does not create events."
         />
       ) : (
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
@@ -819,7 +834,7 @@ export default function CalendarPage() {
               <CardContent className="flex flex-col gap-2">
                 {persistedTasks.length === 0 ? (
                   <EmptyState
-                    title="No persisted active tasks."
+                    title="No saved active tasks."
                     description="Accept task drafts in triage before proposing local time."
                   />
                 ) : (
@@ -851,12 +866,14 @@ export default function CalendarPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Proposals (local only)</CardTitle>
+              <CardTitle className="text-base">
+                Planned time blocks (This browser only)
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {proposals.length === 0 ? (
                 <EmptyState
-                  title="No proposals."
+                  title="No planned time blocks."
                   description="Propose time from an active task to stage a local block."
                 />
               ) : (
@@ -878,7 +895,7 @@ export default function CalendarPage() {
                       )
                     : null;
                   const googleWriteState = !usesPersistedPlanning
-                    ? "Unavailable in mock/session mode"
+                    ? "Unavailable in Demo mode (This browser only)"
                     : googleBlock
                       ? "Google event created"
                       : googleConnectionState.status === "loading"
@@ -966,8 +983,8 @@ export default function CalendarPage() {
                         </div>
                       ) : (
                         <div className="text-xs text-muted-foreground">
-                          Approval gate: Not applicable in local mock/session
-                          mode.
+                          Approval gate: Not applicable in Demo mode (This
+                          browser only).
                         </div>
                       )}
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -981,7 +998,7 @@ export default function CalendarPage() {
                               proposal.status !== "edited")
                           }
                         >
-                          Check conflict
+                          Check calendar conflicts
                         </Button>
                         <Button
                           type="button"
@@ -995,7 +1012,7 @@ export default function CalendarPage() {
                         >
                           {googleBlock
                             ? "Google event created"
-                            : "Approve + create Google event"}
+                            : "Create Google Calendar event"}
                         </Button>
                         <Button
                           type="button"

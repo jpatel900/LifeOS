@@ -42,6 +42,10 @@ type ActionState =
   | { status: "saved"; provider: DataProvider }
   | { status: "error"; message: string };
 
+function storageModeLabel(mode: DataProvider) {
+  return mode === "supabase" ? "Saved workspace" : "Demo mode";
+}
+
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -236,7 +240,16 @@ export default function ReviewPage() {
         <summary>System details</summary>
         {reviewState.status === "ready" ? (
           <p className="mt-2">
-            Data source: <strong>{reviewState.provider}</strong>
+            Storage mode: <strong>{storageModeLabel(reviewState.provider)}</strong>
+          </p>
+        ) : null}
+      </details>
+
+      <details className="text-sm text-muted-foreground">
+        <summary>Developer details</summary>
+        {reviewState.status === "ready" ? (
+          <p className="mt-2">
+            Storage mode id: <strong>{reviewState.provider}</strong>
           </p>
         ) : null}
       </details>
@@ -258,7 +271,8 @@ export default function ReviewPage() {
         <Alert role="status" className="border-border bg-muted text-foreground">
           <AlertTitle className="text-primary">Saved</AlertTitle>
           <AlertDescription>
-            Review entry created through <strong>{actionState.provider}</strong>.
+            Review entry created in{" "}
+            <strong>{storageModeLabel(actionState.provider)}</strong>.
           </AlertDescription>
         </Alert>
       ) : null}

@@ -31,6 +31,10 @@ type SaveState =
   | { status: "saved"; label: string; provider: DataProvider }
   | { status: "error"; message: string };
 
+function storageModeLabel(mode: DataProvider) {
+  return mode === "supabase" ? "Saved workspace" : "Demo mode";
+}
+
 function resolvePersistedAreaId(workflowAreaId: string, areas: Area[]) {
   const slug = slugForWorkflowAreaId(workflowAreaId);
   const area = areas.find((item) => item.slug === slug) ?? areas[0];
@@ -109,7 +113,7 @@ export default function TriagePage() {
     if (loadState.status !== "ready") {
       setSaveState({
         status: "error",
-        message: "Triage data source is not ready.",
+        message: "Saved workspace is not ready yet.",
       });
       return;
     }
@@ -168,7 +172,7 @@ export default function TriagePage() {
     if (loadState.status !== "ready") {
       setSaveState({
         status: "error",
-        message: "Triage data source is not ready.",
+        message: "Saved workspace is not ready yet.",
       });
       return;
     }
@@ -258,8 +262,17 @@ export default function TriagePage() {
         <summary className="cursor-pointer select-none">System details</summary>
         {loadState.status === "ready" ? (
           <p className="mt-2">
-            Persisted acceptance provider: <strong>{loadState.provider}</strong>.
-            Draft list source: <strong>this browser</strong>.
+            Saved workspace: <strong>{storageModeLabel(loadState.provider)}</strong>
+            . Drafts shown from this browser.
+          </p>
+        ) : null}
+      </details>
+
+      <details className="text-sm text-muted-foreground">
+        <summary className="cursor-pointer select-none">Developer details</summary>
+        {loadState.status === "ready" ? (
+          <p className="mt-2">
+            Acceptance storage mode id: <strong>{loadState.provider}</strong>.
           </p>
         ) : null}
       </details>
@@ -287,7 +300,8 @@ export default function TriagePage() {
         <Alert variant="success">
           <AlertTitle>Saved</AlertTitle>
           <AlertDescription>
-            Accepted {saveState.label} through <strong>{saveState.provider}</strong>.
+            Accepted {saveState.label} in{" "}
+            <strong>{storageModeLabel(saveState.provider)}</strong>.
           </AlertDescription>
         </Alert>
       ) : null}

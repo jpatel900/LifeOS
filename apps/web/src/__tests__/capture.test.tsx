@@ -129,12 +129,13 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Organization help: Local organization is ready"),
+      await screen.findByText("Organization help: Demo mode sorting is ready"),
     ).toBeDefined();
-    expect(screen.getByText("mock")).toBeDefined();
+    expect(screen.getByText("Storage mode:")).toBeDefined();
+    expect(screen.getByText("Demo mode")).toBeDefined();
     expect(
       screen.getByText(
-        /Save thought and Save and organize write persisted capture rows through the current data provider/i,
+        /Save thought and Save and organize write to your selected storage mode/i,
       ),
     ).toBeDefined();
     expect(
@@ -156,7 +157,7 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Organization help: AI organization is ready"),
+      await screen.findByText("Organization help: AI sorting is ready"),
     ).toBeDefined();
   });
 
@@ -167,7 +168,7 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Organization help: AI organization is unavailable"),
+      await screen.findByText("Organization help: AI sorting is off"),
     ).toBeDefined();
   });
 
@@ -213,7 +214,7 @@ describe("CapturePage", () => {
     });
     fireEvent.click(await screen.findByText("Save and organize"));
 
-    expect(await screen.findByText("Capture parsed")).toBeDefined();
+    expect(await screen.findByText("AI sorting complete")).toBeDefined();
     expect(
       screen.getByText(
         "Drafts were routed to triage because confidence is low.",
@@ -290,12 +291,10 @@ describe("CapturePage", () => {
     );
     fireEvent.click(await screen.findByText("Save and organize"));
 
-    expect(
-      await screen.findByText("Capture parse failed safely"),
-    ).toBeDefined();
+    expect(await screen.findByText("AI sorting stopped safely")).toBeDefined();
     expect(
       screen.getByText(
-        "Capture was saved, but parsing failed safely. Retry with mock parser.",
+        "Capture was saved, but AI sorting stopped safely. Retry with Demo mode sorting.",
       ),
     ).toBeDefined();
     expect(
@@ -303,10 +302,10 @@ describe("CapturePage", () => {
     ).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Retry with mock parser" }),
+      screen.getByRole("button", { name: "Retry with Demo mode sorting" }),
     );
 
-    expect(await screen.findByText("Capture parsed")).toBeDefined();
+    expect(await screen.findByText("AI sorting complete")).toBeDefined();
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         "/api/parse-capture",

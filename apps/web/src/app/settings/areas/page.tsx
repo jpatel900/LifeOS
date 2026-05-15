@@ -17,6 +17,10 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; provider: DataProvider; areas: Area[] };
 
+function storageModeLabel(mode: DataProvider) {
+  return mode === "supabase" ? "Saved workspace" : "Demo mode";
+}
+
 export default function AreasSettingsPage() {
   const { resetWorkflow } = useWorkflow();
   const [state, setState] = useState<LoadState>({ status: "loading" });
@@ -68,7 +72,16 @@ export default function AreasSettingsPage() {
         <summary className="cursor-pointer select-none">System details</summary>
         {state.status === "ready" ? (
           <p className="mt-2">
-            Persisted area provider: <strong>{state.provider}</strong>
+            Storage mode: <strong>{storageModeLabel(state.provider)}</strong>
+          </p>
+        ) : null}
+      </details>
+
+      <details className="text-sm text-muted-foreground">
+        <summary className="cursor-pointer select-none">Developer details</summary>
+        {state.status === "ready" ? (
+          <p className="mt-2">
+            Storage mode id: <strong>{state.provider}</strong>
           </p>
         ) : null}
       </details>
@@ -126,8 +139,8 @@ export default function AreasSettingsPage() {
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
             Reset clears local browser session workflow state (captures, drafts,
-            ambiguity assessments, and proposal drafts). It does not delete
-            persisted Supabase/mock-provider rows.
+            ambiguity assessments, and planned time blocks). It does not delete
+            Saved workspace or Demo mode rows.
           </p>
           <Button type="button" variant="destructive" onClick={resetWorkflow}>
             Reset this browser only

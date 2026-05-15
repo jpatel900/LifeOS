@@ -81,6 +81,10 @@ type ParseCaptureStatusApiResponse =
     }
   | { ok: false; error: string };
 
+function storageModeLabel(mode: DataProvider) {
+  return mode === "supabase" ? "Saved workspace" : "Demo mode";
+}
+
 export default function CapturePage() {
   const {
     state,
@@ -257,7 +261,7 @@ export default function CapturePage() {
       setParseState({
         status: "error",
         message:
-          "Capture was saved, but parsing failed safely. Retry with mock parser.",
+          "Capture was saved, but AI sorting stopped safely. Retry with Demo mode sorting.",
         canRetryWithMock: Boolean(!body.ok && body.can_retry_with_mock),
       });
       return;
@@ -355,20 +359,20 @@ export default function CapturePage() {
   const parserStatusLabel =
     parserStatusState.status === "ready"
       ? parserStatusState.parserStatus === "ai_configured"
-        ? "AI organization is ready"
+        ? "AI sorting is ready"
         : parserStatusState.parserStatus === "ai_unavailable"
-          ? "AI organization is unavailable"
-          : "Local organization is ready"
+          ? "AI sorting is off"
+          : "Demo mode sorting is ready"
       : parserStatusState.status === "loading"
-        ? "Checking organization options..."
-        : "Organization status unavailable";
+        ? "Checking sorting options..."
+        : "Sorting status unavailable";
   const parserStatusDetail =
     parserStatusState.status === "ready"
       ? parserStatusState.parserStatus === "ai_configured"
-        ? "Save and organize will use AI."
+        ? "Save and organize will use AI sorting."
         : parserStatusState.parserStatus === "ai_unavailable"
-          ? "Save and organize will safely use local organization."
-          : "AI organization is off. Save and organize will use local organization."
+          ? "AI sorting is off. Save and organize will use Demo mode sorting."
+          : "Save and organize will use Demo mode sorting."
       : "You can still save thoughts and organize them in this browser.";
 
   const visibleCaptures = state.captureItems.filter((capture) => {
@@ -401,14 +405,22 @@ export default function CapturePage() {
       <details className="text-sm text-muted-foreground">
         <summary className="cursor-pointer select-none">System details</summary>
         <p className="mt-2">
-          Save thought and Save and organize write persisted capture rows through
-          the current data provider. Save in this browser and recent captures stay
-          in this browser only.
+          Save thought and Save and organize write to your selected storage mode.
+          Save in this browser and Recent captures stay in this browser only.
         </p>
         <span className="sr-only">this browser only</span>
         {provider ? (
           <p>
-            Persisted provider: <strong>{provider}</strong>
+            Storage mode: <strong>{storageModeLabel(provider)}</strong>
+          </p>
+        ) : null}
+      </details>
+
+      <details className="text-sm text-muted-foreground">
+        <summary className="cursor-pointer select-none">Developer details</summary>
+        {provider ? (
+          <p className="mt-2">
+            Storage mode id: <strong>{provider}</strong>
           </p>
         ) : null}
       </details>
@@ -489,8 +501,8 @@ export default function CapturePage() {
               >
                 {parseState.status === "parsing"
                   ? parseState.parserMode === "mock"
-                    ? "Retrying with mock parser..."
-                    : "Saving and parsing..."
+                    ? "Retrying with Demo mode sorting..."
+                    : "Saving and sorting..."
                   : "Save and organize"}
               </Button>
             </div>
@@ -527,8 +539,8 @@ export default function CapturePage() {
         <Alert variant="success">
           <AlertTitle>Capture saved</AlertTitle>
           <AlertDescription>
-            Stored through <strong>{saveState.provider}</strong> with status{" "}
-            <strong>{saveState.capture.status}</strong>.
+            Saved in <strong>{storageModeLabel(saveState.provider)}</strong> with
+            status <strong>{saveState.capture.status}</strong>.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -542,10 +554,9 @@ export default function CapturePage() {
 
       {parseState.status === "parsed" ? (
         <Alert>
-          <AlertTitle>Capture parsed</AlertTitle>
+          <AlertTitle>AI sorting complete</AlertTitle>
           <AlertDescription>
-            Parser: <strong>{parseState.parser}</strong>. Sent to review:{" "}
-            <strong>{parseState.draftCount}</strong>.
+            Sent to review: <strong>{parseState.draftCount}</strong>.
           </AlertDescription>
           {parseState.triageRequired ? (
             <AlertDescription>
@@ -564,7 +575,7 @@ export default function CapturePage() {
 
       {parseState.status === "error" ? (
         <Alert variant="destructive">
-          <AlertTitle>Capture parse failed safely</AlertTitle>
+          <AlertTitle>AI sorting stopped safely</AlertTitle>
           <AlertDescription>{parseState.message}</AlertDescription>
           {parseState.canRetryWithMock && lastSavedCapture ? (
             <div className="mt-2">
@@ -573,7 +584,7 @@ export default function CapturePage() {
                 variant="outline"
                 onClick={() => void handleRetryWithMockParser()}
               >
-                Retry with mock parser
+                Retry with Demo mode sorting
               </Button>
             </div>
           ) : null}
