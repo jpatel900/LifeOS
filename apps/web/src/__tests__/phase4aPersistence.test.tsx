@@ -277,6 +277,28 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(await screen.findByText("No active areas yet.")).toBeDefined();
   });
 
+  it("requires local-reset confirmation and shows success after reset", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(<AreasSettingsPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Reset this browser only" }),
+    );
+
+    expect(await screen.findByText("Confirm local reset")).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm reset" }));
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Local reset complete");
+    expect(status).toHaveTextContent(
+      "This browser session workflow state was cleared.",
+    );
+  });
+
   it("saves capture_items through Supabase from the capture page", async () => {
     mocks.listAreas.mockResolvedValue({
       provider: "supabase",

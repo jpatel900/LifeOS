@@ -106,6 +106,16 @@ export default function HealthPage() {
     };
   }, [checkRunId]);
 
+  const attentionChecks =
+    state.status === "ready"
+      ? state.result.checks.filter((check) => {
+          const display = humanStatus(check.summary, check.status);
+          return (
+            display.label === "Needs setup" || display.label === "Needs attention"
+          );
+        })
+      : [];
+
   return (
     <div className="flex flex-col gap-6">
       <section className="space-y-2">
@@ -140,7 +150,31 @@ export default function HealthPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">System overview</CardTitle>
+              <CardTitle className="text-xl">What needs attention now</CardTitle>
+              <CardDescription>
+                Resolve these first before relying on them.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              {attentionChecks.length > 0 ? (
+                <ul className="list-disc pl-4">
+                  {attentionChecks.map((check) => (
+                    <li key={`${check.id}-attention`}>
+                      <span className="font-medium text-foreground">
+                        {displaySubsystem(check.subsystem)}:
+                      </span>{" "}
+                      {toUserText(check.summary)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Nothing urgent is blocking this snapshot.</p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">System overview</CardTitle>
               <CardDescription>
                 Checked at {state.result.checkedAt}
               </CardDescription>
@@ -160,6 +194,36 @@ export default function HealthPage() {
               ) : null}
             </CardContent>
           </Card>
+
+          <details className="text-sm text-muted-foreground">
+            <summary className="cursor-pointer select-none">
+              Connection checks details
+            </summary>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {state.result.checks.map((check) => {
+                const display = humanStatus(check.summary, check.status);
+                return (
+                  <Card key={check.id}>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-lg capitalize">
+                          {displaySubsystem(check.subsystem)}
+                        </CardTitle>
+                        <Badge variant={display.variant}>{display.label}</Badge>
+                      </div>
+                      <CardDescription className="text-xs">
+                        Score: {check.score}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                      {toUserText(check.summary)}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </details>
+
           <details className="text-sm text-muted-foreground">
             <summary className="cursor-pointer select-none">Developer details</summary>
             <p className="mt-2">
@@ -169,53 +233,6 @@ export default function HealthPage() {
               System check saved id: <strong>{state.result.persistence}</strong>
             </p>
           </details>
-
-          <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {state.result.checks.map((check) => {
-              const display = humanStatus(check.summary, check.status);
-              return (
-                <Card key={check.id}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-lg capitalize">
-                        {displaySubsystem(check.subsystem)}
-                      </CardTitle>
-                      <Badge variant={display.variant}>
-                        {display.label}
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-xs">
-                      Score: {check.score}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    {toUserText(check.summary)}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </section>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Repair focus</CardTitle>
-              <CardDescription>
-                Setup or reconnect these items before relying on them.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              <ul className="list-disc space-y-1 pl-4">
-                {state.result.checks
-                  .filter((check) => check.status !== "healthy")
-                  .map((check) => (
-                    <li key={`${check.id}-repair`}>
-                      {displaySubsystem(check.subsystem)}:{" "}
-                      {toUserText(check.summary)}
-                    </li>
-                  ))}
-              </ul>
-            </CardContent>
-          </Card>
         </>
       ) : null}
 

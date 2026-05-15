@@ -456,8 +456,8 @@ export function GoogleCalendarConnectionPanel() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Connection metadata is managed here. Real calendar writes still require
-          explicit approval from Planning.
+          Connect Google Calendar so LifeOS can check conflicts and create events
+          only after approval.
         </p>
 
         {flashMessage ? (
@@ -493,13 +493,6 @@ export function GoogleCalendarConnectionPanel() {
               {panelState.connection?.status === "error" ? " (error)" : null}
             </div>
             <p className="text-sm text-foreground">{panelState.message}</p>
-
-            {panelState.connection?.granted_scopes_json?.length ? (
-              <p className="text-sm text-muted-foreground">
-                Granted scopes:{" "}
-                {panelState.connection.granted_scopes_json.join(", ")}
-              </p>
-            ) : null}
 
             <div className="flex flex-wrap gap-3">
               <Button
@@ -537,6 +530,18 @@ export function GoogleCalendarConnectionPanel() {
                 Missing server config is non-fatal. Mock/local mode still works
                 without Google env vars.
               </p>
+            ) : null}
+
+            {panelState.connection?.granted_scopes_json?.length ? (
+              <details className="text-sm text-muted-foreground">
+                <summary className="cursor-pointer select-none">
+                  Advanced details
+                </summary>
+                <p className="mt-2">
+                  Granted OAuth scopes:{" "}
+                  {panelState.connection.granted_scopes_json.join(", ")}
+                </p>
+              </details>
             ) : null}
           </>
         ) : null}

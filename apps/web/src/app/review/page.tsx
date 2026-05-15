@@ -203,15 +203,14 @@ export default function ReviewPage() {
       <section>
         <h1>Review</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Daily and weekly review surfaces what moved, what stalled, and what to
-          adjust next.
+          Reflection helps decide the next move, not just count what happened.
         </p>
       </section>
 
       {reviewState.status === "ready" ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Next action</CardTitle>
+            <CardTitle className="text-base">Next review decision</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
             <Button
@@ -223,9 +222,24 @@ export default function ReviewPage() {
             </Button>
             <p className="text-sm text-muted-foreground">
               {reviewEntries.length === 0
-                ? "Start with one daily review to capture today's progress and blockers."
-                : "Create today's review when you are ready to log this day's outcomes."}
+                ? "Start one daily review to decide what to carry forward."
+                : "When this day is done, log what to move forward and what to change."}
             </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {reviewState.status === "ready" ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Reflection prompts</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            <ul className="m-0 list-disc pl-5">
+              <li>What should move forward?</li>
+              <li>What needs rescheduling?</li>
+              <li>What did reality teach?</li>
+            </ul>
           </CardContent>
         </Card>
       ) : null}
@@ -287,7 +301,7 @@ export default function ReviewPage() {
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Daily snapshot</CardTitle>
+            <CardTitle className="text-base">Numbers at a glance</CardTitle>
           </CardHeader>
           <CardContent>
             {captureCount === 0 && sessions.length === 0 ? (
@@ -311,7 +325,7 @@ export default function ReviewPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Weekly area patterns</CardTitle>
+            <CardTitle className="text-base">Area patterns this week</CardTitle>
           </CardHeader>
           <CardContent>
             {tasks.length === 0 ? (
@@ -355,7 +369,7 @@ export default function ReviewPage() {
       </div>
       {reviewEntries.length > 0 ? (
         <section>
-          <h2 className="mb-2 text-base">Saved review history</h2>
+          <h2 className="mb-2 text-base">Saved reflections</h2>
           <ul className="m-0 list-disc pl-5 text-sm text-foreground">
             {reviewEntries.map((entry) => (
               <li key={entry.id}>
@@ -368,9 +382,7 @@ export default function ReviewPage() {
       ) : null}
       {localReviewLog.length > 0 ? (
         <details>
-          <summary className="mb-2 text-base">
-            System details
-          </summary>
+          <summary className="mb-2 text-base">Session notes log</summary>
           <ul className="m-0 list-disc pl-5 text-sm text-foreground">
             {localReviewLog.map((entry, index) => (
               <li key={`${entry}-${index}`}>{entry}</li>

@@ -101,8 +101,10 @@ describe("HealthPage", () => {
 
     render(<HealthPage />);
 
-    expect(await screen.findByText("Repair focus")).toBeDefined();
-    expect(screen.getByText("auth session: Supabase auth is unavailable in the current client.")).toBeDefined();
+    expect(await screen.findByText("What needs attention now")).toBeDefined();
+    expect(screen.getByRole("listitem")).toHaveTextContent(
+      "auth session: Supabase auth is unavailable in the current client.",
+    );
     expect(screen.queryByText("No active warnings")).toBeNull();
   });
 

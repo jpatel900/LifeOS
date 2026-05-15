@@ -24,6 +24,9 @@ function storageModeLabel(mode: DataProvider) {
 export default function AreasSettingsPage() {
   const { resetWorkflow } = useWorkflow();
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [resetState, setResetState] = useState<
+    "idle" | "confirming" | "success"
+  >("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -132,7 +135,7 @@ export default function AreasSettingsPage() {
 
       <GoogleCalendarConnectionPanel />
 
-      <Card className="border-dashed border-destructive/40">
+      <Card className="border-dashed border-destructive/50">
         <CardHeader>
           <CardTitle className="text-lg">Local reset</CardTitle>
         </CardHeader>
@@ -142,9 +145,53 @@ export default function AreasSettingsPage() {
             ambiguity assessments, and planned time blocks). It does not delete
             Saved workspace or Demo mode rows.
           </p>
-          <Button type="button" variant="destructive" onClick={resetWorkflow}>
-            Reset this browser only
-          </Button>
+          {resetState === "success" ? (
+            <Alert variant="success" role="status" aria-live="polite">
+              <AlertTitle>Local reset complete</AlertTitle>
+              <AlertDescription>
+                This browser session workflow state was cleared.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {resetState === "confirming" ? (
+            <Alert variant="destructive">
+              <AlertTitle>Confirm local reset</AlertTitle>
+              <AlertDescription>
+                This cannot be undone for this browser session.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {resetState === "confirming" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => {
+                    resetWorkflow();
+                    setResetState("success");
+                  }}
+                >
+                  Confirm reset
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setResetState("idle")}
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setResetState("confirming")}
+              >
+                Reset this browser only
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

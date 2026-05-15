@@ -152,4 +152,52 @@ describe("Google Calendar settings panel", () => {
     expect(screen.getByText("error")).toBeDefined();
     expect(screen.queryByText(/connection stack trace/i)).toBeNull();
   });
+
+  it("keeps granted OAuth scopes in advanced details", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: {
+        session: {
+          access_token: "supabase-access-token",
+        },
+      },
+      error: null,
+    });
+    mocks.createSupabaseBrowserClient.mockReturnValue({
+      auth: {
+        getSession: mocks.getSession,
+      },
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          configured: true,
+          status: "connected",
+          message: "Google Calendar is connected.",
+          connection: {
+            id: "conn-1",
+            status: "connected",
+            calendar_id: "primary",
+            granted_scopes_json: [
+              "https://www.googleapis.com/auth/calendar.events",
+            ],
+            connected_at: "2026-05-10T00:00:00.000Z",
+            disconnected_at: null,
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    render(<GoogleCalendarConnectionPanel />);
+
+    expect(await screen.findByText("Connected")).toBeDefined();
+    expect(screen.getByText("Advanced details")).toBeDefined();
+    expect(
+      screen.getByText(/Granted OAuth scopes: https:\/\/www\.googleapis\.com/i),
+    ).toBeDefined();
+  });
 });
