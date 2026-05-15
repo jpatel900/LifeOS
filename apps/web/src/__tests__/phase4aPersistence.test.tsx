@@ -296,7 +296,7 @@ describe("Phase 4A Supabase persistence UI", () => {
         },
       );
     });
-    expect(await screen.findByText("Capture saved")).toBeDefined();
+    expect(await screen.findByText("Saved.")).toBeDefined();
     expect(screen.getAllByText("Saved workspace").length).toBeGreaterThan(0);
     expect(screen.getByText("Storage mode id:")).toBeDefined();
   });
@@ -430,12 +430,12 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add defer note" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Mark for later" }));
     fireEvent.click(screen.getByRole("button", { name: "Add area note" }));
 
     expect(
       screen.getByText(
-        "Add defer note and Add area note only add notes in this browser. They do not change status or area yet.",
+        "This adds a note for now; it does not move the item yet.",
       ),
     ).toBeDefined();
     expect(mocks.createTask).not.toHaveBeenCalled();

@@ -7,6 +7,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
 import { getAreaById } from "@/lib/mockData";
 import {
@@ -65,6 +67,9 @@ export default function TriagePage() {
   } = useWorkflow();
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
   const triageCandidates = state.taskDrafts.filter(
     (draft) => draft.status === "pending",
   );
@@ -227,6 +232,32 @@ export default function TriagePage() {
     nextItem.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function startEditingTaskDraft(taskId: string) {
+    const draft = state.taskDrafts.find((item) => item.id === taskId);
+    if (!draft) return;
+    setEditingDraftId(taskId);
+    setEditTitle(draft.title);
+    setEditDescription(draft.description ?? "");
+  }
+
+  function applyTaskDraftEdit(taskId: string) {
+    const title = editTitle.trim();
+    if (!title) {
+      return;
+    }
+
+    editTaskDraft(taskId, {
+      title,
+      description: editDescription.trim() || null,
+    });
+    setEditingDraftId(null);
+  }
+
+  function appendNote(description: string | null, note: string) {
+    const base = description?.trim();
+    return base ? `${base}\n${note}` : note;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <section className="space-y-2">
@@ -303,6 +334,14 @@ export default function TriagePage() {
             Accepted {saveState.label} in{" "}
             <strong>{storageModeLabel(saveState.provider)}</strong>.
           </AlertDescription>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/calendar">Plan time for this</Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/capture">Capture another</Link>
+            </Button>
+          </div>
         </Alert>
       ) : null}
 
@@ -353,6 +392,54 @@ export default function TriagePage() {
                       </CardContent>
                     </Card>
                   ) : null}
+                  {editingDraftId === task.id ? (
+                    <Card className="bg-muted/40">
+                      <CardContent className="space-y-3 p-3">
+                        <div className="space-y-1">
+                          <label htmlFor={`${task.id}-title`} className="text-xs font-medium">
+                            Title
+                          </label>
+                          <Input
+                            id={`${task.id}-title`}
+                            value={editTitle}
+                            onChange={(event) => setEditTitle(event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label
+                            htmlFor={`${task.id}-description`}
+                            className="text-xs font-medium"
+                          >
+                            Description
+                          </label>
+                          <Textarea
+                            id={`${task.id}-description`}
+                            value={editDescription}
+                            onChange={(event) => setEditDescription(event.target.value)}
+                            rows={3}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => applyTaskDraftEdit(task.id)}
+                            disabled={!editTitle.trim()}
+                          >
+                            Save edit
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingDraftId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ) : null}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
@@ -360,17 +447,12 @@ export default function TriagePage() {
                       aria-label="Accept task draft"
                       disabled={saveState.status === "saving"}
                     >
-                      Accept
+                      Accept as task
                     </Button>
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() =>
-                        editTaskDraft(task.id, {
-                          title: `${task.title} (edited)`,
-                          description: task.description,
-                        })
-                      }
+                      onClick={() => startEditingTaskDraft(task.id)}
                       aria-label="Edit draft"
                     >
                       Edit
@@ -381,12 +463,12 @@ export default function TriagePage() {
                       onClick={() =>
                         editTaskDraft(task.id, {
                           title: task.title,
-                          description: `${task.description ?? ""}\nAdded note: review later.`,
+                          description: appendNote(task.description, "Added note: review later."),
                         })
                       }
-                      aria-label="Add defer note"
+                      aria-label="Mark for later"
                     >
-                      Add defer note
+                      Mark for later
                     </Button>
                     <Button
                       type="button"
@@ -394,7 +476,10 @@ export default function TriagePage() {
                       onClick={() =>
                         editTaskDraft(task.id, {
                           title: task.title,
-                          description: `${task.description ?? ""}\nAdded note: consider changing area.`,
+                          description: appendNote(
+                            task.description,
+                            "Added note: consider changing area.",
+                          ),
                         })
                       }
                       aria-label="Add area note"
@@ -411,8 +496,7 @@ export default function TriagePage() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Add defer note and Add area note only add notes in this browser.
-                    They do not change status or area yet.
+                    This adds a note for now; it does not move the item yet.
                   </p>
                 </CardContent>
               </Card>
@@ -448,7 +532,7 @@ export default function TriagePage() {
                       aria-label="Accept project draft"
                       disabled={saveState.status === "saving"}
                     >
-                      Accept
+                      Accept as project
                     </Button>
                     <Button
                       type="button"

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import type { Area, CaptureItem, ParseCaptureResponse } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,7 +36,12 @@ type AreasState =
 type SaveState =
   | { status: "idle" }
   | { status: "saving" }
-  | { status: "saved"; provider: DataProvider; capture: CaptureItem }
+  | {
+      status: "saved";
+      provider: DataProvider;
+      capture: CaptureItem;
+      source: "save" | "save_and_organize";
+    }
   | { status: "error"; message: string };
 
 type ParseState =
@@ -209,7 +215,10 @@ export default function CapturePage() {
         status: "saved",
         provider: result.provider,
         capture: result.capture,
+        source: "save",
       });
+      setText("");
+      setParseState({ status: "idle" });
       void captureEvent({
         event: "capture_submitted",
         properties: {
@@ -311,7 +320,9 @@ export default function CapturePage() {
         status: "saved",
         provider: captureResult.provider,
         capture: captureResult.capture,
+        source: "save_and_organize",
       });
+      setText("");
       void captureEvent({
         event: "capture_submitted",
         properties: {
@@ -406,7 +417,7 @@ export default function CapturePage() {
         <summary className="cursor-pointer select-none">System details</summary>
         <p className="mt-2">
           Save thought and Save and organize write to your selected storage mode.
-          Save in this browser and Recent captures stay in this browser only.
+          Organize in this browser and Recent captures stay in this browser only.
         </p>
         <span className="sr-only">this browser only</span>
         {provider ? (
@@ -457,6 +468,10 @@ export default function CapturePage() {
             placeholder="What's on your mind? Type anything..."
             className="resize-y"
           />
+          <p className="text-xs text-muted-foreground">
+            After Save thought or Save and organize, this field clears so you can
+            capture the next thought.
+          </p>
 
           <form onSubmit={handleSaveCapture} className="space-y-4 rounded-lg border p-4">
             <h2 className="text-lg font-semibold">Save options</h2>
@@ -514,7 +529,7 @@ export default function CapturePage() {
               the recent-captures list on this page.
             </p>
             <Button type="button" variant="ghost" onClick={handleStructure}>
-              Save in this browser
+              Organize in this browser
             </Button>
           </div>
 
@@ -537,10 +552,11 @@ export default function CapturePage() {
 
       {saveState.status === "saved" ? (
         <Alert variant="success">
-          <AlertTitle>Capture saved</AlertTitle>
+          <AlertTitle>Saved.</AlertTitle>
           <AlertDescription>
-            Saved in <strong>{storageModeLabel(saveState.provider)}</strong> with
-            status <strong>{saveState.capture.status}</strong>.
+            {saveState.source === "save_and_organize"
+              ? "Saved before organizing."
+              : "You can organize it now or keep capturing."}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -554,10 +570,15 @@ export default function CapturePage() {
 
       {parseState.status === "parsed" ? (
         <Alert>
-          <AlertTitle>AI sorting complete</AlertTitle>
+          <AlertTitle>Sent to review.</AlertTitle>
           <AlertDescription>
-            Sent to review: <strong>{parseState.draftCount}</strong>.
+            Drafts ready: <strong>{parseState.draftCount}</strong>.
           </AlertDescription>
+          <div className="mt-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/triage">Review it now</Link>
+            </Button>
+          </div>
           {parseState.triageRequired ? (
             <AlertDescription>
               {parseState.lowConfidence
@@ -596,7 +617,7 @@ export default function CapturePage() {
         {visibleCaptures.length === 0 ? (
           <EmptyState
             title="No captures in this browser for this area yet."
-            description="Use Save in this browser for local draft flow, or Save thought for durable storage."
+            description="Use Organize in this browser for local draft flow, or Save thought for durable storage."
           />
         ) : (
           <div className="flex flex-col gap-2">

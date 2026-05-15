@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -29,6 +31,10 @@ function AppChrome({ children }: { children: ReactNode }) {
   const currentArea =
     state.areas.find((area) => area.id === selectedAreaId) ?? state.areas[0];
   const [now, setNow] = useState("--:--:--");
+  const [quickNoteText, setQuickNoteText] = useState("");
+  const [quickNoteStatus, setQuickNoteStatus] = useState<
+    "idle" | "saved" | "error"
+  >("idle");
 
   useEffect(() => {
     const formatNow = () => new Date().toLocaleTimeString();
@@ -38,6 +44,18 @@ function AppChrome({ children }: { children: ReactNode }) {
     }, 1000);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  function handleSaveQuickNote() {
+    const value = quickNoteText.trim();
+    if (!value) {
+      setQuickNoteStatus("error");
+      return;
+    }
+
+    submitCaptureText(value, selectedAreaId);
+    setQuickNoteText("");
+    setQuickNoteStatus("saved");
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -55,21 +73,49 @@ function AppChrome({ children }: { children: ReactNode }) {
             <div className="flex flex-col items-end gap-1">
               <div className="flex items-center gap-2">
                 <ThemeToggle />
+                <Input
+                  aria-label="Quick note text"
+                  value={quickNoteText}
+                  onChange={(event) => {
+                    setQuickNoteText(event.target.value);
+                    if (quickNoteStatus !== "idle") {
+                      setQuickNoteStatus("idle");
+                    }
+                  }}
+                  placeholder="Type a quick note"
+                  className="h-9 w-56"
+                />
                 <Button
                   type="button"
-                  onClick={() =>
-                    submitCaptureText(
-                      "Quick capture: sort this thought later.",
-                      selectedAreaId,
-                    )
-                  }
+                  onClick={handleSaveQuickNote}
                 >
-                  Quick note
+                  Save quick note
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Saved in this browser until you organize it.
+                Saves in this browser only.
               </p>
+              {quickNoteStatus === "error" ? (
+                <p className="text-xs text-destructive">
+                  Type a note first, or use Capture.
+                </p>
+              ) : null}
+              {quickNoteStatus === "saved" ? (
+                <Alert variant="success" className="max-w-sm">
+                  <AlertTitle>Saved.</AlertTitle>
+                  <AlertDescription>
+                    Review it in{" "}
+                    <Link href="/triage" className="underline underline-offset-2">
+                      Triage
+                    </Link>{" "}
+                    or{" "}
+                    <Link href="/review" className="underline underline-offset-2">
+                      Review
+                    </Link>
+                    .
+                  </AlertDescription>
+                </Alert>
+              ) : null}
             </div>
           </div>
 

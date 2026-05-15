@@ -145,7 +145,7 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        /Save in this browser and Recent captures stay in this browser only/i,
+        /Organize in this browser and Recent captures stay in this browser only/i,
       ),
     ).toBeDefined();
   });
@@ -214,7 +214,7 @@ describe("CapturePage", () => {
     });
     fireEvent.click(await screen.findByText("Save and organize"));
 
-    expect(await screen.findByText("AI sorting complete")).toBeDefined();
+    expect(await screen.findByText("Sent to review.")).toBeDefined();
     expect(
       screen.getByText(
         "Drafts were routed to triage because confidence is low.",
@@ -222,7 +222,7 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(
       screen.getAllByText("Email Taylor about launch notes").length,
-    ).toBeGreaterThan(1);
+    ).toBeGreaterThan(0);
     expect(mocks.createCaptureItem.mock.invocationCallOrder[0]).toBeLessThan(
       fetch.mock.invocationCallOrder[1],
     );
@@ -305,7 +305,7 @@ describe("CapturePage", () => {
       screen.getByRole("button", { name: "Retry with Demo mode sorting" }),
     );
 
-    expect(await screen.findByText("AI sorting complete")).toBeDefined();
+    expect(await screen.findByText("Sent to review.")).toBeDefined();
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         "/api/parse-capture",

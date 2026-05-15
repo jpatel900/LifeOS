@@ -186,7 +186,7 @@ describe("source-of-truth boundaries", () => {
 
     expect(appShell).toContain("Workflow area (session)");
     expect(appShell).toContain("Session workflow area:");
-    expect(appShell).toContain("Saved in this browser until you organize it.");
+    expect(appShell).toContain("Saves in this browser only.");
     expect(capture).toContain("AI sorting is off");
     expect(capture).toContain("Storage mode:");
     expect(capture).toContain("Developer details");
@@ -195,7 +195,7 @@ describe("source-of-truth boundaries", () => {
     expect(triage).toContain("Saved workspace:");
     expect(triage).toContain("Drafts shown from this browser.");
     expect(triage).toContain("Acceptance storage mode id:");
-    expect(triage).toContain("do not change status or area yet");
+    expect(triage).toContain("does not move the item yet");
     expect(calendar).toContain("Check calendar conflicts");
     expect(calendar).toContain("Create Google Calendar event");
     expect(calendar).toContain("Developer details");
