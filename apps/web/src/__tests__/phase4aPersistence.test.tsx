@@ -133,6 +133,16 @@ const proposal = {
   created_at: "2026-05-08T15:00:00.000Z",
 };
 
+const proposalWithCheckedConflict = {
+  ...proposal,
+  conflict_details_json: {
+    provider: "google_calendar",
+    status: "checked",
+    checked_at: "2026-05-08T15:35:00.000Z",
+    has_conflict: false,
+  },
+};
+
 const block = {
   id: "550e8400-e29b-41d4-a716-446655440601",
   user_id: area.user_id,
@@ -476,6 +486,8 @@ describe("Phase 4A Supabase persistence UI", () => {
         mocks.supabaseClient,
         expect.objectContaining({
           task_id: task.id,
+          rationale_note:
+            "Quick proposal: next available hour. You can adjust this before approving.",
         }),
       );
     });
@@ -549,7 +561,73 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
   });
 
+  it("adjusts a persisted proposal through explicit inline adjustment controls", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      proposals: [proposal],
+      blocks: [],
+    });
+    mocks.editTimeBlockProposal.mockResolvedValue({
+      provider: "supabase",
+      proposal: {
+        ...proposal,
+        proposed_start: "2026-05-08T16:30:00.000Z",
+        proposed_end: "2026-05-08T17:30:00.000Z",
+        status: "edited",
+      },
+    });
+
+    renderWithWorkflow(<CalendarPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Adjust time" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Move 30 min later" }));
+
+    await waitFor(() => {
+      expect(mocks.editTimeBlockProposal).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        proposal.id,
+        {
+          proposed_start: "2026-05-08T16:30:00.000Z",
+          proposed_end: "2026-05-08T17:30:00.000Z",
+        },
+      );
+    });
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(
+      "Proposal moved 30 minutes later through Saved workspace.",
+    );
+  });
+
   it("checks a persisted proposal for conflicts and updates the badge", async () => {
+    const supabaseClientWithSession = {
+      ...mocks.supabaseClient,
+      auth: {
+        getSession: vi.fn().mockResolvedValue({
+          data: { session: { access_token: "supabase-access-token" } },
+          error: null,
+        }),
+      },
+    };
+    mocks.createSupabaseBrowserClient.mockReturnValue(
+      supabaseClientWithSession,
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            status: "connected",
+            connection: {
+              status: "connected",
+              first_write_warning_acknowledged_at: "2026-05-09T00:00:00.000Z",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
     mocks.listPlanningItems.mockResolvedValue({
       provider: "supabase",
       tasks: [task],
@@ -581,38 +659,33 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     await waitFor(() => {
       expect(mocks.checkTimeBlockProposalConflict).toHaveBeenCalledWith(
-        mocks.supabaseClient,
+        supabaseClientWithSession,
         proposal.id,
       );
     });
     expect(await screen.findByText("Conflict flagged")).toBeDefined();
   });
 
-  it("shows a visible disconnected-state error when conflict checks fail due to missing Google connection", async () => {
+  it("shows an inline disabled reason when conflict checks are unavailable without Google connection", async () => {
     mocks.listPlanningItems.mockResolvedValue({
       provider: "supabase",
       tasks: [task],
-      proposals: [proposal],
+      proposals: [proposalWithCheckedConflict],
       blocks: [],
     });
-    mocks.checkTimeBlockProposalConflict.mockRejectedValue(
-      new Error("Google Calendar is not connected."),
-    );
 
     renderWithWorkflow(<CalendarPage />);
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Check calendar conflicts" }),
-    );
-
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Google Calendar is disconnected");
-    expect(alert).toHaveTextContent(
-      "A calendar connection is required before this Google Calendar action can run.",
-    );
-    expect(alert).toHaveTextContent(
-      "Connect Google Calendar in Settings, then retry.",
-    );
+    const checkConflictButton = await screen.findByRole("button", {
+      name: "Check calendar conflicts",
+    });
+    expect(checkConflictButton).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Check calendar conflicts disabled: Connect Google Calendar first.",
+      ),
+    ).toBeDefined();
+    expect(mocks.checkTimeBlockProposalConflict).not.toHaveBeenCalled();
     expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(
       0,
     );
@@ -650,12 +723,12 @@ describe("Phase 4A Supabase persistence UI", () => {
     mocks.listPlanningItems.mockResolvedValue({
       provider: "supabase",
       tasks: [task],
-      proposals: [proposal],
+      proposals: [proposalWithCheckedConflict],
       blocks: [],
     });
     mocks.createGoogleCalendarEventFromProposal.mockResolvedValue({
       provider: "supabase",
-      proposal: { ...proposal, status: "accepted" },
+      proposal: { ...proposalWithCheckedConflict, status: "accepted" },
       block: { ...block, google_event_id: "google-event-1" },
       googleEventId: "google-event-1",
     });
@@ -673,7 +746,7 @@ describe("Phase 4A Supabase persistence UI", () => {
         supabaseClientWithSession,
         expect.objectContaining({
           approved: true,
-          proposal_id: proposal.id,
+          proposal_id: proposalWithCheckedConflict.id,
         }),
       );
     });
@@ -713,7 +786,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     mocks.listPlanningItems.mockResolvedValue({
       provider: "supabase",
       tasks: [task],
-      proposals: [proposal],
+      proposals: [proposalWithCheckedConflict],
       blocks: [],
     });
 
@@ -765,7 +838,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     mocks.listPlanningItems.mockResolvedValue({
       provider: "supabase",
       tasks: [task],
-      proposals: [proposal],
+      proposals: [proposalWithCheckedConflict],
       blocks: [],
     });
     mocks.createGoogleCalendarEventFromProposal.mockRejectedValue(
@@ -838,7 +911,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(screen.getByText("No current task is in execution.")).toBeDefined();
     expect(
       screen.getByText(
-        "Plan one local block in Calendar or capture a task first. LifeOS does not invent scheduled work for you.",
+        "Plan one block in Planning or capture and triage a task first.",
       ),
     ).toBeDefined();
   });
@@ -924,7 +997,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(stopButton).toBeDisabled();
     expect(
       screen.getByText(
-        "Stop is disabled here. Saved sessions need an end status and end-session details.",
+        "Stop disabled: Stop is demo-mode only. Saved sessions need an end outcome and details.",
       ),
     ).toBeDefined();
   });
@@ -950,7 +1023,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        "Stop only updates this browser in Demo mode. It does not save an end state.",
+        "Stop only updates this browser in Demo mode.",
       ),
     ).toBeDefined();
   });
@@ -972,7 +1045,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<ExecutePage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Mark missed" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Missed" }));
     fireEvent.change(await screen.findByLabelText("Actual duration minutes"), {
       target: { value: "5" },
     });

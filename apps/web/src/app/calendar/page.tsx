@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "../components/EmptyState";
 import {
   acceptTimeBlockProposal,
@@ -81,6 +82,58 @@ function nextLocalSlot(task: Task) {
   };
 }
 
+const QUICK_PROPOSAL_RATIONALE =
+  "Quick proposal: next available hour. You can adjust this before approving.";
+
+type ProposalAdjustment = "move_later" | "shorten" | "extend";
+
+function adjustmentLabel(adjustment: ProposalAdjustment) {
+  switch (adjustment) {
+    case "move_later":
+      return "moved 30 minutes later";
+    case "shorten":
+      return "shortened";
+    case "extend":
+      return "extended";
+  }
+}
+
+function adjustedProposalTimes(
+  proposal: Pick<TimeBlockProposal, "proposed_start" | "proposed_end">,
+  adjustment: ProposalAdjustment,
+) {
+  const start = new Date(proposal.proposed_start);
+  const end = new Date(proposal.proposed_end);
+  const currentDurationMs = Math.max(end.getTime() - start.getTime(), 0);
+  const fiveMinutesMs = 5 * 60 * 1000;
+  const thirtyMinutesMs = 30 * 60 * 1000;
+
+  if (adjustment === "move_later") {
+    start.setMinutes(start.getMinutes() + 30);
+    end.setMinutes(end.getMinutes() + 30);
+  }
+
+  if (adjustment === "extend") {
+    end.setMinutes(end.getMinutes() + 30);
+  }
+
+  if (adjustment === "shorten") {
+    const shortenByMs = Math.min(
+      15 * 60 * 1000,
+      Math.max(fiveMinutesMs, currentDurationMs - fiveMinutesMs),
+    );
+    end.setTime(end.getTime() - shortenByMs);
+    if (end.getTime() <= start.getTime()) {
+      end.setTime(start.getTime() + fiveMinutesMs);
+    }
+  }
+
+  return {
+    proposed_start: start.toISOString(),
+    proposed_end: end.toISOString(),
+  };
+}
+
 function proposalRationale(
   proposal: TimeBlockProposal | { rationale: string },
 ) {
@@ -101,13 +154,18 @@ function proposalRationale(
   return "Local planning proposal.";
 }
 
-function proposalConflictSummary(proposal: TimeBlockProposal) {
+function proposalHasConflictCheck(proposal: TimeBlockProposal) {
   const details = proposal.conflict_details_json;
-  const hasCheckedConflict =
+  return Boolean(
     details &&
-    typeof details === "object" &&
-    !Array.isArray(details) &&
-    typeof (details as Record<string, unknown>).checked_at === "string";
+      typeof details === "object" &&
+      !Array.isArray(details) &&
+      typeof (details as Record<string, unknown>).checked_at === "string",
+  );
+}
+
+function proposalConflictSummary(proposal: TimeBlockProposal) {
+  const hasCheckedConflict = proposalHasConflictCheck(proposal);
 
   if (proposal.conflict_flag) {
     return {
@@ -239,6 +297,9 @@ export default function CalendarPage() {
     useState<GoogleConnectionState>({ status: "loading" });
   const [acknowledgeFirstWriteWarning, setAcknowledgeFirstWriteWarning] =
     useState(false);
+  const [adjustingProposalId, setAdjustingProposalId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -361,6 +422,7 @@ export default function CalendarPage() {
         {
           task_id: task.id,
           ...nextLocalSlot(task),
+          rationale_note: QUICK_PROPOSAL_RATIONALE,
         },
       );
 
@@ -396,21 +458,17 @@ export default function CalendarPage() {
     }
   }
 
-  async function handleEditProposal(proposal: TimeBlockProposal) {
-    const editedStart = new Date(proposal.proposed_start);
-    editedStart.setMinutes(editedStart.getMinutes() + 30);
-    const editedEnd = new Date(proposal.proposed_end);
-    editedEnd.setMinutes(editedEnd.getMinutes() + 30);
-
-    setActionState({ status: "saving", label: "proposal edit" });
+  async function handleAdjustPersistedProposal(
+    proposal: TimeBlockProposal,
+    adjustment: ProposalAdjustment,
+  ) {
+    const nextTimes = adjustedProposalTimes(proposal, adjustment);
+    setActionState({ status: "saving", label: "proposal adjustment" });
     try {
       const result = await editTimeBlockProposal(
         createSupabaseBrowserClient(),
         proposal.id,
-        {
-          proposed_start: editedStart.toISOString(),
-          proposed_end: editedEnd.toISOString(),
-        },
+        nextTimes,
       );
 
       setPlanningState((current) =>
@@ -425,9 +483,10 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: "Proposal edited through",
+        label: `Proposal ${adjustmentLabel(adjustment)} through`,
         provider: result.provider,
       });
+      setAdjustingProposalId(null);
     } catch (error) {
       const failure = normalizeCalendarFailure(
         error instanceof Error ? error.message : "",
@@ -440,6 +499,26 @@ export default function CalendarPage() {
         nextStep: failure.nextStep,
       });
     }
+  }
+
+  function handleAdjustLocalProposal(
+    proposal: TimeBlockProposal,
+    adjustment: ProposalAdjustment,
+  ) {
+    const nextTimes = adjustedProposalTimes(proposal, adjustment);
+    setActionState({ status: "saving", label: "proposal adjustment" });
+    editLocalProposal(proposal.id, {
+      ...nextTimes,
+      rationale: `${proposalRationale(proposal)} Time ${adjustmentLabel(
+        adjustment,
+      )}.`,
+    });
+    setActionState({
+      status: "saved",
+      label: `Proposal ${adjustmentLabel(adjustment)} through`,
+      provider: "mock",
+    });
+    setAdjustingProposalId(null);
   }
 
   async function handleRejectProposal(proposalId: string) {
@@ -720,8 +799,8 @@ export default function CalendarPage() {
       <section>
         <h1>Planning</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Planned time blocks show up here first. Google Calendar writes happen
-          only after explicit approval.
+          Planned time blocks show up here first. Nothing goes to Google
+          Calendar until you approve it.
         </p>
       </section>
 
@@ -748,8 +827,8 @@ export default function CalendarPage() {
             </Button>
           )}
           <p className="text-sm text-muted-foreground">
-            Choose one local block first. External writes require a separate
-            explicit approval click.
+            Quick proposals start with the next available hour. You can adjust
+            time before approving.
           </p>
         </CardContent>
       </Card>
@@ -865,11 +944,11 @@ export default function CalendarPage() {
           ) : null}
 
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                Planned time blocks (This browser only)
-              </CardTitle>
-            </CardHeader>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">
+                  Planned time blocks (local first)
+                </CardTitle>
+              </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {proposals.length === 0 ? (
                 <EmptyState
@@ -909,26 +988,56 @@ export default function CalendarPage() {
                                 proposal.status !== "accepted"
                               ? "Not eligible from this proposal status"
                               : "Ready after explicit approval";
-                  const googleWriteAllowed =
-                    usesPersistedPlanning &&
-                    googleConnectionState.status === "ready" &&
-                    googleConnectionState.connected &&
-                    !googleBlock &&
-                    (googleConnectionState.firstWriteWarningAcknowledged ||
-                      acknowledgeFirstWriteWarning) &&
-                    (proposal.status === "proposed" ||
-                      proposal.status === "edited" ||
-                      proposal.status === "accepted");
-                  const editedStart = new Date(proposal.proposed_start);
-                  editedStart.setMinutes(editedStart.getMinutes() + 30);
-                  const editedEnd = new Date(proposal.proposed_end);
-                  editedEnd.setMinutes(editedEnd.getMinutes() + 30);
+                  const canCheckConflictStatus =
+                    proposal.status === "proposed" || proposal.status === "edited";
+                  const hasConflictCheck = proposalHasConflictCheck(proposal);
+                  const checkConflictDisabledReason = !usesPersistedPlanning
+                    ? "This block is local only. Supabase setup is required."
+                    : actionState.status === "saving"
+                      ? "Another planning action is already in progress."
+                      : googleConnectionState.status === "loading"
+                        ? "Google Calendar status is still loading."
+                        : googleConnectionState.status === "error"
+                          ? "Google Calendar status is unavailable right now."
+                          : !googleConnectionState.connected
+                            ? "Connect Google Calendar first."
+                            : !canCheckConflictStatus
+                              ? "Only proposed or adjusted blocks can be checked."
+                              : null;
+                  const checkConflictAllowed = checkConflictDisabledReason === null;
+                  const createGoogleDisabledReason = !usesPersistedPlanning
+                    ? "This block is local only. Supabase setup is required."
+                    : actionState.status === "saving"
+                      ? "Another planning action is already in progress."
+                      : googleBlock
+                        ? "Google event already created for this block."
+                        : googleConnectionState.status === "loading"
+                          ? "Google Calendar status is still loading."
+                          : googleConnectionState.status === "error"
+                            ? "Google Calendar status is unavailable right now."
+                            : !googleConnectionState.connected
+                              ? "Connect Google Calendar first."
+                              : !hasConflictCheck
+                                ? "Check conflicts before creating."
+                                : !(
+                                      googleConnectionState.firstWriteWarningAcknowledged ||
+                                      acknowledgeFirstWriteWarning
+                                    )
+                                  ? "Confirm first-write approval before creating."
+                                  : !(
+                                        proposal.status === "proposed" ||
+                                        proposal.status === "edited" ||
+                                        proposal.status === "accepted"
+                                      )
+                                    ? "This proposal status cannot create a Google event."
+                                    : null;
+                  const createGoogleAllowed = createGoogleDisabledReason === null;
 
                   return (
                     <div
                       key={proposal.id}
                       id={proposal.id === proposals[0]?.id ? "planning-next-proposal" : undefined}
-                      className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 text-sm"
+                      className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm"
                     >
                       <div className="font-medium">{task?.title ?? "Unassigned block"}</div>
                       <div className="text-muted-foreground">
@@ -978,8 +1087,8 @@ export default function CalendarPage() {
                       </div>
                       {usesPersistedPlanning ? (
                         <div className="text-xs text-muted-foreground">
-                          Approval gate: Explicit user click required before any
-                          external write.
+                          Approval gate: Nothing goes to Google Calendar until
+                          you approve it.
                         </div>
                       ) : (
                         <div className="text-xs text-muted-foreground">
@@ -987,84 +1096,185 @@ export default function CalendarPage() {
                           browser only).
                         </div>
                       )}
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <Separator />
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-foreground">
+                          Local planning actions
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            onClick={() =>
+                              usesPersistedPlanning
+                                ? void handleAcceptProposal(proposal.id)
+                                : acceptLocalProposal(proposal.id)
+                            }
+                            disabled={
+                              actionState.status === "saving" ||
+                              proposal.status === "accepted"
+                            }
+                          >
+                            Accept local block
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              setAdjustingProposalId((current) =>
+                                current === proposal.id ? null : proposal.id,
+                              )
+                            }
+                            disabled={
+                              actionState.status === "saving" ||
+                              proposal.status === "accepted" ||
+                              proposal.status === "rejected"
+                            }
+                          >
+                            Adjust time
+                          </Button>
+                        </div>
+                        {adjustingProposalId === proposal.id ? (
+                          <div className="rounded-md border border-border bg-muted/40 p-2">
+                            <p className="text-xs text-muted-foreground">
+                              Limited adjustments update this proposal directly.
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  usesPersistedPlanning
+                                    ? void handleAdjustPersistedProposal(
+                                        proposal,
+                                        "move_later",
+                                      )
+                                    : handleAdjustLocalProposal(
+                                        proposal,
+                                        "move_later",
+                                      )
+                                }
+                                disabled={actionState.status === "saving"}
+                              >
+                                Move 30 min later
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  usesPersistedPlanning
+                                    ? void handleAdjustPersistedProposal(
+                                        proposal,
+                                        "shorten",
+                                      )
+                                    : handleAdjustLocalProposal(
+                                        proposal,
+                                        "shorten",
+                                      )
+                                }
+                                disabled={actionState.status === "saving"}
+                              >
+                                Shorten
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  usesPersistedPlanning
+                                    ? void handleAdjustPersistedProposal(
+                                        proposal,
+                                        "extend",
+                                      )
+                                    : handleAdjustLocalProposal(
+                                        proposal,
+                                        "extend",
+                                      )
+                                }
+                                disabled={actionState.status === "saving"}
+                              >
+                                Extend
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      <Separator />
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-foreground">
+                          Google Calendar actions
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void handleCheckConflict(proposal.id)}
+                            disabled={!checkConflictAllowed}
+                          >
+                            Check calendar conflicts
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={createGoogleAllowed ? "default" : "outline"}
+                            onClick={() =>
+                              void handleCreateGoogleEvent(proposal.id)
+                            }
+                            disabled={!createGoogleAllowed}
+                          >
+                            {googleBlock
+                              ? "Google event created"
+                              : "Create Google Calendar event"}
+                          </Button>
+                        </div>
+                        {!checkConflictAllowed ? (
+                          <p className="text-xs text-muted-foreground">
+                            Check calendar conflicts disabled:{" "}
+                            {checkConflictDisabledReason}
+                          </p>
+                        ) : null}
+                        {!createGoogleAllowed ? (
+                          <p className="text-xs text-muted-foreground">
+                            Create Google Calendar event disabled:{" "}
+                            {createGoogleDisabledReason}
+                          </p>
+                        ) : null}
+                        <p className="text-xs text-muted-foreground">
+                          Nothing goes to Google Calendar until you approve it.
+                        </p>
+                      </div>
+                      <Separator />
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs font-medium text-foreground">
+                          Admin action
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={() =>
+                              usesPersistedPlanning
+                                ? void handleRejectProposal(proposal.id)
+                                : rejectLocalProposal(proposal.id)
+                            }
+                            disabled={
+                              actionState.status === "saving" ||
+                              proposal.status === "accepted" ||
+                              proposal.status === "rejected"
+                            }
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-2">
                         <Button
                           type="button"
-                          onClick={() => void handleCheckConflict(proposal.id)}
-                          disabled={
-                            !usesPersistedPlanning ||
-                            actionState.status === "saving" ||
-                            (proposal.status !== "proposed" &&
-                              proposal.status !== "edited")
-                          }
+                          size="sm"
+                          variant="secondary"
+                          disabled
                         >
-                          Check calendar conflicts
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            void handleCreateGoogleEvent(proposal.id)
-                          }
-                          disabled={
-                            actionState.status === "saving" ||
-                            !googleWriteAllowed
-                          }
-                        >
-                          {googleBlock
-                            ? "Google event created"
-                            : "Create Google Calendar event"}
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            usesPersistedPlanning
-                              ? void handleAcceptProposal(proposal.id)
-                              : acceptLocalProposal(proposal.id)
-                          }
-                          disabled={
-                            actionState.status === "saving" ||
-                            proposal.status === "accepted"
-                          }
-                        >
-                          Accept local block
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            usesPersistedPlanning
-                              ? void handleEditProposal(
-                                  proposal as TimeBlockProposal,
-                                )
-                              : editLocalProposal(proposal.id, {
-                                  proposed_start: editedStart.toISOString(),
-                                  proposed_end: editedEnd.toISOString(),
-                                  rationale: `${proposalRationale(
-                                    proposal,
-                                  )} Edited locally by 30 minutes.`,
-                                })
-                          }
-                          disabled={
-                            actionState.status === "saving" ||
-                            proposal.status === "accepted" ||
-                            proposal.status === "rejected"
-                          }
-                        >
-                          Edit +30 min
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            usesPersistedPlanning
-                              ? void handleRejectProposal(proposal.id)
-                              : rejectLocalProposal(proposal.id)
-                          }
-                          disabled={
-                            actionState.status === "saving" ||
-                            proposal.status === "accepted" ||
-                            proposal.status === "rejected"
-                          }
-                        >
-                          Reject
+                          Primary next step: accept local block
                         </Button>
                       </div>
                     </div>

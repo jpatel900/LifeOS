@@ -198,6 +198,10 @@ describe("source-of-truth boundaries", () => {
     expect(triage).toContain("does not move the item yet");
     expect(calendar).toContain("Check calendar conflicts");
     expect(calendar).toContain("Create Google Calendar event");
+    expect(calendar).toContain("Adjust time");
+    expect(calendar).toContain(
+      "Nothing goes to Google Calendar until you approve it.",
+    );
     expect(calendar).toContain("Developer details");
     expect(calendar).toContain("Storage mode id:");
     expect(execute).toContain("Stop (demo mode only)");

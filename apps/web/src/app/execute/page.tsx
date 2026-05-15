@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { CalendarBlock, ExecutionSession, Task } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
 import {
@@ -59,7 +62,7 @@ const markLabels: Record<
   Phase2MockExecutionSession["status"],
   { button: string; saved: string }
 > = {
-  running: { button: "Start", saved: "running" },
+  running: { button: "Resume", saved: "running" },
   paused: { button: "Pause", saved: "paused" },
   completed: { button: "Complete", saved: "completed" },
   missed: { button: "Mark missed", saved: "missed" },
@@ -90,10 +93,6 @@ const terminalOutcomeOptions: Array<{
   { value: "stopped", label: "Stopped" },
 ];
 
-function persistedOutcomeLabel(session: ExecutionSession | null) {
-  return session ? session.outcome : "ready";
-}
-
 function createTerminalForm(status: PersistedTerminalStatus): TerminalFormState {
   return {
     status,
@@ -102,6 +101,76 @@ function createTerminalForm(status: PersistedTerminalStatus): TerminalFormState 
     productivityRating: "",
     notes: "",
   };
+}
+
+function persistedSessionStateLabel(
+  session: ExecutionSession | null,
+  lastPersistedMark: Phase2MockExecutionSession["status"] | null,
+) {
+  if (!session) {
+    return "Ready";
+  }
+
+  if (lastPersistedMark === "paused") {
+    return "Paused";
+  }
+
+  if (session.outcome === "distracted") {
+    return "Distracted";
+  }
+
+  return "In progress";
+}
+
+function demoSessionStateLabel(session: Phase2MockExecutionSession | null) {
+  if (!session) {
+    return "Ready";
+  }
+
+  switch (session.status) {
+    case "running":
+      return "In progress";
+    case "paused":
+      return "Paused";
+    case "distracted":
+      return "Distracted";
+    case "stuck":
+      return "Stuck";
+    case "missed":
+      return "Missed";
+    case "completed":
+      return "Completed";
+    case "stopped":
+      return "Stopped";
+    default:
+      return "Ready";
+  }
+}
+
+function recoveryTitle(status: PersistedTerminalStatus) {
+  switch (status) {
+    case "completed":
+      return "Close this session";
+    case "stuck":
+      return "Recovery: Stuck";
+    case "distracted":
+      return "Recovery: Distracted";
+    case "missed":
+      return "Recovery: Missed";
+  }
+}
+
+function recoveryGuidance(status: PersistedTerminalStatus) {
+  switch (status) {
+    case "completed":
+      return "Capture what was done and mark the session complete.";
+    case "stuck":
+      return "Describe what blocked progress and choose a small next move.";
+    case "distracted":
+      return "Document the interruption and decide the next focused action.";
+    case "missed":
+      return "Record why this was missed and what should happen next.";
+  }
 }
 
 export default function ExecutePage() {
@@ -118,6 +187,9 @@ export default function ExecutePage() {
   const [terminalFormError, setTerminalFormError] = useState<string | null>(
     null,
   );
+  const [lastPersistedMark, setLastPersistedMark] = useState<
+    Phase2MockExecutionSession["status"] | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +239,14 @@ export default function ExecutePage() {
         session.outcome === "partial" || session.outcome === "distracted",
     ) ?? null;
 
+  useEffect(() => {
+    if (!activePersistedSession) {
+      setLastPersistedMark(null);
+      setTerminalForm(null);
+      setTerminalFormError(null);
+    }
+  }, [activePersistedSession]);
+
   const activeSession = usesPersistedExecution
     ? activePersistedSession
     : (state.executionSessions[0] ?? null);
@@ -180,20 +260,83 @@ export default function ExecutePage() {
         (task) => task.id === activeSession.task_id,
       ) ?? runnableTask)
     : runnableTask;
-  const blocks = usesPersistedExecution
-    ? persistedBlocks
-    : state.calendarBlocks;
+  const blocks = usesPersistedExecution ? persistedBlocks : state.calendarBlocks;
   const activeBlock = activeSession?.calendar_block_id
     ? (blocks.find((block) => block.id === activeSession.calendar_block_id) ??
       null)
     : (blocks.find((block) => block.task_id === activeTask?.id) ?? null);
   const area = activeTask ? getAreaById(activeTask.area_id) : null;
+  const mockSession = usesPersistedExecution
+    ? null
+    : (activeSession as Phase2MockExecutionSession | null);
+  const hasActiveSession = Boolean(activeSession);
+
+  const sessionStateLabel = usesPersistedExecution
+    ? persistedSessionStateLabel(activePersistedSession, lastPersistedMark)
+    : demoSessionStateLabel(mockSession);
+  const sessionStartedAt = activeSession
+    ? "created_at" in activeSession
+      ? new Date(activeSession.created_at).toLocaleTimeString()
+      : "This browser session"
+    : null;
+
+  const startDisabledReason =
+    actionState.status === "saving"
+      ? "Another execution action is saving."
+      : hasActiveSession
+        ? "A session is already in progress. Pause or end it first."
+        : !activeTask
+          ? "No task is ready to start."
+          : null;
+  const pauseDisabledReason =
+    actionState.status === "saving"
+      ? "Another execution action is saving."
+      : !hasActiveSession
+        ? "Start a session first."
+        : !usesPersistedExecution && mockSession?.status === "paused"
+          ? "Session is already paused."
+          : null;
+  const resumeDisabledReason =
+    actionState.status === "saving"
+      ? "Another execution action is saving."
+      : usesPersistedExecution
+        ? "Saved workspace does not persist a separate resume state yet."
+        : mockSession?.status === "paused"
+          ? null
+          : "Resume is available after pausing.";
+  const endDisabledReason =
+    actionState.status === "saving"
+      ? "Another execution action is saving."
+      : !hasActiveSession
+        ? "Start a session first."
+        : null;
+  const stopDisabledReason =
+    actionState.status === "saving"
+      ? "Another execution action is saving."
+      : usesPersistedExecution
+        ? "Stop is demo-mode only. Saved sessions need an end outcome and details."
+        : null;
+
+  const nextRecommendedAction = terminalForm
+    ? "Finish the recovery details, then save the end session."
+    : !hasActiveSession
+      ? "Start the session when you are ready to focus."
+      : sessionStateLabel === "Paused"
+        ? usesPersistedExecution
+          ? "Choose an end outcome when this block is done."
+          : "Resume when ready, or choose an end outcome."
+        : "When this block ends, choose Complete, Stuck, Distracted, or Missed.";
 
   async function handleStart() {
-    if (!activeTask) return;
+    if (!activeTask || startDisabledReason) return;
 
     if (!usesPersistedExecution) {
       startTaskSession(activeTask.id);
+      setActionState({
+        status: "saved",
+        label: "Session started through",
+        provider: "mock",
+      });
       void captureEvent({
         event: "execution_started",
         properties: {
@@ -209,13 +352,10 @@ export default function ExecutePage() {
 
     setActionState({ status: "saving", label: "session" });
     try {
-      const result = await createExecutionSession(
-        createSupabaseBrowserClient(),
-        {
-          task_id: activeTask.id,
-          calendar_block_id: activeBlock?.id ?? null,
-        },
-      );
+      const result = await createExecutionSession(createSupabaseBrowserClient(), {
+        task_id: activeTask.id,
+        calendar_block_id: activeBlock?.id ?? null,
+      });
       setExecuteState((current) =>
         current.status === "ready" && current.provider === "supabase"
           ? {
@@ -229,6 +369,7 @@ export default function ExecutePage() {
             }
           : current,
       );
+      setLastPersistedMark("running");
       setActionState({
         status: "saved",
         label: "Session started through",
@@ -303,6 +444,7 @@ export default function ExecutePage() {
             }
           : current,
       );
+      setLastPersistedMark(status);
       setActionState({
         status: "saved",
         label: `Session marked ${markLabels[status].saved} through`,
@@ -334,6 +476,11 @@ export default function ExecutePage() {
   async function handleMark(status: Phase2MockExecutionSession["status"]) {
     if (!usesPersistedExecution) {
       markSession(status);
+      setActionState({
+        status: "saved",
+        label: `Session marked ${markLabels[status].saved} through`,
+        provider: "mock",
+      });
       if (status === "completed") {
         void captureEvent({
           event: "execution_completed",
@@ -360,6 +507,27 @@ export default function ExecutePage() {
 
     setTerminalForm(createTerminalForm(status));
     setTerminalFormError(null);
+  }
+
+  async function handleResume() {
+    if (usesPersistedExecution) {
+      return;
+    }
+
+    await handleMark("running");
+  }
+
+  function appendRecoveryNote(prefix: string) {
+    setTerminalForm((current) =>
+      current
+        ? {
+            ...current,
+            notes: current.notes
+              ? `${current.notes.trim()}\n${prefix}`
+              : prefix,
+          }
+        : current,
+    );
   }
 
   async function handleSubmitTerminalForm() {
@@ -398,10 +566,11 @@ export default function ExecutePage() {
   if (!activeTask) {
     return (
       <div className="flex flex-col gap-6">
-        <section>
-          <h1>Execute</h1>
-          <p className="mt-1 text-[0.95rem] text-muted-foreground">
-            One current task. One first step. Keep forward motion visible.
+        <section className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight">Execute</h1>
+          <p className="text-sm text-muted-foreground">
+            Run one focused work session at a time with clear start and end
+            decisions.
           </p>
         </section>
         {executeState.status === "loading" ? (
@@ -416,7 +585,7 @@ export default function ExecutePage() {
           </Alert>
         ) : null}
         <details className="text-sm text-muted-foreground">
-          <summary>System details</summary>
+          <summary className="cursor-pointer select-none">System details</summary>
           {executeState.status === "ready" ? (
             <p className="mt-2">
               Storage mode:{" "}
@@ -425,7 +594,9 @@ export default function ExecutePage() {
           ) : null}
         </details>
         <details className="text-sm text-muted-foreground">
-          <summary>Developer details</summary>
+          <summary className="cursor-pointer select-none">
+            Developer details
+          </summary>
           {executeState.status === "ready" ? (
             <p className="mt-2">
               Storage mode id: <strong>{executeState.provider}</strong>
@@ -452,9 +623,28 @@ export default function ExecutePage() {
             <AlertDescription>{actionState.message}</AlertDescription>
           </Alert>
         ) : null}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">What Execute is for</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              Execute is where one planned task becomes one focused session with
+              a clear end outcome.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild>
+                <Link href="/calendar">Go to Planning</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/capture">Go to Capture</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
         <EmptyState
           title="No current task is in execution."
-          description="Plan one local block in Calendar or capture a task first. LifeOS does not invent scheduled work for you."
+          description="Plan one block in Planning or capture and triage a task first."
         />
       </div>
     );
@@ -462,14 +652,15 @@ export default function ExecutePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section>
-        <h1>Execute</h1>
-        <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Focus on one current task and keep progress visible.
+      <section className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight">Execute</h1>
+        <p className="text-sm text-muted-foreground">
+          Keep one current mission visible until you choose the end outcome.
         </p>
       </section>
+
       <details className="text-sm text-muted-foreground">
-        <summary>System details</summary>
+        <summary className="cursor-pointer select-none">System details</summary>
         {executeState.status === "ready" ? (
           <p className="mt-2">
             Storage mode: <strong>{storageModeLabel(executeState.provider)}</strong>
@@ -477,7 +668,7 @@ export default function ExecutePage() {
         ) : null}
       </details>
       <details className="text-sm text-muted-foreground">
-        <summary>Developer details</summary>
+        <summary className="cursor-pointer select-none">Developer details</summary>
         {executeState.status === "ready" ? (
           <p className="mt-2">
             Storage mode id: <strong>{executeState.provider}</strong>
@@ -508,260 +699,340 @@ export default function ExecutePage() {
         </Alert>
       ) : null}
 
-      <Card className="max-w-[720px]">
-        <CardContent className="flex flex-col gap-3 p-5">
-          <p className="text-sm font-medium text-primary">Current focus</p>
-          <div className="flex items-baseline justify-between gap-4">
-          <div>
-              <div className="text-[1.05rem] font-semibold">
-              {activeTask.title}
+      <Card className="max-w-[820px]">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Current mission</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-xl font-semibold leading-tight">{activeTask.title}</h2>
+              {area ? (
+                <Badge variant="secondary" className="w-fit">
+                  Area: {area.name}
+                </Badge>
+              ) : null}
             </div>
-            {area ? (
-                <div className="text-[0.85rem] text-muted-foreground">
-                Area: {area.name}
-              </div>
-            ) : null}
+            <Badge variant={hasActiveSession ? "default" : "outline"}>
+              {sessionStateLabel}
+            </Badge>
           </div>
-            <div className="text-right text-[0.8rem] text-muted-foreground">
-            <div>
-              {activeBlock
-                ? `${new Date(activeBlock.start_at).toLocaleTimeString()} – ${new Date(
-                    activeBlock.end_at,
-                  ).toLocaleTimeString()}`
-                : "Unscheduled session in this browser"}
-            </div>
-            <div>
-              Status:{" "}
-              {usesPersistedExecution
-                ? persistedOutcomeLabel(activePersistedSession)
-                : ((activeSession as Phase2MockExecutionSession | null)
-                    ?.status ??
-                  activeBlock?.status ??
-                  "ready")}
-            </div>
-          </div>
-        </div>
 
-          <div className="rounded-lg border border-border bg-muted p-3 text-sm text-foreground">
-            <div className="mb-1 font-medium text-primary">
-            First tiny step
+          <div className="grid gap-2 text-sm">
+            <p className="rounded-md border border-border bg-muted/60 p-3">
+              <span className="font-medium text-foreground">First tiny step:</span>{" "}
+              {activeTask.first_tiny_step ??
+                "Pick one concrete action you can finish in a few minutes."}
+            </p>
+            <p className="rounded-md border border-border bg-muted/60 p-3">
+              <span className="font-medium text-foreground">Definition of done:</span>{" "}
+              {activeTask.definition_of_done ??
+                "Complete the first useful move and note the result."}
+            </p>
           </div>
-          <div>
-            {activeTask.first_tiny_step ??
-              "Pick one small, concrete action you can do in the next few minutes."}
-          </div>
-        </div>
-          <div className="rounded-lg border border-border bg-muted/80 p-3 text-sm text-foreground">
-            <div className="mb-1 font-medium text-muted-foreground">Definition of done</div>
-          <div>
-            {activeTask.definition_of_done ??
-              "Complete the first useful move and note the outcome."}
-          </div>
-        </div>
 
-        <div
-          aria-label="Timer (demo mode only)"
-            className="mt-2 flex items-center justify-between gap-4"
-        >
-          <div>
-              <div className="mb-0.5 text-xs text-muted-foreground">
-              Session state (demo mode)
-            </div>
-              <div className="text-2xl [font-variant-numeric:tabular-nums]">
-              {!usesPersistedExecution &&
-              (activeSession as Phase2MockExecutionSession | null)?.status ===
-                "running"
-                ? "00:25:00"
-                : "00:00:00"}
-            </div>
-          </div>
-            <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={() => void handleStart()}
-              disabled={actionState.status === "saving"}
-            >
-              Start
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleMark("paused")}
-              variant="secondary"
-              disabled={
-                actionState.status === "saving" ||
-                (usesPersistedExecution && !activePersistedSession)
-              }
-            >
-              Pause
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleMark("distracted")}
-              variant="outline"
-              disabled={
-                actionState.status === "saving" ||
-                (usesPersistedExecution && !activePersistedSession)
-              }
-            >
-              Mark distracted
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleMark("stuck")}
-              variant="outline"
-              disabled={
-                actionState.status === "saving" ||
-                (usesPersistedExecution && !activePersistedSession)
-              }
-            >
-              Mark stuck
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleMark("completed")}
-              disabled={
-                actionState.status === "saving" ||
-                (usesPersistedExecution && !activePersistedSession)
-              }
-            >
-              Complete
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleMark("missed")}
-              variant="outline"
-              disabled={
-                actionState.status === "saving" ||
-                (usesPersistedExecution && !activePersistedSession)
-              }
-            >
-              Mark missed
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleMark("stopped")}
-              disabled={actionState.status === "saving" || usesPersistedExecution}
-            >
-              {usesPersistedExecution ? "Stop (demo mode only)" : "Stop (this browser)"}
-            </Button>
-          </div>
-        </div>
-          <p className="m-0 text-xs text-muted-foreground">
-          {usesPersistedExecution
-            ? "Stop is disabled here. Saved sessions need an end status and end-session details."
-            : "Stop only updates this browser in Demo mode. It does not save an end state."}
-        </p>
-        {usesPersistedExecution && terminalForm ? (
-            <section
-              aria-label="End session details"
-              className="flex flex-col gap-3 rounded-lg border border-border bg-muted/60 p-4"
-            >
-              <h2 className="m-0 text-[0.95rem] font-semibold">
-              End session details
-            </h2>
-              <label className="flex flex-col gap-1.5 text-sm text-foreground">
-              Outcome
-                <Select
-                aria-label="End session outcome"
-                value={terminalForm.outcome}
-                onChange={(event) =>
-                  setTerminalForm((current) =>
-                    current
-                      ? {
-                          ...current,
-                          outcome: event.target
-                            .value as ExecutionSession["outcome"],
-                        }
-                      : current,
-                  )
-                }
-              >
-                {terminalOutcomeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-                </Select>
-            </label>
-              <label className="flex flex-col gap-1.5 text-sm text-foreground">
-              Actual duration (minutes)
-                <Input
-                aria-label="Actual duration minutes"
-                type="number"
-                min={0}
-                value={terminalForm.actualMinutes}
-                onChange={(event) =>
-                  setTerminalForm((current) =>
-                    current
-                      ? { ...current, actualMinutes: event.target.value }
-                      : current,
-                  )
-                }
-              />
-            </label>
-              <label className="flex flex-col gap-1.5 text-sm text-foreground">
-              Productivity rating (1-5)
-                <Input
-                aria-label="Productivity rating"
-                type="number"
-                min={1}
-                max={5}
-                value={terminalForm.productivityRating}
-                onChange={(event) =>
-                  setTerminalForm((current) =>
-                    current
-                      ? { ...current, productivityRating: event.target.value }
-                      : current,
-                  )
-                }
-              />
-            </label>
-              <label className="flex flex-col gap-1.5 text-sm text-foreground">
-              Notes (optional)
-                <Textarea
-                aria-label="End session notes"
-                rows={2}
-                className="min-h-[72px]"
-                value={terminalForm.notes}
-                onChange={(event) =>
-                  setTerminalForm((current) =>
-                    current ? { ...current, notes: event.target.value } : current,
-                  )
-                }
-              />
-            </label>
-            {terminalFormError ? (
-                <p role="alert" className="m-0 text-sm text-destructive">
-                {terminalFormError}
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border border-border p-3 text-sm">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Session started
               </p>
-            ) : null}
-              <div className="flex flex-wrap gap-2">
+              <p className="mt-1 font-medium">
+                {sessionStartedAt ? `Started at ${sessionStartedAt}` : "Not started"}
+              </p>
+            </div>
+            <div className="rounded-md border border-border p-3 text-sm">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Timing
+              </p>
+              <p className="mt-1 font-medium">
+                {usesPersistedExecution
+                  ? activePersistedSession?.actual_minutes != null
+                    ? `${activePersistedSession.actual_minutes} minutes recorded`
+                    : "Elapsed time is tracked after completion."
+                  : "Demo timer only. No live elapsed tracking."}
+              </p>
+            </div>
+          </div>
+
+          <p className="rounded-md border border-border bg-muted/50 p-3 text-sm text-foreground">
+            <span className="font-medium">Next recommended action:</span>{" "}
+            {nextRecommendedAction}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-[820px]">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Session controls</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Start / Pause / Resume
+            </p>
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                onClick={() => void handleSubmitTerminalForm()}
-                disabled={actionState.status === "saving"}
+                onClick={() => void handleStart()}
+                disabled={startDisabledReason !== null}
               >
-                Save end session
+                Start
               </Button>
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  setTerminalForm(null);
-                  setTerminalFormError(null);
-                }}
-                disabled={actionState.status === "saving"}
+                onClick={() => void handleMark("paused")}
+                disabled={pauseDisabledReason !== null}
               >
-                Cancel
+                Pause
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleResume()}
+                disabled={resumeDisabledReason !== null}
+              >
+                Resume
               </Button>
             </div>
-          </section>
-        ) : null}
+            {startDisabledReason ? (
+              <p className="text-xs text-muted-foreground">
+                Start disabled: {startDisabledReason}
+              </p>
+            ) : null}
+            {!startDisabledReason && pauseDisabledReason ? (
+              <p className="text-xs text-muted-foreground">
+                Pause disabled: {pauseDisabledReason}
+              </p>
+            ) : null}
+            {!startDisabledReason && !pauseDisabledReason && resumeDisabledReason ? (
+              <p className="text-xs text-muted-foreground">
+                Resume disabled: {resumeDisabledReason}
+              </p>
+            ) : null}
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              End session outcomes
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => void handleMark("completed")}
+                disabled={endDisabledReason !== null}
+              >
+                Complete
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleMark("stuck")}
+                disabled={endDisabledReason !== null}
+              >
+                Stuck
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleMark("distracted")}
+                disabled={endDisabledReason !== null}
+              >
+                Distracted
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleMark("missed")}
+                disabled={endDisabledReason !== null}
+              >
+                Missed
+              </Button>
+            </div>
+            {endDisabledReason ? (
+              <p className="text-xs text-muted-foreground">
+                End outcomes disabled: {endDisabledReason}
+              </p>
+            ) : null}
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Secondary actions
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void handleMark("stopped")}
+                disabled={stopDisabledReason !== null}
+              >
+                {usesPersistedExecution ? "Stop (demo mode only)" : "Stop (this browser)"}
+              </Button>
+            </div>
+            {stopDisabledReason ? (
+              <p className="text-xs text-muted-foreground">
+                Stop disabled: {stopDisabledReason}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Stop only updates this browser in Demo mode.
+              </p>
+            )}
+          </div>
+
+          {usesPersistedExecution && terminalForm ? (
+            <>
+              <Separator />
+              <section
+                aria-label="End session details"
+                className="flex flex-col gap-3 rounded-lg border border-border bg-muted/60 p-4"
+              >
+                <h2 className="m-0 text-[0.95rem] font-semibold">
+                  {recoveryTitle(terminalForm.status)}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {recoveryGuidance(terminalForm.status)}
+                </p>
+                {terminalForm.status !== "completed" ? (
+                  <div className="rounded-md border border-border bg-background/60 p-3 text-sm">
+                    <p className="font-medium text-foreground">What got in the way?</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Capture the blocker in plain language so your next move is clear.
+                    </p>
+                    <p className="mt-2 font-medium text-foreground">
+                      What should happen next?
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => appendRecoveryNote("Create smaller first move: ")}
+                        disabled={actionState.status === "saving"}
+                      >
+                        Create smaller first move
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => appendRecoveryNote("Reschedule later: ")}
+                        disabled={actionState.status === "saving"}
+                      >
+                        Reschedule later
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  Outcome
+                  <Select
+                    aria-label="End session outcome"
+                    value={terminalForm.outcome}
+                    onChange={(event) =>
+                      setTerminalForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              outcome: event.target.value as ExecutionSession["outcome"],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    {terminalOutcomeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  Actual duration (minutes)
+                  <Input
+                    aria-label="Actual duration minutes"
+                    type="number"
+                    min={0}
+                    value={terminalForm.actualMinutes}
+                    onChange={(event) =>
+                      setTerminalForm((current) =>
+                        current
+                          ? { ...current, actualMinutes: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  Productivity rating (1-5)
+                  <Input
+                    aria-label="Productivity rating"
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={terminalForm.productivityRating}
+                    onChange={(event) =>
+                      setTerminalForm((current) =>
+                        current
+                          ? { ...current, productivityRating: event.target.value }
+                          : current,
+                      )
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  Notes
+                  <Textarea
+                    aria-label="End session notes"
+                    rows={3}
+                    className="min-h-[90px]"
+                    placeholder="What got in the way? What should happen next?"
+                    value={terminalForm.notes}
+                    onChange={(event) =>
+                      setTerminalForm((current) =>
+                        current ? { ...current, notes: event.target.value } : current,
+                      )
+                    }
+                  />
+                </label>
+                {terminalFormError ? (
+                  <p role="alert" className="m-0 text-sm text-destructive">
+                    {terminalFormError}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => void handleSubmitTerminalForm()}
+                    disabled={actionState.status === "saving"}
+                  >
+                    Save end session
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setTerminalForm(null);
+                      setTerminalFormError(null);
+                    }}
+                    disabled={actionState.status === "saving"}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </section>
+            </>
+          ) : null}
         </CardContent>
       </Card>
 
       {activeSession ? (
-        <Card aria-label="Most recent execution summary" className="max-w-[720px]">
+        <Card aria-label="Most recent execution summary" className="max-w-[820px]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Recent execution summary</CardTitle>
           </CardHeader>
@@ -775,17 +1046,12 @@ export default function ExecutePage() {
             <div>Paused: {activeSession.paused_minutes ?? 0} min</div>
             <div>Distracted: {activeSession.distraction_minutes ?? 0} min</div>
             {activeSession.productivity_rating ? (
-              <div>
-                Productivity rating: {activeSession.productivity_rating}/5
-              </div>
+              <div>Productivity rating: {activeSession.productivity_rating}/5</div>
             ) : null}
-            {activeSession.notes ? (
-              <div>Notes: {activeSession.notes}</div>
-            ) : null}
+            {activeSession.notes ? <div>Notes: {activeSession.notes}</div> : null}
           </CardContent>
         </Card>
       ) : null}
     </div>
   );
 }
-
