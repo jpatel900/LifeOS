@@ -27,6 +27,63 @@ Use `.env.example` at the repo root as the template. When wiring Supabase, OpenA
 
 Mock mode remains usable without Supabase, OpenAI, or Google OAuth vars for the Phase 2 shell and offline flows.
 
+## Production / Vercel rollout
+
+There is no single `DEMO_MODE=false` switch in this repo.
+
+The app falls back to Demo mode when the relevant production integrations are not configured:
+
+- missing `NEXT_PUBLIC_SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` => local/browser fallback paths stay active
+- missing `OPENAI_API_KEY` or all AI model tier vars => AI capture sorting falls back to Demo mode sorting
+- `AI_PARSE_CAPTURE_ENABLED=false` => AI capture sorting is explicitly disabled
+- missing Google OAuth vars or `SUPABASE_SERVICE_ROLE_KEY` => Google Calendar connect/write paths stay unavailable
+
+For a real Vercel deployment with the current shipped feature set, set these environment variables in the Vercel project:
+
+Required for persisted app behavior:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Required for server-side Google Calendar connect, free/busy, and approval-gated event creation:
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY`
+
+Required for AI capture sorting:
+
+- `OPENAI_API_KEY`
+- one of `AI_MODEL_STANDARD`, `AI_MODEL_CHEAP`, or `AI_MODEL_STRONG`
+- optional: `AI_PARSE_CAPTURE_ENABLED=true`
+
+Optional observability:
+
+- `NEXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_DSN`
+- `NEXT_PUBLIC_POSTHOG_TOKEN`
+- `NEXT_PUBLIC_POSTHOG_HOST`
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+- `LANGFUSE_BASE_URL`
+
+What this does not change:
+
+- persisted `/execute` still does not support a live elapsed timer or persisted stop/resume workflow beyond the shipped truthfulness contract
+- Google Calendar writes remain explicit approval-only
+- mock/demo fallback code remains in the repo by design for local degraded operation
+
+Recommended rollout order:
+
+1. Set the required Vercel env vars.
+2. Redeploy.
+3. Verify `/login`, `/settings/areas`, `/capture`, `/triage`, `/calendar`, `/execute`, `/review`, and `/health`.
+4. Confirm Google Calendar connect, free/busy, and explicit event creation with a non-critical test calendar before relying on it.
+
+Use [docs/VERCEL_PRODUCTION_CHECKLIST.md](docs/VERCEL_PRODUCTION_CHECKLIST.md) for the exact env matrix and post-deploy smoke order.
+
 ## Supabase local development
 
 On Windows, the recommended path is a Scoop-installed Supabase CLI (`supabase` in PATH). If `supabase` is unavailable, use the `npx` fallback commands shown below.
