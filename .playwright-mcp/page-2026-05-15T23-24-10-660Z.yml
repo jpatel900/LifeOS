@@ -1,0 +1,89 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - generic [ref=e6]:
+            - link "LifeOS" [ref=e7] [cursor=pointer]:
+              - /url: /capture
+            - generic [ref=e8]: Personal workflow cockpit
+          - generic [ref=e9]:
+            - generic [ref=e10]:
+              - button "Toggle theme" [ref=e54]:
+                - img
+              - textbox "Quick note text" [ref=e11]:
+                - /placeholder: Type a quick note
+              - button "Save quick note" [ref=e12]
+            - paragraph [ref=e13]: Saves in this browser only.
+        - generic [ref=e14]:
+          - navigation "Primary" [ref=e15]:
+            - link "Capture" [ref=e16] [cursor=pointer]:
+              - /url: /capture
+            - link "Triage" [ref=e17] [cursor=pointer]:
+              - /url: /triage
+            - link "Planning" [ref=e18] [cursor=pointer]:
+              - /url: /calendar
+            - link "Execute" [ref=e19] [cursor=pointer]:
+              - /url: /execute
+            - link "Review" [active] [ref=e20] [cursor=pointer]:
+              - /url: /review
+            - link "Health" [ref=e21] [cursor=pointer]:
+              - /url: /health
+            - link "Areas" [ref=e22] [cursor=pointer]:
+              - /url: /settings/areas
+          - generic [ref=e23]:
+            - combobox "Current workflow area (session)" [ref=e24]:
+              - option "Main Job" [selected]
+              - option "Personal"
+              - option "Volunteer Work"
+              - option "Side Project"
+            - generic [ref=e25]: 19:24:10
+    - main [ref=e26]:
+      - generic "Current area context" [ref=e27]:
+        - generic [ref=e28]: Current area
+        - generic [ref=e29]: Main Job
+        - generic [ref=e30]: "Session workflow area: Main Job"
+      - group [ref=e31]:
+        - generic "System details" [ref=e32] [cursor=pointer]
+      - generic [ref=e129]:
+        - generic [ref=e130]:
+          - heading "Review" [level=1] [ref=e131]
+          - paragraph [ref=e132]: Reflection helps decide the next move, not just count what happened.
+        - generic [ref=e133]:
+          - heading "Next review decision" [level=3] [ref=e135]
+          - generic [ref=e136]:
+            - button "Create daily review" [ref=e137]
+            - paragraph [ref=e138]: Start one daily review to decide what to carry forward.
+        - generic [ref=e139]:
+          - heading "Reflection prompts" [level=3] [ref=e141]
+          - list [ref=e143]:
+            - listitem [ref=e144]: What should move forward?
+            - listitem [ref=e145]: What needs rescheduling?
+            - listitem [ref=e146]: What did reality teach?
+        - group [ref=e147]:
+          - generic "System details" [ref=e148]
+        - group [ref=e149]:
+          - generic "Developer details" [ref=e150]
+        - generic [ref=e151]:
+          - generic [ref=e152]:
+            - heading "Numbers at a glance" [level=3] [ref=e154]
+            - list [ref=e156]:
+              - listitem [ref=e157]: "Captured: 3"
+              - listitem [ref=e158]: "Accepted tasks: 1"
+              - listitem [ref=e159]: "Completed sessions: 0"
+              - listitem [ref=e160]: "Missed sessions: 0"
+              - listitem [ref=e161]: "Distracted sessions: 0"
+              - listitem [ref=e162]: "Stuck sessions: 0"
+              - listitem [ref=e163]: "Still open: 1"
+          - generic [ref=e164]:
+            - heading "Area patterns this week" [level=3] [ref=e166]
+            - generic [ref=e169]:
+              - generic [ref=e170]: Main Job
+              - generic [ref=e171]: "Open tasks: 1"
+              - generic [ref=e172]: "Completed tasks: 0"
+              - generic [ref=e173]: "Sessions recorded: 1"
+        - group [ref=e174]:
+          - generic "Session notes log" [ref=e175]
+  - button "Open Next.js Dev Tools" [ref=e102] [cursor=pointer]:
+    - img [ref=e103]
+  - alert [ref=e106]

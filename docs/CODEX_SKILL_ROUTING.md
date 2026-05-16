@@ -10,6 +10,7 @@ Default allowed for LifeOS development:
 - `codex-security` only for security-sensitive surfaces
 - `Supabase` only for database, auth, RLS, migrations, and Supabase client/server work
 - `build-web-apps` only for React, Next.js, frontend, and browser verification work
+- `playwright` MCP for bounded browser validation only (see `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md`)
 - `Vercel` only for deployment, build, env, and runtime diagnostics
 - `openai-docs` / `openai-developers` only for OpenAI API, Responses API, Structured Outputs, models, prompts, and schema contracts
 - `Sentry` only during Sentry-related observability work
@@ -43,3 +44,25 @@ No skill or plugin can override `AGENTS.md`, direct user instructions, security/
 Do not load broad plugins or skills "just in case."
 
 The goal is routing clarity and token/context efficiency, not maximum plugin availability.
+
+## Playwright MCP Routing Rule
+
+Use Playwright MCP when browser evidence is needed for UI behavior, UX state, or interaction truthfulness.
+
+Use it:
+
+- after UI/UX changes
+- after app shell/navigation changes
+- after button/action behavior changes
+- after Capture/Triage/Calendar/Execute/Review changes
+- when a user reports the UI looks broken, static, or misleading
+- before claiming UI work is done
+
+Do not use it:
+
+- docs-only changes
+- backend-only changes with no UI impact
+- schema-only changes unless a UI flow depends on the schema change
+- broad autonomous exploration without a specific journey
+
+For exact journeys, output format, and safety boundaries, follow `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md`.

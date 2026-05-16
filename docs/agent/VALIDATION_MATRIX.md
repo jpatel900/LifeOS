@@ -6,6 +6,7 @@ These are minimum local iteration checks. They do not replace final validation r
 - Before final completion, follow `AGENTS.md` and the task’s risk surface.
 - Opt-in local Supabase RLS tests remain opt-in because they require local Supabase/Docker and env setup.
 - Do not use this file to justify skipping required final checks.
+- For UI/browser verification scope and safety, use `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md`.
 
 | Change type                     | Useful iteration checks                                                                                      |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -16,5 +17,6 @@ These are minimum local iteration checks. They do not replace final validation r
 | `Supabase / RLS`                | `pnpm --filter @lifeos/web test -- workflow.test.ts health.test.ts` · opt-in `phase4aRls.local.test.ts`      |
 | `calendar / external writes`    | `pnpm --filter @lifeos/web test -- google-calendar` · `pnpm --filter @lifeos/web test -- calendar`           |
 | `UI-only`                       | `pnpm --filter @lifeos/web test -- WorkflowContext.test.tsx sourceOfTruth.test.ts`                           |
+| `UI-only` (browser walkthrough) | Run the scoped journeys in `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md` and report required handoff output.     |
 | `health / observability`        | `pnpm --filter @lifeos/web test -- health.test.ts` · `pnpm --filter @lifeos/web test -- observability`       |
 | `tests-only`                    | Run the changed test files first, then the nearest package-level test/type-check command.                    |

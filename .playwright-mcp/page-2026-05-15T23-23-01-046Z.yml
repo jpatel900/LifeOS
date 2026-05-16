@@ -1,0 +1,54 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - link "LifeOS" [ref=e7] [cursor=pointer]:
+            - /url: /capture
+          - generic [ref=e8]: Personal workflow cockpit
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - button "Toggle theme" [disabled]:
+              - img
+            - textbox "Quick note text" [ref=e11]:
+              - /placeholder: Type a quick note
+            - button "Save quick note" [ref=e12]
+          - paragraph [ref=e13]: Saves in this browser only.
+      - generic [ref=e14]:
+        - navigation "Primary" [ref=e15]:
+          - link "Capture" [ref=e16] [cursor=pointer]:
+            - /url: /capture
+          - link "Triage" [ref=e17] [cursor=pointer]:
+            - /url: /triage
+          - link "Planning" [ref=e18] [cursor=pointer]:
+            - /url: /calendar
+          - link "Execute" [ref=e19] [cursor=pointer]:
+            - /url: /execute
+          - link "Review" [ref=e20] [cursor=pointer]:
+            - /url: /review
+          - link "Health" [ref=e21] [cursor=pointer]:
+            - /url: /health
+          - link "Areas" [ref=e22] [cursor=pointer]:
+            - /url: /settings/areas
+        - generic [ref=e23]:
+          - combobox "Current workflow area (session)" [ref=e24]:
+            - option "Main Job" [selected]
+            - option "Personal"
+            - option "Volunteer Work"
+            - option "Side Project"
+          - generic [ref=e25]: "--:--:--"
+  - main [ref=e26]:
+    - generic "Current area context" [ref=e27]:
+      - generic [ref=e28]: Current area
+      - generic [ref=e29]: Main Job
+      - generic [ref=e30]: "Session workflow area: Main Job"
+    - group [ref=e31]:
+      - generic "System details" [ref=e32] [cursor=pointer]
+    - heading "Local Supabase Login" [level=1] [ref=e33]
+    - paragraph [ref=e34]: Sign in to test persisted workflow paths with local Supabase.
+    - generic [ref=e35]:
+      - generic [ref=e36]: Email
+      - textbox "Email" [ref=e37]: user_a@example.test
+      - generic [ref=e38]: Password
+      - textbox "Password" [ref=e39]: password123
+      - button "Sign in" [ref=e40]
