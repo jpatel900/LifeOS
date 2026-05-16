@@ -70,6 +70,10 @@ export default function TriagePage() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editedDraftIds, setEditedDraftIds] = useState<Record<string, true>>({});
+  const [noteFeedbackByDraftId, setNoteFeedbackByDraftId] = useState<
+    Record<string, string>
+  >({});
   const triageCandidates = state.taskDrafts.filter(
     (draft) => draft.status === "pending",
   );
@@ -250,12 +254,31 @@ export default function TriagePage() {
       title,
       description: editDescription.trim() || null,
     });
+    setEditedDraftIds((current) => ({ ...current, [taskId]: true }));
+    setNoteFeedbackByDraftId((current) => {
+      const next = { ...current };
+      delete next[taskId];
+      return next;
+    });
     setEditingDraftId(null);
   }
 
   function appendNote(description: string | null, note: string) {
     const base = description?.trim();
     return base ? `${base}\n${note}` : note;
+  }
+
+  function addNoteOnlyFeedback(
+    taskId: string,
+    title: string,
+    description: string | null,
+    note: string,
+  ) {
+    editTaskDraft(taskId, {
+      title,
+      description: appendNote(description, note),
+    });
+    setNoteFeedbackByDraftId((current) => ({ ...current, [taskId]: note }));
   }
 
   return (
@@ -383,14 +406,40 @@ export default function TriagePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {assessment ? (
+                    editedDraftIds[task.id] ? (
+                      <Alert>
+                        <AlertTitle>AI notes are from the original capture</AlertTitle>
+                        <AlertDescription>
+                          You edited this draft. Re-sort in Capture if you want
+                          updated AI notes.
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <Card className="bg-muted/40">
+                        <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground">Clarity notes</p>
+                          <p>First useful move: {assessment.recommended_first_move}</p>
+                          <p>Unknowns: {assessment.unknowns.join(", ")}</p>
+                          <p>
+                            What not to do yet: {assessment.what_not_to_do_yet.join(", ")}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )
+                  ) : null}
+                  {task.description ? (
                     <Card className="bg-muted/40">
                       <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground">Clarity notes</p>
-                        <p>First useful move: {assessment.recommended_first_move}</p>
-                        <p>Unknowns: {assessment.unknowns.join(", ")}</p>
-                        <p>What not to do yet: {assessment.what_not_to_do_yet.join(", ")}</p>
+                        <p className="font-medium text-foreground">Draft notes</p>
+                        <p className="whitespace-pre-line">{task.description}</p>
                       </CardContent>
                     </Card>
+                  ) : null}
+                  {noteFeedbackByDraftId[task.id] ? (
+                    <Alert variant="success">
+                      <AlertTitle>Note saved in this browser</AlertTitle>
+                      <AlertDescription>{noteFeedbackByDraftId[task.id]}</AlertDescription>
+                    </Alert>
                   ) : null}
                   {editingDraftId === task.id ? (
                     <Card className="bg-muted/40">
@@ -461,30 +510,31 @@ export default function TriagePage() {
                       type="button"
                       variant="outline"
                       onClick={() =>
-                        editTaskDraft(task.id, {
-                          title: task.title,
-                          description: appendNote(task.description, "Added note: review later."),
-                        })
+                        addNoteOnlyFeedback(
+                          task.id,
+                          task.title,
+                          task.description,
+                          "Added note: review later.",
+                        )
                       }
                       aria-label="Mark for later"
                     >
-                      Mark for later
+                      Mark for later (note only)
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() =>
-                        editTaskDraft(task.id, {
-                          title: task.title,
-                          description: appendNote(
-                            task.description,
-                            "Added note: consider changing area.",
-                          ),
-                        })
+                        addNoteOnlyFeedback(
+                          task.id,
+                          task.title,
+                          task.description,
+                          "Added note: consider changing area.",
+                        )
                       }
                       aria-label="Add area note"
                     >
-                      Add area note
+                      Add area note (note only)
                     </Button>
                     <Button
                       type="button"

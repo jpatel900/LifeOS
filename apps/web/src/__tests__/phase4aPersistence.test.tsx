@@ -463,7 +463,14 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Mark for later" }));
+
+    expect(await screen.findByText("Note saved in this browser")).toBeDefined();
+    expect(screen.getAllByText("Added note: review later.").length).toBeGreaterThan(0);
+    expect(screen.getByText("Draft notes")).toBeDefined();
+    expect(screen.getAllByText(/Added note: review later\./).length).toBeGreaterThan(0);
+
     fireEvent.click(screen.getByRole("button", { name: "Add area note" }));
+    expect(await screen.findByText("Added note: consider changing area.")).toBeDefined();
 
     expect(
       screen.getByText(
@@ -471,6 +478,33 @@ describe("Phase 4A Supabase persistence UI", () => {
       ),
     ).toBeDefined();
     expect(mocks.createTask).not.toHaveBeenCalled();
+  });
+
+  it("marks clarity notes as based on original capture after editing", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Call dentist tomorrow" />
+        <TriagePage />
+      </>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit draft" }));
+    fireEvent.change(await screen.findByLabelText("Title"), {
+      target: { value: "Call dentist and confirm insurance details" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save edit" }));
+
+    expect(
+      await screen.findByText("AI notes are from the original capture"),
+    ).toBeDefined();
+    expect(
+      screen.getByText(/Re-sort in Capture if you want updated AI notes\./),
+    ).toBeDefined();
   });
 
   it("shows triage empty-state guidance with a capture next step", async () => {
@@ -1056,7 +1090,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
   });
 
-  it("labels stop as browser-only in demo mode", async () => {
+  it("labels stop as browser-only in demo mode and explains why it can be disabled", async () => {
     mocks.listExecutionReviewItems.mockResolvedValue({
       provider: "mock",
       tasks: [],
@@ -1072,13 +1106,55 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
+    const stopButton = await screen.findByRole("button", {
+      name: "Stop (this browser)",
+    });
+    expect(stopButton).toBeDisabled();
     expect(
-      await screen.findByRole("button", { name: "Stop (this browser)" }),
+      screen.getByText(
+        "Stop disabled: Start a session first.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("keeps demo stop terminal state coherent and restartable", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "mock",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedAcceptedTask text="Call dentist tomorrow" />
+        <ExecutePage />
+      </>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
+    expect(
+      await screen.findByText(
+        "Start disabled: A session is already in progress. Pause or end it first.",
+      ),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop (this browser)" }));
+
+    expect(await screen.findByText("Stopped")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Session stopped in this browser. Decide the next useful step.",
+      ),
     ).toBeDefined();
     expect(
       screen.getByText(
-        "Stop only updates this browser in Demo mode.",
+        "End outcomes disabled: Session already ended. Start another session for new outcomes.",
       ),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Start another session" }),
     ).toBeDefined();
   });
 
@@ -1126,6 +1202,17 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Session marked missed through Saved workspace.");
+    expect(
+      screen.getByText("Session ended as missed. Capture why it was missed, then re-plan."),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Plan another block" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Capture what got in the way" }),
+    ).toBeDefined();
+    expect(screen.getByRole("link", { name: "Review this later" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Back to Planning" })).toBeDefined();
   });
 
   it("creates a persisted review entry from review data", async () => {

@@ -181,8 +181,26 @@ function makeTitle(rawText: string) {
   return `${normalized.slice(0, 69).trim()}...`;
 }
 
+function makeProjectTitle(rawText: string) {
+  return makeTitle(rawText)
+    .replace(/^(?:need\s+)?a\s+project\s+to\s+/i, "")
+    .trim();
+}
+
+function isProjectShapedCapture(rawText: string) {
+  const lower = rawText.toLowerCase();
+  return (
+    /\bproject\b/.test(lower) ||
+    /\broadmap\b/.test(lower) ||
+    /\binitiative\b/.test(lower) ||
+    /\bsystem\b/.test(lower) ||
+    /\boverhaul\b/.test(lower)
+  );
+}
+
 function buildMockResponse(rawText: string): ParseCaptureResponse {
   const title = makeTitle(rawText);
+  const isProjectShaped = isProjectShapedCapture(rawText);
   const response = {
     schema_version: PARSE_CAPTURE_SCHEMA_VERSION,
     prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
@@ -204,13 +222,24 @@ function buildMockResponse(rawText: string): ParseCaptureResponse {
         due_at: null,
         confidence: 0.78,
       },
+      ...(isProjectShaped
+        ? [
+            {
+              draft_type: "project_draft" as const,
+              title: makeProjectTitle(rawText),
+              description: `Draft created from capture: ${rawText.trim()}`,
+              area_slug_suggestion: null,
+              confidence: 0.72,
+            },
+          ]
+        : []),
     ],
     clarification_questions: [
       "What deadline or definition of done should this use?",
     ],
     ambiguity_assessment: {
       likely_objective: title,
-      problem_type: "task",
+      problem_type: isProjectShaped ? "project" : "task",
       complexity_level: "unclear",
       knowns: [rawText.trim()],
       unknowns: ["Exact deadline", "Definition of done"],

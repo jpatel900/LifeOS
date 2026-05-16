@@ -126,6 +126,18 @@ describe("parse capture server service", () => {
     }
   });
 
+  it("emits a project draft from mock parsing for clearly project-shaped captures", async () => {
+    const result = await parseCaptureWithFallback(
+      { rawText: "Need a project to organize volunteer ops system." },
+      { env: { AI_MODEL_STANDARD: "standard-model" } },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(
+      result.response.drafts.some((draft) => draft.draft_type === "project_draft"),
+    ).toBe(true);
+  });
+
   it("uses the AI parser when an API key and model tier are configured", async () => {
     const parseCaptureImpl = vi.fn(async () => aiResponse);
 

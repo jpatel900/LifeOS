@@ -46,6 +46,16 @@ type PersistedTerminalStatus = Extract<
   "completed" | "missed" | "distracted" | "stuck"
 >;
 
+type SessionUiState =
+  | "not_started"
+  | "running"
+  | "paused"
+  | "stopped"
+  | "completed"
+  | "stuck"
+  | "distracted"
+  | "missed";
+
 type TerminalFormState = {
   status: PersistedTerminalStatus;
   outcome: ExecutionSession["outcome"];
@@ -103,47 +113,90 @@ function createTerminalForm(status: PersistedTerminalStatus): TerminalFormState 
   };
 }
 
-function persistedSessionStateLabel(
+function persistedSessionUiState(
   session: ExecutionSession | null,
   lastPersistedMark: Phase2MockExecutionSession["status"] | null,
-) {
+): SessionUiState {
   if (!session) {
-    return "Ready";
+    return "not_started";
   }
 
-  if (lastPersistedMark === "paused") {
-    return "Paused";
+  if (lastPersistedMark === "paused" && session.outcome === "partial") {
+    return "paused";
   }
 
-  if (session.outcome === "distracted") {
-    return "Distracted";
+  switch (session.outcome) {
+    case "completed":
+      return "completed";
+    case "blocked":
+      return "stuck";
+    case "distracted":
+      return "distracted";
+    case "skipped":
+      return "missed";
+    case "stopped":
+      return "stopped";
+    case "partial":
+    default:
+      return "running";
   }
-
-  return "In progress";
 }
 
-function demoSessionStateLabel(session: Phase2MockExecutionSession | null) {
+function demoSessionUiState(
+  session: Phase2MockExecutionSession | null,
+): SessionUiState {
   if (!session) {
-    return "Ready";
+    return "not_started";
   }
 
-  switch (session.status) {
+  return session.status;
+}
+
+function sessionStateLabelFromUiState(uiState: SessionUiState) {
+  switch (uiState) {
+    case "not_started":
+      return "Not started";
     case "running":
       return "In progress";
     case "paused":
       return "Paused";
-    case "distracted":
-      return "Distracted";
-    case "stuck":
-      return "Stuck";
-    case "missed":
-      return "Missed";
-    case "completed":
-      return "Completed";
     case "stopped":
       return "Stopped";
+    case "completed":
+      return "Completed";
+    case "stuck":
+      return "Stuck";
+    case "distracted":
+      return "Distracted";
+    case "missed":
+      return "Missed";
+  }
+}
+
+function isTerminalSessionState(uiState: SessionUiState) {
+  return (
+    uiState === "stopped" ||
+    uiState === "completed" ||
+    uiState === "stuck" ||
+    uiState === "distracted" ||
+    uiState === "missed"
+  );
+}
+
+function terminalNextStep(uiState: SessionUiState) {
+  switch (uiState) {
+    case "completed":
+      return "Session completed. Plan another block or review this later.";
+    case "stopped":
+      return "Session stopped in this browser. Decide the next useful step.";
+    case "stuck":
+      return "Session ended as stuck. Capture the blocker, then plan the next step.";
+    case "distracted":
+      return "Session ended as distracted. Capture what interrupted focus, then reset.";
+    case "missed":
+      return "Session ended as missed. Capture why it was missed, then re-plan.";
     default:
-      return "Ready";
+      return null;
   }
 }
 
@@ -233,23 +286,28 @@ export default function ExecutePage() {
   const persistedTasks = usesPersistedExecution ? executeState.tasks : [];
   const persistedBlocks = usesPersistedExecution ? executeState.blocks : [];
   const persistedSessions = usesPersistedExecution ? executeState.sessions : [];
-  const activePersistedSession =
-    persistedSessions.find(
-      (session) =>
-        session.outcome === "partial" || session.outcome === "distracted",
-    ) ?? null;
+  const latestPersistedSession =
+    usesPersistedExecution ? (persistedSessions[0] ?? null) : null;
 
   useEffect(() => {
-    if (!activePersistedSession) {
+    if (!latestPersistedSession) {
       setLastPersistedMark(null);
       setTerminalForm(null);
       setTerminalFormError(null);
     }
-  }, [activePersistedSession]);
+  }, [latestPersistedSession]);
 
   const activeSession = usesPersistedExecution
-    ? activePersistedSession
+    ? latestPersistedSession
     : (state.executionSessions[0] ?? null);
+  const sessionUiState = usesPersistedExecution
+    ? persistedSessionUiState(latestPersistedSession, lastPersistedMark)
+    : demoSessionUiState(activeSession as Phase2MockExecutionSession | null);
+  const sessionStateLabel = sessionStateLabelFromUiState(sessionUiState);
+  const hasActiveSession =
+    sessionUiState === "running" || sessionUiState === "paused";
+  const isTerminalSession = isTerminalSessionState(sessionUiState);
+  const terminalSessionNextStep = terminalNextStep(sessionUiState);
   const runnableTask = usesPersistedExecution
     ? (persistedTasks.find((task) => task.status === "active") ?? null)
     : (state.tasks.find((task) => task.status === "active") ??
@@ -266,14 +324,6 @@ export default function ExecutePage() {
       null)
     : (blocks.find((block) => block.task_id === activeTask?.id) ?? null);
   const area = activeTask ? getAreaById(activeTask.area_id) : null;
-  const mockSession = usesPersistedExecution
-    ? null
-    : (activeSession as Phase2MockExecutionSession | null);
-  const hasActiveSession = Boolean(activeSession);
-
-  const sessionStateLabel = usesPersistedExecution
-    ? persistedSessionStateLabel(activePersistedSession, lastPersistedMark)
-    : demoSessionStateLabel(mockSession);
   const sessionStartedAt = activeSession
     ? "created_at" in activeSession
       ? new Date(activeSession.created_at).toLocaleTimeString()
@@ -291,41 +341,55 @@ export default function ExecutePage() {
   const pauseDisabledReason =
     actionState.status === "saving"
       ? "Another execution action is saving."
-      : !hasActiveSession
-        ? "Start a session first."
-        : !usesPersistedExecution && mockSession?.status === "paused"
+      : sessionUiState === "running"
+        ? null
+        : sessionUiState === "paused"
           ? "Session is already paused."
-          : null;
+          : isTerminalSession
+            ? "Session already ended. Start another session to pause again."
+            : "Start a session first.";
   const resumeDisabledReason =
     actionState.status === "saving"
       ? "Another execution action is saving."
       : usesPersistedExecution
-        ? "Saved workspace does not persist a separate resume state yet."
-        : mockSession?.status === "paused"
+        ? sessionUiState === "paused"
+          ? "Saved workspace does not support resume yet. Choose an end outcome."
+          : "Resume is demo-mode only."
+        : sessionUiState === "paused"
           ? null
-          : "Resume is available after pausing.";
+          : sessionUiState === "running"
+            ? "Session is already running."
+            : "Resume is available after pausing.";
   const endDisabledReason =
     actionState.status === "saving"
       ? "Another execution action is saving."
-      : !hasActiveSession
-        ? "Start a session first."
-        : null;
+      : hasActiveSession
+        ? null
+        : isTerminalSession
+          ? "Session already ended. Start another session for new outcomes."
+          : "Start a session first.";
   const stopDisabledReason =
     actionState.status === "saving"
       ? "Another execution action is saving."
       : usesPersistedExecution
         ? "Stop is demo-mode only. Saved sessions need an end outcome and details."
+        : !hasActiveSession
+          ? isTerminalSession
+            ? "Session already ended. Start another session before stopping again."
+            : "Start a session first."
         : null;
 
   const nextRecommendedAction = terminalForm
     ? "Finish the recovery details, then save the end session."
-    : !hasActiveSession
-      ? "Start the session when you are ready to focus."
-      : sessionStateLabel === "Paused"
+    : terminalSessionNextStep
+      ? terminalSessionNextStep
+      : sessionUiState === "paused"
         ? usesPersistedExecution
-          ? "Choose an end outcome when this block is done."
+          ? "Paused in Saved workspace. Choose an end outcome to finish this session."
           : "Resume when ready, or choose an end outcome."
-        : "When this block ends, choose Complete, Stuck, Distracted, or Missed.";
+        : sessionUiState === "running"
+          ? "When this block ends, choose Complete, Stuck, Distracted, or Missed."
+          : "Start the session when you are ready to focus.";
 
   async function handleStart() {
     if (!activeTask || startDisabledReason) return;
@@ -405,7 +469,12 @@ export default function ExecutePage() {
         }
       | undefined,
   ) {
-    if (!activePersistedSession || status === "running" || status === "stopped") {
+    if (
+      !latestPersistedSession ||
+      !hasActiveSession ||
+      status === "running" ||
+      status === "stopped"
+    ) {
       return;
     }
 
@@ -413,7 +482,7 @@ export default function ExecutePage() {
     try {
       const result = await markExecutionSession(
         createSupabaseBrowserClient(),
-        activePersistedSession.id,
+        latestPersistedSession.id,
         status === "paused"
           ? { status }
           : {
@@ -496,7 +565,12 @@ export default function ExecutePage() {
       return;
     }
 
-    if (!activePersistedSession || status === "running" || status === "stopped") {
+    if (
+      !latestPersistedSession ||
+      !hasActiveSession ||
+      status === "running" ||
+      status === "stopped"
+    ) {
       return;
     }
 
@@ -746,8 +820,8 @@ export default function ExecutePage() {
               </p>
               <p className="mt-1 font-medium">
                 {usesPersistedExecution
-                  ? activePersistedSession?.actual_minutes != null
-                    ? `${activePersistedSession.actual_minutes} minutes recorded`
+                  ? latestPersistedSession?.actual_minutes != null
+                    ? `${latestPersistedSession.actual_minutes} minutes recorded`
                     : "Elapsed time is tracked after completion."
                   : "Demo timer only. No live elapsed tracking."}
               </p>
@@ -768,7 +842,7 @@ export default function ExecutePage() {
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Start / Pause / Resume
+              Primary session control
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -850,21 +924,6 @@ export default function ExecutePage() {
               >
                 Missed
               </Button>
-            </div>
-            {endDisabledReason ? (
-              <p className="text-xs text-muted-foreground">
-                End outcomes disabled: {endDisabledReason}
-              </p>
-            ) : null}
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Secondary actions
-            </p>
-            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="ghost"
@@ -874,6 +933,11 @@ export default function ExecutePage() {
                 {usesPersistedExecution ? "Stop (demo mode only)" : "Stop (this browser)"}
               </Button>
             </div>
+            {endDisabledReason ? (
+              <p className="text-xs text-muted-foreground">
+                End outcomes disabled: {endDisabledReason}
+              </p>
+            ) : null}
             {stopDisabledReason ? (
               <p className="text-xs text-muted-foreground">
                 Stop disabled: {stopDisabledReason}
@@ -881,6 +945,44 @@ export default function ExecutePage() {
             ) : (
               <p className="text-xs text-muted-foreground">
                 Stop only updates this browser in Demo mode.
+              </p>
+            )}
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Recovery / next-step actions
+            </p>
+            {isTerminalSession ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  This session is ended. Pick the next useful move.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild type="button" variant="outline">
+                    <Link href="/calendar">Plan another block</Link>
+                  </Button>
+                  <Button asChild type="button" variant="outline">
+                    <Link href="/capture">Capture what got in the way</Link>
+                  </Button>
+                  <Button asChild type="button" variant="outline">
+                    <Link href="/review">Review this later</Link>
+                  </Button>
+                  <Button asChild type="button" variant="secondary">
+                    <Link href="/calendar">Back to Planning</Link>
+                  </Button>
+                  {!usesPersistedExecution && startDisabledReason === null ? (
+                    <Button type="button" onClick={() => void handleStart()}>
+                      Start another session
+                    </Button>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Use these actions when a session ends or needs a reset.
               </p>
             )}
           </div>
