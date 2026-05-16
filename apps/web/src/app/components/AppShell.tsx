@@ -61,7 +61,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-3">
               <Link href="/capture" className="text-xl font-semibold tracking-tight">
                 LifeOS
@@ -70,8 +70,8 @@ function AppChrome({ children }: { children: ReactNode }) {
                 Personal workflow cockpit
               </Badge>
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-1 lg:w-auto lg:items-end">
+              <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
                 <ThemeToggle />
                 <Input
                   aria-label="Quick note text"
@@ -83,11 +83,12 @@ function AppChrome({ children }: { children: ReactNode }) {
                     }
                   }}
                   placeholder="Type a quick note"
-                  className="h-9 w-56"
+                  className="h-9 min-w-0 flex-1 sm:w-56 sm:flex-none"
                 />
                 <Button
                   type="button"
                   onClick={handleSaveQuickNote}
+                  className="w-full sm:w-auto"
                 >
                   Save quick note
                 </Button>
@@ -119,8 +120,8 @@ function AppChrome({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 overflow-x-auto pb-1">
-            <nav aria-label="Primary" className="flex min-w-max items-center gap-2">
+          <div className="flex flex-col gap-3 pb-1 lg:flex-row lg:items-center">
+            <nav aria-label="Primary" className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
               {navLinks.map((link) => {
                 const isActive =
                   pathname === link.href ||
@@ -130,7 +131,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                     key={link.href}
                     href={link.href}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-sm transition-colors",
+                      "rounded-full px-2.5 py-1.5 text-xs transition-colors sm:px-3 sm:text-sm",
                       isActive
                         ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -141,12 +142,12 @@ function AppChrome({ children }: { children: ReactNode }) {
                 );
               })}
             </nav>
-            <div className="ml-auto flex min-w-max items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
               <Select
                 aria-label="Current workflow area (session)"
                 value={selectedAreaId ?? ""}
                 onChange={(event) => setSelectedAreaId(event.target.value || null)}
-                className="h-9 min-w-44 rounded-full"
+                className="h-9 min-w-0 flex-1 rounded-full sm:min-w-44 sm:flex-none"
               >
                 {state.areas.map((area) => (
                   <option key={area.id} value={area.id}>

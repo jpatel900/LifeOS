@@ -500,7 +500,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Propose time" }),
+      await screen.findByRole("button", { name: "Draft a time block" }),
     );
 
     await waitFor(() => {
@@ -547,9 +547,41 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        "Planned time blocks will appear here after you propose time for a task. Checking calendar conflicts is optional and does not create events.",
+        "Planned time blocks will appear here after you draft a time block for a task. Checking calendar conflicts is optional and does not create events.",
       ),
     ).toBeDefined();
+  });
+
+  it("keeps accepted demo tasks plannable with a local draft-block action", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "mock",
+      tasks: [],
+      proposals: [],
+      blocks: [],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedAcceptedTask text="Call dentist tomorrow" />
+        <CalendarPage />
+      </>,
+    );
+
+    expect(await screen.findByText("Unplanned tasks")).toBeDefined();
+    expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(0);
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Draft a time block" })[0],
+    );
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Proposal drafted in Demo mode.");
+    expect(
+      screen.getAllByText(
+        "Quick proposal: next available hour. You can adjust this before approving.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(mocks.createTimeBlockProposal).not.toHaveBeenCalled();
   });
 
   it("accepting a persisted proposal creates a local calendar block", async () => {

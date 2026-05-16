@@ -14,6 +14,8 @@ PR3 Execute session-state rework now makes `/execute` a guided focus surface ins
 
 ## Recently completed
 
+- Fixed P0 triage-to-planning continuity for accepted tasks: `/calendar` now treats accepted active tasks as explicit **Unplanned tasks** in both Saved workspace and Demo mode, exposes a real `Draft a time block` action from that task list, and no longer dead-ends to planning empty state when an accepted task exists without a prebuilt proposal.
+- Fixed P0 mobile AppShell overflow on narrow screens: header controls now stack/wrap safely, primary nav wraps instead of forcing horizontal width, and area-picker/clock controls move to responsive rows so the shell does not cause horizontal overflow at 390px while preserving existing route labels, behavior, and accessibility semantics.
 - Added Playwright MCP agent-routing and validation guidance (`docs/CODEX_SKILL_ROUTING.md`, `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md`, `docs/agent/VALIDATION_MATRIX.md`) so future agents have explicit triggers, non-triggers, required UI journeys, required handoff output format, and safety limits (local/dev-only preference, mock/demo preference, no unapproved external writes).
 - Added `docs/VERCEL_PRODUCTION_CHECKLIST.md` with a production-focused Vercel env matrix, deploy prerequisites, post-deploy smoke order, stop-ship failures, and rollback sequence grounded in the current shipped Supabase/OpenAI/Google behavior.
 - Added a production/Vercel rollout note to `README.md` and clarified `.env.example`: the repo does not use a single demo-mode master flag, production behavior depends on complete Supabase/OpenAI/Google env configuration, observability remains optional, and persisted `/execute` timing limits remain an intentional truthful boundary.
@@ -129,7 +131,7 @@ PR3 Execute session-state rework now makes `/execute` a guided focus surface ins
 
 - Supabase multi-step workflow writes are still issued as separate client requests; future work should move proposal acceptance and execution transitions into transactional server/RPC boundaries if stronger atomicity is required.
 - Rescheduling does not yet check all-day events.
-- Mobile layout needs improvement.
+- Additional mobile polish may still be needed on some screen-specific content, but AppShell-level horizontal overflow at 390px is now fixed.
 - Supabase is scaffolded locally and Phase 4E UI uses it for areas, capture, accepted tasks/projects, local time-block proposals, local calendar blocks, execution sessions, review entries, and health check snapshots.
 - Supabase-backed capture and accepted-draft saves require an authenticated Supabase user because RLS policies enforce `auth.uid() = user_id`.
 - Persisted planning, execution, review, and health remain local-first. Google Calendar now supports connect/disconnect, manual free/busy checks, and explicit approval-gated event insert from local proposals, but there is still no event update/delete, review/health narrative AI, autonomous scheduling, background job, advanced analytics, full sync, or conflict auto-solver.

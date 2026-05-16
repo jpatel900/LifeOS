@@ -472,6 +472,42 @@ export function acceptDraft(
   };
 }
 
+export function createLocalProposalFromTask(
+  state: WorkflowState,
+  taskId: string,
+  input: {
+    proposed_start: string;
+    proposed_end: string;
+    rationale: string;
+  },
+): WorkflowState {
+  const task = state.tasks.find(
+    (item) => item.id === taskId && item.status === "active",
+  );
+  if (!task) {
+    return state;
+  }
+
+  const proposal = Phase2TimeBlockProposalSchema.parse({
+    id: nextId("proposal"),
+    user_id: task.user_id,
+    area_id: task.area_id,
+    task_id: task.id,
+    proposed_start: input.proposed_start,
+    proposed_end: input.proposed_end,
+    rationale: input.rationale,
+    conflict_flag: false,
+    status: "proposed",
+    created_at: nowIso(),
+  });
+
+  return {
+    ...state,
+    timeBlockProposals: [proposal, ...state.timeBlockProposals],
+    reviewLog: [`Drafted local block for task: ${task.title}`, ...state.reviewLog],
+  };
+}
+
 export function updateProposal(
   state: WorkflowState,
   proposalId: string,

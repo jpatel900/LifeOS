@@ -23,6 +23,7 @@ import {
   acceptProjectDraft,
   appendParsedWorkflowResult,
   acceptProposal,
+  createLocalProposalFromTask,
   createInitialWorkflowState,
   editDraft,
   markCurrentSession,
@@ -92,6 +93,13 @@ type WorkflowAction =
       >;
     }
   | {
+      type: "createProposalFromTask";
+      taskId: string;
+      proposedStart: string;
+      proposedEnd: string;
+      rationale: string;
+    }
+  | {
       type: "startSession";
       taskId: string;
     }
@@ -126,6 +134,12 @@ interface WorkflowContextValue {
       "proposed_start" | "proposed_end" | "rationale"
     >,
   ) => void;
+  createLocalProposalForTask: (input: {
+    taskId: string;
+    proposedStart: string;
+    proposedEnd: string;
+    rationale: string;
+  }) => void;
   startTaskSession: (taskId: string) => void;
   markSession: (status: Phase2MockExecutionSession["status"]) => void;
   resetWorkflow: () => void;
@@ -422,6 +436,12 @@ function workflowReducer(
       return rejectProposal(state, action.proposalId);
     case "updateProposal":
       return updateProposal(state, action.proposalId, action.changes);
+    case "createProposalFromTask":
+      return createLocalProposalFromTask(state, action.taskId, {
+        proposed_start: action.proposedStart,
+        proposed_end: action.proposedEnd,
+        rationale: action.rationale,
+      });
     case "startSession":
       return startExecutionSession(state, action.taskId);
     case "markSession":
@@ -519,6 +539,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "rejectProposal", proposalId }),
     editLocalProposal: (proposalId, changes) =>
       dispatch({ type: "updateProposal", proposalId, changes }),
+    createLocalProposalForTask: ({
+      taskId,
+      proposedStart,
+      proposedEnd,
+      rationale,
+    }) =>
+      dispatch({
+        type: "createProposalFromTask",
+        taskId,
+        proposedStart,
+        proposedEnd,
+        rationale,
+      }),
     startTaskSession: (taskId) => dispatch({ type: "startSession", taskId }),
     markSession: (status) => dispatch({ type: "markSession", status }),
     resetWorkflow: () => dispatch({ type: "reset" }),

@@ -284,6 +284,7 @@ export default function CalendarPage() {
     state,
     selectedAreaId,
     acceptLocalProposal,
+    createLocalProposalForTask,
     rejectLocalProposal,
     editLocalProposal,
   } = useWorkflow();
@@ -415,6 +416,30 @@ export default function CalendarPage() {
 
   async function handleCreateProposal(task: Task) {
     setActionState({ status: "saving", label: task.title });
+
+    if (!usesPersistedPlanning) {
+      const slot = nextLocalSlot(task);
+      createLocalProposalForTask({
+        taskId: task.id,
+        proposedStart: slot.proposed_start,
+        proposedEnd: slot.proposed_end,
+        rationale: QUICK_PROPOSAL_RATIONALE,
+      });
+      setActionState({
+        status: "saved",
+        label: "Proposal drafted in",
+        provider: "mock",
+      });
+      void captureEvent({
+        event: "proposal_created",
+        properties: {
+          area_present: Boolean(task.area_id),
+          feature: "calendar",
+          status: "proposed",
+        },
+      });
+      return;
+    }
 
     try {
       const result = await createTimeBlockProposal(
@@ -775,7 +800,13 @@ export default function CalendarPage() {
     nextItem.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const persistedTasks = usesPersistedPlanning ? planningState.tasks : [];
+  const scheduleableTasks = (
+    usesPersistedPlanning ? planningState.tasks : state.tasks
+  ).filter((task) => {
+    if (task.status !== "active") return false;
+    if (usesPersistedPlanning || !selectedAreaId) return true;
+    return task.area_id === selectedAreaId;
+  });
   const proposals = (
     usesPersistedPlanning ? planningState.proposals : state.timeBlockProposals
   ).filter((proposal) => {
@@ -789,10 +820,8 @@ export default function CalendarPage() {
     return block.area_id === selectedAreaId;
   });
   const hasAny =
-    persistedTasks.length > 0 || proposals.length > 0 || blocks.length > 0;
-  const nextTaskForProposal = usesPersistedPlanning
-    ? (persistedTasks[0] ?? null)
-    : null;
+    scheduleableTasks.length > 0 || proposals.length > 0 || blocks.length > 0;
+  const nextTaskForProposal = scheduleableTasks[0] ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -815,7 +844,7 @@ export default function CalendarPage() {
               onClick={() => void handleCreateProposal(nextTaskForProposal)}
               disabled={actionState.status === "saving"}
             >
-              Propose time for next task
+              Draft a time block for next task
             </Button>
           ) : proposals.length > 0 ? (
             <Button type="button" onClick={handleReviewNextProposal}>
@@ -901,23 +930,35 @@ export default function CalendarPage() {
       {!hasAny ? (
         <EmptyState
           title="No planned time blocks yet."
-          description="Planned time blocks will appear here after you propose time for a task. Checking calendar conflicts is optional and does not create events."
+          description="Planned time blocks will appear here after you draft a time block for a task. Checking calendar conflicts is optional and does not create events."
         />
       ) : (
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-          {usesPersistedPlanning ? (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Tasks ready to schedule</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
-                {persistedTasks.length === 0 ? (
-                  <EmptyState
-                    title="No saved active tasks."
-                    description="Accept task drafts in triage before proposing local time."
-                  />
-                ) : (
-                  persistedTasks.map((task) => (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Unplanned tasks</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {scheduleableTasks.length === 0 ? (
+                <EmptyState
+                  title={
+                    usesPersistedPlanning
+                      ? "No saved active tasks."
+                      : "No accepted tasks in this browser."
+                  }
+                  description={
+                    usesPersistedPlanning
+                      ? "Accept task drafts in triage before drafting local time blocks."
+                      : "Accept a task in Triage, then draft a local time block here."
+                  }
+                />
+              ) : (
+                scheduleableTasks.map((task) => {
+                  const area = usesPersistedPlanning
+                    ? null
+                    : getAreaById(task.area_id);
+
+                  return (
                     <div
                       key={task.id}
                       className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm"
@@ -928,20 +969,23 @@ export default function CalendarPage() {
                           Estimate: {task.estimated_minutes_low ?? "?"}-
                           {task.estimated_minutes_high ?? "?"} min
                         </div>
+                        {area ? (
+                          <div className="text-muted-foreground">Area: {area.name}</div>
+                        ) : null}
                       </div>
                       <Button
                         type="button"
                         onClick={() => void handleCreateProposal(task)}
                         disabled={actionState.status === "saving"}
                       >
-                        Propose time
+                        Draft a time block
                       </Button>
                     </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          ) : null}
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
               <CardHeader className="pb-3">
@@ -953,7 +997,7 @@ export default function CalendarPage() {
               {proposals.length === 0 ? (
                 <EmptyState
                   title="No planned time blocks."
-                  description="Propose time from an active task to stage a local block."
+                  description="Draft a time block from an unplanned task to stage a local block."
                 />
               ) : (
                 proposals.map((proposal) => {
@@ -962,7 +1006,7 @@ export default function CalendarPage() {
                     : getAreaById(proposal.area_id);
                   const conflictSummary = proposalConflictSummary(proposal);
                   const task = usesPersistedPlanning
-                    ? persistedTasks.find(
+                    ? scheduleableTasks.find(
                         (item) => item.id === proposal.task_id,
                       )
                     : state.tasks.find((item) => item.id === proposal.task_id);
@@ -1300,7 +1344,7 @@ export default function CalendarPage() {
                     ? null
                     : getAreaById(block.area_id);
                   const task = usesPersistedPlanning
-                    ? persistedTasks.find((item) => item.id === block.task_id)
+                    ? scheduleableTasks.find((item) => item.id === block.task_id)
                     : state.tasks.find((item) => item.id === block.task_id);
 
                   return (
