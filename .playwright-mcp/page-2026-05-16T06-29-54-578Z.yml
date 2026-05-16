@@ -1,0 +1,82 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - link "LifeOS" [ref=e7] [cursor=pointer]:
+          - /url: /capture
+        - generic [ref=e8]:
+          - generic [ref=e9]:
+            - button "Toggle theme" [disabled]:
+              - img
+            - textbox "Quick note text" [ref=e10]:
+              - /placeholder: Type a quick note
+            - button "Save quick note" [ref=e11]
+          - paragraph [ref=e12]: Saves in this browser only.
+      - generic [ref=e13]:
+        - navigation "Primary" [ref=e14]:
+          - link "Capture" [ref=e15] [cursor=pointer]:
+            - /url: /capture
+          - link "Triage" [ref=e16] [cursor=pointer]:
+            - /url: /triage
+          - link "Planning" [ref=e17] [cursor=pointer]:
+            - /url: /calendar
+          - link "Execute" [ref=e18] [cursor=pointer]:
+            - /url: /execute
+          - link "Review" [ref=e19] [cursor=pointer]:
+            - /url: /review
+          - link "Health" [ref=e20] [cursor=pointer]:
+            - /url: /health
+          - link "Areas" [ref=e21] [cursor=pointer]:
+            - /url: /settings/areas
+        - generic [ref=e22]:
+          - combobox "Current workflow area (session)" [ref=e23]:
+            - option "Main Job" [selected]
+            - option "Personal"
+            - option "Volunteer Work"
+            - option "Side Project"
+          - generic [ref=e24]: "--:--:--"
+  - main [ref=e25]:
+    - generic "Current area context" [ref=e26]:
+      - generic [ref=e27]: Current area
+      - generic [ref=e28]: Main Job
+      - generic [ref=e29]: "Session workflow area: Main Job"
+    - group [ref=e30]:
+      - generic "System details" [ref=e31] [cursor=pointer]
+    - generic [ref=e32]:
+      - generic [ref=e33]:
+        - heading "Capture" [level=1] [ref=e34]
+        - paragraph [ref=e35]: Save one thought now, then organize it if helpful.
+      - generic [ref=e37]:
+        - 'heading "Organization help: Checking sorting options..." [level=3] [ref=e38]'
+        - paragraph [ref=e39]: You can still save thoughts and organize them in this browser.
+      - group [ref=e40]:
+        - generic "System details" [ref=e41] [cursor=pointer]
+      - group [ref=e42]:
+        - generic "Developer details" [ref=e43] [cursor=pointer]
+      - status [ref=e44]: Loading capture context...
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - heading "Capture a thought" [level=3] [ref=e47]
+          - paragraph [ref=e48]: The fastest path is one quick thought and one next action.
+        - generic [ref=e49]:
+          - text: What are you thinking about?
+          - textbox "What are you thinking about?" [ref=e50]:
+            - /placeholder: What's on your mind? Type anything...
+          - paragraph [ref=e51]: After Save thought or Save and organize, this field clears so you can capture the next thought.
+          - generic [ref=e52]:
+            - heading "Save options" [level=2] [ref=e53]
+            - text: Area for this saved thought
+            - combobox "Area for this saved thought" [ref=e54]:
+              - option "No area yet" [selected]
+            - paragraph [ref=e55]: Selecting an area here also updates the header session workflow area when a matching local workflow area exists.
+            - generic [ref=e56]:
+              - button "Save thought" [ref=e57]
+              - button "Save and organize" [ref=e58]
+          - generic [ref=e59]:
+            - paragraph [ref=e60]: The header workflow area picker controls this browser draft flow and the recent-captures list on this page.
+            - button "Organize in this browser" [ref=e61]
+      - generic [ref=e62]:
+        - heading "Recent captures (this browser only)" [level=2] [ref=e63]
+        - generic [ref=e65]:
+          - heading "No captures in this browser for this area yet." [level=3] [ref=e66]
+          - paragraph [ref=e67]: Use Organize in this browser for local draft flow, or Save thought for durable storage.
