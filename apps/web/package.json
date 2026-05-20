@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "next typegen && tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@langfuse/otel": "^5.3.0",
@@ -41,6 +42,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
+    "@playwright/test": "^1.51.1",
     "eslint": "^9",
     "eslint-config-next": "^15",
     "jsdom": "^25",
