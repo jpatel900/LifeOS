@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import CapturePage from "../app/capture/page";
@@ -52,6 +52,25 @@ describe("workflow route provider wiring", () => {
     expect(
       screen.getByPlaceholderText("What's on your mind? Type anything..."),
     ).toBeDefined();
+  });
+
+  it("shows quick note save feedback in the app shell", async () => {
+    renderThroughAppShell(<CapturePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save quick note" }));
+    expect(
+      await screen.findByText(
+        "Quick note was not saved. Type a note first, or use Capture.",
+      ),
+    ).toBeDefined();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Quick note text" }), {
+      target: { value: "quick-note-route-smoke" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save quick note" }));
+
+    expect(await screen.findByText("Saved.")).toBeDefined();
+    expect(screen.getByText(/Review it in/i)).toBeDefined();
   });
 
   it.each([

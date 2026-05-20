@@ -217,6 +217,7 @@ export default function CapturePage() {
         capture: result.capture,
         source: "save",
       });
+      setLastSavedCapture(result.capture);
       setText("");
       setParseState({ status: "idle" });
       void captureEvent({
@@ -349,6 +350,15 @@ export default function CapturePage() {
         canRetryWithMock: false,
       });
     }
+  }
+
+  async function handleOrganizeSavedCapture() {
+    if (!lastSavedCapture) {
+      return;
+    }
+
+    setParseState({ status: "parsing", parserMode: "auto" });
+    await parseCaptureForSavedCapture(lastSavedCapture, "auto");
   }
 
   async function handleRetryWithMockParser() {
@@ -556,8 +566,23 @@ export default function CapturePage() {
           <AlertDescription>
             {saveState.source === "save_and_organize"
               ? "Saved before organizing."
-              : "You can organize it now or keep capturing."}
+              : `${storageModeLabel(saveState.provider)} stored this raw capture. Recent captures below are browser-only and may not include this saved item.`}
           </AlertDescription>
+          {saveState.source === "save" ? (
+            <div className="mt-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void handleOrganizeSavedCapture()}
+                disabled={parseState.status === "parsing"}
+              >
+                {parseState.status === "parsing"
+                  ? "Organizing saved capture..."
+                  : "Organize this saved thought"}
+              </Button>
+            </div>
+          ) : null}
         </Alert>
       ) : null}
 
@@ -644,4 +669,3 @@ export default function CapturePage() {
     </div>
   );
 }
-

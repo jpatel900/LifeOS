@@ -52,9 +52,13 @@ function AppChrome({ children }: { children: ReactNode }) {
       return;
     }
 
-    submitCaptureText(value, selectedAreaId);
-    setQuickNoteText("");
-    setQuickNoteStatus("saved");
+    try {
+      submitCaptureText(value, selectedAreaId);
+      setQuickNoteText("");
+      setQuickNoteStatus("saved");
+    } catch {
+      setQuickNoteStatus("error");
+    }
   }
 
   return (
@@ -98,7 +102,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               </p>
               {quickNoteStatus === "error" ? (
                 <p className="text-xs text-destructive">
-                  Type a note first, or use Capture.
+                  Quick note was not saved. Type a note first, or use Capture.
                 </p>
               ) : null}
               {quickNoteStatus === "saved" ? (

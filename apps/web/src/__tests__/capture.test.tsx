@@ -172,6 +172,73 @@ describe("CapturePage", () => {
     ).toBeDefined();
   });
 
+  it("explains where Save thought went and can organize the saved capture", async () => {
+    mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.createCaptureItem.mockResolvedValue({
+      provider: "supabase",
+      capture: persistedCapture,
+    });
+
+    const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/parse-capture" && !init?.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            status: "ai_configured",
+            preferredParser: "ai",
+          }),
+        } satisfies Partial<Response>;
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          ok: true,
+          parser: "ai",
+          response: parseResponse,
+          status: "ai_configured",
+        }),
+      } satisfies Partial<Response>;
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    renderCapturePage();
+
+    fireEvent.change(
+      await screen.findByPlaceholderText(
+        "What's on your mind? Type anything...",
+      ),
+      { target: { value: "Email Taylor about launch notes" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+
+    expect(await screen.findByText("Saved.")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Saved workspace stored this raw capture. Recent captures below are browser-only and may not include this saved item.",
+      ),
+    ).toBeDefined();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Organize this saved thought" }),
+    );
+
+    expect(await screen.findByText("Sent to review.")).toBeDefined();
+    expect(screen.getByRole("link", { name: "Review it now" })).toBeDefined();
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/parse-capture",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining(
+            '"rawText":"Email Taylor about launch notes"',
+          ),
+        }),
+      ),
+    );
+  });
+
   it("saves capture, parses, and shows triage routing for low confidence", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
     mocks.createCaptureItem.mockResolvedValue({
