@@ -69,6 +69,7 @@ describe("source-of-truth boundaries", () => {
       "apps/web/src/lib/supabase/browser.ts",
       "apps/web/src/lib/supabase/config.ts",
       "apps/web/src/app/capture/page.tsx",
+      "apps/web/src/app/page.tsx",
       "apps/web/src/app/settings/areas/page.tsx",
       "apps/web/src/app/settings/areas/GoogleCalendarConnectionPanel.tsx",
       "apps/web/src/app/triage/page.tsx",
@@ -97,6 +98,7 @@ describe("source-of-truth boundaries", () => {
   it("keeps Google Calendar integration on server routes only through Phase 7E", () => {
     const clientFiles = [
       "apps/web/src/app/calendar/page.tsx",
+      "apps/web/src/app/page.tsx",
       "apps/web/src/app/settings/areas/page.tsx",
       "apps/web/src/app/settings/areas/GoogleCalendarConnectionPanel.tsx",
       "apps/web/src/lib/data/workflow.ts",
@@ -214,6 +216,16 @@ describe("source-of-truth boundaries", () => {
     expect(settings).toContain("Storage mode:");
     expect(settings).toContain("Storage mode id:");
     expect(settings).toContain("planned time blocks");
+  });
+
+  it("keeps Home as read-only workflow routing with no calendar/event write helpers", () => {
+    const home = readRepoFile("apps/web/src/app/page.tsx");
+
+    expect(home).not.toMatch(/createGoogleCalendarEventFromProposal/);
+    expect(home).not.toMatch(/acceptTimeBlockProposal/);
+    expect(home).not.toMatch(/createTimeBlockProposal/);
+    expect(home).not.toMatch(/markExecutionSession/);
+    expect(home).not.toMatch(/getHealthDashboard/);
   });
 
   it("marks parser modules with explicit server runtime guards", () => {

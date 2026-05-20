@@ -105,6 +105,27 @@ test("header quick note save feedback shows clear error then success", async ({
   ).toBeVisible();
 });
 
+test("home cockpit quick capture shows truthful error/success and route links", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Next" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Save quick capture" }).click();
+  await expect(page.getByText("Type a note first.")).toBeVisible();
+
+  await page.getByLabel("Home quick capture text").fill("Home cockpit capture test");
+  await page.getByRole("button", { name: "Save quick capture" }).click();
+  await expect(page.getByText("Saved.")).toBeVisible();
+  await expect(
+    page.getByText("Saved in this browser and sent to"),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "Open Triage" }).click();
+  await expect(page).toHaveURL(/\/triage$/);
+});
+
 test("capture save feedback and save-and-organize route to triage", async ({
   page,
 }) => {
@@ -245,4 +266,13 @@ test("keyboard tab path reaches key controls", async ({ page }) => {
   await tabUntilFocused(page, page.getByLabel("Current workflow area (session)"));
   await tabUntilFocused(page, page.getByLabel("What are you thinking about?"));
   await tabUntilFocused(page, page.getByRole("button", { name: "Save thought" }));
+});
+
+test("home keyboard tab path reaches cockpit controls", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("body").click({ position: { x: 10, y: 10 } });
+
+  await tabUntilFocused(page, page.getByLabel("Home quick capture text"));
+  await tabUntilFocused(page, page.getByRole("button", { name: "Save quick capture" }));
+  await tabUntilFocused(page, page.getByRole("link", { name: "Open next step" }));
 });

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import HomePage from "../app/page";
 import CapturePage from "../app/capture/page";
 import CalendarPage from "../app/calendar/page";
 import ExecutePage from "../app/execute/page";
@@ -74,6 +75,7 @@ describe("workflow route provider wiring", () => {
   });
 
   it.each([
+    ["home", () => <HomePage />],
     ["triage", () => <TriagePage />],
     ["calendar", () => <CalendarPage />],
     ["execute", () => <ExecutePage />],

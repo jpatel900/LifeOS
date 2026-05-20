@@ -67,7 +67,7 @@ function AppChrome({ children }: { children: ReactNode }) {
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/capture" className="text-xl font-semibold tracking-tight">
+              <Link href="/" className="text-xl font-semibold tracking-tight">
                 LifeOS
               </Link>
               <Badge variant="secondary" className="hidden sm:inline-flex">
