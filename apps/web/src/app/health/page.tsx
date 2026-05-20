@@ -24,6 +24,15 @@ type HealthLoadState =
   | { status: "ready"; result: HealthDashboardResult }
   | { status: "error"; message: string };
 
+type CheckFeedbackState =
+  | { status: "idle" }
+  | { status: "running"; message: string }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };
+
+const HEALTH_LOAD_TIMEOUT_MS = 20_000;
+const HEALTH_TIMEOUT_ERROR_CODE = "health_timeout";
+
 function storageModeLabel(mode: HealthDashboardResult["provider"]) {
   return mode === "supabase" ? "Saved workspace" : "Demo mode";
 }
@@ -63,8 +72,28 @@ function humanStatus(summary: string, status: "healthy" | "watch" | "critical") 
   return { label: "Needs attention", variant: "destructive" as const };
 }
 
+function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(HEALTH_TIMEOUT_ERROR_CODE));
+    }, timeoutMs);
+
+    work.then(
+      (result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      },
+      (error: unknown) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      },
+    );
+  });
+}
+
 export default function HealthPage() {
   const [state, setState] = useState<HealthLoadState>({ status: "loading" });
+  const [feedback, setFeedback] = useState<CheckFeedbackState>({ status: "idle" });
   const [checkRunId, setCheckRunId] = useState(0);
 
   useEffect(() => {
@@ -72,8 +101,15 @@ export default function HealthPage() {
 
     async function runSystemCheck() {
       setState({ status: "loading" });
+      setFeedback({
+        status: "running",
+        message: "Run in progress. Please wait.",
+      });
       try {
-        const result = await getHealthDashboard(createSupabaseBrowserClient());
+        const result = await withTimeout(
+          getHealthDashboard(createSupabaseBrowserClient()),
+          HEALTH_LOAD_TIMEOUT_MS,
+        );
 
         if (!cancelled) {
           void captureEvent({
@@ -86,14 +122,24 @@ export default function HealthPage() {
             },
           });
           setState({ status: "ready", result });
+          setFeedback({
+            status: "success",
+            message: "System check complete.",
+          });
         }
       } catch (error) {
         if (!cancelled) {
-          void error;
+          const errorMessage =
+            error instanceof Error && error.message === HEALTH_TIMEOUT_ERROR_CODE
+              ? "Health checks are taking too long. Verify your connection or session, then run the check again."
+              : "Unable to load health checks right now. Verify auth/session and storage mode, then retry.";
           setState({
             status: "error",
-            message:
-              "Unable to load health checks right now. Verify auth/session and storage mode, then retry.",
+            message: errorMessage,
+          });
+          setFeedback({
+            status: "error",
+            message: "Last run failed. Fix the issue and run the check again.",
           });
         }
       }
@@ -116,6 +162,8 @@ export default function HealthPage() {
         })
       : [];
 
+  const isRunDisabled = state.status === "loading";
+
   return (
     <div className="flex flex-col gap-6">
       <section className="space-y-2">
@@ -126,10 +174,17 @@ export default function HealthPage() {
         <Button
           type="button"
           onClick={() => setCheckRunId((id) => id + 1)}
-          disabled={state.status === "loading"}
+          disabled={isRunDisabled}
         >
           Run system check
         </Button>
+        <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+          {isRunDisabled
+            ? "Run in progress. Please wait."
+            : feedback.status === "success" || feedback.status === "error"
+              ? feedback.message
+              : "Run a system check to refresh status."}
+        </p>
         <span className="sr-only">mock</span>
       </section>
 

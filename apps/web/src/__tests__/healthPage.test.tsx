@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HealthDashboardResult } from "@/lib/data/health";
 import HealthPage from "../app/health/page";
@@ -37,6 +37,7 @@ describe("HealthPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createSupabaseBrowserClient.mockReturnValue({ client: "mock" });
+    vi.useRealTimers();
   });
 
   it("treats optional-disabled states as informational non-warnings", async () => {
@@ -121,5 +122,100 @@ describe("HealthPage", () => {
       "Unable to load health checks right now. Verify auth/session and storage mode, then retry.",
     );
     expect(alert).not.toHaveTextContent("sk-secret-123");
+  });
+
+  it("shows a visible disabled reason while a system check is running", async () => {
+    let resolveDashboard: ((result: HealthDashboardResult) => void) | null = null;
+    const pendingDashboard = new Promise<HealthDashboardResult>((resolve) => {
+      resolveDashboard = resolve;
+    });
+    mocks.getHealthDashboard.mockReturnValue(pendingDashboard);
+
+    render(<HealthPage />);
+
+    const runButton = screen.getByRole("button", { name: "Run system check" });
+    expect(runButton).toBeDisabled();
+    expect(screen.getByText("Run in progress. Please wait.")).toBeDefined();
+
+    if (!resolveDashboard) {
+      throw new Error("resolveDashboard was not set.");
+    }
+    const finishDashboard = resolveDashboard as (result: HealthDashboardResult) => void;
+    finishDashboard(
+      readyResult([
+        {
+          id: "mock-mode",
+          subsystem: "mock mode",
+          status: "healthy",
+          score: 100,
+          summary: "Mock mode is available.",
+          details: { informational: true, summary: "Mock mode is available." },
+        },
+      ]),
+    );
+
+    expect(await screen.findByText("System check complete.")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Run system check" })).not.toBeDisabled();
+  });
+
+  it("moves from loading to error when health loading exceeds timeout", async () => {
+    vi.useFakeTimers();
+    mocks.getHealthDashboard.mockImplementation(
+      () => new Promise<HealthDashboardResult>(() => {}),
+    );
+
+    render(<HealthPage />);
+
+    expect(screen.getByText("Loading health...")).toBeDefined();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20000);
+    });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Health checks could not load");
+    expect(alert).toHaveTextContent(
+      "Health checks are taking too long. Verify your connection or session, then run the check again.",
+    );
+    expect(screen.getByRole("button", { name: "Run system check" })).not.toBeDisabled();
+  });
+
+  it("shows success feedback after a manual re-run", async () => {
+    mocks.getHealthDashboard
+      .mockResolvedValueOnce(
+        readyResult([
+          {
+            id: "auth",
+            subsystem: "auth session",
+            status: "watch",
+            score: 60,
+            summary: "Sign in before checking Supabase areas.",
+            details: { summary: "Sign in before checking Supabase areas." },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        readyResult([
+          {
+            id: "auth",
+            subsystem: "auth session",
+            status: "healthy",
+            score: 100,
+            summary: "Authenticated Supabase session is active.",
+            details: { summary: "Authenticated Supabase session is active." },
+          },
+        ]),
+      );
+
+    render(<HealthPage />);
+
+    expect(await screen.findByText("System check complete.")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Run system check" }));
+
+    await waitFor(() => {
+      expect(mocks.getHealthDashboard).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("System check complete.")).toBeDefined();
   });
 });
