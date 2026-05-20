@@ -277,7 +277,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(await screen.findByText("No active areas yet.")).toBeDefined();
   });
 
-  it("requires local-reset confirmation and shows success after reset", async () => {
+  it("requires local-reset confirmation, supports cancel, and shows success after reset", async () => {
     mocks.listAreas.mockResolvedValue({
       provider: "supabase",
       areas: [area],
@@ -286,17 +286,31 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<AreasSettingsPage />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Reset this browser only" }),
+      await screen.findByRole("button", { name: "Reset this browser" }),
     );
 
-    expect(await screen.findByText("Confirm local reset")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm reset" }));
+    expect(
+      await screen.findByText("Reset local data on this browser?"),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        /This only clears local demo.session data on this device\. It does not delete cloud data\./i,
+      ),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Reset local data on this browser?"),
+      ).toBeNull();
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset this browser" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, reset this browser" }));
 
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Local reset complete");
-    expect(status).toHaveTextContent(
-      "This browser session workflow state was cleared.",
-    );
+    expect(status).toHaveTextContent("Local browser data reset.");
   });
 
   it("saves capture_items through Supabase from the capture page", async () => {

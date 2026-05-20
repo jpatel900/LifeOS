@@ -333,7 +333,7 @@ export default function TriagePage() {
 
       {loadState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Loading triage context...
+          Checking saved workspace context. You can still review drafts.
         </p>
       ) : null}
 

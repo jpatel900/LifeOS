@@ -13,25 +13,25 @@ export function ThemeToggle() {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
-    return (
-      <Button aria-label="Toggle theme" variant="ghost" size="icon" disabled>
-        <MoonStar />
-      </Button>
-    );
-  }
-
-  const isDark = theme !== "light";
+  const isDark = mounted ? theme !== "light" : true;
 
   return (
-    <Button
-      aria-label="Toggle theme"
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      type="button"
-    >
-      {isDark ? <Sun /> : <MoonStar />}
-    </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        aria-label="Toggle theme"
+        variant="ghost"
+        size="icon"
+        onClick={() => setTheme(isDark ? "light" : "dark")}
+        type="button"
+        disabled={!mounted}
+      >
+        {isDark ? <Sun /> : <MoonStar />}
+      </Button>
+      {!mounted ? (
+        <span className="text-xs text-muted-foreground">
+          Theme toggle is loading.
+        </span>
+      ) : null}
+    </div>
   );
 }

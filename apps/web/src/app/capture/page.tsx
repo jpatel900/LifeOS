@@ -448,7 +448,7 @@ export default function CapturePage() {
 
       {areasState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Loading capture context...
+          Checking saved workspace areas. You can still capture now.
         </p>
       ) : null}
 

@@ -246,7 +246,7 @@ export default function ReviewPage() {
 
       {reviewState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Loading review context...
+          Checking saved review rows. Local reflection is still available.
         </p>
       ) : null}
 

@@ -649,7 +649,7 @@ export default function ExecutePage() {
         </section>
         {executeState.status === "loading" ? (
           <p role="status" className="text-sm text-muted-foreground">
-            Loading execution context...
+            Checking saved execution rows. Demo guidance is still available.
           </p>
         ) : null}
         {executeState.status === "error" ? (

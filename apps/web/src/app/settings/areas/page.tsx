@@ -135,29 +135,27 @@ export default function AreasSettingsPage() {
 
       <GoogleCalendarConnectionPanel />
 
-      <Card className="border-dashed border-destructive/50">
+      <Card className="border-dashed border-destructive/60 bg-destructive/5">
         <CardHeader>
           <CardTitle className="text-lg">Local reset</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            Reset clears local browser session workflow state (captures, drafts,
-            ambiguity assessments, and planned time blocks). It does not delete
-            Saved workspace or Demo mode rows.
+            This only clears local demo/session data on this device. It does not
+            delete cloud data.
           </p>
           {resetState === "success" ? (
             <Alert variant="success" role="status" aria-live="polite">
-              <AlertTitle>Local reset complete</AlertTitle>
-              <AlertDescription>
-                This browser session workflow state was cleared.
-              </AlertDescription>
+              <AlertTitle>Local browser data reset.</AlertTitle>
             </Alert>
           ) : null}
           {resetState === "confirming" ? (
-            <Alert variant="destructive">
-              <AlertTitle>Confirm local reset</AlertTitle>
+            <Alert variant="destructive" role="alert">
+              <AlertTitle>Reset local data on this browser?</AlertTitle>
               <AlertDescription>
-                This cannot be undone for this browser session.
+                This clears local demo/session data for this device only,
+                including captures, drafts, ambiguity checks, and planned time blocks.
+                It does not delete cloud data.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -172,7 +170,7 @@ export default function AreasSettingsPage() {
                     setResetState("success");
                   }}
                 >
-                  Confirm reset
+                  Yes, reset this browser
                 </Button>
                 <Button
                   type="button"
@@ -188,7 +186,7 @@ export default function AreasSettingsPage() {
                 variant="destructive"
                 onClick={() => setResetState("confirming")}
               >
-                Reset this browser only
+                Reset this browser
               </Button>
             )}
           </div>
@@ -197,4 +195,3 @@ export default function AreasSettingsPage() {
     </div>
   );
 }
-

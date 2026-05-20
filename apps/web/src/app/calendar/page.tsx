@@ -864,7 +864,7 @@ export default function CalendarPage() {
 
       {planningState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Loading planning context...
+          Checking saved planning rows. Local planning view is still available.
         </p>
       ) : null}
 
