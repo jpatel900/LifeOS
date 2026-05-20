@@ -114,6 +114,7 @@ describe("buildTodayCockpitModel", () => {
     const model = buildTodayCockpitModel(
       baseInput({
         now: new Date("2026-05-20T12:00:00.000-04:00"),
+        timezone: "America/Toronto",
         blocks: [
           {
             id: "b-before",

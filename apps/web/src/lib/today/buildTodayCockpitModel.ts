@@ -36,6 +36,7 @@ export interface TodayCockpitSession {
 
 export interface BuildTodayCockpitModelInput {
   now?: Date;
+  timezone?: string;
   tasks: TodayCockpitTask[];
   drafts: TodayCockpitDraft[];
   proposals: TodayCockpitProposal[];
@@ -95,13 +96,37 @@ const TODAY_BLOCK_STATUSES = new Set(["scheduled", "running", "missed", "complet
 const RECOVERY_SESSION_STATUSES = new Set(["missed", "stuck", "distracted"]);
 const RECOVERY_OUTCOMES = new Set(["blocked", "skipped", "distracted"]);
 
-function startOfLocalDay(now: Date) {
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+function getRuntimeLocalDateKey(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function isWithinLocalDay(iso: string, dayStart: Date, dayEndExclusive: Date) {
-  const time = new Date(iso).getTime();
-  return time >= dayStart.getTime() && time < dayEndExclusive.getTime();
+function createCalendarDateKeyGetter(timezone?: string) {
+  if (!timezone) {
+    return (value: Date) => getRuntimeLocalDateKey(value);
+  }
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  return (value: Date) => {
+    const parts = formatter.formatToParts(value);
+    const year = parts.find((part) => part.type === "year")?.value;
+    const month = parts.find((part) => part.type === "month")?.value;
+    const day = parts.find((part) => part.type === "day")?.value;
+
+    if (!year || !month || !day) {
+      return getRuntimeLocalDateKey(value);
+    }
+
+    return `${year}-${month}-${day}`;
+  };
 }
 
 function normalizeSessionStatus(session: TodayCockpitSession) {
@@ -130,9 +155,8 @@ function isRecoverySession(session: TodayCockpitSession) {
 
 export function buildTodayCockpitModel(input: BuildTodayCockpitModelInput): TodayCockpitModel {
   const now = input.now ?? new Date();
-  const dayStart = startOfLocalDay(now);
-  const dayEndExclusive = new Date(dayStart);
-  dayEndExclusive.setDate(dayEndExclusive.getDate() + 1);
+  const getCalendarDateKey = createCalendarDateKeyGetter(input.timezone);
+  const todayDateKey = getCalendarDateKey(now);
 
   const taskById = new Map(input.tasks.map((task) => [task.id, task] as const));
   const needsDecisionItems = input.drafts.slice(0, 3);
@@ -162,7 +186,7 @@ export function buildTodayCockpitModel(input: BuildTodayCockpitModelInput): Toda
     .filter(
       (block) =>
         TODAY_BLOCK_STATUSES.has(block.status) &&
-        isWithinLocalDay(block.startAt, dayStart, dayEndExclusive),
+        getCalendarDateKey(new Date(block.startAt)) === todayDateKey,
     )
     .sort(
       (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
