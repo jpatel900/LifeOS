@@ -18,6 +18,7 @@ P0 Execute terminal-state coherence is now fixed: `/execute` uses explicit UI st
 
 ## Recently completed
 
+- Added Codex PR review automation for pull requests: `.github/workflows/codex-pr-review.yml` now runs on `opened`, `synchronize`, `reopened`, and `ready_for_review`, skips draft PRs, checks out the PR merge ref with `persist-credentials: false`, runs `openai/codex-action@v1` with the repo-local prompt at `.github/codex/prompts/pr-review.md`, saves `codex-pr-review.md` as an artifact, and posts the final review back to the PR as a top-level review comment. The workflow stays review-only by constraining permissions to `contents: read` for analysis and `pull-requests: write` only for posting the review; no push or patch behavior is enabled.
 - Added the initial GitHub Actions CI workflow at
   `.github/workflows/ci.yml`: it runs on pull requests and pushes to `main`
   with least-privilege `contents: read`, pins Node 20 and pnpm 11.1.0, uses
