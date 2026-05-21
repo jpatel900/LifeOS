@@ -24,8 +24,8 @@ P0 Execute terminal-state coherence is now fixed: `/execute` uses explicit UI st
   with least-privilege `contents: read`, pins Node 20 and pnpm 11.1.0, uses
   pnpm cache via `actions/setup-node`, and validates the monorepo with
   `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm type-check`,
-  `pnpm test`, `pnpm build`, and `pnpm format:check` without changing runtime
-  behavior or adding deployment/secrets.
+  `pnpm test`, `pnpm build`, and a non-blocking `pnpm format:check` warning
+  without changing runtime behavior or adding deployment/secrets.
 - Completed Phase 7A durable browser-regression hardening for P0 UX trust journeys: added Playwright config and stable accessible-locator tests in `apps/web/tests/e2e/p0-ux-regression.spec.ts` covering quick note feedback, capture save/save+organize, triage edit/note/accept-to-planning path, health run-check readiness states, areas reset cancel/confirm, 390px overflow checks on core routes, execute empty-state CTA, and keyboard tab reachability through primary controls.
 - Completed Today/Home Cockpit v1 on `/` with a pure selector layer (`apps/web/src/lib/today/buildTodayCockpitModel.ts`) and scoped UI wiring (`apps/web/src/app/page.tsx`): Home now shows deterministic Now/Next, quick capture with truthful local-save messaging, needs-decision summaries, unplanned task routing, today planned blocks by local-day boundaries, non-shaming recovery signals, and Health link-first trust status; it does not create proposals, accept blocks, start sessions, run health persistence, or write Google Calendar events.
 - Added cockpit regression coverage: new model unit tests (`apps/web/src/__tests__/todayCockpitModel.test.ts`), updated Home route tests (`apps/web/src/__tests__/page.test.tsx`), route smoke coverage for Home provider wiring (`apps/web/src/__tests__/routeSmoke.test.tsx`), source-of-truth boundary assertions for Home write-safety (`apps/web/src/__tests__/sourceOfTruth.test.ts`), and focused Home Playwright journeys in `apps/web/tests/e2e/p0-ux-regression.spec.ts`.
