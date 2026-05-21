@@ -1,0 +1,560 @@
+name: Codex Low-Risk Issue To PR
+
+on:
+  issues:
+    types:
+      - labeled
+      - edited
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Open issue number labeled `agent:ready` and `risk:low`
+        required: true
+        type: number
+
+concurrency:
+  group: codex-low-risk-issue-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  resolve-issue:
+    name: Resolve issue scope
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.resolve.outputs.should_run }}
+      issue_number: ${{ steps.resolve.outputs.issue_number }}
+      issue_title: ${{ steps.resolve.outputs.issue_title }}
+      issue_url: ${{ steps.resolve.outputs.issue_url }}
+      issue_body: ${{ steps.resolve.outputs.issue_body }}
+      branch_name: ${{ steps.resolve.outputs.branch_name }}
+
+    steps:
+      - name: Load issue details and eligibility
+        id: resolve
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber =
+              context.eventName === 'workflow_dispatch'
+                ? Number(core.getInput('issue_number', { required: true }))
+                : context.payload.issue?.number;
+
+            if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+              core.setFailed('A valid issue number is required.');
+              return;
+            }
+
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const labels = issue.labels.map((label) =>
+              typeof label === 'string' ? label : label.name ?? '',
+            );
+            const hasLabel = (name) => labels.includes(name);
+            const shouldRun =
+              issue.state === 'open' &&
+              hasLabel('agent:ready') &&
+              hasLabel('risk:low') &&
+              !hasLabel('needs:human-decision') &&
+              !hasLabel('risk:medium') &&
+              !hasLabel('risk:high');
+
+            core.setOutput('should_run', String(shouldRun));
+            core.setOutput('issue_number', String(issue.number));
+            core.setOutput('issue_title', issue.title ?? '');
+            core.setOutput('issue_url', issue.html_url ?? issue.url ?? '');
+            core.setOutput('issue_body', issue.body ?? '');
+            core.setOutput('branch_name', `codex/issue-${issue.number}-low-risk`);
+
+            if (!shouldRun) {
+              core.notice(
+                `Skipping issue #${issue.number}: state=${issue.state}, labels=${labels.join(', ') || 'none'}`,
+              );
+            }
+
+  codex-generate:
+    name: Generate low-risk patch
+    if: needs.resolve-issue.outputs.should_run == 'true'
+    needs:
+      - resolve-issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      final_message: ${{ steps.run_codex.outputs.final-message }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create working branch
+        env:
+          BRANCH_NAME: ${{ needs.resolve-issue.outputs.branch_name }}
+        run: git switch --create "$BRANCH_NAME"
+
+      - name: Write issue context for Codex
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}
+          ISSUE_URL: ${{ needs.resolve-issue.outputs.issue_url }}
+          ISSUE_BODY: ${{ needs.resolve-issue.outputs.issue_body }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const issuePath = path.join(process.env.GITHUB_WORKSPACE, '.git', 'codex', 'low-risk-issue.md');
+            fs.mkdirSync(path.dirname(issuePath), { recursive: true });
+
+            const body = [
+              `# GitHub Issue #${process.env.ISSUE_NUMBER}`,
+              '',
+              `URL: ${process.env.ISSUE_URL}`,
+              '',
+              '## Title',
+              process.env.ISSUE_TITLE ?? '',
+              '',
+              '## Body',
+              process.env.ISSUE_BODY ?? '',
+              '',
+            ].join('\n');
+
+            fs.writeFileSync(issuePath, body, 'utf8');
+
+      - name: Run Codex low-risk implementation
+        id: run_codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4-mini
+          effort: high
+          prompt-file: .github/codex/prompts/low-risk-implementation.md
+          output-file: codex-low-risk-implementation.json
+          output-schema: |
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "result",
+                "summary",
+                "risks",
+                "rollback_plan",
+                "deferred_items",
+                "issue_comment",
+                "human_review_reason"
+              ],
+              "properties": {
+                "result": {
+                  "type": "string",
+                  "enum": ["ready", "no_changes", "needs_human_review"]
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "risks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "rollback_plan": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "deferred_items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "issue_comment": {
+                  "type": "string"
+                },
+                "human_review_reason": {
+                  "type": ["string", "null"]
+                }
+              }
+            }
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+
+      - name: Capture Codex patch artifact
+        if: always()
+        shell: bash
+        run: |
+          git add -N .
+          git diff --binary --stat > "$RUNNER_TEMP/codex-diff.stat"
+          git diff --binary > "$RUNNER_TEMP/codex-changes.patch"
+          git diff --name-only > "$RUNNER_TEMP/codex-changed-files.txt"
+
+      - name: Upload Codex patch artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-low-risk-issue-${{ needs.resolve-issue.outputs.issue_number }}
+          path: |
+            ${{ runner.temp }}/codex-diff.stat
+            ${{ runner.temp }}/codex-changes.patch
+            ${{ runner.temp }}/codex-changed-files.txt
+          if-no-files-found: error
+
+  validate-and-open-pr:
+    name: Validate and open PR
+    if: needs.resolve-issue.outputs.should_run == 'true'
+    needs:
+      - resolve-issue
+      - codex-generate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download Codex patch artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-low-risk-issue-${{ needs.resolve-issue.outputs.issue_number }}
+          path: ${{ runner.temp }}/codex-low-risk
+
+      - name: Parse Codex result
+        id: codex_result
+        uses: actions/github-script@v7
+        env:
+          CODEX_FINAL_MESSAGE: ${{ needs.codex-generate.outputs.final_message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const parsed = JSON.parse(process.env.CODEX_FINAL_MESSAGE ?? '{}');
+            core.setOutput('result', parsed.result ?? '');
+            core.setOutput('summary', parsed.summary ?? '');
+            core.setOutput('issue_comment', parsed.issue_comment ?? '');
+            core.setOutput('human_review_reason', parsed.human_review_reason ?? '');
+            core.setOutput('risks_json', JSON.stringify(parsed.risks ?? []));
+            core.setOutput('rollback_plan_json', JSON.stringify(parsed.rollback_plan ?? []));
+            core.setOutput('deferred_items_json', JSON.stringify(parsed.deferred_items ?? []));
+
+      - name: Comment when human review is required
+        if: steps.codex_result.outputs.result == 'needs_human_review'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
+          HUMAN_REVIEW_REASON: ${{ steps.codex_result.outputs.human_review_reason }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const reason = process.env.HUMAN_REVIEW_REASON
+              ? `\n\nReason: ${process.env.HUMAN_REVIEW_REASON}`
+              : '';
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.ISSUE_NUMBER),
+              body: `## Codex low-risk automation\n\n${process.env.ISSUE_COMMENT || 'This issue needs human review before automation can continue.'}${reason}`,
+            });
+
+      - name: Comment when no changes are needed
+        if: steps.codex_result.outputs.result == 'no_changes'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.ISSUE_NUMBER),
+              body: `## Codex low-risk automation\n\n${process.env.ISSUE_COMMENT || 'No code changes were needed for this issue.'}`,
+            });
+
+      - name: Create working branch
+        if: steps.codex_result.outputs.result == 'ready'
+        env:
+          BRANCH_NAME: ${{ needs.resolve-issue.outputs.branch_name }}
+        run: git switch --create "$BRANCH_NAME"
+
+      - name: Apply Codex patch
+        if: steps.codex_result.outputs.result == 'ready'
+        shell: bash
+        run: |
+          PATCH_FILE="$RUNNER_TEMP/codex-low-risk/codex-changes.patch"
+          if [ -s "$PATCH_FILE" ]; then
+            git apply --binary "$PATCH_FILE"
+          fi
+
+      - name: Check for changed files
+        id: changed_files
+        if: steps.codex_result.outputs.result == 'ready'
+        shell: bash
+        run: |
+          git add -N .
+          git diff --name-only > "$RUNNER_TEMP/changed-files.txt"
+          if [ ! -s "$RUNNER_TEMP/changed-files.txt" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment when Codex produced no repository changes
+        if: steps.changed_files.outputs.has_changes == 'false'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.ISSUE_NUMBER),
+              body: `## Codex low-risk automation\n\n${process.env.ISSUE_COMMENT || 'Codex did not produce any repository changes for this issue.'}`,
+            });
+
+      - name: Guard forbidden paths
+        id: guard_paths
+        if: steps.changed_files.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          violations_file="$RUNNER_TEMP/forbidden-path-violations.txt"
+          : > "$violations_file"
+
+          while IFS= read -r file; do
+            case "$file" in
+              supabase/migrations/*|apps/web/src/lib/googleCalendar/*|apps/web/src/app/api/google-calendar/*|apps/web/src/lib/ai/contracts/*|apps/web/src/lib/ai/parseCapture.ts|apps/web/src/lib/observability/*|.env*|package.json|pnpm-lock.yaml)
+                echo "$file" >> "$violations_file"
+                ;;
+            esac
+          done < "$RUNNER_TEMP/changed-files.txt"
+
+          if [ -s "$violations_file" ]; then
+            echo "blocked=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "violations<<EOF"
+              cat "$violations_file"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment when forbidden paths were touched
+        if: steps.guard_paths.outputs.blocked == 'true'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          SUMMARY: ${{ steps.codex_result.outputs.summary }}
+          VIOLATIONS: ${{ steps.guard_paths.outputs.violations }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const violations = (process.env.VIOLATIONS || '')
+              .split('\n')
+              .filter(Boolean)
+              .map((file) => `- \`${file}\``)
+              .join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.ISSUE_NUMBER),
+              body: [
+                '## Codex low-risk automation',
+                '',
+                'Codex proposed edits outside the allowed low-risk surface. Human review is required.',
+                '',
+                process.env.SUMMARY || '',
+                '',
+                'Forbidden paths touched:',
+                violations || '- None captured.',
+              ].join('\n'),
+            });
+
+      - name: Stop when forbidden paths were touched
+        if: steps.guard_paths.outputs.blocked == 'true'
+        shell: bash
+        run: exit 1
+
+      - name: Set up pnpm
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: pnpm lint
+
+      - name: Type-check
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: pnpm type-check
+
+      - name: Test
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: pnpm test
+
+      - name: Build
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: pnpm build
+
+      - name: Check formatting
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: pnpm format:check
+
+      - name: Check diff formatting
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: git diff --check
+
+      - name: Commit and push branch
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        env:
+          BRANCH_NAME: ${{ needs.resolve-issue.outputs.branch_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Codex low-risk issue #${{ needs.resolve-issue.outputs.issue_number }}"
+          git push --force-with-lease origin "$BRANCH_NAME"
+
+      - name: Create or update pull request
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}
+          ISSUE_URL: ${{ needs.resolve-issue.outputs.issue_url }}
+          BRANCH_NAME: ${{ needs.resolve-issue.outputs.branch_name }}
+          SUMMARY: ${{ steps.codex_result.outputs.summary }}
+          RISKS_JSON: ${{ steps.codex_result.outputs.risks_json }}
+          ROLLBACK_PLAN_JSON: ${{ steps.codex_result.outputs.rollback_plan_json }}
+          DEFERRED_ITEMS_JSON: ${{ steps.codex_result.outputs.deferred_items_json }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const branchName = process.env.BRANCH_NAME;
+            const changedFiles = fs
+              .readFileSync(`${process.env.RUNNER_TEMP}/changed-files.txt`, 'utf8')
+              .split('\n')
+              .filter(Boolean);
+
+            const risks = JSON.parse(process.env.RISKS_JSON || '[]');
+            const rollbackPlan = JSON.parse(process.env.ROLLBACK_PLAN_JSON || '[]');
+            const deferredItems = JSON.parse(process.env.DEFERRED_ITEMS_JSON || '[]');
+
+            const renderList = (items, emptyText) =>
+              items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : `- ${emptyText}`;
+
+            const body = [
+              `Closes #${issueNumber}`,
+              '',
+              `Linked issue: ${process.env.ISSUE_URL}`,
+              '',
+              '## Summary',
+              process.env.SUMMARY || 'Low-risk repository automation update.',
+              '',
+              '## Files Changed',
+              renderList(changedFiles.map((file) => `\`${file}\``), 'None.'),
+              '',
+              '## Validation',
+              '- `pnpm install --frozen-lockfile`',
+              '- `pnpm lint`',
+              '- `pnpm type-check`',
+              '- `pnpm test`',
+              '- `pnpm build`',
+              '- `pnpm format:check`',
+              '- `git diff --check`',
+              '',
+              '## Risks',
+              renderList(risks, 'Low-risk scoped automation only.'),
+              '',
+              '## Rollback Plan',
+              renderList(rollbackPlan, 'Revert the automation commit and close this PR.'),
+              '',
+              '## Deferred Items',
+              renderList(deferredItems, 'None.'),
+            ].join('\n');
+
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${branchName}`,
+              base: 'main',
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: existing.data[0].number,
+                title: `[Codex] ${process.env.ISSUE_TITLE}`,
+                body,
+              });
+              return;
+            }
+
+            await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Codex] ${process.env.ISSUE_TITLE}`,
+              head: branchName,
+              base: 'main',
+              body,
+            });
