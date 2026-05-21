@@ -1,0 +1,145 @@
+name: Agent Task
+description: Create a bounded, agent-ready LifeOS implementation task.
+title: "[Agent Task] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to create narrow implementation packets for LifeOS agents.
+
+        LifeOS defaults:
+        - Do not broaden scope.
+        - Do not touch secrets.
+        - Do not weaken schemas or tests.
+        - Do not add vendors or integrations.
+        - Do not create autonomous external writes.
+        - Preserve mock and demo paths.
+        - Stop and hand back to a human if the task touches schema, RLS, auth, OAuth, calendar writes, observability privacy, or production deployment without explicit approval.
+  - type: input
+    id: task_title
+    attributes:
+      label: Task title
+      description: Short, specific, implementation-oriented title.
+      placeholder: Fix calendar approval banner copy on /calendar
+    validations:
+      required: true
+  - type: dropdown
+    id: task_type
+    attributes:
+      label: Task type
+      description: Pick the main surface. If the task spans multiple areas, the issue is probably too broad.
+      options:
+        - docs
+        - tests
+        - ui
+        - capture
+        - parser
+        - calendar
+        - health
+        - observability
+        - supabase
+        - security
+        - deployment
+    validations:
+      required: true
+  - type: dropdown
+    id: risk_level
+    attributes:
+      label: Risk level
+      description: Use `blocked-human-decision` when the task cannot proceed safely without a decision or approval.
+      options:
+        - low
+        - medium
+        - high
+        - blocked-human-decision
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: State the exact outcome, not a vague area.
+      placeholder: >
+        Make the calendar approval banner explain exactly when Google writes can happen,
+        without changing approval logic or adding new calendar behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: why_this_matters
+    attributes:
+      label: Why this matters
+      description: Explain the user or product cost of leaving this unfixed.
+      placeholder: >
+        The current wording is ambiguous about whether the app can write to Google
+        automatically, which undermines trust in a safety-critical flow.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Write concrete checks. If the criteria are missing or fuzzy, the task is not ready.
+      placeholder: |
+        - Only the targeted UI copy changes.
+        - The approval gate wording is explicit and truthful.
+        - Existing mock and demo behavior remains intact.
+        - Relevant tests are updated or confirmed unchanged.
+        - No runtime behavior changes outside the stated goal.
+    validations:
+      required: true
+  - type: textarea
+    id: files_docs_to_read
+    attributes:
+      label: Files/docs to read
+      description: List the minimum required context for the agent before editing.
+      value: |
+        - AGENTS.md
+        - docs/CODEX_SKILL_ROUTING.md
+        - docs/agent/CONTEXT_INDEX.md
+        - README.md
+        - docs/PROJECT_STATE.md only if current status or implementation notes are needed
+    validations:
+      required: true
+  - type: textarea
+    id: forbidden_changes
+    attributes:
+      label: Forbidden changes
+      description: Keep the task boxed in. Add any task-specific boundaries below the defaults.
+      value: |
+        - Do not broaden scope.
+        - Do not touch secrets.
+        - Do not weaken schemas or tests.
+        - Do not add vendors or integrations.
+        - Do not create autonomous external writes.
+        - Preserve mock and demo paths.
+        - Stop and hand back to a human if the task touches schema, RLS, auth, OAuth, calendar writes, observability privacy, or production deployment without explicit approval.
+    validations:
+      required: true
+  - type: textarea
+    id: validation_commands
+    attributes:
+      label: Validation commands
+      description: List the exact commands the agent must run before claiming completion. Add task-specific commands as needed.
+      value: |
+        pnpm format:check
+        git diff --check
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: human_approval_required
+    attributes:
+      label: Human approval required?
+      description: Choose `yes` if any explicit human sign-off or approval gate is part of completion.
+      options:
+        - "no"
+        - "yes"
+    validations:
+      required: true
+  - type: textarea
+    id: notes_context
+    attributes:
+      label: Notes/context
+      description: Extra constraints, exact routes, screenshots, linked issues, or known pitfalls.
+      placeholder: >
+        Mention exact files, routes, tests, or phrases that must stay unchanged.
