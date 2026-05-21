@@ -18,7 +18,7 @@ P0 Execute terminal-state coherence is now fixed: `/execute` uses explicit UI st
 
 ## Recently completed
 
-- Added Codex PR review automation for pull requests: `.github/workflows/codex-pr-review.yml` now runs on `opened`, `synchronize`, `reopened`, and `ready_for_review`, skips draft PRs, checks out the PR merge ref with `persist-credentials: false`, runs `openai/codex-action@v1` with the repo-local prompt at `.github/codex/prompts/pr-review.md`, saves `codex-pr-review.md` as an artifact, and posts the final review back to the PR as a top-level review comment. The workflow stays review-only by constraining permissions to `contents: read` for analysis and `pull-requests: write` only for posting the review; no push or patch behavior is enabled.
+- Added Codex PR review escalation protocol only: `.github/workflows/codex-pr-review.yml` now splits review into a deterministic `classify-risk` job, a default baseline review on `gpt-5.4-mini` high, and a conditional escalated review on `gpt-5.5` high when risky labels/paths/size thresholds or the baseline reviewer request it. The workflow remains review-only, skips draft PRs, adds `labeled`/`unlabeled` triggers, keeps `safety-strategy: drop-sudo`, uses read-only Codex sandboxes, and posts separate baseline vs escalated PR review comments without push/patch behavior. Supporting assets now live in `.github/codex/prompts/pr-review-baseline.md`, `.github/codex/prompts/pr-review-escalated.md`, `scripts/agent/classify-pr-risk.mjs`, and `docs/agent/PR_REVIEW_ESCALATION_POLICY.md`.
 - Added the initial GitHub Actions CI workflow at
   `.github/workflows/ci.yml`: it runs on pull requests and pushes to `main`
   with least-privilege `contents: read`, pins Node 20 and pnpm 11.1.0, uses
@@ -168,6 +168,7 @@ P0 Execute terminal-state coherence is now fixed: `/execute` uses explicit UI st
 
 ## Important implementation notes
 
+- PR review automation is now intentionally two-tiered. Use `scripts/agent/classify-pr-risk.mjs` for deterministic escalation logic, keep the baseline reviewer cheap by default (`gpt-5.4-mini` high), and reserve `gpt-5.5` high for risky labels/paths/size or explicit baseline uncertainty. Keep both review jobs read-only and do not reintroduce patch/push behavior into CI review automation.
 - Durable P0 UX browser-regression coverage lives in `apps/web/tests/e2e/p0-ux-regression.spec.ts` with config at `apps/web/playwright.config.ts`. The suite uses role/label/name-first selectors, runs against local/dev mode, and does not perform Google Calendar writes.
 - `apps/web/components.json` and `apps/web/postcss.config.mjs` now initialize app-local shadcn-style component wiring and Tailwind v4 postcss integration. Keep UI work token-first through `globals.css` variables instead of ad-hoc per-page color literals.
 - `apps/web/src/components/theme-provider.tsx` includes a safe `matchMedia` fallback for test environments that do not provide it; avoid removing this unless tests are updated to polyfill consistently.
