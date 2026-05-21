@@ -243,10 +243,13 @@ export default function HomePage() {
         : { state: "unavailable" as const },
     [state.healthChecks],
   );
+  const browserTimeZone =
+    Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
 
   const cockpit = useMemo(
     () =>
       buildTodayCockpitModel({
+        timezone: browserTimeZone,
         tasks: tasks.map((task) => ({
           id: task.id,
           title: task.title,
@@ -275,7 +278,16 @@ export default function HomePage() {
         health: healthState,
         dataDegraded: homeData.status === "degraded",
       }),
-    [blocks, drafts, healthState, homeData.status, proposals, sessionsForModel, tasks],
+    [
+      blocks,
+      browserTimeZone,
+      drafts,
+      healthState,
+      homeData.status,
+      proposals,
+      sessionsForModel,
+      tasks,
+    ],
   );
 
   function handleQuickCaptureSubmit() {
