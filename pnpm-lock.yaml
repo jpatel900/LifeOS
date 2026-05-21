@@ -10,6 +10,10 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      '@playwright/test':
+        specifier: ^1.60.0
+        version: 1.60.0
     devDependencies:
       prettier:
         specifier: ^3.5.0
