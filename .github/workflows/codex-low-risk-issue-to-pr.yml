@@ -41,7 +41,7 @@ jobs:
           script: |
             const issueNumber =
               context.eventName === 'workflow_dispatch'
-                ? Number(core.getInput('issue_number', { required: true }))
+                ? Number(context.payload.inputs?.issue_number)
                 : context.payload.issue?.number;
 
             if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
