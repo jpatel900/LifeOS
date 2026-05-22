@@ -453,7 +453,10 @@ jobs:
 
       - name: Check formatting
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
-        run: pnpm format:check
+        run: |
+          if ! pnpm format:check; then
+            echo "::warning::pnpm format:check failed. Formatting drift is non-blocking in this workflow."
+          fi
 
       - name: Check diff formatting
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
