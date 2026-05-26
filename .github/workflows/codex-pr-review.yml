@@ -27,7 +27,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Pre-fetch base and head refs for the PR
@@ -66,7 +66,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Pre-fetch base and head refs for the PR
@@ -90,7 +90,7 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-5.4-mini
-          effort: high
+          effort: medium
           prompt-file: .github/codex/prompts/pr-review-baseline.md
           output-file: codex-pr-review-baseline.md
           sandbox: read-only
@@ -120,7 +120,7 @@ jobs:
             const body = [
               '## Codex Baseline Review',
               `Model: gpt-5.4-mini`,
-              `Effort: high`,
+              `Effort: medium`,
               `Classifier risk level: ${process.env.PR_RISK_LEVEL}`,
               `Classifier escalation reasons: ${process.env.PR_ESCALATION_REASONS}`,
               '',
@@ -156,7 +156,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Pre-fetch base and head refs for the PR
@@ -226,7 +226,7 @@ jobs:
 
             const body = [
               '## Codex Escalated Review',
-              'Model: gpt-5.5',
+              'Model: gpt-5.4',
               'Effort: high',
               `Escalation trigger: ${triggerReasons.length > 0 ? triggerReasons.join(' | ') : 'manual risk escalation'}`,
               '',

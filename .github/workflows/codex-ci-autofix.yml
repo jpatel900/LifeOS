@@ -339,7 +339,7 @@ jobs:
           model: gpt-5.4-mini
           effort: high
           prompt-file: .git/codex/ci-autofix-prompt.md
-          output-file: codex-ci-autofix.json
+          output-file: .git/codex/codex-ci-autofix.json
           output-schema: |
             {
               "type": "object",
