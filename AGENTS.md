@@ -408,6 +408,7 @@ Required sequence:
 - The review must distinguish real blockers from optional cleanup and prefer small, scoped cleanup over broad refactors.
 - Prefer repo-local `.agents/skills` over global/user-level skills.
 - Use `docs/CODEX_SKILL_ROUTING.md` for the compact default Codex skill/plugin allow-vs-avoid routing policy.
+- Use `.github/AGENT_AUTOMATION_POLICY.md` for GitHub/agent automation tiering; if a task spans tiers, apply the highest tier.
 - Use relevant skills automatically when the task clearly matches the skill description.
 - Do not wait for direct skill invocation when a trusted repo-local skill clearly applies.
 - Treat global/user-level skills as lower-trust and review them before use.

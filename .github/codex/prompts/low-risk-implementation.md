@@ -57,6 +57,13 @@ Stop and do not make repository changes if any of these are true:
 - The issue needs broad refactoring or multi-surface edits.
 - The issue cannot be completed safely without human judgment.
 
+Limited docs-only exception:
+
+- If the issue is docs-only and does not name a file, you may still proceed when there is exactly one obvious existing documentation surface that already owns the referenced repo-level commands or concept.
+- For repo-level command clarification, prefer `README.md` when it already contains the relevant command list.
+- Only use this exception for a single-file wording or ordering clarification grounded in existing repo automation or docs.
+- If more than one plausible target doc exists, stop and hand back to a human instead of guessing.
+
 If you proceed:
 
 - Make the minimum repo change needed.

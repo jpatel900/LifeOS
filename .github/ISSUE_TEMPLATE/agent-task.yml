@@ -58,7 +58,7 @@ body:
     id: goal
     attributes:
       label: Goal
-      description: State the exact outcome, not a vague area.
+      description: State the exact outcome, not a vague area. For docs tasks, name the target doc and the exact clarification to make.
       placeholder: >
         Make the calendar approval banner explain exactly when Google writes can happen,
         without changing approval logic or adding new calendar behavior.
@@ -78,7 +78,7 @@ body:
     id: acceptance_criteria
     attributes:
       label: Acceptance criteria
-      description: Write concrete checks. If the criteria are missing or fuzzy, the task is not ready.
+      description: Write concrete checks. If the criteria are missing or fuzzy, the task is not ready. For docs tasks, include the exact doc target and the exact wording or ordering to add or change.
       placeholder: |
         - Only the targeted UI copy changes.
         - The approval gate wording is explicit and truthful.
@@ -142,4 +142,4 @@ body:
       label: Notes/context
       description: Extra constraints, exact routes, screenshots, linked issues, or known pitfalls.
       placeholder: >
-        Mention exact files, routes, tests, or phrases that must stay unchanged.
+        Mention exact files, routes, tests, or phrases that must stay unchanged. For docs tasks, include the exact target file and the exact order or wording expected if the title alone is not enough.
