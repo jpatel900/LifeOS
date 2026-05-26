@@ -13,6 +13,8 @@
   - Clarified engineering automation boundaries in policy and `AGENTS.md`.
   - Removed test globs from `scripts/agent/check-safe-automerge.mjs` and updated self-tests.
   - Standardized docs/package policy around Node 22 while leaving runtime dependencies and workflow permissions unchanged.
+  - Follow-up review fixes treat `.github/codex/prompts/**` as control-plane files that require human review and are excluded from safe auto-merge and low-risk issue automation.
+  - Follow-up review fixes also document that safe auto-merge can only arm GitHub auto-merge when the repository-level auto-merge setting is enabled.
 - Deviations:
   - Did not change `README.md` because it did not contain a contradictory Node-version claim.
   - Did not change `docs/CODEX_SKILL_ROUTING.md` because the existing routing policy already fit the approved scope.
@@ -32,18 +34,24 @@
   - `docs/agent/PR_REVIEW_ESCALATION_POLICY.md`: align docs to live PR review workflow.
   - `package.json`: align Node engine range to Node 22.
   - `docs/PROJECT_STATE.md`: concise governance-hardening note plus stale detail corrections.
+  - Follow-up review fixes:
+  - `scripts/agent/check-safe-automerge.mjs`: remove `.github/codex/prompts/**` from the safe allowlist and add self-test coverage proving prompt-file changes are blocked.
+  - `.github/AGENT_AUTOMATION_POLICY.md`: move automation prompt files and workflow changes into human-review-required control-plane rules, clarify approved GitHub write surfaces, and document the repo-level auto-merge prerequisite.
+  - `.github/workflows/codex-low-risk-issue-to-pr.yml`: block `.github/codex/prompts/*` in the low-risk forbidden-path guard.
+  - `AGENTS.md`: align the engineering automation boundary wording with the approved GitHub-only write scope.
+  - `docs/agent/CODEX_PROMPT_TEMPLATE.md`: align Verification Oracle scope wording with `AGENTS.md`.
 - Validation commands and results:
-  - Pending until repo validation finishes:
-    - `node scripts/agent/check-safe-automerge.mjs --self-test`
-    - `pnpm format:check`
-    - `pnpm lint`
-    - `pnpm type-check`
-    - `pnpm test`
-    - `pnpm build`
-    - `git status`
+  - `node scripts/agent/check-safe-automerge.mjs --self-test`: passed (`Self-test passed (8 cases).`)
+  - `pnpm format:check`: failed from known unrelated repo-wide Prettier drift; warnings were reported across many pre-existing files outside this patch surface, including `.github/codex/prompts/*`, multiple workflow files, many `.playwright-mcp/*.yml`, `README.md`, `pnpm-workspace.yaml`, and existing `apps/web` sources.
+  - `pnpm lint`: passed
+  - `pnpm type-check`: passed
+  - `pnpm test`: passed (`@lifeos/web`: `39` files passed, `1` skipped; `252` tests passed, `14` skipped)
+  - `pnpm build`: passed
+  - `git status`: expected governance-only edits remain in `.github/AGENT_AUTOMATION_POLICY.md`, `.github/workflows/codex-low-risk-issue-to-pr.yml`, `AGENTS.md`, `docs/PROJECT_STATE.md`, `docs/agent/CODEX_PROMPT_TEMPLATE.md`, `docs/implementation-notes/2026-05-26-governance-hardening-agent-process.md`, and `scripts/agent/check-safe-automerge.mjs`
 - Risks:
   - Repo-wide validation may fail for unrelated pre-existing drift.
   - Blocking test-only auto-merge may slow some low-risk maintenance PRs.
+  - Safe auto-merge still depends on the repository-level GitHub auto-merge setting being enabled outside the repo.
 - Deferred items:
   - A future stronger assertion-preservation guard if the team wants to reconsider test-only auto-merge.
   - Any workflow-model upgrade beyond the current PR review model/effort alignment.

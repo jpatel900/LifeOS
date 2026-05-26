@@ -57,7 +57,7 @@ Final proof format:
 
 ## Verification Oracle
 
-Every medium/high-risk or ambiguous implementation prompt should define a Verification Oracle before editing:
+Every medium/high-risk, local-debugging, governance, or otherwise ambiguous implementation prompt should define a Verification Oracle before editing:
 
 - the exact user journey or behavior that must work
 - the test or command that proves it

@@ -12,7 +12,6 @@ const ALLOWED_PATH_PATTERNS = [
   "docs/**",
   "README.md",
   ".github/ISSUE_TEMPLATE/**",
-  ".github/codex/prompts/**",
 ];
 
 const FORBIDDEN_PATH_PATTERNS = [
@@ -228,6 +227,18 @@ function runSelfTest() {
       input: {
         labels: ["automerge:safe", "risk:low"],
         changedPaths: ["apps/web/src/__tests__/page.test.tsx"],
+        draft: false,
+      },
+      expected: {
+        eligible: false,
+        reasonCount: 1,
+      },
+    },
+    {
+      name: "automation prompt files are blocked",
+      input: {
+        labels: ["automerge:safe", "risk:low"],
+        changedPaths: [".github/codex/prompts/low-risk-implementation.md"],
         draft: false,
       },
       expected: {

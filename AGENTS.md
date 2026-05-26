@@ -413,9 +413,9 @@ Required sequence:
 ## 20A. Engineering Automation Boundary
 
 - LifeOS product/runtime automation remains tightly restricted by product requirements and safety rules.
-- Engineering automations may write only to isolated branches or GitHub PR metadata, never directly to `main`.
+- Engineering automations may write only to isolated branches and approved GitHub metadata surfaces such as pull requests or issue comments, never directly to `main`.
 - Engineering automations must be label-gated, path-guarded, validation-gated, and governed by `.github/AGENT_AUTOMATION_POLICY.md`.
-- Engineering automations must not touch production data, secrets, external systems, or LifeOS runtime state.
+- Engineering automations must not touch production data, secrets, non-GitHub external systems, or LifeOS runtime state.
 - Default delivery for repo automation is GitHub-first. Use local Codex CLI when medium/high-risk, local debugging, or governance hardening is safer or faster under active human supervision.
 
 ## Skill Routing and Skill Security
