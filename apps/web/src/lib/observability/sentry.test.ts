@@ -5,10 +5,7 @@ import {
   OBSERVABILITY_REDACTED_EMAIL,
   OBSERVABILITY_REDACTED_TEXT,
 } from "./sanitize";
-import {
-  getSentryInitConfig,
-  sanitizeSentryEvent,
-} from "./sentry";
+import { getSentryInitConfig, sanitizeSentryEvent } from "./sentry";
 
 describe("sentry observability helpers", () => {
   it("returns null init config when Sentry DSN is absent", () => {

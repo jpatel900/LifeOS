@@ -144,13 +144,11 @@ function getDefaultAdapters(env: ObservabilityEnv = process.env) {
         ? createPostHogAdapter(status)
         : status.provider === "langfuse"
           ? createLangfuseAdapter(status)
-      : createNoopAdapter(status),
+          : createNoopAdapter(status),
   );
 }
 
-export function createObservability(
-  options: CreateObservabilityOptions = {},
-) {
+export function createObservability(options: CreateObservabilityOptions = {}) {
   const getActiveAdapters = () =>
     (options.adapters ?? getDefaultAdapters(options.env)).filter(
       (adapter) => adapter.status.state === "configured",
@@ -193,8 +191,11 @@ export function createObservability(
         operation: input.operation,
         metadata: sanitizeEventProperties(input.metadata),
         finalizeMetadata: input.finalizeMetadata
-          ? (outcome: { ok: true; value: unknown } | { ok: false; error: unknown }) =>
-              sanitizeEventProperties(input.finalizeMetadata?.(outcome))
+          ? (
+              outcome:
+                | { ok: true; value: unknown }
+                | { ok: false; error: unknown },
+            ) => sanitizeEventProperties(input.finalizeMetadata?.(outcome))
           : undefined,
       };
 
@@ -230,7 +231,8 @@ export function createObservability(
           metadata: {
             operation: "parse_capture",
             parser: input.parser,
-            provider: input.provider ?? (input.parser === "ai" ? "openai" : "mock"),
+            provider:
+              input.provider ?? (input.parser === "ai" ? "openai" : "mock"),
             ...input.metadata,
           },
           finalizeMetadata: input.finalizeMetadata,
@@ -255,24 +257,18 @@ export function createObservability(
 
 const defaultObservability = createObservability();
 
-export const captureError = defaultObservability.captureError.bind(
-  defaultObservability,
-);
-export const captureEvent = defaultObservability.captureEvent.bind(
-  defaultObservability,
-);
-export const traceAiOperation = defaultObservability.traceAiOperation.bind(
-  defaultObservability,
-);
-export const traceParseCapture = defaultObservability.traceParseCapture.bind(
-  defaultObservability,
-);
-export const flushObservability = defaultObservability.flush.bind(
-  defaultObservability,
-);
-export const shutdownObservability = defaultObservability.shutdown.bind(
-  defaultObservability,
-);
+export const captureError =
+  defaultObservability.captureError.bind(defaultObservability);
+export const captureEvent =
+  defaultObservability.captureEvent.bind(defaultObservability);
+export const traceAiOperation =
+  defaultObservability.traceAiOperation.bind(defaultObservability);
+export const traceParseCapture =
+  defaultObservability.traceParseCapture.bind(defaultObservability);
+export const flushObservability =
+  defaultObservability.flush.bind(defaultObservability);
+export const shutdownObservability =
+  defaultObservability.shutdown.bind(defaultObservability);
 
 export * from "./config";
 export * from "./langfuse";

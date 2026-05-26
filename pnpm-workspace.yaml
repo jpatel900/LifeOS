@@ -4,7 +4,7 @@ packages:
 overrides:
   protobufjs: ^8.0.2
 allowBuilds:
-  '@sentry/cli': false
+  "@sentry/cli": false
   core-js: false
   esbuild: true
   protobufjs: false

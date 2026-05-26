@@ -8,6 +8,10 @@ function readRepoFile(path: string) {
   return readFileSync(resolve(repoRoot, path), "utf8");
 }
 
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 const IGNORED_SCAN_DIRECTORIES = new Set([
   ".next",
   ".turbo",
@@ -25,7 +29,10 @@ function walkRepoFiles(relativePath: string): string[] {
   const currentPath = resolve(repoRoot, relativePath);
 
   return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
-    const nextRelativePath = `${relativePath}/${entry.name}`.replace(/\\/g, "/");
+    const nextRelativePath = `${relativePath}/${entry.name}`.replace(
+      /\\/g,
+      "/",
+    );
 
     if (entry.isDirectory()) {
       if (IGNORED_SCAN_DIRECTORIES.has(entry.name)) {
@@ -178,13 +185,27 @@ describe("source-of-truth boundaries", () => {
   });
 
   it("keeps plain-language primary UX while preserving technical truth in disclosures", () => {
-    const appShell = readRepoFile("apps/web/src/app/components/AppShell.tsx");
-    const capture = readRepoFile("apps/web/src/app/capture/page.tsx");
-    const triage = readRepoFile("apps/web/src/app/triage/page.tsx");
-    const execute = readRepoFile("apps/web/src/app/execute/page.tsx");
-    const calendar = readRepoFile("apps/web/src/app/calendar/page.tsx");
-    const health = readRepoFile("apps/web/src/app/health/page.tsx");
-    const settings = readRepoFile("apps/web/src/app/settings/areas/page.tsx");
+    const appShell = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/AppShell.tsx"),
+    );
+    const capture = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/capture/page.tsx"),
+    );
+    const triage = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/triage/page.tsx"),
+    );
+    const execute = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/execute/page.tsx"),
+    );
+    const calendar = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/calendar/page.tsx"),
+    );
+    const health = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/health/page.tsx"),
+    );
+    const settings = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/settings/areas/page.tsx"),
+    );
 
     expect(appShell).toContain("Workflow area (session)");
     expect(appShell).toContain("Session workflow area:");
@@ -303,7 +324,9 @@ describe("source-of-truth boundaries", () => {
       return /traceParseCapture|traceAiOperation/.test(readRepoFile(file));
     });
 
-    expect(traceUsageFiles).toEqual(["apps/web/src/lib/ai/parseCaptureService.ts"]);
+    expect(traceUsageFiles).toEqual([
+      "apps/web/src/lib/ai/parseCaptureService.ts",
+    ]);
   });
 
   it("keeps Langfuse secrets server-only and out of client bundles", () => {
@@ -325,6 +348,8 @@ describe("source-of-truth boundaries", () => {
     expect(envExample).toContain("LANGFUSE_BASE_URL=");
     expect(envExample).not.toMatch(/NEXT_PUBLIC_LANGFUSE/i);
     expect(instrumentation).toContain('import("./langfuse.server.config")');
-    expect(() => readRepoFile("apps/web/langfuse.server.config.ts")).not.toThrow();
+    expect(() =>
+      readRepoFile("apps/web/langfuse.server.config.ts"),
+    ).not.toThrow();
   });
 });

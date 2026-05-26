@@ -134,7 +134,9 @@ describe("parse capture server service", () => {
 
     expect(result.parser).toBe("mock");
     expect(
-      result.response.drafts.some((draft) => draft.draft_type === "project_draft"),
+      result.response.drafts.some(
+        (draft) => draft.draft_type === "project_draft",
+      ),
     ).toBe(true);
   });
 

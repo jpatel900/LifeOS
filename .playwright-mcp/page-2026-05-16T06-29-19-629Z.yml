@@ -1,7 +1,7 @@
 - generic [ref=e1]:
-  - button "Open Next.js Dev Tools" [ref=e56] [cursor=pointer]:
-    - img [ref=e57]
-  - main [ref=e128]:
-    - heading "Something failed safely." [level=1] [ref=e129]
-    - paragraph [ref=e130]: The error was captured through the privacy-safe observability layer.
-    - button "Retry" [active] [ref=e131]
+    - button "Open Next.js Dev Tools" [ref=e56] [cursor=pointer]:
+        - img [ref=e57]
+    - main [ref=e128]:
+        - heading "Something failed safely." [level=1] [ref=e129]
+        - paragraph [ref=e130]: The error was captured through the privacy-safe observability layer.
+        - button "Retry" [active] [ref=e131]

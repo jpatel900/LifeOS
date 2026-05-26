@@ -4,8 +4,11 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import type { ThemeProviderProps } from "next-themes";
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
-    window.matchMedia = ((query: string) =>
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia !== "function"
+  ) {
+    window.matchMedia = (query: string) =>
       ({
         matches: false,
         media: query,
@@ -15,7 +18,7 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
         addListener: () => undefined,
         removeListener: () => undefined,
         dispatchEvent: () => false,
-      }) as MediaQueryList);
+      }) as MediaQueryList;
   }
 
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>;

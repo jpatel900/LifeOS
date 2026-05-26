@@ -1,114 +1,114 @@
 - generic [ref=e1]:
-  - generic [ref=e2]:
-    - banner [ref=e3]:
-      - generic [ref=e4]:
-        - generic [ref=e5]:
-          - generic [ref=e6]:
-            - link "LifeOS" [ref=e7] [cursor=pointer]:
-              - /url: /capture
-            - generic [ref=e8]: Personal workflow cockpit
-          - generic [ref=e9]:
-            - generic [ref=e10]:
-              - button "Toggle theme" [ref=e54]:
-                - img
-              - textbox "Quick note text" [ref=e11]:
-                - /placeholder: Type a quick note
-              - button "Save quick note" [ref=e12]
-            - paragraph [ref=e13]: Saves in this browser only.
-        - generic [ref=e14]:
-          - navigation "Primary" [ref=e15]:
-            - link "Capture" [ref=e16] [cursor=pointer]:
-              - /url: /capture
-            - link "Triage" [ref=e17] [cursor=pointer]:
-              - /url: /triage
-            - link "Planning" [ref=e18] [cursor=pointer]:
-              - /url: /calendar
-            - link "Execute" [ref=e19] [cursor=pointer]:
-              - /url: /execute
-            - link "Review" [ref=e20] [cursor=pointer]:
-              - /url: /review
-            - link "Health" [ref=e21] [cursor=pointer]:
-              - /url: /health
-            - link "Areas" [ref=e22] [cursor=pointer]:
-              - /url: /settings/areas
-          - generic [ref=e23]:
-            - combobox "Current workflow area (session)" [ref=e24]:
-              - option "Main Job" [selected]
-              - option "Personal"
-              - option "Volunteer Work"
-              - option "Side Project"
-            - generic [ref=e25]: 19:24:01
-    - main [ref=e26]:
-      - generic "Current area context" [ref=e27]:
-        - generic [ref=e28]: Current area
-        - generic [ref=e29]: Main Job
-        - generic [ref=e30]: "Session workflow area: Main Job"
-      - group [ref=e31]:
-        - generic "System details" [ref=e32] [cursor=pointer]
-      - generic [ref=e33]:
-        - generic [ref=e34]:
-          - heading "Execute" [level=1] [ref=e35]
-          - paragraph [ref=e36]: Keep one current mission visible until you choose the end outcome.
-        - group [ref=e55]:
-          - generic "System details" [ref=e56] [cursor=pointer]
-        - group [ref=e57]:
-          - generic "Developer details" [ref=e58] [cursor=pointer]
-        - status [ref=e107]:
-          - heading "Saved" [level=5] [ref=e108]
-          - generic [ref=e109]:
-            - text: Session marked stopped through
-            - strong [ref=e110]: Demo mode
-            - text: .
-        - generic [ref=e59]:
-          - heading "Current mission" [level=3] [ref=e61]
-          - generic [ref=e62]:
-            - generic [ref=e63]:
-              - generic [ref=e64]:
-                - heading "Review contractor invoices and resolve the missing line item" [level=2] [ref=e65]
-                - generic [ref=e66]: "Area: Main Job"
-              - generic [ref=e67]: Stopped
-            - generic [ref=e68]:
-              - paragraph [ref=e69]: "First tiny step: Clarify the next concrete step for: compare contractor invoices, check the missing line item, and decide..."
-              - paragraph [ref=e70]: "Definition of done: Complete the first useful move and note the outcome."
-            - generic [ref=e71]:
-              - generic [ref=e72]:
-                - paragraph [ref=e73]: Session started
-                - paragraph [ref=e74]: Started at This browser session
-              - generic [ref=e75]:
-                - paragraph [ref=e76]: Timing
-                - paragraph [ref=e77]: Demo timer only. No live elapsed tracking.
-            - paragraph [ref=e78]: "Next recommended action: When this block ends, choose Complete, Stuck, Distracted, or Missed."
-        - generic [ref=e79]:
-          - heading "Session controls" [level=3] [ref=e81]
-          - generic [ref=e82]:
-            - generic [ref=e83]:
-              - paragraph [ref=e84]: Start / Pause / Resume
-              - generic [ref=e85]:
-                - button "Start" [disabled]
-                - button "Pause" [ref=e111]
-                - button "Resume" [disabled]
-              - paragraph [ref=e112]: "Start disabled: A session is already in progress. Pause or end it first."
-            - generic [ref=e88]:
-              - paragraph [ref=e89]: End session outcomes
-              - generic [ref=e90]:
-                - button "Complete" [ref=e113]
-                - button "Stuck" [ref=e114]
-                - button "Distracted" [ref=e115]
-                - button "Missed" [ref=e116]
-            - generic [ref=e92]:
-              - paragraph [ref=e93]: Secondary actions
-              - button "Stop (this browser)" [active] [ref=e95]
-              - paragraph [ref=e96]: Stop only updates this browser in Demo mode.
-        - generic "Most recent execution summary" [ref=e117]:
-          - heading "Recent execution summary" [level=3] [ref=e119]
-          - generic [ref=e120]:
-            - generic [ref=e121]: "Planned: 60 min"
-            - generic [ref=e122]: "Actual: 0 min"
-            - generic [ref=e123]: "Status: stopped"
-            - generic [ref=e124]: "Outcome: blocked"
-            - generic [ref=e125]: "Paused: 5 min"
-            - generic [ref=e126]: "Distracted: 0 min"
-            - generic [ref=e128]: "Notes: Need a smaller next step."
-  - button "Open Next.js Dev Tools" [ref=e102] [cursor=pointer]:
-    - img [ref=e103]
-  - alert [ref=e106]
+    - generic [ref=e2]:
+        - banner [ref=e3]:
+            - generic [ref=e4]:
+                - generic [ref=e5]:
+                    - generic [ref=e6]:
+                        - link "LifeOS" [ref=e7] [cursor=pointer]:
+                            - /url: /capture
+                        - generic [ref=e8]: Personal workflow cockpit
+                    - generic [ref=e9]:
+                        - generic [ref=e10]:
+                            - button "Toggle theme" [ref=e54]:
+                                - img
+                            - textbox "Quick note text" [ref=e11]:
+                                - /placeholder: Type a quick note
+                            - button "Save quick note" [ref=e12]
+                        - paragraph [ref=e13]: Saves in this browser only.
+                - generic [ref=e14]:
+                    - navigation "Primary" [ref=e15]:
+                        - link "Capture" [ref=e16] [cursor=pointer]:
+                            - /url: /capture
+                        - link "Triage" [ref=e17] [cursor=pointer]:
+                            - /url: /triage
+                        - link "Planning" [ref=e18] [cursor=pointer]:
+                            - /url: /calendar
+                        - link "Execute" [ref=e19] [cursor=pointer]:
+                            - /url: /execute
+                        - link "Review" [ref=e20] [cursor=pointer]:
+                            - /url: /review
+                        - link "Health" [ref=e21] [cursor=pointer]:
+                            - /url: /health
+                        - link "Areas" [ref=e22] [cursor=pointer]:
+                            - /url: /settings/areas
+                    - generic [ref=e23]:
+                        - combobox "Current workflow area (session)" [ref=e24]:
+                            - option "Main Job" [selected]
+                            - option "Personal"
+                            - option "Volunteer Work"
+                            - option "Side Project"
+                        - generic [ref=e25]: 19:24:01
+        - main [ref=e26]:
+            - generic "Current area context" [ref=e27]:
+                - generic [ref=e28]: Current area
+                - generic [ref=e29]: Main Job
+                - generic [ref=e30]: "Session workflow area: Main Job"
+            - group [ref=e31]:
+                - generic "System details" [ref=e32] [cursor=pointer]
+            - generic [ref=e33]:
+                - generic [ref=e34]:
+                    - heading "Execute" [level=1] [ref=e35]
+                    - paragraph [ref=e36]: Keep one current mission visible until you choose the end outcome.
+                - group [ref=e55]:
+                    - generic "System details" [ref=e56] [cursor=pointer]
+                - group [ref=e57]:
+                    - generic "Developer details" [ref=e58] [cursor=pointer]
+                - status [ref=e107]:
+                    - heading "Saved" [level=5] [ref=e108]
+                    - generic [ref=e109]:
+                        - text: Session marked stopped through
+                        - strong [ref=e110]: Demo mode
+                        - text: .
+                - generic [ref=e59]:
+                    - heading "Current mission" [level=3] [ref=e61]
+                    - generic [ref=e62]:
+                        - generic [ref=e63]:
+                            - generic [ref=e64]:
+                                - heading "Review contractor invoices and resolve the missing line item" [level=2] [ref=e65]
+                                - generic [ref=e66]: "Area: Main Job"
+                            - generic [ref=e67]: Stopped
+                        - generic [ref=e68]:
+                            - paragraph [ref=e69]: "First tiny step: Clarify the next concrete step for: compare contractor invoices, check the missing line item, and decide..."
+                            - paragraph [ref=e70]: "Definition of done: Complete the first useful move and note the outcome."
+                        - generic [ref=e71]:
+                            - generic [ref=e72]:
+                                - paragraph [ref=e73]: Session started
+                                - paragraph [ref=e74]: Started at This browser session
+                            - generic [ref=e75]:
+                                - paragraph [ref=e76]: Timing
+                                - paragraph [ref=e77]: Demo timer only. No live elapsed tracking.
+                        - paragraph [ref=e78]: "Next recommended action: When this block ends, choose Complete, Stuck, Distracted, or Missed."
+                - generic [ref=e79]:
+                    - heading "Session controls" [level=3] [ref=e81]
+                    - generic [ref=e82]:
+                        - generic [ref=e83]:
+                            - paragraph [ref=e84]: Start / Pause / Resume
+                            - generic [ref=e85]:
+                                - button "Start" [disabled]
+                                - button "Pause" [ref=e111]
+                                - button "Resume" [disabled]
+                            - paragraph [ref=e112]: "Start disabled: A session is already in progress. Pause or end it first."
+                        - generic [ref=e88]:
+                            - paragraph [ref=e89]: End session outcomes
+                            - generic [ref=e90]:
+                                - button "Complete" [ref=e113]
+                                - button "Stuck" [ref=e114]
+                                - button "Distracted" [ref=e115]
+                                - button "Missed" [ref=e116]
+                        - generic [ref=e92]:
+                            - paragraph [ref=e93]: Secondary actions
+                            - button "Stop (this browser)" [active] [ref=e95]
+                            - paragraph [ref=e96]: Stop only updates this browser in Demo mode.
+                - generic "Most recent execution summary" [ref=e117]:
+                    - heading "Recent execution summary" [level=3] [ref=e119]
+                    - generic [ref=e120]:
+                        - generic [ref=e121]: "Planned: 60 min"
+                        - generic [ref=e122]: "Actual: 0 min"
+                        - generic [ref=e123]: "Status: stopped"
+                        - generic [ref=e124]: "Outcome: blocked"
+                        - generic [ref=e125]: "Paused: 5 min"
+                        - generic [ref=e126]: "Distracted: 0 min"
+                        - generic [ref=e128]: "Notes: Need a smaller next step."
+    - button "Open Next.js Dev Tools" [ref=e102] [cursor=pointer]:
+        - img [ref=e103]
+    - alert [ref=e106]

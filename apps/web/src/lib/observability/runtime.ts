@@ -28,13 +28,17 @@ interface LangfuseRuntimeHooks {
       feature: string;
       operation: string;
       metadata: Record<string, string | number | boolean | null>;
-      finalizeMetadata?: (outcome: {
-        ok: true;
-        value: unknown;
-      } | {
-        ok: false;
-        error: unknown;
-      }) => Record<string, string | number | boolean | null>;
+      finalizeMetadata?: (
+        outcome:
+          | {
+              ok: true;
+              value: unknown;
+            }
+          | {
+              ok: false;
+              error: unknown;
+            },
+      ) => Record<string, string | number | boolean | null>;
     },
     run: () => Promise<T>,
   ) => Promise<T>;
@@ -56,9 +60,7 @@ export function getObservabilityRuntime(): ObservabilityRuntimeHooks {
   return globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ ?? {};
 }
 
-export function registerObservabilityRuntime(
-  hooks: ObservabilityRuntimeHooks,
-) {
+export function registerObservabilityRuntime(hooks: ObservabilityRuntimeHooks) {
   globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ = {
     ...(globalThis.__LIFEOS_OBSERVABILITY_RUNTIME__ ?? {}),
     ...hooks,

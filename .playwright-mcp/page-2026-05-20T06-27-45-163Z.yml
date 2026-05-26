@@ -1,67 +1,67 @@
 - generic [ref=e2]:
-  - banner [ref=e3]:
-    - generic [ref=e4]:
-      - generic [ref=e5]:
-        - generic [ref=e6]:
-          - link "LifeOS" [ref=e7] [cursor=pointer]:
-            - /url: /capture
-          - generic [ref=e8]: Personal workflow cockpit
-        - generic [ref=e9]:
-          - generic [ref=e10]:
-            - generic [ref=e11]:
-              - button "Toggle theme" [disabled]:
-                - img
-              - generic [ref=e12]: Theme toggle is loading.
-            - textbox "Quick note text" [ref=e13]:
-              - /placeholder: Type a quick note
-            - button "Save quick note" [ref=e14]
-          - paragraph [ref=e15]: Saves in this browser only.
-      - generic [ref=e16]:
-        - navigation "Primary" [ref=e17]:
-          - link "Capture" [ref=e18] [cursor=pointer]:
-            - /url: /capture
-          - link "Triage" [ref=e19] [cursor=pointer]:
-            - /url: /triage
-          - link "Planning" [ref=e20] [cursor=pointer]:
-            - /url: /calendar
-          - link "Execute" [ref=e21] [cursor=pointer]:
-            - /url: /execute
-          - link "Review" [ref=e22] [cursor=pointer]:
-            - /url: /review
-          - link "Health" [ref=e23] [cursor=pointer]:
-            - /url: /health
-          - link "Areas" [ref=e24] [cursor=pointer]:
-            - /url: /settings/areas
-        - generic [ref=e25]:
-          - combobox "Current workflow area (session)" [ref=e26]:
-            - option "Main Job" [selected]
-            - option "Personal"
-            - option "Volunteer Work"
-            - option "Side Project"
-          - generic [ref=e27]: "--:--:--"
-  - main [ref=e28]:
-    - generic "Current area context" [ref=e29]:
-      - generic [ref=e30]: Current area
-      - generic [ref=e31]: Main Job
-      - generic [ref=e32]: "Session workflow area: Main Job"
-    - group [ref=e33]:
-      - generic "System details" [ref=e34] [cursor=pointer]
-    - main [ref=e35]:
-      - heading "LifeOS" [level=1] [ref=e36]
-      - generic [ref=e37]:
-        - generic [ref=e38]:
-          - heading "LifeOS" [level=3] [ref=e39]
-          - paragraph [ref=e40]: Calm command center for captures, planning, and focused execution.
-        - generic [ref=e41]:
-          - link "Save a thought" [ref=e42] [cursor=pointer]:
-            - /url: /capture
-          - link "Continue current task" [ref=e43] [cursor=pointer]:
-            - /url: /execute
-      - generic [ref=e44]:
-        - generic [ref=e45]:
-          - heading "Next action" [level=3] [ref=e46]
-          - paragraph [ref=e47]: Start here when you are not sure what to do next.
-        - generic [ref=e48]:
-          - paragraph [ref=e49]: 1. Save one thought in Capture.
-          - paragraph [ref=e50]: 2. Accept or reject it in Triage.
-          - paragraph [ref=e51]: 3. Propose one local time block in Calendar.
+    - banner [ref=e3]:
+        - generic [ref=e4]:
+            - generic [ref=e5]:
+                - generic [ref=e6]:
+                    - link "LifeOS" [ref=e7] [cursor=pointer]:
+                        - /url: /capture
+                    - generic [ref=e8]: Personal workflow cockpit
+                - generic [ref=e9]:
+                    - generic [ref=e10]:
+                        - generic [ref=e11]:
+                            - button "Toggle theme" [disabled]:
+                                - img
+                            - generic [ref=e12]: Theme toggle is loading.
+                        - textbox "Quick note text" [ref=e13]:
+                            - /placeholder: Type a quick note
+                        - button "Save quick note" [ref=e14]
+                    - paragraph [ref=e15]: Saves in this browser only.
+            - generic [ref=e16]:
+                - navigation "Primary" [ref=e17]:
+                    - link "Capture" [ref=e18] [cursor=pointer]:
+                        - /url: /capture
+                    - link "Triage" [ref=e19] [cursor=pointer]:
+                        - /url: /triage
+                    - link "Planning" [ref=e20] [cursor=pointer]:
+                        - /url: /calendar
+                    - link "Execute" [ref=e21] [cursor=pointer]:
+                        - /url: /execute
+                    - link "Review" [ref=e22] [cursor=pointer]:
+                        - /url: /review
+                    - link "Health" [ref=e23] [cursor=pointer]:
+                        - /url: /health
+                    - link "Areas" [ref=e24] [cursor=pointer]:
+                        - /url: /settings/areas
+                - generic [ref=e25]:
+                    - combobox "Current workflow area (session)" [ref=e26]:
+                        - option "Main Job" [selected]
+                        - option "Personal"
+                        - option "Volunteer Work"
+                        - option "Side Project"
+                    - generic [ref=e27]: "--:--:--"
+    - main [ref=e28]:
+        - generic "Current area context" [ref=e29]:
+            - generic [ref=e30]: Current area
+            - generic [ref=e31]: Main Job
+            - generic [ref=e32]: "Session workflow area: Main Job"
+        - group [ref=e33]:
+            - generic "System details" [ref=e34] [cursor=pointer]
+        - main [ref=e35]:
+            - heading "LifeOS" [level=1] [ref=e36]
+            - generic [ref=e37]:
+                - generic [ref=e38]:
+                    - heading "LifeOS" [level=3] [ref=e39]
+                    - paragraph [ref=e40]: Calm command center for captures, planning, and focused execution.
+                - generic [ref=e41]:
+                    - link "Save a thought" [ref=e42] [cursor=pointer]:
+                        - /url: /capture
+                    - link "Continue current task" [ref=e43] [cursor=pointer]:
+                        - /url: /execute
+            - generic [ref=e44]:
+                - generic [ref=e45]:
+                    - heading "Next action" [level=3] [ref=e46]
+                    - paragraph [ref=e47]: Start here when you are not sure what to do next.
+                - generic [ref=e48]:
+                    - paragraph [ref=e49]: 1. Save one thought in Capture.
+                    - paragraph [ref=e50]: 2. Accept or reject it in Triage.
+                    - paragraph [ref=e51]: 3. Propose one local time block in Calendar.

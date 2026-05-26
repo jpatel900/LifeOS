@@ -103,7 +103,9 @@ const terminalOutcomeOptions: Array<{
   { value: "stopped", label: "Stopped" },
 ];
 
-function createTerminalForm(status: PersistedTerminalStatus): TerminalFormState {
+function createTerminalForm(
+  status: PersistedTerminalStatus,
+): TerminalFormState {
   return {
     status,
     outcome: terminalOutcomeByStatus[status],
@@ -286,8 +288,9 @@ export default function ExecutePage() {
   const persistedTasks = usesPersistedExecution ? executeState.tasks : [];
   const persistedBlocks = usesPersistedExecution ? executeState.blocks : [];
   const persistedSessions = usesPersistedExecution ? executeState.sessions : [];
-  const latestPersistedSession =
-    usesPersistedExecution ? (persistedSessions[0] ?? null) : null;
+  const latestPersistedSession = usesPersistedExecution
+    ? (persistedSessions[0] ?? null)
+    : null;
 
   useEffect(() => {
     if (!latestPersistedSession) {
@@ -318,7 +321,9 @@ export default function ExecutePage() {
         (task) => task.id === activeSession.task_id,
       ) ?? runnableTask)
     : runnableTask;
-  const blocks = usesPersistedExecution ? persistedBlocks : state.calendarBlocks;
+  const blocks = usesPersistedExecution
+    ? persistedBlocks
+    : state.calendarBlocks;
   const activeBlock = activeSession?.calendar_block_id
     ? (blocks.find((block) => block.id === activeSession.calendar_block_id) ??
       null)
@@ -377,7 +382,7 @@ export default function ExecutePage() {
           ? isTerminalSession
             ? "Session already ended. Start another session before stopping again."
             : "Start a session first."
-        : null;
+          : null;
 
   const nextRecommendedAction = terminalForm
     ? "Finish the recovery details, then save the end session."
@@ -416,10 +421,13 @@ export default function ExecutePage() {
 
     setActionState({ status: "saving", label: "session" });
     try {
-      const result = await createExecutionSession(createSupabaseBrowserClient(), {
-        task_id: activeTask.id,
-        calendar_block_id: activeBlock?.id ?? null,
-      });
+      const result = await createExecutionSession(
+        createSupabaseBrowserClient(),
+        {
+          task_id: activeTask.id,
+          calendar_block_id: activeBlock?.id ?? null,
+        },
+      );
       setExecuteState((current) =>
         current.status === "ready" && current.provider === "supabase"
           ? {
@@ -659,7 +667,9 @@ export default function ExecutePage() {
           </Alert>
         ) : null}
         <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none">System details</summary>
+          <summary className="cursor-pointer select-none">
+            System details
+          </summary>
           {executeState.status === "ready" ? (
             <p className="mt-2">
               Storage mode:{" "}
@@ -683,7 +693,10 @@ export default function ExecutePage() {
           </p>
         ) : null}
         {actionState.status === "saved" ? (
-          <Alert role="status" className="border-border bg-muted text-foreground">
+          <Alert
+            role="status"
+            className="border-border bg-muted text-foreground"
+          >
             <AlertTitle className="text-primary">Saved</AlertTitle>
             <AlertDescription>
               {actionState.label}{" "}
@@ -737,12 +750,15 @@ export default function ExecutePage() {
         <summary className="cursor-pointer select-none">System details</summary>
         {executeState.status === "ready" ? (
           <p className="mt-2">
-            Storage mode: <strong>{storageModeLabel(executeState.provider)}</strong>
+            Storage mode:{" "}
+            <strong>{storageModeLabel(executeState.provider)}</strong>
           </p>
         ) : null}
       </details>
       <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">Developer details</summary>
+        <summary className="cursor-pointer select-none">
+          Developer details
+        </summary>
         {executeState.status === "ready" ? (
           <p className="mt-2">
             Storage mode id: <strong>{executeState.provider}</strong>
@@ -780,7 +796,9 @@ export default function ExecutePage() {
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <h2 className="text-xl font-semibold leading-tight">{activeTask.title}</h2>
+              <h2 className="text-xl font-semibold leading-tight">
+                {activeTask.title}
+              </h2>
               {area ? (
                 <Badge variant="secondary" className="w-fit">
                   Area: {area.name}
@@ -794,12 +812,16 @@ export default function ExecutePage() {
 
           <div className="grid gap-2 text-sm">
             <p className="rounded-md border border-border bg-muted/60 p-3">
-              <span className="font-medium text-foreground">First tiny step:</span>{" "}
+              <span className="font-medium text-foreground">
+                First tiny step:
+              </span>{" "}
               {activeTask.first_tiny_step ??
                 "Pick one concrete action you can finish in a few minutes."}
             </p>
             <p className="rounded-md border border-border bg-muted/60 p-3">
-              <span className="font-medium text-foreground">Definition of done:</span>{" "}
+              <span className="font-medium text-foreground">
+                Definition of done:
+              </span>{" "}
               {activeTask.definition_of_done ??
                 "Complete the first useful move and note the result."}
             </p>
@@ -811,7 +833,9 @@ export default function ExecutePage() {
                 Session started
               </p>
               <p className="mt-1 font-medium">
-                {sessionStartedAt ? `Started at ${sessionStartedAt}` : "Not started"}
+                {sessionStartedAt
+                  ? `Started at ${sessionStartedAt}`
+                  : "Not started"}
               </p>
             </div>
             <div className="rounded-md border border-border p-3 text-sm">
@@ -879,7 +903,9 @@ export default function ExecutePage() {
                 Pause disabled: {pauseDisabledReason}
               </p>
             ) : null}
-            {!startDisabledReason && !pauseDisabledReason && resumeDisabledReason ? (
+            {!startDisabledReason &&
+            !pauseDisabledReason &&
+            resumeDisabledReason ? (
               <p className="text-xs text-muted-foreground">
                 Resume disabled: {resumeDisabledReason}
               </p>
@@ -930,7 +956,9 @@ export default function ExecutePage() {
                 onClick={() => void handleMark("stopped")}
                 disabled={stopDisabledReason !== null}
               >
-                {usesPersistedExecution ? "Stop (demo mode only)" : "Stop (this browser)"}
+                {usesPersistedExecution
+                  ? "Stop (demo mode only)"
+                  : "Stop (this browser)"}
               </Button>
             </div>
             {endDisabledReason ? (
@@ -1002,9 +1030,12 @@ export default function ExecutePage() {
                 </p>
                 {terminalForm.status !== "completed" ? (
                   <div className="rounded-md border border-border bg-background/60 p-3 text-sm">
-                    <p className="font-medium text-foreground">What got in the way?</p>
+                    <p className="font-medium text-foreground">
+                      What got in the way?
+                    </p>
                     <p className="mt-1 text-muted-foreground">
-                      Capture the blocker in plain language so your next move is clear.
+                      Capture the blocker in plain language so your next move is
+                      clear.
                     </p>
                     <p className="mt-2 font-medium text-foreground">
                       What should happen next?
@@ -1014,7 +1045,9 @@ export default function ExecutePage() {
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => appendRecoveryNote("Create smaller first move: ")}
+                        onClick={() =>
+                          appendRecoveryNote("Create smaller first move: ")
+                        }
                         disabled={actionState.status === "saving"}
                       >
                         Create smaller first move
@@ -1041,7 +1074,8 @@ export default function ExecutePage() {
                         current
                           ? {
                               ...current,
-                              outcome: event.target.value as ExecutionSession["outcome"],
+                              outcome: event.target
+                                .value as ExecutionSession["outcome"],
                             }
                           : current,
                       )
@@ -1081,7 +1115,10 @@ export default function ExecutePage() {
                     onChange={(event) =>
                       setTerminalForm((current) =>
                         current
-                          ? { ...current, productivityRating: event.target.value }
+                          ? {
+                              ...current,
+                              productivityRating: event.target.value,
+                            }
                           : current,
                       )
                     }
@@ -1097,7 +1134,9 @@ export default function ExecutePage() {
                     value={terminalForm.notes}
                     onChange={(event) =>
                       setTerminalForm((current) =>
-                        current ? { ...current, notes: event.target.value } : current,
+                        current
+                          ? { ...current, notes: event.target.value }
+                          : current,
                       )
                     }
                   />
@@ -1134,9 +1173,14 @@ export default function ExecutePage() {
       </Card>
 
       {activeSession ? (
-        <Card aria-label="Most recent execution summary" className="max-w-[820px]">
+        <Card
+          aria-label="Most recent execution summary"
+          className="max-w-[820px]"
+        >
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Recent execution summary</CardTitle>
+            <CardTitle className="text-base">
+              Recent execution summary
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm text-muted-foreground">
             <div>Planned: {activeSession.planned_minutes ?? 0} min</div>
@@ -1148,9 +1192,13 @@ export default function ExecutePage() {
             <div>Paused: {activeSession.paused_minutes ?? 0} min</div>
             <div>Distracted: {activeSession.distraction_minutes ?? 0} min</div>
             {activeSession.productivity_rating ? (
-              <div>Productivity rating: {activeSession.productivity_rating}/5</div>
+              <div>
+                Productivity rating: {activeSession.productivity_rating}/5
+              </div>
             ) : null}
-            {activeSession.notes ? <div>Notes: {activeSession.notes}</div> : null}
+            {activeSession.notes ? (
+              <div>Notes: {activeSession.notes}</div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

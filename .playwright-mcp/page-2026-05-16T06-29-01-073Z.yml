@@ -1,56 +1,56 @@
 - generic [ref=e1]:
-  - generic [active]:
-    - generic [ref=e63]:
-      - generic [ref=e64]:
-        - navigation [ref=e66]:
-          - button "previous" [disabled] [ref=e67]:
-            - img "previous" [ref=e68]
-          - generic [ref=e70]:
-            - generic [ref=e71]: 1/
-            - text: "1"
-          - button "next" [disabled] [ref=e72]:
-            - img "next" [ref=e73]
-        - link "Next.js 15.5.18 (outdated) Webpack" [ref=e76] [cursor=pointer]:
-          - /url: https://nextjs.org/docs/messages/version-staleness
-          - img [ref=e77]
-          - generic "An outdated version detected (latest is 16.2.6), upgrade is highly recommended!" [ref=e79]: Next.js 15.5.18 (outdated)
-          - generic [ref=e80]: Webpack
-      - dialog "Runtime ChunkLoadError" [ref=e82]:
-        - generic [ref=e85]:
-          - generic [ref=e86]:
-            - generic [ref=e87]:
-              - generic [ref=e89]: Runtime ChunkLoadError
-              - generic [ref=e90]:
-                - button "Copy Error Info" [ref=e91] [cursor=pointer]:
-                  - img [ref=e92]
-                - button "No related documentation found" [disabled] [ref=e94]:
-                  - img [ref=e95]
-                - link "Learn more about enabling Node.js inspector for server code with Chrome DevTools" [ref=e97] [cursor=pointer]:
-                  - /url: https://nextjs.org/docs/app/building-your-application/configuring/debugging#server-side-code
-                  - img [ref=e98]
-            - paragraph [ref=e107]: "Loading chunk app/capture/page failed. (error: http://localhost:3002/_next/static/chunks/app/capture/page.js)"
-          - generic [ref=e110]:
-            - paragraph [ref=e111]:
-              - text: Call Stack
-              - generic [ref=e112]: "12"
-            - button "Show 12 ignore-listed frame(s)" [ref=e113] [cursor=pointer]:
-              - text: Show 12 ignore-listed frame(s)
-              - img [ref=e114]
-        - generic [ref=e116]:
-          - generic [ref=e117]: "1"
-          - generic [ref=e118]: "2"
-    - generic [ref=e55] [cursor=pointer]:
-      - button "Open Next.js Dev Tools" [ref=e56]:
-        - img [ref=e57]
-      - generic [ref=e119]:
-        - button "Open issues overlay" [ref=e120]:
-          - generic [ref=e121]:
-            - generic [ref=e122]: "0"
-            - generic [ref=e123]: "1"
-          - generic [ref=e124]: Issue
-        - button "Collapse issues badge" [ref=e125]:
-          - img [ref=e126]
-  - main [ref=e128]:
-    - heading "Something failed safely." [level=1] [ref=e129]
-    - paragraph [ref=e130]: The error was captured through the privacy-safe observability layer.
-    - button "Retry" [ref=e131]
+    - generic [active]:
+        - generic [ref=e63]:
+            - generic [ref=e64]:
+                - navigation [ref=e66]:
+                    - button "previous" [disabled] [ref=e67]:
+                        - img "previous" [ref=e68]
+                    - generic [ref=e70]:
+                        - generic [ref=e71]: 1/
+                        - text: "1"
+                    - button "next" [disabled] [ref=e72]:
+                        - img "next" [ref=e73]
+                - link "Next.js 15.5.18 (outdated) Webpack" [ref=e76] [cursor=pointer]:
+                    - /url: https://nextjs.org/docs/messages/version-staleness
+                    - img [ref=e77]
+                    - generic "An outdated version detected (latest is 16.2.6), upgrade is highly recommended!" [ref=e79]: Next.js 15.5.18 (outdated)
+                    - generic [ref=e80]: Webpack
+            - dialog "Runtime ChunkLoadError" [ref=e82]:
+                - generic [ref=e85]:
+                    - generic [ref=e86]:
+                        - generic [ref=e87]:
+                            - generic [ref=e89]: Runtime ChunkLoadError
+                            - generic [ref=e90]:
+                                - button "Copy Error Info" [ref=e91] [cursor=pointer]:
+                                    - img [ref=e92]
+                                - button "No related documentation found" [disabled] [ref=e94]:
+                                    - img [ref=e95]
+                                - link "Learn more about enabling Node.js inspector for server code with Chrome DevTools" [ref=e97] [cursor=pointer]:
+                                    - /url: https://nextjs.org/docs/app/building-your-application/configuring/debugging#server-side-code
+                                    - img [ref=e98]
+                        - paragraph [ref=e107]: "Loading chunk app/capture/page failed. (error: http://localhost:3002/_next/static/chunks/app/capture/page.js)"
+                    - generic [ref=e110]:
+                        - paragraph [ref=e111]:
+                            - text: Call Stack
+                            - generic [ref=e112]: "12"
+                        - button "Show 12 ignore-listed frame(s)" [ref=e113] [cursor=pointer]:
+                            - text: Show 12 ignore-listed frame(s)
+                            - img [ref=e114]
+                - generic [ref=e116]:
+                    - generic [ref=e117]: "1"
+                    - generic [ref=e118]: "2"
+        - generic [ref=e55] [cursor=pointer]:
+            - button "Open Next.js Dev Tools" [ref=e56]:
+                - img [ref=e57]
+            - generic [ref=e119]:
+                - button "Open issues overlay" [ref=e120]:
+                    - generic [ref=e121]:
+                        - generic [ref=e122]: "0"
+                        - generic [ref=e123]: "1"
+                    - generic [ref=e124]: Issue
+                - button "Collapse issues badge" [ref=e125]:
+                    - img [ref=e126]
+    - main [ref=e128]:
+        - heading "Something failed safely." [level=1] [ref=e129]
+        - paragraph [ref=e130]: The error was captured through the privacy-safe observability layer.
+        - button "Retry" [ref=e131]

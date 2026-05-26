@@ -254,7 +254,8 @@ export default function ReviewPage() {
         <summary>System details</summary>
         {reviewState.status === "ready" ? (
           <p className="mt-2">
-            Storage mode: <strong>{storageModeLabel(reviewState.provider)}</strong>
+            Storage mode:{" "}
+            <strong>{storageModeLabel(reviewState.provider)}</strong>
           </p>
         ) : null}
       </details>
@@ -311,7 +312,9 @@ export default function ReviewPage() {
               />
             ) : (
               <ul className="m-0 list-disc pl-5 text-sm text-foreground">
-                {captureCount !== null ? <li>Captured: {captureCount}</li> : null}
+                {captureCount !== null ? (
+                  <li>Captured: {captureCount}</li>
+                ) : null}
                 <li>Accepted tasks: {tasks.length}</li>
                 <li>Completed sessions: {completed.length}</li>
                 <li>Missed sessions: {missed.length}</li>
@@ -393,4 +396,3 @@ export default function ReviewPage() {
     </div>
   );
 }
-

@@ -70,7 +70,9 @@ export default function TriagePage() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editedDraftIds, setEditedDraftIds] = useState<Record<string, true>>({});
+  const [editedDraftIds, setEditedDraftIds] = useState<Record<string, true>>(
+    {},
+  );
   const [noteFeedbackByDraftId, setNoteFeedbackByDraftId] = useState<
     Record<string, string>
   >({});
@@ -316,14 +318,17 @@ export default function TriagePage() {
         <summary className="cursor-pointer select-none">System details</summary>
         {loadState.status === "ready" ? (
           <p className="mt-2">
-            Saved workspace: <strong>{storageModeLabel(loadState.provider)}</strong>
-            . Drafts shown from this browser.
+            Saved workspace:{" "}
+            <strong>{storageModeLabel(loadState.provider)}</strong>. Drafts
+            shown from this browser.
           </p>
         ) : null}
       </details>
 
       <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">Developer details</summary>
+        <summary className="cursor-pointer select-none">
+          Developer details
+        </summary>
         {loadState.status === "ready" ? (
           <p className="mt-2">
             Acceptance storage mode id: <strong>{loadState.provider}</strong>.
@@ -388,14 +393,19 @@ export default function TriagePage() {
               (item) => item.source_capture_item_id === task.capture_item_id,
             );
             return (
-              <Card key={task.id} id={index === 0 ? "triage-next-item" : undefined}>
+              <Card
+                key={task.id}
+                id={index === 0 ? "triage-next-item" : undefined}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="space-y-1">
                       <CardTitle className="text-lg">{task.title}</CardTitle>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline">Task suggestion</Badge>
-                        {area ? <Badge variant="secondary">Area: {area.name}</Badge> : null}
+                        {area ? (
+                          <Badge variant="secondary">Area: {area.name}</Badge>
+                        ) : null}
                         <Badge variant="warning">
                           Confidence: {Math.round(task.confidence * 100)}%
                         </Badge>
@@ -408,7 +418,9 @@ export default function TriagePage() {
                   {assessment ? (
                     editedDraftIds[task.id] ? (
                       <Alert>
-                        <AlertTitle>AI notes are from the original capture</AlertTitle>
+                        <AlertTitle>
+                          AI notes are from the original capture
+                        </AlertTitle>
                         <AlertDescription>
                           You edited this draft. Re-sort in Capture if you want
                           updated AI notes.
@@ -417,11 +429,17 @@ export default function TriagePage() {
                     ) : (
                       <Card className="bg-muted/40">
                         <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                          <p className="font-medium text-foreground">Clarity notes</p>
-                          <p>First useful move: {assessment.recommended_first_move}</p>
+                          <p className="font-medium text-foreground">
+                            Clarity notes
+                          </p>
+                          <p>
+                            First useful move:{" "}
+                            {assessment.recommended_first_move}
+                          </p>
                           <p>Unknowns: {assessment.unknowns.join(", ")}</p>
                           <p>
-                            What not to do yet: {assessment.what_not_to_do_yet.join(", ")}
+                            What not to do yet:{" "}
+                            {assessment.what_not_to_do_yet.join(", ")}
                           </p>
                         </CardContent>
                       </Card>
@@ -430,28 +448,39 @@ export default function TriagePage() {
                   {task.description ? (
                     <Card className="bg-muted/40">
                       <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground">Draft notes</p>
-                        <p className="whitespace-pre-line">{task.description}</p>
+                        <p className="font-medium text-foreground">
+                          Draft notes
+                        </p>
+                        <p className="whitespace-pre-line">
+                          {task.description}
+                        </p>
                       </CardContent>
                     </Card>
                   ) : null}
                   {noteFeedbackByDraftId[task.id] ? (
                     <Alert variant="success">
                       <AlertTitle>Note saved in this browser</AlertTitle>
-                      <AlertDescription>{noteFeedbackByDraftId[task.id]}</AlertDescription>
+                      <AlertDescription>
+                        {noteFeedbackByDraftId[task.id]}
+                      </AlertDescription>
                     </Alert>
                   ) : null}
                   {editingDraftId === task.id ? (
                     <Card className="bg-muted/40">
                       <CardContent className="space-y-3 p-3">
                         <div className="space-y-1">
-                          <label htmlFor={`${task.id}-title`} className="text-xs font-medium">
+                          <label
+                            htmlFor={`${task.id}-title`}
+                            className="text-xs font-medium"
+                          >
                             Title
                           </label>
                           <Input
                             id={`${task.id}-title`}
                             value={editTitle}
-                            onChange={(event) => setEditTitle(event.target.value)}
+                            onChange={(event) =>
+                              setEditTitle(event.target.value)
+                            }
                           />
                         </div>
                         <div className="space-y-1">
@@ -464,7 +493,9 @@ export default function TriagePage() {
                           <Textarea
                             id={`${task.id}-description`}
                             value={editDescription}
-                            onChange={(event) => setEditDescription(event.target.value)}
+                            onChange={(event) =>
+                              setEditDescription(event.target.value)
+                            }
                             rows={3}
                           />
                         </div>
@@ -562,7 +593,9 @@ export default function TriagePage() {
                       <CardTitle className="text-lg">{project.title}</CardTitle>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline">Project suggestion</Badge>
-                        {area ? <Badge variant="secondary">Area: {area.name}</Badge> : null}
+                        {area ? (
+                          <Badge variant="secondary">Area: {area.name}</Badge>
+                        ) : null}
                         <Badge variant="warning">
                           Confidence: {Math.round(project.confidence * 100)}%
                         </Badge>
@@ -573,7 +606,9 @@ export default function TriagePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {project.description ? (
-                    <p className="text-sm text-muted-foreground">{project.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {project.description}
+                    </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -602,4 +637,3 @@ export default function TriagePage() {
     </div>
   );
 }
-

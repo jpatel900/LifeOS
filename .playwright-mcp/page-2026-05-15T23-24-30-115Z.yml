@@ -1,75 +1,75 @@
 - generic [ref=e1]:
-  - generic [ref=e2]:
-    - banner [ref=e3]:
-      - generic [ref=e4]:
-        - generic [ref=e5]:
-          - generic [ref=e6]:
-            - link "LifeOS" [ref=e7] [cursor=pointer]:
-              - /url: /capture
-            - generic [ref=e8]: Personal workflow cockpit
-          - generic [ref=e9]:
-            - generic [ref=e10]:
-              - button "Toggle theme" [ref=e54]:
-                - img
-              - textbox "Quick note text" [ref=e11]:
-                - /placeholder: Type a quick note
-              - button "Save quick note" [ref=e12]
-            - paragraph [ref=e13]: Saves in this browser only.
-        - generic [ref=e14]:
-          - navigation "Primary" [ref=e15]:
-            - link "Capture" [ref=e16] [cursor=pointer]:
-              - /url: /capture
-            - link "Triage" [ref=e17] [cursor=pointer]:
-              - /url: /triage
-            - link "Planning" [ref=e18] [cursor=pointer]:
-              - /url: /calendar
-            - link "Execute" [ref=e19] [cursor=pointer]:
-              - /url: /execute
-            - link "Review" [ref=e20] [cursor=pointer]:
-              - /url: /review
-            - link "Health" [active] [ref=e21] [cursor=pointer]:
-              - /url: /health
-            - link "Areas" [ref=e22] [cursor=pointer]:
-              - /url: /settings/areas
-          - generic [ref=e23]:
-            - combobox "Current workflow area (session)" [ref=e24]:
-              - option "Main Job" [selected]
-              - option "Personal"
-              - option "Volunteer Work"
-              - option "Side Project"
-            - generic [ref=e25]: 19:24:29
-    - main [ref=e26]:
-      - generic "Current area context" [ref=e27]:
-        - generic [ref=e28]: Current area
-        - generic [ref=e29]: Main Job
-        - generic [ref=e30]: "Session workflow area: Main Job"
-      - group [ref=e31]:
-        - generic "System details" [ref=e32] [cursor=pointer]
-      - generic [ref=e180]:
-        - generic [ref=e181]:
-          - heading "Health" [level=1] [ref=e182]
-          - paragraph [ref=e183]: System check from current app state. No AI scoring.
-          - button "Run system check" [ref=e184]
-          - generic [ref=e185]: mock
-        - generic [ref=e186]:
-          - generic [ref=e187]:
-            - heading "What needs attention now" [level=3] [ref=e188]
-            - paragraph [ref=e189]: Resolve these first before relying on them.
-          - paragraph [ref=e191]: Nothing urgent is blocking this snapshot.
-        - generic [ref=e192]:
-          - generic [ref=e193]:
-            - heading "System overview" [level=3] [ref=e194]
-            - paragraph [ref=e195]: Checked at 2026-05-15T23:24:28.965Z
-          - generic [ref=e196]:
-            - generic [ref=e197]: "Storage mode: Demo mode"
-            - generic [ref=e198]: "System check saved: Not applicable"
-        - group [ref=e199]:
-          - generic "Connection checks details" [ref=e200] [cursor=pointer]
-        - group [ref=e201]:
-          - generic "Developer details" [ref=e202] [cursor=pointer]
-        - alert [ref=e203]:
-          - heading "No active warnings" [level=5] [ref=e204]
-          - generic [ref=e205]: All Connection checks are healthy for this snapshot.
-  - button "Open Next.js Dev Tools" [ref=e102] [cursor=pointer]:
-    - img [ref=e103]
-  - alert [ref=e106]
+    - generic [ref=e2]:
+        - banner [ref=e3]:
+            - generic [ref=e4]:
+                - generic [ref=e5]:
+                    - generic [ref=e6]:
+                        - link "LifeOS" [ref=e7] [cursor=pointer]:
+                            - /url: /capture
+                        - generic [ref=e8]: Personal workflow cockpit
+                    - generic [ref=e9]:
+                        - generic [ref=e10]:
+                            - button "Toggle theme" [ref=e54]:
+                                - img
+                            - textbox "Quick note text" [ref=e11]:
+                                - /placeholder: Type a quick note
+                            - button "Save quick note" [ref=e12]
+                        - paragraph [ref=e13]: Saves in this browser only.
+                - generic [ref=e14]:
+                    - navigation "Primary" [ref=e15]:
+                        - link "Capture" [ref=e16] [cursor=pointer]:
+                            - /url: /capture
+                        - link "Triage" [ref=e17] [cursor=pointer]:
+                            - /url: /triage
+                        - link "Planning" [ref=e18] [cursor=pointer]:
+                            - /url: /calendar
+                        - link "Execute" [ref=e19] [cursor=pointer]:
+                            - /url: /execute
+                        - link "Review" [ref=e20] [cursor=pointer]:
+                            - /url: /review
+                        - link "Health" [active] [ref=e21] [cursor=pointer]:
+                            - /url: /health
+                        - link "Areas" [ref=e22] [cursor=pointer]:
+                            - /url: /settings/areas
+                    - generic [ref=e23]:
+                        - combobox "Current workflow area (session)" [ref=e24]:
+                            - option "Main Job" [selected]
+                            - option "Personal"
+                            - option "Volunteer Work"
+                            - option "Side Project"
+                        - generic [ref=e25]: 19:24:29
+        - main [ref=e26]:
+            - generic "Current area context" [ref=e27]:
+                - generic [ref=e28]: Current area
+                - generic [ref=e29]: Main Job
+                - generic [ref=e30]: "Session workflow area: Main Job"
+            - group [ref=e31]:
+                - generic "System details" [ref=e32] [cursor=pointer]
+            - generic [ref=e180]:
+                - generic [ref=e181]:
+                    - heading "Health" [level=1] [ref=e182]
+                    - paragraph [ref=e183]: System check from current app state. No AI scoring.
+                    - button "Run system check" [ref=e184]
+                    - generic [ref=e185]: mock
+                - generic [ref=e186]:
+                    - generic [ref=e187]:
+                        - heading "What needs attention now" [level=3] [ref=e188]
+                        - paragraph [ref=e189]: Resolve these first before relying on them.
+                    - paragraph [ref=e191]: Nothing urgent is blocking this snapshot.
+                - generic [ref=e192]:
+                    - generic [ref=e193]:
+                        - heading "System overview" [level=3] [ref=e194]
+                        - paragraph [ref=e195]: Checked at 2026-05-15T23:24:28.965Z
+                    - generic [ref=e196]:
+                        - generic [ref=e197]: "Storage mode: Demo mode"
+                        - generic [ref=e198]: "System check saved: Not applicable"
+                - group [ref=e199]:
+                    - generic "Connection checks details" [ref=e200] [cursor=pointer]
+                - group [ref=e201]:
+                    - generic "Developer details" [ref=e202] [cursor=pointer]
+                - alert [ref=e203]:
+                    - heading "No active warnings" [level=5] [ref=e204]
+                    - generic [ref=e205]: All Connection checks are healthy for this snapshot.
+    - button "Open Next.js Dev Tools" [ref=e102] [cursor=pointer]:
+        - img [ref=e103]
+    - alert [ref=e106]

@@ -158,9 +158,9 @@ function proposalHasConflictCheck(proposal: TimeBlockProposal) {
   const details = proposal.conflict_details_json;
   return Boolean(
     details &&
-      typeof details === "object" &&
-      !Array.isArray(details) &&
-      typeof (details as Record<string, unknown>).checked_at === "string",
+    typeof details === "object" &&
+    !Array.isArray(details) &&
+    typeof (details as Record<string, unknown>).checked_at === "string",
   );
 }
 
@@ -195,7 +195,10 @@ type CalendarActionKind =
   | "conflict_check"
   | "google_write";
 
-function normalizeCalendarFailure(rawMessage: string, action: CalendarActionKind) {
+function normalizeCalendarFailure(
+  rawMessage: string,
+  action: CalendarActionKind,
+) {
   const message = rawMessage.toLowerCase();
 
   if (
@@ -204,8 +207,7 @@ function normalizeCalendarFailure(rawMessage: string, action: CalendarActionKind
   ) {
     return {
       title: "Google Calendar is not configured",
-      message:
-        "Google Calendar features are unavailable in this environment.",
+      message: "Google Calendar features are unavailable in this environment.",
       nextStep:
         "Keep local planning in this view or configure Google Calendar server env vars.",
     };
@@ -218,8 +220,7 @@ function normalizeCalendarFailure(rawMessage: string, action: CalendarActionKind
   ) {
     return {
       title: "Sign-in required",
-      message:
-        "This action requires an authenticated Supabase session.",
+      message: "This action requires an authenticated Supabase session.",
       nextStep: "Sign in again, then retry the action.",
     };
   }
@@ -264,8 +265,7 @@ function normalizeCalendarFailure(rawMessage: string, action: CalendarActionKind
   if (action === "google_write") {
     return {
       title: "Google Calendar write failed",
-      message:
-        "No Google Calendar event was confirmed for this action.",
+      message: "No Google Calendar event was confirmed for this action.",
       nextStep:
         "Your local proposal is unchanged. Review connection/approval state and retry.",
     };
@@ -273,8 +273,7 @@ function normalizeCalendarFailure(rawMessage: string, action: CalendarActionKind
 
   return {
     title: "Planning change was not saved",
-    message:
-      "LifeOS could not confirm this local planning update.",
+    message: "LifeOS could not confirm this local planning update.",
     nextStep: "Review state and retry.",
   };
 }
@@ -742,8 +741,7 @@ export default function CalendarPage() {
         setActionState({
           status: "error",
           title: "Google write result could not be confirmed",
-          message:
-            "LifeOS could not confirm the local post-write state.",
+          message: "LifeOS could not confirm the local post-write state.",
           nextStep:
             "Refresh this page, verify local proposal and block state, then retry if needed.",
         });
@@ -970,7 +968,9 @@ export default function CalendarPage() {
                           {task.estimated_minutes_high ?? "?"} min
                         </div>
                         {area ? (
-                          <div className="text-muted-foreground">Area: {area.name}</div>
+                          <div className="text-muted-foreground">
+                            Area: {area.name}
+                          </div>
                         ) : null}
                       </div>
                       <Button
@@ -988,11 +988,11 @@ export default function CalendarPage() {
           </Card>
 
           <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">
-                  Planned time blocks (local first)
-                </CardTitle>
-              </CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                Planned time blocks (local first)
+              </CardTitle>
+            </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {proposals.length === 0 ? (
                 <EmptyState
@@ -1033,7 +1033,8 @@ export default function CalendarPage() {
                               ? "Not eligible from this proposal status"
                               : "Ready after explicit approval";
                   const canCheckConflictStatus =
-                    proposal.status === "proposed" || proposal.status === "edited";
+                    proposal.status === "proposed" ||
+                    proposal.status === "edited";
                   const hasConflictCheck = proposalHasConflictCheck(proposal);
                   const checkConflictDisabledReason = !usesPersistedPlanning
                     ? "This block is local only. Supabase setup is required."
@@ -1048,7 +1049,8 @@ export default function CalendarPage() {
                             : !canCheckConflictStatus
                               ? "Only proposed or adjusted blocks can be checked."
                               : null;
-                  const checkConflictAllowed = checkConflictDisabledReason === null;
+                  const checkConflictAllowed =
+                    checkConflictDisabledReason === null;
                   const createGoogleDisabledReason = !usesPersistedPlanning
                     ? "This block is local only. Supabase setup is required."
                     : actionState.status === "saving"
@@ -1075,23 +1077,34 @@ export default function CalendarPage() {
                                       )
                                     ? "This proposal status cannot create a Google event."
                                     : null;
-                  const createGoogleAllowed = createGoogleDisabledReason === null;
+                  const createGoogleAllowed =
+                    createGoogleDisabledReason === null;
 
                   return (
                     <div
                       key={proposal.id}
-                      id={proposal.id === proposals[0]?.id ? "planning-next-proposal" : undefined}
+                      id={
+                        proposal.id === proposals[0]?.id
+                          ? "planning-next-proposal"
+                          : undefined
+                      }
                       className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm"
                     >
-                      <div className="font-medium">{task?.title ?? "Unassigned block"}</div>
+                      <div className="font-medium">
+                        {task?.title ?? "Unassigned block"}
+                      </div>
                       <div className="text-muted-foreground">
                         {new Date(proposal.proposed_start).toLocaleTimeString()}{" "}
                         - {new Date(proposal.proposed_end).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div className="text-muted-foreground">Area: {area.name}</div>
+                        <div className="text-muted-foreground">
+                          Area: {area.name}
+                        </div>
                       ) : null}
-                      <div className="text-muted-foreground">{proposalRationale(proposal)}</div>
+                      <div className="text-muted-foreground">
+                        {proposalRationale(proposal)}
+                      </div>
                       {usesPersistedPlanning &&
                       googleConnectionState.status === "ready" &&
                       googleConnectionState.connected &&
@@ -1121,7 +1134,10 @@ export default function CalendarPage() {
                         </span>
                         <Badge
                           variant={conflictSummary.variant}
-                          className={cn("text-[0.7rem]", conflictSummary.className)}
+                          className={cn(
+                            "text-[0.7rem]",
+                            conflictSummary.className,
+                          )}
                         >
                           {conflictSummary.label}
                         </Badge>
@@ -1253,14 +1269,18 @@ export default function CalendarPage() {
                           <Button
                             type="button"
                             variant="outline"
-                            onClick={() => void handleCheckConflict(proposal.id)}
+                            onClick={() =>
+                              void handleCheckConflict(proposal.id)
+                            }
                             disabled={!checkConflictAllowed}
                           >
                             Check calendar conflicts
                           </Button>
                           <Button
                             type="button"
-                            variant={createGoogleAllowed ? "default" : "outline"}
+                            variant={
+                              createGoogleAllowed ? "default" : "outline"
+                            }
                             onClick={() =>
                               void handleCreateGoogleEvent(proposal.id)
                             }
@@ -1330,7 +1350,9 @@ export default function CalendarPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Scheduled blocks (local)</CardTitle>
+              <CardTitle className="text-base">
+                Scheduled blocks (local)
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {blocks.length === 0 ? (
@@ -1344,7 +1366,9 @@ export default function CalendarPage() {
                     ? null
                     : getAreaById(block.area_id);
                   const task = usesPersistedPlanning
-                    ? scheduleableTasks.find((item) => item.id === block.task_id)
+                    ? scheduleableTasks.find(
+                        (item) => item.id === block.task_id,
+                      )
                     : state.tasks.find((item) => item.id === block.task_id);
 
                   return (
@@ -1360,7 +1384,9 @@ export default function CalendarPage() {
                         {new Date(block.end_at).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div className="text-muted-foreground">Area: {area.name}</div>
+                        <div className="text-muted-foreground">
+                          Area: {area.name}
+                        </div>
                       ) : null}
                       <span className="text-xs text-muted-foreground">
                         Status: {block.status}
@@ -1384,4 +1410,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-

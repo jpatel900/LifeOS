@@ -426,8 +426,9 @@ export default function CapturePage() {
       <details className="text-sm text-muted-foreground">
         <summary className="cursor-pointer select-none">System details</summary>
         <p className="mt-2">
-          Save thought and Save and organize write to your selected storage mode.
-          Organize in this browser and Recent captures stay in this browser only.
+          Save thought and Save and organize write to your selected storage
+          mode. Organize in this browser and Recent captures stay in this
+          browser only.
         </p>
         <span className="sr-only">this browser only</span>
         {provider ? (
@@ -438,7 +439,9 @@ export default function CapturePage() {
       </details>
 
       <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">Developer details</summary>
+        <summary className="cursor-pointer select-none">
+          Developer details
+        </summary>
         {provider ? (
           <p className="mt-2">
             Storage mode id: <strong>{provider}</strong>
@@ -479,11 +482,14 @@ export default function CapturePage() {
             className="resize-y"
           />
           <p className="text-xs text-muted-foreground">
-            After Save thought or Save and organize, this field clears so you can
-            capture the next thought.
+            After Save thought or Save and organize, this field clears so you
+            can capture the next thought.
           </p>
 
-          <form onSubmit={handleSaveCapture} className="space-y-4 rounded-lg border p-4">
+          <form
+            onSubmit={handleSaveCapture}
+            className="space-y-4 rounded-lg border p-4"
+          >
             <h2 className="text-lg font-semibold">Save options</h2>
             <label htmlFor="area_persist" className="text-sm font-medium">
               Area for this saved thought
@@ -503,14 +509,14 @@ export default function CapturePage() {
               ))}
             </Select>
             <p className="text-xs text-muted-foreground">
-              Selecting an area here also updates the header session workflow area
-              when a matching local workflow area exists.
+              Selecting an area here also updates the header session workflow
+              area when a matching local workflow area exists.
             </p>
 
             {areasState.status === "ready" && areas.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No active areas are available yet. You can still save an unscoped
-                capture.
+                No active areas are available yet. You can still save an
+                unscoped capture.
               </p>
             ) : null}
 
@@ -535,8 +541,8 @@ export default function CapturePage() {
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              The header workflow area picker controls this browser draft flow and
-              the recent-captures list on this page.
+              The header workflow area picker controls this browser draft flow
+              and the recent-captures list on this page.
             </p>
             <Button type="button" variant="ghost" onClick={handleStructure}>
               Organize in this browser
@@ -546,13 +552,23 @@ export default function CapturePage() {
           {latestDraft && latestAssessment && latestProposalDraft ? (
             <Card className="border-cyan-500/40 bg-cyan-500/10">
               <CardContent className="space-y-1 p-4 text-sm">
-                <p className="font-semibold">Demo mode created a draft bundle.</p>
+                <p className="font-semibold">
+                  Demo mode created a draft bundle.
+                </p>
                 <p>Task draft: {latestDraft.title}</p>
-                <p>First suggested action: {latestAssessment.recommended_first_move}</p>
+                <p>
+                  First suggested action:{" "}
+                  {latestAssessment.recommended_first_move}
+                </p>
                 <p>
                   Possible local block:{" "}
-                  {new Date(latestProposalDraft.proposed_start).toLocaleTimeString()} –{" "}
-                  {new Date(latestProposalDraft.proposed_end).toLocaleTimeString()}
+                  {new Date(
+                    latestProposalDraft.proposed_start,
+                  ).toLocaleTimeString()}{" "}
+                  –{" "}
+                  {new Date(
+                    latestProposalDraft.proposed_end,
+                  ).toLocaleTimeString()}
                 </p>
               </CardContent>
             </Card>
@@ -612,8 +628,8 @@ export default function CapturePage() {
             </AlertDescription>
           ) : (
             <AlertDescription>
-              Capture is parseable and drafts are still reviewable in triage before
-              acceptance.
+              Capture is parseable and drafts are still reviewable in triage
+              before acceptance.
             </AlertDescription>
           )}
         </Alert>
@@ -638,7 +654,9 @@ export default function CapturePage() {
       ) : null}
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Recent captures (this browser only)</h2>
+        <h2 className="text-xl font-semibold">
+          Recent captures (this browser only)
+        </h2>
         {visibleCaptures.length === 0 ? (
           <EmptyState
             title="No captures in this browser for this area yet."
@@ -654,8 +672,12 @@ export default function CapturePage() {
                     <div className="space-y-1">
                       <p className="font-medium">{capture.raw_text}</p>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">Status: {capture.status}</Badge>
-                        {area ? <Badge variant="secondary">Area: {area.name}</Badge> : null}
+                        <Badge variant="outline">
+                          Status: {capture.status}
+                        </Badge>
+                        {area ? (
+                          <Badge variant="secondary">Area: {area.name}</Badge>
+                        ) : null}
                       </div>
                     </div>
                     <Badge variant="secondary">This browser only</Badge>

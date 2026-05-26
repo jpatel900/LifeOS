@@ -217,7 +217,9 @@ function SeedAcceptedTask({ text }: { text: string }) {
 
   useEffect(() => {
     if (accepted.current) return;
-    const pendingDraft = state.taskDrafts.find((draft) => draft.status === "pending");
+    const pendingDraft = state.taskDrafts.find(
+      (draft) => draft.status === "pending",
+    );
     if (!pendingDraft) return;
     accepted.current = true;
     acceptTaskDraft(pendingDraft.id);
@@ -307,7 +309,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(screen.queryByRole("status")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Reset this browser" }));
-    fireEvent.click(screen.getByRole("button", { name: "Yes, reset this browser" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Yes, reset this browser" }),
+    );
 
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Local browser data reset.");
@@ -476,15 +480,23 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Mark for later" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Mark for later" }),
+    );
 
     expect(await screen.findByText("Note saved in this browser")).toBeDefined();
-    expect(screen.getAllByText("Added note: review later.").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText("Added note: review later.").length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText("Draft notes")).toBeDefined();
-    expect(screen.getAllByText(/Added note: review later\./).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Added note: review later\./).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Add area note" }));
-    expect(await screen.findByText("Added note: consider changing area.")).toBeDefined();
+    expect(
+      await screen.findByText("Added note: consider changing area."),
+    ).toBeDefined();
 
     expect(
       screen.getByText(
@@ -529,7 +541,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<TriagePage />);
 
-    expect(await screen.findByText("Nothing to triage right now.")).toBeDefined();
+    expect(
+      await screen.findByText("Nothing to triage right now."),
+    ).toBeDefined();
     expect(screen.getByRole("link", { name: "Go to Capture" })).toBeDefined();
   });
 
@@ -589,7 +603,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    expect(await screen.findByText("No planned time blocks yet.")).toBeDefined();
+    expect(
+      await screen.findByText("No planned time blocks yet."),
+    ).toBeDefined();
     expect(
       screen.getByRole("link", { name: "Get a task ready in Triage" }),
     ).toBeDefined();
@@ -616,7 +632,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
 
     expect(await screen.findByText("Unplanned tasks")).toBeDefined();
-    expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(
+      0,
+    );
 
     fireEvent.click(
       screen.getAllByRole("button", { name: "Draft a time block" })[0],
@@ -683,7 +701,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Adjust time" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Move 30 min later" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Move 30 min later" }),
+    );
 
     await waitFor(() => {
       expect(mocks.editTimeBlockProposal).toHaveBeenCalledWith(
@@ -853,7 +873,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     expect(await screen.findByText("Google event created")).toBeDefined();
-    expect(screen.getByText("Google write: Google event created")).toBeDefined();
+    expect(
+      screen.getByText("Google write: Google event created"),
+    ).toBeDefined();
   });
 
   it("requires first-write warning acknowledgement before enabling event creation", async () => {
@@ -995,7 +1017,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Session started through Saved workspace.");
+    expect(status).toHaveTextContent(
+      "Session started through Saved workspace.",
+    );
   });
 
   it("shows an execution load failure and keeps the no-active-block fallback visible", async () => {
@@ -1029,7 +1053,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<ExecutePage />);
 
-    expect(await screen.findByText("No current task is in execution.")).toBeDefined();
+    expect(
+      await screen.findByText("No current task is in execution."),
+    ).toBeDefined();
     expect(screen.queryByRole("button", { name: "Start" })).toBeNull();
     expect(mocks.createExecutionSession).not.toHaveBeenCalled();
   });
@@ -1061,7 +1087,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     fireEvent.change(await screen.findByLabelText("End session notes"), {
       target: { value: "Finished the planned block." },
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Save end session" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Save end session" }),
+    );
 
     await waitFor(() => {
       expect(mocks.markExecutionSession).toHaveBeenCalledWith(
@@ -1125,9 +1153,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     expect(stopButton).toBeDisabled();
     expect(
-      screen.getByText(
-        "Stop disabled: Start a session first.",
-      ),
+      screen.getByText("Stop disabled: Start a session first."),
     ).toBeDefined();
   });
 
@@ -1154,7 +1180,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       ),
     ).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop (this browser)" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Stop (this browser)" }),
+    );
 
     expect(await screen.findByText("Stopped")).toBeDefined();
     expect(
@@ -1199,7 +1227,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     fireEvent.change(await screen.findByLabelText("End session notes"), {
       target: { value: "Interrupted by another urgent item." },
     });
-    fireEvent.click(await screen.findByRole("button", { name: "Save end session" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Save end session" }),
+    );
 
     await waitFor(() => {
       expect(mocks.markExecutionSession).toHaveBeenCalledWith(
@@ -1215,9 +1245,13 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Session marked missed through Saved workspace.");
+    expect(status).toHaveTextContent(
+      "Session marked missed through Saved workspace.",
+    );
     expect(
-      screen.getByText("Session ended as missed. Capture why it was missed, then re-plan."),
+      screen.getByText(
+        "Session ended as missed. Capture why it was missed, then re-plan.",
+      ),
     ).toBeDefined();
     expect(
       screen.getByRole("link", { name: "Plan another block" }),
@@ -1225,8 +1259,12 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(
       screen.getByRole("link", { name: "Capture what got in the way" }),
     ).toBeDefined();
-    expect(screen.getByRole("link", { name: "Review this later" })).toBeDefined();
-    expect(screen.getByRole("link", { name: "Back to Planning" })).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Review this later" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Back to Planning" }),
+    ).toBeDefined();
   });
 
   it("creates a persisted review entry from review data", async () => {
@@ -1266,7 +1304,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Review entry created in Saved workspace.");
+    expect(status).toHaveTextContent(
+      "Review entry created in Saved workspace.",
+    );
   });
 
   it("rolls up persisted review rows by persisted area ids", async () => {

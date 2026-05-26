@@ -1,4 +1,7 @@
-import { getObservabilityProviderStatus, type ObservabilityEnv } from "./config";
+import {
+  getObservabilityProviderStatus,
+  type ObservabilityEnv,
+} from "./config";
 
 function readEnvValue(
   env: ObservabilityEnv,

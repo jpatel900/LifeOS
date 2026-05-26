@@ -73,10 +73,7 @@ export default function LoginPage() {
           disabled={state.status === "submitting"}
         />
 
-        <Button
-          type="submit"
-          disabled={state.status === "submitting"}
-        >
+        <Button type="submit" disabled={state.status === "submitting"}>
           {state.status === "submitting" ? "Signing in..." : "Sign in"}
         </Button>
       </form>
@@ -90,4 +87,3 @@ export default function LoginPage() {
     </>
   );
 }
-

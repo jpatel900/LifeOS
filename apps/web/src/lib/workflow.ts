@@ -504,7 +504,10 @@ export function createLocalProposalFromTask(
   return {
     ...state,
     timeBlockProposals: [proposal, ...state.timeBlockProposals],
-    reviewLog: [`Drafted local block for task: ${task.title}`, ...state.reviewLog],
+    reviewLog: [
+      `Drafted local block for task: ${task.title}`,
+      ...state.reviewLog,
+    ],
   };
 }
 

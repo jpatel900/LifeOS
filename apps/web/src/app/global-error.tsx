@@ -48,10 +48,7 @@ export default function GlobalError({
           <p style={{ marginBottom: 20 }}>
             The error was captured through the privacy-safe observability layer.
           </p>
-          <Button
-            variant="outline"
-            onClick={() => reset()}
-          >
+          <Button variant="outline" onClick={() => reset()}>
             Retry
           </Button>
         </main>
@@ -59,4 +56,3 @@ export default function GlobalError({
     </html>
   );
 }
-

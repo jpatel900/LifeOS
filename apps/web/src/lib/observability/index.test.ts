@@ -257,13 +257,17 @@ describe("observability wrapper", () => {
         feature: string;
         operation: string;
         metadata: Record<string, string | number | boolean | null>;
-        finalizeMetadata?: (outcome: {
-          ok: true;
-          value: unknown;
-        } | {
-          ok: false;
-          error: unknown;
-        }) => Record<string, string | number | boolean | null>;
+        finalizeMetadata?: (
+          outcome:
+            | {
+                ok: true;
+                value: unknown;
+              }
+            | {
+                ok: false;
+                error: unknown;
+              },
+        ) => Record<string, string | number | boolean | null>;
       },
       run: () => Promise<T>,
     ) => {

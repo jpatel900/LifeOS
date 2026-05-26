@@ -1,101 +1,101 @@
 - generic [ref=e1]:
-  - generic [ref=e2]:
-    - banner [ref=e3]:
-      - generic [ref=e4]:
-        - generic [ref=e5]:
-          - generic [ref=e6]:
-            - link "LifeOS" [ref=e7] [cursor=pointer]:
-              - /url: /capture
-            - generic [ref=e8]: Personal workflow cockpit
-          - generic [ref=e9]:
-            - generic [ref=e10]:
-              - button "Toggle theme" [ref=e54]:
-                - img
-              - textbox "Quick note text" [ref=e11]:
-                - /placeholder: Type a quick note
-              - button "Save quick note" [ref=e12]
-            - paragraph [ref=e13]: Saves in this browser only.
-        - generic [ref=e14]:
-          - navigation "Primary" [ref=e15]:
-            - link "Capture" [ref=e16] [cursor=pointer]:
-              - /url: /capture
-            - link "Triage" [ref=e17] [cursor=pointer]:
-              - /url: /triage
-            - link "Planning" [ref=e18] [cursor=pointer]:
-              - /url: /calendar
-            - link "Execute" [ref=e19] [cursor=pointer]:
-              - /url: /execute
-            - link "Review" [ref=e20] [cursor=pointer]:
-              - /url: /review
-            - link "Health" [ref=e21] [cursor=pointer]:
-              - /url: /health
-            - link "Areas" [ref=e22] [cursor=pointer]:
-              - /url: /settings/areas
-          - generic [ref=e23]:
-            - combobox "Current workflow area (session)" [ref=e24]:
-              - option "Main Job" [selected]
-              - option "Personal"
-              - option "Volunteer Work"
-              - option "Side Project"
-            - generic [ref=e25]: 19:24:59
-    - main [ref=e26]:
-      - generic "Current area context" [ref=e27]:
-        - generic [ref=e28]: Current area
-        - generic [ref=e29]: Main Job
-        - generic [ref=e30]: "Session workflow area: Main Job"
-      - group [ref=e31]:
-        - generic "System details" [ref=e32] [cursor=pointer]
-      - generic [ref=e206]:
-        - generic [ref=e207]:
-          - heading "Areas" [level=1] [ref=e208]
-          - paragraph [ref=e209]: Areas are first-class workspace scopes for capture, planning, and review.
-        - group [ref=e210]:
-          - generic "System details" [ref=e211] [cursor=pointer]
-        - group [ref=e212]:
-          - generic "Developer details" [ref=e213] [cursor=pointer]
-        - generic [ref=e214]:
-          - generic [ref=e215]:
-            - heading "Main Job" [level=3] [ref=e217]
-            - generic [ref=e218]:
-              - paragraph [ref=e219]: Work commitments and job-related projects.
-              - generic [ref=e220]: "Slug: main-job"
-          - generic [ref=e221]:
-            - heading "Personal" [level=3] [ref=e223]
-            - generic [ref=e224]:
-              - paragraph [ref=e225]: Home, health, errands, and personal admin.
-              - generic [ref=e226]: "Slug: personal"
-          - generic [ref=e227]:
-            - heading "Volunteer Work" [level=3] [ref=e229]
-            - generic [ref=e230]:
-              - paragraph [ref=e231]: Community commitments and volunteer follow-ups.
-              - generic [ref=e232]: "Slug: volunteer-work"
-          - generic [ref=e233]:
-            - heading "Side Project" [level=3] [ref=e235]
-            - generic [ref=e236]:
-              - paragraph [ref=e237]: Independent builds, experiments, and optional projects.
-              - generic [ref=e238]: "Slug: side-project"
-        - generic [ref=e239]:
-          - heading "Google Calendar" [level=3] [ref=e241]
-          - generic [ref=e242]:
-            - paragraph [ref=e243]: Connect Google Calendar so LifeOS can check conflicts and create events only after approval.
-            - generic [ref=e244]:
-              - generic [ref=e245]: Disconnected
-              - generic [ref=e246]: warning
-            - paragraph [ref=e247]: Supabase is not configured in this environment, so Google Calendar stays unavailable and mock/local mode remains intact.
-            - generic [ref=e248]:
-              - button "Connect Google Calendar" [disabled]
-              - button "Disconnect Google Calendar" [disabled]
-            - paragraph [ref=e249]: Missing server config is non-fatal. Mock/local mode still works without Google env vars.
-        - generic [ref=e250]:
-          - heading "Local reset" [level=3] [ref=e252]
-          - generic [ref=e253]:
-            - paragraph [ref=e254]: Reset clears local browser session workflow state (captures, drafts, ambiguity assessments, and planned time blocks). It does not delete Saved workspace or Demo mode rows.
-            - alert [ref=e257]:
-              - heading "Confirm local reset" [level=5] [ref=e258]
-              - generic [ref=e259]: This cannot be undone for this browser session.
-            - generic [ref=e255]:
-              - button "Confirm reset" [active] [ref=e260]
-              - button "Cancel" [ref=e261]
-  - button "Open Next.js Dev Tools" [ref=e102] [cursor=pointer]:
-    - img [ref=e103]
-  - alert [ref=e106]
+    - generic [ref=e2]:
+        - banner [ref=e3]:
+            - generic [ref=e4]:
+                - generic [ref=e5]:
+                    - generic [ref=e6]:
+                        - link "LifeOS" [ref=e7] [cursor=pointer]:
+                            - /url: /capture
+                        - generic [ref=e8]: Personal workflow cockpit
+                    - generic [ref=e9]:
+                        - generic [ref=e10]:
+                            - button "Toggle theme" [ref=e54]:
+                                - img
+                            - textbox "Quick note text" [ref=e11]:
+                                - /placeholder: Type a quick note
+                            - button "Save quick note" [ref=e12]
+                        - paragraph [ref=e13]: Saves in this browser only.
+                - generic [ref=e14]:
+                    - navigation "Primary" [ref=e15]:
+                        - link "Capture" [ref=e16] [cursor=pointer]:
+                            - /url: /capture
+                        - link "Triage" [ref=e17] [cursor=pointer]:
+                            - /url: /triage
+                        - link "Planning" [ref=e18] [cursor=pointer]:
+                            - /url: /calendar
+                        - link "Execute" [ref=e19] [cursor=pointer]:
+                            - /url: /execute
+                        - link "Review" [ref=e20] [cursor=pointer]:
+                            - /url: /review
+                        - link "Health" [ref=e21] [cursor=pointer]:
+                            - /url: /health
+                        - link "Areas" [ref=e22] [cursor=pointer]:
+                            - /url: /settings/areas
+                    - generic [ref=e23]:
+                        - combobox "Current workflow area (session)" [ref=e24]:
+                            - option "Main Job" [selected]
+                            - option "Personal"
+                            - option "Volunteer Work"
+                            - option "Side Project"
+                        - generic [ref=e25]: 19:24:59
+        - main [ref=e26]:
+            - generic "Current area context" [ref=e27]:
+                - generic [ref=e28]: Current area
+                - generic [ref=e29]: Main Job
+                - generic [ref=e30]: "Session workflow area: Main Job"
+            - group [ref=e31]:
+                - generic "System details" [ref=e32] [cursor=pointer]
+            - generic [ref=e206]:
+                - generic [ref=e207]:
+                    - heading "Areas" [level=1] [ref=e208]
+                    - paragraph [ref=e209]: Areas are first-class workspace scopes for capture, planning, and review.
+                - group [ref=e210]:
+                    - generic "System details" [ref=e211] [cursor=pointer]
+                - group [ref=e212]:
+                    - generic "Developer details" [ref=e213] [cursor=pointer]
+                - generic [ref=e214]:
+                    - generic [ref=e215]:
+                        - heading "Main Job" [level=3] [ref=e217]
+                        - generic [ref=e218]:
+                            - paragraph [ref=e219]: Work commitments and job-related projects.
+                            - generic [ref=e220]: "Slug: main-job"
+                    - generic [ref=e221]:
+                        - heading "Personal" [level=3] [ref=e223]
+                        - generic [ref=e224]:
+                            - paragraph [ref=e225]: Home, health, errands, and personal admin.
+                            - generic [ref=e226]: "Slug: personal"
+                    - generic [ref=e227]:
+                        - heading "Volunteer Work" [level=3] [ref=e229]
+                        - generic [ref=e230]:
+                            - paragraph [ref=e231]: Community commitments and volunteer follow-ups.
+                            - generic [ref=e232]: "Slug: volunteer-work"
+                    - generic [ref=e233]:
+                        - heading "Side Project" [level=3] [ref=e235]
+                        - generic [ref=e236]:
+                            - paragraph [ref=e237]: Independent builds, experiments, and optional projects.
+                            - generic [ref=e238]: "Slug: side-project"
+                - generic [ref=e239]:
+                    - heading "Google Calendar" [level=3] [ref=e241]
+                    - generic [ref=e242]:
+                        - paragraph [ref=e243]: Connect Google Calendar so LifeOS can check conflicts and create events only after approval.
+                        - generic [ref=e244]:
+                            - generic [ref=e245]: Disconnected
+                            - generic [ref=e246]: warning
+                        - paragraph [ref=e247]: Supabase is not configured in this environment, so Google Calendar stays unavailable and mock/local mode remains intact.
+                        - generic [ref=e248]:
+                            - button "Connect Google Calendar" [disabled]
+                            - button "Disconnect Google Calendar" [disabled]
+                        - paragraph [ref=e249]: Missing server config is non-fatal. Mock/local mode still works without Google env vars.
+                - generic [ref=e250]:
+                    - heading "Local reset" [level=3] [ref=e252]
+                    - generic [ref=e253]:
+                        - paragraph [ref=e254]: Reset clears local browser session workflow state (captures, drafts, ambiguity assessments, and planned time blocks). It does not delete Saved workspace or Demo mode rows.
+                        - alert [ref=e257]:
+                            - heading "Confirm local reset" [level=5] [ref=e258]
+                            - generic [ref=e259]: This cannot be undone for this browser session.
+                        - generic [ref=e255]:
+                            - button "Confirm reset" [active] [ref=e260]
+                            - button "Cancel" [ref=e261]
+    - button "Open Next.js Dev Tools" [ref=e102] [cursor=pointer]:
+        - img [ref=e103]
+    - alert [ref=e106]

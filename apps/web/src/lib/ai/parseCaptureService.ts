@@ -140,7 +140,8 @@ function categorizeParseCaptureError(error: unknown) {
 }
 
 function getValidationStatus(error: unknown) {
-  return categorizeParseCaptureError(error) === "provider_schema_validation_failed"
+  return categorizeParseCaptureError(error) ===
+    "provider_schema_validation_failed"
     ? "failed"
     : "not_run";
 }
@@ -273,7 +274,9 @@ export async function parseCaptureWithFallback(
   const aiEnabled = isAiParserEnabled(env);
   const modelConfig = resolveParseCaptureModelConfig(env);
   const parser =
-    options.forceMock || !aiEnabled || !apiKey ? ("mock" as const) : ("ai" as const);
+    options.forceMock || !aiEnabled || !apiKey
+      ? ("mock" as const)
+      : ("ai" as const);
 
   return (options.traceParseCaptureImpl ?? traceParseCapture)(
     {

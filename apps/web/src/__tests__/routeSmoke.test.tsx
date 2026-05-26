@@ -43,10 +43,10 @@ describe("workflow route provider wiring", () => {
 
     expect(await screen.findByText(/Organization help:/)).toBeDefined();
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save quick note" })).toBeDefined();
     expect(
-      screen.getByText("Saves in this browser only."),
+      screen.getByRole("button", { name: "Save quick note" }),
     ).toBeDefined();
+    expect(screen.getByText("Saves in this browser only.")).toBeDefined();
     expect(
       screen.getByRole("heading", { level: 1, name: "Capture" }),
     ).toBeDefined();

@@ -110,11 +110,17 @@ function AppChrome({ children }: { children: ReactNode }) {
                   <AlertTitle>Saved.</AlertTitle>
                   <AlertDescription>
                     Review it in{" "}
-                    <Link href="/triage" className="underline underline-offset-2">
+                    <Link
+                      href="/triage"
+                      className="underline underline-offset-2"
+                    >
                       Triage
                     </Link>{" "}
                     or{" "}
-                    <Link href="/review" className="underline underline-offset-2">
+                    <Link
+                      href="/review"
+                      className="underline underline-offset-2"
+                    >
                       Review
                     </Link>
                     .
@@ -125,7 +131,10 @@ function AppChrome({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex flex-col gap-3 pb-1 lg:flex-row lg:items-center">
-            <nav aria-label="Primary" className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+            <nav
+              aria-label="Primary"
+              className="flex flex-wrap items-center gap-2 lg:flex-nowrap"
+            >
               {navLinks.map((link) => {
                 const isActive =
                   pathname === link.href ||
@@ -150,7 +159,9 @@ function AppChrome({ children }: { children: ReactNode }) {
               <Select
                 aria-label="Current workflow area (session)"
                 value={selectedAreaId ?? ""}
-                onChange={(event) => setSelectedAreaId(event.target.value || null)}
+                onChange={(event) =>
+                  setSelectedAreaId(event.target.value || null)
+                }
                 className="h-9 min-w-0 flex-1 rounded-full sm:min-w-44 sm:flex-none"
               >
                 {state.areas.map((area) => (
@@ -182,7 +193,9 @@ function AppChrome({ children }: { children: ReactNode }) {
         </div>
         <Separator />
         <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none">System details</summary>
+          <summary className="cursor-pointer select-none">
+            System details
+          </summary>
           <p className="mt-2">Workflow area (session)</p>
           <p>Session workflow area: {currentArea?.name ?? "Not set"}</p>
         </details>

@@ -206,8 +206,7 @@ export const MarkExecutionSessionInputSchema = z
     if (input.productivity_rating === null) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
-        message:
-          "productivity_rating is required for terminal session updates",
+        message: "productivity_rating is required for terminal session updates",
         path: ["productivity_rating"],
       });
     }

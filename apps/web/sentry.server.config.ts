@@ -14,7 +14,10 @@ if (config) {
     sentry: {
       transportMode: "sentry_sdk",
       captureException(input) {
-        const scopeContext = getSentryScopeContext(input.feature, input.context);
+        const scopeContext = getSentryScopeContext(
+          input.feature,
+          input.context,
+        );
 
         Sentry.withScope((scope) => {
           for (const [key, value] of Object.entries(scopeContext.tags)) {

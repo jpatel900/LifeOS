@@ -376,9 +376,11 @@ describe("health dashboard data provider", () => {
       expect(checkBySubsystem(result.checks, "PostHog").details).toMatchObject({
         provider_state: expectedStates.PostHog,
       });
-      expect(checkBySubsystem(result.checks, "Langfuse").details).toMatchObject({
-        provider_state: expectedStates.Langfuse,
-      });
+      expect(checkBySubsystem(result.checks, "Langfuse").details).toMatchObject(
+        {
+          provider_state: expectedStates.Langfuse,
+        },
+      );
 
       const serialized = JSON.stringify(result);
       expect(serialized).not.toContain("example.ingest.sentry.io/123");

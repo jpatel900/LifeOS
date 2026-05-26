@@ -92,7 +92,12 @@ export interface TodayCockpitModel {
 
 const ACTIVE_PROPOSAL_STATUSES = new Set(["proposed", "edited", "accepted"]);
 const ACTIVE_BLOCK_STATUSES = new Set(["scheduled", "running"]);
-const TODAY_BLOCK_STATUSES = new Set(["scheduled", "running", "missed", "completed"]);
+const TODAY_BLOCK_STATUSES = new Set([
+  "scheduled",
+  "running",
+  "missed",
+  "completed",
+]);
 const RECOVERY_SESSION_STATUSES = new Set(["missed", "stuck", "distracted"]);
 const RECOVERY_OUTCOMES = new Set(["blocked", "skipped", "distracted"]);
 
@@ -153,7 +158,9 @@ function isRecoverySession(session: TodayCockpitSession) {
   return false;
 }
 
-export function buildTodayCockpitModel(input: BuildTodayCockpitModelInput): TodayCockpitModel {
+export function buildTodayCockpitModel(
+  input: BuildTodayCockpitModelInput,
+): TodayCockpitModel {
   const now = input.now ?? new Date();
   const getCalendarDateKey = createCalendarDateKeyGetter(input.timezone);
   const todayDateKey = getCalendarDateKey(now);
@@ -171,7 +178,9 @@ export function buildTodayCockpitModel(input: BuildTodayCockpitModelInput): Toda
   );
   const activeBlockTaskIds = new Set(
     input.blocks
-      .filter((block) => block.taskId && ACTIVE_BLOCK_STATUSES.has(block.status))
+      .filter(
+        (block) => block.taskId && ACTIVE_BLOCK_STATUSES.has(block.status),
+      )
       .map((block) => block.taskId as string),
   );
 
@@ -236,8 +245,9 @@ export function buildTodayCockpitModel(input: BuildTodayCockpitModelInput): Toda
     return status === "running" || status === "paused";
   });
   const currentBlock = input.blocks.find((block) => block.status === "running");
-  const currentSessionTask =
-    currentSession?.taskId ? taskById.get(currentSession.taskId) : null;
+  const currentSessionTask = currentSession?.taskId
+    ? taskById.get(currentSession.taskId)
+    : null;
   const currentBlockTask = currentBlock?.taskId
     ? taskById.get(currentBlock.taskId)
     : null;

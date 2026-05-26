@@ -127,9 +127,7 @@ export function sanitizeSentryEvent(event: unknown) {
       data:
         request.data === undefined ? undefined : OBSERVABILITY_REDACTED_TEXT,
       cookies:
-        request.cookies === undefined
-          ? undefined
-          : OBSERVABILITY_REDACTED_TEXT,
+        request.cookies === undefined ? undefined : OBSERVABILITY_REDACTED_TEXT,
     };
   }
 

@@ -10,7 +10,9 @@ function getNumberMetadata(
   key: string,
 ) {
   const value = metadata[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function getStringMetadata(
@@ -108,7 +110,8 @@ if (config) {
                 level: "ERROR",
                 model: getStringMetadata(metadata, "model_name"),
                 statusMessage:
-                  getStringMetadata(metadata, "error_category") ?? "unknown_error",
+                  getStringMetadata(metadata, "error_category") ??
+                  "unknown_error",
                 usageDetails: buildUsageDetails(metadata),
                 costDetails: buildCostDetails(metadata),
                 version:

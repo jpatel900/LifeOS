@@ -123,11 +123,9 @@ describe("observability config helpers", () => {
       "configured",
       "configured",
     ]);
-    expect(snapshot.providers.map((provider) => provider.transportMode)).toEqual([
-      "sentry_sdk",
-      "posthog_js",
-      "langfuse_sdk",
-    ]);
+    expect(
+      snapshot.providers.map((provider) => provider.transportMode),
+    ).toEqual(["sentry_sdk", "posthog_js", "langfuse_sdk"]);
     expect(snapshot.guardrails.networkTelemetryEnabled).toBe(true);
   });
 });

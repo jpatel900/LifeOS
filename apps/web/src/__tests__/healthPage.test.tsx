@@ -1,4 +1,10 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HealthDashboardResult } from "@/lib/data/health";
 import HealthPage from "../app/health/page";
@@ -70,7 +76,9 @@ describe("HealthPage", () => {
 
     render(<HealthPage />);
 
-    expect(screen.getByRole("button", { name: "Run system check" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Run system check" }),
+    ).toBeDefined();
     expect(await screen.findByText("No active warnings")).toBeDefined();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.getByText("Google Calendar")).toBeDefined();
@@ -125,7 +133,8 @@ describe("HealthPage", () => {
   });
 
   it("shows a visible disabled reason while a system check is running", async () => {
-    let resolveDashboard: ((result: HealthDashboardResult) => void) | null = null;
+    let resolveDashboard: ((result: HealthDashboardResult) => void) | null =
+      null;
     const pendingDashboard = new Promise<HealthDashboardResult>((resolve) => {
       resolveDashboard = resolve;
     });
@@ -140,7 +149,9 @@ describe("HealthPage", () => {
     if (!resolveDashboard) {
       throw new Error("resolveDashboard was not set.");
     }
-    const finishDashboard = resolveDashboard as (result: HealthDashboardResult) => void;
+    const finishDashboard = resolveDashboard as (
+      result: HealthDashboardResult,
+    ) => void;
     finishDashboard(
       readyResult([
         {
@@ -155,7 +166,9 @@ describe("HealthPage", () => {
     );
 
     expect(await screen.findByText("System check complete.")).toBeDefined();
-    expect(screen.getByRole("button", { name: "Run system check" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Run system check" }),
+    ).not.toBeDisabled();
   });
 
   it("moves from loading to error when health loading exceeds timeout", async () => {
@@ -176,7 +189,9 @@ describe("HealthPage", () => {
     expect(alert).toHaveTextContent(
       "Health checks are taking too long. Verify your connection or session, then run the check again.",
     );
-    expect(screen.getByRole("button", { name: "Run system check" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Run system check" }),
+    ).not.toBeDisabled();
   });
 
   it("shows success feedback after a manual re-run", async () => {

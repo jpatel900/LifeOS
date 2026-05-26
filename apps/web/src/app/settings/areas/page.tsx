@@ -67,7 +67,8 @@ export default function AreasSettingsPage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Areas</h1>
         <p className="text-sm text-muted-foreground">
-          Areas are first-class workspace scopes for capture, planning, and review.
+          Areas are first-class workspace scopes for capture, planning, and
+          review.
         </p>
       </section>
 
@@ -81,7 +82,9 @@ export default function AreasSettingsPage() {
       </details>
 
       <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">Developer details</summary>
+        <summary className="cursor-pointer select-none">
+          Developer details
+        </summary>
         {state.status === "ready" ? (
           <p className="mt-2">
             Storage mode id: <strong>{state.provider}</strong>
@@ -101,8 +104,9 @@ export default function AreasSettingsPage() {
           <AlertDescription>
             <p>{state.message}</p>
             <p>
-              If Supabase is configured, make sure you are signed in and the local
-              stack is running. Without Supabase env vars, this page uses demo areas.
+              If Supabase is configured, make sure you are signed in and the
+              local stack is running. Without Supabase env vars, this page uses
+              demo areas.
             </p>
           </AlertDescription>
         </Alert>
@@ -154,8 +158,8 @@ export default function AreasSettingsPage() {
               <AlertTitle>Reset local data on this browser?</AlertTitle>
               <AlertDescription>
                 This clears local demo/session data for this device only,
-                including captures, drafts, ambiguity checks, and planned time blocks.
-                It does not delete cloud data.
+                including captures, drafts, ambiguity checks, and planned time
+                blocks. It does not delete cloud data.
               </AlertDescription>
             </Alert>
           ) : null}

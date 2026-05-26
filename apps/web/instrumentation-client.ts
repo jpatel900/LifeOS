@@ -19,7 +19,10 @@ if (config) {
     sentry: {
       transportMode: "sentry_sdk",
       captureException(input) {
-        const scopeContext = getSentryScopeContext(input.feature, input.context);
+        const scopeContext = getSentryScopeContext(
+          input.feature,
+          input.context,
+        );
 
         Sentry.withScope((scope) => {
           for (const [key, value] of Object.entries(scopeContext.tags)) {
@@ -49,7 +52,10 @@ const posthogConfig = getPostHogInitConfig();
 const posthogToken = getPostHogToken();
 
 if (posthogConfig && posthogToken) {
-  posthog.init(posthogToken, posthogConfig as Parameters<typeof posthog.init>[1]);
+  posthog.init(
+    posthogToken,
+    posthogConfig as Parameters<typeof posthog.init>[1],
+  );
 
   registerObservabilityRuntime({
     posthog: {

@@ -126,7 +126,9 @@ function getAccessTokenHeader(accessToken: string) {
   };
 }
 
-function getSeverityClasses(severity: "info" | "warning" | "error" | "success") {
+function getSeverityClasses(
+  severity: "info" | "warning" | "error" | "success",
+) {
   switch (severity) {
     case "success":
       return "border-border bg-muted";
@@ -456,8 +458,8 @@ export function GoogleCalendarConnectionPanel() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Connect Google Calendar so LifeOS can check conflicts and create events
-          only after approval.
+          Connect Google Calendar so LifeOS can check conflicts and create
+          events only after approval.
         </p>
 
         {flashMessage ? (
@@ -549,4 +551,3 @@ export function GoogleCalendarConnectionPanel() {
     </Card>
   );
 }
-

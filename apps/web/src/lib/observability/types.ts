@@ -70,14 +70,18 @@ export interface TraceAiOperationInput {
   feature: string;
   operation: string;
   metadata?: Record<string, unknown>;
-  finalizeMetadata?: (outcome: TraceAiOperationOutcome) => Record<string, unknown>;
+  finalizeMetadata?: (
+    outcome: TraceAiOperationOutcome,
+  ) => Record<string, unknown>;
 }
 
 export interface TraceParseCaptureInput {
   parser: "ai" | "mock";
   provider?: "openai" | "mock";
   metadata?: Record<string, unknown>;
-  finalizeMetadata?: (outcome: TraceAiOperationOutcome) => Record<string, unknown>;
+  finalizeMetadata?: (
+    outcome: TraceAiOperationOutcome,
+  ) => Record<string, unknown>;
 }
 
 export type TraceAiOperationOutcome =

@@ -217,20 +217,22 @@ function getObservabilityCheckStatus(provider: ObservabilityProviderStatus) {
   }
 }
 
-function getObservabilityProviderSummary(provider: ObservabilityProviderStatus) {
+function getObservabilityProviderSummary(
+  provider: ObservabilityProviderStatus,
+) {
   switch (provider.state) {
     case "disabled":
       return provider.provider === "sentry"
         ? "Sentry DSN is absent; sanitized error export is disabled."
         : provider.provider === "posthog"
           ? "PostHog public config is absent; manual product analytics is disabled."
-        : `${provider.provider} is disabled; vendor telemetry stays off by default.`;
+          : `${provider.provider} is disabled; vendor telemetry stays off by default.`;
     case "configured":
       return provider.provider === "sentry"
         ? "Sentry DSN is present; sanitized error capture is enabled with replay, tracing, and default PII off."
         : provider.provider === "posthog"
           ? "PostHog public config is present; manual analytics is enabled with autocapture, replay, heatmaps, dead clicks, and console logs off."
-        : "Langfuse server config is present; metadata-only parse_capture tracing is enabled without prompt, completion, or raw-capture export.";
+          : "Langfuse server config is present; metadata-only parse_capture tracing is enabled without prompt, completion, or raw-capture export.";
     case "missing_config":
       return `${provider.provider} has partial configuration. Complete the config before any future enablement.`;
     case "invalid_config":
@@ -252,8 +254,7 @@ function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
         ? "Selective sanitized telemetry may be enabled, but replay, autocapture, tracing, and AI content export remain off."
         : "Replay, autocapture, AI content tracing, and vendor telemetry remain disabled.",
       {
-        ai_content_tracing_enabled:
-          snapshot.guardrails.aiContentTracingEnabled,
+        ai_content_tracing_enabled: snapshot.guardrails.aiContentTracingEnabled,
         active_provider_count: activeProviders.length,
         active_providers: activeProviders.map((provider) => provider.provider),
         active_transport_modes: activeProviders.map(
@@ -261,8 +262,7 @@ function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
         ),
         autocapture_enabled: snapshot.guardrails.autocaptureEnabled,
         environment: snapshot.environmentName,
-        network_telemetry_enabled:
-          snapshot.guardrails.networkTelemetryEnabled,
+        network_telemetry_enabled: snapshot.guardrails.networkTelemetryEnabled,
         session_replay_enabled: snapshot.guardrails.sessionReplayEnabled,
       },
     ),

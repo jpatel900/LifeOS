@@ -48,7 +48,9 @@ describe("HomePage Today cockpit", () => {
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Next" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Now" })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Quick Capture" })).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: "Quick Capture" }),
+    ).toBeDefined();
     expect(
       screen.getByRole("heading", { name: "System trust/status" }),
     ).toBeDefined();
@@ -64,10 +66,9 @@ describe("HomePage Today cockpit", () => {
     await waitFor(() => expect(listPlanningItems).toHaveBeenCalled());
 
     expect(screen.getByText("Capture what matters now")).toBeDefined();
-    expect(screen.getByRole("link", { name: "Open next step" })).toHaveAttribute(
-      "href",
-      "/capture",
-    );
+    expect(
+      screen.getByRole("link", { name: "Open next step" }),
+    ).toHaveAttribute("href", "/capture");
   });
 
   it("shows honest empty states", async () => {
@@ -75,8 +76,12 @@ describe("HomePage Today cockpit", () => {
     await waitFor(() => expect(listExecutionReviewItems).toHaveBeenCalled());
 
     expect(screen.getByText("No pending drafts right now.")).toBeDefined();
-    expect(screen.getByText("No unplanned active tasks right now.")).toBeDefined();
-    expect(screen.getByText("No local planned blocks for today.")).toBeDefined();
+    expect(
+      screen.getByText("No unplanned active tasks right now."),
+    ).toBeDefined();
+    expect(
+      screen.getByText("No local planned blocks for today."),
+    ).toBeDefined();
   });
 
   it("shows degraded saved-workspace state without crashing", async () => {
@@ -104,9 +109,12 @@ describe("HomePage Today cockpit", () => {
   it("shows truthful Quick Capture success and allowed route links", async () => {
     renderHome();
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Home quick capture text" }), {
-      target: { value: "Home capture test" },
-    });
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Home quick capture text" }),
+      {
+        target: { value: "Home capture test" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save quick capture" }));
 
     expect(await screen.findByText("Saved.")).toBeDefined();

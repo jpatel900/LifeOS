@@ -112,7 +112,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getFiniteNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function extractTelemetry(

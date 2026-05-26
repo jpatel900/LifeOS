@@ -31,10 +31,7 @@ const PHASE_8B_GUARDRAILS: ObservabilityGuardrails = {
   aiContentTracingEnabled: false,
 };
 
-function readEnvValue(
-  env: ObservabilityEnv,
-  key: string,
-): string | undefined {
+function readEnvValue(env: ObservabilityEnv, key: string): string | undefined {
   const value = env[key];
   if (typeof value !== "string") {
     return undefined;
@@ -50,7 +47,8 @@ function hasAnyProviderSignal(
 ) {
   if (provider === "sentry") {
     return Boolean(
-      readEnvValue(env, "NEXT_PUBLIC_SENTRY_DSN") ?? readEnvValue(env, "SENTRY_DSN"),
+      readEnvValue(env, "NEXT_PUBLIC_SENTRY_DSN") ??
+      readEnvValue(env, "SENTRY_DSN"),
     );
   }
 
@@ -137,7 +135,7 @@ export function getObservabilityProviderStatus(
           ? "posthog_js"
           : provider === "langfuse" && state === "configured"
             ? "langfuse_sdk"
-          : "noop",
+            : "noop",
   };
 }
 

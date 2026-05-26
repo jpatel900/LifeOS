@@ -55,7 +55,10 @@ function displaySubsystem(name: string) {
   return toUserText(name);
 }
 
-function humanStatus(summary: string, status: "healthy" | "watch" | "critical") {
+function humanStatus(
+  summary: string,
+  status: "healthy" | "watch" | "critical",
+) {
   const lower = toUserText(summary).toLowerCase();
   if (lower.includes("disabled") || lower.includes("optional")) {
     return { label: "Off by choice", variant: "secondary" as const };
@@ -93,7 +96,9 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
 
 export default function HealthPage() {
   const [state, setState] = useState<HealthLoadState>({ status: "loading" });
-  const [feedback, setFeedback] = useState<CheckFeedbackState>({ status: "idle" });
+  const [feedback, setFeedback] = useState<CheckFeedbackState>({
+    status: "idle",
+  });
   const [checkRunId, setCheckRunId] = useState(0);
 
   useEffect(() => {
@@ -130,7 +135,8 @@ export default function HealthPage() {
       } catch (error) {
         if (!cancelled) {
           const errorMessage =
-            error instanceof Error && error.message === HEALTH_TIMEOUT_ERROR_CODE
+            error instanceof Error &&
+            error.message === HEALTH_TIMEOUT_ERROR_CODE
               ? "Health checks are taking too long. Verify your connection or session, then run the check again."
               : "Unable to load health checks right now. Verify auth/session and storage mode, then retry.";
           setState({
@@ -157,7 +163,8 @@ export default function HealthPage() {
       ? state.result.checks.filter((check) => {
           const display = humanStatus(check.summary, check.status);
           return (
-            display.label === "Needs setup" || display.label === "Needs attention"
+            display.label === "Needs setup" ||
+            display.label === "Needs attention"
           );
         })
       : [];
@@ -178,7 +185,11 @@ export default function HealthPage() {
         >
           Run system check
         </Button>
-        <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+        <p
+          className="text-xs text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
           {isRunDisabled
             ? "Run in progress. Please wait."
             : feedback.status === "success" || feedback.status === "error"
@@ -205,7 +216,9 @@ export default function HealthPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">What needs attention now</CardTitle>
+              <CardTitle className="text-xl">
+                What needs attention now
+              </CardTitle>
               <CardDescription>
                 Resolve these first before relying on them.
               </CardDescription>
@@ -280,7 +293,9 @@ export default function HealthPage() {
           </details>
 
           <details className="text-sm text-muted-foreground">
-            <summary className="cursor-pointer select-none">Developer details</summary>
+            <summary className="cursor-pointer select-none">
+              Developer details
+            </summary>
             <p className="mt-2">
               Storage mode id: <strong>{state.result.provider}</strong>
             </p>

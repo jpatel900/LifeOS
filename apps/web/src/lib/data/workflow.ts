@@ -1343,7 +1343,8 @@ export async function markExecutionSession(
     (updatedSession.outcome === "completed" ||
       updatedSession.outcome === "skipped")
   ) {
-    const blockStatus = updatedSession.outcome === "completed" ? "completed" : "missed";
+    const blockStatus =
+      updatedSession.outcome === "completed" ? "completed" : "missed";
     const blockUpdateQuery = client.from("calendar_blocks") as {
       update: (row: Record<string, unknown>) => {
         eq: (
@@ -1371,7 +1372,8 @@ export async function markExecutionSession(
     (updatedSession.outcome === "completed" ||
       updatedSession.outcome === "blocked")
   ) {
-    const taskStatus = updatedSession.outcome === "completed" ? "done" : "blocked";
+    const taskStatus =
+      updatedSession.outcome === "completed" ? "done" : "blocked";
     const taskUpdateQuery = client.from("tasks") as {
       update: (row: Record<string, unknown>) => {
         eq: (

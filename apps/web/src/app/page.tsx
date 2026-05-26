@@ -123,10 +123,14 @@ function normalizeSession(session: ExecutionSession): TodayCockpitSession {
 
 export default function HomePage() {
   const { state, selectedAreaId, submitCaptureText } = useWorkflow();
-  const [homeData, setHomeData] = useState<HomeDataState>({ status: "loading" });
+  const [homeData, setHomeData] = useState<HomeDataState>({
+    status: "loading",
+  });
   const [quickCaptureText, setQuickCaptureText] = useState("");
   const [quickCaptureFeedback, setQuickCaptureFeedback] = useState<
-    { status: "idle" } | { status: "error"; message: string } | { status: "saved" }
+    | { status: "idle" }
+    | { status: "error"; message: string }
+    | { status: "saved" }
   >({ status: "idle" });
 
   useEffect(() => {
@@ -349,9 +353,7 @@ export default function HomePage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Now</CardTitle>
-          <CardDescription>
-            What is currently in progress.
-          </CardDescription>
+          <CardDescription>What is currently in progress.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2">
           <p className="font-medium">{cockpit.now.title}</p>
@@ -417,7 +419,9 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
             {cockpit.needsDecision.count === 0 ? (
-              <p className="text-muted-foreground">No pending drafts right now.</p>
+              <p className="text-muted-foreground">
+                No pending drafts right now.
+              </p>
             ) : (
               cockpit.needsDecision.items.map((item) => (
                 <p key={item.id} className="text-foreground">
@@ -458,7 +462,9 @@ export default function HomePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Today&apos;s planned blocks</CardTitle>
+            <CardTitle className="text-lg">
+              Today&apos;s planned blocks
+            </CardTitle>
             <CardDescription>
               Local blocks scheduled, running, missed, or completed today.
             </CardDescription>
@@ -472,8 +478,13 @@ export default function HomePage() {
               cockpit.todayBlocks.map((block) => {
                 const task = tasks.find((item) => item.id === block.taskId);
                 return (
-                  <div key={block.id} className="rounded-md border border-border p-2">
-                    <p className="font-medium">{task?.title ?? "Planned block"}</p>
+                  <div
+                    key={block.id}
+                    className="rounded-md border border-border p-2"
+                  >
+                    <p className="font-medium">
+                      {task?.title ?? "Planned block"}
+                    </p>
                     <p className="text-muted-foreground">
                       {formatBlockTime(block.startAt, block.endAt)}
                     </p>
@@ -504,10 +515,15 @@ export default function HomePage() {
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
             {cockpit.recoveryItems.length === 0 ? (
-              <p className="text-muted-foreground">No recovery items right now.</p>
+              <p className="text-muted-foreground">
+                No recovery items right now.
+              </p>
             ) : (
               cockpit.recoveryItems.map((item) => (
-                <div key={item.id} className="rounded-md border border-border p-2">
+                <div
+                  key={item.id}
+                  className="rounded-md border border-border p-2"
+                >
                   <p className="font-medium">{item.label}</p>
                   <p className="text-muted-foreground">{item.reason}</p>
                 </div>
@@ -532,7 +548,9 @@ export default function HomePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 text-sm">
-            <p className="text-muted-foreground">{cockpit.systemStatus.summary}</p>
+            <p className="text-muted-foreground">
+              {cockpit.systemStatus.summary}
+            </p>
             <Button asChild variant="outline">
               <Link href={cockpit.systemStatus.href}>Open Health</Link>
             </Button>
@@ -547,13 +565,16 @@ export default function HomePage() {
 
       {homeData.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Checking saved workspace rows. This browser workflow state remains available.
+          Checking saved workspace rows. This browser workflow state remains
+          available.
         </p>
       ) : null}
 
       {homeData.status !== "loading" && homeData.issues.length > 0 ? (
         <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none">Developer details</summary>
+          <summary className="cursor-pointer select-none">
+            Developer details
+          </summary>
           <ul className="mt-2 list-disc pl-5">
             {homeData.issues.map((issue) => (
               <li key={issue}>{issue}</li>
