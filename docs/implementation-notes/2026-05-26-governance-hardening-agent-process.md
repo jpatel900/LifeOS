@@ -17,6 +17,7 @@
   - Follow-up review fixes also document that safe auto-merge can only arm GitHub auto-merge when the repository-level auto-merge setting is enabled.
   - PR-review and auto-merge workflows must fetch full history before using three-dot git diffs so risk/eligibility scripts always have a merge base.
   - GitHub-managed JS actions in repo workflows should stay on Node 24-capable majors to avoid Node 20 deprecation breakage on GitHub-hosted runners.
+  - PR #40 follow-up keeps the classifier logic unchanged and fixes the failure at the workflow layer: `Classify PR risk` was failing with `fatal: <base>...<head>: no merge base` because three-dot diffs need merge-base history, so `codex-pr-review.yml` must keep `fetch-depth: 0` on all PR review checkouts and use a current `actions/setup-node` major.
 - Deviations:
   - Did not change `README.md` because it did not contain a contradictory Node-version claim.
   - Did not change `docs/CODEX_SKILL_ROUTING.md` because the existing routing policy already fit the approved scope.
@@ -43,9 +44,12 @@
   - `AGENTS.md`: align the engineering automation boundary wording with the approved GitHub-only write scope.
   - `docs/agent/CODEX_PROMPT_TEMPLATE.md`: align Verification Oracle scope wording with `AGENTS.md`.
   - `.github/workflows/codex-pr-review.yml`: fetch full history for classifier/review jobs and bump Node 24-capable action versions for setup/comment steps.
+  - PR #40 merge-blocker follow-up:
+  - `.github/workflows/codex-pr-review.yml`: keep `fetch-depth: 0` on `classify-risk`, `baseline-review`, and `escalated-review`, and bump `actions/setup-node` from `v5` to `v6` while preserving `node-version: 22.13.0`.
   - `.github/workflows/safe-automerge.yml`: fetch full PR history for merge-base-sensitive eligibility checks and bump Node 24-capable action versions.
   - `.github/workflows/ci.yml`, `.github/workflows/codex-low-risk-issue-to-pr.yml`, `.github/workflows/codex-ci-autofix.yml`: bump GitHub-managed JS action versions to Node 24-capable majors to remove Node 20 deprecation pressure.
 - Validation commands and results:
+  - PR #40 rerun target after push: rerun `Codex PR Review` on the pull request and confirm `Classify PR risk` completes, then confirm baseline/escalated review jobs run or skip according to classifier output.
   - `node scripts/agent/check-safe-automerge.mjs --self-test`: passed (`Self-test passed (8 cases).`)
   - `pnpm format:check`: failed from known unrelated repo-wide Prettier drift; warnings were reported across many pre-existing files outside this patch surface, including `.github/codex/prompts/*`, multiple workflow files, many `.playwright-mcp/*.yml`, `README.md`, `pnpm-workspace.yaml`, and existing `apps/web` sources.
   - `pnpm lint`: passed
