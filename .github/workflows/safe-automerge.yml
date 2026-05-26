@@ -1,0 +1,175 @@
+name: Safe Auto-merge
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+      - ready_for_review
+      - converted_to_draft
+
+concurrency:
+  group: safe-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  sync-safe-automerge:
+    name: Sync safe auto-merge state
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+
+      - name: Pre-fetch base and head refs for the PR
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin \
+            "$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+
+      - name: Evaluate safe auto-merge eligibility
+        id: eligibility
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/agent/check-safe-automerge.mjs
+
+      - name: Sync GitHub auto-merge setting
+        id: sync
+        uses: actions/github-script@v7
+        env:
+          ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const eligible = process.env.ELIGIBLE === 'true';
+            const pullRequestId = process.env.PR_NODE_ID;
+
+            if (!pullRequestId) {
+              core.setFailed('pull_request.node_id is required to sync auto-merge.');
+              return;
+            }
+
+            const setOutputs = (action, detail) => {
+              core.setOutput('action', action);
+              core.setOutput('detail', detail);
+            };
+
+            if (eligible) {
+              try {
+                const result = await github.graphql(
+                  `
+                    mutation EnableAutoMerge($pullRequestId: ID!) {
+                      enablePullRequestAutoMerge(
+                        input: {
+                          pullRequestId: $pullRequestId
+                          mergeMethod: SQUASH
+                        }
+                      ) {
+                        pullRequest {
+                          number
+                        }
+                      }
+                    }
+                  `,
+                  { pullRequestId },
+                );
+
+                setOutputs(
+                  'enabled',
+                  `Enabled GitHub auto-merge with squash for PR #${result.enablePullRequestAutoMerge.pullRequest.number}.`,
+                );
+                return;
+              } catch (error) {
+                const message = String(error?.message ?? error);
+
+                if (/already enabled/i.test(message)) {
+                  setOutputs(
+                    'already-enabled',
+                    'GitHub auto-merge was already enabled for this pull request.',
+                  );
+                  return;
+                }
+
+                core.setFailed(`Eligible PR, but enabling auto-merge failed: ${message}`);
+                return;
+              }
+            }
+
+            try {
+              const result = await github.graphql(
+                `
+                  mutation DisableAutoMerge($pullRequestId: ID!) {
+                    disablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId }) {
+                      pullRequest {
+                        number
+                      }
+                    }
+                  }
+                `,
+                { pullRequestId },
+              );
+
+              setOutputs(
+                'disabled',
+                `Disabled GitHub auto-merge for PR #${result.disablePullRequestAutoMerge.pullRequest.number} because it is not currently safe.`,
+              );
+            } catch (error) {
+              const message = String(error?.message ?? error);
+
+              if (
+                /auto-merge is disabled|auto-merge is not enabled|already disabled|not currently enabled/i.test(
+                  message,
+                )
+              ) {
+                setOutputs(
+                  'not-enabled',
+                  'Pull request is ineligible, and GitHub auto-merge was not enabled.',
+                );
+                return;
+              }
+
+              core.setFailed(`Ineligible PR, but disabling auto-merge failed: ${message}`);
+            }
+
+      - name: Write workflow summary
+        env:
+          ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
+          REASONS_MARKDOWN: ${{ steps.eligibility.outputs.reasons_markdown }}
+          CHANGED_FILES_MARKDOWN: ${{ steps.eligibility.outputs.changed_files_markdown }}
+          SYNC_ACTION: ${{ steps.sync.outputs.action }}
+          SYNC_DETAIL: ${{ steps.sync.outputs.detail }}
+        shell: bash
+        run: |
+          {
+            echo "## Safe Auto-merge Guard"
+            echo
+            echo "- Eligibility: \`${ELIGIBLE}\`"
+            echo "- Sync action: \`${SYNC_ACTION}\`"
+            echo "- Detail: ${SYNC_DETAIL}"
+            echo
+            echo "### Reasons"
+            echo "${REASONS_MARKDOWN}"
+            echo
+            echo "### Changed files"
+            echo "${CHANGED_FILES_MARKDOWN}"
+          } >> "$GITHUB_STEP_SUMMARY"
