@@ -63,6 +63,7 @@ jobs:
           script: |
             const eligible = process.env.ELIGIBLE === 'true';
             const pullRequestId = process.env.PR_NODE_ID;
+            const autoMergeEnabled = Boolean(context.payload.pull_request?.auto_merge);
 
             if (!pullRequestId) {
               core.setFailed('pull_request.node_id is required to sync auto-merge.');
@@ -115,6 +116,14 @@ jobs:
               }
             }
 
+            if (!autoMergeEnabled) {
+              setOutputs(
+                'not-enabled',
+                'Pull request is ineligible, and GitHub auto-merge is not enabled.',
+              );
+              return;
+            }
+
             try {
               const result = await github.graphql(
                 `
@@ -144,6 +153,17 @@ jobs:
                 setOutputs(
                   'not-enabled',
                   'Pull request is ineligible, and GitHub auto-merge was not enabled.',
+                );
+                return;
+              }
+
+              if (/Resource not accessible by integration/i.test(message)) {
+                core.warning(
+                  `Pull request is ineligible, but the workflow token could not disable GitHub auto-merge: ${message}`,
+                );
+                setOutputs(
+                  'disable-unavailable',
+                  'Pull request is ineligible, but the workflow token could not disable GitHub auto-merge.',
                 );
                 return;
               }
