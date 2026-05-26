@@ -363,7 +363,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              supabase/migrations/*|apps/web/src/lib/googleCalendar/*|apps/web/src/app/api/google-calendar/*|apps/web/src/lib/ai/contracts/*|apps/web/src/lib/ai/parseCapture.ts|apps/web/src/lib/observability/*|.env*|package.json|pnpm-lock.yaml)
+              .github/workflows/*|supabase/migrations/*|apps/web/src/lib/googleCalendar/*|apps/web/src/app/api/google-calendar/*|apps/web/src/lib/ai/contracts/*|apps/web/src/lib/ai/parseCapture.ts|apps/web/src/lib/observability/*|.env*|package.json|pnpm-lock.yaml)
                 echo "$file" >> "$violations_file"
                 ;;
             esac
