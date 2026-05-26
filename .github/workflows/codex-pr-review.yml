@@ -1,0 +1,242 @@
+name: Codex PR Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
+
+jobs:
+  classify-risk:
+    name: Classify PR risk
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      escalation_required: ${{ steps.classify.outputs.escalation_required }}
+      risk_level: ${{ steps.classify.outputs.risk_level }}
+      escalation_reasons: ${{ steps.classify.outputs.escalation_reasons }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+
+      - name: Pre-fetch base and head refs for the PR
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin \
+            "$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+
+      - name: Classify pull request risk
+        id: classify
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/agent/classify-pr-risk.mjs
+
+  baseline-review:
+    name: Codex baseline review
+    if: github.event.pull_request.draft == false
+    needs:
+      - classify-risk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      final_message: ${{ steps.run_codex.outputs.final-message }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+
+      - name: Pre-fetch base and head refs for the PR
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin \
+            "$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head"
+
+      - name: Run Codex baseline PR review
+        id: run_codex
+        uses: openai/codex-action@v1
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_RISK_LEVEL: ${{ needs.classify-risk.outputs.risk_level }}
+          PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4-mini
+          effort: high
+          prompt-file: .github/codex/prompts/pr-review-baseline.md
+          output-file: codex-pr-review-baseline.md
+          sandbox: read-only
+          safety-strategy: drop-sudo
+
+  post-baseline-review:
+    name: Post baseline review
+    if: github.event.pull_request.draft == false && needs.baseline-review.outputs.final_message != ''
+    needs:
+      - classify-risk
+      - baseline-review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Publish baseline pull request review
+        uses: actions/github-script@v7
+        env:
+          CODEX_FINAL_MESSAGE: ${{ needs.baseline-review.outputs.final_message }}
+          PR_RISK_LEVEL: ${{ needs.classify-risk.outputs.risk_level }}
+          PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const body = [
+              '## Codex Baseline Review',
+              `Model: gpt-5.4-mini`,
+              `Effort: high`,
+              `Classifier risk level: ${process.env.PR_RISK_LEVEL}`,
+              `Classifier escalation reasons: ${process.env.PR_ESCALATION_REASONS}`,
+              '',
+              process.env.CODEX_FINAL_MESSAGE,
+            ].join('\n');
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: 'COMMENT',
+              body,
+            });
+
+  escalated-review:
+    name: Codex escalated review
+    if: >-
+      github.event.pull_request.draft == false &&
+      (
+        needs.classify-risk.outputs.escalation_required == 'true' ||
+        contains(needs.baseline-review.outputs.final_message, 'ESCALATE_RECOMMENDED: true')
+      )
+    needs:
+      - classify-risk
+      - baseline-review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      final_message: ${{ steps.run_codex.outputs.final-message }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+
+      - name: Pre-fetch base and head refs for the PR
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          git fetch --no-tags origin \
+            "$PR_BASE_REF" \
+            "+refs/pull/$PR_NUMBER/head"
+
+      - name: Run Codex escalated PR review
+        id: run_codex
+        uses: openai/codex-action@v1
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_RISK_LEVEL: ${{ needs.classify-risk.outputs.risk_level }}
+          PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
+          BASELINE_FINAL_MESSAGE: ${{ needs.baseline-review.outputs.final_message }}
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4
+          effort: high
+          prompt-file: .github/codex/prompts/pr-review-escalated.md
+          output-file: codex-pr-review-escalated.md
+          sandbox: read-only
+          safety-strategy: drop-sudo
+
+  post-escalated-review:
+    name: Post escalated review
+    if: github.event.pull_request.draft == false && needs.escalated-review.outputs.final_message != ''
+    needs:
+      - classify-risk
+      - baseline-review
+      - escalated-review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Publish escalated pull request review
+        uses: actions/github-script@v7
+        env:
+          CODEX_FINAL_MESSAGE: ${{ needs.escalated-review.outputs.final_message }}
+          PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
+          BASELINE_FINAL_MESSAGE: ${{ needs.baseline-review.outputs.final_message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const baselineMessage = process.env.BASELINE_FINAL_MESSAGE ?? '';
+            const baselineRequestedEscalation = baselineMessage.includes('ESCALATE_RECOMMENDED: true');
+            const baselineReasonMatch = baselineMessage.match(/^ESCALATION_REASON:\s*(.+)$/m);
+            const triggerReasons = [];
+
+            if (process.env.PR_ESCALATION_REASONS && process.env.PR_ESCALATION_REASONS !== 'none') {
+              triggerReasons.push(`classifier: ${process.env.PR_ESCALATION_REASONS}`);
+            }
+
+            if (baselineRequestedEscalation) {
+              triggerReasons.push(
+                `baseline reviewer: ${baselineReasonMatch ? baselineReasonMatch[1] : 'requested escalation'}`,
+              );
+            }
+
+            const body = [
+              '## Codex Escalated Review',
+              'Model: gpt-5.5',
+              'Effort: high',
+              `Escalation trigger: ${triggerReasons.length > 0 ? triggerReasons.join(' | ') : 'manual risk escalation'}`,
+              '',
+              process.env.CODEX_FINAL_MESSAGE,
+            ].join('\n');
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: 'COMMENT',
+              body,
+            });
