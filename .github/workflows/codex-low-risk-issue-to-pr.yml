@@ -35,13 +35,13 @@ jobs:
     steps:
       - name: Load issue details and eligibility
         id: resolve
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
           script: |
             const issueNumber =
               context.eventName === 'workflow_dispatch'
-                ? Number(core.getInput('issue_number', { required: true }))
+                ? Number(context.payload.inputs?.issue_number)
                 : context.payload.issue?.number;
 
             if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
@@ -106,7 +106,7 @@ jobs:
           run_install: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -121,7 +121,7 @@ jobs:
         run: git switch --create "$BRANCH_NAME"
 
       - name: Write issue context for Codex
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}
@@ -221,7 +221,7 @@ jobs:
 
       - name: Upload Codex patch artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: codex-low-risk-issue-${{ needs.resolve-issue.outputs.issue_number }}
           path: |
@@ -250,14 +250,14 @@ jobs:
           fetch-depth: 0
 
       - name: Download Codex patch artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: codex-low-risk-issue-${{ needs.resolve-issue.outputs.issue_number }}
           path: ${{ runner.temp }}/codex-low-risk
 
       - name: Parse Codex result
         id: codex_result
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           CODEX_FINAL_MESSAGE: ${{ needs.codex-generate.outputs.final_message }}
         with:
@@ -274,7 +274,7 @@ jobs:
 
       - name: Comment when human review is required
         if: steps.codex_result.outputs.codex_result == 'needs_human_review'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
@@ -295,7 +295,7 @@ jobs:
 
       - name: Comment when no changes are needed
         if: steps.codex_result.outputs.codex_result == 'no_changes'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
@@ -339,7 +339,7 @@ jobs:
 
       - name: Comment when Codex produced no repository changes
         if: steps.changed_files.outputs.has_changes == 'false'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_COMMENT: ${{ steps.codex_result.outputs.issue_comment }}
@@ -363,7 +363,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              supabase/migrations/*|apps/web/src/lib/googleCalendar/*|apps/web/src/app/api/google-calendar/*|apps/web/src/lib/ai/contracts/*|apps/web/src/lib/ai/parseCapture.ts|apps/web/src/lib/ai/*|apps/web/src/lib/observability/*|apps/web/src/lib/supabase/*|.github/workflows/*|.github/actions/*|.env*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|vercel.json|.vercel/*)
+              supabase/migrations/*|apps/web/src/lib/googleCalendar/*|apps/web/src/app/api/google-calendar/*|apps/web/src/lib/ai/contracts/*|apps/web/src/lib/ai/parseCapture.ts|apps/web/src/lib/ai/*|apps/web/src/lib/observability/*|apps/web/src/lib/supabase/*|.github/workflows/*|.github/actions/*|.github/codex/prompts/*|.env*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|vercel.json|.vercel/*)
                 echo "$file" >> "$violations_file"
                 ;;
             esac
@@ -382,7 +382,7 @@ jobs:
 
       - name: Comment when forbidden paths were touched
         if: steps.guard_paths.outputs.blocked == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           SUMMARY: ${{ steps.codex_result.outputs.summary }}
@@ -425,7 +425,7 @@ jobs:
 
       - name: Set up Node.js
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -475,7 +475,7 @@ jobs:
 
       - name: Create or update pull request
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}

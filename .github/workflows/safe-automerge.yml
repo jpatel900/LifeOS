@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Pre-fetch base and head refs for the PR
@@ -41,9 +42,10 @@ jobs:
             "+refs/pull/$PR_NUMBER/head"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22.13.0
+          package-manager-cache: false
 
       - name: Evaluate safe auto-merge eligibility
         id: eligibility
@@ -54,7 +56,7 @@ jobs:
 
       - name: Sync GitHub auto-merge setting
         id: sync
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           ELIGIBLE: ${{ steps.eligibility.outputs.eligible }}
           PR_NODE_ID: ${{ github.event.pull_request.node_id }}

@@ -1,0 +1,73 @@
+# Governance Hardening Agent Process
+
+- Task name and branch: Governance hardening for LifeOS agent/process rules only; `governance-hardening-agent-process`
+- Original scope: Docs, governance, workflow, and tooling-only normalization to adopt the remaining agent/process hardening items without changing product/runtime behavior.
+- Assumptions:
+  - Node 22.13.0 is the least disruptive tooling standard because `.nvmrc` and all inspected workflows already use it.
+  - Safe auto-merge should tighten immediately by blocking test-only PRs rather than attempting a new semantic test-diff analyzer.
+  - PR review model/effort docs should align to the live workflow rather than changing workflow cost/routing in this task.
+- Decisions:
+  - Added a canonical prompt template at `docs/agent/CODEX_PROMPT_TEMPLATE.md` with a required Verification Oracle block.
+  - Formalized implementation-note rules in `docs/implementation-notes/README.md`.
+  - Made T3/T4 explicitly planning-first in `.github/AGENT_AUTOMATION_POLICY.md`.
+  - Clarified engineering automation boundaries in policy and `AGENTS.md`.
+  - Removed test globs from `scripts/agent/check-safe-automerge.mjs` and updated self-tests.
+  - Standardized docs/package policy around Node 22 while leaving runtime dependencies and workflow permissions unchanged.
+  - Follow-up review fixes treat `.github/codex/prompts/**` as control-plane files that require human review and are excluded from safe auto-merge and low-risk issue automation.
+  - Follow-up review fixes also document that safe auto-merge can only arm GitHub auto-merge when the repository-level auto-merge setting is enabled.
+  - PR-review and auto-merge workflows must fetch full history before using three-dot git diffs so risk/eligibility scripts always have a merge base.
+  - GitHub-managed JS actions in repo workflows should stay on Node 24-capable majors to avoid Node 20 deprecation breakage on GitHub-hosted runners.
+  - PR #40 follow-up keeps the classifier logic unchanged and fixes the failure at the workflow layer: `Classify PR risk` was failing with `fatal: <base>...<head>: no merge base` because three-dot diffs need merge-base history, so `codex-pr-review.yml` must keep `fetch-depth: 0` on all PR review checkouts and use a current `actions/setup-node` major.
+  - Safe auto-merge follow-up keeps eligibility logic unchanged and fixes the runner bootstrap failure at the workflow layer: `actions/setup-node` was failing before evaluation with `Unable to locate executable file: pnpm` because the workflow does not use `pnpm` but `setup-node` was still attempting package-manager cache discovery, so `safe-automerge.yml` must disable package-manager cache there.
+- Deviations:
+  - Did not change `README.md` because it did not contain a contradictory Node-version claim.
+  - Did not change `docs/CODEX_SKILL_ROUTING.md` because the existing routing policy already fit the approved scope.
+- Tradeoffs:
+  - Blocking test-only auto-merge is more conservative and adds human-review friction, but it avoids false safety claims until a stronger assertion-preservation guard exists.
+  - Aligning PR review docs to the live workflow avoids broader cost/model changes in this governance pass.
+- Files changed and why:
+  - `AGENTS.md`: concise doctrine updates, Verification Oracle reference, PROJECT_STATE bloat rule, engineering automation boundary, Node alignment.
+  - `.github/AGENT_AUTOMATION_POLICY.md`: planning-first T3/T4, engineering automation boundary, test-review tiering.
+  - `.cursor/rules/execution-discipline.mdc`: always-on mirror for Verification Oracle, T3/T4, and implementation-note requirements.
+  - `.cursor/rules/project-state.mdc`: align PROJECT_STATE usage and anti-bloat rule.
+  - `.github/labels.md`: remove stale pre-automation wording.
+  - `docs/agent/CODEX_PROMPT_TEMPLATE.md`: canonical prompt template and Verification Oracle.
+  - `docs/implementation-notes/README.md`: note rules and schema.
+  - `scripts/agent/check-safe-automerge.mjs`: remove test-only auto-merge eligibility.
+  - `.github/workflows/codex-low-risk-issue-to-pr.yml`: fix `workflow_dispatch` issue-number source.
+  - `docs/agent/PR_REVIEW_ESCALATION_POLICY.md`: align docs to live PR review workflow.
+  - `package.json`: align Node engine range to Node 22.
+  - `docs/PROJECT_STATE.md`: concise governance-hardening note plus stale detail corrections.
+  - Follow-up review fixes:
+  - `scripts/agent/check-safe-automerge.mjs`: remove `.github/codex/prompts/**` from the safe allowlist and add self-test coverage proving prompt-file changes are blocked.
+  - `.github/AGENT_AUTOMATION_POLICY.md`: move automation prompt files and workflow changes into human-review-required control-plane rules, clarify approved GitHub write surfaces, and document the repo-level auto-merge prerequisite.
+  - `.github/workflows/codex-low-risk-issue-to-pr.yml`: block `.github/codex/prompts/*` in the low-risk forbidden-path guard.
+  - `AGENTS.md`: align the engineering automation boundary wording with the approved GitHub-only write scope.
+  - `docs/agent/CODEX_PROMPT_TEMPLATE.md`: align Verification Oracle scope wording with `AGENTS.md`.
+  - `.github/workflows/codex-pr-review.yml`: fetch full history for classifier/review jobs and bump Node 24-capable action versions for setup/comment steps.
+  - PR #40 merge-blocker follow-up:
+  - `.github/workflows/codex-pr-review.yml`: keep `fetch-depth: 0` on `classify-risk`, `baseline-review`, and `escalated-review`, and bump `actions/setup-node` from `v5` to `v6` while preserving `node-version: 22.13.0`.
+  - Safe auto-merge runner fix:
+  - `.github/workflows/safe-automerge.yml`: bump `actions/setup-node` from `v5` to `v6` and set `package-manager-cache: false` so the workflow can run Node-based eligibility checks without requiring `pnpm` on the runner PATH.
+  - `.github/workflows/safe-automerge.yml`: fetch full PR history for merge-base-sensitive eligibility checks and bump Node 24-capable action versions.
+  - `.github/workflows/ci.yml`, `.github/workflows/codex-low-risk-issue-to-pr.yml`, `.github/workflows/codex-ci-autofix.yml`: bump GitHub-managed JS action versions to Node 24-capable majors to remove Node 20 deprecation pressure.
+- Validation commands and results:
+  - PR #40 rerun target after push: rerun `Codex PR Review` on the pull request and confirm `Classify PR risk` completes, then confirm baseline/escalated review jobs run or skip according to classifier output.
+  - Safe auto-merge rerun target after push: rerun `Safe Auto-merge` on the pull request and confirm `Sync safe auto-merge state` reaches `Evaluate safe auto-merge eligibility` instead of failing inside `actions/setup-node`.
+  - `node scripts/agent/check-safe-automerge.mjs --self-test`: passed (`Self-test passed (8 cases).`)
+  - `pnpm format:check`: failed from known unrelated repo-wide Prettier drift; warnings were reported across many pre-existing files outside this patch surface, including `.github/codex/prompts/*`, multiple workflow files, many `.playwright-mcp/*.yml`, `README.md`, `pnpm-workspace.yaml`, and existing `apps/web` sources.
+  - `pnpm lint`: passed
+  - `pnpm type-check`: passed
+  - `pnpm test`: passed (`@lifeos/web`: `39` files passed, `1` skipped; `252` tests passed, `14` skipped)
+  - `pnpm build`: passed
+  - `git status`: expected governance-only edits remain in `.github/AGENT_AUTOMATION_POLICY.md`, `.github/workflows/codex-low-risk-issue-to-pr.yml`, `AGENTS.md`, `docs/PROJECT_STATE.md`, `docs/agent/CODEX_PROMPT_TEMPLATE.md`, `docs/implementation-notes/2026-05-26-governance-hardening-agent-process.md`, and `scripts/agent/check-safe-automerge.mjs`
+- Risks:
+  - Repo-wide validation may fail for unrelated pre-existing drift.
+  - Blocking test-only auto-merge may slow some low-risk maintenance PRs.
+  - Safe auto-merge still depends on the repository-level GitHub auto-merge setting being enabled outside the repo.
+- Deferred items:
+  - A future stronger assertion-preservation guard if the team wants to reconsider test-only auto-merge.
+  - Any workflow-model upgrade beyond the current PR review model/effort alignment.
+- Rollback notes:
+  - Revert this branch or revert the resulting PR.
+  - If the stricter auto-merge policy proves too restrictive, restore the removed test allowlist entries in `scripts/agent/check-safe-automerge.mjs` and its self-tests.

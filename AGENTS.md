@@ -131,6 +131,8 @@ Keep project documentation in `/docs`, except root-level files used by tooling o
 `/docs/PROJECT_STATE.md` is the handoff file for future agents. At the start of each substantial agent run, start with the smallest relevant context (`docs/agent/CONTEXT_INDEX.md`, `pnpm agent:context <area>` when the task area is known), then read `/docs/PROJECT_STATE.md` as needed to confirm current status, recent work, known issues, recommended next tasks, and implementation notes.
 
 After every major update, update `/docs/PROJECT_STATE.md` before finishing the run. Keep it concise and factual: current shipped or implemented behavior, recently completed work, known issues, next recommended tasks, and important implementation notes.
+Do not turn `PROJECT_STATE` into a phase diary. Deep phase history belongs in `docs/implementation-notes/YYYY-MM-DD-<task-slug>.md` or dedicated validation-history / known-issues docs.
+For medium/high-risk or non-obvious governance, workflow, or phase work, add an implementation note in the standard path above.
 
 ## 6A. Context Budget
 
@@ -251,6 +253,13 @@ Before marking work done:
 - `pnpm test` passes
 
 Do not claim completion with "code compiles" alone. Test evidence is required.
+
+## 12A. Testing And Error Doctrines
+
+- Source-of-truth static guard tests are intentional architecture governance, not noise.
+- Use them to protect server-only boundaries, forbidden client imports, calendar write boundaries, observability vendor import restrictions, and plain-language UX guards.
+- Errors must be sanitized, plain-language, and recovery-oriented.
+- Apply that standard to parser, calendar, health, observability, and auth-facing states.
 
 ## 13. Forbidden Changes Without Human Review
 
@@ -377,6 +386,7 @@ Before implementing any task, the agent must confirm:
 3. impacted schemas/tables/functions are identified
 4. required tests are identified
 5. risky surfaces (RLS, calendar writes, OAuth scopes, schema contracts) are flagged
+6. for medium/high-risk, local debugging, or governance work, a Verification Oracle is defined from `docs/agent/CODEX_PROMPT_TEMPLATE.md`
 
 If any item is missing, stop implementation and resolve that gap first.
 
@@ -399,6 +409,14 @@ Required sequence:
 2. update related docs (`ARCHITECTURE.md`, `SECURITY_PRIVACY.md`, `TEST_PLAN.md`) as needed
 3. implement code changes
 4. verify tests
+
+## 20A. Engineering Automation Boundary
+
+- LifeOS product/runtime automation remains tightly restricted by product requirements and safety rules.
+- Engineering automations may write only to isolated branches and approved GitHub metadata surfaces such as pull requests or issue comments, never directly to `main`.
+- Engineering automations must be label-gated, path-guarded, validation-gated, and governed by `.github/AGENT_AUTOMATION_POLICY.md`.
+- Engineering automations must not touch production data, secrets, non-GitHub external systems, or LifeOS runtime state.
+- Default delivery for repo automation is GitHub-first. Use local Codex CLI when medium/high-risk, local debugging, or governance hardening is safer or faster under active human supervision.
 
 ## Skill Routing and Skill Security
 
@@ -425,6 +443,7 @@ When working as an AI coding agent:
 - make small changes
 - read `AGENTS.md`; start with `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context <area>` when the task area is known; read `docs/PROJECT_STATE.md` as needed before planning substantial work
 - identify the exact implementation phase before coding
+- use `docs/agent/CODEX_PROMPT_TEMPLATE.md` for medium/high-risk, local debugging, or governance work and include a Verification Oracle
 - explain risky assumptions
 - prefer simple implementation
 - do not invent features
@@ -480,7 +499,7 @@ These documents are intentionally grounded in stable platform capabilities, not 
 
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Package manager**: pnpm (lockfile: `pnpm-lock.yaml`)
-- **Node.js**: v20 LTS (`.nvmrc` at root)
+- **Node.js**: 22.13.0 (`.nvmrc` at root)
 - **Frontend**: Next.js 15 in `apps/web`
 - **Shared packages**: `packages/schemas` (zod), `packages/types`, `packages/ui`, `packages/utils`
 

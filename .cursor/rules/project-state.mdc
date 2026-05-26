@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Project State Handoff
 
-At the start of each agent run, read `AGENTS.md` and `docs/PROJECT_STATE.md` before planning substantial work.
+At the start of each substantial agent run, read `AGENTS.md` first, then read `docs/PROJECT_STATE.md` only when current status or implementation notes are needed.
 
 After every major update, refresh `docs/PROJECT_STATE.md` before finishing. Keep it concise and factual:
 
@@ -16,3 +16,4 @@ After every major update, refresh `docs/PROJECT_STATE.md` before finishing. Keep
 - important implementation notes
 
 Do not turn the state file into a changelog. It should help the next agent resume without rediscovering the project.
+Deep phase history belongs in implementation notes or dedicated validation / known-issues docs, not here.

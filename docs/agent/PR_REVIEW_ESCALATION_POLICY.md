@@ -2,8 +2,8 @@
 
 LifeOS Codex PR review is intentionally split into two passes:
 
-- Baseline review always runs on non-draft PRs with `gpt-5.4-mini` at high effort.
-- Escalated review runs only when the PR hits a deterministic risk trigger or the baseline reviewer explicitly asks for escalation.
+- Baseline review always runs on non-draft PRs with `gpt-5.4-mini` at medium effort.
+- Escalated review runs on `gpt-5.4` at high effort only when the PR hits a deterministic risk trigger or the baseline reviewer explicitly asks for escalation.
 
 ## Deterministic escalation triggers
 
