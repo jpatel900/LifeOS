@@ -17,6 +17,9 @@ Before coding:
 - identify the exact implementation phase from `AGENTS.md` section 16
 - read before writing; do not guess about scope, phase, or existing boundaries
 - define success, touched surfaces, and risky surfaces before editing
+- for medium/high-risk, local debugging, or governance work, use `docs/agent/CODEX_PROMPT_TEMPLATE.md` and define a Verification Oracle before editing
+- follow `.github/AGENT_AUTOMATION_POLICY.md` for T3/T4 planning-first gates before implementation
+- create an implementation note when `docs/implementation-notes/README.md` says one is required
 - Skill routing:
 - inspect available Agent Skills
 - use `skill-router` first if available

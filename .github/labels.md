@@ -1,6 +1,6 @@
 # Recommended issue labels
 
-Use labels to show agent readiness, owning surface, and expected risk without adding automation yet.
+Use labels to show agent readiness, owning surface, expected risk, and automation eligibility cues under `.github/AGENT_AUTOMATION_POLICY.md`.
 
 ## Agent routing
 

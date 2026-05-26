@@ -2,6 +2,9 @@
 
 This file defines the required human gate for agent-driven repo changes and GitHub automation in LifeOS.
 
+LifeOS product/runtime automation remains tightly restricted by `AGENTS.md` and product authority docs.
+Engineering automations may write only to isolated branches or GitHub PR metadata. They must be label-gated, path-guarded, validation-gated, and must not touch production data, secrets, external systems, or LifeOS runtime state.
+
 If a task spans multiple categories, apply the highest tier.
 If classification is unclear, choose the stricter tier.
 CI and validation requirements from `AGENTS.md` still apply. This policy adds human-gate rules; it does not create exceptions.
@@ -13,14 +16,12 @@ Allowed without extra human review once required checks pass:
 - docs-only
 - prompt copy
 - issue templates
-- test-only additions that do not weaken assertions
 
 ## T1 — Agent PR allowed, human review recommended
 
 Agent may implement and open a PR. Human review is recommended before merge.
 
 - isolated UI copy
-- small test fixes
 - route smoke coverage
 - non-risky workflow file improvements
 
@@ -28,6 +29,8 @@ Agent may implement and open a PR. Human review is recommended before merge.
 
 Agent may implement, but a human must review before merge or rollout.
 
+- small test fixes
+- test-only additions or assertion-affecting test changes until a stronger assertion-preservation guard exists
 - cross-flow UX
 - parser UI
 - health behavior
@@ -36,7 +39,7 @@ Agent may implement, but a human must review before merge or rollout.
 
 ## T3 — Planning or implementation only with explicit human approval
 
-Do not plan or implement beyond bounded analysis unless a human explicitly approves this surface.
+Start with planning/review-only. Do not implement beyond bounded analysis unless a human explicitly approves the exact surface. After approval, keep implementation bounded to that approved surface.
 
 - Supabase schema
 - migrations
@@ -51,7 +54,7 @@ Do not plan or implement beyond bounded analysis unless a human explicitly appro
 
 ## T4 — Human decision before any implementation
 
-Do not implement. Stop at framing, tradeoffs, or requirements clarification until a human makes the decision.
+Stop at planning/review-only, tradeoffs, or requirements clarification until a human makes the decision. Implementation may proceed only after explicit human approval and any resulting requirements or policy update.
 
 - new vendors
 - new external write capabilities

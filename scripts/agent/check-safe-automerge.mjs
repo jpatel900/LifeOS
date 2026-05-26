@@ -13,11 +13,6 @@ const ALLOWED_PATH_PATTERNS = [
   "README.md",
   ".github/ISSUE_TEMPLATE/**",
   ".github/codex/prompts/**",
-  "**/*.test.ts",
-  "**/*.test.tsx",
-  "**/*.spec.ts",
-  "**/*.spec.tsx",
-  "apps/web/tests/e2e/**",
 ];
 
 const FORBIDDEN_PATH_PATTERNS = [
@@ -229,18 +224,15 @@ function runSelfTest() {
       },
     },
     {
-      name: "eligible test-only pr",
+      name: "test-only pr is blocked until a stronger guard exists",
       input: {
         labels: ["automerge:safe", "risk:low"],
-        changedPaths: [
-          "apps/web/src/__tests__/page.test.tsx",
-          "apps/web/tests/e2e/p0-ux-regression.spec.ts",
-        ],
+        changedPaths: ["apps/web/src/__tests__/page.test.tsx"],
         draft: false,
       },
       expected: {
-        eligible: true,
-        reasonCount: 0,
+        eligible: false,
+        reasonCount: 1,
       },
     },
     {

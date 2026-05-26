@@ -1,0 +1,52 @@
+# Governance Hardening Agent Process
+
+- Task name and branch: Governance hardening for LifeOS agent/process rules only; `governance-hardening-agent-process`
+- Original scope: Docs, governance, workflow, and tooling-only normalization to adopt the remaining agent/process hardening items without changing product/runtime behavior.
+- Assumptions:
+  - Node 22.13.0 is the least disruptive tooling standard because `.nvmrc` and all inspected workflows already use it.
+  - Safe auto-merge should tighten immediately by blocking test-only PRs rather than attempting a new semantic test-diff analyzer.
+  - PR review model/effort docs should align to the live workflow rather than changing workflow cost/routing in this task.
+- Decisions:
+  - Added a canonical prompt template at `docs/agent/CODEX_PROMPT_TEMPLATE.md` with a required Verification Oracle block.
+  - Formalized implementation-note rules in `docs/implementation-notes/README.md`.
+  - Made T3/T4 explicitly planning-first in `.github/AGENT_AUTOMATION_POLICY.md`.
+  - Clarified engineering automation boundaries in policy and `AGENTS.md`.
+  - Removed test globs from `scripts/agent/check-safe-automerge.mjs` and updated self-tests.
+  - Standardized docs/package policy around Node 22 while leaving runtime dependencies and workflow permissions unchanged.
+- Deviations:
+  - Did not change `README.md` because it did not contain a contradictory Node-version claim.
+  - Did not change `docs/CODEX_SKILL_ROUTING.md` because the existing routing policy already fit the approved scope.
+- Tradeoffs:
+  - Blocking test-only auto-merge is more conservative and adds human-review friction, but it avoids false safety claims until a stronger assertion-preservation guard exists.
+  - Aligning PR review docs to the live workflow avoids broader cost/model changes in this governance pass.
+- Files changed and why:
+  - `AGENTS.md`: concise doctrine updates, Verification Oracle reference, PROJECT_STATE bloat rule, engineering automation boundary, Node alignment.
+  - `.github/AGENT_AUTOMATION_POLICY.md`: planning-first T3/T4, engineering automation boundary, test-review tiering.
+  - `.cursor/rules/execution-discipline.mdc`: always-on mirror for Verification Oracle, T3/T4, and implementation-note requirements.
+  - `.cursor/rules/project-state.mdc`: align PROJECT_STATE usage and anti-bloat rule.
+  - `.github/labels.md`: remove stale pre-automation wording.
+  - `docs/agent/CODEX_PROMPT_TEMPLATE.md`: canonical prompt template and Verification Oracle.
+  - `docs/implementation-notes/README.md`: note rules and schema.
+  - `scripts/agent/check-safe-automerge.mjs`: remove test-only auto-merge eligibility.
+  - `.github/workflows/codex-low-risk-issue-to-pr.yml`: fix `workflow_dispatch` issue-number source.
+  - `docs/agent/PR_REVIEW_ESCALATION_POLICY.md`: align docs to live PR review workflow.
+  - `package.json`: align Node engine range to Node 22.
+  - `docs/PROJECT_STATE.md`: concise governance-hardening note plus stale detail corrections.
+- Validation commands and results:
+  - Pending until repo validation finishes:
+    - `node scripts/agent/check-safe-automerge.mjs --self-test`
+    - `pnpm format:check`
+    - `pnpm lint`
+    - `pnpm type-check`
+    - `pnpm test`
+    - `pnpm build`
+    - `git status`
+- Risks:
+  - Repo-wide validation may fail for unrelated pre-existing drift.
+  - Blocking test-only auto-merge may slow some low-risk maintenance PRs.
+- Deferred items:
+  - A future stronger assertion-preservation guard if the team wants to reconsider test-only auto-merge.
+  - Any workflow-model upgrade beyond the current PR review model/effort alignment.
+- Rollback notes:
+  - Revert this branch or revert the resulting PR.
+  - If the stricter auto-merge policy proves too restrictive, restore the removed test allowlist entries in `scripts/agent/check-safe-automerge.mjs` and its self-tests.
