@@ -288,7 +288,7 @@ export default function TriagePage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Triage</h1>
         <p className="text-sm text-muted-foreground">
-          Review suggestions, decide quickly, and keep momentum.
+          Review one thing at a time, make the next decision, and keep moving.
         </p>
       </section>
 
@@ -308,8 +308,8 @@ export default function TriagePage() {
           )}
           <p className="text-sm text-muted-foreground">
             {hasCandidates
-              ? "Open the first pending suggestion and accept or reject it."
-              : "Nothing is waiting for review. Capture a thought to create the next triage item."}
+              ? "Open the first pending suggestion, then accept it or park it."
+              : "Nothing is waiting for review. Capture a thought to create the next item."}
           </p>
         </CardContent>
       </Card>

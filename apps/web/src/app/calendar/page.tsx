@@ -826,8 +826,8 @@ export default function CalendarPage() {
       <section>
         <h1>Planning</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Planned time blocks show up here first. Nothing goes to Google
-          Calendar until you approve it.
+          Stage one local block here first. Nothing goes to Google Calendar
+          until you approve a real write.
         </p>
       </section>
 
@@ -855,7 +855,8 @@ export default function CalendarPage() {
           )}
           <p className="text-sm text-muted-foreground">
             Quick proposals start with the next available hour. You can adjust
-            time before approving.
+            time before approving, then move to Execute when you are ready to
+            start.
           </p>
         </CardContent>
       </Card>
@@ -1405,6 +1406,10 @@ export default function CalendarPage() {
           Time proposals stay local first. Free/busy checks are manual and
           advisory only. No Google Calendar events, OpenAI scheduling,
           autonomous rescheduling, or background calendar changes happen here.
+        </p>
+        <p className="mt-2">
+          After you accept a local block, start focus from Execute and close the
+          loop in Review when the session ends.
         </p>
       </section>
     </div>

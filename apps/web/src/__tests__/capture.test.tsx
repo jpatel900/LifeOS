@@ -145,6 +145,14 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
+        /Save the raw capture first. Organize it after if needed./i,
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText(/Save first, then sort into drafts for Triage./i),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
         /Organize in this browser and Recent captures stay in this browser only/i,
       ),
     ).toBeDefined();
@@ -282,6 +290,9 @@ describe("CapturePage", () => {
     fireEvent.click(await screen.findByText("Save and organize"));
 
     expect(await screen.findByText("Sent to review.")).toBeDefined();
+    expect(
+      screen.getByText("Saved before organizing. Triage is the next stop."),
+    ).toBeDefined();
     expect(
       screen.getByText(
         "Drafts were routed to triage because confidence is low.",
