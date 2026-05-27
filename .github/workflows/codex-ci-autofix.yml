@@ -350,6 +350,10 @@ jobs:
                 "risks",
                 "rollback_plan",
                 "deferred_items",
+                "failure_coverage",
+                "touched_surfaces",
+                "untouched_high_risk_surfaces",
+                "browser_manual_proof",
                 "workflow_summary",
                 "human_review_reason"
               ],
@@ -374,6 +378,30 @@ jobs:
                   }
                 },
                 "deferred_items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "failure_coverage": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "touched_surfaces": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "untouched_high_risk_surfaces": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "browser_manual_proof": {
                   "type": "array",
                   "items": {
                     "type": "string"
@@ -451,6 +479,22 @@ jobs:
             core.setOutput('risks_json', JSON.stringify(parsed.risks ?? []));
             core.setOutput('rollback_plan_json', JSON.stringify(parsed.rollback_plan ?? []));
             core.setOutput('deferred_items_json', JSON.stringify(parsed.deferred_items ?? []));
+            core.setOutput(
+              'failure_coverage_json',
+              JSON.stringify(parsed.failure_coverage ?? []),
+            );
+            core.setOutput(
+              'touched_surfaces_json',
+              JSON.stringify(parsed.touched_surfaces ?? []),
+            );
+            core.setOutput(
+              'untouched_high_risk_surfaces_json',
+              JSON.stringify(parsed.untouched_high_risk_surfaces ?? []),
+            );
+            core.setOutput(
+              'browser_manual_proof_json',
+              JSON.stringify(parsed.browser_manual_proof ?? []),
+            );
 
       - name: Create autofix branch
         if: steps.codex_result.outputs.codex_result == 'ready'
@@ -483,29 +527,8 @@ jobs:
       - name: Guard forbidden paths
         id: guard_paths
         if: steps.changed_files.outputs.has_changes == 'true'
-        shell: bash
         run: |
-          violations_file="$RUNNER_TEMP/forbidden-path-violations.txt"
-          : > "$violations_file"
-
-          while IFS= read -r file; do
-            case "$file" in
-              .env*|supabase/migrations/*|apps/web/src/lib/googleCalendar/*|apps/web/src/app/api/google-calendar/*|apps/web/src/lib/observability/*|apps/web/src/lib/supabase/*|apps/web/src/lib/externalWrites/*)
-                echo "$file" >> "$violations_file"
-                ;;
-            esac
-          done < "$RUNNER_TEMP/changed-files.txt"
-
-          if [ -s "$violations_file" ]; then
-            echo "blocked=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "violations<<EOF"
-              cat "$violations_file"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "blocked=false" >> "$GITHUB_OUTPUT"
-          fi
+          node scripts/agent/check-automation-scope.mjs --mode ci-autofix --paths-file "$RUNNER_TEMP/changed-files.txt"
 
       - name: Set up pnpm
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
@@ -620,6 +643,10 @@ jobs:
           RISKS_JSON: ${{ steps.codex_result.outputs.risks_json }}
           ROLLBACK_PLAN_JSON: ${{ steps.codex_result.outputs.rollback_plan_json }}
           DEFERRED_ITEMS_JSON: ${{ steps.codex_result.outputs.deferred_items_json }}
+          FAILURE_COVERAGE_JSON: ${{ steps.codex_result.outputs.failure_coverage_json }}
+          TOUCHED_SURFACES_JSON: ${{ steps.codex_result.outputs.touched_surfaces_json }}
+          UNTOUCHED_HIGH_RISK_SURFACES_JSON: ${{ steps.codex_result.outputs.untouched_high_risk_surfaces_json }}
+          BROWSER_MANUAL_PROOF_JSON: ${{ steps.codex_result.outputs.browser_manual_proof_json }}
           FORMAT_STATUS: ${{ steps.validation_gate.outputs.format_status }}
         with:
           github-token: ${{ github.token }}
@@ -637,6 +664,14 @@ jobs:
             const risks = JSON.parse(process.env.RISKS_JSON || '[]');
             const rollbackPlan = JSON.parse(process.env.ROLLBACK_PLAN_JSON || '[]');
             const deferredItems = JSON.parse(process.env.DEFERRED_ITEMS_JSON || '[]');
+            const failureCoverage = JSON.parse(process.env.FAILURE_COVERAGE_JSON || '[]');
+            const touchedSurfaces = JSON.parse(process.env.TOUCHED_SURFACES_JSON || '[]');
+            const untouchedHighRiskSurfaces = JSON.parse(
+              process.env.UNTOUCHED_HIGH_RISK_SURFACES_JSON || '[]',
+            );
+            const browserManualProof = JSON.parse(
+              process.env.BROWSER_MANUAL_PROOF_JSON || '[]',
+            );
 
             const renderList = (items, emptyText) =>
               items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : `- ${emptyText}`;
@@ -654,8 +689,16 @@ jobs:
             const body = [
               `Failed workflow run: ${process.env.RUN_URL}`,
               '',
+              'Linked issue: none for workflow_run-driven CI autofix.',
+              '',
               `Original branch/SHA: \`${process.env.SOURCE_BRANCH}\` @ \`${process.env.SOURCE_SHA}\``,
               process.env.SOURCE_PR_URL ? `Original pull request: ${process.env.SOURCE_PR_URL}` : null,
+              '',
+              '## Route',
+              '- Route: CI autofix',
+              '- Automation result: ready',
+              '- Risk tier: CI repair route with human review if validation or guardrails fail',
+              '- Human intervention before this PR: none',
               '',
               '## Summary',
               process.env.SUMMARY || 'Scoped CI repair generated by Codex.',
@@ -663,8 +706,26 @@ jobs:
               '## Files Changed',
               renderList(changedFiles.map((file) => `\`${file}\``), 'None.'),
               '',
+              '## Failure Coverage',
+              renderList(
+                failureCoverage,
+                'See the linked failed workflow run for the original CI failure context.',
+              ),
+              '',
               '## Validation',
               ...validation,
+              '',
+              '## Browser / Manual Proof',
+              renderList(browserManualProof, 'Not applicable.'),
+              '',
+              '## Risk Surfaces Touched',
+              renderList(touchedSurfaces, 'None beyond the bounded repair surface.'),
+              '',
+              '## Risk Surfaces Intentionally Not Touched',
+              renderList(
+                untouchedHighRiskSurfaces,
+                'No additional risky surfaces were declared in the Codex result.',
+              ),
               '',
               '## Risks',
               renderList(risks, 'Smallest scoped CI repair only.'),
@@ -749,8 +810,9 @@ jobs:
           FORMAT_STATUS: ${{ steps.validation_gate.outputs.format_status }}
         run: |
           {
-            echo "## Codex CI Autofix"
+            echo "## Automation Decision Log"
             echo
+            echo "- Route: CI autofix"
             case "$CODEX_RESULT" in
               ready)
                 if [ "$HAS_CHANGES" != "true" ]; then
@@ -792,6 +854,12 @@ jobs:
                 echo "- Reason: Codex did not return a recognized result."
                 ;;
             esac
+
+            if [ -n "$HUMAN_REVIEW_REASON" ]; then
+              echo "- Human intervention: required"
+            else
+              echo "- Human intervention: not required by Codex result"
+            fi
 
             if [ -n "$WORKFLOW_SUMMARY" ]; then
               echo
