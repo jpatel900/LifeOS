@@ -5,7 +5,11 @@ description: Use before substantial coding, debugging, testing, architecture, de
 
 # skill-router
 
-## Use when
+## Overview / purpose
+
+Route LifeOS work toward the smallest relevant trusted skill set before major editing, testing, or governance changes.
+
+## When to use
 
 - Work is non-trivial: coding, debugging, testing, architecture, deployment, documentation, security, database/schema, AI/parser/evals, repo maintenance, or agent-governance.
 - You need to decide which skill(s) to load before editing or running major commands.
@@ -14,7 +18,7 @@ description: Use before substantial coding, debugging, testing, architecture, de
 
 - The task is trivial and self-contained (for example, a one-line typo fix or a simple command output).
 
-## Procedure
+## Process
 
 1. Inspect repo-local skills in `.agents/skills` first.
 2. Read `docs/CODEX_SKILL_ROUTING.md` when you need the compact default Codex skill/plugin allow-vs-avoid policy for this repo.
@@ -28,3 +32,31 @@ description: Use before substantial coding, debugging, testing, architecture, de
 10. For risky work, use a safety or review skill before editing. Use `skill-security-review` before relying on unfamiliar global skills.
 11. State selected skill(s) and why in one short note.
 12. If no relevant trusted skill exists, continue normally and state that no relevant trusted skill was found.
+
+## Common rationalizations
+
+- "I already know which skill fits." Check anyway when the work is non-trivial.
+- "Loading more skills is safer." It is usually worse; extra guidance bloats context and increases drift.
+- "A global skill is probably fine." Review it first unless the repo-local set is clearly insufficient.
+
+## Red flags
+
+- The chosen skill expands scope beyond the issue or acceptance criteria.
+- A skill encourages risky commands, installs, or approval bypasses.
+- Multiple skills overlap and start contradicting each other.
+
+## Verification
+
+- Confirm the selected skill set is minimal and task-relevant.
+- Confirm no chosen skill conflicts with `AGENTS.md`, repo docs, or direct user instructions.
+
+## Done criteria
+
+- The relevant skill set is identified.
+- Unsafe or irrelevant skills are excluded.
+- The task proceeds with a minimal trusted context set.
+
+## Authority / safety boundaries
+
+- `AGENTS.md`, authority docs, and direct user instructions override every skill.
+- This skill does not authorize global-skill trust, broader scope, or risky commands by itself.

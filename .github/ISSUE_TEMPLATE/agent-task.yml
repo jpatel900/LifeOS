@@ -131,13 +131,52 @@ body:
     id: validation_commands
     attributes:
       label: Validation commands
-      description: List the exact commands the agent must run before claiming completion. Add task-specific commands as needed.
+      description: List the exact commands the agent must run before claiming completion. Choose commands based on the touched surface, not generic docs-only defaults.
       value: |
         pnpm format:check
         git diff --check
       render: shell
     validations:
       required: true
+  - type: markdown
+    attributes:
+      value: |
+        Validation presets by task surface:
+
+        - `docs`
+          - `pnpm format:check`
+          - `git diff --check`
+        - `ui`
+          - `pnpm lint`
+          - `pnpm type-check`
+          - `pnpm test`
+          - `pnpm build`
+          - Playwright or equivalent browser/manual proof when user-facing behavior changes
+        - `parser`
+          - focused schema/parser tests where available
+          - `pnpm type-check`
+          - `pnpm test`
+          - `pnpm build`
+        - `calendar`
+          - focused planning/calendar tests
+          - approval-gate coverage
+          - no real Google write unless explicitly approved
+          - `pnpm test`
+          - `pnpm build`
+        - `supabase` / `security`
+          - focused migration/RLS/auth tests where available
+          - two-user isolation proof if table or policy changes
+          - `pnpm test`
+          - `pnpm build`
+        - `tests`
+          - exact touched test suites
+          - prove assertions were strengthened or preserved, not weakened
+        - workflow / automation / prompt control-plane changes
+          - relevant script self-tests if available
+          - repo validation as required by the touched surface
+          - human review required before merge
+
+        These presets supplement `AGENTS.md`; they do not replace repo-wide validation requirements.
   - type: dropdown
     id: human_approval_required
     attributes:
