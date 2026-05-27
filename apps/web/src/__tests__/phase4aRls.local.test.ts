@@ -5,7 +5,7 @@ const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
 const describeLocalRls = runLocalRlsTests ? describe : describe.skip;
 
 const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:15431";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const userA = {

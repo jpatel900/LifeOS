@@ -22,7 +22,7 @@ describe("Supabase server clients", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getSupabaseConfig.mockReturnValue({
-      url: "http://127.0.0.1:54321",
+      url: "http://127.0.0.1:15431",
       anonKey: "anon-key",
     });
     mocks.createClient.mockReturnValue({ from: vi.fn() });
@@ -32,7 +32,7 @@ describe("Supabase server clients", () => {
     createSupabaseServerClient({ accessToken: " user-jwt " });
 
     expect(mocks.createClient).toHaveBeenCalledWith(
-      "http://127.0.0.1:54321",
+      "http://127.0.0.1:15431",
       "anon-key",
       expect.objectContaining({
         global: {
@@ -46,7 +46,7 @@ describe("Supabase server clients", () => {
 
   it("creates service-role clients only when the server-only key is present", () => {
     const env = {
-      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:15431",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
       SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
     };
@@ -54,7 +54,7 @@ describe("Supabase server clients", () => {
     createSupabaseServiceRoleClient(env);
 
     expect(mocks.createClient).toHaveBeenCalledWith(
-      "http://127.0.0.1:54321",
+      "http://127.0.0.1:15431",
       "service-role-key",
       expect.objectContaining({
         auth: expect.objectContaining({
@@ -66,7 +66,7 @@ describe("Supabase server clients", () => {
 
   it("returns null instead of falling back to anon privileges without a service-role key", () => {
     const env = {
-      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:15431",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
       SUPABASE_SERVICE_ROLE_KEY: "",
     };

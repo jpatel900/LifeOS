@@ -11,13 +11,13 @@ describe("Supabase config helpers", () => {
 
   it("returns the public Supabase URL and anon key when configured", () => {
     const env = {
-      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:15431",
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "local-anon-key",
     };
 
     expect(isSupabaseConfigured(env)).toBe(true);
     expect(getSupabaseConfig(env)).toEqual({
-      url: "http://127.0.0.1:54321",
+      url: "http://127.0.0.1:15431",
       anonKey: "local-anon-key",
     });
   });
