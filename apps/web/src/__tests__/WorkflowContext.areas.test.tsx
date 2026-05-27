@@ -71,10 +71,10 @@ describe("WorkflowProvider persisted area sync", () => {
     await waitFor(() => {
       expect(screen.getByTestId("area-count")).toHaveTextContent("1");
       expect(screen.getByTestId("first-area-id")).toHaveTextContent(
-        "11111111-1111-4111-8111-111111111111",
+        "area-main-job",
       );
       expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
-        "11111111-1111-4111-8111-111111111111",
+        "area-main-job",
       );
     });
 

@@ -40,6 +40,7 @@ import { listAreas } from "./data/workflow";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import type { Phase2MockExecutionSession } from "./types";
 import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
+import { workflowAreaIdForSlug } from "./workflowAreaMapping";
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
@@ -526,7 +527,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         }
 
         const syncedAreas = result.areas.map((area) => ({
-          id: area.id,
+          id: workflowAreaIdForSlug(area.slug) ?? area.id,
           user_id: area.user_id,
           name: area.name,
           color: area.color ?? "#64748b",
