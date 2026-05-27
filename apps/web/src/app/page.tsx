@@ -364,7 +364,8 @@ export default function HomePage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Today</h1>
         <p className="text-sm text-muted-foreground">
-          Pick one useful next move.
+          Pick one useful next move. The short loop below stays useful on a
+          fresh day and on a messy one.
         </p>
       </section>
 
@@ -380,7 +381,9 @@ export default function HomePage() {
       <Card className="border-primary/40">
         <CardHeader>
           <CardTitle className="text-2xl">Next</CardTitle>
-          <CardDescription>Deterministic next step.</CardDescription>
+          <CardDescription>
+            One useful move from the state you already have.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <p className="text-lg font-semibold">{cockpit.next.label}</p>
@@ -388,6 +391,40 @@ export default function HomePage() {
           <Button asChild className="w-full sm:w-auto">
             <Link href={cockpit.next.href}>Open next step</Link>
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">Daily loop</CardTitle>
+          <CardDescription>
+            A calm first-run path using the routes that already exist. No sample
+            data is created until you save something.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <ol className="grid gap-2 text-sm text-muted-foreground">
+            <li>1. Capture one real thought.</li>
+            <li>2. Decide what it is in Triage.</li>
+            <li>3. Plan one local block before you start focus.</li>
+            <li>
+              4. Use Execute while working, then close the loop in Review.
+            </li>
+          </ol>
+          <div className="grid gap-2 sm:flex sm:flex-wrap">
+            <Button asChild className="w-full sm:w-auto">
+              <Link href="/capture">Start with Capture</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/triage">Open Triage</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/calendar">Open Planning</Link>
+            </Button>
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href="/review">Open Review</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -416,7 +453,7 @@ export default function HomePage() {
               <Card key={cardKey}>
                 <CardHeader>
                   <CardTitle className="text-lg">Quick Capture</CardTitle>
-                  <CardDescription>Save one thing fast.</CardDescription>
+                  <CardDescription>Save one real thing fast.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-2">
                   <Input
@@ -489,7 +526,11 @@ export default function HomePage() {
                       </p>
                     ))
                   )}
-                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
                     <Link href="/triage">Open Triage</Link>
                   </Button>
                 </CardContent>
@@ -509,7 +550,9 @@ export default function HomePage() {
                       </Badge>
                     ) : null}
                   </CardTitle>
-                  <CardDescription>Active tasks without a plan.</CardDescription>
+                  <CardDescription>
+                    Active tasks without a plan.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-2 text-sm">
                   {cockpit.unplanned.items.length === 0 ? (
@@ -523,7 +566,11 @@ export default function HomePage() {
                       </p>
                     ))
                   )}
-                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
                     <Link href="/calendar">Open Planning</Link>
                   </Button>
                 </CardContent>
@@ -552,7 +599,9 @@ export default function HomePage() {
                     </p>
                   ) : (
                     cockpit.todayBlocks.map((block) => {
-                      const task = tasks.find((item) => item.id === block.taskId);
+                      const task = tasks.find(
+                        (item) => item.id === block.taskId,
+                      );
                       return (
                         <div
                           key={block.id}
