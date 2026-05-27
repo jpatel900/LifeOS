@@ -75,13 +75,10 @@ describe("HomePage Today cockpit", () => {
     renderHome();
     await waitFor(() => expect(listExecutionReviewItems).toHaveBeenCalled());
 
-    expect(screen.getByText("No pending drafts right now.")).toBeDefined();
-    expect(
-      screen.getByText("No unplanned active tasks right now."),
-    ).toBeDefined();
-    expect(
-      screen.getByText("No local planned blocks for today."),
-    ).toBeDefined();
+    expect(screen.getByText("No drafts waiting.")).toBeDefined();
+    expect(screen.getByText("No tasks need planning.")).toBeDefined();
+    expect(screen.getByText("Nothing planned today.")).toBeDefined();
+    expect(screen.getByText("Nothing needs recovery.")).toBeDefined();
   });
 
   it("shows degraded saved-workspace state without crashing", async () => {
@@ -131,10 +128,6 @@ describe("HomePage Today cockpit", () => {
         .getAllByRole("link", { name: "Open Planning" })
         .some((link) => link.getAttribute("href") === "/calendar"),
     ).toBe(true);
-    expect(screen.getByRole("link", { name: "Go to Execute" })).toHaveAttribute(
-      "href",
-      "/execute",
-    );
     expect(screen.getByRole("link", { name: "Open Health" })).toHaveAttribute(
       "href",
       "/health",

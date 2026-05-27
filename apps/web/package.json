@@ -9,7 +9,7 @@
     "lint": "next lint",
     "type-check": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "node ../../scripts/run-playwright-e2e.mjs"
   },
   "dependencies": {
     "@langfuse/otel": "^5.3.0",

@@ -258,8 +258,8 @@ export function buildTodayCockpitModel(
         title: currentSessionTask?.title ?? "Current session",
         summary:
           normalizeSessionStatus(currentSession) === "paused"
-            ? "Paused right now. Resume or choose the next end outcome."
-            : "In progress now. Stay with this before starting something else.",
+            ? "Paused now. Resume it or choose an end outcome."
+            : "In progress now. Stay here before starting something else.",
         href: "/execute",
       }
     : currentBlock
@@ -272,7 +272,7 @@ export function buildTodayCockpitModel(
       : {
           kind: "empty",
           title: "Nothing is running right now.",
-          summary: "Start from Next to choose one useful move.",
+          summary: "Use Next to choose one useful move.",
           href: "/execute",
         };
 
@@ -291,7 +291,7 @@ export function buildTodayCockpitModel(
       ? "System status needs attention."
       : healthState === "ok"
         ? "System status looks healthy."
-        : "System status is not loaded here. Open Health to run a check.");
+        : "System status is not loaded here. Open Health for a check.");
 
   let next: TodayCockpitModel["next"];
   if (recoveryItems.length > 0) {
@@ -305,7 +305,7 @@ export function buildTodayCockpitModel(
     next = {
       kind: "needs_decision",
       label: "Review pending decisions",
-      reason: "Drafts are waiting for accept or reject in Triage.",
+      reason: "Drafts are waiting in Triage.",
       href: "/triage",
     };
   } else if (nowSection.kind !== "empty") {
@@ -319,7 +319,7 @@ export function buildTodayCockpitModel(
     next = {
       kind: "unplanned_task",
       label: "Plan one active task",
-      reason: "Active tasks exist without an active proposal or running block.",
+      reason: "Active tasks have no active proposal or running block.",
       href: "/calendar",
     };
   } else if (isEmpty || Boolean(input.dataDegraded)) {
@@ -327,7 +327,7 @@ export function buildTodayCockpitModel(
       kind: "capture",
       label: "Capture what matters now",
       reason: input.dataDegraded
-        ? "Saved workspace data is partial, so start with a fresh capture."
+        ? "Saved workspace data is partial. Start with a fresh capture."
         : "No pending workflow state is loaded yet.",
       href: "/capture",
     };
@@ -342,7 +342,7 @@ export function buildTodayCockpitModel(
     next = {
       kind: "capture",
       label: "Capture what matters now",
-      reason: "Capture is the quickest way to create the next actionable item.",
+      reason: "Capture is the fastest way to create the next step.",
       href: "/capture",
     };
   }

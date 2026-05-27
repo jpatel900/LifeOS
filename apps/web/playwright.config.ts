@@ -20,10 +20,14 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], channel: "msedge" },
     },
   ],
-  webServer: {
-    command: `pnpm exec next dev -p ${port}`,
-    url: baseURL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
+  ...(process.env.PLAYWRIGHT_DISABLE_WEBSERVER
+    ? {}
+    : {
+        webServer: {
+          command: `node ./node_modules/next/dist/bin/next dev --hostname 127.0.0.1 -p ${port}`,
+          url: baseURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 180_000,
+        },
+      }),
 });

@@ -1,0 +1,175 @@
+import { spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+const repoRoot = path.resolve(scriptDir, "..");
+const webDir = path.join(repoRoot, "apps", "web");
+const port = process.env.PLAYWRIGHT_PORT ?? "3100";
+const baseURL = `http://127.0.0.1:${port}`;
+const startupTimeoutMs = 180_000;
+const nextCliPath = require.resolve("next/dist/bin/next", {
+  paths: [webDir, repoRoot],
+});
+const playwrightCliPath = require.resolve("@playwright/test/cli", {
+  paths: [webDir, repoRoot],
+});
+const serverArgs = [
+  nextCliPath,
+  "dev",
+  "--hostname",
+  "127.0.0.1",
+  "-p",
+  port,
+];
+const testArgs = [
+  playwrightCliPath,
+  "test",
+  ...process.argv.slice(2),
+];
+const serverLogBuffer = [];
+const maxBufferedLogLines = 200;
+let shuttingDown = false;
+
+function appendLogLine(source, line) {
+  if (!line) {
+    return;
+  }
+
+  serverLogBuffer.push(`[${source}] ${line}`);
+  if (serverLogBuffer.length > maxBufferedLogLines) {
+    serverLogBuffer.shift();
+  }
+}
+
+function forwardStream(stream, writer, source) {
+  let pending = "";
+
+  stream.on("data", (chunk) => {
+    const text = chunk.toString();
+    writer.write(text);
+    pending += text;
+
+    const parts = pending.split(/\r?\n/);
+    pending = parts.pop() ?? "";
+    for (const part of parts) {
+      appendLogLine(source, part);
+    }
+  });
+
+  stream.on("end", () => {
+    appendLogLine(source, pending.trim());
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForServer() {
+  const deadline = Date.now() + startupTimeoutMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(baseURL, {
+        signal: AbortSignal.timeout(5_000),
+      });
+
+      if (response.status < 500) {
+        return;
+      }
+    } catch {
+      // Retry until startup deadline.
+    }
+
+    await sleep(500);
+  }
+
+  throw new Error(
+    `Timed out waiting for ${baseURL}. Recent server output:\n${serverLogBuffer.join("\n")}`,
+  );
+}
+
+function cleanupServer(serverProcess) {
+  if (
+    shuttingDown ||
+    !serverProcess ||
+    serverProcess.killed ||
+    serverProcess.exitCode !== null
+  ) {
+    return;
+  }
+
+  shuttingDown = true;
+
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/PID", String(serverProcess.pid), "/T", "/F"], {
+      stdio: "ignore",
+    });
+    return;
+  }
+
+  try {
+    process.kill(-serverProcess.pid, "SIGKILL");
+  } catch {
+    serverProcess.kill("SIGKILL");
+  }
+}
+
+function exitWithSignal(serverProcess, code) {
+  cleanupServer(serverProcess);
+  process.exit(code);
+}
+
+async function main() {
+  const serverProcess = spawn(process.execPath, serverArgs, {
+    cwd: webDir,
+    env: { ...process.env, PORT: port },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: process.platform !== "win32",
+  });
+
+  forwardStream(serverProcess.stdout, process.stdout, "next:stdout");
+  forwardStream(serverProcess.stderr, process.stderr, "next:stderr");
+
+  process.on("SIGINT", () => exitWithSignal(serverProcess, 130));
+  process.on("SIGTERM", () => exitWithSignal(serverProcess, 143));
+  process.on("uncaughtException", (error) => {
+    console.error(error);
+    exitWithSignal(serverProcess, 1);
+  });
+  process.on("unhandledRejection", (error) => {
+    console.error(error);
+    exitWithSignal(serverProcess, 1);
+  });
+
+  try {
+    await waitForServer();
+  } catch (error) {
+    cleanupServer(serverProcess);
+    throw error;
+  }
+
+  const playwrightProcess = spawn(process.execPath, testArgs, {
+    cwd: webDir,
+    env: {
+      ...process.env,
+      PLAYWRIGHT_PORT: port,
+      PLAYWRIGHT_DISABLE_WEBSERVER: "1",
+    },
+    stdio: "inherit",
+  });
+
+  const exitCode = await new Promise((resolve, reject) => {
+    playwrightProcess.on("error", reject);
+    playwrightProcess.on("exit", (code) => resolve(code ?? 1));
+  });
+
+  cleanupServer(serverProcess);
+  process.exit(exitCode);
+}
+
+await main();

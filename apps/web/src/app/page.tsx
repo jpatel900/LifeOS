@@ -28,6 +28,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   buildTodayCockpitModel,
+  type TodayCockpitModel,
   type TodayCockpitDraft,
   type TodayCockpitSession,
 } from "@/lib/today/buildTodayCockpitModel";
@@ -119,6 +120,43 @@ function normalizeSession(session: ExecutionSession): TodayCockpitSession {
     status: "running",
     outcome: session.outcome,
   };
+}
+
+type HomeCardKey =
+  | "quickCapture"
+  | "needsDecision"
+  | "unplanned"
+  | "todayBlocks"
+  | "recovery"
+  | "systemStatus";
+
+const DEFAULT_CARD_ORDER: HomeCardKey[] = [
+  "quickCapture",
+  "needsDecision",
+  "unplanned",
+  "todayBlocks",
+  "recovery",
+  "systemStatus",
+];
+
+function getPriorityCardOrder(cockpit: TodayCockpitModel): HomeCardKey[] {
+  const prioritizedCardByNextKind: Record<
+    TodayCockpitModel["next"]["kind"],
+    HomeCardKey
+  > = {
+    recovery: "recovery",
+    needs_decision: "needsDecision",
+    current_work: "todayBlocks",
+    unplanned_task: "unplanned",
+    capture: "quickCapture",
+    health_attention: "systemStatus",
+  };
+  const priorityCard = prioritizedCardByNextKind[cockpit.next.kind];
+
+  return [
+    priorityCard,
+    ...DEFAULT_CARD_ORDER.filter((card) => card !== priorityCard),
+  ];
 }
 
 export default function HomePage() {
@@ -293,6 +331,11 @@ export default function HomePage() {
       tasks,
     ],
   );
+  const prioritizedCardOrder = useMemo(
+    () => getPriorityCardOrder(cockpit),
+    [cockpit],
+  );
+  const showNowPrimaryCard = cockpit.now.kind !== "empty";
 
   function handleQuickCaptureSubmit() {
     const trimmed = quickCaptureText.trim();
@@ -321,7 +364,7 @@ export default function HomePage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Today</h1>
         <p className="text-sm text-muted-foreground">
-          Use this cockpit to decide what matters now and what to do next.
+          Pick one useful next move.
         </p>
       </section>
 
@@ -337,226 +380,306 @@ export default function HomePage() {
       <Card className="border-primary/40">
         <CardHeader>
           <CardTitle className="text-2xl">Next</CardTitle>
-          <CardDescription>
-            One recommended next click, chosen by deterministic rules.
-          </CardDescription>
+          <CardDescription>Deterministic next step.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3">
-          <p className="text-base font-medium">{cockpit.next.label}</p>
+        <CardContent className="grid gap-4">
+          <p className="text-lg font-semibold">{cockpit.next.label}</p>
           <p className="text-sm text-muted-foreground">{cockpit.next.reason}</p>
-          <Button asChild>
+          <Button asChild className="w-full sm:w-auto">
             <Link href={cockpit.next.href}>Open next step</Link>
           </Button>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Now</CardTitle>
-          <CardDescription>What is currently in progress.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-2">
-          <p className="font-medium">{cockpit.now.title}</p>
-          <p className="text-sm text-muted-foreground">{cockpit.now.summary}</p>
-          <Button asChild variant="outline">
-            <Link href={cockpit.now.href}>Go to Execute</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
+      {showNowPrimaryCard ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Quick Capture</CardTitle>
-            <CardDescription>
-              Capture one thing fast without leaving Home.
-            </CardDescription>
+            <CardTitle className="text-xl">Now</CardTitle>
+            <CardDescription>What is already in motion.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <Input
-              aria-label="Home quick capture text"
-              placeholder="What matters right now?"
-              value={quickCaptureText}
-              onChange={(event) => {
-                setQuickCaptureText(event.target.value);
-                if (quickCaptureFeedback.status !== "idle") {
-                  setQuickCaptureFeedback({ status: "idle" });
-                }
-              }}
-            />
-            <Button type="button" onClick={handleQuickCaptureSubmit}>
-              Save quick capture
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Saves in this browser and sends a draft to Triage.
+            <p className="break-words font-medium">{cockpit.now.title}</p>
+            <p className="text-sm text-muted-foreground">
+              {cockpit.now.summary}
             </p>
-            {quickCaptureFeedback.status === "error" ? (
-              <p role="alert" className="text-sm text-destructive">
-                {quickCaptureFeedback.message}
-              </p>
-            ) : null}
-            {quickCaptureFeedback.status === "saved" ? (
-              <Alert variant="success">
-                <AlertTitle>Saved.</AlertTitle>
-                <AlertDescription>
-                  Saved in this browser and sent to{" "}
-                  <Link href="/triage" className="underline underline-offset-2">
-                    Triage
-                  </Link>
-                  .
-                </AlertDescription>
-              </Alert>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Needs decision</CardTitle>
-            <CardDescription>
-              Pending task/project drafts that need accept or reject.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            {cockpit.needsDecision.count === 0 ? (
-              <p className="text-muted-foreground">
-                No pending drafts right now.
-              </p>
-            ) : (
-              cockpit.needsDecision.items.map((item) => (
-                <p key={item.id} className="text-foreground">
-                  {item.title}
-                </p>
-              ))
-            )}
-            <Button asChild variant="outline">
-              <Link href="/triage">Open Triage</Link>
+            <Button asChild variant="outline" className="w-full sm:w-auto">
+              <Link href={cockpit.now.href}>Go to Execute</Link>
             </Button>
           </CardContent>
         </Card>
+      ) : null}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{cockpit.unplanned.title}</CardTitle>
-            <CardDescription>
-              Active work that has no active proposal or running block.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            {cockpit.unplanned.items.length === 0 ? (
-              <p className="text-muted-foreground">
-                No unplanned active tasks right now.
-              </p>
-            ) : (
-              cockpit.unplanned.items.map((task) => (
-                <p key={task.id} className="text-foreground">
-                  {task.title}
-                </p>
-              ))
-            )}
-            <Button asChild variant="outline">
-              <Link href="/calendar">Open Planning</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">
-              Today&apos;s planned blocks
-            </CardTitle>
-            <CardDescription>
-              Local blocks scheduled, running, missed, or completed today.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            {cockpit.todayBlocks.length === 0 ? (
-              <p className="text-muted-foreground">
-                No local planned blocks for today.
-              </p>
-            ) : (
-              cockpit.todayBlocks.map((block) => {
-                const task = tasks.find((item) => item.id === block.taskId);
-                return (
-                  <div
-                    key={block.id}
-                    className="rounded-md border border-border p-2"
+      <div className="grid gap-4 md:grid-cols-2">
+        {prioritizedCardOrder.map((cardKey) => {
+          if (cardKey === "quickCapture") {
+            return (
+              <Card key={cardKey}>
+                <CardHeader>
+                  <CardTitle className="text-lg">Quick Capture</CardTitle>
+                  <CardDescription>Save one thing fast.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2">
+                  <Input
+                    aria-label="Home quick capture text"
+                    placeholder="What matters right now?"
+                    value={quickCaptureText}
+                    onChange={(event) => {
+                      setQuickCaptureText(event.target.value);
+                      if (quickCaptureFeedback.status !== "idle") {
+                        setQuickCaptureFeedback({ status: "idle" });
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleQuickCaptureSubmit}
+                    className="w-full sm:w-auto"
                   >
-                    <p className="font-medium">
-                      {task?.title ?? "Planned block"}
+                    Save quick capture
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Browser save plus a Triage draft.
+                  </p>
+                  {quickCaptureFeedback.status === "error" ? (
+                    <p role="alert" className="text-sm text-destructive">
+                      {quickCaptureFeedback.message}
                     </p>
+                  ) : null}
+                  {quickCaptureFeedback.status === "saved" ? (
+                    <Alert variant="success">
+                      <AlertTitle>Saved.</AlertTitle>
+                      <AlertDescription>
+                        Saved in this browser and sent to{" "}
+                        <Link
+                          href="/triage"
+                          className="underline underline-offset-2"
+                        >
+                          Triage
+                        </Link>
+                        .
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                </CardContent>
+              </Card>
+            );
+          }
+
+          if (cardKey === "needsDecision") {
+            return (
+              <Card key={cardKey}>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                    <span>Needs decision</span>
+                    {cockpit.needsDecision.count > 0 ? (
+                      <Badge variant="secondary">
+                        {cockpit.needsDecision.count}
+                      </Badge>
+                    ) : null}
+                  </CardTitle>
+                  <CardDescription>Drafts waiting in Triage.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2 text-sm">
+                  {cockpit.needsDecision.count === 0 ? (
+                    <p className="text-muted-foreground">No drafts waiting.</p>
+                  ) : (
+                    cockpit.needsDecision.items.map((item) => (
+                      <p key={item.id} className="break-words text-foreground">
+                        {item.title}
+                      </p>
+                    ))
+                  )}
+                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                    <Link href="/triage">Open Triage</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          if (cardKey === "unplanned") {
+            return (
+              <Card key={cardKey}>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                    <span>{cockpit.unplanned.title}</span>
+                    {cockpit.unplanned.items.length > 0 ? (
+                      <Badge variant="secondary">
+                        {cockpit.unplanned.items.length}
+                      </Badge>
+                    ) : null}
+                  </CardTitle>
+                  <CardDescription>Active tasks without a plan.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2 text-sm">
+                  {cockpit.unplanned.items.length === 0 ? (
                     <p className="text-muted-foreground">
-                      {formatBlockTime(block.startAt, block.endAt)}
+                      No tasks need planning.
                     </p>
-                    <Badge variant="outline" className="mt-1">
-                      {block.status}
-                    </Badge>
+                  ) : (
+                    cockpit.unplanned.items.map((task) => (
+                      <p key={task.id} className="break-words text-foreground">
+                        {task.title}
+                      </p>
+                    ))
+                  )}
+                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                    <Link href="/calendar">Open Planning</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          if (cardKey === "todayBlocks") {
+            return (
+              <Card key={cardKey}>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                    <span>Today&apos;s planned blocks</span>
+                    {cockpit.todayBlocks.length > 0 ? (
+                      <Badge variant="secondary">
+                        {cockpit.todayBlocks.length}
+                      </Badge>
+                    ) : null}
+                  </CardTitle>
+                  <CardDescription>Today in local time.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2 text-sm">
+                  {cockpit.todayBlocks.length === 0 ? (
+                    <p className="text-muted-foreground">
+                      Nothing planned today.
+                    </p>
+                  ) : (
+                    cockpit.todayBlocks.map((block) => {
+                      const task = tasks.find((item) => item.id === block.taskId);
+                      return (
+                        <div
+                          key={block.id}
+                          className="rounded-md border border-border p-2"
+                        >
+                          <p className="break-words font-medium">
+                            {task?.title ?? "Planned block"}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {formatBlockTime(block.startAt, block.endAt)}
+                          </p>
+                          <Badge variant="outline" className="mt-1">
+                            {block.status}
+                          </Badge>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div className="grid gap-2 sm:flex">
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                    >
+                      <Link href="/calendar">Open Planning</Link>
+                    </Button>
+                    {cockpit.todayBlocks.length > 0 ? (
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                      >
+                        <Link href="/execute">Open Execute</Link>
+                      </Button>
+                    ) : null}
                   </div>
-                );
-              })
-            )}
-            <div className="flex gap-2">
-              <Button asChild variant="outline">
-                <Link href="/calendar">Open Planning</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/execute">Open Execute</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                </CardContent>
+              </Card>
+            );
+          }
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Stuck / needs recovery</CardTitle>
-            <CardDescription>
-              Non-shaming recovery signals from missed or interrupted work.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            {cockpit.recoveryItems.length === 0 ? (
-              <p className="text-muted-foreground">
-                No recovery items right now.
-              </p>
-            ) : (
-              cockpit.recoveryItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-md border border-border p-2"
-                >
-                  <p className="font-medium">{item.label}</p>
-                  <p className="text-muted-foreground">{item.reason}</p>
-                </div>
-              ))
-            )}
-            <div className="flex gap-2">
-              <Button asChild variant="outline">
-                <Link href="/execute">Open Execute</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/review">Open Review</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          if (cardKey === "recovery") {
+            return (
+              <Card key={cardKey}>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                    <span>Stuck / needs recovery</span>
+                    {cockpit.recoveryItems.length > 0 ? (
+                      <Badge variant="secondary">
+                        {cockpit.recoveryItems.length}
+                      </Badge>
+                    ) : null}
+                  </CardTitle>
+                  <CardDescription>Missed or interrupted work.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-2 text-sm">
+                  {cockpit.recoveryItems.length === 0 ? (
+                    <p className="text-muted-foreground">
+                      Nothing needs recovery.
+                    </p>
+                  ) : (
+                    cockpit.recoveryItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-md border border-border p-2"
+                      >
+                        <p className="break-words font-medium">{item.label}</p>
+                        <p className="text-muted-foreground">{item.reason}</p>
+                      </div>
+                    ))
+                  )}
+                  {cockpit.recoveryItems.length > 0 ? (
+                    <div className="grid gap-2 sm:flex">
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                      >
+                        <Link href="/execute">Open Execute</Link>
+                      </Button>
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                      >
+                        <Link href="/review">Open Review</Link>
+                      </Button>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            );
+          }
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">System trust/status</CardTitle>
-            <CardDescription>
-              Health checks stay explicit and deterministic.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2 text-sm">
-            <p className="text-muted-foreground">
-              {cockpit.systemStatus.summary}
-            </p>
-            <Button asChild variant="outline">
-              <Link href={cockpit.systemStatus.href}>Open Health</Link>
-            </Button>
-          </CardContent>
-        </Card>
+          return (
+            <Card key={cardKey}>
+              <CardHeader>
+                <CardTitle className="text-lg">System trust/status</CardTitle>
+                <CardDescription>Deterministic health only.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2 text-sm">
+                <p className="text-muted-foreground">
+                  {cockpit.systemStatus.summary}
+                </p>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href={cockpit.systemStatus.href}>Open Health</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      {!showNowPrimaryCard ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Now</CardTitle>
+            <CardDescription>Nothing active yet.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <p className="break-words font-medium">{cockpit.now.title}</p>
+            <p className="text-sm text-muted-foreground">
+              {cockpit.now.summary}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <details className="text-sm text-muted-foreground">
         <summary className="cursor-pointer select-none">System details</summary>
