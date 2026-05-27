@@ -26,6 +26,7 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 ## Escalation
 
 - `needs:human-decision` - The issue is blocked on scope, policy, approval, or risk decisions a human must make.
+- `automerge:safe` - The issue is explicitly approved for the T0 safe auto-merge lane when deterministic path checks also pass.
 
 ## Suggested combinations
 

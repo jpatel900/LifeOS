@@ -31,6 +31,8 @@ jobs:
       issue_url: ${{ steps.resolve.outputs.issue_url }}
       issue_body: ${{ steps.resolve.outputs.issue_body }}
       branch_name: ${{ steps.resolve.outputs.branch_name }}
+      source_labels: ${{ steps.resolve.outputs.source_labels }}
+      allow_safe_automerge: ${{ steps.resolve.outputs.allow_safe_automerge }}
 
     steps:
       - name: Load issue details and eligibility
@@ -66,6 +68,7 @@ jobs:
               !hasLabel('needs:human-decision') &&
               !hasLabel('risk:medium') &&
               !hasLabel('risk:high');
+            const allowSafeAutomerge = shouldRun && hasLabel('automerge:safe');
 
             core.setOutput('should_run', String(shouldRun));
             core.setOutput('issue_number', String(issue.number));
@@ -73,6 +76,8 @@ jobs:
             core.setOutput('issue_url', issue.html_url ?? issue.url ?? '');
             core.setOutput('issue_body', issue.body ?? '');
             core.setOutput('branch_name', `codex/issue-${issue.number}-low-risk`);
+            core.setOutput('source_labels', labels.join(', '));
+            core.setOutput('allow_safe_automerge', String(allowSafeAutomerge));
 
             if (!shouldRun) {
               core.notice(
@@ -170,6 +175,10 @@ jobs:
                 "risks",
                 "rollback_plan",
                 "deferred_items",
+                "acceptance_criteria_coverage",
+                "touched_surfaces",
+                "untouched_high_risk_surfaces",
+                "browser_manual_proof",
                 "issue_comment",
                 "human_review_reason"
               ],
@@ -194,6 +203,30 @@ jobs:
                   }
                 },
                 "deferred_items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "acceptance_criteria_coverage": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "touched_surfaces": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "untouched_high_risk_surfaces": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "browser_manual_proof": {
                   "type": "array",
                   "items": {
                     "type": "string"
@@ -271,6 +304,22 @@ jobs:
             core.setOutput('risks_json', JSON.stringify(parsed.risks ?? []));
             core.setOutput('rollback_plan_json', JSON.stringify(parsed.rollback_plan ?? []));
             core.setOutput('deferred_items_json', JSON.stringify(parsed.deferred_items ?? []));
+            core.setOutput(
+              'acceptance_criteria_coverage_json',
+              JSON.stringify(parsed.acceptance_criteria_coverage ?? []),
+            );
+            core.setOutput(
+              'touched_surfaces_json',
+              JSON.stringify(parsed.touched_surfaces ?? []),
+            );
+            core.setOutput(
+              'untouched_high_risk_surfaces_json',
+              JSON.stringify(parsed.untouched_high_risk_surfaces ?? []),
+            );
+            core.setOutput(
+              'browser_manual_proof_json',
+              JSON.stringify(parsed.browser_manual_proof ?? []),
+            );
 
       - name: Comment when human review is required
         if: steps.codex_result.outputs.codex_result == 'needs_human_review'
@@ -356,29 +405,8 @@ jobs:
       - name: Guard forbidden paths
         id: guard_paths
         if: steps.changed_files.outputs.has_changes == 'true'
-        shell: bash
         run: |
-          violations_file="$RUNNER_TEMP/forbidden-path-violations.txt"
-          : > "$violations_file"
-
-          while IFS= read -r file; do
-            case "$file" in
-              supabase/migrations/*|apps/web/src/lib/googleCalendar/*|apps/web/src/app/api/google-calendar/*|apps/web/src/lib/ai/contracts/*|apps/web/src/lib/ai/parseCapture.ts|apps/web/src/lib/ai/*|apps/web/src/lib/observability/*|apps/web/src/lib/supabase/*|.github/workflows/*|.github/actions/*|.github/codex/prompts/*|.env*|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|vercel.json|.vercel/*)
-                echo "$file" >> "$violations_file"
-                ;;
-            esac
-          done < "$RUNNER_TEMP/changed-files.txt"
-
-          if [ -s "$violations_file" ]; then
-            echo "blocked=true" >> "$GITHUB_OUTPUT"
-            {
-              echo "violations<<EOF"
-              cat "$violations_file"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "blocked=false" >> "$GITHUB_OUTPUT"
-          fi
+          node scripts/agent/check-automation-scope.mjs --mode low-risk --paths-file "$RUNNER_TEMP/changed-files.txt"
 
       - name: Comment when forbidden paths were touched
         if: steps.guard_paths.outputs.blocked == 'true'
@@ -386,16 +414,10 @@ jobs:
         env:
           ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
           SUMMARY: ${{ steps.codex_result.outputs.summary }}
-          VIOLATIONS: ${{ steps.guard_paths.outputs.violations }}
+          VIOLATIONS: ${{ steps.guard_paths.outputs.violations_markdown }}
         with:
           github-token: ${{ github.token }}
           script: |
-            const violations = (process.env.VIOLATIONS || '')
-              .split('\n')
-              .filter(Boolean)
-              .map((file) => `- \`${file}\``)
-              .join('\n');
-
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -408,7 +430,7 @@ jobs:
                 process.env.SUMMARY || '',
                 '',
                 'Forbidden paths touched:',
-                violations || '- None captured.',
+                process.env.VIOLATIONS || '- None captured.',
               ].join('\n'),
             });
 
@@ -462,6 +484,12 @@ jobs:
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
         run: git diff --check
 
+      - name: Check safe auto-merge path eligibility
+        id: safe_automerge_paths
+        if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
+        run: |
+          node scripts/agent/check-automation-scope.mjs --mode safe-automerge --paths-file "$RUNNER_TEMP/changed-files.txt"
+
       - name: Commit and push branch
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
         env:
@@ -474,6 +502,7 @@ jobs:
           git push --force-with-lease origin "$BRANCH_NAME"
 
       - name: Create or update pull request
+        id: create_pr
         if: steps.changed_files.outputs.has_changes == 'true' && steps.guard_paths.outputs.blocked != 'true'
         uses: actions/github-script@v8
         env:
@@ -481,10 +510,17 @@ jobs:
           ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}
           ISSUE_URL: ${{ needs.resolve-issue.outputs.issue_url }}
           BRANCH_NAME: ${{ needs.resolve-issue.outputs.branch_name }}
+          SOURCE_LABELS: ${{ needs.resolve-issue.outputs.source_labels }}
+          ALLOW_SAFE_AUTOMERGE: ${{ needs.resolve-issue.outputs.allow_safe_automerge }}
           SUMMARY: ${{ steps.codex_result.outputs.summary }}
           RISKS_JSON: ${{ steps.codex_result.outputs.risks_json }}
           ROLLBACK_PLAN_JSON: ${{ steps.codex_result.outputs.rollback_plan_json }}
           DEFERRED_ITEMS_JSON: ${{ steps.codex_result.outputs.deferred_items_json }}
+          ACCEPTANCE_CRITERIA_COVERAGE_JSON: ${{ steps.codex_result.outputs.acceptance_criteria_coverage_json }}
+          TOUCHED_SURFACES_JSON: ${{ steps.codex_result.outputs.touched_surfaces_json }}
+          UNTOUCHED_HIGH_RISK_SURFACES_JSON: ${{ steps.codex_result.outputs.untouched_high_risk_surfaces_json }}
+          BROWSER_MANUAL_PROOF_JSON: ${{ steps.codex_result.outputs.browser_manual_proof_json }}
+          SAFE_AUTOMERGE_ELIGIBLE: ${{ steps.safe_automerge_paths.outputs.eligible }}
         with:
           github-token: ${{ github.token }}
           script: |
@@ -500,14 +536,62 @@ jobs:
             const risks = JSON.parse(process.env.RISKS_JSON || '[]');
             const rollbackPlan = JSON.parse(process.env.ROLLBACK_PLAN_JSON || '[]');
             const deferredItems = JSON.parse(process.env.DEFERRED_ITEMS_JSON || '[]');
+            const acceptanceCriteriaCoverage = JSON.parse(
+              process.env.ACCEPTANCE_CRITERIA_COVERAGE_JSON || '[]',
+            );
+            const touchedSurfaces = JSON.parse(process.env.TOUCHED_SURFACES_JSON || '[]');
+            const untouchedHighRiskSurfaces = JSON.parse(
+              process.env.UNTOUCHED_HIGH_RISK_SURFACES_JSON || '[]',
+            );
+            const browserManualProof = JSON.parse(
+              process.env.BROWSER_MANUAL_PROOF_JSON || '[]',
+            );
+            const propagatedLabels =
+              process.env.ALLOW_SAFE_AUTOMERGE === 'true' &&
+              process.env.SAFE_AUTOMERGE_ELIGIBLE === 'true'
+                ? ['risk:low', 'automerge:safe']
+                : [];
 
             const renderList = (items, emptyText) =>
               items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : `- ${emptyText}`;
+            const syncPropagatedLabels = async (prNumber) => {
+              if (propagatedLabels.length > 0) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  labels: propagatedLabels,
+                });
+                return;
+              }
+
+              for (const label of ['automerge:safe', 'risk:low']) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    name: label,
+                  });
+                } catch (error) {
+                  if (error.status !== 404) {
+                    throw error;
+                  }
+                }
+              }
+            };
 
             const body = [
               `Closes #${issueNumber}`,
               '',
               `Linked issue: ${process.env.ISSUE_URL}`,
+              '',
+              '## Route',
+              '- Route: low-risk issue automation',
+              '- Automation result: ready',
+              '- Risk tier: `risk:low` source issue route',
+              `- Source labels: ${process.env.SOURCE_LABELS || 'none'}`,
+              `- Propagated PR labels: ${propagatedLabels.length > 0 ? propagatedLabels.map((label) => `\`${label}\``).join(', ') : 'none'}`,
               '',
               '## Summary',
               process.env.SUMMARY || 'Low-risk repository automation update.',
@@ -515,14 +599,32 @@ jobs:
               '## Files Changed',
               renderList(changedFiles.map((file) => `\`${file}\``), 'None.'),
               '',
+              '## Acceptance Criteria Coverage',
+              renderList(
+                acceptanceCriteriaCoverage,
+                'See the linked issue acceptance criteria; no additional coverage notes were provided.',
+              ),
+              '',
               '## Validation',
-              '- `pnpm install --frozen-lockfile`',
-              '- `pnpm lint`',
-              '- `pnpm type-check`',
-              '- `pnpm test`',
-              '- `pnpm build`',
-              '- `pnpm format:check`',
-              '- `git diff --check`',
+              '- `pnpm install --frozen-lockfile`: passed',
+              '- `pnpm lint`: passed',
+              '- `pnpm type-check`: passed',
+              '- `pnpm test`: passed',
+              '- `pnpm build`: passed',
+              '- `pnpm format:check`: warning-only failure is allowed when caused by unrelated repo baseline drift',
+              '- `git diff --check`: passed',
+              '',
+              '## Browser / Manual Proof',
+              renderList(browserManualProof, 'Not applicable.'),
+              '',
+              '## Risk Surfaces Touched',
+              renderList(touchedSurfaces, 'None beyond the bounded low-risk surface.'),
+              '',
+              '## Risk Surfaces Intentionally Not Touched',
+              renderList(
+                untouchedHighRiskSurfaces,
+                'No additional risky surfaces were declared in the Codex result.',
+              ),
               '',
               '## Risks',
               renderList(risks, 'Low-risk scoped automation only.'),
@@ -543,17 +645,20 @@ jobs:
             });
 
             if (existing.data.length > 0) {
-              await github.rest.pulls.update({
+              const updated = await github.rest.pulls.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 pull_number: existing.data[0].number,
                 title: `[Codex] ${process.env.ISSUE_TITLE}`,
                 body,
               });
+              await syncPropagatedLabels(updated.data.number);
+              core.setOutput('pr_number', String(updated.data.number));
+              core.setOutput('pr_url', updated.data.html_url ?? '');
               return;
             }
 
-            await github.rest.pulls.create({
+            const created = await github.rest.pulls.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `[Codex] ${process.env.ISSUE_TITLE}`,
@@ -561,3 +666,48 @@ jobs:
               base: 'main',
               body,
             });
+
+            await syncPropagatedLabels(created.data.number);
+            core.setOutput('pr_number', String(created.data.number));
+            core.setOutput('pr_url', created.data.html_url ?? '');
+
+      - name: Write automation decision summary
+        if: always()
+        shell: bash
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          SOURCE_LABELS: ${{ needs.resolve-issue.outputs.source_labels }}
+          CODEX_RESULT: ${{ steps.codex_result.outputs.codex_result }}
+          HUMAN_REVIEW_REASON: ${{ steps.codex_result.outputs.human_review_reason }}
+          HAS_CHANGES: ${{ steps.changed_files.outputs.has_changes }}
+          BLOCKED: ${{ steps.guard_paths.outputs.blocked }}
+          SAFE_AUTOMERGE_ELIGIBLE: ${{ steps.safe_automerge_paths.outputs.eligible }}
+          PR_NUMBER: ${{ steps.create_pr.outputs.pr_number }}
+          PR_URL: ${{ steps.create_pr.outputs.pr_url }}
+        run: |
+          {
+            echo "## Automation Decision Log"
+            echo
+            echo "- Route: low-risk issue automation"
+            echo "- Issue: #$ISSUE_NUMBER"
+            echo "- Source labels: ${SOURCE_LABELS:-none}"
+            echo "- Codex result: ${CODEX_RESULT:-not-run}"
+            echo "- Changed files produced: ${HAS_CHANGES:-false}"
+            echo "- Guard blocked: ${BLOCKED:-false}"
+            echo "- Safe auto-merge path eligible: ${SAFE_AUTOMERGE_ELIGIBLE:-false}"
+            if [ -n "$PR_NUMBER" ]; then
+              echo "- PR opened or updated: #$PR_NUMBER"
+            fi
+            if [ -n "$PR_URL" ]; then
+              echo "- PR URL: $PR_URL"
+            fi
+            if [ "${HAS_CHANGES:-false}" = "true" ] && [ "${BLOCKED:-false}" != "true" ] && [ -n "$PR_NUMBER" ]; then
+              echo "- Validation summary: install/lint/type-check/test/build/diff passed; format drift warning remains non-blocking"
+            fi
+            if [ -n "$HUMAN_REVIEW_REASON" ]; then
+              echo "- Human intervention: required"
+              echo "- Escalation reason: $HUMAN_REVIEW_REASON"
+            else
+              echo "- Human intervention: not required by Codex result"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

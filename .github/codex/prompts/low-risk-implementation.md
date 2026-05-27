@@ -88,4 +88,11 @@ Return:
 - `result: "needs_human_review"` if the task is risky, ambiguous, or blocked on a human decision.
 
 Write `summary`, `risks`, `rollback_plan`, `deferred_items`, and `issue_comment` for the workflow to reuse.
+Also write:
+
+- `acceptance_criteria_coverage`: short bullets showing how the bounded issue acceptance criteria were covered
+- `touched_surfaces`: exact repo or control-plane surfaces changed
+- `untouched_high_risk_surfaces`: risky surfaces intentionally not changed
+- `browser_manual_proof`: `Not applicable.` when no UI or browser proof is required, otherwise the exact proof needed
+
 Set `human_review_reason` to a short plain string only when human review is required; otherwise use `null`.

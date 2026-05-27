@@ -5,75 +5,17 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 
-const HIGH_RISK_LABELS = new Set([
-  "risk:high",
-  "needs:human-decision",
-  "area:security",
-  "area:supabase",
-  "area:calendar",
-  "area:parser",
-  "area:observability",
-  "area:deployment",
-]);
-
-const HIGH_RISK_PATH_PATTERNS = [
-  "supabase/**",
-  "apps/web/src/lib/supabase/**",
-  "apps/web/src/lib/googleCalendar/**",
-  "apps/web/src/app/api/google-calendar/**",
-  "apps/web/src/lib/ai/**",
-  "apps/web/src/lib/observability/**",
-  "apps/web/instrumentation*",
-  "apps/web/sentry*",
-  "apps/web/langfuse*",
-  ".github/workflows/**",
-  ".env*",
-  ".env.example",
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-  "turbo.json",
-];
+import {
+  HIGH_RISK_LABELS,
+  HIGH_RISK_PATH_PATTERNS,
+  globToRegExp,
+  normalizePath,
+} from "./automation-policy.mjs";
 
 const HIGH_FILE_COUNT = 20;
 const HIGH_TOTAL_CHANGES = 800;
 const MEDIUM_FILE_COUNT = 10;
 const MEDIUM_TOTAL_CHANGES = 300;
-
-function normalizePath(value) {
-  return String(value ?? "")
-    .replace(/\\/g, "/")
-    .replace(/^\.\//, "");
-}
-
-function globToRegExp(pattern) {
-  const normalized = normalizePath(pattern);
-  let regex = "^";
-
-  for (let index = 0; index < normalized.length; index += 1) {
-    const char = normalized[index];
-
-    if (char === "*") {
-      if (normalized[index + 1] === "*") {
-        regex += ".*";
-        index += 1;
-      } else {
-        regex += "[^/]*";
-      }
-      continue;
-    }
-
-    if ("\\^$+?.()|{}[]".includes(char)) {
-      regex += `\\${char}`;
-      continue;
-    }
-
-    regex += char;
-  }
-
-  regex += "$";
-  return new RegExp(regex);
-}
 
 const HIGH_RISK_PATH_REGEXES = HIGH_RISK_PATH_PATTERNS.map((pattern) => ({
   pattern,
@@ -254,7 +196,7 @@ function runSelfTest() {
       name: "path trigger escalates",
       input: {
         labels: [],
-        changedPaths: ["supabase/migrations/20260521_add_table.sql"],
+        changedPaths: [".github/codex/prompts/pr-review-baseline.md"],
         changedFileCount: 1,
         additions: 20,
         deletions: 0,
