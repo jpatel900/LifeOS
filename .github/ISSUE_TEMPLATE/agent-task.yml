@@ -88,6 +88,18 @@ body:
     validations:
       required: true
   - type: textarea
+    id: research_spec_checkpoint
+    attributes:
+      label: Research/spec checkpoint
+      description: Concise checkpoint for medium/high-risk or cross-flow work. State the governing doc or requirement, current behavior, smallest approved approach, and exact non-goals. If truly unnecessary, say why.
+      placeholder: |
+        - Requirement/doc anchor: `.github/AGENT_AUTOMATION_POLICY.md` T2 and `docs/agent/CODEX_PROMPT_TEMPLATE.md`
+        - Current behavior: PR review checks repo rules and risk surfaces, but does not explicitly compare against issue checkpoint fields.
+        - Smallest approved approach: docs/template/prompt updates only.
+        - Non-goals: no workflow edits, no runtime agent behavior, no new dependencies.
+    validations:
+      required: true
+  - type: textarea
     id: files_docs_to_read
     attributes:
       label: Files/docs to read

@@ -13,6 +13,7 @@ Delivery defaults:
 
 - GitHub-first is the default for repo delivery: issues, PRs, labels, review workflows, and branch-scoped automation.
 - Local Codex CLI is allowed for medium/high-risk, local debugging, or governance hardening when direct repo work is safer or faster under active human supervision.
+- For medium/high-risk or cross-flow work, use the role-separated checkpoints in `docs/agent/ROLE_SEPARATED_DELIVERY.md` so research/spec/build/test/validation are explicit.
 - Do not copy all repo law into the prompt. Point back to `AGENTS.md` and the smallest relevant doc set.
 
 ## Required Prompt Skeleton
@@ -30,6 +31,12 @@ Context:
 - Then the smallest relevant context/doc set only
 - Automation tier: <T0/T1/T2/T3/T4 from .github/AGENT_AUTOMATION_POLICY.md>
 - Implementation note required: <yes/no; if yes, use docs/implementation-notes/YYYY-MM-DD-<task-slug>.md>
+
+Role-separated checkpoints:
+
+- Research/spec checkpoint: <requirement anchor, current behavior, smallest approved approach, non-goals>
+- Build checkpoint: <exact surface allowed to change>
+- Test/validation checkpoint: <commands, review proof, human gate if any>
 
 Verification Oracle:
 
@@ -62,7 +69,7 @@ Every medium/high-risk, local-debugging, governance, or otherwise ambiguous impl
 - the exact user journey or behavior that must work
 - the test or command that proves it
 - UI/browser/manual proof when the task affects UX or operator-facing behavior
-- exact acceptance criteria
+- exact acceptance criteria and the research/spec checkpoint it must satisfy
 - what must not change
 - the evidence required in the final report
 
