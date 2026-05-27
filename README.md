@@ -1,6 +1,6 @@
 # LifeOS
 
-Area-scoped personal workflow cockpit. The Phase 2 mock vertical slice stays available for local triage while Phase 4A adds Supabase-backed areas and raw capture persistence when env vars are configured.
+Area-scoped personal workflow cockpit. The current shipped surface includes Today/Home Cockpit v1, Supabase-backed areas and workflow slices, AI parse-capture routing, Google Calendar connection/free-busy/approval-gated event creation, observability wrappers, and broad UX hardening, while the Phase 2 mock vertical slice remains available for local triage.
 
 Project documentation lives in `docs/`. For bounded agent/developer orientation, start with `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context <area>`, then read `docs/PROJECT_STATE.md` and the relevant authority docs as needed. This helper is for orientation only and does not replace authority docs.
 
