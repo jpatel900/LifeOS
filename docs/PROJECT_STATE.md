@@ -19,6 +19,7 @@ P0 Execute terminal-state coherence is now fixed: `/execute` uses explicit UI st
 
 ## Recently completed
 
+- Closed the current verification/planning batch without runtime changes: local Supabase smoke proved a Windows environment blocker because the excluded TCP range `54318-54417` includes local Supabase DB port `54322`, so `supabase db reset` and the full local browser/RLS smoke could not complete from this machine state; production smoke reached the current Vercel deployment root successfully but authenticated route checks were blocked by deployment protection from this environment; and planning packets now exist for all-day conflict-check correctness and app-created Google Calendar update/cancel scope. See `docs/implementation-notes/2026-05-27-smoke-verification-results.md` and `docs/implementation-notes/2026-05-27-google-calendar-scope-plans.md`.
 - Closed the daily-flow UX batch without changing workflow/data contracts: Home `/` now includes a first-run-safe `Daily loop` guide using existing routes only, Capture `/capture` now uses clearer mobile-friendly save/sort actions and more practical next-step copy, Triage/Planning/Execute copy now makes the next step more obvious, and Review `/review` now includes a simple close-the-loop action card plus a basic review log/history surface built from existing `review_entries` and local fallback notes only. No schema, migration, parser, auth, observability, env, or Google Calendar write behavior changed.
 - Resolved the PostCSS security alert with a minimal dependency-policy change only: `pnpm-workspace.yaml` now overrides `postcss` to `^8.5.15`, `pnpm-lock.yaml` now resolves only `postcss@8.5.15` including the `next@15.5.18` path that had previously resolved `8.4.31`, and no direct unsafe user-controlled CSS embedding path was found in the app during the issue-driven search for direct PostCSS usage, `<style>` injection, or `dangerouslySetInnerHTML`-style CSS sinks. No runtime behavior, workflow permission, auth/calendar/parser/privacy boundary, or broad dependency set changed.
 - Added the next governance-only automation planning layer without changing app runtime or enabling new merge behavior: `docs/agent/SCENARIO_PACKS.md` now defines T2 scenario-pack requirements and examples, `docs/agent/VERIFIED_MEDIUM_AUTOMATION.md` now defines a future policy-only verified-medium lane, `docs/agent/ISSUE_PLANNING_AUTOMATION.md` now documents when to use `agent:plan`, `.github/workflows/codex-issue-plan.yml` plus `.github/codex/prompts/issue-plan.md` now provide a read-only issue-planning packet workflow that comments repo-grounded research instead of opening branches/PRs, and the Agent Task template plus `docs/agent/CODEX_PROMPT_TEMPLATE.md` now require scenario-pack thinking for T2 workflow behavior without turning T0/T1 work into mandatory paperwork. No T2 auto-merge or runtime behavior was enabled.
@@ -168,7 +169,10 @@ P0 Execute terminal-state coherence is now fixed: `/execute` uses explicit UI st
 
 ## Known issues
 
+- Local Supabase verification is currently blocked on this Windows environment because the excluded TCP range `54318-54417` includes local DB port `54322`, preventing reliable `supabase start`/`supabase db reset` until the port conflict is resolved or the local port mapping is changed safely.
 - Supabase multi-step workflow writes are still issued as separate client requests; future work should move proposal acceptance and execution transitions into transactional server/RPC boundaries if stronger atomicity is required.
+- Google Calendar free/busy handling for all-day events is not yet explicitly proven or regression-covered; current checks rely on provider free/busy normalization over the proposal time window and store only minimal checked metadata.
+- Additional mobile polish may still be needed on screen-specific content outside Home, but AppShell-level overflow and Home cockpit density/prioritization at 390px are now improved.
 - Rescheduling does not yet check all-day events.
 - Additional mobile polish may still be needed on screen-specific content outside the Capture/Home daily loop pass, but the core entry path now uses full-width mobile capture actions and explicit route guidance at 390px.
 - Historical `ChunkLoadError` findings from Playwright logs mapped to transient dev-only stale chunk 404s (`/_next/static/chunks/...`) during HMR/reload windows; after clean restart and full validation gates, no repository code-path regression was identified in this pass.
@@ -178,6 +182,16 @@ P0 Execute terminal-state coherence is now fixed: `/execute` uses explicit UI st
 
 ## Next recommended tasks
 
+1. Resolve the local Windows/Supabase port blocker first, then re-run `supabase start`, `supabase db reset`, the local browser workflow smoke, and the opt-in `phase4aRls.local` suite with exact pass/fail evidence.
+2. Re-run production acceptance smoke from an authenticated deployment session or an explicitly approved temporary bypass path; do not weaken Vercel deployment protection casually just to make the issue go green.
+3. Start the next Google Calendar implementation phase only after explicit human approval, and keep it split into the two already-planned tracks: all-day conflict-check correctness and app-created event update/cancel.
+4. Keep regression hardening active by running `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts` for every UX-affecting change and extending this suite only when new P0 journeys are approved.
+5. Preserve the current truthfulness boundary: no autonomous rescheduling, no Google update/delete without explicit user action, and no raw provider payload storage.
+
+## Important implementation notes
+
+- The current production smoke limitation is access-boundary, not app-runtime proof: the public root fetch succeeded on the active Vercel production deployment, but `/login` returned Vercel Authentication from this environment and no temporary bypass URL was created. Treat that as a skipped surface unless a human explicitly approves an authenticated or bypassed smoke path.
+- The current all-day calendar issue is a planning/proof gap, not yet a reproduced code-path bug from this run. Today the free/busy helper sends only `timeMin`, `timeMax`, and `items` to Google, stores only `checkedAt`/`hasConflict`, and has no explicit all-day regression coverage. Reproduce before broadening logic.
 1. Keep regression hardening active by running `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts` for UX-affecting changes and extending the suite only when a new approved P0 journey is added.
 2. Run the local Supabase end-to-end smoke using `user_a@example.test` / `password123`, then record exact pass/fail/skipped evidence for `/login`, `/settings/areas`, `/capture`, `/triage`, `/calendar`, `/execute`, `/review`, and `/health`.
 3. Run the production/Vercel acceptance smoke and post an exact route-by-route result without changing deployment settings or secrets.
