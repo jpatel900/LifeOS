@@ -35,6 +35,10 @@ Typical paths:
 - `apps/web/src/app/**` when the change is narrow copy-only or bounded smoke coverage
 - `apps/web/tests/e2e/**` when the change is bounded smoke coverage rather than assertion-changing broad test rewrites
 
+Planning-only note:
+
+- If the correct implementation slice is unclear, use `agent:plan` first instead of guessing.
+
 ## T2 — Agent implementation allowed, human review required
 
 Agent may implement, but a human must review before merge or rollout.
@@ -93,6 +97,11 @@ Start with planning/review-only. Do not implement beyond bounded analysis unless
 - observability privacy
 - secrets/env
 - production deployment
+
+Planning route:
+
+- `agent:plan` is the preferred GitHub-first planning route for T2/T3 issues that still need repo research, risk classification, test mapping, or a smallest-safe-slice recommendation.
+- The planning route may comment on the issue but must not create branches, commits, or implementation PRs.
 
 ## T4 — Human decision before any implementation
 
