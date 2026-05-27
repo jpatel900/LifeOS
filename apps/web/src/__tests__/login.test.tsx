@@ -41,7 +41,7 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Supabase is not configured. Add local Supabase env vars to use login, or continue in mock mode.",
+      "Supabase is not configured. Add local Supabase env vars to use login, or continue in local-only mode.",
     );
     expect(mocks.signInWithPassword).not.toHaveBeenCalled();
   });

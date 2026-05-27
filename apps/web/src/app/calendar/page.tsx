@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
 import {
   acceptTimeBlockProposal,
@@ -21,6 +22,10 @@ import {
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
+import {
+  saveDestinationLabel,
+  saveModeLabel,
+} from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
@@ -65,10 +70,6 @@ type GoogleCalendarConnectionResponse = {
   status?: "connected" | "disconnected" | "error";
   error?: string;
 };
-
-function storageModeLabel(mode: DataProvider) {
-  return mode === "supabase" ? "Saved workspace" : "Demo mode";
-}
 
 function nextLocalSlot(task: Task) {
   const start = new Date(Date.now() + 60 * 60 * 1000);
@@ -426,7 +427,7 @@ export default function CalendarPage() {
       });
       setActionState({
         status: "saved",
-        label: "Proposal drafted in",
+        label: "Proposal drafted",
         provider: "mock",
       });
       void captureEvent({
@@ -457,7 +458,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: "Proposal saved through",
+        label: "Proposal drafted",
         provider: result.provider,
       });
       void captureEvent({
@@ -507,7 +508,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: `Proposal ${adjustmentLabel(adjustment)} through`,
+        label: `Proposal ${adjustmentLabel(adjustment)}`,
         provider: result.provider,
       });
       setAdjustingProposalId(null);
@@ -539,7 +540,7 @@ export default function CalendarPage() {
     });
     setActionState({
       status: "saved",
-      label: `Proposal ${adjustmentLabel(adjustment)} through`,
+      label: `Proposal ${adjustmentLabel(adjustment)}`,
       provider: "mock",
     });
     setAdjustingProposalId(null);
@@ -565,7 +566,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: "Proposal rejected through",
+        label: "Proposal rejected",
         provider: result.provider,
       });
     } catch (error) {
@@ -603,7 +604,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: "Local block created through",
+        label: "Local block created",
         provider: result.provider,
       });
     } catch (error) {
@@ -755,7 +756,7 @@ export default function CalendarPage() {
       setAcknowledgeFirstWriteWarning(false);
       setActionState({
         status: "saved",
-        label: "Google Calendar event created through",
+        label: "Google Calendar event created",
         provider: result.provider,
       });
       void captureEvent({
@@ -867,24 +868,18 @@ export default function CalendarPage() {
         </p>
       ) : null}
 
-      <details className="text-sm text-muted-foreground">
-        <summary>System details</summary>
+      <DiagnosticsDisclosure>
         {planningState.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode:{" "}
-            <strong>{storageModeLabel(planningState.provider)}</strong>
-          </p>
+          <>
+            <p>
+              Save mode: <strong>{saveModeLabel(planningState.provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{planningState.provider}</strong>
+            </p>
+          </>
         ) : null}
-      </details>
-
-      <details className="text-sm text-muted-foreground">
-        <summary>Developer details</summary>
-        {planningState.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode id: <strong>{planningState.provider}</strong>
-          </p>
-        ) : null}
-      </details>
+      </DiagnosticsDisclosure>
 
       {planningState.status === "error" ? (
         <Alert variant="destructive">
@@ -910,8 +905,7 @@ export default function CalendarPage() {
         <Alert role="status" className="border-border bg-muted text-foreground">
           <AlertTitle className="text-primary">Saved</AlertTitle>
           <AlertDescription>
-            {actionState.label}{" "}
-            <strong>{storageModeLabel(actionState.provider)}</strong>.
+            {actionState.label}. Saved {saveDestinationLabel(actionState.provider)}.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -1019,7 +1013,7 @@ export default function CalendarPage() {
                       )
                     : null;
                   const googleWriteState = !usesPersistedPlanning
-                    ? "Unavailable in Demo mode (This browser only)"
+                    ? "Unavailable while planning stays on this device only"
                     : googleBlock
                       ? "Google event created"
                       : googleConnectionState.status === "loading"
@@ -1148,13 +1142,13 @@ export default function CalendarPage() {
                       </div>
                       {usesPersistedPlanning ? (
                         <div className="text-xs text-muted-foreground">
-                          Approval gate: Nothing goes to Google Calendar until
+                          Calendar approval: Nothing goes to Google Calendar until
                           you approve it.
                         </div>
                       ) : (
                         <div className="text-xs text-muted-foreground">
-                          Approval gate: Not applicable in Demo mode (This
-                          browser only).
+                          Calendar approval is not needed while planning stays
+                          on this device only.
                         </div>
                       )}
                       <Separator />

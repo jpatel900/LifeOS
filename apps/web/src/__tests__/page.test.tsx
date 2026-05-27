@@ -85,14 +85,14 @@ describe("HomePage Today cockpit", () => {
     expect(screen.getByText("Nothing needs recovery.")).toBeDefined();
   });
 
-  it("shows degraded saved-workspace state without crashing", async () => {
+  it("shows degraded account-data state without crashing", async () => {
     vi.mocked(listPlanningItems).mockRejectedValueOnce(
       new Error("Sign in before loading planning rows."),
     );
     renderHome();
 
     expect(
-      await screen.findByText("Saved workspace is partially unavailable"),
+      await screen.findByText("Account data is partially unavailable"),
     ).toBeDefined();
     expect(
       screen.getByRole("heading", { level: 1, name: "Today" }),
@@ -120,7 +120,7 @@ describe("HomePage Today cockpit", () => {
 
     expect(await screen.findByText("Saved.")).toBeDefined();
     expect(
-      screen.getByText(/Saved in this browser and sent to/i),
+      screen.getByText(/Saved on this device and sent to/i),
     ).toBeDefined();
 
     expect(

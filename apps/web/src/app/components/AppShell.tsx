@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
+import { DiagnosticsDisclosure } from "./DiagnosticsDisclosure";
 
 const navLinks = [
   { href: "/capture", label: "Capture" },
@@ -97,9 +98,12 @@ function AppChrome({ children }: { children: ReactNode }) {
                   Save quick note
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Saves in this browser only.
-              </p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline" className="rounded-full">
+                  Quick capture: device only
+                </Badge>
+                <span>Quick capture saves on this device. Review it in Triage or Review.</span>
+              </div>
               {quickNoteStatus === "error" ? (
                 <p className="text-xs text-destructive">
                   Quick note was not saved. Type a note first, or use Capture.
@@ -156,8 +160,9 @@ function AppChrome({ children }: { children: ReactNode }) {
               })}
             </nav>
             <div className="flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
+              <span className="text-xs text-muted-foreground">Current area</span>
               <Select
-                aria-label="Current workflow area (session)"
+                aria-label="Current area"
                 value={selectedAreaId ?? ""}
                 onChange={(event) =>
                   setSelectedAreaId(event.target.value || null)
@@ -171,6 +176,9 @@ function AppChrome({ children }: { children: ReactNode }) {
                 ))}
               </Select>
               <Badge variant="outline" className="rounded-full">
+                Device-only quick capture
+              </Badge>
+              <Badge variant="outline" className="rounded-full">
                 {now}
               </Badge>
             </div>
@@ -179,26 +187,16 @@ function AppChrome({ children }: { children: ReactNode }) {
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
-        <div
-          aria-label="Current area context"
-          className="flex flex-wrap items-center gap-2"
-        >
-          <span className="text-sm text-muted-foreground">Current area</span>
-          <Badge variant="secondary" className="rounded-full text-sm">
-            {currentArea?.name ?? "No area selected"}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            Session workflow area: {currentArea?.name ?? "Not set"}
-          </span>
-        </div>
         <Separator />
-        <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none">
-            System details
-          </summary>
-          <p className="mt-2">Workflow area (session)</p>
-          <p>Session workflow area: {currentArea?.name ?? "Not set"}</p>
-        </details>
+        <DiagnosticsDisclosure>
+          <p>Quick capture saves on this device and sends notes to Triage.</p>
+          <p>
+            Current area: <strong>{currentArea?.name ?? "Not set"}</strong>
+          </p>
+          <p>
+            Technical area id: <strong>{selectedAreaId ?? "none"}</strong>
+          </p>
+        </DiagnosticsDisclosure>
         {children}
       </main>
     </div>

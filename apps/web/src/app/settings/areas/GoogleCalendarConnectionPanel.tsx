@@ -335,7 +335,7 @@ export function GoogleCalendarConnectionPanel() {
 
     if (!client) {
       throw new Error(
-        "Supabase is not configured. Google Calendar stays unavailable in mock mode.",
+        "Supabase is not configured. Google Calendar stays unavailable in local-only mode.",
       );
     }
 

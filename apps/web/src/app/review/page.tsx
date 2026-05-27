@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
 import {
   createReviewEntry,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
+import { saveModeLabel, savedViaLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
@@ -48,10 +50,6 @@ type ActionState =
   | { status: "saving" }
   | { status: "saved"; provider: DataProvider }
   | { status: "error"; message: string };
-
-function storageModeLabel(mode: DataProvider) {
-  return mode === "supabase" ? "Saved workspace" : "Demo mode";
-}
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
@@ -311,24 +309,21 @@ export default function ReviewPage() {
         </p>
       ) : null}
 
-      <details className="text-sm text-muted-foreground">
-        <summary>System details</summary>
+      <DiagnosticsDisclosure>
         {reviewState.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode:{" "}
-            <strong>{storageModeLabel(reviewState.provider)}</strong>
-          </p>
+          <>
+            <p>
+              Review entries are {savedViaLabel(reviewState.provider)}.
+            </p>
+            <p>
+              Save mode: <strong>{saveModeLabel(reviewState.provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{reviewState.provider}</strong>
+            </p>
+          </>
         ) : null}
-      </details>
-
-      <details className="text-sm text-muted-foreground">
-        <summary>Developer details</summary>
-        {reviewState.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode id: <strong>{reviewState.provider}</strong>
-          </p>
-        ) : null}
-      </details>
+      </DiagnosticsDisclosure>
 
       {reviewState.status === "error" ? (
         <Alert variant="destructive">
@@ -347,8 +342,7 @@ export default function ReviewPage() {
         <Alert role="status" className="border-border bg-muted text-foreground">
           <AlertTitle className="text-primary">Saved</AlertTitle>
           <AlertDescription>
-            Review entry created in{" "}
-            <strong>{storageModeLabel(actionState.provider)}</strong>.
+            Review entry {savedViaLabel(actionState.provider)}.
           </AlertDescription>
         </Alert>
       ) : null}

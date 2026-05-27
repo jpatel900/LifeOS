@@ -129,18 +129,18 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Organization help: Demo mode sorting is ready"),
+      await screen.findByText("Organization help: On-device sorting ready"),
     ).toBeDefined();
-    expect(screen.getByText("Storage mode:")).toBeDefined();
-    expect(screen.getByText("Demo mode")).toBeDefined();
+    expect(screen.getByText("Save mode:")).toBeDefined();
+    expect(screen.getByText("Saved on this device only")).toBeDefined();
     expect(
       screen.getByText(
-        /Save thought and Save and organize write to your selected storage mode/i,
+        /Save thought and Save and organize use your current save mode/i,
       ),
     ).toBeDefined();
     expect(
       screen.getByText(
-        /The header workflow area picker controls this browser draft flow and the recent-captures list on this page/i,
+        /The header area picker controls this device-only draft flow and the recent captures on this page/i,
       ),
     ).toBeDefined();
     expect(
@@ -153,7 +153,7 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        /Organize in this browser and Recent captures stay in this browser only/i,
+        /Organize on this device and recent captures stay on this device/i,
       ),
     ).toBeDefined();
   });
@@ -165,7 +165,7 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Organization help: AI sorting is ready"),
+      await screen.findByText("Organization help: AI sorting on"),
     ).toBeDefined();
   });
 
@@ -176,7 +176,7 @@ describe("CapturePage", () => {
     renderCapturePage();
 
     expect(
-      await screen.findByText("Organization help: AI sorting is off"),
+      await screen.findByText("Organization help: AI sorting unavailable"),
     ).toBeDefined();
   });
 
@@ -225,7 +225,7 @@ describe("CapturePage", () => {
     expect(await screen.findByText("Saved.")).toBeDefined();
     expect(
       screen.getByText(
-        "Saved workspace stored this raw capture. Recent captures below are browser-only and may not include this saved item.",
+        "This raw capture was saved to your account. Recent captures below stay on this device and may not include this saved item.",
       ),
     ).toBeDefined();
     fireEvent.click(
@@ -372,7 +372,7 @@ describe("CapturePage", () => {
     expect(await screen.findByText("AI sorting stopped safely")).toBeDefined();
     expect(
       screen.getByText(
-        "Capture was saved, but AI sorting stopped safely. Retry with Demo mode sorting.",
+        "Capture was saved, but AI sorting stopped safely. Retry with on-device sorting.",
       ),
     ).toBeDefined();
     expect(
@@ -380,7 +380,7 @@ describe("CapturePage", () => {
     ).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Retry with Demo mode sorting" }),
+      screen.getByRole("button", { name: "Retry with on-device sorting" }),
     );
 
     expect(await screen.findByText("Sent to review.")).toBeDefined();

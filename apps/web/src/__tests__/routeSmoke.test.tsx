@@ -46,7 +46,11 @@ describe("workflow route provider wiring", () => {
     expect(
       screen.getByRole("button", { name: "Save quick note" }),
     ).toBeDefined();
-    expect(screen.getByText("Saves in this browser only.")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Quick capture saves on this device. Review it in Triage or Review.",
+      ),
+    ).toBeDefined();
     expect(
       screen.getByRole("heading", { level: 1, name: "Capture" }),
     ).toBeDefined();
@@ -71,7 +75,16 @@ describe("workflow route provider wiring", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save quick note" }));
 
     expect(await screen.findByText("Saved.")).toBeDefined();
-    expect(screen.getByText(/Review it in/i)).toBeDefined();
+    expect(
+      screen
+        .getAllByRole("link", { name: "Triage" })
+        .some((link) => link.getAttribute("href") === "/triage"),
+    ).toBe(true);
+    expect(
+      screen
+        .getAllByRole("link", { name: "Review" })
+        .some((link) => link.getAttribute("href") === "/review"),
+    ).toBe(true);
   });
 
   it.each([
@@ -88,9 +101,7 @@ describe("workflow route provider wiring", () => {
       renderThroughAppShell(createPage());
 
       expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
-      expect(screen.getByLabelText("Current area context")).toHaveTextContent(
-        "Session workflow area:",
-      );
+      expect(screen.getByLabelText("Current area")).toBeDefined();
       expect(await screen.findByRole("heading", { level: 1 })).toBeDefined();
     },
   );

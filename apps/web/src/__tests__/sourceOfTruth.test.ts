@@ -214,36 +214,39 @@ describe("source-of-truth boundaries", () => {
     const settings = normalizeWhitespace(
       readRepoFile("apps/web/src/app/settings/areas/page.tsx"),
     );
+    const statusVocabulary = normalizeWhitespace(
+      readRepoFile("apps/web/src/lib/statusVocabulary.ts"),
+    );
 
-    expect(appShell).toContain("Workflow area (session)");
-    expect(appShell).toContain("Session workflow area:");
-    expect(appShell).toContain("Saves in this browser only.");
-    expect(capture).toContain("AI sorting is off");
-    expect(capture).toContain("Storage mode:");
-    expect(capture).toContain("Developer details");
-    expect(capture).toContain("Storage mode id:");
-    expect(capture).toContain("this browser only");
-    expect(triage).toContain("Saved workspace:");
-    expect(triage).toContain("Drafts shown from this browser.");
-    expect(triage).toContain("Acceptance storage mode id:");
+    expect(appShell).toContain("Quick capture saves on this device.");
+    expect(appShell).toContain("Current area");
+    expect(appShell).toContain("Technical area id:");
+    expect(capture).toContain("Save mode:");
+    expect(capture).toContain("Technical save mode id:");
+    expect(capture).toContain("on this device");
+    expect(statusVocabulary).toContain("AI sorting unavailable");
+    expect(statusVocabulary).toContain("Saved on this device only");
+    expect(statusVocabulary).toContain("Saved to account");
+    expect(triage).toContain("Accepted items are");
+    expect(triage).toContain(
+      "Drafts shown here stay on this device until you accept them.",
+    );
+    expect(triage).toContain("Technical save mode id:");
     expect(triage).toContain("does not move the item yet");
     expect(calendar).toContain("Check calendar conflicts");
     expect(calendar).toContain("Create Google Calendar event");
     expect(calendar).toContain("Adjust time");
     expect(calendar).toContain(
-      "Nothing goes to Google Calendar until you approve it.",
+      "Calendar approval: Nothing goes to Google Calendar until you approve it.",
     );
-    expect(calendar).toContain("Developer details");
-    expect(calendar).toContain("Storage mode id:");
-    expect(execute).toContain("Stop (demo mode only)");
-    expect(execute).toContain("Stop (this browser)");
-    expect(execute).toContain("Developer details");
-    expect(execute).toContain("Storage mode id:");
-    expect(health).toContain("Connection checks");
-    expect(health).toContain("Developer details");
-    expect(health).toContain("Storage mode id:");
-    expect(settings).toContain("Storage mode:");
-    expect(settings).toContain("Storage mode id:");
+    expect(calendar).toContain("Technical save mode id:");
+    expect(execute).toContain("Stop (device-only sessions)");
+    expect(execute).toContain("Stop on this device");
+    expect(execute).toContain("Technical save mode id:");
+    expect(health).toContain("Can I rely on LifeOS today?");
+    expect(health).toContain("Technical save mode id:");
+    expect(settings).toContain("Save mode:");
+    expect(settings).toContain("Technical save mode id:");
     expect(settings).toContain("planned time blocks");
   });
 

@@ -28,7 +28,7 @@ export default function LoginPage() {
       setState({
         status: "error",
         message:
-          "Supabase is not configured. Add local Supabase env vars to use login, or continue in mock mode.",
+          "Supabase is not configured. Add local Supabase env vars to use login, or continue in local-only mode.",
       });
       return;
     }
