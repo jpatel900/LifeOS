@@ -14,6 +14,7 @@ Delivery defaults:
 - GitHub-first is the default for repo delivery: issues, PRs, labels, review workflows, and branch-scoped automation.
 - Local Codex CLI is allowed for medium/high-risk, local debugging, or governance hardening when direct repo work is safer or faster under active human supervision.
 - For medium/high-risk or cross-flow work, use the role-separated checkpoints in `docs/agent/ROLE_SEPARATED_DELIVERY.md` so research/spec/build/test/validation are explicit.
+- For T2 workflow behavior, cross-flow UX, health meaning changes, parser UI, observability display, or workflow data behavior, attach or define a scenario pack before implementation.
 - Do not copy all repo law into the prompt. Point back to `AGENTS.md` and the smallest relevant doc set.
 
 ## Required Prompt Skeleton
@@ -35,6 +36,7 @@ Context:
 Role-separated checkpoints:
 
 - Research/spec checkpoint: <requirement anchor, current behavior, smallest approved approach, non-goals>
+- Scenario pack: <required or not required; if required, include scenario, failure paths, proofs, and rollback notes>
 - Build checkpoint: <exact surface allowed to change>
 - Test/validation checkpoint: <commands, review proof, human gate if any>
 
@@ -67,6 +69,7 @@ Final proof format:
 Every medium/high-risk, local-debugging, governance, or otherwise ambiguous implementation prompt should define a Verification Oracle before editing:
 
 - the exact user journey or behavior that must work
+- the linked scenario pack when the task is T2 workflow behavior rather than narrow T0/T1 work
 - the test or command that proves it
 - UI/browser/manual proof when the task affects UX or operator-facing behavior
 - exact acceptance criteria and the research/spec checkpoint it must satisfy

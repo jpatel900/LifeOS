@@ -5,6 +5,7 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 ## Agent routing
 
 - `agent:ready` - The issue is bounded enough for an agent to start.
+- `agent:plan` - Run the read-only planning packet workflow for medium/high-risk or unclear tasks before implementation.
 - `agent:codex` - Good fit for Codex execution.
 - `agent:cursor` - Good fit for Cursor execution.
 
