@@ -182,6 +182,57 @@ describe("health dashboard data provider", () => {
     );
   });
 
+  it("accepts Supabase area timestamps with offsets during signed-in health reads", async () => {
+    const areasEq = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440101",
+          user_id: userId,
+          name: "Main Job",
+          slug: "main-job",
+          description: null,
+          color: "#2563eb",
+          icon: "briefcase",
+          sort_order: 0,
+          is_active: true,
+          created_at: "2026-05-07T00:00:00.000-04:00",
+          updated_at: "2026-05-07T00:00:00.000-04:00",
+        },
+      ],
+      error: null,
+    });
+    const areasOrder = vi.fn().mockReturnValue({ eq: areasEq });
+    const areasSelect = vi.fn().mockReturnValue({ order: areasOrder });
+    const captureLimit = vi.fn().mockResolvedValue({ data: [], error: null });
+    const captureSelect = vi.fn().mockReturnValue({ limit: captureLimit });
+    const healthInsert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "areas") return { select: areasSelect };
+      if (table === "capture_items") return { select: captureSelect };
+      if (table === "health_checks") return { insert: healthInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await getHealthDashboard(
+      {
+        from,
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: { user: { id: userId } },
+            error: null,
+          }),
+        },
+      } as MinimalHealthSupabaseClient,
+      {
+        now: () => fixedNow,
+        supabaseConfigured: true,
+      },
+    );
+
+    expect(result.persistence).toBe("persisted");
+    expect(checkBySubsystem(result.checks, "areas").status).toBe("healthy");
+  });
+
   it("does not fail the dashboard when health_check persistence is unavailable", async () => {
     const areasEq = vi.fn().mockResolvedValue({ data: [], error: null });
     const areasOrder = vi.fn().mockReturnValue({ eq: areasEq });

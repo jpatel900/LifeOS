@@ -185,6 +185,36 @@ describe("workflow data provider", () => {
     expect(result.areas[0]?.slug).toBe("main-job");
   });
 
+  it("normalizes Supabase offset timestamps before validating areas", async () => {
+    const eq = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          user_id: "550e8400-e29b-41d4-a716-446655440001",
+          name: "Main Job",
+          slug: "main-job",
+          description: null,
+          color: "#2563eb",
+          icon: "briefcase",
+          sort_order: 0,
+          is_active: true,
+          created_at: "2026-05-07T00:00:00.000-04:00",
+          updated_at: "2026-05-07T00:00:00.000-04:00",
+        },
+      ],
+      error: null,
+    });
+    const order = vi.fn().mockReturnValue({ eq });
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const result = await listAreas(authenticatedClient(from));
+
+    expect(result.provider).toBe("supabase");
+    expect(result.areas[0]?.created_at).toBe("2026-05-07T04:00:00.000Z");
+    expect(result.areas[0]?.updated_at).toBe("2026-05-07T04:00:00.000Z");
+  });
+
   it("requires an authenticated user before reading Supabase areas", async () => {
     const from = vi.fn();
     const getUser = vi.fn().mockResolvedValue({
@@ -434,6 +464,67 @@ describe("workflow data provider", () => {
     expect(result.tasks).toEqual([taskRow]);
     expect(result.proposals).toEqual([proposalRow]);
     expect(result.blocks).toEqual([blockRow]);
+  });
+
+  it("normalizes Supabase offset timestamps across persisted planning rows", async () => {
+    const tasksEq = vi.fn().mockResolvedValue({
+      data: [
+        {
+          ...taskRow,
+          created_at: "2026-05-07T00:00:00.000-04:00",
+          updated_at: "2026-05-07T00:00:00.000-04:00",
+        },
+      ],
+      error: null,
+    });
+    const tasksOrder = vi.fn().mockReturnValue({ eq: tasksEq });
+    const tasksSelect = vi.fn().mockReturnValue({ order: tasksOrder });
+
+    const proposalsOrder = vi.fn().mockResolvedValue({
+      data: [
+        {
+          ...proposalRow,
+          proposed_start: "2026-05-08T12:00:00.000-04:00",
+          proposed_end: "2026-05-08T13:00:00.000-04:00",
+          created_at: "2026-05-08T11:00:00.000-04:00",
+        },
+      ],
+      error: null,
+    });
+    const proposalsSelect = vi.fn().mockReturnValue({ order: proposalsOrder });
+
+    const blocksOrder = vi.fn().mockResolvedValue({
+      data: [
+        {
+          ...blockRow,
+          start_at: "2026-05-08T12:00:00.000-04:00",
+          end_at: "2026-05-08T13:00:00.000-04:00",
+          created_at: "2026-05-08T11:05:00.000-04:00",
+          updated_at: "2026-05-08T11:05:00.000-04:00",
+        },
+      ],
+      error: null,
+    });
+    const blocksSelect = vi.fn().mockReturnValue({ order: blocksOrder });
+
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: tasksSelect };
+      if (table === "time_block_proposals") return { select: proposalsSelect };
+      if (table === "calendar_blocks") return { select: blocksSelect };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await listPlanningItems(authenticatedClient(from));
+
+    expect(result.tasks[0]?.created_at).toBe("2026-05-07T04:00:00.000Z");
+    expect(result.tasks[0]?.updated_at).toBe("2026-05-07T04:00:00.000Z");
+    expect(result.proposals[0]?.proposed_start).toBe(start);
+    expect(result.proposals[0]?.proposed_end).toBe(end);
+    expect(result.proposals[0]?.created_at).toBe("2026-05-08T15:00:00.000Z");
+    expect(result.blocks[0]?.start_at).toBe(start);
+    expect(result.blocks[0]?.end_at).toBe(end);
+    expect(result.blocks[0]?.created_at).toBe("2026-05-08T15:05:00.000Z");
+    expect(result.blocks[0]?.updated_at).toBe("2026-05-08T15:05:00.000Z");
   });
 
   it("creates a local time_block_proposal from a persisted task", async () => {

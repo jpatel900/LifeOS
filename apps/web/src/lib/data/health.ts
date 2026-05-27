@@ -5,6 +5,7 @@ import {
   type ObservabilityProviderStatus,
 } from "@/lib/observability";
 import type { DataProvider } from "./workflow";
+import { normalizeSupabaseRows } from "./supabaseRowNormalization";
 
 type HealthStatus = HealthCheck["status"];
 
@@ -321,7 +322,7 @@ async function readAreas(client: MinimalHealthSupabaseClient) {
     throw new Error(getErrorMessage(error));
   }
 
-  return AreaSchema.array().parse(data);
+  return AreaSchema.array().parse(normalizeSupabaseRows(data));
 }
 
 async function readCaptureStatus(client: MinimalHealthSupabaseClient) {

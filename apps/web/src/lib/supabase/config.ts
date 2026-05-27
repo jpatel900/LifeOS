@@ -13,8 +13,16 @@ function hasText(value: string | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function getDefaultSupabaseEnv(): SupabaseEnv {
+  return {
+    // Keep these as static NEXT_PUBLIC lookups so Next can inline them into client bundles.
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  };
+}
+
 export function getSupabaseConfig(
-  env: SupabaseEnv = process.env,
+  env: SupabaseEnv = getDefaultSupabaseEnv(),
 ): SupabaseConfig | null {
   const url = env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -29,6 +37,8 @@ export function getSupabaseConfig(
   };
 }
 
-export function isSupabaseConfigured(env: SupabaseEnv = process.env) {
+export function isSupabaseConfigured(
+  env: SupabaseEnv = getDefaultSupabaseEnv(),
+) {
   return getSupabaseConfig(env) !== null;
 }

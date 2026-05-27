@@ -35,6 +35,10 @@ import {
   type Task,
   type TimeBlockProposal,
 } from "@lifeos/schemas";
+import {
+  normalizeSupabaseRow,
+  normalizeSupabaseRows,
+} from "./supabaseRowNormalization";
 
 export type DataProvider = "mock" | "supabase";
 
@@ -226,55 +230,55 @@ const reviewEntryColumns =
   "id,user_id,area_id,review_type,period_start,period_end,summary_json,created_at";
 
 function parseAreas(rows: unknown) {
-  return AreaSchema.array().parse(rows);
+  return AreaSchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseCapture(row: unknown) {
-  return CaptureItemSchema.parse(row);
+  return CaptureItemSchema.parse(normalizeSupabaseRow(row));
 }
 
 function parseTask(row: unknown) {
-  return TaskSchema.parse(row);
+  return TaskSchema.parse(normalizeSupabaseRow(row));
 }
 
 function parseProject(row: unknown) {
-  return ProjectSchema.parse(row);
+  return ProjectSchema.parse(normalizeSupabaseRow(row));
 }
 
 function parseTimeBlockProposal(row: unknown) {
-  return TimeBlockProposalSchema.parse(row);
+  return TimeBlockProposalSchema.parse(normalizeSupabaseRow(row));
 }
 
 function parseTimeBlockProposals(rows: unknown) {
-  return TimeBlockProposalSchema.array().parse(rows);
+  return TimeBlockProposalSchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseCalendarBlock(row: unknown) {
-  return CalendarBlockSchema.parse(row);
+  return CalendarBlockSchema.parse(normalizeSupabaseRow(row));
 }
 
 function parseCalendarBlocks(rows: unknown) {
-  return CalendarBlockSchema.array().parse(rows);
+  return CalendarBlockSchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseExecutionSession(row: unknown) {
-  return ExecutionSessionSchema.parse(row);
+  return ExecutionSessionSchema.parse(normalizeSupabaseRow(row));
 }
 
 function parseExecutionSessions(rows: unknown) {
-  return ExecutionSessionSchema.array().parse(rows);
+  return ExecutionSessionSchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseReviewEntry(row: unknown) {
-  return ReviewEntrySchema.parse(row);
+  return ReviewEntrySchema.parse(normalizeSupabaseRow(row));
 }
 
 function parseReviewEntries(rows: unknown) {
-  return ReviewEntrySchema.array().parse(rows);
+  return ReviewEntrySchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseTasks(rows: unknown) {
-  return TaskSchema.array().parse(rows);
+  return TaskSchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function getSupabaseMessage(error: unknown) {

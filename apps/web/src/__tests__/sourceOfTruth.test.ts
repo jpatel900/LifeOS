@@ -102,6 +102,14 @@ describe("source-of-truth boundaries", () => {
     }
   });
 
+  it("keeps client-facing Supabase config on static NEXT_PUBLIC env lookups", () => {
+    const config = readRepoFile("apps/web/src/lib/supabase/config.ts");
+
+    expect(config).toContain("process.env.NEXT_PUBLIC_SUPABASE_URL");
+    expect(config).toContain("process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    expect(config).not.toMatch(/env:\s*SupabaseEnv\s*=\s*process\.env/);
+  });
+
   it("keeps Google Calendar integration on server routes only through Phase 7E", () => {
     const clientFiles = [
       "apps/web/src/app/calendar/page.tsx",
