@@ -79,7 +79,7 @@ describe("HealthPage", () => {
     expect(
       screen.getByRole("button", { name: "Run system check" }),
     ).toBeDefined();
-    expect(await screen.findByText("No active warnings")).toBeDefined();
+    expect(await screen.findByText("No blocking issues right now")).toBeDefined();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.getByText("Google Calendar")).toBeDefined();
   });
@@ -114,7 +114,7 @@ describe("HealthPage", () => {
     expect(screen.getByRole("listitem")).toHaveTextContent(
       "auth session: Supabase auth is unavailable in the current client.",
     );
-    expect(screen.queryByText("No active warnings")).toBeNull();
+    expect(screen.queryByText("No blocking issues right now")).toBeNull();
   });
 
   it("does not show raw loader exceptions in the health error panel", async () => {

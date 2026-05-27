@@ -11,12 +11,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import {
   getHealthDashboard,
-  type HealthPersistenceStatus,
   type HealthDashboardResult,
+  type HealthDashboardCheck,
 } from "@/lib/data/health";
 import { captureEvent } from "@/lib/observability";
+import {
+  calendarConnectionLabel,
+  saveModeLabel,
+  systemCheckSaveLabel,
+} from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type HealthLoadState =
@@ -33,20 +39,9 @@ type CheckFeedbackState =
 const HEALTH_LOAD_TIMEOUT_MS = 20_000;
 const HEALTH_TIMEOUT_ERROR_CODE = "health_timeout";
 
-function storageModeLabel(mode: HealthDashboardResult["provider"]) {
-  return mode === "supabase" ? "Saved workspace" : "Demo mode";
-}
-
-function systemCheckSavedLabel(status: HealthPersistenceStatus) {
-  if (status === "persisted") return "Saved";
-  if (status === "skipped") return "Not saved";
-  if (status === "unavailable") return "Save failed";
-  return "Not applicable";
-}
-
 function toUserText(text: string) {
   return text
-    .replace(/\bmock mode\b/gi, "Demo mode")
+    .replace(/\bmock mode\b/gi, "Local-only mode")
     .replace(/\bAI parser\b/g, "AI sorting")
     .replace(/deterministic/gi, "predictable");
 }
@@ -61,10 +56,10 @@ function humanStatus(
 ) {
   const lower = toUserText(summary).toLowerCase();
   if (lower.includes("disabled") || lower.includes("optional")) {
-    return { label: "Off by choice", variant: "secondary" as const };
+    return { label: "Optional", variant: "secondary" as const };
   }
-  if (lower.includes("demo mode")) {
-    return { label: "Demo mode", variant: "warning" as const };
+  if (lower.includes("local-only mode") || lower.includes("on this device")) {
+    return { label: "Local-only", variant: "secondary" as const };
   }
   if (status === "healthy") {
     return { label: "Ready", variant: "success" as const };
@@ -73,6 +68,191 @@ function humanStatus(
     return { label: "Needs setup", variant: "warning" as const };
   }
   return { label: "Needs attention", variant: "destructive" as const };
+}
+
+function findCheck(
+  checks: HealthDashboardResult["checks"],
+  subsystem: string,
+) {
+  return checks.find((check) => check.subsystem === subsystem) ?? null;
+}
+
+function readBooleanDetail(
+  check: HealthDashboardCheck | null,
+  key: string,
+): boolean | null {
+  const value = check?.details[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+type TrustRow = {
+  title: string;
+  status: string;
+  summary: string;
+  nextStep: string;
+  variant: "success" | "secondary" | "warning" | "destructive";
+};
+
+function buildSavingRow(result: HealthDashboardResult): TrustRow {
+  const authCheck = findCheck(result.checks, "auth session");
+  const captureCheck = findCheck(result.checks, "capture persistence");
+
+  if (result.provider === "mock") {
+    return {
+      title: "Saving",
+      status: "Saved on this device only",
+      summary:
+        "Core workflow stays usable without account sync, but new work stays on this device.",
+      nextStep: "Sign in and configure account sync when you want saved account data.",
+      variant: "secondary",
+    };
+  }
+
+  if (
+    result.persistence === "persisted" &&
+    authCheck?.status === "healthy" &&
+    captureCheck?.status === "healthy"
+  ) {
+    return {
+      title: "Saving",
+      status: "Saved to account",
+      summary: "Account sync is active for this session.",
+      nextStep: "No repair step is needed right now.",
+      variant: "success",
+    };
+  }
+
+  if (result.persistence === "unavailable") {
+    return {
+      title: "Saving",
+      status: "Save failed",
+      summary: toUserText(
+        result.persistenceMessage ?? "The latest health snapshot could not be saved.",
+      ),
+      nextStep: "Verify account access, then run the check again.",
+      variant: "destructive",
+    };
+  }
+
+  if (authCheck?.status === "critical" || captureCheck?.status === "critical") {
+    return {
+      title: "Saving",
+      status: "Needs attention",
+      summary: toUserText(
+        authCheck?.status === "critical"
+          ? authCheck.summary
+          : captureCheck?.summary ?? "Saved account data is unavailable.",
+      ),
+      nextStep: "Fix account access before relying on saved account data.",
+      variant: "destructive",
+    };
+  }
+
+  return {
+    title: "Saving",
+    status: "Not saved",
+    summary: toUserText(
+      result.persistenceMessage ?? "Account sync is not active for this session.",
+    ),
+    nextStep: "Sign in if you want new checks and saved rows in your account.",
+    variant: "warning",
+  };
+}
+
+function buildAiRow(result: HealthDashboardResult): TrustRow {
+  const aiCheck = findCheck(result.checks, "AI parser");
+  const configured = readBooleanDetail(aiCheck, "configured");
+
+  if (aiCheck?.status === "healthy" && configured) {
+    return {
+      title: "AI sorting",
+      status: "On",
+      summary: "AI-assisted sorting is ready in Capture.",
+      nextStep: "Use Save and organize when you want AI help.",
+      variant: "success",
+    };
+  }
+
+  return {
+    title: "AI sorting",
+    status: "Unavailable",
+    summary: "Capture still works and falls back to on-device sorting.",
+    nextStep: "Optional: add AI config if you want AI-assisted sorting.",
+    variant: "secondary",
+  };
+}
+
+function buildCalendarRow(result: HealthDashboardResult): TrustRow {
+  const calendarCheck = findCheck(result.checks, "Google Calendar");
+  const configured = readBooleanDetail(calendarCheck, "configured");
+  const connected = readBooleanDetail(calendarCheck, "connection_present");
+  const status =
+    configured === false
+      ? "unavailable"
+      : connected
+        ? "connected"
+        : "disconnected";
+
+  if (status === "connected") {
+    return {
+      title: "Calendar",
+      status: calendarConnectionLabel(status),
+      summary: "Google Calendar is connected for approval-gated writes.",
+      nextStep: "Conflict checks and event creation still require explicit action.",
+      variant: "success",
+    };
+  }
+
+  if (status === "disconnected") {
+    return {
+      title: "Calendar",
+      status: calendarConnectionLabel(status),
+      summary: "Planning still works locally, but Google writes are unavailable until you connect.",
+      nextStep: "Connect Google Calendar in Areas when you need it.",
+      variant: "warning",
+    };
+  }
+
+  return {
+    title: "Calendar",
+    status: calendarConnectionLabel(status),
+    summary: "Planning stays local until Google Calendar is configured.",
+    nextStep: "Optional: configure Google Calendar in Areas if you want external writes.",
+    variant: "secondary",
+  };
+}
+
+function buildReliabilitySummary(result: HealthDashboardResult) {
+  const savingRow = buildSavingRow(result);
+  const blockingCoreCheck = result.checks.find(
+    (check) =>
+      ["auth session", "areas", "capture persistence"].includes(
+        check.subsystem,
+      ) && check.status === "critical",
+  );
+
+  if (blockingCoreCheck) {
+    return {
+      label: "Not fully",
+      variant: "destructive" as const,
+      summary: "Fix the blocking item below before relying on saved account data.",
+    };
+  }
+
+  if (savingRow.variant === "secondary" || savingRow.variant === "warning") {
+    return {
+      label: "Yes, with limits",
+      variant: "warning" as const,
+      summary:
+        "Core workflow is usable, but saving is still local-only or not active for this session.",
+    };
+  }
+
+  return {
+    label: "Yes",
+    variant: "success" as const,
+    summary: "Core workflow and account saving look available right now.",
+  };
 }
 
 function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
@@ -168,6 +348,16 @@ export default function HealthPage() {
           );
         })
       : [];
+  const reliabilitySummary =
+    state.status === "ready" ? buildReliabilitySummary(state.result) : null;
+  const trustRows =
+    state.status === "ready"
+      ? [
+          buildSavingRow(state.result),
+          buildAiRow(state.result),
+          buildCalendarRow(state.result),
+        ]
+      : [];
 
   const isRunDisabled = state.status === "loading";
 
@@ -176,7 +366,8 @@ export default function HealthPage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Health</h1>
         <p className="text-sm text-muted-foreground">
-          System check from current app state. No AI scoring.
+          Rule-based checks answer whether LifeOS is trustworthy today. AI does
+          not decide this screen.
         </p>
         <Button
           type="button"
@@ -196,7 +387,6 @@ export default function HealthPage() {
               ? feedback.message
               : "Run a system check to refresh status."}
         </p>
-        <span className="sr-only">mock</span>
       </section>
 
       {state.status === "loading" ? (
@@ -217,10 +407,59 @@ export default function HealthPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-xl">
+                Can I rely on LifeOS today?
+              </CardTitle>
+              <CardDescription>
+                Start with the plain answer, then open diagnostics only if you
+                need the raw subsystem view.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={reliabilitySummary?.variant ?? "secondary"}>
+                  {reliabilitySummary?.label}
+                </Badge>
+                <span>{reliabilitySummary?.summary}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Today&apos;s trust summary</CardTitle>
+              <CardDescription>
+                Checked at {state.result.checkedAt}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              {trustRows.map((row) => (
+                <div
+                  key={row.title}
+                  className="rounded-lg border border-border bg-muted/30 p-3 text-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">
+                      {row.title}
+                    </span>
+                    <Badge variant={row.variant}>{row.status}</Badge>
+                  </div>
+                  <p className="mt-2 text-muted-foreground">{row.summary}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Next step: {row.nextStep}
+                  </p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl">
                 What needs attention now
               </CardTitle>
               <CardDescription>
-                Resolve these first before relying on them.
+                Resolve these first before relying on the affected part of the
+                app.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
@@ -236,38 +475,13 @@ export default function HealthPage() {
                   ))}
                 </ul>
               ) : (
-                <p>Nothing urgent is blocking this snapshot.</p>
+                <p>Core workflow looks usable today.</p>
               )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">System overview</CardTitle>
-              <CardDescription>
-                Checked at {state.result.checkedAt}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2 text-sm">
-              <Badge variant="outline">
-                Storage mode: {storageModeLabel(state.result.provider)}
-              </Badge>
-              <Badge variant="outline">
-                System check saved:{" "}
-                {systemCheckSavedLabel(state.result.persistence)}
-              </Badge>
-              {state.result.persistenceMessage ? (
-                <span className="text-muted-foreground">
-                  {toUserText(state.result.persistenceMessage)}
-                </span>
-              ) : null}
-            </CardContent>
-          </Card>
 
-          <details className="text-sm text-muted-foreground">
-            <summary className="cursor-pointer select-none">
-              Connection checks details
-            </summary>
-            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <DiagnosticsDisclosure>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {state.result.checks.map((check) => {
                 const display = humanStatus(check.summary, check.status);
                 return (
@@ -290,28 +504,32 @@ export default function HealthPage() {
                 );
               })}
             </div>
-          </details>
-
-          <details className="text-sm text-muted-foreground">
-            <summary className="cursor-pointer select-none">
-              Developer details
-            </summary>
-            <p className="mt-2">
-              Storage mode id: <strong>{state.result.provider}</strong>
+            <p>
+              Save mode: <strong>{saveModeLabel(state.result.provider)}</strong>
             </p>
             <p>
-              System check saved id: <strong>{state.result.persistence}</strong>
+              System check save result:{" "}
+              <strong>{systemCheckSaveLabel(state.result.persistence)}</strong>
             </p>
-          </details>
+            <p>
+              Technical save mode id: <strong>{state.result.provider}</strong>
+            </p>
+            <p>
+              Technical save result id: <strong>{state.result.persistence}</strong>
+            </p>
+            {state.result.persistenceMessage ? (
+              <p>{toUserText(state.result.persistenceMessage)}</p>
+            ) : null}
+          </DiagnosticsDisclosure>
         </>
       ) : null}
 
       {state.status === "ready" &&
       state.result.checks.every((check) => check.status === "healthy") ? (
         <Alert variant="success">
-          <AlertTitle>No active warnings</AlertTitle>
+          <AlertTitle>No blocking issues right now</AlertTitle>
           <AlertDescription>
-            All Connection checks are healthy for this snapshot.
+            Core workflow checks look healthy for this snapshot.
           </AlertDescription>
         </Alert>
       ) : null}

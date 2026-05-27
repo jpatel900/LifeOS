@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
 import {
   createExecutionSession,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
+import { saveDestinationLabel, saveModeLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import type { Phase2MockExecutionSession } from "@/lib/types";
@@ -63,10 +65,6 @@ type TerminalFormState = {
   productivityRating: string;
   notes: string;
 };
-
-function storageModeLabel(mode: DataProvider) {
-  return mode === "supabase" ? "Saved workspace" : "Demo mode";
-}
 
 const markLabels: Record<
   Phase2MockExecutionSession["status"],
@@ -190,7 +188,7 @@ function terminalNextStep(uiState: SessionUiState) {
     case "completed":
       return "Session completed. Plan another block or review this later.";
     case "stopped":
-      return "Session stopped in this browser. Decide the next useful step.";
+      return "Session stopped on this device. Decide the next useful step.";
     case "stuck":
       return "Session ended as stuck. Capture the blocker, then plan the next step.";
     case "distracted":
@@ -358,8 +356,8 @@ export default function ExecutePage() {
       ? "Another execution action is saving."
       : usesPersistedExecution
         ? sessionUiState === "paused"
-          ? "Saved workspace does not support resume yet. Choose an end outcome."
-          : "Resume is demo-mode only."
+          ? "Sessions saved to your account do not support resume yet. Choose an end outcome."
+          : "Resume is available only for sessions saved on this device."
         : sessionUiState === "paused"
           ? null
           : sessionUiState === "running"
@@ -377,7 +375,7 @@ export default function ExecutePage() {
     actionState.status === "saving"
       ? "Another execution action is saving."
       : usesPersistedExecution
-        ? "Stop is demo-mode only. Saved sessions need an end outcome and details."
+        ? "Stop is available only for sessions saved on this device. Sessions saved to your account need an end outcome and details."
         : !hasActiveSession
           ? isTerminalSession
             ? "Session already ended. Start another session before stopping again."
@@ -390,7 +388,7 @@ export default function ExecutePage() {
       ? terminalSessionNextStep
       : sessionUiState === "paused"
         ? usesPersistedExecution
-          ? "Paused in Saved workspace. Choose an end outcome to finish this session."
+          ? "Paused. Sessions saved to your account need an end outcome to finish."
           : "Resume when ready, or choose an end outcome."
         : sessionUiState === "running"
           ? "When this block ends, choose Complete, Stuck, Distracted, or Missed."
@@ -403,7 +401,7 @@ export default function ExecutePage() {
       startTaskSession(activeTask.id);
       setActionState({
         status: "saved",
-        label: "Session started through",
+        label: "Session started",
         provider: "mock",
       });
       void captureEvent({
@@ -444,7 +442,7 @@ export default function ExecutePage() {
       setLastPersistedMark("running");
       setActionState({
         status: "saved",
-        label: "Session started through",
+        label: "Session started",
         provider: result.provider,
       });
       void captureEvent({
@@ -524,7 +522,7 @@ export default function ExecutePage() {
       setLastPersistedMark(status);
       setActionState({
         status: "saved",
-        label: `Session marked ${markLabels[status].saved} through`,
+        label: `Session marked ${markLabels[status].saved}`,
         provider: result.provider,
       });
       setTerminalForm(null);
@@ -555,7 +553,7 @@ export default function ExecutePage() {
       markSession(status);
       setActionState({
         status: "saved",
-        label: `Session marked ${markLabels[status].saved} through`,
+        label: `Session marked ${markLabels[status].saved}`,
         provider: "mock",
       });
       if (status === "completed") {
@@ -657,7 +655,7 @@ export default function ExecutePage() {
         </section>
         {executeState.status === "loading" ? (
           <p role="status" className="text-sm text-muted-foreground">
-            Checking saved execution rows. Demo guidance is still available.
+            Checking saved execution rows. Device-only guidance is still available.
           </p>
         ) : null}
         {executeState.status === "error" ? (
@@ -666,27 +664,18 @@ export default function ExecutePage() {
             <AlertDescription>{executeState.message}</AlertDescription>
           </Alert>
         ) : null}
-        <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none">
-            System details
-          </summary>
+        <DiagnosticsDisclosure>
           {executeState.status === "ready" ? (
-            <p className="mt-2">
-              Storage mode:{" "}
-              <strong>{storageModeLabel(executeState.provider)}</strong>
-            </p>
+            <>
+              <p>
+                Save mode: <strong>{saveModeLabel(executeState.provider)}</strong>
+              </p>
+              <p>
+                Technical save mode id: <strong>{executeState.provider}</strong>
+              </p>
+            </>
           ) : null}
-        </details>
-        <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none">
-            Developer details
-          </summary>
-          {executeState.status === "ready" ? (
-            <p className="mt-2">
-              Storage mode id: <strong>{executeState.provider}</strong>
-            </p>
-          ) : null}
-        </details>
+        </DiagnosticsDisclosure>
         {actionState.status === "saving" ? (
           <p role="status" className="text-sm text-muted-foreground">
             Saving {actionState.label}...
@@ -699,8 +688,7 @@ export default function ExecutePage() {
           >
             <AlertTitle className="text-primary">Saved</AlertTitle>
             <AlertDescription>
-              {actionState.label}{" "}
-              <strong>{storageModeLabel(actionState.provider)}</strong>.
+              {actionState.label}. Saved {saveDestinationLabel(actionState.provider)}.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -747,25 +735,18 @@ export default function ExecutePage() {
         </p>
       </section>
 
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">System details</summary>
+      <DiagnosticsDisclosure>
         {executeState.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode:{" "}
-            <strong>{storageModeLabel(executeState.provider)}</strong>
-          </p>
+          <>
+            <p>
+              Save mode: <strong>{saveModeLabel(executeState.provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{executeState.provider}</strong>
+            </p>
+          </>
         ) : null}
-      </details>
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">
-          Developer details
-        </summary>
-        {executeState.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode id: <strong>{executeState.provider}</strong>
-          </p>
-        ) : null}
-      </details>
+      </DiagnosticsDisclosure>
 
       {actionState.status === "saving" ? (
         <p role="status" className="text-sm text-muted-foreground">
@@ -777,8 +758,7 @@ export default function ExecutePage() {
         <Alert role="status" className="border-border bg-muted text-foreground">
           <AlertTitle className="text-primary">Saved</AlertTitle>
           <AlertDescription>
-            {actionState.label}{" "}
-            <strong>{storageModeLabel(actionState.provider)}</strong>.
+            {actionState.label}. Saved {saveDestinationLabel(actionState.provider)}.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -958,8 +938,8 @@ export default function ExecutePage() {
                 disabled={stopDisabledReason !== null}
               >
                 {usesPersistedExecution
-                  ? "Stop (demo mode only)"
-                  : "Stop (this browser)"}
+                  ? "Stop (device-only sessions)"
+                  : "Stop on this device"}
               </Button>
             </div>
             {endDisabledReason ? (
@@ -973,7 +953,7 @@ export default function ExecutePage() {
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Stop only updates this browser in Demo mode.
+                Stop only updates sessions saved on this device.
               </p>
             )}
           </div>

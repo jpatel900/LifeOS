@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
@@ -18,6 +19,7 @@ import {
   type DataProvider,
 } from "@/lib/data/workflow";
 import { captureEvent } from "@/lib/observability";
+import { saveModeLabel, savedViaLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { slugForWorkflowAreaId } from "@/lib/workflowAreaMapping";
@@ -32,10 +34,6 @@ type SaveState =
   | { status: "saving"; label: string }
   | { status: "saved"; label: string; provider: DataProvider }
   | { status: "error"; message: string };
-
-function storageModeLabel(mode: DataProvider) {
-  return mode === "supabase" ? "Saved workspace" : "Demo mode";
-}
 
 function resolvePersistedAreaId(workflowAreaId: string, areas: Area[]) {
   const slug = slugForWorkflowAreaId(workflowAreaId);
@@ -124,7 +122,7 @@ export default function TriagePage() {
     if (loadState.status !== "ready") {
       setSaveState({
         status: "error",
-        message: "Saved workspace is not ready yet.",
+        message: "Account sync is not ready yet.",
       });
       return;
     }
@@ -183,7 +181,7 @@ export default function TriagePage() {
     if (loadState.status !== "ready") {
       setSaveState({
         status: "error",
-        message: "Saved workspace is not ready yet.",
+        message: "Account sync is not ready yet.",
       });
       return;
     }
@@ -314,31 +312,26 @@ export default function TriagePage() {
         </CardContent>
       </Card>
 
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">System details</summary>
+      <DiagnosticsDisclosure>
         {loadState.status === "ready" ? (
-          <p className="mt-2">
-            Saved workspace:{" "}
-            <strong>{storageModeLabel(loadState.provider)}</strong>. Drafts
-            shown from this browser.
-          </p>
+          <>
+            <p>
+              Accepted items are {savedViaLabel(loadState.provider)}. Drafts
+              shown here stay on this device until you accept them.
+            </p>
+            <p>
+              Save mode: <strong>{saveModeLabel(loadState.provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{loadState.provider}</strong>.
+            </p>
+          </>
         ) : null}
-      </details>
-
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">
-          Developer details
-        </summary>
-        {loadState.status === "ready" ? (
-          <p className="mt-2">
-            Acceptance storage mode id: <strong>{loadState.provider}</strong>.
-          </p>
-        ) : null}
-      </details>
+      </DiagnosticsDisclosure>
 
       {loadState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Checking saved workspace context. You can still review drafts.
+          Checking saved context. You can still review drafts.
         </p>
       ) : null}
 
@@ -359,8 +352,7 @@ export default function TriagePage() {
         <Alert variant="success">
           <AlertTitle>Saved</AlertTitle>
           <AlertDescription>
-            Accepted {saveState.label} in{" "}
-            <strong>{storageModeLabel(saveState.provider)}</strong>.
+            Accepted {saveState.label} and {savedViaLabel(saveState.provider)}.
           </AlertDescription>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline">

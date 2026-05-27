@@ -6,8 +6,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { EmptyState } from "../../components/EmptyState";
 import { listAreas, type DataProvider } from "../../../lib/data/workflow";
+import { saveModeLabel } from "../../../lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
@@ -16,10 +18,6 @@ type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "ready"; provider: DataProvider; areas: Area[] };
-
-function storageModeLabel(mode: DataProvider) {
-  return mode === "supabase" ? "Saved workspace" : "Demo mode";
-}
 
 export default function AreasSettingsPage() {
   const { resetWorkflow } = useWorkflow();
@@ -72,25 +70,18 @@ export default function AreasSettingsPage() {
         </p>
       </section>
 
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">System details</summary>
+      <DiagnosticsDisclosure>
         {state.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode: <strong>{storageModeLabel(state.provider)}</strong>
-          </p>
+          <>
+            <p>
+              Save mode: <strong>{saveModeLabel(state.provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{state.provider}</strong>
+            </p>
+          </>
         ) : null}
-      </details>
-
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">
-          Developer details
-        </summary>
-        {state.status === "ready" ? (
-          <p className="mt-2">
-            Storage mode id: <strong>{state.provider}</strong>
-          </p>
-        ) : null}
-      </details>
+      </DiagnosticsDisclosure>
 
       {state.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
@@ -106,7 +97,7 @@ export default function AreasSettingsPage() {
             <p>
               If Supabase is configured, make sure you are signed in and the
               local stack is running. Without Supabase env vars, this page uses
-              demo areas.
+              local-only areas.
             </p>
           </AlertDescription>
         </Alert>
@@ -145,8 +136,8 @@ export default function AreasSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <p>
-            This only clears local demo/session data on this device. It does not
-            delete cloud data.
+            This only clears on-device data on this device. It does not delete
+            cloud data.
           </p>
           {resetState === "success" ? (
             <Alert variant="success" role="status" aria-live="polite">
@@ -157,7 +148,7 @@ export default function AreasSettingsPage() {
             <Alert variant="destructive" role="alert">
               <AlertTitle>Reset local data on this browser?</AlertTitle>
               <AlertDescription>
-                This clears local demo/session data for this device only,
+                This clears on-device data for this device only,
                 including captures, drafts, ambiguity checks, and planned time
                 blocks. It does not delete cloud data.
               </AlertDescription>

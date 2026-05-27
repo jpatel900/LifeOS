@@ -249,7 +249,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<AreasSettingsPage />);
 
     expect(await screen.findByText("Main Job")).toBeDefined();
-    expect(screen.getByText("Storage mode:")).toBeDefined();
+    expect(screen.getByText("Save mode:")).toBeDefined();
     expect(screen.getByText("supabase")).toBeDefined();
     expect(mocks.listAreas).toHaveBeenCalledWith(mocks.supabaseClient);
   });
@@ -296,7 +296,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        /This only clears local demo.session data on this device\. It does not delete cloud data\./i,
+        /This only clears on-device data on this device\. It does not delete cloud data\./i,
       ),
     ).toBeDefined();
 
@@ -347,8 +347,8 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     expect(await screen.findByText("Saved.")).toBeDefined();
-    expect(screen.getAllByText("Saved workspace").length).toBeGreaterThan(0);
-    expect(screen.getByText("Storage mode id:")).toBeDefined();
+    expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
+    expect(screen.getByText("Technical save mode id:")).toBeDefined();
   });
 
   it("shows a clear capture save error when Supabase is unauthenticated", async () => {
@@ -576,7 +576,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Proposal saved through Saved workspace.");
+    expect(status).toHaveTextContent("Proposal drafted. Saved to your account.");
   });
 
   it("shows a planning load failure without crashing the page", async () => {
@@ -641,7 +641,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
 
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Proposal drafted in Demo mode.");
+    expect(status).toHaveTextContent(
+      "Proposal drafted. Saved on this device.",
+    );
     expect(
       screen.getAllByText(
         "Quick proposal: next available hour. You can adjust this before approving.",
@@ -677,7 +679,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Local block created through Saved workspace.",
+      "Local block created. Saved to your account.",
     );
   });
 
@@ -717,7 +719,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Proposal moved 30 minutes later through Saved workspace.",
+      "Proposal moved 30 minutes later. Saved to your account.",
     );
   });
 
@@ -1017,9 +1019,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent(
-      "Session started through Saved workspace.",
-    );
+    expect(status).toHaveTextContent("Session started. Saved to your account.");
   });
 
   it("shows an execution load failure and keeps the no-active-block fallback visible", async () => {
@@ -1106,7 +1106,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Session marked completed through Saved workspace.",
+      "Session marked completed. Saved to your account.",
     );
   });
 
@@ -1122,12 +1122,12 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<ExecutePage />);
 
     const stopButton = await screen.findByRole("button", {
-      name: "Stop (demo mode only)",
+      name: "Stop (device-only sessions)",
     });
     expect(stopButton).toBeDisabled();
     expect(
       screen.getByText(
-        "Stop disabled: Stop is demo-mode only. Saved sessions need an end outcome and details.",
+        "Stop disabled: Stop is available only for sessions saved on this device. Sessions saved to your account need an end outcome and details.",
       ),
     ).toBeDefined();
   });
@@ -1149,7 +1149,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
 
     const stopButton = await screen.findByRole("button", {
-      name: "Stop (this browser)",
+      name: "Stop on this device",
     });
     expect(stopButton).toBeDisabled();
     expect(
@@ -1181,13 +1181,13 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Stop (this browser)" }),
+      screen.getByRole("button", { name: "Stop on this device" }),
     );
 
     expect(await screen.findByText("Stopped")).toBeDefined();
     expect(
       screen.getByText(
-        "Session stopped in this browser. Decide the next useful step.",
+        "Session stopped on this device. Decide the next useful step.",
       ),
     ).toBeDefined();
     expect(
@@ -1246,7 +1246,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Session marked missed through Saved workspace.",
+      "Session marked missed. Saved to your account.",
     );
     expect(
       screen.getByText(
@@ -1304,9 +1304,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent(
-      "Review entry created in Saved workspace.",
-    );
+    expect(status).toHaveTextContent("Review entry saved to your account.");
   });
 
   it("rolls up persisted review rows by persisted area ids", async () => {
@@ -1371,7 +1369,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByText(/Storage mode:/)).toBeDefined();
+    expect(await screen.findByText(/Save mode:/)).toBeDefined();
     expect(screen.getByText("Captured: 1")).toBeDefined();
     expect(screen.getByText("Session notes in this browser")).toBeDefined();
   });

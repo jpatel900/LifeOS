@@ -32,6 +32,7 @@ import {
   type TodayCockpitDraft,
   type TodayCockpitSession,
 } from "@/lib/today/buildTodayCockpitModel";
+import { DiagnosticsDisclosure } from "./components/DiagnosticsDisclosure";
 
 type HomeDataState =
   | { status: "loading" }
@@ -51,9 +52,10 @@ type HomeDataState =
     };
 
 function statusLabel(status: "loading" | "ready" | "degraded") {
-  if (status === "loading") return "Checking saved workspace context.";
-  if (status === "degraded") return "Saved workspace is partially unavailable.";
-  return "Saved workspace context is available.";
+  if (status === "loading") return "Checking account data and local state.";
+  if (status === "degraded")
+    return "Account data is partially unavailable. Local state is still available.";
+  return "Account data and local state are available.";
 }
 
 function formatBlockTime(startAt: string, endAt: string) {
@@ -371,9 +373,9 @@ export default function HomePage() {
 
       {homeData.status === "degraded" ? (
         <Alert variant="destructive">
-          <AlertTitle>Saved workspace is partially unavailable</AlertTitle>
+          <AlertTitle>Account data is partially unavailable</AlertTitle>
           <AlertDescription>
-            Showing this browser data where available. You can continue safely.
+            Showing local data where available. You can continue safely.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -475,7 +477,7 @@ export default function HomePage() {
                     Save quick capture
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Browser save plus a Triage draft.
+                    Saves on this device and sends it to Triage.
                   </p>
                   {quickCaptureFeedback.status === "error" ? (
                     <p role="alert" className="text-sm text-destructive">
@@ -486,7 +488,7 @@ export default function HomePage() {
                     <Alert variant="success">
                       <AlertTitle>Saved.</AlertTitle>
                       <AlertDescription>
-                        Saved in this browser and sent to{" "}
+                        Saved on this device and sent to{" "}
                         <Link
                           href="/triage"
                           className="underline underline-offset-2"
@@ -730,29 +732,22 @@ export default function HomePage() {
         </Card>
       ) : null}
 
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">System details</summary>
-        <p className="mt-2">{statusLabel(homeData.status)}</p>
-      </details>
-
-      {homeData.status === "loading" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Checking saved workspace rows. This browser workflow state remains
-          available.
-        </p>
-      ) : null}
-
-      {homeData.status !== "loading" && homeData.issues.length > 0 ? (
-        <details className="text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none">
-            Developer details
-          </summary>
-          <ul className="mt-2 list-disc pl-5">
+      <DiagnosticsDisclosure>
+        <p>{statusLabel(homeData.status)}</p>
+        {homeData.status !== "loading" && homeData.issues.length > 0 ? (
+          <ul className="list-disc pl-5">
             {homeData.issues.map((issue) => (
               <li key={issue}>{issue}</li>
             ))}
           </ul>
-        </details>
+        ) : null}
+      </DiagnosticsDisclosure>
+
+      {homeData.status === "loading" ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Checking saved rows. Local workflow state remains
+          available.
+        </p>
       ) : null}
     </main>
   );

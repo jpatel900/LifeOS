@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
 import { buildParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 import { getAreaById } from "@/lib/mockData";
@@ -24,6 +25,12 @@ import {
   type DataProvider,
 } from "@/lib/data/workflow";
 import { captureEvent } from "@/lib/observability";
+import {
+  aiSortingAvailabilityDetail,
+  aiSortingAvailabilityLabel,
+  saveModeLabel,
+  savedViaLabel,
+} from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { workflowAreaIdForSlug } from "@/lib/workflowAreaMapping";
@@ -86,10 +93,6 @@ type ParseCaptureStatusApiResponse =
       preferredParser: "ai" | "mock";
     }
   | { ok: false; error: string };
-
-function storageModeLabel(mode: DataProvider) {
-  return mode === "supabase" ? "Saved workspace" : "Demo mode";
-}
 
 export default function CapturePage() {
   const {
@@ -271,7 +274,7 @@ export default function CapturePage() {
       setParseState({
         status: "error",
         message:
-          "Capture was saved, but AI sorting stopped safely. Retry with Demo mode sorting.",
+          "Capture was saved, but AI sorting stopped safely. Retry with on-device sorting.",
         canRetryWithMock: Boolean(!body.ok && body.can_retry_with_mock),
       });
       return;
@@ -379,22 +382,14 @@ export default function CapturePage() {
 
   const parserStatusLabel =
     parserStatusState.status === "ready"
-      ? parserStatusState.parserStatus === "ai_configured"
-        ? "AI sorting is ready"
-        : parserStatusState.parserStatus === "ai_unavailable"
-          ? "AI sorting is off"
-          : "Demo mode sorting is ready"
+      ? aiSortingAvailabilityLabel(parserStatusState.parserStatus)
       : parserStatusState.status === "loading"
         ? "Checking sorting options..."
         : "Sorting status unavailable";
   const parserStatusDetail =
     parserStatusState.status === "ready"
-      ? parserStatusState.parserStatus === "ai_configured"
-        ? "Save and organize will use AI sorting."
-        : parserStatusState.parserStatus === "ai_unavailable"
-          ? "AI sorting is off. Save and organize will use Demo mode sorting."
-          : "Save and organize will use Demo mode sorting."
-      : "You can still save thoughts and organize them in this browser.";
+      ? aiSortingAvailabilityDetail(parserStatusState.parserStatus)
+      : "You can still save thoughts and organize them on this device.";
 
   const visibleCaptures = state.captureItems.filter((capture) => {
     if (!selectedAreaId) return true;
@@ -424,35 +419,26 @@ export default function CapturePage() {
         </CardHeader>
       </Card>
 
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">System details</summary>
-        <p className="mt-2">
-          Save thought and Save and organize write to your selected storage
-          mode. Organize in this browser and Recent captures stay in this
-          browser only.
+      <DiagnosticsDisclosure>
+        <p>
+          Save thought and Save and organize use your current save mode.
+          Organize on this device and recent captures stay on this device.
         </p>
-        <span className="sr-only">this browser only</span>
         {provider ? (
-          <p>
-            Storage mode: <strong>{storageModeLabel(provider)}</strong>
-          </p>
+          <>
+            <p>
+              Save mode: <strong>{saveModeLabel(provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{provider}</strong>
+            </p>
+          </>
         ) : null}
-      </details>
-
-      <details className="text-sm text-muted-foreground">
-        <summary className="cursor-pointer select-none">
-          Developer details
-        </summary>
-        {provider ? (
-          <p className="mt-2">
-            Storage mode id: <strong>{provider}</strong>
-          </p>
-        ) : null}
-      </details>
+      </DiagnosticsDisclosure>
 
       {areasState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Checking saved workspace areas. You can still capture now.
+          Checking saved areas. You can still capture now.
         </p>
       ) : null}
 
@@ -510,8 +496,8 @@ export default function CapturePage() {
               ))}
             </Select>
             <p className="text-xs text-muted-foreground">
-              Selecting an area here also updates the header session workflow
-              area when a matching local workflow area exists.
+              Selecting an area here also updates the header area when a
+              matching local workflow area exists.
             </p>
 
             {areasState.status === "ready" && areas.length === 0 ? (
@@ -544,7 +530,7 @@ export default function CapturePage() {
                 >
                   {parseState.status === "parsing"
                     ? parseState.parserMode === "mock"
-                      ? "Retrying with Demo mode sorting..."
+                      ? "Retrying with on-device sorting..."
                       : "Saving and sorting..."
                     : "Save and organize"}
                 </Button>
@@ -557,8 +543,8 @@ export default function CapturePage() {
 
           <div className="grid gap-2 rounded-lg border border-dashed p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
-              The header workflow area picker controls this browser draft flow
-              and the recent-captures list on this page.
+              The header area picker controls this device-only draft flow and
+              the recent captures on this page.
             </p>
             <Button
               type="button"
@@ -566,7 +552,7 @@ export default function CapturePage() {
               onClick={handleStructure}
               className="w-full sm:w-auto"
             >
-              Organize in this browser
+              Organize on this device
             </Button>
           </div>
 
@@ -574,15 +560,15 @@ export default function CapturePage() {
             <Card className="border-cyan-500/40 bg-cyan-500/10">
               <CardContent className="space-y-1 p-4 text-sm">
                 <p className="font-semibold">
-                  Demo mode created a draft bundle.
+                  On-device sorting created suggestions.
                 </p>
-                <p>Task draft: {latestDraft.title}</p>
+                <p>Suggested task: {latestDraft.title}</p>
                 <p>
                   First suggested action:{" "}
                   {latestAssessment.recommended_first_move}
                 </p>
                 <p>
-                  Possible local block:{" "}
+                  Suggested time block:{" "}
                   {new Date(
                     latestProposalDraft.proposed_start,
                   ).toLocaleTimeString()}{" "}
@@ -603,7 +589,7 @@ export default function CapturePage() {
           <AlertDescription>
             {saveState.source === "save_and_organize"
               ? "Saved before organizing. Triage is the next stop."
-              : `${storageModeLabel(saveState.provider)} stored this raw capture. Recent captures below are browser-only and may not include this saved item.`}
+              : `This raw capture was ${savedViaLabel(saveState.provider)}. Recent captures below stay on this device and may not include this saved item.`}
           </AlertDescription>
           {saveState.source === "save" ? (
             <div className="mt-2">
@@ -667,7 +653,7 @@ export default function CapturePage() {
                 variant="outline"
                 onClick={() => void handleRetryWithMockParser()}
               >
-                Retry with Demo mode sorting
+                Retry with on-device sorting
               </Button>
             </div>
           ) : null}
@@ -676,12 +662,12 @@ export default function CapturePage() {
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">
-          Recent captures (this browser only)
+          Recent captures on this device
         </h2>
         {visibleCaptures.length === 0 ? (
           <EmptyState
-            title="No captures in this browser for this area yet."
-            description="Use Organize in this browser for local draft flow, or Save thought for durable storage."
+            title="No captures on this device for this area yet."
+            description="Use Organize on this device for local draft flow, or Save thought for durable storage."
           />
         ) : (
           <div className="flex flex-col gap-2">
@@ -701,7 +687,7 @@ export default function CapturePage() {
                         ) : null}
                       </div>
                     </div>
-                    <Badge variant="secondary">This browser only</Badge>
+                    <Badge variant="secondary">Saved on this device</Badge>
                   </CardContent>
                 </Card>
               );
