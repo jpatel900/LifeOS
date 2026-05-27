@@ -31,6 +31,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     useWorkflow();
   const currentArea =
     state.areas.find((area) => area.id === selectedAreaId) ?? state.areas[0];
+  const hasAreas = state.areas.length > 0;
   const [now, setNow] = useState("--:--:--");
   const [quickNoteText, setQuickNoteText] = useState("");
   const [quickNoteStatus, setQuickNoteStatus] = useState<
@@ -164,11 +165,15 @@ function AppChrome({ children }: { children: ReactNode }) {
               <Select
                 aria-label="Current area"
                 value={selectedAreaId ?? ""}
+                disabled={!hasAreas}
                 onChange={(event) =>
                   setSelectedAreaId(event.target.value || null)
                 }
                 className="h-9 min-w-0 flex-1 rounded-full sm:min-w-44 sm:flex-none"
               >
+                {!hasAreas ? (
+                  <option value="">No areas yet</option>
+                ) : null}
                 {state.areas.map((area) => (
                   <option key={area.id} value={area.id}>
                     {area.name}
@@ -187,6 +192,18 @@ function AppChrome({ children }: { children: ReactNode }) {
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+        <div
+          aria-label="Current area context"
+          className="flex flex-wrap items-center gap-2"
+        >
+          <span className="text-sm text-muted-foreground">Current area</span>
+          <Badge variant="secondary" className="rounded-full text-sm">
+            {currentArea?.name ?? "No area selected yet"}
+          </Badge>
+          <span className="text-sm text-muted-foreground">
+            Session workflow area: {currentArea?.name ?? "Not set"}
+          </span>
+        </div>
         <Separator />
         <DiagnosticsDisclosure>
           <p>Quick capture saves on this device and sends notes to Triage.</p>
