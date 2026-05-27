@@ -36,8 +36,11 @@ import {
   updateProposal,
   type WorkflowState,
 } from "./workflow";
+import { listAreas } from "./data/workflow";
+import { createSupabaseBrowserClient } from "./supabase/browser";
 import type { Phase2MockExecutionSession } from "./types";
 import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
+import { workflowAreaIdForSlug } from "./workflowAreaMapping";
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
@@ -45,6 +48,10 @@ type WorkflowAction =
   | {
       type: "hydrate";
       state: WorkflowState;
+    }
+  | {
+      type: "syncAreas";
+      areas: WorkflowState["areas"];
     }
   | {
       type: "submitCapture";
@@ -413,6 +420,11 @@ function workflowReducer(
   switch (action.type) {
     case "hydrate":
       return action.state;
+    case "syncAreas":
+      return {
+        ...state,
+        areas: action.areas,
+      };
     case "submitCapture":
       return submitCapture(state, {
         rawText: action.rawText,
@@ -502,6 +514,43 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       });
     }
     setHasHydratedFromStorage(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncPersistedAreas() {
+      try {
+        const result = await listAreas(createSupabaseBrowserClient());
+        if (cancelled || result.provider !== "supabase") {
+          return;
+        }
+
+        const syncedAreas = result.areas.map((area) => ({
+          id: workflowAreaIdForSlug(area.slug) ?? area.id,
+          user_id: area.user_id,
+          name: area.name,
+          color: area.color ?? "#64748b",
+          created_at: area.created_at,
+        }));
+
+        dispatch({ type: "syncAreas", areas: syncedAreas });
+        setSelectedAreaId((current) => {
+          if (current && syncedAreas.some((area) => area.id === current)) {
+            return current;
+          }
+          return syncedAreas[0]?.id ?? null;
+        });
+      } catch {
+        // Keep the session/mock area list when persisted areas cannot load.
+      }
+    }
+
+    void syncPersistedAreas();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

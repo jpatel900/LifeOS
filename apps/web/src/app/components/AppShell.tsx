@@ -30,6 +30,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     useWorkflow();
   const currentArea =
     state.areas.find((area) => area.id === selectedAreaId) ?? state.areas[0];
+  const hasAreas = state.areas.length > 0;
   const [now, setNow] = useState("--:--:--");
   const [quickNoteText, setQuickNoteText] = useState("");
   const [quickNoteStatus, setQuickNoteStatus] = useState<
@@ -159,11 +160,15 @@ function AppChrome({ children }: { children: ReactNode }) {
               <Select
                 aria-label="Current workflow area (session)"
                 value={selectedAreaId ?? ""}
+                disabled={!hasAreas}
                 onChange={(event) =>
                   setSelectedAreaId(event.target.value || null)
                 }
                 className="h-9 min-w-0 flex-1 rounded-full sm:min-w-44 sm:flex-none"
               >
+                {!hasAreas ? (
+                  <option value="">No areas yet</option>
+                ) : null}
                 {state.areas.map((area) => (
                   <option key={area.id} value={area.id}>
                     {area.name}
@@ -185,7 +190,7 @@ function AppChrome({ children }: { children: ReactNode }) {
         >
           <span className="text-sm text-muted-foreground">Current area</span>
           <Badge variant="secondary" className="rounded-full text-sm">
-            {currentArea?.name ?? "No area selected"}
+            {currentArea?.name ?? "No area selected yet"}
           </Badge>
           <span className="text-sm text-muted-foreground">
             Session workflow area: {currentArea?.name ?? "Not set"}
