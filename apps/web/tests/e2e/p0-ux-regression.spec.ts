@@ -118,6 +118,10 @@ test("home cockpit quick capture shows truthful error/success and route links", 
     page.getByRole("heading", { level: 1, name: "Today" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Next" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Daily loop" })).toBeVisible();
+  await expect(
+    page.getByText("No sample data is created until you save something."),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Save quick capture" }).click();
   await expect(page.getByText("Type a note first.")).toBeVisible();
@@ -131,8 +135,36 @@ test("home cockpit quick capture shows truthful error/success and route links", 
     page.getByText("Saved in this browser and sent to"),
   ).toBeVisible();
 
-  await page.getByRole("link", { name: "Open Triage" }).click();
+  await page.getByRole("link", { name: "Open Triage" }).first().click();
   await expect(page).toHaveURL(/\/triage$/);
+});
+
+test("review page can create a basic review log entry and keeps next actions visible", async ({
+  page,
+}) => {
+  await page.goto("/review");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Review" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Review log", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No review log yet.", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Plan the next block" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create daily review" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Create daily review" }).click();
+
+  await expect(page.getByText("Review entry created in")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "No review log yet.", exact: true }),
+  ).toBeVisible();
 });
 
 test("capture save feedback and save-and-organize route to triage", async ({

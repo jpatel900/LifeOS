@@ -5,79 +5,12 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 
-const REQUIRED_LABELS = ["automerge:safe", "risk:low"];
-const BLOCKING_LABELS = ["risk:medium", "risk:high", "needs:human-decision"];
-
-const ALLOWED_PATH_PATTERNS = [
-  "docs/**",
-  "README.md",
-  ".github/ISSUE_TEMPLATE/**",
-];
-
-const FORBIDDEN_PATH_PATTERNS = [
-  "supabase/**",
-  "**/migrations/**",
-  "apps/web/src/lib/googleCalendar/**",
-  "apps/web/src/app/api/google-calendar/**",
-  "apps/web/src/lib/ai/**",
-  "apps/web/src/lib/observability/**",
-  "apps/web/src/lib/supabase/**",
-  ".env*",
-  "package.json",
-  "pnpm-lock.yaml",
-  "turbo.json",
-  "pnpm-workspace.yaml",
-  ".github/workflows/**",
-  ".github/actions/**",
-  "vercel.json",
-  ".vercel/**",
-];
-
-function normalizePath(value) {
-  return String(value ?? "")
-    .replace(/\\/g, "/")
-    .replace(/^\.\//, "")
-    .trim();
-}
-
-function globToRegExp(pattern) {
-  const normalized = normalizePath(pattern);
-  let regex = "^";
-
-  for (let index = 0; index < normalized.length; index += 1) {
-    const char = normalized[index];
-
-    if (char === "*") {
-      if (normalized[index + 1] === "*") {
-        regex += ".*";
-        index += 1;
-      } else {
-        regex += "[^/]*";
-      }
-      continue;
-    }
-
-    if ("\\^$+?.()|{}[]".includes(char)) {
-      regex += `\\${char}`;
-      continue;
-    }
-
-    regex += char;
-  }
-
-  regex += "$";
-  return new RegExp(regex);
-}
-
-const ALLOWED_PATH_REGEXES = ALLOWED_PATH_PATTERNS.map((pattern) => ({
-  pattern,
-  regex: globToRegExp(pattern),
-}));
-
-const FORBIDDEN_PATH_REGEXES = FORBIDDEN_PATH_PATTERNS.map((pattern) => ({
-  pattern,
-  regex: globToRegExp(pattern),
-}));
+import {
+  SAFE_AUTOMERGE_BLOCKING_LABELS,
+  SAFE_AUTOMERGE_REQUIRED_LABELS,
+  evaluateAutomationPolicy,
+  normalizePath,
+} from "./automation-policy.mjs";
 
 function readEventPayload() {
   const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -128,13 +61,13 @@ function collectContext() {
 function classifyEligibility({ labels, changedPaths, draft }) {
   const reasons = [];
 
-  for (const label of REQUIRED_LABELS) {
+  for (const label of SAFE_AUTOMERGE_REQUIRED_LABELS) {
     if (!labels.includes(label)) {
       reasons.push(`Missing required label \`${label}\`.`);
     }
   }
 
-  for (const label of BLOCKING_LABELS) {
+  for (const label of SAFE_AUTOMERGE_BLOCKING_LABELS) {
     if (labels.includes(label)) {
       reasons.push(`Blocking label present: \`${label}\`.`);
     }
@@ -148,25 +81,19 @@ function classifyEligibility({ labels, changedPaths, draft }) {
     reasons.push("No changed files were detected.");
   }
 
-  for (const changedPath of changedPaths) {
-    const forbiddenMatch = FORBIDDEN_PATH_REGEXES.find(({ regex }) =>
-      regex.test(changedPath),
-    );
-
-    if (forbiddenMatch) {
+  const pathPolicyResult = evaluateAutomationPolicy(
+    "safe-automerge",
+    changedPaths,
+  );
+  for (const violation of pathPolicyResult.violations) {
+    if (violation.reason === "forbidden") {
       reasons.push(
-        `Forbidden path touched: \`${changedPath}\` matched \`${forbiddenMatch.pattern}\`.`,
+        `Forbidden path touched: \`${violation.path}\` matched \`${violation.pattern}\`.`,
       );
       continue;
     }
 
-    const allowedMatch = ALLOWED_PATH_REGEXES.some(({ regex }) =>
-      regex.test(changedPath),
-    );
-
-    if (!allowedMatch) {
-      reasons.push(`Path is outside the safe allowlist: \`${changedPath}\`.`);
-    }
+    reasons.push(`Path is outside the safe allowlist: \`${violation.path}\`.`);
   }
 
   return {
@@ -287,6 +214,18 @@ function runSelfTest() {
       input: {
         labels: ["automerge:safe", "risk:low"],
         changedPaths: [".github/workflows/ci.yml"],
+        draft: false,
+      },
+      expected: {
+        eligible: false,
+        reasonCount: 1,
+      },
+    },
+    {
+      name: "script control-plane path is blocked",
+      input: {
+        labels: ["automerge:safe", "risk:low"],
+        changedPaths: ["scripts/agent/check-safe-automerge.mjs"],
         draft: false,
       },
       expected: {

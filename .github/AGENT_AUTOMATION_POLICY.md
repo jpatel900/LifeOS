@@ -17,12 +17,27 @@ Allowed without extra human review once required checks pass:
 - docs-only
 - issue templates
 
+Current deterministic safe auto-merge allowlist:
+
+- `docs/**`
+- `README.md`
+- `.github/ISSUE_TEMPLATE/**`
+
 ## T1 — Agent PR allowed, human review recommended
 
 Agent may implement and open a PR. Human review is recommended before merge.
 
 - isolated UI copy
 - route smoke coverage
+
+Typical paths:
+
+- `apps/web/src/app/**` when the change is narrow copy-only or bounded smoke coverage
+- `apps/web/tests/e2e/**` when the change is bounded smoke coverage rather than assertion-changing broad test rewrites
+
+Planning-only note:
+
+- If the correct implementation slice is unclear, use `agent:plan` first instead of guessing.
 
 ## T2 — Agent implementation allowed, human review required
 
@@ -38,6 +53,36 @@ Agent may implement, but a human must review before merge or rollout.
 - observability display
 - workflow data layer changes
 
+Typical paths:
+
+- `.github/workflows/**`
+- `.github/codex/prompts/**`
+- `scripts/agent/**`
+- `apps/web/src/__tests__/**`
+- `apps/web/tests/e2e/**` when behavior assertions materially change
+- `apps/web/src/lib/observability/**` for UI-facing observability behavior
+
+## Guardrail references
+
+- Safe auto-merge evaluator and revocation guard: `.github/workflows/safe-automerge.yml` and `scripts/agent/check-safe-automerge.mjs`
+- Shared automation path policy: `scripts/agent/automation-policy.mjs`
+- Shared automation path guard: `scripts/agent/check-automation-scope.mjs`
+- PR risk classification: `scripts/agent/classify-pr-risk.mjs`
+- PR evidence bundle guidance: `docs/agent/AUTOMATION_EVIDENCE_BUNDLE.md`
+- Decision-log review guidance: `docs/agent/AUTOMATION_DECISION_LOG.md`
+
+## Hands-off path matrix
+
+Use this as the deterministic routing summary before opening or merging an automation-driven PR.
+
+| Tier | Hands-off status                                                  | Allowed path examples                                                                                                                                                                 | Notes                                                                                                                                      |
+| ---- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| T0   | Safe auto-merge allowed after CI and review gates                 | `docs/**`, `README.md`, `.github/ISSUE_TEMPLATE/**`                                                                                                                                   | Requires `agent:ready`, `risk:low`, and `automerge:safe`. The safe auto-merge allowlist must stay exactly here unless separately approved. |
+| T1   | Agent may open PR; human review recommended                       | Narrow `apps/web/src/app/**` copy-only edits, bounded route-smoke coverage                                                                                                            | Not auto-merge eligible. Use when the blast radius is still low but not purely documentation metadata.                                     |
+| T2   | Agent may open PR; human review required                          | `.github/workflows/**`, `.github/codex/prompts/**`, `scripts/agent/**`, meaningful test assertion changes                                                                             | Control-plane and assertion-bearing work stays out of hands-off merge lanes.                                                               |
+| T3   | Planning first; implementation only after explicit human approval | `supabase/**`, `**/migrations/**`, `apps/web/src/lib/supabase/**`, `apps/web/src/lib/ai/**`, `apps/web/src/lib/googleCalendar/**`, `apps/web/src/app/api/google-calendar/**`, `.env*` | Sensitive auth, persistence, parser, calendar, secrets, and deployment-adjacent surfaces.                                                  |
+| T4   | Human decision before any implementation                          | New vendor/service surfaces, new background automation surfaces, scope-expansion surfaces                                                                                             | Requires an explicit human decision and usually requirements/policy updates first.                                                         |
+
 ## T3 — Planning or implementation only with explicit human approval
 
 Start with planning/review-only. Do not implement beyond bounded analysis unless a human explicitly approves the exact surface. After approval, keep implementation bounded to that approved surface.
@@ -52,6 +97,11 @@ Start with planning/review-only. Do not implement beyond bounded analysis unless
 - observability privacy
 - secrets/env
 - production deployment
+
+Planning route:
+
+- `agent:plan` is the preferred GitHub-first planning route for T2/T3 issues that still need repo research, risk classification, test mapping, or a smallest-safe-slice recommendation.
+- The planning route may comment on the issue but must not create branches, commits, or implementation PRs.
 
 ## T4 — Human decision before any implementation
 

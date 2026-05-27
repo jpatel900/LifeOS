@@ -51,6 +51,7 @@ describe("HomePage Today cockpit", () => {
     expect(
       screen.getByRole("heading", { name: "Quick Capture" }),
     ).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Daily loop" })).toBeDefined();
     expect(
       screen.getByRole("heading", { name: "System trust/status" }),
     ).toBeDefined();
@@ -66,6 +67,9 @@ describe("HomePage Today cockpit", () => {
     await waitFor(() => expect(listPlanningItems).toHaveBeenCalled());
 
     expect(screen.getByText("Capture what matters now")).toBeDefined();
+    expect(
+      screen.getByText(/No sample data is created until you save something/i),
+    ).toBeDefined();
     expect(
       screen.getByRole("link", { name: "Open next step" }),
     ).toHaveAttribute("href", "/capture");
@@ -119,10 +123,11 @@ describe("HomePage Today cockpit", () => {
       screen.getByText(/Saved in this browser and sent to/i),
     ).toBeDefined();
 
-    expect(screen.getByRole("link", { name: "Open Triage" })).toHaveAttribute(
-      "href",
-      "/triage",
-    );
+    expect(
+      screen
+        .getAllByRole("link", { name: "Open Triage" })
+        .some((link) => link.getAttribute("href") === "/triage"),
+    ).toBe(true);
     expect(
       screen
         .getAllByRole("link", { name: "Open Planning" })

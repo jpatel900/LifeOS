@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type {
   Area,
@@ -10,7 +11,13 @@ import type {
 } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { EmptyState } from "../components/EmptyState";
 import {
   createReviewEntry,
@@ -48,6 +55,26 @@ function storageModeLabel(mode: DataProvider) {
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatReviewDate(value: string) {
+  return new Date(`${value}T12:00:00.000Z`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function summaryNumber(
+  summary: ReviewEntry["summary_json"],
+  key: string,
+): number | null {
+  if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+    return null;
+  }
+
+  const value = (summary as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : null;
 }
 
 export default function ReviewPage() {
@@ -203,7 +230,8 @@ export default function ReviewPage() {
       <section>
         <h1>Review</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Reflection helps decide the next move, not just count what happened.
+          Review closes the loop: carry something forward, reschedule it, or let
+          it stop for today.
         </p>
       </section>
 
@@ -240,6 +268,39 @@ export default function ReviewPage() {
               <li>What needs rescheduling?</li>
               <li>What did reality teach?</li>
             </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {reviewState.status === "ready" ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Close the loop</CardTitle>
+            <CardDescription>
+              Pick the next action on purpose instead of leaving the day half
+              open.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+              <p className="rounded-lg border border-border bg-muted/40 p-3">
+                Continue or reschedule in Planning if the work still matters.
+              </p>
+              <p className="rounded-lg border border-border bg-muted/40 p-3">
+                Capture a follow-up if something new came up during the session.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
+              <Button asChild className="w-full sm:w-auto">
+                <Link href="/calendar">Plan the next block</Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <Link href="/capture">Capture a follow-up</Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <Link href="/">Back to Today</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -370,29 +431,89 @@ export default function ReviewPage() {
           </CardContent>
         </Card>
       </div>
-      {reviewEntries.length > 0 ? (
-        <section>
-          <h2 className="mb-2 text-base">Saved reflections</h2>
-          <ul className="m-0 list-disc pl-5 text-sm text-foreground">
-            {reviewEntries.map((entry) => (
-              <li key={entry.id}>
-                {entry.review_type} review: {entry.period_start} to{" "}
-                {entry.period_end}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {localReviewLog.length > 0 ? (
-        <details>
-          <summary className="mb-2 text-base">Session notes log</summary>
-          <ul className="m-0 list-disc pl-5 text-sm text-foreground">
-            {localReviewLog.map((entry, index) => (
-              <li key={`${entry}-${index}`}>{entry}</li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Review log</CardTitle>
+          <CardDescription>
+            Saved reviews stay simple: date, scope, and a few useful signals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {reviewEntries.length === 0 && localReviewLog.length === 0 ? (
+            <EmptyState
+              title="No review log yet."
+              description="Create the first daily review and it will show up here."
+            />
+          ) : null}
+
+          {reviewEntries.map((entry) => {
+            const areaName =
+              entry.area_id === null
+                ? "All areas"
+                : (areas.find((area) => area.id === entry.area_id)?.name ??
+                  "Saved area");
+            const completedCount = summaryNumber(
+              entry.summary_json,
+              "completed_sessions",
+            );
+            const openCount = summaryNumber(entry.summary_json, "open_tasks");
+            const missedCount = summaryNumber(
+              entry.summary_json,
+              "missed_sessions",
+            );
+
+            return (
+              <div
+                key={entry.id}
+                className="rounded-lg border border-border bg-card p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">
+                      {entry.review_type} review for{" "}
+                      {formatReviewDate(entry.period_end)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{areaName}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Saved {new Date(entry.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  {completedCount !== null ? (
+                    <span className="rounded-full border border-border px-2 py-1">
+                      Completed sessions: {completedCount}
+                    </span>
+                  ) : null}
+                  {openCount !== null ? (
+                    <span className="rounded-full border border-border px-2 py-1">
+                      Open tasks: {openCount}
+                    </span>
+                  ) : null}
+                  {missedCount !== null ? (
+                    <span className="rounded-full border border-border px-2 py-1">
+                      Missed sessions: {missedCount}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+
+          {localReviewLog.length > 0 ? (
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <p className="mb-2 text-sm font-medium">
+                Session notes in this browser
+              </p>
+              <ul className="m-0 list-disc pl-5 text-sm text-foreground">
+                {localReviewLog.map((entry, index) => (
+                  <li key={`${entry}-${index}`}>{entry}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 }

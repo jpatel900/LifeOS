@@ -5,6 +5,7 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 ## Agent routing
 
 - `agent:ready` - The issue is bounded enough for an agent to start.
+- `agent:plan` - Run the read-only planning packet workflow for medium/high-risk or unclear tasks before implementation.
 - `agent:codex` - Good fit for Codex execution.
 - `agent:cursor` - Good fit for Cursor execution.
 
@@ -26,6 +27,7 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 ## Escalation
 
 - `needs:human-decision` - The issue is blocked on scope, policy, approval, or risk decisions a human must make.
+- `automerge:safe` - The issue is explicitly approved for the T0 safe auto-merge lane when deterministic path checks also pass.
 
 ## Suggested combinations
 

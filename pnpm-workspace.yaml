@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
 overrides:
+  postcss: ^8.5.15
   protobufjs: ^8.0.2
 allowBuilds:
   "@sentry/cli": false

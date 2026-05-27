@@ -1,0 +1,295 @@
+name: Codex Issue Planning Packet
+
+on:
+  issues:
+    types:
+      - labeled
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Open issue number to plan
+        required: true
+        type: number
+
+concurrency:
+  group: codex-issue-plan-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  resolve-issue:
+    name: Resolve planning scope
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.resolve.outputs.should_run }}
+      issue_number: ${{ steps.resolve.outputs.issue_number }}
+      issue_title: ${{ steps.resolve.outputs.issue_title }}
+      issue_url: ${{ steps.resolve.outputs.issue_url }}
+      issue_body: ${{ steps.resolve.outputs.issue_body }}
+      source_labels: ${{ steps.resolve.outputs.source_labels }}
+
+    steps:
+      - name: Load issue details and planning eligibility
+        id: resolve
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber =
+              context.eventName === 'workflow_dispatch'
+                ? Number(context.payload.inputs?.issue_number)
+                : context.payload.issue?.number;
+
+            if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+              core.setFailed('A valid issue number is required.');
+              return;
+            }
+
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const labels = issue.labels.map((label) =>
+              typeof label === 'string' ? label : label.name ?? '',
+            );
+            const planningTriggeredByLabel =
+              context.eventName === 'issues' &&
+              context.payload.action === 'labeled' &&
+              context.payload.label?.name === 'agent:plan';
+            const shouldRun =
+              issue.state === 'open' &&
+              (context.eventName === 'workflow_dispatch' || planningTriggeredByLabel);
+
+            core.setOutput('should_run', String(shouldRun));
+            core.setOutput('issue_number', String(issue.number));
+            core.setOutput('issue_title', issue.title ?? '');
+            core.setOutput('issue_url', issue.html_url ?? issue.url ?? '');
+            core.setOutput('issue_body', issue.body ?? '');
+            core.setOutput('source_labels', labels.join(', '));
+
+            if (!shouldRun) {
+              core.notice(
+                `Skipping issue #${issue.number}: state=${issue.state}, action=${context.payload.action ?? context.eventName}, label=${context.payload.label?.name ?? 'none'}`,
+              );
+            }
+
+  generate-planning-packet:
+    name: Generate planning packet
+    if: needs.resolve-issue.outputs.should_run == 'true'
+    needs:
+      - resolve-issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Write issue context
+        uses: actions/github-script@v8
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          ISSUE_TITLE: ${{ needs.resolve-issue.outputs.issue_title }}
+          ISSUE_URL: ${{ needs.resolve-issue.outputs.issue_url }}
+          ISSUE_BODY: ${{ needs.resolve-issue.outputs.issue_body }}
+          SOURCE_LABELS: ${{ needs.resolve-issue.outputs.source_labels }}
+          ISSUE_CONTEXT_PATH: ${{ runner.temp }}/issue-plan-context.md
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+
+            const body = [
+              `# GitHub Issue #${process.env.ISSUE_NUMBER}`,
+              '',
+              `URL: ${process.env.ISSUE_URL}`,
+              `Labels: ${process.env.SOURCE_LABELS || 'none'}`,
+              '',
+              '## Title',
+              process.env.ISSUE_TITLE ?? '',
+              '',
+              '## Body',
+              process.env.ISSUE_BODY ?? '',
+              '',
+            ].join('\n');
+
+            fs.writeFileSync(process.env.ISSUE_CONTEXT_PATH, body, 'utf8');
+
+      - name: Run Codex planning packet
+        id: run_codex
+        env:
+          ISSUE_CONTEXT_PATH: ${{ runner.temp }}/issue-plan-context.md
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.4-mini
+          effort: high
+          prompt-file: .github/codex/prompts/issue-plan.md
+          output-file: ${{ runner.temp }}/codex-issue-plan.json
+          output-schema: |
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "summary",
+                "recommended_risk_tier",
+                "relevant_files",
+                "existing_patterns",
+                "likely_tests",
+                "risky_surfaces",
+                "open_questions",
+                "smallest_safe_slice",
+                "recommended_route",
+                "t3_t4_blocked",
+                "t3_t4_block_reason",
+                "workflow_summary"
+              ],
+              "properties": {
+                "summary": {
+                  "type": "string"
+                },
+                "recommended_risk_tier": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "blocked-human-decision"]
+                },
+                "relevant_files": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "existing_patterns": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "likely_tests": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "risky_surfaces": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "open_questions": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "smallest_safe_slice": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "recommended_route": {
+                  "type": "string",
+                  "enum": ["low-risk automation", "manual Codex CLI", "Cursor", "human decision"]
+                },
+                "t3_t4_blocked": {
+                  "type": "boolean"
+                },
+                "t3_t4_block_reason": {
+                  "type": ["string", "null"]
+                },
+                "workflow_summary": {
+                  "type": "string"
+                }
+              }
+            }
+          sandbox: read-only
+          safety-strategy: drop-sudo
+
+      - name: Post planning packet comment
+        uses: actions/github-script@v8
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          SOURCE_LABELS: ${{ needs.resolve-issue.outputs.source_labels }}
+          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const parsed = JSON.parse(process.env.CODEX_FINAL_MESSAGE ?? '{}');
+            const renderList = (items, emptyText) =>
+              Array.isArray(items) && items.length > 0
+                ? items.map((item) => `- ${item}`).join('\n')
+                : `- ${emptyText}`;
+
+            const body = [
+              '## Codex Planning Packet',
+              '',
+              parsed.summary ?? 'Planning packet generated.',
+              '',
+              '## Recommended Risk Tier',
+              `- ${parsed.recommended_risk_tier ?? 'unknown'}`,
+              '',
+              '## Recommended Route',
+              `- ${parsed.recommended_route ?? 'human decision'}`,
+              '',
+              '## T3/T4 Gate Status',
+              parsed.t3_t4_blocked
+                ? `- Blocked by T3/T4 gate: ${parsed.t3_t4_block_reason ?? 'yes'}`
+                : '- Not blocked by T3/T4 gate based on the reviewed scope.',
+              '',
+              '## Relevant Files and Docs',
+              renderList(parsed.relevant_files, 'None identified.'),
+              '',
+              '## Existing Patterns to Follow',
+              renderList(parsed.existing_patterns, 'None identified.'),
+              '',
+              '## Likely Tests and Validation',
+              renderList(parsed.likely_tests, 'No specific tests identified.'),
+              '',
+              '## Risky or Forbidden Surfaces',
+              renderList(parsed.risky_surfaces, 'None beyond the stated issue scope.'),
+              '',
+              '## Open Questions',
+              renderList(parsed.open_questions, 'None.'),
+              '',
+              '## Smallest Safe Implementation Slice',
+              renderList(parsed.smallest_safe_slice, 'No implementation slice recommended yet.'),
+              '',
+              '## Source Labels',
+              `- ${process.env.SOURCE_LABELS || 'none'}`,
+              '',
+              'This packet is planning-only. It does not approve implementation by itself.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.ISSUE_NUMBER),
+              body,
+            });
+
+      - name: Write workflow summary
+        shell: bash
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve-issue.outputs.issue_number }}
+          SOURCE_LABELS: ${{ needs.resolve-issue.outputs.source_labels }}
+          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+        run: |
+          node <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          const parsed = JSON.parse(process.env.CODEX_FINAL_MESSAGE ?? '{}');
+          console.log("## Automation Decision Log");
+          console.log("");
+          console.log("- Route: planning-only issue automation");
+          console.log(`- Issue: #${process.env.ISSUE_NUMBER}`);
+          console.log(`- Source labels: ${process.env.SOURCE_LABELS || 'none'}`);
+          console.log(`- Recommended route: ${parsed.recommended_route ?? 'unknown'}`);
+          console.log(`- Recommended risk tier: ${parsed.recommended_risk_tier ?? 'unknown'}`);
+          console.log(
+            `- T3/T4 blocked: ${parsed.t3_t4_blocked ? `yes (${parsed.t3_t4_block_reason ?? 'reason not provided'})` : 'no'}`,
+          );
+          console.log("- Human intervention: required before implementation when the packet says so");
+          if (parsed.workflow_summary) {
+            console.log("");
+            console.log("## Codex Summary");
+            console.log(parsed.workflow_summary);
+          }
+          EOF

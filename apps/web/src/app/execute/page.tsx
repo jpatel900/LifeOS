@@ -742,7 +742,8 @@ export default function ExecutePage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Execute</h1>
         <p className="text-sm text-muted-foreground">
-          Keep one current mission visible until you choose the end outcome.
+          Keep one current mission visible until you decide what happened and
+          what comes next.
         </p>
       </section>
 

@@ -410,7 +410,8 @@ export default function CapturePage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Capture</h1>
         <p className="text-sm text-muted-foreground">
-          Save one thought now, then organize it if helpful.
+          Save one thought now. You can sort it one step later if that is
+          easier.
         </p>
       </section>
 
@@ -466,7 +467,7 @@ export default function CapturePage() {
         <CardHeader>
           <CardTitle>Capture a thought</CardTitle>
           <CardDescription>
-            The fastest path is one quick thought and one next action.
+            One real sentence is enough. Save first if you are in a rush.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -477,7 +478,7 @@ export default function CapturePage() {
             id="raw_capture"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={4}
+            rows={5}
             placeholder="What's on your mind? Type anything..."
             className="resize-y"
           />
@@ -499,7 +500,7 @@ export default function CapturePage() {
               value={areaId ?? ""}
               onChange={(e) => handleAreaChange(e.target.value)}
               disabled={saveState.status === "saving"}
-              className="max-w-xs"
+              className="w-full sm:max-w-xs"
             >
               <option value="">No area yet</option>
               {areas.map((area) => (
@@ -520,31 +521,51 @@ export default function CapturePage() {
               </p>
             ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={saveState.status === "saving"}>
-                {saveState.status === "saving" ? "Saving..." : "Save thought"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleSaveAndParse()}
-                disabled={parseState.status === "parsing"}
-              >
-                {parseState.status === "parsing"
-                  ? parseState.parserMode === "mock"
-                    ? "Retrying with Demo mode sorting..."
-                    : "Saving and sorting..."
-                  : "Save and organize"}
-              </Button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1">
+                <Button
+                  type="submit"
+                  disabled={saveState.status === "saving"}
+                  className="w-full"
+                >
+                  {saveState.status === "saving" ? "Saving..." : "Save thought"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Save the raw capture first. Organize it after if needed.
+                </p>
+              </div>
+              <div className="grid gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleSaveAndParse()}
+                  disabled={parseState.status === "parsing"}
+                  className="w-full"
+                >
+                  {parseState.status === "parsing"
+                    ? parseState.parserMode === "mock"
+                      ? "Retrying with Demo mode sorting..."
+                      : "Saving and sorting..."
+                    : "Save and organize"}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Save first, then sort into drafts for Triage.
+                </p>
+              </div>
             </div>
           </form>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="grid gap-2 rounded-lg border border-dashed p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
             <p className="text-xs text-muted-foreground">
               The header workflow area picker controls this browser draft flow
               and the recent-captures list on this page.
             </p>
-            <Button type="button" variant="ghost" onClick={handleStructure}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleStructure}
+              className="w-full sm:w-auto"
+            >
               Organize in this browser
             </Button>
           </div>
@@ -581,7 +602,7 @@ export default function CapturePage() {
           <AlertTitle>Saved.</AlertTitle>
           <AlertDescription>
             {saveState.source === "save_and_organize"
-              ? "Saved before organizing."
+              ? "Saved before organizing. Triage is the next stop."
               : `${storageModeLabel(saveState.provider)} stored this raw capture. Recent captures below are browser-only and may not include this saved item.`}
           </AlertDescription>
           {saveState.source === "save" ? (

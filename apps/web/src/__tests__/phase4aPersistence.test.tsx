@@ -1315,7 +1315,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       tasks: [task],
       blocks: [block],
       sessions: [{ ...session, outcome: "completed" }],
-      reviewEntries: [],
+      reviewEntries: [reviewEntry],
     });
     mocks.listAreas.mockResolvedValue({
       provider: "supabase",
@@ -1325,8 +1325,10 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<ReviewPage />);
 
     expect(await screen.findByText("Main Job")).toBeDefined();
-    expect(screen.getByText("Open tasks: 1")).toBeDefined();
+    expect(screen.getAllByText("Open tasks: 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Sessions recorded: 1")).toBeDefined();
+    expect(screen.getByText("Review log")).toBeDefined();
+    expect(screen.getByText(/daily review for/i)).toBeDefined();
   });
 
   it("does not mix local session capture counts into persisted review summaries", async () => {
@@ -1371,5 +1373,6 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     expect(await screen.findByText(/Storage mode:/)).toBeDefined();
     expect(screen.getByText("Captured: 1")).toBeDefined();
+    expect(screen.getByText("Session notes in this browser")).toBeDefined();
   });
 });

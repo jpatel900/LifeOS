@@ -100,6 +100,29 @@ body:
     validations:
       required: true
   - type: textarea
+    id: scenario_pack
+    attributes:
+      label: Scenario pack
+      description: Required for T2 cross-flow UX, health behavior, parser UI, observability display, and workflow data behavior. For T0/T1 or narrow docs tasks, say `Not required` and why.
+      placeholder: |
+        - Scenario: User reviews a local time-block proposal, sees a conflict state, and decides whether to create an external event.
+        - Acceptance criteria:
+          - The approval gate remains explicit.
+          - Failure states are plain-language and actionable.
+        - Failure paths:
+          - Google disconnected
+          - duplicate create attempt
+        - Out of scope:
+          - no automatic rescheduling
+        - Required proofs:
+          - focused route tests
+          - browser/manual proof on /calendar
+          - source-of-truth guard unchanged
+        - Rollback notes:
+          - revert the route-copy change and related tests only
+    validations:
+      required: false
+  - type: textarea
     id: files_docs_to_read
     attributes:
       label: Files/docs to read
@@ -131,13 +154,57 @@ body:
     id: validation_commands
     attributes:
       label: Validation commands
-      description: List the exact commands the agent must run before claiming completion. Add task-specific commands as needed.
+      description: List the exact commands the agent must run before claiming completion. Choose commands based on the touched surface, not generic docs-only defaults.
       value: |
         pnpm format:check
         git diff --check
       render: shell
     validations:
       required: true
+  - type: markdown
+    attributes:
+      value: |
+        Validation presets by task surface:
+
+        - `docs`
+          - `pnpm format:check`
+          - `git diff --check`
+        - `ui`
+          - `pnpm lint`
+          - `pnpm type-check`
+          - `pnpm test`
+          - `pnpm build`
+          - Playwright or equivalent browser/manual proof when user-facing behavior changes
+          - for T2 cross-flow or behavior-clarity work, include a scenario pack or explain why it is not required
+        - `parser`
+          - focused schema/parser tests where available
+          - `pnpm type-check`
+          - `pnpm test`
+          - `pnpm build`
+          - include scenario-pack thinking when parser UI or cross-flow behavior changes
+        - `calendar`
+          - focused planning/calendar tests
+          - approval-gate coverage
+          - no real Google write unless explicitly approved
+          - `pnpm test`
+          - `pnpm build`
+          - include a scenario pack for T2 workflow behavior
+        - `health` / `observability`
+          - include a scenario pack when user-visible behavior or state meaning changes
+        - `supabase` / `security`
+          - focused migration/RLS/auth tests where available
+          - two-user isolation proof if table or policy changes
+          - `pnpm test`
+          - `pnpm build`
+        - `tests`
+          - exact touched test suites
+          - prove assertions were strengthened or preserved, not weakened
+        - workflow / automation / prompt control-plane changes
+          - relevant script self-tests if available
+          - repo validation as required by the touched surface
+          - human review required before merge
+
+        These presets supplement `AGENTS.md`; they do not replace repo-wide validation requirements.
   - type: dropdown
     id: human_approval_required
     attributes:

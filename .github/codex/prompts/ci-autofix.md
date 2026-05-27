@@ -60,5 +60,9 @@ Write:
 - `risks`: remaining risks or assumptions
 - `rollback_plan`: exact rollback steps
 - `deferred_items`: follow-up items you intentionally did not do
+- `failure_coverage`: short bullets showing how the patch addresses the failing CI signal
+- `touched_surfaces`: exact repo or control-plane surfaces changed
+- `untouched_high_risk_surfaces`: risky surfaces intentionally not changed
+- `browser_manual_proof`: `Not applicable.` when UI or browser proof is irrelevant, otherwise the exact missing proof
 - `workflow_summary`: a short plain-language summary suitable for the GitHub Actions run summary
 - `human_review_reason`: short plain string only when human review is required; otherwise `null`
