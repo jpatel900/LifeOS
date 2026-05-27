@@ -235,7 +235,7 @@ function renderWithWorkflow(ui: React.ReactElement) {
 describe("Phase 4A Supabase persistence UI", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     window.sessionStorage.clear();
     mocks.createSupabaseBrowserClient.mockReturnValue(mocks.supabaseClient);
   });
