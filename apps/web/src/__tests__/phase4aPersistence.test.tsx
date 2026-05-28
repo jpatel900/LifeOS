@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     supabaseClient,
     createSupabaseBrowserClient: vi.fn(() => supabaseClient),
     listAreas: vi.fn(),
+    listCaptureItems: vi.fn(),
     createCaptureItem: vi.fn(),
     createTask: vi.fn(),
     createProject: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 
 vi.mock("@/lib/data/workflow", () => ({
   listAreas: mocks.listAreas,
+  listCaptureItems: mocks.listCaptureItems,
   createCaptureItem: mocks.createCaptureItem,
   createTask: mocks.createTask,
   createProject: mocks.createProject,
@@ -238,6 +240,17 @@ describe("Phase 4A Supabase persistence UI", () => {
     vi.clearAllMocks();
     window.sessionStorage.clear();
     mocks.createSupabaseBrowserClient.mockReturnValue(mocks.supabaseClient);
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "mock",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
   });
 
   it("shows Supabase areas on settings when configured and authenticated", async () => {
@@ -245,12 +258,27 @@ describe("Phase 4A Supabase persistence UI", () => {
       provider: "supabase",
       areas: [area],
     });
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [task],
+      blocks: [block],
+      sessions: [],
+      reviewEntries: [{ ...reviewEntry, area_id: area.id }],
+    });
 
     renderWithWorkflow(<AreasSettingsPage />);
 
     expect(await screen.findByText("Main Job")).toBeDefined();
     expect(screen.getByText("Save mode:")).toBeDefined();
     expect(screen.getByText("supabase")).toBeDefined();
+    expect(screen.queryByText("Slug: main-job")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /Use this area|Using this area/ }),
+    ).toBeDefined();
+    expect(screen.getByRole("link", { name: "Plan area" })).toBeDefined();
+    expect(screen.getByText("1 open task")).toBeDefined();
+    expect(screen.getByText("1 planned block")).toBeDefined();
+    expect(screen.getByText(/Last saved review:/)).toBeDefined();
     expect(mocks.listAreas).toHaveBeenCalledWith(mocks.supabaseClient);
   });
 
@@ -273,6 +301,13 @@ describe("Phase 4A Supabase persistence UI", () => {
       provider: "supabase",
       areas: [],
     });
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
 
     renderWithWorkflow(<AreasSettingsPage />);
 
@@ -283,6 +318,13 @@ describe("Phase 4A Supabase persistence UI", () => {
     mocks.listAreas.mockResolvedValue({
       provider: "supabase",
       areas: [area],
+    });
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
     });
 
     renderWithWorkflow(<AreasSettingsPage />);
@@ -1110,7 +1152,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
   });
 
-  it("explains that stop is demo-mode-only when execution is persisted", async () => {
+  it("keeps persisted stop as guidance instead of a fake disabled control", async () => {
     mocks.listExecutionReviewItems.mockResolvedValue({
       provider: "supabase",
       tasks: [task],
@@ -1121,18 +1163,18 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<ExecutePage />);
 
-    const stopButton = await screen.findByRole("button", {
-      name: "Stop (device-only sessions)",
-    });
-    expect(stopButton).toBeDisabled();
+    expect(await screen.findByText("End this session")).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: "Stop (device-only sessions)" }),
+    ).toBeNull();
     expect(
       screen.getByText(
-        "Stop disabled: Stop is available only for sessions saved on this device. Sessions saved to your account need an end outcome and details.",
+        "Stop (device-only sessions) is only available when the session lives on this device. Sessions saved to your account need an end outcome and notes.",
       ),
     ).toBeDefined();
   });
 
-  it("labels stop as browser-only in demo mode and explains why it can be disabled", async () => {
+  it("hides stop in demo mode until a device-only session is actually running", async () => {
     mocks.listExecutionReviewItems.mockResolvedValue({
       provider: "mock",
       tasks: [],
@@ -1148,12 +1190,12 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    const stopButton = await screen.findByRole("button", {
-      name: "Stop on this device",
-    });
-    expect(stopButton).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Start" })).toBeDefined();
     expect(
-      screen.getByText("Stop disabled: Start a session first."),
+      screen.queryByRole("button", { name: "Stop on this device" }),
+    ).toBeNull();
+    expect(
+      screen.getByText("Start when you are ready to focus on this one task."),
     ).toBeDefined();
   });
 
@@ -1175,9 +1217,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     expect(
-      await screen.findByText(
-        "Start disabled: A session is already in progress. Pause or end it first.",
-      ),
+      await screen.findByRole("button", { name: "Stop on this device" }),
     ).toBeDefined();
 
     fireEvent.click(
@@ -1191,13 +1231,10 @@ describe("Phase 4A Supabase persistence UI", () => {
       ),
     ).toBeDefined();
     expect(
-      screen.getByText(
-        "End outcomes disabled: Session already ended. Start another session for new outcomes.",
-      ),
-    ).toBeDefined();
-    expect(
       screen.getByRole("button", { name: "Start another session" }),
     ).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Complete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
   });
 
   it("marks a persisted execution session missed", async () => {
@@ -1279,6 +1316,10 @@ describe("Phase 4A Supabase persistence UI", () => {
       provider: "supabase",
       areas: [area],
     });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
     mocks.createReviewEntry.mockResolvedValue({
       provider: "supabase",
       reviewEntry,
@@ -1319,13 +1360,19 @@ describe("Phase 4A Supabase persistence UI", () => {
       provider: "supabase",
       areas: [area],
     });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
 
     renderWithWorkflow(<ReviewPage />);
 
     expect(await screen.findByText("Main Job")).toBeDefined();
     expect(screen.getAllByText("Open tasks: 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Sessions recorded: 1")).toBeDefined();
-    expect(screen.getByText("Review log")).toBeDefined();
+    expect(screen.getByText("Today at a glance")).toBeDefined();
+    expect(screen.getByText("Past reviews and notes")).toBeDefined();
+    expect(screen.getByText("Open saved review details")).toBeDefined();
     expect(screen.getByText(/daily review for/i)).toBeDefined();
   });
 
@@ -1341,6 +1388,10 @@ describe("Phase 4A Supabase persistence UI", () => {
       provider: "supabase",
       areas: [area],
     });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
 
     renderWithWorkflow(
       <>
@@ -1349,8 +1400,15 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByText("Accepted tasks: 1")).toBeDefined();
-    expect(screen.queryByText(/^Captured:/)).toBeNull();
+    expect(await screen.findByText("Completed")).toBeDefined();
+    expect(
+      screen.getByText("Nothing is stuck in capture right now."),
+    ).toBeDefined();
+    expect(
+      screen.queryByText(
+        "Local capture should not appear in persisted review counts",
+      ),
+    ).toBeNull();
   });
 
   it("shows local capture context in review when provider is mock", async () => {
@@ -1370,7 +1428,8 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
 
     expect(await screen.findByText(/Save mode:/)).toBeDefined();
-    expect(screen.getByText("Captured: 1")).toBeDefined();
-    expect(screen.getByText("Session notes in this browser")).toBeDefined();
+    expect(screen.getByText("Captured and still waiting")).toBeDefined();
+    expect(screen.getByText("Local-only capture for review surface")).toBeDefined();
+    expect(screen.getByText("Open raw browser notes")).toBeDefined();
   });
 });

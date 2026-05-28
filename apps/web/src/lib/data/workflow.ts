@@ -57,6 +57,11 @@ export interface CaptureCreateResult {
   capture: CaptureItem;
 }
 
+export interface CaptureListResult {
+  provider: DataProvider;
+  captures: CaptureItem[];
+}
+
 export interface TaskCreateResult {
   provider: DataProvider;
   task: Task;
@@ -237,6 +242,10 @@ function parseCapture(row: unknown) {
   return CaptureItemSchema.parse(normalizeSupabaseRow(row));
 }
 
+function parseCaptures(rows: unknown) {
+  return CaptureItemSchema.array().parse(normalizeSupabaseRows(rows));
+}
+
 function parseTask(row: unknown) {
   return TaskSchema.parse(normalizeSupabaseRow(row));
 }
@@ -410,6 +419,41 @@ export async function createCaptureItem(
   return {
     provider: "supabase",
     capture: parseCapture(data),
+  };
+}
+
+export async function listCaptureItems(
+  client: MinimalSupabaseClient | null,
+): Promise<CaptureListResult> {
+  if (!client) {
+    return { provider: "mock", captures: [] };
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before loading captures from Supabase.",
+  );
+
+  const query = client.from("capture_items") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+
+  const { data, error } = await query
+    .select(captureColumns)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return {
+    provider: "supabase",
+    captures: parseCaptures(data),
   };
 }
 
