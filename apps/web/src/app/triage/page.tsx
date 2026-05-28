@@ -21,6 +21,7 @@ import {
 import { captureEvent } from "@/lib/observability";
 import { saveModeLabel, savedViaLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { triageLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { slugForWorkflowAreaId } from "@/lib/workflowAreaMapping";
 
@@ -111,6 +112,7 @@ export default function TriagePage() {
     [projectCandidates, triageCandidates],
   );
   const totalCandidates = triageCandidates.length + projectCandidates.length;
+  const lifecycle = triageLifecycleDisplay();
   const hasCandidates = totalCandidates > 0;
   const activeQueueItem =
     queueItems.find((item) => item.queueId === activeQueueItemId) ??
@@ -467,9 +469,10 @@ export default function TriagePage() {
                         Confidence:{" "}
                         {Math.round(activeQueueItem.draft.confidence * 100)}%
                       </Badge>
+                      <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
                     </div>
                   </div>
-                  <Badge variant="warning">Needs review now</Badge>
+                  <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -724,6 +727,9 @@ export default function TriagePage() {
                           <Badge variant="warning">
                             Confidence:{" "}
                             {Math.round(item.draft.confidence * 100)}%
+                          </Badge>
+                          <Badge variant={lifecycle.variant}>
+                            {lifecycle.label}
                           </Badge>
                         </div>
                       </div>

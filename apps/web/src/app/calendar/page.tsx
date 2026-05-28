@@ -27,6 +27,11 @@ import {
   saveModeLabel,
 } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import {
+  blockLifecycleDisplay,
+  planningTaskLifecycleDisplay,
+  proposalLifecycleDisplay,
+} from "@/lib/workflowLifecycle";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
@@ -950,6 +955,7 @@ export default function CalendarPage() {
                   const area = usesPersistedPlanning
                     ? null
                     : getAreaById(task.area_id);
+                  const lifecycle = planningTaskLifecycleDisplay(task.status);
 
                   return (
                     <div
@@ -957,7 +963,12 @@ export default function CalendarPage() {
                       className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm"
                     >
                       <div>
-                        <div className="font-medium">{task.title}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="font-medium">{task.title}</div>
+                          <Badge variant={lifecycle.variant}>
+                            {lifecycle.label}
+                          </Badge>
+                        </div>
                         <div className="text-muted-foreground">
                           Estimate: {task.estimated_minutes_low ?? "?"}-
                           {task.estimated_minutes_high ?? "?"} min
@@ -1012,6 +1023,7 @@ export default function CalendarPage() {
                           item.google_event_id,
                       )
                     : null;
+                  const lifecycle = proposalLifecycleDisplay(proposal.status);
                   const googleWriteState = !usesPersistedPlanning
                     ? "Unavailable while planning stays on this device only"
                     : googleBlock
@@ -1085,8 +1097,13 @@ export default function CalendarPage() {
                       }
                       className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm"
                     >
-                      <div className="font-medium">
-                        {task?.title ?? "Unassigned block"}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-medium">
+                          {task?.title ?? "Unassigned block"}
+                        </div>
+                        <Badge variant={lifecycle.variant}>
+                          {lifecycle.label}
+                        </Badge>
                       </div>
                       <div className="text-muted-foreground">
                         {new Date(proposal.proposed_start).toLocaleTimeString()}{" "}
@@ -1365,14 +1382,20 @@ export default function CalendarPage() {
                         (item) => item.id === block.task_id,
                       )
                     : state.tasks.find((item) => item.id === block.task_id);
+                  const lifecycle = blockLifecycleDisplay(block.status);
 
                   return (
                     <div
                       key={block.id}
                       className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 text-sm"
                     >
-                      <div className="font-medium">
-                        {task?.title ?? "Block without specific task"}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="font-medium">
+                          {task?.title ?? "Block without specific task"}
+                        </div>
+                        <Badge variant={lifecycle.variant}>
+                          {lifecycle.label}
+                        </Badge>
                       </div>
                       <div className="text-muted-foreground">
                         {new Date(block.start_at).toLocaleTimeString()} -{" "}

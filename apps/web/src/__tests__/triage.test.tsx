@@ -119,6 +119,7 @@ describe("TriagePage", () => {
     renderTriagePage(storedState);
 
     expect(await screen.findByText("Current item")).toBeDefined();
+    expect(screen.getAllByText("Needs decision").length).toBeGreaterThan(0);
     expect(screen.getByText("Call dentist tomorrow")).toBeDefined();
     expect(screen.getByText("First useful move: Check office hours")).toBeDefined();
     expect(screen.getByText("Plan annual review rollout")).toBeDefined();
