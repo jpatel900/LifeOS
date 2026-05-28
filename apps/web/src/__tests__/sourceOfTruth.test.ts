@@ -233,11 +233,12 @@ describe("source-of-truth boundaries", () => {
     );
     expect(triage).toContain("Technical save mode id:");
     expect(triage).toContain("does not move the item yet");
-    expect(calendar).toContain("Check calendar conflicts");
+    expect(calendar).toContain("Check calendar availability");
     expect(calendar).toContain("Create Google Calendar event");
     expect(calendar).toContain("Adjust time");
+    expect(calendar).toContain("Google Calendar options");
     expect(calendar).toContain(
-      "Calendar approval: Nothing goes to Google Calendar until you approve it.",
+      "Nothing goes to Google Calendar until you approve it.",
     );
     expect(calendar).toContain("Technical save mode id:");
     expect(execute).toContain("Stop (device-only sessions)");
