@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "../app/page";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import { createInitialWorkflowState } from "@/lib/workflow";
 import {
   listExecutionReviewItems,
   listPlanningItems,
@@ -27,7 +28,14 @@ vi.mock("@/lib/data/workflow", () => ({
   })),
 }));
 
-function renderHome() {
+const STORAGE_KEY = "lifeos.phase2.workflow";
+
+function renderHome(storedState?: ReturnType<typeof createInitialWorkflowState>) {
+  window.sessionStorage.clear();
+  if (storedState) {
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(storedState));
+  }
+
   return render(
     <WorkflowProvider>
       <HomePage />
@@ -37,6 +45,7 @@ function renderHome() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.sessionStorage.clear();
 });
 
 describe("HomePage Today cockpit", () => {
@@ -53,8 +62,8 @@ describe("HomePage Today cockpit", () => {
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Daily loop" })).toBeDefined();
     expect(
-      screen.getByRole("heading", { name: "System trust/status" }),
-    ).toBeDefined();
+      screen.queryByRole("heading", { name: "System trust/status" }),
+    ).toBeNull();
 
     await waitFor(() => {
       expect(listPlanningItems).toHaveBeenCalled();
@@ -75,14 +84,51 @@ describe("HomePage Today cockpit", () => {
     ).toHaveAttribute("href", "/capture");
   });
 
-  it("shows honest empty states", async () => {
+  it("hides empty secondary cards until they matter", async () => {
     renderHome();
     await waitFor(() => expect(listExecutionReviewItems).toHaveBeenCalled());
 
-    expect(screen.getByText("No drafts waiting.")).toBeDefined();
-    expect(screen.getByText("No tasks need planning.")).toBeDefined();
-    expect(screen.getByText("Nothing planned today.")).toBeDefined();
-    expect(screen.getByText("Nothing needs recovery.")).toBeDefined();
+    expect(screen.queryByText("No drafts waiting.")).toBeNull();
+    expect(screen.queryByText("No tasks need planning.")).toBeNull();
+    expect(screen.queryByText("Nothing planned today.")).toBeNull();
+    expect(screen.queryByText("Nothing needs recovery.")).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: "System trust/status" }),
+    ).toBeNull();
+  });
+
+  it("reduces starter guidance once real workflow state exists", async () => {
+    const storedState = createInitialWorkflowState();
+    storedState.taskDrafts = [
+      {
+        id: "task-draft-1",
+        user_id: "user-1",
+        capture_item_id: "capture-1",
+        area_id: "area-main-job",
+        title: "Review pending contract",
+        description: "Draft waiting for triage.",
+        confidence: 0.72,
+        estimated_minutes_low: 15,
+        estimated_minutes_high: 30,
+        first_tiny_step: "Open the contract notes.",
+        status: "pending",
+        created_at: "2026-05-27T12:00:00.000Z",
+      },
+    ];
+
+    renderHome(storedState);
+
+    await waitFor(() =>
+      expect(screen.getByText("Review pending decisions")).toBeDefined(),
+    );
+
+    expect(screen.queryByRole("heading", { name: "Daily loop" })).toBeNull();
+    expect(
+      screen.queryByText("Nothing is running right now."),
+    ).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: /Needs decision/i }),
+    ).toBeDefined();
   });
 
   it("shows degraded account-data state without crashing", async () => {
@@ -129,13 +175,25 @@ describe("HomePage Today cockpit", () => {
         .some((link) => link.getAttribute("href") === "/triage"),
     ).toBe(true);
     expect(
-      screen
-        .getAllByRole("link", { name: "Open Planning" })
-        .some((link) => link.getAttribute("href") === "/calendar"),
-    ).toBe(true);
-    expect(screen.getByRole("link", { name: "Open Health" })).toHaveAttribute(
-      "href",
-      "/health",
-    );
+      screen.queryByRole("link", { name: "Open Planning" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: "Open Health" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: /Needs decision/i }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("heading", { name: "System trust/status" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("heading", { name: "Daily loop" }),
+    ).toBeNull();
+    expect(
+      screen.queryByText("Nothing is running right now."),
+    ).toBeNull();
+    expect(
+      screen.queryByText(/No sample data is created until you save something/i),
+    ).toBeNull();
   });
 });

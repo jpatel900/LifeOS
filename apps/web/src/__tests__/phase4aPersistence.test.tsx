@@ -472,6 +472,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
+    fireEvent.click(await screen.findByRole("button", { name: "Review this next" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Accept project draft" }),
     );

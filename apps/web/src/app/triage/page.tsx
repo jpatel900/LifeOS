@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import type { Area } from "@lifeos/schemas";
+import { useEffect, useMemo, useState } from "react";
+import type { Area, Phase2ProjectDraft, Phase2TaskDraft } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,18 @@ type SaveState =
   | { status: "saved"; label: string; provider: DataProvider }
   | { status: "error"; message: string };
 
+type QueueItem =
+  | {
+      queueId: string;
+      kind: "task";
+      draft: Phase2TaskDraft;
+    }
+  | {
+      queueId: string;
+      kind: "project";
+      draft: Phase2ProjectDraft;
+    };
+
 function resolvePersistedAreaId(workflowAreaId: string, areas: Area[]) {
   const slug = slugForWorkflowAreaId(workflowAreaId);
   const area = areas.find((item) => item.slug === slug) ?? areas[0];
@@ -66,6 +78,9 @@ export default function TriagePage() {
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [activeQueueItemId, setActiveQueueItemId] = useState<string | null>(
+    null,
+  );
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editedDraftIds, setEditedDraftIds] = useState<Record<string, true>>(
@@ -80,8 +95,30 @@ export default function TriagePage() {
   const projectCandidates = state.projectDrafts.filter(
     (draft) => draft.status === "pending",
   );
+  const queueItems = useMemo<QueueItem[]>(
+    () => [
+      ...triageCandidates.map((draft) => ({
+        queueId: `task:${draft.id}`,
+        kind: "task" as const,
+        draft,
+      })),
+      ...projectCandidates.map((draft) => ({
+        queueId: `project:${draft.id}`,
+        kind: "project" as const,
+        draft,
+      })),
+    ],
+    [projectCandidates, triageCandidates],
+  );
   const totalCandidates = triageCandidates.length + projectCandidates.length;
   const hasCandidates = totalCandidates > 0;
+  const activeQueueItem =
+    queueItems.find((item) => item.queueId === activeQueueItemId) ??
+    queueItems[0] ??
+    null;
+  const upcomingQueueItems = activeQueueItem
+    ? queueItems.filter((item) => item.queueId !== activeQueueItem.queueId)
+    : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +152,24 @@ export default function TriagePage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (queueItems.length === 0) {
+      if (activeQueueItemId !== null) {
+        setActiveQueueItemId(null);
+      }
+      return;
+    }
+
+    if (!activeQueueItemId) {
+      setActiveQueueItemId(queueItems[0].queueId);
+      return;
+    }
+
+    if (!queueItems.some((item) => item.queueId === activeQueueItemId)) {
+      setActiveQueueItemId(queueItems[0].queueId);
+    }
+  }, [activeQueueItemId, queueItems]);
 
   async function handleAcceptTaskDraft(draftId: string) {
     const draft = state.taskDrafts.find((item) => item.id === draftId);
@@ -228,12 +283,16 @@ export default function TriagePage() {
   }
 
   function handleReviewNextItem() {
-    const nextItem = document.getElementById("triage-next-item");
+    const nextItem = document.getElementById("triage-current-item");
     if (!nextItem) {
       return;
     }
 
     nextItem.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function handleSelectQueueItem(queueId: string) {
+    setActiveQueueItemId(queueId);
   }
 
   function startEditingTaskDraft(taskId: string) {
@@ -297,7 +356,7 @@ export default function TriagePage() {
         <CardContent className="flex flex-wrap items-center gap-2">
           {hasCandidates ? (
             <Button type="button" onClick={handleReviewNextItem}>
-              Review next item
+              Open current item
             </Button>
           ) : (
             <Button asChild>
@@ -306,7 +365,9 @@ export default function TriagePage() {
           )}
           <p className="text-sm text-muted-foreground">
             {hasCandidates
-              ? "Open the first pending suggestion, then accept it or park it."
+              ? upcomingQueueItems.length === 0
+                ? "Review one item now. Nothing else is waiting after this."
+                : `Review one item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after this one.`
               : "Nothing is waiting for review. Capture a thought to create the next item."}
           </p>
         </CardContent>
@@ -379,251 +440,307 @@ export default function TriagePage() {
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {triageCandidates.map((task, index) => {
-            const area = getAreaById(task.area_id);
-            const assessment = state.ambiguityAssessments.find(
-              (item) => item.source_capture_item_id === task.capture_item_id,
-            );
-            return (
-              <Card
-                key={task.id}
-                id={index === 0 ? "triage-next-item" : undefined}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{task.title}</CardTitle>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">Task suggestion</Badge>
-                        {area ? (
+          {activeQueueItem ? (
+            <Card id="triage-current-item">
+              <CardHeader className="pb-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                      Current item
+                    </p>
+                    <CardTitle className="text-lg">
+                      {activeQueueItem.draft.title}
+                    </CardTitle>
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline">
+                        {activeQueueItem.kind === "task"
+                          ? "Task suggestion"
+                          : "Project suggestion"}
+                      </Badge>
+                      {(() => {
+                        const area = getAreaById(activeQueueItem.draft.area_id);
+                        return area ? (
                           <Badge variant="secondary">Area: {area.name}</Badge>
-                        ) : null}
-                        <Badge variant="warning">
-                          Confidence: {Math.round(task.confidence * 100)}%
-                        </Badge>
-                      </div>
+                        ) : null;
+                      })()}
+                      <Badge variant="warning">
+                        Confidence:{" "}
+                        {Math.round(activeQueueItem.draft.confidence * 100)}%
+                      </Badge>
                     </div>
-                    <Badge variant="warning">Needs review</Badge>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {assessment ? (
-                    editedDraftIds[task.id] ? (
-                      <Alert>
-                        <AlertTitle>
-                          AI notes are from the original capture
-                        </AlertTitle>
-                        <AlertDescription>
-                          You edited this draft. Re-sort in Capture if you want
-                          updated AI notes.
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
+                  <Badge variant="warning">Needs review now</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {activeQueueItem.kind === "task" ? (
+                  <>
+                    {(() => {
+                      const task = activeQueueItem.draft;
+                      const assessment = state.ambiguityAssessments.find(
+                        (item) =>
+                          item.source_capture_item_id === task.capture_item_id,
+                      );
+
+                      return (
+                        <>
+                          {assessment ? (
+                            editedDraftIds[task.id] ? (
+                              <Alert>
+                                <AlertTitle>
+                                  AI notes are from the original capture
+                                </AlertTitle>
+                                <AlertDescription>
+                                  You edited this draft. Re-sort in Capture if
+                                  you want updated AI notes.
+                                </AlertDescription>
+                              </Alert>
+                            ) : (
+                              <Card className="bg-muted/40">
+                                <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
+                                  <p className="font-medium text-foreground">
+                                    Clarity notes
+                                  </p>
+                                  <p>
+                                    First useful move:{" "}
+                                    {assessment.recommended_first_move}
+                                  </p>
+                                  <p>
+                                    Unknowns: {assessment.unknowns.join(", ")}
+                                  </p>
+                                  <p>
+                                    What not to do yet:{" "}
+                                    {assessment.what_not_to_do_yet.join(", ")}
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            )
+                          ) : null}
+                          {task.description ? (
+                            <Card className="bg-muted/40">
+                              <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
+                                <p className="font-medium text-foreground">
+                                  Draft notes
+                                </p>
+                                <p className="whitespace-pre-line">
+                                  {task.description}
+                                </p>
+                              </CardContent>
+                            </Card>
+                          ) : null}
+                          {noteFeedbackByDraftId[task.id] ? (
+                            <Alert variant="success">
+                              <AlertTitle>Note saved in this browser</AlertTitle>
+                              <AlertDescription>
+                                {noteFeedbackByDraftId[task.id]}
+                              </AlertDescription>
+                            </Alert>
+                          ) : null}
+                          {editingDraftId === task.id ? (
+                            <Card className="bg-muted/40">
+                              <CardContent className="space-y-3 p-3">
+                                <div className="space-y-1">
+                                  <label
+                                    htmlFor={`${task.id}-title`}
+                                    className="text-xs font-medium"
+                                  >
+                                    Title
+                                  </label>
+                                  <Input
+                                    id={`${task.id}-title`}
+                                    value={editTitle}
+                                    onChange={(event) =>
+                                      setEditTitle(event.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label
+                                    htmlFor={`${task.id}-description`}
+                                    className="text-xs font-medium"
+                                  >
+                                    Description
+                                  </label>
+                                  <Textarea
+                                    id={`${task.id}-description`}
+                                    value={editDescription}
+                                    onChange={(event) =>
+                                      setEditDescription(event.target.value)
+                                    }
+                                    rows={3}
+                                  />
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => applyTaskDraftEdit(task.id)}
+                                    disabled={!editTitle.trim()}
+                                  >
+                                    Save edit
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setEditingDraftId(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ) : null}
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              onClick={() => void handleAcceptTaskDraft(task.id)}
+                              aria-label="Accept task draft"
+                              disabled={saveState.status === "saving"}
+                            >
+                              Accept as task
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => startEditingTaskDraft(task.id)}
+                              aria-label="Edit draft"
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                addNoteOnlyFeedback(
+                                  task.id,
+                                  task.title,
+                                  task.description,
+                                  "Added note: review later.",
+                                )
+                              }
+                              aria-label="Mark for later"
+                            >
+                              Mark for later (note only)
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                addNoteOnlyFeedback(
+                                  task.id,
+                                  task.title,
+                                  task.description,
+                                  "Added note: consider changing area.",
+                                )
+                              }
+                              aria-label="Add area note"
+                            >
+                              Add area note (note only)
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={() => rejectTaskDraft(task.id)}
+                              aria-label="Reject task draft"
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            This adds a note for now; it does not move the item
+                            yet.
+                          </p>
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    {activeQueueItem.draft.description ? (
                       <Card className="bg-muted/40">
                         <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">
-                            Clarity notes
+                            Draft notes
                           </p>
-                          <p>
-                            First useful move:{" "}
-                            {assessment.recommended_first_move}
-                          </p>
-                          <p>Unknowns: {assessment.unknowns.join(", ")}</p>
-                          <p>
-                            What not to do yet:{" "}
-                            {assessment.what_not_to_do_yet.join(", ")}
+                          <p className="whitespace-pre-line">
+                            {activeQueueItem.draft.description}
                           </p>
                         </CardContent>
                       </Card>
-                    )
-                  ) : null}
-                  {task.description ? (
-                    <Card className="bg-muted/40">
-                      <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                        <p className="font-medium text-foreground">
-                          Draft notes
-                        </p>
-                        <p className="whitespace-pre-line">
-                          {task.description}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ) : null}
-                  {noteFeedbackByDraftId[task.id] ? (
-                    <Alert variant="success">
-                      <AlertTitle>Note saved in this browser</AlertTitle>
-                      <AlertDescription>
-                        {noteFeedbackByDraftId[task.id]}
-                      </AlertDescription>
-                    </Alert>
-                  ) : null}
-                  {editingDraftId === task.id ? (
-                    <Card className="bg-muted/40">
-                      <CardContent className="space-y-3 p-3">
-                        <div className="space-y-1">
-                          <label
-                            htmlFor={`${task.id}-title`}
-                            className="text-xs font-medium"
-                          >
-                            Title
-                          </label>
-                          <Input
-                            id={`${task.id}-title`}
-                            value={editTitle}
-                            onChange={(event) =>
-                              setEditTitle(event.target.value)
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label
-                            htmlFor={`${task.id}-description`}
-                            className="text-xs font-medium"
-                          >
-                            Description
-                          </label>
-                          <Textarea
-                            id={`${task.id}-description`}
-                            value={editDescription}
-                            onChange={(event) =>
-                              setEditDescription(event.target.value)
-                            }
-                            rows={3}
-                          />
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => applyTaskDraftEdit(task.id)}
-                            disabled={!editTitle.trim()}
-                          >
-                            Save edit
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setEditingDraftId(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => void handleAcceptTaskDraft(task.id)}
-                      aria-label="Accept task draft"
-                      disabled={saveState.status === "saving"}
-                    >
-                      Accept as task
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => startEditingTaskDraft(task.id)}
-                      aria-label="Edit draft"
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        addNoteOnlyFeedback(
-                          task.id,
-                          task.title,
-                          task.description,
-                          "Added note: review later.",
-                        )
-                      }
-                      aria-label="Mark for later"
-                    >
-                      Mark for later (note only)
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        addNoteOnlyFeedback(
-                          task.id,
-                          task.title,
-                          task.description,
-                          "Added note: consider changing area.",
-                        )
-                      }
-                      aria-label="Add area note"
-                    >
-                      Add area note (note only)
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => rejectTaskDraft(task.id)}
-                      aria-label="Reject task draft"
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    This adds a note for now; it does not move the item yet.
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-          {projectCandidates.map((project) => {
-            const area = getAreaById(project.area_id);
-            return (
-              <Card key={project.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{project.title}</CardTitle>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">Project suggestion</Badge>
-                        {area ? (
-                          <Badge variant="secondary">Area: {area.name}</Badge>
-                        ) : null}
-                        <Badge variant="warning">
-                          Confidence: {Math.round(project.confidence * 100)}%
-                        </Badge>
-                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        onClick={() =>
+                          void handleAcceptProjectDraft(activeQueueItem.draft.id)
+                        }
+                        aria-label="Accept project draft"
+                        disabled={saveState.status === "saving"}
+                      >
+                        Accept as project
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={() =>
+                          rejectProjectDraft(activeQueueItem.draft.id)
+                        }
+                        aria-label="Reject project draft"
+                      >
+                        Reject
+                      </Button>
                     </div>
-                    <Badge variant="warning">Needs review</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {project.description ? (
-                    <p className="text-sm text-muted-foreground">
-                      {project.description}
-                    </p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => void handleAcceptProjectDraft(project.id)}
-                      aria-label="Accept project draft"
-                      disabled={saveState.status === "saving"}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {upcomingQueueItems.length > 0 ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Up next</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-2">
+                {upcomingQueueItems.map((item) => {
+                  const area = getAreaById(item.draft.area_id);
+                  return (
+                    <div
+                      key={item.queueId}
+                      className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      Accept as project
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={() => rejectProjectDraft(project.id)}
-                      aria-label="Reject project draft"
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                      <div className="space-y-1">
+                        <p className="font-medium">{item.draft.title}</p>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline">
+                            {item.kind === "task"
+                              ? "Task suggestion"
+                              : "Project suggestion"}
+                          </Badge>
+                          {area ? (
+                            <Badge variant="secondary">Area: {area.name}</Badge>
+                          ) : null}
+                          <Badge variant="warning">
+                            Confidence:{" "}
+                            {Math.round(item.draft.confidence * 100)}%
+                          </Badge>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                        onClick={() => handleSelectQueueItem(item.queueId)}
+                      >
+                        Review this next
+                      </Button>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
       )}
     </div>
