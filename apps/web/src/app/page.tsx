@@ -338,6 +338,31 @@ export default function HomePage() {
     [cockpit],
   );
   const showNowPrimaryCard = cockpit.now.kind !== "empty";
+  const hasWorkflowState =
+    showNowPrimaryCard ||
+    cockpit.needsDecision.count > 0 ||
+    cockpit.unplanned.items.length > 0 ||
+    cockpit.todayBlocks.length > 0 ||
+    cockpit.recoveryItems.length > 0;
+  const showDailyLoop = !hasWorkflowState;
+  const showSystemStatusCard =
+    cockpit.dataDegraded || cockpit.next.kind === "health_attention";
+  const visibleSecondaryCardOrder = prioritizedCardOrder.filter((cardKey) => {
+    switch (cardKey) {
+      case "quickCapture":
+        return true;
+      case "needsDecision":
+        return cockpit.needsDecision.count > 0;
+      case "unplanned":
+        return cockpit.unplanned.items.length > 0;
+      case "todayBlocks":
+        return cockpit.todayBlocks.length > 0;
+      case "recovery":
+        return cockpit.recoveryItems.length > 0;
+      case "systemStatus":
+        return showSystemStatusCard;
+    }
+  });
 
   function handleQuickCaptureSubmit() {
     const trimmed = quickCaptureText.trim();
@@ -396,39 +421,41 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">Daily loop</CardTitle>
-          <CardDescription>
-            A calm first-run path using the routes that already exist. No sample
-            data is created until you save something.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <ol className="grid gap-2 text-sm text-muted-foreground">
-            <li>1. Capture one real thought.</li>
-            <li>2. Decide what it is in Triage.</li>
-            <li>3. Plan one local block before you start focus.</li>
-            <li>
-              4. Use Execute while working, then close the loop in Review.
-            </li>
-          </ol>
-          <div className="grid gap-2 sm:flex sm:flex-wrap">
-            <Button asChild className="w-full sm:w-auto">
-              <Link href="/capture">Start with Capture</Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/triage">Open Triage</Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/calendar">Open Planning</Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/review">Open Review</Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {showDailyLoop ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Daily loop</CardTitle>
+            <CardDescription>
+              A calm first-run path using the routes that already exist. No
+              sample data is created until you save something.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <ol className="grid gap-2 text-sm text-muted-foreground">
+              <li>1. Capture one real thought.</li>
+              <li>2. Decide what it is in Triage.</li>
+              <li>3. Plan one local block before you start focus.</li>
+              <li>
+                4. Use Execute while working, then close the loop in Review.
+              </li>
+            </ol>
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
+              <Button asChild className="w-full sm:w-auto">
+                <Link href="/capture">Start with Capture</Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <Link href="/triage">Open Triage</Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <Link href="/calendar">Open Planning</Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full sm:w-auto">
+                <Link href="/review">Open Review</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {showNowPrimaryCard ? (
         <Card>
@@ -449,7 +476,7 @@ export default function HomePage() {
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {prioritizedCardOrder.map((cardKey) => {
+        {visibleSecondaryCardOrder.map((cardKey) => {
           if (cardKey === "quickCapture") {
             return (
               <Card key={cardKey}>
@@ -717,7 +744,7 @@ export default function HomePage() {
         })}
       </div>
 
-      {!showNowPrimaryCard ? (
+      {!showNowPrimaryCard && !hasWorkflowState ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Now</CardTitle>
@@ -745,8 +772,7 @@ export default function HomePage() {
 
       {homeData.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Checking saved rows. Local workflow state remains
-          available.
+          Checking saved information. Local workflow state remains available.
         </p>
       ) : null}
     </main>
