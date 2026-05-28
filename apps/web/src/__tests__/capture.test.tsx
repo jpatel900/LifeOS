@@ -225,14 +225,14 @@ describe("CapturePage", () => {
     expect(await screen.findByText("Saved.")).toBeDefined();
     expect(
       screen.getByText(
-        "This raw capture was saved to your account. Recent captures below stay on this device and may not include this saved item.",
+        "This raw capture was saved to your account. Organize this saved thought next if you want draft suggestions.",
       ),
     ).toBeDefined();
     fireEvent.click(
       screen.getByRole("button", { name: "Organize this saved thought" }),
     );
 
-    expect(await screen.findByText("Sent to review.")).toBeDefined();
+    expect(await screen.findByText("Drafts ready for Triage.")).toBeDefined();
     expect(screen.getByRole("link", { name: "Review it now" })).toBeDefined();
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
@@ -289,9 +289,11 @@ describe("CapturePage", () => {
     });
     fireEvent.click(await screen.findByText("Save and organize"));
 
-    expect(await screen.findByText("Sent to review.")).toBeDefined();
+    expect(await screen.findByText("Drafts ready for Triage.")).toBeDefined();
     expect(
-      screen.getByText("Saved before organizing. Triage is the next stop."),
+      screen.getByText(
+        "Saved first, then organized. Review the drafts in Triage next.",
+      ),
     ).toBeDefined();
     expect(
       screen.getByText(
@@ -383,7 +385,7 @@ describe("CapturePage", () => {
       screen.getByRole("button", { name: "Retry with on-device sorting" }),
     );
 
-    expect(await screen.findByText("Sent to review.")).toBeDefined();
+    expect(await screen.findByText("Drafts ready for Triage.")).toBeDefined();
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
         "/api/parse-capture",

@@ -94,6 +94,36 @@ type ParseCaptureStatusApiResponse =
     }
   | { ok: false; error: string };
 
+function captureLifecycleLabel(status: CaptureItem["status"]) {
+  switch (status) {
+    case "new":
+      return "Captured";
+    case "parsed":
+      return "Organized into drafts";
+    case "triage_required":
+      return "Ready for triage";
+    case "resolved":
+      return "Reviewed and closed";
+    case "archived":
+      return "Archived";
+  }
+}
+
+function captureLifecycleDetail(status: CaptureItem["status"]) {
+  switch (status) {
+    case "new":
+      return "Saved, but not organized yet.";
+    case "parsed":
+      return "Suggestions were created from this capture.";
+    case "triage_required":
+      return "Review the drafts in Triage before accepting them.";
+    case "resolved":
+      return "This capture already led to a reviewed decision.";
+    case "archived":
+      return "This capture was archived from the active flow.";
+  }
+}
+
 export default function CapturePage() {
   const {
     state,
@@ -588,8 +618,8 @@ export default function CapturePage() {
           <AlertTitle>Saved.</AlertTitle>
           <AlertDescription>
             {saveState.source === "save_and_organize"
-              ? "Saved before organizing. Triage is the next stop."
-              : `This raw capture was ${savedViaLabel(saveState.provider)}. Recent captures below stay on this device and may not include this saved item.`}
+              ? "Saved first, then organized. Review the drafts in Triage next."
+              : `This raw capture was ${savedViaLabel(saveState.provider)}. Organize this saved thought next if you want draft suggestions.`}
           </AlertDescription>
           {saveState.source === "save" ? (
             <div className="mt-2">
@@ -618,9 +648,11 @@ export default function CapturePage() {
 
       {parseState.status === "parsed" ? (
         <Alert>
-          <AlertTitle>Sent to review.</AlertTitle>
+          <AlertTitle>Drafts ready for Triage.</AlertTitle>
           <AlertDescription>
-            Drafts ready: <strong>{parseState.draftCount}</strong>.
+            Created <strong>{parseState.draftCount}</strong> draft
+            {parseState.draftCount === 1 ? "" : "s"}. Review them in Triage
+            before you accept anything.
           </AlertDescription>
           <div className="mt-2">
             <Button asChild size="sm" variant="outline">
@@ -680,12 +712,15 @@ export default function CapturePage() {
                       <p className="font-medium">{capture.raw_text}</p>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline">
-                          Status: {capture.status}
+                          {captureLifecycleLabel(capture.status)}
                         </Badge>
                         {area ? (
                           <Badge variant="secondary">Area: {area.name}</Badge>
                         ) : null}
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        {captureLifecycleDetail(capture.status)}
+                      </p>
                     </div>
                     <Badge variant="secondary">Saved on this device</Badge>
                   </CardContent>
