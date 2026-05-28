@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
@@ -327,11 +326,22 @@ export default function ExecutePage() {
       null)
     : (blocks.find((block) => block.task_id === activeTask?.id) ?? null);
   const area = activeTask ? getAreaById(activeTask.area_id) : null;
-  const sessionStartedAt = activeSession
-    ? "created_at" in activeSession
-      ? new Date(activeSession.created_at).toLocaleTimeString()
-      : "This browser session"
-    : null;
+  const sessionStartedLabel = !activeSession
+    ? "Not started"
+    : usesPersistedExecution
+      ? latestPersistedSession
+        ? `Saved at ${new Date(latestPersistedSession.created_at).toLocaleTimeString()}`
+        : "Not started"
+      : "Started in this browser";
+  const timingLabel = usesPersistedExecution
+    ? latestPersistedSession?.actual_minutes != null
+      ? `${latestPersistedSession.actual_minutes} minutes recorded`
+      : hasActiveSession
+        ? "Add the actual minutes when you end this session."
+        : "Actual minutes are recorded when you close the session."
+    : activeSession
+      ? "This browser-only session does not track live minutes. Record the actual minutes when you finish."
+      : "Actual minutes are recorded when you end the session.";
 
   const startDisabledReason =
     actionState.status === "saving"
@@ -393,6 +403,21 @@ export default function ExecutePage() {
         : sessionUiState === "running"
           ? "When this block ends, choose Complete, Stuck, Distracted, or Missed."
           : "Start the session when you are ready to focus.";
+  const showStartControl =
+    !terminalForm &&
+    (sessionUiState === "not_started" || sessionUiState === "stopped");
+  const showPauseControl = !terminalForm && sessionUiState === "running";
+  const showResumeControl =
+    !terminalForm && !usesPersistedExecution && sessionUiState === "paused";
+  const showEndOutcomeControls =
+    !terminalForm &&
+    (sessionUiState === "running" || sessionUiState === "paused");
+  const showStopControl =
+    !terminalForm && !usesPersistedExecution && hasActiveSession;
+  const showPersistedStopGuidance =
+    !terminalForm &&
+    usesPersistedExecution &&
+    (sessionUiState === "running" || sessionUiState === "paused");
 
   async function handleStart() {
     if (!activeTask || startDisabledReason) return;
@@ -813,23 +838,13 @@ export default function ExecutePage() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Session started
               </p>
-              <p className="mt-1 font-medium">
-                {sessionStartedAt
-                  ? `Started at ${sessionStartedAt}`
-                  : "Not started"}
-              </p>
+              <p className="mt-1 font-medium">{sessionStartedLabel}</p>
             </div>
             <div className="rounded-md border border-border p-3 text-sm">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Timing
               </p>
-              <p className="mt-1 font-medium">
-                {usesPersistedExecution
-                  ? latestPersistedSession?.actual_minutes != null
-                    ? `${latestPersistedSession.actual_minutes} minutes recorded`
-                    : "Elapsed time is tracked after completion."
-                  : "Demo timer only. No live elapsed tracking."}
-              </p>
+              <p className="mt-1 font-medium">{timingLabel}</p>
             </div>
           </div>
 
@@ -845,120 +860,135 @@ export default function ExecutePage() {
           <CardTitle className="text-base">Session controls</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Primary session control
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() => void handleStart()}
-                disabled={startDisabledReason !== null}
-              >
-                Start
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => void handleMark("paused")}
-                disabled={pauseDisabledReason !== null}
-              >
-                Pause
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleResume()}
-                disabled={resumeDisabledReason !== null}
-              >
-                Resume
-              </Button>
+          {showStartControl ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Start this session
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void handleStart()}
+                  disabled={startDisabledReason !== null}
+                >
+                  Start
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/capture">Capture a side thought</Link>
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Start when you are ready to focus on this one task.
+              </p>
             </div>
-            {startDisabledReason ? (
-              <p className="text-xs text-muted-foreground">
-                Start disabled: {startDisabledReason}
-              </p>
-            ) : null}
-            {!startDisabledReason && pauseDisabledReason ? (
-              <p className="text-xs text-muted-foreground">
-                Pause disabled: {pauseDisabledReason}
-              </p>
-            ) : null}
-            {!startDisabledReason &&
-            !pauseDisabledReason &&
-            resumeDisabledReason ? (
-              <p className="text-xs text-muted-foreground">
-                Resume disabled: {resumeDisabledReason}
-              </p>
-            ) : null}
-          </div>
+          ) : null}
 
-          <Separator />
-
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              End session outcomes
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() => void handleMark("completed")}
-                disabled={endDisabledReason !== null}
-              >
-                Complete
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleMark("stuck")}
-                disabled={endDisabledReason !== null}
-              >
-                Stuck
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleMark("distracted")}
-                disabled={endDisabledReason !== null}
-              >
-                Distracted
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleMark("missed")}
-                disabled={endDisabledReason !== null}
-              >
-                Missed
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => void handleMark("stopped")}
-                disabled={stopDisabledReason !== null}
-              >
-                {usesPersistedExecution
-                  ? "Stop (device-only sessions)"
-                  : "Stop on this device"}
-              </Button>
+          {showPauseControl || showResumeControl ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Session state
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {showPauseControl ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void handleMark("paused")}
+                    disabled={pauseDisabledReason !== null}
+                  >
+                    Pause
+                  </Button>
+                ) : null}
+                {showResumeControl ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handleResume()}
+                    disabled={resumeDisabledReason !== null}
+                  >
+                    Resume
+                  </Button>
+                ) : null}
+                <Button asChild variant="outline">
+                  <Link href="/capture">Capture a side thought</Link>
+                </Button>
+              </div>
+              {showResumeControl ? (
+                <p className="text-sm text-muted-foreground">
+                  Resume when you are ready, or finish the session with a real
+                  outcome.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Pause if you need to step away. Keep the outcome honest when
+                  the block ends.
+                </p>
+              )}
             </div>
-            {endDisabledReason ? (
-              <p className="text-xs text-muted-foreground">
-                End outcomes disabled: {endDisabledReason}
-              </p>
-            ) : null}
-            {stopDisabledReason ? (
-              <p className="text-xs text-muted-foreground">
-                Stop disabled: {stopDisabledReason}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Stop only updates sessions saved on this device.
-              </p>
-            )}
-          </div>
+          ) : null}
 
-          <Separator />
+          {showEndOutcomeControls ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                End this session
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => void handleMark("completed")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Complete
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleMark("stuck")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Stuck
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleMark("distracted")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Distracted
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleMark("missed")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Missed
+                </Button>
+                {showStopControl ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => void handleMark("stopped")}
+                    disabled={stopDisabledReason !== null}
+                  >
+                    Stop on this device
+                  </Button>
+                ) : null}
+              </div>
+              {showPersistedStopGuidance ? (
+                <p className="text-sm text-muted-foreground">
+                  Stop (device-only sessions) is only available when the
+                  session lives on this device. Sessions saved to your account
+                  need an end outcome and notes.
+                </p>
+              ) : null}
+              {showStopControl ? (
+                <p className="text-sm text-muted-foreground">
+                  Stop only updates sessions saved on this device.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -990,15 +1020,14 @@ export default function ExecutePage() {
                 </div>
               </>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Use these actions when a session ends or needs a reset.
+              <p className="text-sm text-muted-foreground">
+                Recovery actions show up after the session ends.
               </p>
             )}
           </div>
 
           {usesPersistedExecution && terminalForm ? (
             <>
-              <Separator />
               <section
                 aria-label="End session details"
                 className="flex flex-col gap-3 rounded-lg border border-border bg-muted/60 p-4"
