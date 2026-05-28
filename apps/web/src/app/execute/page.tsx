@@ -22,6 +22,7 @@ import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
 import { saveDestinationLabel, saveModeLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { executeLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import type { Phase2MockExecutionSession } from "@/lib/types";
 
@@ -418,6 +419,10 @@ export default function ExecutePage() {
     !terminalForm &&
     usesPersistedExecution &&
     (sessionUiState === "running" || sessionUiState === "paused");
+  const lifecycle = executeLifecycleDisplay({
+    uiState: sessionUiState,
+    hasPlannedBlock: Boolean(activeBlock),
+  });
 
   async function handleStart() {
     if (!activeTask || startDisabledReason) return;
@@ -805,11 +810,14 @@ export default function ExecutePage() {
               <h2 className="text-xl font-semibold leading-tight">
                 {activeTask.title}
               </h2>
-              {area ? (
-                <Badge variant="secondary" className="w-fit">
-                  Area: {area.name}
-                </Badge>
-              ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                {area ? (
+                  <Badge variant="secondary" className="w-fit">
+                    Area: {area.name}
+                  </Badge>
+                ) : null}
+              </div>
             </div>
             <Badge variant={hasActiveSession ? "default" : "outline"}>
               {sessionStateLabel}

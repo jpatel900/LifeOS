@@ -11,6 +11,7 @@ import type {
   Task,
 } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,6 +33,10 @@ import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
 import { saveModeLabel, savedViaLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import {
+  reviewGroupLifecycleDisplay,
+  reviewedLifecycleDisplay,
+} from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
 type ReviewState =
@@ -220,30 +225,35 @@ export default function ReviewPage() {
   };
   const summaryGroups = [
     {
+      lifecycle: "captured" as const,
       title: "Captured and still waiting",
       count: capturedWaiting.length,
       items: capturedWaiting.slice(0, 3).map((capture) => capture.raw_text),
       empty: "Nothing is stuck in capture right now.",
     },
     {
+      lifecycle: "planned" as const,
       title: "Planned",
       count: plannedBlocks.length,
       items: plannedTitles.slice(0, 3),
       empty: "Nothing is planned right now.",
     },
     {
+      lifecycle: "completed" as const,
       title: "Completed",
       count: completed.length,
       items: completedTitles.slice(0, 3),
       empty: "Nothing was marked complete yet.",
     },
     {
+      lifecycle: "follow_up" as const,
       title: "Needs follow-up",
       count: missed.length + distracted.length + stuck.length,
       items: recoveryTitles.slice(0, 3),
       empty: "Nothing ended as missed, stuck, or distracted.",
     },
     {
+      lifecycle: "carry_forward" as const,
       title: "Carry forward",
       count: openTasks.length,
       items: carryForwardTitles.slice(0, 3),
@@ -437,13 +447,16 @@ export default function ReviewPage() {
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {summaryGroups.map((group) => (
-            <div
-              key={group.title}
-              className="rounded-lg border border-border bg-card p-4"
-            >
+            <div key={group.title} className="rounded-lg border border-border bg-card p-4">
+              {(() => {
+                const lifecycle = reviewGroupLifecycleDisplay(group.lifecycle);
+                return (
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium">{group.title}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{group.title}</p>
+                    <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                  </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {group.count === 0 ? group.empty : `${group.count} item${group.count === 1 ? "" : "s"}`}
                   </p>
@@ -452,6 +465,8 @@ export default function ReviewPage() {
                   {group.count}
                 </span>
               </div>
+                );
+              })()}
               {group.items.length > 0 ? (
                 <ul className="mt-3 list-disc pl-5 text-sm text-foreground">
                   {group.items.map((item) => (
@@ -560,6 +575,7 @@ export default function ReviewPage() {
               </summary>
               <div className="mt-3 grid gap-3">
                 {reviewEntries.map((entry) => {
+                  const lifecycle = reviewedLifecycleDisplay();
                   const areaName =
                     entry.area_id === null
                       ? "All areas"
@@ -585,10 +601,15 @@ export default function ReviewPage() {
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <p className="font-medium">
-                            {entry.review_type} review for{" "}
-                            {formatReviewDate(entry.period_end)}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">
+                              {entry.review_type} review for{" "}
+                              {formatReviewDate(entry.period_end)}
+                            </p>
+                            <Badge variant={lifecycle.variant}>
+                              {lifecycle.label}
+                            </Badge>
+                          </div>
                           <p className="text-sm text-muted-foreground">
                             {areaName}
                           </p>

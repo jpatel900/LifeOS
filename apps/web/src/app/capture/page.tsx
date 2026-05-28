@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, type KeyboardEvent, useEffect, useState } from "react";
 import type { Area, CaptureItem, ParseCaptureResponse } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ import {
   savedViaLabel,
 } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { captureLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { workflowAreaIdForSlug } from "@/lib/workflowAreaMapping";
 
@@ -93,36 +94,6 @@ type ParseCaptureStatusApiResponse =
       preferredParser: "ai" | "mock";
     }
   | { ok: false; error: string };
-
-function captureLifecycleLabel(status: CaptureItem["status"]) {
-  switch (status) {
-    case "new":
-      return "Captured";
-    case "parsed":
-      return "Organized into drafts";
-    case "triage_required":
-      return "Ready for triage";
-    case "resolved":
-      return "Reviewed and closed";
-    case "archived":
-      return "Archived";
-  }
-}
-
-function captureLifecycleDetail(status: CaptureItem["status"]) {
-  switch (status) {
-    case "new":
-      return "Saved, but not organized yet.";
-    case "parsed":
-      return "Suggestions were created from this capture.";
-    case "triage_required":
-      return "Review the drafts in Triage before accepting them.";
-    case "resolved":
-      return "This capture already led to a reviewed decision.";
-    case "archived":
-      return "This capture was archived from the active flow.";
-  }
-}
 
 export default function CapturePage() {
   const {
@@ -236,6 +207,10 @@ export default function CapturePage() {
 
   async function handleSaveCapture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await saveCaptureOnly();
+  }
+
+  async function saveCaptureOnly() {
     setSaveState({ status: "saving" });
 
     try {
@@ -268,6 +243,19 @@ export default function CapturePage() {
           error instanceof Error ? error.message : "Unable to save capture.",
       });
     }
+  }
+
+  function handleCaptureShortcut(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      event.key !== "Enter" ||
+      (!event.ctrlKey && !event.metaKey) ||
+      saveState.status === "saving"
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    void saveCaptureOnly();
   }
 
   const areas = areasState.status === "ready" ? areasState.areas : [];
@@ -494,6 +482,7 @@ export default function CapturePage() {
             id="raw_capture"
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleCaptureShortcut}
             rows={5}
             placeholder="What's on your mind? Type anything..."
             className="resize-y"
@@ -505,6 +494,7 @@ export default function CapturePage() {
 
           <form
             onSubmit={handleSaveCapture}
+            id="capture-save-form"
             className="space-y-4 rounded-lg border p-4"
           >
             <h2 className="text-lg font-semibold">Save options</h2>
@@ -549,6 +539,10 @@ export default function CapturePage() {
                 <p className="text-xs text-muted-foreground">
                   Save the raw capture first. Organize it after if needed.
                 </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline">Ctrl/Cmd + Enter</Badge>
+                  <span>Saves thought from the main capture field.</span>
+                </div>
               </div>
               <div className="grid gap-1">
                 <Button
@@ -705,21 +699,20 @@ export default function CapturePage() {
           <div className="flex flex-col gap-2">
             {visibleCaptures.map((capture) => {
               const area = getAreaById(capture.area_id);
+              const lifecycle = captureLifecycleDisplay(capture.status);
               return (
                 <Card key={capture.id}>
                   <CardContent className="flex items-start justify-between gap-3 p-4">
                     <div className="space-y-1">
                       <p className="font-medium">{capture.raw_text}</p>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <Badge variant="outline">
-                          {captureLifecycleLabel(capture.status)}
-                        </Badge>
+                        <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
                         {area ? (
                           <Badge variant="secondary">Area: {area.name}</Badge>
                         ) : null}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {captureLifecycleDetail(capture.status)}
+                        {lifecycle.detail}
                       </p>
                     </div>
                     <Badge variant="secondary">Saved on this device</Badge>

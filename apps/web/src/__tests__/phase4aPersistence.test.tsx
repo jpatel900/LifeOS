@@ -620,6 +620,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Proposal drafted. Saved to your account.");
+    expect(screen.getByText("Accepted")).toBeDefined();
   });
 
   it("shows a planning load failure without crashing the page", async () => {
@@ -687,6 +688,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent(
       "Proposal drafted. Saved on this device.",
     );
+    expect(screen.getAllByText("Suggested time").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
         "Quick proposal: next available hour. You can adjust this before approving.",
@@ -1063,6 +1065,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Session started. Saved to your account.");
+    expect(screen.getByText("In focus")).toBeDefined();
   });
 
   it("shows an execution load failure and keeps the no-active-block fallback visible", async () => {
@@ -1286,6 +1289,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent(
       "Session marked missed. Saved to your account.",
     );
+    expect(screen.getByText("Needs review")).toBeDefined();
     expect(
       screen.getByText(
         "Session ended as missed. Capture why it was missed, then re-plan.",
@@ -1371,6 +1375,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(await screen.findByText("Main Job")).toBeDefined();
     expect(screen.getAllByText("Open tasks: 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Sessions recorded: 1")).toBeDefined();
+    expect(screen.getByText("Reviewed")).toBeDefined();
     expect(screen.getByText("Today at a glance")).toBeDefined();
     expect(screen.getByText("Past reviews and notes")).toBeDefined();
     expect(screen.getByText("Open saved review details")).toBeDefined();
@@ -1401,15 +1406,20 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByText("Completed")).toBeDefined();
+    await waitFor(() => {
+      expect(mocks.listCaptureItems).toHaveBeenCalledWith(mocks.supabaseClient);
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByText(
+          "Local capture should not appear in persisted review counts",
+        ),
+      ).toBeNull();
+    });
+    expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Nothing is stuck in capture right now."),
     ).toBeDefined();
-    expect(
-      screen.queryByText(
-        "Local capture should not appear in persisted review counts",
-      ),
-    ).toBeNull();
   });
 
   it("shows local capture context in review when provider is mock", async () => {

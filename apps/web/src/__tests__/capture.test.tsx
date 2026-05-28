@@ -148,6 +148,10 @@ describe("CapturePage", () => {
         /Save the raw capture first. Organize it after if needed./i,
       ),
     ).toBeDefined();
+    expect(screen.getByText("Ctrl/Cmd + Enter")).toBeDefined();
+    expect(
+      screen.getByText("Saves thought from the main capture field."),
+    ).toBeDefined();
     expect(
       screen.getByText(/Save first, then sort into drafts for Triage./i),
     ).toBeDefined();
@@ -245,6 +249,42 @@ describe("CapturePage", () => {
         }),
       ),
     );
+  });
+
+  it("submits Save thought from the main capture field with Ctrl/Cmd + Enter", async () => {
+    mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.createCaptureItem.mockResolvedValue({
+      provider: "supabase",
+      capture: persistedCapture,
+    });
+    mockParserStatusFetch("ai_configured");
+
+    renderCapturePage();
+
+    fireEvent.change(
+      await screen.findByPlaceholderText(
+        "What's on your mind? Type anything...",
+      ),
+      { target: { value: "Email Taylor about launch notes" } },
+    );
+    fireEvent.keyDown(
+      screen.getByPlaceholderText("What's on your mind? Type anything..."),
+      {
+        key: "Enter",
+        ctrlKey: true,
+      },
+    );
+
+    await waitFor(() =>
+      expect(mocks.createCaptureItem).toHaveBeenCalledWith(
+        mocks.supabaseClient,
+        {
+          raw_text: "Email Taylor about launch notes",
+          area_id: area.id,
+        },
+      ),
+    );
+    expect(await screen.findByText("Saved.")).toBeDefined();
   });
 
   it("saves capture, parses, and shows triage routing for low confidence", async () => {
