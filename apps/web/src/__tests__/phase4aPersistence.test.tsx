@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
     supabaseClient,
     createSupabaseBrowserClient: vi.fn(() => supabaseClient),
     listAreas: vi.fn(),
+    createArea: vi.fn(),
+    softDeleteArea: vi.fn(),
     listCaptureItems: vi.fn(),
     createCaptureItem: vi.fn(),
     createTask: vi.fn(),
@@ -41,6 +43,8 @@ vi.mock("@/lib/supabase/browser", () => ({
 
 vi.mock("@/lib/data/workflow", () => ({
   listAreas: mocks.listAreas,
+  createArea: mocks.createArea,
+  softDeleteArea: mocks.softDeleteArea,
   listCaptureItems: mocks.listCaptureItems,
   createCaptureItem: mocks.createCaptureItem,
   createTask: mocks.createTask,
@@ -312,6 +316,95 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<AreasSettingsPage />);
 
     expect(await screen.findByText("No active areas yet.")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Create area" })).toBeDefined();
+  });
+
+  it("creates a new active area from the zero-area onboarding state", async () => {
+    const deepWorkArea: Area = {
+      id: "550e8400-e29b-41d4-a716-446655440109",
+      user_id: area.user_id,
+      name: "Deep Work",
+      slug: "deep-work",
+      description: "Longer focus sessions.",
+      color: null,
+      icon: null,
+      sort_order: 0,
+      is_active: true,
+      created_at: "2026-05-28T16:40:00.000Z",
+      updated_at: "2026-05-28T16:40:00.000Z",
+    };
+
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [],
+    });
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+    mocks.createArea.mockResolvedValue({
+      provider: "supabase",
+      area: deepWorkArea,
+    });
+
+    renderWithWorkflow(<AreasSettingsPage />);
+
+    fireEvent.change(await screen.findByLabelText("Area name"), {
+      target: { value: "Deep Work" },
+    });
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "Longer focus sessions." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create area" }));
+
+    expect(mocks.createArea).toHaveBeenCalledWith(mocks.supabaseClient, {
+      name: "Deep Work",
+      description: "Longer focus sessions.",
+    });
+    expect(await screen.findByText("Area created.")).toBeDefined();
+    expect(screen.getByText("Deep Work")).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /Use this area|Using this area/ }),
+    ).toBeDefined();
+  });
+
+  it("soft-deletes an area from active settings cards", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+    mocks.softDeleteArea.mockResolvedValue({
+      provider: "supabase",
+      area: {
+        ...area,
+        is_active: false,
+        updated_at: "2026-05-28T16:45:00.000Z",
+      },
+    });
+
+    renderWithWorkflow(<AreasSettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove area" }));
+    expect(
+      await screen.findByRole("button", { name: "Confirm remove" }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+
+    expect(mocks.softDeleteArea).toHaveBeenCalledWith(mocks.supabaseClient, {
+      area_id: area.id,
+    });
+    expect(await screen.findByText("Area removed from active use.")).toBeDefined();
+    expect(screen.getByText("No active areas yet.")).toBeDefined();
   });
 
   it("requires local-reset confirmation, supports cancel, and shows success after reset", async () => {
@@ -1380,6 +1473,34 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(screen.getByText("Past reviews and notes")).toBeDefined();
     expect(screen.getByText("Open saved review details")).toBeDefined();
     expect(screen.getByText(/daily review for/i)).toBeDefined();
+  });
+
+  it("renders historical review rows safely when the linked area is no longer active", async () => {
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [
+        {
+          ...reviewEntry,
+          area_id: "550e8400-e29b-41d4-a716-446655440999",
+        },
+      ],
+    });
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
+
+    renderWithWorkflow(<ReviewPage />);
+
+    fireEvent.click(await screen.findByText("Open saved review details"));
+    expect(await screen.findByText("Saved area")).toBeDefined();
   });
 
   it("does not mix local session capture counts into persisted review summaries", async () => {

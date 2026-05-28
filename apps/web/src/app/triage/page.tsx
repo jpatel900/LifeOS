@@ -23,7 +23,7 @@ import { saveModeLabel, savedViaLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { triageLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
-import { slugForWorkflowAreaId } from "@/lib/workflowAreaMapping";
+import { persistedAreaIdForWorkflowAreaId } from "@/lib/workflowAreaMapping";
 
 type LoadState =
   | { status: "loading" }
@@ -49,14 +49,14 @@ type QueueItem =
     };
 
 function resolvePersistedAreaId(workflowAreaId: string, areas: Area[]) {
-  const slug = slugForWorkflowAreaId(workflowAreaId);
-  const area = areas.find((item) => item.slug === slug) ?? areas[0];
+  const areaId =
+    persistedAreaIdForWorkflowAreaId(workflowAreaId, areas) ?? areas[0]?.id;
 
-  if (!area) {
+  if (!areaId) {
     throw new Error("Create an active area before accepting triage drafts.");
   }
 
-  return area.id;
+  return areaId;
 }
 
 function sourceCaptureIdForPersistence(captureItemId: string) {

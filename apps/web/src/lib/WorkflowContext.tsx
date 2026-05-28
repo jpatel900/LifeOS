@@ -15,6 +15,7 @@ import {
   Phase2TaskDraftSchema,
   Phase2TimeBlockProposalDraftSchema,
   Phase2TimeBlockProposalSchema,
+  type Area,
   type Phase2TaskDraft,
   type Phase2TimeBlockProposal,
 } from "@lifeos/schemas";
@@ -40,7 +41,7 @@ import { listAreas } from "./data/workflow";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import type { Phase2MockExecutionSession } from "./types";
 import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
-import { workflowAreaIdForSlug } from "./workflowAreaMapping";
+import { workflowAreaIdForPersistedArea } from "./workflowAreaMapping";
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
@@ -122,6 +123,7 @@ interface WorkflowContextValue {
   state: WorkflowState;
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
+  syncPersistedAreas: (areas: Area[]) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
   acceptTaskDraft: (draftId: string) => void;
@@ -499,6 +501,24 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   );
   const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
 
+  function applyPersistedAreas(areas: Area[]) {
+    const syncedAreas = areas.map((area) => ({
+      id: workflowAreaIdForPersistedArea(area),
+      user_id: area.user_id,
+      name: area.name,
+      color: area.color ?? "#64748b",
+      created_at: area.created_at,
+    }));
+
+    dispatch({ type: "syncAreas", areas: syncedAreas });
+    setSelectedAreaId((current) => {
+      if (current && syncedAreas.some((area) => area.id === current)) {
+        return current;
+      }
+      return syncedAreas[0]?.id ?? null;
+    });
+  }
+
   useEffect(() => {
     const restoredState = loadStoredStateFromSession();
     if (restoredState) {
@@ -525,22 +545,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         if (cancelled || result.provider !== "supabase") {
           return;
         }
-
-        const syncedAreas = result.areas.map((area) => ({
-          id: workflowAreaIdForSlug(area.slug) ?? area.id,
-          user_id: area.user_id,
-          name: area.name,
-          color: area.color ?? "#64748b",
-          created_at: area.created_at,
-        }));
-
-        dispatch({ type: "syncAreas", areas: syncedAreas });
-        setSelectedAreaId((current) => {
-          if (current && syncedAreas.some((area) => area.id === current)) {
-            return current;
-          }
-          return syncedAreas[0]?.id ?? null;
-        });
+        applyPersistedAreas(result.areas);
       } catch {
         // Keep the session/mock area list when persisted areas cannot load.
       }
@@ -570,6 +575,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     state,
     selectedAreaId,
     setSelectedAreaId,
+    syncPersistedAreas: applyPersistedAreas,
     submitCaptureText: (rawText, areaId) =>
       dispatch({ type: "submitCapture", rawText, areaId }),
     addParsedWorkflowResult: (parsed) =>

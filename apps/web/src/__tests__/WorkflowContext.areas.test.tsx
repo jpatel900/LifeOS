@@ -99,4 +99,41 @@ describe("WorkflowProvider persisted area sync", () => {
       expect(screen.getByTestId("selected-area-id")).toHaveTextContent("");
     });
   });
+
+  it("keeps direct persisted ids for custom areas without canonical slug mappings", async () => {
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          user_id: "user-a",
+          name: "Deep Work",
+          slug: "deep-work",
+          description: "Custom area",
+          color: null,
+          icon: null,
+          sort_order: 0,
+          is_active: true,
+          created_at: "2026-05-28T00:00:00.000Z",
+          updated_at: "2026-05-28T00:00:00.000Z",
+        },
+      ],
+    });
+
+    render(
+      <WorkflowProvider>
+        <AreaProbe />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("area-count")).toHaveTextContent("1");
+      expect(screen.getByTestId("first-area-id")).toHaveTextContent(
+        "33333333-3333-4333-8333-333333333333",
+      );
+      expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+        "33333333-3333-4333-8333-333333333333",
+      );
+    });
+  });
 });

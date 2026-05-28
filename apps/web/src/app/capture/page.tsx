@@ -34,7 +34,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { captureLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
-import { workflowAreaIdForSlug } from "@/lib/workflowAreaMapping";
+import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 
 type AreasState =
   | { status: "loading" }
@@ -136,8 +136,7 @@ export default function CapturePage() {
           const first = result.areas[0];
           if (first) {
             setAreaId(first.id);
-            const wf = workflowAreaIdForSlug(first.slug);
-            if (wf) setSelectedAreaId(wf);
+            setSelectedAreaId(workflowAreaIdForPersistedArea(first));
           }
         }
       } catch (error) {
@@ -200,8 +199,7 @@ export default function CapturePage() {
         ? areasState.areas.find((a) => a.id === idOrEmpty)
         : undefined;
     if (area) {
-      const wf = workflowAreaIdForSlug(area.slug);
-      if (wf) setSelectedAreaId(wf);
+      setSelectedAreaId(workflowAreaIdForPersistedArea(area));
     }
   }
 
