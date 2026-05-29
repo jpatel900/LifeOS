@@ -33,6 +33,19 @@ const optionalNullableTrimmedText = z
   .nullish()
   .transform((value) => value ?? null);
 
+export const CreateAreaInputSchema = z.object({
+  name: z.string().trim().min(1),
+  description: optionalNullableTrimmedText,
+});
+
+export type CreateAreaInput = z.input<typeof CreateAreaInputSchema>;
+
+export const SoftDeleteAreaInputSchema = z.object({
+  area_id: z.string().uuid(),
+});
+
+export type SoftDeleteAreaInput = z.input<typeof SoftDeleteAreaInputSchema>;
+
 export const CreateProjectInputSchema = z.object({
   area_id: z.string().uuid(),
   title: z.string().trim().min(1),

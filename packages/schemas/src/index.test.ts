@@ -4,6 +4,7 @@ import {
   AreaSchema,
   CalendarBlockSchema,
   CaptureItemSchema,
+  CreateAreaInputSchema,
   CreateCaptureItemInputSchema,
   CreateExecutionSessionInputSchema,
   CreateGoogleCalendarEventInputSchema,
@@ -13,6 +14,7 @@ import {
   CheckTimeBlockProposalConflictInputSchema,
   MarkExecutionSessionInputSchema,
   CreateProjectInputSchema,
+  SoftDeleteAreaInputSchema,
   CreateTaskInputSchema,
   ExecutionSessionSchema,
   ExternalWriteEventSchema,
@@ -71,6 +73,36 @@ describe("CreateCaptureItemInputSchema", () => {
     expect(result.success ? result.data.raw_text : "").toBe(
       "Call dentist tomorrow",
     );
+  });
+});
+
+describe("CreateAreaInputSchema", () => {
+  it("trims and validates new area input", () => {
+    const result = CreateAreaInputSchema.safeParse({
+      name: "  Deep Work  ",
+      description: "  Longer focus-heavy work.  ",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.name : "").toBe("Deep Work");
+    expect(result.success ? result.data.description : "").toBe(
+      "Longer focus-heavy work.",
+    );
+  });
+});
+
+describe("SoftDeleteAreaInputSchema", () => {
+  it("requires a UUID area id", () => {
+    expect(
+      SoftDeleteAreaInputSchema.safeParse({
+        area_id: uid,
+      }).success,
+    ).toBe(true);
+    expect(
+      SoftDeleteAreaInputSchema.safeParse({
+        area_id: "not-a-uuid",
+      }).success,
+    ).toBe(false);
   });
 });
 

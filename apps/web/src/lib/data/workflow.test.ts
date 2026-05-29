@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   acceptTimeBlockProposal,
+  createArea,
   createReviewEntry,
   createTimeBlockProposal,
   createProject,
@@ -13,6 +14,7 @@ import {
   markExecutionSession,
   rejectTimeBlockProposal,
   listAreas,
+  softDeleteArea,
   type MinimalSupabaseClient,
 } from "./workflow";
 
@@ -229,6 +231,116 @@ describe("workflow data provider", () => {
       } as unknown as MinimalSupabaseClient),
     ).rejects.toThrow("Sign in before loading areas from Supabase.");
     expect(from).not.toHaveBeenCalled();
+  });
+
+  it("creates areas through Supabase with a unique slug and next sort order", async () => {
+    const existingOrder = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          user_id: userId,
+          name: "Main Job",
+          slug: "main-job",
+          description: null,
+          color: "#2563eb",
+          icon: "briefcase",
+          sort_order: 0,
+          is_active: true,
+          created_at: "2026-05-07T00:00:00.000Z",
+          updated_at: "2026-05-07T00:00:00.000Z",
+        },
+        {
+          id: "550e8400-e29b-41d4-a716-446655440999",
+          user_id: userId,
+          name: "Archived Main Job",
+          slug: "main-job-2",
+          description: null,
+          color: null,
+          icon: null,
+          sort_order: 5,
+          is_active: false,
+          created_at: "2026-05-07T00:00:00.000Z",
+          updated_at: "2026-05-07T00:00:00.000Z",
+        },
+      ],
+      error: null,
+    });
+    const existingSelect = vi.fn().mockReturnValue({ order: existingOrder });
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: "550e8400-e29b-41d4-a716-446655440777",
+        user_id: userId,
+        name: "Main Job",
+        slug: "main-job-3",
+        description: "Focus-heavy work",
+        color: null,
+        icon: null,
+        sort_order: 6,
+        is_active: true,
+        created_at: "2026-05-28T16:30:00.000Z",
+        updated_at: "2026-05-28T16:30:00.000Z",
+      },
+      error: null,
+    });
+    const insertSelect = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select: insertSelect });
+    const from = vi
+      .fn()
+      .mockReturnValueOnce({ select: existingSelect })
+      .mockReturnValueOnce({ insert });
+
+    const result = await createArea(authenticatedClient(from), {
+      name: "  Main Job  ",
+      description: "  Focus-heavy work  ",
+    });
+
+    expect(from).toHaveBeenNthCalledWith(1, "areas");
+    expect(from).toHaveBeenNthCalledWith(2, "areas");
+    expect(insert).toHaveBeenCalledWith({
+      user_id: userId,
+      name: "Main Job",
+      slug: "main-job-3",
+      description: "Focus-heavy work",
+      color: null,
+      icon: null,
+      sort_order: 6,
+      is_active: true,
+    });
+    expect(result.provider).toBe("supabase");
+    expect(result.area.slug).toBe("main-job-3");
+  });
+
+  it("soft-deletes areas through Supabase without deleting the row", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: areaId,
+        user_id: userId,
+        name: "Main Job",
+        slug: "main-job",
+        description: null,
+        color: "#2563eb",
+        icon: "briefcase",
+        sort_order: 0,
+        is_active: false,
+        created_at: "2026-05-07T00:00:00.000Z",
+        updated_at: "2026-05-28T16:35:00.000Z",
+      },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+
+    const result = await softDeleteArea(authenticatedClient(from), {
+      area_id: areaId,
+    });
+
+    expect(from).toHaveBeenCalledWith("areas");
+    expect(update).toHaveBeenCalledWith({ is_active: false });
+    expect(eq).toHaveBeenCalledWith("id", areaId);
+    expect(result.provider).toBe("supabase");
+    expect(result.area.is_active).toBe(false);
   });
 
   it("persists capture items through Supabase after validating input", async () => {

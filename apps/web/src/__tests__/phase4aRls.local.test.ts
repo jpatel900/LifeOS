@@ -190,6 +190,17 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     expect(data?.every((area) => area.user_id === userA.id)).toBe(true);
   });
 
+  it("denies authenticated hard deletes for areas", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+
+    const { data, error } = await userAClient
+      .from("areas")
+      .delete()
+      .eq("id", userA.areaId);
+
+    expectDenied(data, error);
+  });
+
   it("denies unauthenticated anon reads for areas and capture_items", async () => {
     const anonClient = createLocalClient();
 

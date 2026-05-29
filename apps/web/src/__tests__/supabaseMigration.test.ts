@@ -144,6 +144,17 @@ describe("Supabase local database scaffold", () => {
     }
   });
 
+  it("revokes authenticated hard delete for areas so removal stays soft-delete only", () => {
+    const sql = loadAllMigrations();
+
+    expect(sql).toContain(
+      "revoke delete on table public.areas from authenticated",
+    );
+    expect(sql).toContain(
+      "drop policy if exists areas_delete_own on public.areas",
+    );
+  });
+
   it("adds Phase 7B calendar connection and external-write audit scaffolding", () => {
     const sql = loadAllMigrations();
 

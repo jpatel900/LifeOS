@@ -1,22 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import type { Area, CalendarBlock, ReviewEntry, Task } from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { EmptyState } from "../../components/EmptyState";
 import {
+  createArea,
   listAreas,
   listExecutionReviewItems,
+  softDeleteArea,
   type DataProvider,
 } from "../../../lib/data/workflow";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
-import { workflowAreaIdForSlug } from "@/lib/workflowAreaMapping";
+import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
 
@@ -41,12 +45,48 @@ function formatReviewDate(value: string) {
 }
 
 export default function AreasSettingsPage() {
-  const { state: workflowState, selectedAreaId, setSelectedAreaId, resetWorkflow } =
-    useWorkflow();
+  const {
+    state: workflowState,
+    selectedAreaId,
+    setSelectedAreaId,
+    syncPersistedAreas,
+    resetWorkflow,
+  } = useWorkflow();
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [resetState, setResetState] = useState<
     "idle" | "confirming" | "success"
   >("idle");
+  const [newAreaName, setNewAreaName] = useState("");
+  const [newAreaDescription, setNewAreaDescription] = useState("");
+  const [createState, setCreateState] = useState<
+    | { status: "idle" }
+    | { status: "saving" }
+    | { status: "saved"; areaName: string }
+    | { status: "error"; message: string }
+  >({ status: "idle" });
+  const [removeState, setRemoveState] = useState<
+    | { status: "idle" }
+    | { status: "confirming"; areaId: string }
+    | { status: "saving"; areaId: string }
+    | { status: "saved"; areaName: string }
+    | { status: "error"; message: string }
+  >({ status: "idle" });
+
+  function sortAreas(areas: Area[]) {
+    return [...areas].sort((left, right) => left.sort_order - right.sort_order);
+  }
+
+  function replaceReadyAreas(nextAreas: Area[]) {
+    setState((current) =>
+      current.status === "ready"
+        ? {
+            ...current,
+            areas: sortAreas(nextAreas),
+          }
+        : current,
+    );
+    syncPersistedAreas(nextAreas);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -89,6 +129,52 @@ export default function AreasSettingsPage() {
     };
   }, []);
 
+  async function handleCreateArea(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreateState({ status: "saving" });
+
+    try {
+      const result = await createArea(createSupabaseBrowserClient(), {
+        name: newAreaName,
+        description: newAreaDescription,
+      });
+
+      const nextAreas =
+        state.status === "ready" ? [...state.areas, result.area] : [result.area];
+      replaceReadyAreas(nextAreas);
+      setSelectedAreaId(workflowAreaIdForPersistedArea(result.area));
+      setNewAreaName("");
+      setNewAreaDescription("");
+      setCreateState({ status: "saved", areaName: result.area.name });
+    } catch (error) {
+      setCreateState({
+        status: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to create area.",
+      });
+    }
+  }
+
+  async function handleConfirmRemoveArea(area: Area) {
+    setRemoveState({ status: "saving", areaId: area.id });
+
+    try {
+      await softDeleteArea(createSupabaseBrowserClient(), { area_id: area.id });
+      const nextAreas =
+        state.status === "ready"
+          ? state.areas.filter((item) => item.id !== area.id)
+          : [];
+      replaceReadyAreas(nextAreas);
+      setRemoveState({ status: "saved", areaName: area.name });
+    } catch (error) {
+      setRemoveState({
+        status: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to remove area.",
+      });
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <section className="space-y-2">
@@ -111,6 +197,70 @@ export default function AreasSettingsPage() {
           </>
         ) : null}
       </DiagnosticsDisclosure>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Create area</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={handleCreateArea} className="space-y-4">
+            <div className="grid gap-2 sm:max-w-md">
+              <label htmlFor="area_name" className="text-sm font-medium">
+                Area name
+              </label>
+              <Input
+                id="area_name"
+                value={newAreaName}
+                onChange={(event) => {
+                  setNewAreaName(event.target.value);
+                  if (createState.status !== "idle") {
+                    setCreateState({ status: "idle" });
+                  }
+                }}
+                placeholder="Main Job"
+                disabled={createState.status === "saving"}
+              />
+            </div>
+            <div className="grid gap-2 sm:max-w-xl">
+              <label htmlFor="area_description" className="text-sm font-medium">
+                Description
+              </label>
+              <Textarea
+                id="area_description"
+                value={newAreaDescription}
+                onChange={(event) => setNewAreaDescription(event.target.value)}
+                placeholder="What belongs in this area?"
+                rows={3}
+                disabled={createState.status === "saving"}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit" disabled={createState.status === "saving"}>
+                {createState.status === "saving" ? "Creating..." : "Create area"}
+              </Button>
+              <p className="text-sm text-muted-foreground">
+                New work should have a clear area before you plan or review it.
+              </p>
+            </div>
+          </form>
+
+          {createState.status === "saved" ? (
+            <Alert variant="success" role="status">
+              <AlertTitle>Area created.</AlertTitle>
+              <AlertDescription>
+                {createState.areaName} is now available in active area pickers.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {createState.status === "error" ? (
+            <Alert variant="destructive" role="alert">
+              <AlertTitle>Area could not be created</AlertTitle>
+              <AlertDescription>{createState.message}</AlertDescription>
+            </Alert>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {state.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
@@ -137,13 +287,12 @@ export default function AreasSettingsPage() {
           {state.areas.length === 0 ? (
             <EmptyState
               title="No active areas yet."
-              description="Create or load an area before capture and planning so work has a clear scope."
+              description="Create your first area above before capture and planning so new work has a clear scope."
             />
           ) : (
             state.areas.map((area) => {
-              const workflowAreaId = workflowAreaIdForSlug(area.slug);
-              const isSelected =
-                workflowAreaId !== null && selectedAreaId === workflowAreaId;
+              const workflowAreaId = workflowAreaIdForPersistedArea(area);
+              const isSelected = selectedAreaId === workflowAreaId;
               const areaTasks =
                 state.provider === "supabase"
                   ? state.tasks.filter((task) => task.area_id === area.id)
@@ -219,21 +368,17 @@ export default function AreasSettingsPage() {
                     </p>
 
                     <div className="flex flex-wrap gap-2">
-                      {workflowAreaId ? (
-                        <Button
-                          type="button"
-                          variant={isSelected ? "secondary" : "outline"}
-                          onClick={() => setSelectedAreaId(workflowAreaId)}
-                        >
-                          {isSelected ? "Using this area" : "Use this area"}
-                        </Button>
-                      ) : null}
+                      <Button
+                        type="button"
+                        variant={isSelected ? "secondary" : "outline"}
+                        onClick={() => setSelectedAreaId(workflowAreaId)}
+                      >
+                        {isSelected ? "Using this area" : "Use this area"}
+                      </Button>
                       <Button asChild>
                         <Link
                           href="/capture"
-                          onClick={() =>
-                            workflowAreaId && setSelectedAreaId(workflowAreaId)
-                          }
+                          onClick={() => setSelectedAreaId(workflowAreaId)}
                         >
                           Capture here
                         </Link>
@@ -241,9 +386,7 @@ export default function AreasSettingsPage() {
                       <Button asChild variant="outline">
                         <Link
                           href="/calendar"
-                          onClick={() =>
-                            workflowAreaId && setSelectedAreaId(workflowAreaId)
-                          }
+                          onClick={() => setSelectedAreaId(workflowAreaId)}
                         >
                           Plan area
                         </Link>
@@ -251,14 +394,51 @@ export default function AreasSettingsPage() {
                       <Button asChild variant="outline">
                         <Link
                           href="/review"
-                          onClick={() =>
-                            workflowAreaId && setSelectedAreaId(workflowAreaId)
-                          }
+                          onClick={() => setSelectedAreaId(workflowAreaId)}
                         >
                           Review area
                         </Link>
                       </Button>
+                      {removeState.status === "confirming" &&
+                      removeState.areaId === area.id ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={() => void handleConfirmRemoveArea(area)}
+                          >
+                            Confirm remove
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setRemoveState({ status: "idle" })}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          onClick={() =>
+                            setRemoveState({
+                              status: "confirming",
+                              areaId: area.id,
+                            })
+                          }
+                        >
+                          Remove area
+                        </Button>
+                      )}
                     </div>
+
+                    {removeState.status === "saving" &&
+                    removeState.areaId === area.id ? (
+                      <p className="text-sm text-muted-foreground">
+                        Removing area...
+                      </p>
+                    ) : null}
 
                     <details className="rounded-lg border border-border bg-background/50 p-3 text-xs text-muted-foreground">
                       <summary className="cursor-pointer select-none font-medium text-foreground">
@@ -280,6 +460,23 @@ export default function AreasSettingsPage() {
             })
           )}
         </section>
+      ) : null}
+
+      {removeState.status === "saved" ? (
+        <Alert variant="success" role="status">
+          <AlertTitle>Area removed from active use.</AlertTitle>
+          <AlertDescription>
+            {removeState.areaName} is now excluded from active pickers and new
+            work assignment.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {removeState.status === "error" ? (
+        <Alert variant="destructive" role="alert">
+          <AlertTitle>Area could not be removed</AlertTitle>
+          <AlertDescription>{removeState.message}</AlertDescription>
+        </Alert>
       ) : null}
 
       <GoogleCalendarConnectionPanel />
