@@ -32,6 +32,11 @@ import {
   planningTaskLifecycleDisplay,
   proposalLifecycleDisplay,
 } from "@/lib/workflowLifecycle";
+import {
+  buildAreaAccentStyle,
+  resolveAreaById,
+  resolveSelectedArea,
+} from "@/lib/areaAccent";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 
@@ -418,6 +423,7 @@ export default function CalendarPage() {
 
   const usesPersistedPlanning =
     planningState.status === "ready" && planningState.provider === "supabase";
+  const selectedArea = resolveSelectedArea(state.areas, selectedAreaId);
 
   async function handleCreateProposal(task: Task) {
     setActionState({ status: "saving", label: task.title });
@@ -1007,9 +1013,10 @@ export default function CalendarPage() {
                 />
               ) : (
                 proposals.map((proposal) => {
-                  const area = usesPersistedPlanning
-                    ? null
-                    : getAreaById(proposal.area_id);
+                  const area =
+                    resolveAreaById(state.areas, proposal.area_id) ??
+                    getAreaById(proposal.area_id);
+                  const accentArea = area ?? selectedArea;
                   const conflictSummary = proposalConflictSummary(proposal);
                   const task = usesPersistedPlanning
                     ? scheduleableTasks.find(
@@ -1090,12 +1097,15 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={proposal.id}
+                      data-testid="planning-proposal-card"
                       id={
                         proposal.id === proposals[0]?.id
                           ? "planning-next-proposal"
                           : undefined
                       }
-                      className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 text-sm"
+                      data-accent-strength="subtle"
+                      style={buildAreaAccentStyle(accentArea?.color)}
+                      className="area-accent-card flex flex-col gap-2 rounded-lg border border-border p-3 text-sm"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="font-medium">
@@ -1110,9 +1120,19 @@ export default function CalendarPage() {
                         - {new Date(proposal.proposed_end).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div className="text-muted-foreground">
+                        <Badge
+                          variant="secondary"
+                          className="area-accent-chip w-fit rounded-full"
+                        >
                           Area: {area.name}
-                        </div>
+                        </Badge>
+                      ) : selectedArea ? (
+                        <Badge
+                          variant="secondary"
+                          className="area-accent-chip w-fit rounded-full"
+                        >
+                          Current area: {selectedArea.name}
+                        </Badge>
                       ) : null}
                       <div className="text-muted-foreground">
                         {proposalRationale(proposal)}
@@ -1374,9 +1394,10 @@ export default function CalendarPage() {
                 />
               ) : (
                 blocks.map((block) => {
-                  const area = usesPersistedPlanning
-                    ? null
-                    : getAreaById(block.area_id);
+                  const area =
+                    resolveAreaById(state.areas, block.area_id) ??
+                    getAreaById(block.area_id);
+                  const accentArea = area ?? selectedArea;
                   const task = usesPersistedPlanning
                     ? scheduleableTasks.find(
                         (item) => item.id === block.task_id,
@@ -1387,7 +1408,10 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={block.id}
-                      className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3 text-sm"
+                      data-testid="planning-scheduled-block-card"
+                      data-accent-strength="subtle"
+                      style={buildAreaAccentStyle(accentArea?.color)}
+                      className="area-accent-card flex flex-col gap-1 rounded-lg border border-border p-3 text-sm"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="font-medium">
@@ -1402,9 +1426,19 @@ export default function CalendarPage() {
                         {new Date(block.end_at).toLocaleTimeString()}
                       </div>
                       {area ? (
-                        <div className="text-muted-foreground">
+                        <Badge
+                          variant="secondary"
+                          className="area-accent-chip w-fit rounded-full"
+                        >
                           Area: {area.name}
-                        </div>
+                        </Badge>
+                      ) : selectedArea ? (
+                        <Badge
+                          variant="secondary"
+                          className="area-accent-chip w-fit rounded-full"
+                        >
+                          Current area: {selectedArea.name}
+                        </Badge>
                       ) : null}
                       <span className="text-xs text-muted-foreground">
                         Status: {block.status}

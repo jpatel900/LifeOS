@@ -35,6 +35,11 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { captureLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
+import {
+  buildAreaAccentStyle,
+  resolveAreaById,
+  resolveSelectedArea,
+} from "@/lib/areaAccent";
 
 type AreasState =
   | { status: "loading" }
@@ -406,6 +411,8 @@ export default function CapturePage() {
     parserStatusState.status === "ready"
       ? aiSortingAvailabilityDetail(parserStatusState.parserStatus)
       : "You can still save thoughts and organize them on this device.";
+  const selectedArea = resolveSelectedArea(state.areas, selectedAreaId);
+  const selectedAreaStyle = buildAreaAccentStyle(selectedArea?.color);
 
   const visibleCaptures = state.captureItems.filter((capture) => {
     if (!selectedAreaId) return true;
@@ -426,7 +433,7 @@ export default function CapturePage() {
         </p>
       </section>
 
-      <Card className="max-w-3xl">
+      <Card className="workflow-quiet-card max-w-3xl">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">
             Organization help: {parserStatusLabel}
@@ -465,7 +472,7 @@ export default function CapturePage() {
         </Alert>
       ) : null}
 
-      <Card className="max-w-3xl">
+      <Card data-testid="capture-main-card" className="workflow-primary-card max-w-3xl">
         <CardHeader>
           <CardTitle>Capture a thought</CardTitle>
           <CardDescription>
@@ -493,9 +500,26 @@ export default function CapturePage() {
           <form
             onSubmit={handleSaveCapture}
             id="capture-save-form"
-            className="space-y-4 rounded-lg border p-4"
+            data-testid="capture-save-options-card"
+            data-accent-strength="subtle"
+            style={selectedAreaStyle}
+            className="area-accent-card space-y-4 rounded-lg border p-4"
           >
-            <h2 className="text-lg font-semibold">Save options</h2>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold">Save options</h2>
+              {selectedArea ? (
+                <Badge
+                  variant="secondary"
+                  className="area-accent-chip inline-flex items-center gap-2 rounded-full"
+                >
+                  <span
+                    aria-hidden
+                    className="area-accent-dot h-2 w-2 rounded-full"
+                  />
+                  Current area: {selectedArea.name}
+                </Badge>
+              ) : null}
+            </div>
             <label htmlFor="area_persist" className="text-sm font-medium">
               Area for this saved thought
             </label>
@@ -579,7 +603,7 @@ export default function CapturePage() {
           </div>
 
           {latestDraft && latestAssessment && latestProposalDraft ? (
-            <Card className="border-cyan-500/40 bg-cyan-500/10">
+            <Card className="workflow-secondary-card border-cyan-500/40 bg-cyan-500/10">
               <CardContent className="space-y-1 p-4 text-sm">
                 <p className="font-semibold">
                   On-device sorting created suggestions.
@@ -696,10 +720,19 @@ export default function CapturePage() {
         ) : (
           <div className="flex flex-col gap-2">
             {visibleCaptures.map((capture) => {
-              const area = getAreaById(capture.area_id);
+              const area =
+                resolveAreaById(state.areas, capture.area_id) ??
+                getAreaById(capture.area_id);
               const lifecycle = captureLifecycleDisplay(capture.status);
+              const captureAreaStyle = buildAreaAccentStyle(area?.color);
               return (
-                <Card key={capture.id}>
+                <Card
+                  key={capture.id}
+                  data-testid="capture-recent-card"
+                  data-accent-strength="subtle"
+                  style={captureAreaStyle}
+                  className="area-accent-card workflow-secondary-card"
+                >
                   <CardContent className="flex items-start justify-between gap-3 p-4">
                     <div className="space-y-1">
                       <p className="font-medium">{capture.raw_text}</p>

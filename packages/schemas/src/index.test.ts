@@ -23,6 +23,7 @@ import {
   ParseCaptureResponseSchema,
   ProjectSchema,
   ReviewEntrySchema,
+  UpdateAreaColorInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
 } from "./index";
@@ -103,6 +104,35 @@ describe("SoftDeleteAreaInputSchema", () => {
         area_id: "not-a-uuid",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("UpdateAreaColorInputSchema", () => {
+  it("accepts a valid area id with a six-digit hex color", () => {
+    const result = UpdateAreaColorInputSchema.safeParse({
+      area_id: uid,
+      color: "#2563eb",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts null to reset back to the default accent", () => {
+    const result = UpdateAreaColorInputSchema.safeParse({
+      area_id: uid,
+      color: null,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid color strings", () => {
+    const result = UpdateAreaColorInputSchema.safeParse({
+      area_id: uid,
+      color: "blue",
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 

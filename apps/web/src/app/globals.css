@@ -117,6 +117,113 @@ body {
     sans-serif;
 }
 
+.area-accent-card {
+  border-color: var(--area-accent-border);
+  background:
+    linear-gradient(
+      180deg,
+      var(--area-accent-surface) 0%,
+      color-mix(in oklch, var(--area-accent-surface) 55%, var(--card)) 100%
+    );
+  box-shadow:
+    inset 4px 0 0 0 var(--area-accent),
+    inset 0 1px 0 0 var(--area-accent-soft);
+}
+
+.area-accent-card[data-accent-strength="strong"] {
+  background:
+    linear-gradient(
+      180deg,
+      var(--area-accent-muted) 0%,
+      color-mix(in oklch, var(--area-accent-surface) 82%, var(--card)) 100%
+    );
+  box-shadow:
+    inset 6px 0 0 0 var(--area-accent),
+    0 20px 40px -36px var(--area-accent);
+}
+
+.area-accent-panel {
+  border-color: var(--area-accent-border);
+  background: color-mix(in oklch, var(--area-accent-soft) 72%, var(--card));
+}
+
+.area-accent-chip {
+  border-color: var(--area-accent-border);
+  background: var(--area-accent-soft);
+  color: var(--foreground);
+}
+
+.area-accent-dot {
+  background: var(--area-accent);
+  box-shadow: 0 0 0 4px var(--area-accent-soft);
+}
+
+.workflow-primary-card {
+  border-color: color-mix(in oklch, var(--foreground) 8%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 82%, var(--muted)) 0%,
+      var(--card) 100%
+    );
+  box-shadow:
+    0 24px 48px -40px color-mix(in oklch, var(--foreground) 24%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 4%, white);
+}
+
+.workflow-secondary-card {
+  background: color-mix(in oklch, var(--card) 90%, var(--muted));
+  box-shadow: 0 8px 24px -24px color-mix(in oklch, var(--foreground) 12%, transparent);
+}
+
+.workflow-quiet-card {
+  background: color-mix(in oklch, var(--card) 76%, var(--muted));
+  box-shadow: none;
+}
+
+.workflow-support-panel {
+  border-color: color-mix(in oklch, var(--border) 76%, var(--muted));
+  background: color-mix(in oklch, var(--muted) 68%, transparent);
+}
+
+.focus-state-card {
+  border-color: var(--area-accent-border);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--area-accent-soft) 78%, var(--card)) 0%,
+      color-mix(in oklch, var(--area-accent-surface) 42%, var(--card)) 100%
+    );
+  box-shadow:
+    0 18px 36px -34px color-mix(in oklch, var(--area-accent) 60%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, var(--area-accent-soft) 78%, white);
+}
+
+.focus-state-card[data-focus-state="running"] {
+  border-color: color-mix(in oklch, var(--area-accent) 36%, var(--border));
+}
+
+.focus-state-card[data-focus-state="paused"] {
+  border-color: color-mix(in oklch, var(--accent) 40%, var(--border));
+}
+
+.focus-state-card[data-focus-state="completed"] {
+  border-color: color-mix(in oklch, var(--primary) 34%, var(--border));
+}
+
+.focus-state-card[data-focus-state="stopped"],
+.focus-state-card[data-focus-state="stuck"],
+.focus-state-card[data-focus-state="distracted"],
+.focus-state-card[data-focus-state="missed"] {
+  border-color: color-mix(in oklch, var(--destructive) 24%, var(--area-accent-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--destructive) 7%, var(--area-accent-soft)) 0%,
+      color-mix(in oklch, var(--card) 88%, var(--area-accent-surface)) 100%
+    );
+}
+
 h1,
 h2,
 h3,

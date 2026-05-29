@@ -12,7 +12,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description }: EmptyStateProps) {
   return (
-    <Card className="border-dashed">
+    <Card className="workflow-quiet-card border-dashed shadow-none">
       <CardContent className="p-5">
         <CardTitle className="text-base">{title}</CardTitle>
         {description ? (

@@ -19,6 +19,7 @@ import {
   SoftDeleteAreaInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
+  UpdateAreaColorInputSchema,
   type Area,
   type CalendarBlock,
   type CaptureItem,
@@ -38,6 +39,7 @@ import {
   type SoftDeleteAreaInput,
   type Task,
   type TimeBlockProposal,
+  type UpdateAreaColorInput,
 } from "@lifeos/schemas";
 import {
   normalizeSupabaseRow,
@@ -62,6 +64,11 @@ export interface AreaCreateResult {
 }
 
 export interface AreaSoftDeleteResult {
+  provider: DataProvider;
+  area: Area;
+}
+
+export interface AreaColorUpdateResult {
   provider: DataProvider;
   area: Area;
 }
@@ -565,6 +572,66 @@ export async function softDeleteArea(
   const { data, error } = await query
     .update({
       is_active: false,
+    })
+    .eq("id", parsedInput.area_id)
+    .select(areaColumns)
+    .single();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return {
+    provider: "supabase",
+    area: AreaSchema.parse(normalizeSupabaseRow(data)),
+  };
+}
+
+export async function updateAreaColor(
+  client: MinimalSupabaseClient | null,
+  input: UpdateAreaColorInput,
+): Promise<AreaColorUpdateResult> {
+  const parsedInput = UpdateAreaColorInputSchema.parse(input);
+
+  if (!client) {
+    const area = mockAreas.find((item) => item.id === parsedInput.area_id);
+
+    if (!area) {
+      throw new Error("Area not found.");
+    }
+
+    const updatedArea = AreaSchema.parse({
+      ...area,
+      color: parsedInput.color,
+      updated_at: new Date().toISOString(),
+    });
+    const index = mockAreas.findIndex((item) => item.id === parsedInput.area_id);
+    mockAreas.splice(index, 1, updatedArea);
+
+    return {
+      provider: "mock",
+      area: updatedArea,
+    };
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before updating area colors in Supabase.",
+  );
+
+  const query = client.from("areas") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (column: string, value: string) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({
+      color: parsedInput.color,
     })
     .eq("id", parsedInput.area_id)
     .select(areaColumns)

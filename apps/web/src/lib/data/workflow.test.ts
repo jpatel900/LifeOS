@@ -15,6 +15,7 @@ import {
   rejectTimeBlockProposal,
   listAreas,
   softDeleteArea,
+  updateAreaColor,
   type MinimalSupabaseClient,
 } from "./workflow";
 
@@ -341,6 +342,71 @@ describe("workflow data provider", () => {
     expect(eq).toHaveBeenCalledWith("id", areaId);
     expect(result.provider).toBe("supabase");
     expect(result.area.is_active).toBe(false);
+  });
+
+  it("updates an area's persisted accent color through Supabase", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: areaId,
+        user_id: userId,
+        name: "Main Job",
+        slug: "main-job",
+        description: null,
+        color: "#0f766e",
+        icon: "briefcase",
+        sort_order: 0,
+        is_active: true,
+        created_at: "2026-05-07T00:00:00.000Z",
+        updated_at: "2026-05-29T03:00:00.000Z",
+      },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+
+    const result = await updateAreaColor(authenticatedClient(from), {
+      area_id: areaId,
+      color: "#0f766e",
+    });
+
+    expect(from).toHaveBeenCalledWith("areas");
+    expect(update).toHaveBeenCalledWith({ color: "#0f766e" });
+    expect(eq).toHaveBeenCalledWith("id", areaId);
+    expect(result.provider).toBe("supabase");
+    expect(result.area.color).toBe("#0f766e");
+  });
+
+  it("resets an area's accent back to the default token with null color", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: areaId,
+        user_id: userId,
+        name: "Main Job",
+        slug: "main-job",
+        description: null,
+        color: null,
+        icon: "briefcase",
+        sort_order: 0,
+        is_active: true,
+        created_at: "2026-05-07T00:00:00.000Z",
+        updated_at: "2026-05-29T03:10:00.000Z",
+      },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const eq = vi.fn().mockReturnValue({ select });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+
+    const result = await updateAreaColor(authenticatedClient(from), {
+      area_id: areaId,
+      color: null,
+    });
+
+    expect(update).toHaveBeenCalledWith({ color: null });
+    expect(result.area.color).toBeNull();
   });
 
   it("persists capture items through Supabase after validating input", async () => {

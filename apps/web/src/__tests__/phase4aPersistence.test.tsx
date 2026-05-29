@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     createSupabaseBrowserClient: vi.fn(() => supabaseClient),
     listAreas: vi.fn(),
     createArea: vi.fn(),
+    updateAreaColor: vi.fn(),
     softDeleteArea: vi.fn(),
     listCaptureItems: vi.fn(),
     createCaptureItem: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 vi.mock("@/lib/data/workflow", () => ({
   listAreas: mocks.listAreas,
   createArea: mocks.createArea,
+  updateAreaColor: mocks.updateAreaColor,
   softDeleteArea: mocks.softDeleteArea,
   listCaptureItems: mocks.listCaptureItems,
   createCaptureItem: mocks.createCaptureItem,
@@ -369,6 +371,63 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(
       screen.getByRole("button", { name: /Use this area|Using this area/ }),
     ).toBeDefined();
+  });
+
+  it("updates an area's accent color and supports resetting back to default", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    mocks.listExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+    mocks.updateAreaColor
+      .mockResolvedValueOnce({
+        provider: "supabase",
+        area: { ...area, color: "#0f766e" },
+      })
+      .mockResolvedValueOnce({
+        provider: "supabase",
+        area: { ...area, color: null },
+      });
+
+    renderWithWorkflow(<AreasSettingsPage />);
+
+    const areaCard = await screen.findByTestId("areas-area-card");
+    expect(areaCard).toHaveStyle({ "--area-accent": "#2563eb" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Teal" }));
+
+    await waitFor(() => {
+      expect(mocks.updateAreaColor).toHaveBeenNthCalledWith(
+        1,
+        mocks.supabaseClient,
+        {
+          area_id: area.id,
+          color: "#0f766e",
+        },
+      );
+    });
+    expect(areaCard).toHaveStyle({ "--area-accent": "#0f766e" });
+    expect(await screen.findByText("Accent updated.")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Default" }));
+
+    await waitFor(() => {
+      expect(mocks.updateAreaColor).toHaveBeenNthCalledWith(
+        2,
+        mocks.supabaseClient,
+        {
+          area_id: area.id,
+          color: null,
+        },
+      );
+    });
+    expect(areaCard).toHaveStyle({ "--area-accent": "#64748b" });
   });
 
   it("soft-deletes an area from active settings cards", async () => {
@@ -1321,7 +1380,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       screen.getByRole("button", { name: "Stop on this device" }),
     );
 
-    expect(await screen.findByText("Stopped")).toBeDefined();
+    expect(await screen.findByText("Stopped on this device")).toBeDefined();
     expect(
       screen.getByText(
         "Session stopped on this device. Decide the next useful step.",
@@ -1398,7 +1457,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       screen.getByRole("link", { name: "Review this later" }),
     ).toBeDefined();
     expect(
-      screen.getByRole("link", { name: "Back to Planning" }),
+      screen.getByRole("link", { name: "Plan next block" }),
     ).toBeDefined();
   });
 

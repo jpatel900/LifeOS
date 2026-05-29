@@ -25,6 +25,11 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { executeLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import type { Phase2MockExecutionSession } from "@/lib/types";
+import {
+  buildAreaAccentStyle,
+  resolveAreaById,
+  resolveSelectedArea,
+} from "@/lib/areaAccent";
 
 type ExecuteState =
   | { status: "loading" }
@@ -226,8 +231,61 @@ function recoveryGuidance(status: PersistedTerminalStatus) {
   }
 }
 
+function focusStateTitle(
+  uiState: SessionUiState,
+  usesPersistedExecution: boolean,
+) {
+  switch (uiState) {
+    case "not_started":
+      return "Ready to focus";
+    case "running":
+      return "Focus in progress";
+    case "paused":
+      return usesPersistedExecution
+        ? "Paused and waiting for a real outcome"
+        : "Paused on purpose";
+    case "completed":
+      return "Session complete";
+    case "stopped":
+      return "Stopped on this device";
+    case "stuck":
+      return "Blocked, but recoverable";
+    case "distracted":
+      return "Focus was interrupted";
+    case "missed":
+      return "Missed block";
+  }
+}
+
+function focusStateDescription(
+  uiState: SessionUiState,
+  usesPersistedExecution: boolean,
+) {
+  switch (uiState) {
+    case "not_started":
+      return "One mission is staged. Start when you are ready, then keep the outcome honest.";
+    case "running":
+      return "Stay with this mission until you can mark a real end outcome.";
+    case "paused":
+      return usesPersistedExecution
+        ? "Sessions saved to your account cannot resume yet. Finish with the outcome that matches what happened."
+        : "Resume when you are ready, or end the session with the outcome that fits.";
+    case "completed":
+      return "Close the loop in Review, then decide whether another block is needed.";
+    case "stopped":
+      return "This device-only session ended without a saved account outcome. Choose the next useful move.";
+    case "stuck":
+      return "Capture the blocker in plain language, then make the next move smaller or later.";
+    case "distracted":
+      return "Capture the interruption, then choose whether to reset or re-plan.";
+    case "missed":
+      return "Record why the block was missed, then pick the next useful step without shame.";
+  }
+}
+
 export default function ExecutePage() {
-  const { state, startTaskSession, markSession } = useWorkflow();
+  const { state, selectedAreaId, startTaskSession, markSession } =
+    useWorkflow();
   const [executeState, setExecuteState] = useState<ExecuteState>({
     status: "loading",
   });
@@ -326,7 +384,13 @@ export default function ExecutePage() {
     ? (blocks.find((block) => block.id === activeSession.calendar_block_id) ??
       null)
     : (blocks.find((block) => block.task_id === activeTask?.id) ?? null);
-  const area = activeTask ? getAreaById(activeTask.area_id) : null;
+  const area = activeTask
+    ? resolveAreaById(state.areas, activeTask.area_id) ??
+      getAreaById(activeTask.area_id) ??
+      null
+    : null;
+  const selectedArea = resolveSelectedArea(state.areas, selectedAreaId);
+  const missionArea = area ?? selectedArea;
   const sessionStartedLabel = !activeSession
     ? "Not started"
     : usesPersistedExecution
@@ -423,6 +487,11 @@ export default function ExecutePage() {
     uiState: sessionUiState,
     hasPlannedBlock: Boolean(activeBlock),
   });
+  const focusTitle = focusStateTitle(sessionUiState, usesPersistedExecution);
+  const focusDescription = focusStateDescription(
+    sessionUiState,
+    usesPersistedExecution,
+  );
 
   async function handleStart() {
     if (!activeTask || startDisabledReason) return;
@@ -728,7 +797,7 @@ export default function ExecutePage() {
             <AlertDescription>{actionState.message}</AlertDescription>
           </Alert>
         ) : null}
-        <Card>
+        <Card className="workflow-primary-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">What Execute is for</CardTitle>
           </CardHeader>
@@ -800,7 +869,156 @@ export default function ExecutePage() {
         </Alert>
       ) : null}
 
-      <Card className="max-w-[820px]">
+      <Card
+        data-testid="execute-focus-state-card"
+        data-focus-state={sessionUiState}
+        style={buildAreaAccentStyle(missionArea?.color)}
+        className="focus-state-card max-w-[820px]"
+      >
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Focus state</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {sessionStateLabel}
+              </p>
+              <h2 className="text-2xl font-semibold leading-tight">
+                {focusTitle}
+              </h2>
+              <p className="max-w-2xl text-sm text-muted-foreground">
+                {focusDescription}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              {missionArea ? (
+                <span className="area-accent-chip inline-flex items-center gap-2 rounded-full border px-3 py-1 font-medium">
+                  <span
+                    aria-hidden="true"
+                    className="area-accent-dot size-2 rounded-full"
+                  />
+                  Current area: {missionArea.name}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {showStartControl ? (
+              <>
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={() => void handleStart()}
+                  disabled={startDisabledReason !== null}
+                >
+                  Start focus session
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/calendar">Check Planning</Link>
+                </Button>
+              </>
+            ) : null}
+
+            {showResumeControl ? (
+              <>
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={() => void handleResume()}
+                  disabled={resumeDisabledReason !== null}
+                >
+                  Resume focus session
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => void handleMark("completed")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Complete this block
+                </Button>
+              </>
+            ) : null}
+
+            {sessionUiState === "running" ? (
+              <>
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={() => void handleMark("completed")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Complete this block
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => void handleMark("paused")}
+                  disabled={pauseDisabledReason !== null}
+                >
+                  Pause focus session
+                </Button>
+              </>
+            ) : null}
+
+            {usesPersistedExecution && sessionUiState === "paused" ? (
+              <>
+                <Button asChild size="lg">
+                  <Link href="#execute-end-actions">Choose end outcome</Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/review">Review context</Link>
+                </Button>
+              </>
+            ) : null}
+
+            {sessionUiState === "completed" ? (
+              <>
+                <Button asChild size="lg">
+                  <Link href="/review">Review this session</Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/calendar">Plan next block</Link>
+                </Button>
+              </>
+            ) : null}
+
+            {["stopped", "stuck", "distracted", "missed"].includes(
+              sessionUiState,
+            ) ? (
+              <>
+                <Button asChild size="lg">
+                  <Link href="/capture">Capture follow-up</Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/calendar">Plan next block</Link>
+                </Button>
+                <Button asChild size="lg" variant="ghost">
+                  <Link href="/review">Review this session</Link>
+                </Button>
+              </>
+            ) : null}
+          </div>
+
+          {!activeBlock ? (
+            <p className="text-sm text-muted-foreground">
+              No planned block is attached right now. You can still focus this
+              task, or plan a block first.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card
+        data-testid="execute-current-mission-card"
+        data-accent-strength="strong"
+        style={buildAreaAccentStyle(missionArea?.color)}
+        className="area-accent-card workflow-primary-card max-w-[820px]"
+      >
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Current mission</CardTitle>
         </CardHeader>
@@ -813,8 +1031,18 @@ export default function ExecutePage() {
               <div className="flex flex-wrap gap-2">
                 <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
                 {area ? (
-                  <Badge variant="secondary" className="w-fit">
+                  <Badge
+                    variant="secondary"
+                    className="area-accent-chip w-fit rounded-full"
+                  >
                     Area: {area.name}
+                  </Badge>
+                ) : selectedArea ? (
+                  <Badge
+                    variant="secondary"
+                    className="area-accent-chip w-fit rounded-full"
+                  >
+                    Current area: {selectedArea.name}
                   </Badge>
                 ) : null}
               </div>
@@ -825,14 +1053,14 @@ export default function ExecutePage() {
           </div>
 
           <div className="grid gap-2 text-sm">
-            <p className="rounded-md border border-border bg-muted/60 p-3">
+            <p className="area-accent-panel rounded-md border p-3">
               <span className="font-medium text-foreground">
                 First tiny step:
               </span>{" "}
               {activeTask.first_tiny_step ??
                 "Pick one concrete action you can finish in a few minutes."}
             </p>
-            <p className="rounded-md border border-border bg-muted/60 p-3">
+            <p className="area-accent-panel rounded-md border p-3">
               <span className="font-medium text-foreground">
                 Definition of done:
               </span>{" "}
@@ -842,13 +1070,13 @@ export default function ExecutePage() {
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-md border border-border p-3 text-sm">
+            <div className="area-accent-panel rounded-md border p-3 text-sm">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Session started
               </p>
               <p className="mt-1 font-medium">{sessionStartedLabel}</p>
             </div>
-            <div className="rounded-md border border-border p-3 text-sm">
+            <div className="area-accent-panel rounded-md border p-3 text-sm">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Timing
               </p>
@@ -856,16 +1084,16 @@ export default function ExecutePage() {
             </div>
           </div>
 
-          <p className="rounded-md border border-border bg-muted/50 p-3 text-sm text-foreground">
+          <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
             <span className="font-medium">Next recommended action:</span>{" "}
             {nextRecommendedAction}
           </p>
         </CardContent>
       </Card>
 
-      <Card className="max-w-[820px]">
+      <Card className="workflow-secondary-card max-w-[820px]">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Session controls</CardTitle>
+          <CardTitle className="text-base">Focus controls</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {showStartControl ? (
@@ -880,9 +1108,6 @@ export default function ExecutePage() {
                   disabled={startDisabledReason !== null}
                 >
                   Start
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href="/capture">Capture a side thought</Link>
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground">
@@ -917,9 +1142,6 @@ export default function ExecutePage() {
                     Resume
                   </Button>
                 ) : null}
-                <Button asChild variant="outline">
-                  <Link href="/capture">Capture a side thought</Link>
-                </Button>
               </div>
               {showResumeControl ? (
                 <p className="text-sm text-muted-foreground">
@@ -936,7 +1158,7 @@ export default function ExecutePage() {
           ) : null}
 
           {showEndOutcomeControls ? (
-            <div className="flex flex-col gap-2">
+            <div id="execute-end-actions" className="flex flex-col gap-2">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 End this session
               </p>
@@ -998,47 +1220,56 @@ export default function ExecutePage() {
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Recovery / next-step actions
-            </p>
-            {isTerminalSession ? (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  This session is ended. Pick the next useful move.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button asChild type="button" variant="outline">
-                    <Link href="/calendar">Plan another block</Link>
-                  </Button>
-                  <Button asChild type="button" variant="outline">
-                    <Link href="/capture">Capture what got in the way</Link>
-                  </Button>
-                  <Button asChild type="button" variant="outline">
-                    <Link href="/review">Review this later</Link>
-                  </Button>
-                  <Button asChild type="button" variant="secondary">
-                    <Link href="/calendar">Back to Planning</Link>
-                  </Button>
-                  {!usesPersistedExecution && startDisabledReason === null ? (
-                    <Button type="button" onClick={() => void handleStart()}>
-                      Start another session
-                    </Button>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Recovery actions show up after the session ends.
+          {isTerminalSession ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Recovery / next-step actions
               </p>
-            )}
+              <p className="text-sm text-muted-foreground">
+                This session is ended. Pick the next useful move.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild type="button" variant="outline">
+                  <Link href="/calendar">Plan another block</Link>
+                </Button>
+                <Button asChild type="button" variant="outline">
+                  <Link href="/capture">Capture what got in the way</Link>
+                </Button>
+                <Button asChild type="button" variant="outline">
+                  <Link href="/review">Review this later</Link>
+                </Button>
+                {!usesPersistedExecution && startDisabledReason === null ? (
+                  <Button type="button" onClick={() => void handleStart()}>
+                    Start another session
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          <div
+            data-testid="execute-side-thought-card"
+            className="workflow-support-panel flex flex-col gap-2 rounded-lg border p-4"
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Side thought
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Capture it without losing the current mission. Keep it secondary
+              until this focus block is done.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild type="button" variant="outline">
+                <Link href="/capture">Capture a side thought</Link>
+              </Button>
+            </div>
           </div>
 
           {usesPersistedExecution && terminalForm ? (
             <>
               <section
                 aria-label="End session details"
-                className="flex flex-col gap-3 rounded-lg border border-border bg-muted/60 p-4"
+                className="workflow-support-panel flex flex-col gap-3 rounded-lg border bg-muted/60 p-4"
               >
                 <h2 className="m-0 text-[0.95rem] font-semibold">
                   {recoveryTitle(terminalForm.status)}
@@ -1047,7 +1278,7 @@ export default function ExecutePage() {
                   {recoveryGuidance(terminalForm.status)}
                 </p>
                 {terminalForm.status !== "completed" ? (
-                  <div className="rounded-md border border-border bg-background/60 p-3 text-sm">
+                  <div className="workflow-support-panel rounded-md border bg-background/60 p-3 text-sm">
                     <p className="font-medium text-foreground">
                       What got in the way?
                     </p>

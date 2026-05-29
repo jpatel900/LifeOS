@@ -404,7 +404,7 @@ export default function HealthPage() {
 
       {state.status === "ready" ? (
         <>
-          <Card>
+          <Card data-testid="health-reliability-card" className="workflow-primary-card">
             <CardHeader>
               <CardTitle className="text-xl">
                 Can I rely on LifeOS today?
@@ -424,7 +424,7 @@ export default function HealthPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="health-trust-summary-card" className="workflow-secondary-card">
             <CardHeader>
               <CardTitle className="text-lg">Today&apos;s trust summary</CardTitle>
               <CardDescription>
@@ -435,7 +435,7 @@ export default function HealthPage() {
               {trustRows.map((row) => (
                 <div
                   key={row.title}
-                  className="rounded-lg border border-border bg-muted/30 p-3 text-sm"
+                  className="workflow-support-panel rounded-lg border p-3 text-sm"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-foreground">
@@ -452,7 +452,13 @@ export default function HealthPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            className={
+              attentionChecks.length > 0
+                ? "workflow-primary-card"
+                : "workflow-secondary-card"
+            }
+          >
             <CardHeader>
               <CardTitle className="text-xl">
                 What needs attention now

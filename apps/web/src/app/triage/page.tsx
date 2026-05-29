@@ -24,6 +24,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { triageLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { persistedAreaIdForWorkflowAreaId } from "@/lib/workflowAreaMapping";
+import { buildAreaAccentStyle, resolveAreaById } from "@/lib/areaAccent";
 
 type LoadState =
   | { status: "loading" }
@@ -118,6 +119,11 @@ export default function TriagePage() {
     queueItems.find((item) => item.queueId === activeQueueItemId) ??
     queueItems[0] ??
     null;
+  const activeQueueItemArea = activeQueueItem
+    ? resolveAreaById(state.areas, activeQueueItem.draft.area_id) ??
+      getAreaById(activeQueueItem.draft.area_id) ??
+      null
+    : null;
   const upcomingQueueItems = activeQueueItem
     ? queueItems.filter((item) => item.queueId !== activeQueueItem.queueId)
     : [];
@@ -351,7 +357,7 @@ export default function TriagePage() {
         </p>
       </section>
 
-      <Card>
+      <Card data-testid="triage-next-action-card" className="workflow-secondary-card">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Next action</CardTitle>
         </CardHeader>
@@ -443,7 +449,13 @@ export default function TriagePage() {
       ) : (
         <div className="flex flex-col gap-3">
           {activeQueueItem ? (
-            <Card id="triage-current-item">
+            <Card
+              id="triage-current-item"
+              data-testid="triage-current-item-card"
+              data-accent-strength="subtle"
+              style={buildAreaAccentStyle(activeQueueItemArea?.color)}
+              className="area-accent-card workflow-primary-card"
+            >
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="space-y-1">
@@ -459,12 +471,14 @@ export default function TriagePage() {
                           ? "Task suggestion"
                           : "Project suggestion"}
                       </Badge>
-                      {(() => {
-                        const area = getAreaById(activeQueueItem.draft.area_id);
-                        return area ? (
-                          <Badge variant="secondary">Area: {area.name}</Badge>
-                        ) : null;
-                      })()}
+                      {activeQueueItemArea ? (
+                        <Badge
+                          variant="secondary"
+                          className="area-accent-chip rounded-full"
+                        >
+                          Area: {activeQueueItemArea.name}
+                        </Badge>
+                      ) : null}
                       <Badge variant="warning">
                         Confidence:{" "}
                         {Math.round(activeQueueItem.draft.confidence * 100)}%
@@ -499,7 +513,7 @@ export default function TriagePage() {
                                 </AlertDescription>
                               </Alert>
                             ) : (
-                              <Card className="bg-muted/40">
+                              <Card className="workflow-support-panel bg-muted/40 shadow-none">
                                 <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
                                   <p className="font-medium text-foreground">
                                     Clarity notes
@@ -520,7 +534,7 @@ export default function TriagePage() {
                             )
                           ) : null}
                           {task.description ? (
-                            <Card className="bg-muted/40">
+                            <Card className="workflow-support-panel bg-muted/40 shadow-none">
                               <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
                                 <p className="font-medium text-foreground">
                                   Draft notes
@@ -540,7 +554,7 @@ export default function TriagePage() {
                             </Alert>
                           ) : null}
                           {editingDraftId === task.id ? (
-                            <Card className="bg-muted/40">
+                            <Card className="workflow-support-panel bg-muted/40 shadow-none">
                               <CardContent className="space-y-3 p-3">
                                 <div className="space-y-1">
                                   <label
@@ -701,7 +715,7 @@ export default function TriagePage() {
           ) : null}
 
           {upcomingQueueItems.length > 0 ? (
-            <Card>
+            <Card className="workflow-secondary-card">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Up next</CardTitle>
               </CardHeader>

@@ -38,6 +38,10 @@ import {
   reviewedLifecycleDisplay,
 } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import {
+  buildAreaAccentStyle,
+  resolveSelectedArea,
+} from "@/lib/areaAccent";
 
 type ReviewState =
   | { status: "loading" }
@@ -90,7 +94,7 @@ function uniqTruthy(values: Array<string | null | undefined>) {
 }
 
 export default function ReviewPage() {
-  const { state } = useWorkflow();
+  const { state, selectedAreaId } = useWorkflow();
   const [reviewState, setReviewState] = useState<ReviewState>({
     status: "loading",
   });
@@ -154,6 +158,8 @@ export default function ReviewPage() {
   const reviewEntries = usesPersistedReview ? reviewState.reviewEntries : [];
   const areas = usesPersistedReview ? reviewState.areas : state.areas;
   const localReviewLog = usesPersistedReview ? [] : state.reviewLog;
+  const selectedArea = resolveSelectedArea(state.areas, selectedAreaId);
+  const selectedAreaStyle = buildAreaAccentStyle(selectedArea?.color);
   const taskById = new Map(tasks.map((task) => [task.id, task] as const));
 
   const completed = sessions.filter((session) =>
@@ -314,7 +320,7 @@ export default function ReviewPage() {
       </section>
 
       {reviewState.status === "ready" ? (
-        <Card>
+        <Card data-testid="review-next-decision-card" className="workflow-primary-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Next review decision</CardTitle>
           </CardHeader>
@@ -336,7 +342,7 @@ export default function ReviewPage() {
       ) : null}
 
       {reviewState.status === "ready" ? (
-        <Card>
+        <Card className="workflow-quiet-card shadow-none">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Reflection prompts</CardTitle>
           </CardHeader>
@@ -351,7 +357,7 @@ export default function ReviewPage() {
       ) : null}
 
       {reviewState.status === "ready" ? (
-        <Card>
+        <Card data-testid="review-close-loop-card" className="workflow-primary-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Close the loop</CardTitle>
             <CardDescription>
@@ -361,10 +367,10 @@ export default function ReviewPage() {
           </CardHeader>
           <CardContent className="grid gap-3">
             <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-              <p className="rounded-lg border border-border bg-muted/40 p-3">
+              <p className="workflow-support-panel rounded-lg border p-3">
                 Continue or reschedule in Planning if the work still matters.
               </p>
-              <p className="rounded-lg border border-border bg-muted/40 p-3">
+              <p className="workflow-support-panel rounded-lg border p-3">
                 Capture a follow-up, carry it forward, or stop for today on purpose.
               </p>
             </div>
@@ -437,17 +443,49 @@ export default function ReviewPage() {
         </Alert>
       ) : null}
 
-      <Card>
+      <Card
+        data-testid="review-today-at-a-glance-card"
+        data-accent-strength="subtle"
+        style={selectedAreaStyle}
+        className="area-accent-card workflow-secondary-card"
+      >
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Today at a glance</CardTitle>
-          <CardDescription>
-            Group the day into what was captured, planned, finished, interrupted,
-            and still open.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-base">Today at a glance</CardTitle>
+              <CardDescription>
+                Group the day into what was captured, planned, finished,
+                interrupted, and still open.
+              </CardDescription>
+            </div>
+            {selectedArea ? (
+              <Badge
+                variant="secondary"
+                className="area-accent-chip rounded-full"
+              >
+                Current area: {selectedArea.name}
+              </Badge>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {summaryGroups.map((group) => (
-            <div key={group.title} className="rounded-lg border border-border bg-card p-4">
+            <div
+              key={group.title}
+              data-testid={
+                group.lifecycle === "carry_forward"
+                  ? "review-carry-forward-card"
+                  : undefined
+              }
+              data-accent-strength={
+                group.lifecycle === "carry_forward" ? "subtle" : undefined
+              }
+              className={
+                group.lifecycle === "carry_forward"
+                  ? "area-accent-card rounded-lg border p-4"
+                  : "area-accent-panel rounded-lg border p-4"
+              }
+            >
               {(() => {
                 const lifecycle = reviewGroupLifecycleDisplay(group.lifecycle);
                 return (
@@ -480,7 +518,7 @@ export default function ReviewPage() {
       </Card>
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-        <Card>
+        <Card className="workflow-secondary-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Counts</CardTitle>
           </CardHeader>
@@ -526,7 +564,12 @@ export default function ReviewPage() {
                     return (
                       <div
                         key={summary.area.id}
-                        className="rounded-lg border border-border bg-card p-3 text-sm"
+                        data-testid="review-area-summary-card"
+                        data-accent-strength="subtle"
+                        style={buildAreaAccentStyle(
+                          area?.color ?? summary.area.color,
+                        )}
+                        className="area-accent-card rounded-lg border p-3 text-sm"
                       >
                         <div className="font-medium">
                           {area?.name ?? summary.area.name}
@@ -553,7 +596,7 @@ export default function ReviewPage() {
           </CardContent>
         </Card>
       </div>
-      <Card>
+      <Card className="workflow-quiet-card shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Past reviews and notes</CardTitle>
           <CardDescription>

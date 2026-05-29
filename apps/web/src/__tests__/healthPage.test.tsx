@@ -233,4 +233,28 @@ describe("HealthPage", () => {
 
     expect(await screen.findByText("System check complete.")).toBeDefined();
   });
+
+  it("keeps the top health answer visually primary and the trust summary secondary", async () => {
+    mocks.getHealthDashboard.mockResolvedValue(
+      readyResult([
+        {
+          id: "auth",
+          subsystem: "auth session",
+          status: "healthy",
+          score: 100,
+          summary: "Authenticated Supabase session is active.",
+          details: { summary: "Authenticated Supabase session is active." },
+        },
+      ]),
+    );
+
+    render(<HealthPage />);
+
+    expect(await screen.findByTestId("health-reliability-card")).toHaveClass(
+      "workflow-primary-card",
+    );
+    expect(screen.getByTestId("health-trust-summary-card")).toHaveClass(
+      "workflow-secondary-card",
+    );
+  });
 });

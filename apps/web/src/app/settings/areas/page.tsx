@@ -16,6 +16,7 @@ import {
   listAreas,
   listExecutionReviewItems,
   softDeleteArea,
+  updateAreaColor,
   type DataProvider,
 } from "../../../lib/data/workflow";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
@@ -23,6 +24,7 @@ import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
+import { buildAreaAccentStyle } from "@/lib/areaAccent";
 
 type LoadState =
   | { status: "loading" }
@@ -43,6 +45,15 @@ function formatReviewDate(value: string) {
     year: "numeric",
   });
 }
+
+const AREA_COLOR_PRESETS = [
+  { label: "Ocean", value: "#2563eb" },
+  { label: "Forest", value: "#16a34a" },
+  { label: "Sunrise", value: "#f59e0b" },
+  { label: "Clay", value: "#f97316" },
+  { label: "Violet", value: "#9333ea" },
+  { label: "Teal", value: "#0f766e" },
+] as const;
 
 export default function AreasSettingsPage() {
   const {
@@ -174,6 +185,58 @@ export default function AreasSettingsPage() {
       });
     }
   }
+  const [colorState, setColorState] = useState<
+    | { status: "idle" }
+    | { status: "saving"; areaId: string }
+    | { status: "saved"; areaName: string; color: string | null }
+    | { status: "error"; areaName: string; message: string }
+  >({ status: "idle" });
+
+  async function handleUpdateAreaColor(area: Area, color: string | null) {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const previousAreas = state.areas;
+    const optimisticAreas = previousAreas.map((item) =>
+      item.id === area.id
+        ? {
+            ...item,
+            color,
+          }
+        : item,
+    );
+
+    replaceReadyAreas(optimisticAreas);
+    setColorState({ status: "saving", areaId: area.id });
+
+    try {
+      const result = await updateAreaColor(createSupabaseBrowserClient(), {
+        area_id: area.id,
+        color,
+      });
+      replaceReadyAreas(
+        optimisticAreas.map((item) =>
+          item.id === result.area.id ? result.area : item,
+        ),
+      );
+      setColorState({
+        status: "saved",
+        areaName: result.area.name,
+        color: result.area.color,
+      });
+    } catch (error) {
+      replaceReadyAreas(previousAreas);
+      setColorState({
+        status: "error",
+        areaName: area.name,
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to update the area accent.",
+      });
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -198,7 +261,7 @@ export default function AreasSettingsPage() {
         ) : null}
       </DiagnosticsDisclosure>
 
-      <Card>
+      <Card data-testid="areas-create-card" className="workflow-primary-card">
         <CardHeader>
           <CardTitle className="text-lg">Create area</CardTitle>
         </CardHeader>
@@ -322,14 +385,27 @@ export default function AreasSettingsPage() {
                       (entry) => entry.area_id === area.id,
                     ) ?? null)
                   : null;
+              const isUpdatingColor =
+                colorState.status === "saving" && colorState.areaId === area.id;
 
               return (
-                <Card key={area.id}>
+                <Card
+                  key={area.id}
+                  data-testid="areas-area-card"
+                  data-accent-strength={isSelected ? "subtle" : undefined}
+                  style={buildAreaAccentStyle(area.color)}
+                  className="area-accent-card workflow-secondary-card"
+                >
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <CardTitle className="text-xl">{area.name}</CardTitle>
                       {isSelected ? (
-                        <Badge variant="secondary">Current area</Badge>
+                        <Badge
+                          variant="secondary"
+                          className="area-accent-chip rounded-full"
+                        >
+                          Current area
+                        </Badge>
                       ) : null}
                     </div>
                   </CardHeader>
@@ -339,7 +415,7 @@ export default function AreasSettingsPage() {
                     </p>
 
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-lg border border-border bg-muted/40 p-3">
+                      <div className="area-accent-panel rounded-lg border p-3">
                         <p className="font-medium text-foreground">
                           {openTasks} open task{openTasks === 1 ? "" : "s"}
                         </p>
@@ -349,7 +425,7 @@ export default function AreasSettingsPage() {
                             : "Work is waiting to be planned or executed."}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-border bg-muted/40 p-3">
+                      <div className="area-accent-panel rounded-lg border p-3">
                         <p className="font-medium text-foreground">
                           {plannedBlocks} planned block{plannedBlocks === 1 ? "" : "s"}
                         </p>
@@ -366,6 +442,75 @@ export default function AreasSettingsPage() {
                         ? `Last saved review: ${formatReviewDate(latestReview.period_end)}`
                         : "No saved review for this area yet."}
                     </p>
+
+                    <div
+                      data-testid="areas-color-panel"
+                      className="area-accent-panel rounded-lg border p-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">
+                            Accent color
+                          </p>
+                          <p className="text-muted-foreground">
+                            Accent helps you recognize this area faster. The
+                            area name always stays visible.
+                          </p>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="area-accent-chip rounded-full"
+                        >
+                          {area.color ? "Custom accent" : "Default accent"}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {AREA_COLOR_PRESETS.map((preset) => (
+                          <Button
+                            key={preset.value}
+                            type="button"
+                            size="sm"
+                            variant={
+                              area.color === preset.value
+                                ? "secondary"
+                                : "outline"
+                            }
+                            className="gap-2"
+                            onClick={() =>
+                              void handleUpdateAreaColor(area, preset.value)
+                            }
+                            disabled={isUpdatingColor}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="size-3 rounded-full border border-black/10"
+                              style={{ backgroundColor: preset.value }}
+                            />
+                            {preset.label}
+                          </Button>
+                        ))}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={area.color === null ? "secondary" : "ghost"}
+                          onClick={() => void handleUpdateAreaColor(area, null)}
+                          disabled={isUpdatingColor}
+                        >
+                          Default
+                        </Button>
+                      </div>
+
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Preview updates immediately on this card. Reset uses the
+                        default accent token instead of inventing a fake theme.
+                      </p>
+                      {isUpdatingColor ? (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Saving accent...
+                        </p>
+                      ) : null}
+                    </div>
 
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -476,6 +621,25 @@ export default function AreasSettingsPage() {
         <Alert variant="destructive" role="alert">
           <AlertTitle>Area could not be removed</AlertTitle>
           <AlertDescription>{removeState.message}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {colorState.status === "saved" ? (
+        <Alert variant="success" role="status">
+          <AlertTitle>Accent updated.</AlertTitle>
+          <AlertDescription>
+            {colorState.areaName} now uses{" "}
+            {colorState.color ? "the selected accent." : "the default accent."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {colorState.status === "error" ? (
+        <Alert variant="destructive" role="alert">
+          <AlertTitle>Accent could not be updated</AlertTitle>
+          <AlertDescription>
+            {colorState.areaName}: {colorState.message}
+          </AlertDescription>
         </Alert>
       ) : null}
 

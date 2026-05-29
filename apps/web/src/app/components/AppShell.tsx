@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { buildAreaAccentStyle, resolveSelectedArea } from "@/lib/areaAccent";
 import { cn } from "@/lib/utils";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { DiagnosticsDisclosure } from "./DiagnosticsDisclosure";
@@ -25,20 +26,11 @@ const navLinks = [
   { href: "/settings/areas", label: "Areas" },
 ];
 
-const DEFAULT_AREA_ACCENT = "#64748b";
-
-function buildAreaAccentStyle(color?: string | null): CSSProperties {
-  return {
-    "--area-accent": color ?? DEFAULT_AREA_ACCENT,
-  } as CSSProperties;
-}
-
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { state, selectedAreaId, setSelectedAreaId, submitCaptureText } =
     useWorkflow();
-  const currentArea =
-    state.areas.find((area) => area.id === selectedAreaId) ?? state.areas[0];
+  const currentArea = resolveSelectedArea(state.areas, selectedAreaId);
   const hasAreas = state.areas.length > 0;
   const [now, setNow] = useState("--:--:--");
   const [quickNoteText, setQuickNoteText] = useState("");

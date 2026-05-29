@@ -46,6 +46,16 @@ export const SoftDeleteAreaInputSchema = z.object({
 
 export type SoftDeleteAreaInput = z.input<typeof SoftDeleteAreaInputSchema>;
 
+export const UpdateAreaColorInputSchema = z.object({
+  area_id: z.string().uuid(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable(),
+});
+
+export type UpdateAreaColorInput = z.input<typeof UpdateAreaColorInputSchema>;
+
 export const CreateProjectInputSchema = z.object({
   area_id: z.string().uuid(),
   title: z.string().trim().min(1),

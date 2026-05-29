@@ -32,6 +32,7 @@ import {
   type TodayCockpitDraft,
   type TodayCockpitSession,
 } from "@/lib/today/buildTodayCockpitModel";
+import { buildAreaAccentStyle, resolveSelectedArea } from "@/lib/areaAccent";
 import { DiagnosticsDisclosure } from "./components/DiagnosticsDisclosure";
 
 type HomeDataState =
@@ -337,6 +338,8 @@ export default function HomePage() {
     () => getPriorityCardOrder(cockpit),
     [cockpit],
   );
+  const selectedArea = resolveSelectedArea(state.areas, selectedAreaId);
+  const selectedAreaStyle = buildAreaAccentStyle(selectedArea?.color);
   const showNowPrimaryCard = cockpit.now.kind !== "empty";
   const hasWorkflowState =
     showNowPrimaryCard ||
@@ -405,12 +408,30 @@ export default function HomePage() {
         </Alert>
       ) : null}
 
-      <Card className="border-primary/40">
+      <Card
+        data-testid="today-next-card"
+        data-accent-strength="subtle"
+        style={selectedAreaStyle}
+        className="area-accent-card workflow-primary-card border-primary/40"
+      >
         <CardHeader>
-          <CardTitle className="text-2xl">Next</CardTitle>
-          <CardDescription>
-            One useful move from the state you already have.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-2xl">Next</CardTitle>
+              <CardDescription>
+                One useful move from the state you already have.
+              </CardDescription>
+            </div>
+            {selectedArea ? (
+              <Badge
+                variant="secondary"
+                className="area-accent-chip inline-flex items-center gap-2 rounded-full"
+              >
+                <span aria-hidden className="area-accent-dot h-2 w-2 rounded-full" />
+                Current area: {selectedArea.name}
+              </Badge>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4">
           <p className="text-lg font-semibold">{cockpit.next.label}</p>
@@ -422,7 +443,7 @@ export default function HomePage() {
       </Card>
 
       {showDailyLoop ? (
-        <Card>
+        <Card className="workflow-secondary-card">
           <CardHeader>
             <CardTitle className="text-xl">Daily loop</CardTitle>
             <CardDescription>
@@ -458,7 +479,7 @@ export default function HomePage() {
       ) : null}
 
       {showNowPrimaryCard ? (
-        <Card>
+        <Card className="workflow-secondary-card">
           <CardHeader>
             <CardTitle className="text-xl">Now</CardTitle>
             <CardDescription>What is already in motion.</CardDescription>
@@ -479,7 +500,7 @@ export default function HomePage() {
         {visibleSecondaryCardOrder.map((cardKey) => {
           if (cardKey === "quickCapture") {
             return (
-              <Card key={cardKey}>
+              <Card key={cardKey} className="workflow-secondary-card">
                 <CardHeader>
                   <CardTitle className="text-lg">Quick Capture</CardTitle>
                   <CardDescription>Save one real thing fast.</CardDescription>
@@ -533,7 +554,7 @@ export default function HomePage() {
 
           if (cardKey === "needsDecision") {
             return (
-              <Card key={cardKey}>
+              <Card key={cardKey} className="workflow-secondary-card">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>Needs decision</span>
@@ -569,7 +590,7 @@ export default function HomePage() {
 
           if (cardKey === "unplanned") {
             return (
-              <Card key={cardKey}>
+              <Card key={cardKey} className="workflow-secondary-card">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>{cockpit.unplanned.title}</span>
@@ -609,7 +630,7 @@ export default function HomePage() {
 
           if (cardKey === "todayBlocks") {
             return (
-              <Card key={cardKey}>
+              <Card key={cardKey} className="workflow-secondary-card">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>Today&apos;s planned blocks</span>
@@ -674,7 +695,7 @@ export default function HomePage() {
 
           if (cardKey === "recovery") {
             return (
-              <Card key={cardKey}>
+              <Card key={cardKey} className="workflow-secondary-card">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>Stuck / needs recovery</span>
@@ -726,7 +747,7 @@ export default function HomePage() {
           }
 
           return (
-            <Card key={cardKey}>
+            <Card key={cardKey} className="workflow-secondary-card">
               <CardHeader>
                 <CardTitle className="text-lg">System trust/status</CardTitle>
                 <CardDescription>Deterministic health only.</CardDescription>
@@ -745,7 +766,7 @@ export default function HomePage() {
       </div>
 
       {!showNowPrimaryCard && !hasWorkflowState ? (
-        <Card>
+        <Card className="workflow-secondary-card">
           <CardHeader>
             <CardTitle className="text-lg">Now</CardTitle>
             <CardDescription>Nothing active yet.</CardDescription>
