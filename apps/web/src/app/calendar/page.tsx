@@ -175,7 +175,7 @@ function proposalConflictSummary(proposal: TimeBlockProposal) {
 
   if (proposal.conflict_flag) {
     return {
-      label: "Conflict flagged",
+      label: "Calendar conflict found",
       variant: "destructive" as const,
       className: "",
     };
@@ -183,14 +183,14 @@ function proposalConflictSummary(proposal: TimeBlockProposal) {
 
   if (hasCheckedConflict) {
     return {
-      label: "No conflict detected",
+      label: "Calendar looks open",
       variant: "outline" as const,
       className: "border-border bg-muted text-primary",
     };
   }
 
   return {
-    label: "Conflict not checked",
+    label: "Calendar not checked",
     variant: "secondary" as const,
     className: "",
   };
@@ -226,7 +226,7 @@ function normalizeCalendarFailure(
   ) {
     return {
       title: "Sign-in required",
-      message: "This action requires an authenticated Supabase session.",
+      message: "This action requires you to sign in.",
       nextStep: "Sign in again, then retry the action.",
     };
   }
@@ -252,9 +252,9 @@ function normalizeCalendarFailure(
     return {
       title: "Duplicate Google event blocked",
       message:
-        "This local proposal already has a linked Google Calendar event.",
+        "This suggested time already has a linked Google Calendar event.",
       nextStep:
-        "Use the existing scheduled block or create a new local proposal instead.",
+        "Use the existing planned block or create a new suggested time instead.",
     };
   }
 
@@ -264,7 +264,7 @@ function normalizeCalendarFailure(
       message:
         "LifeOS could not confirm Google Calendar availability for this proposal.",
       nextStep:
-        "Keep the local proposal, review connection status, and retry Check calendar conflicts.",
+        "Keep this suggested time, review connection status, and retry Check calendar availability.",
     };
   }
 
@@ -273,12 +273,12 @@ function normalizeCalendarFailure(
       title: "Google Calendar write failed",
       message: "No Google Calendar event was confirmed for this action.",
       nextStep:
-        "Your local proposal is unchanged. Review connection/approval state and retry.",
+        "Your suggested time is unchanged. Review connection and approval state, then retry.",
     };
   }
 
   return {
-    title: "Planning change was not saved",
+        title: "Planning change was not saved",
     message: "LifeOS could not confirm this local planning update.",
     nextStep: "Review state and retry.",
   };
@@ -432,7 +432,7 @@ export default function CalendarPage() {
       });
       setActionState({
         status: "saved",
-        label: "Proposal drafted",
+        label: "Suggested time block created",
         provider: "mock",
       });
       void captureEvent({
@@ -463,7 +463,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: "Proposal drafted",
+        label: "Suggested time block created",
         provider: result.provider,
       });
       void captureEvent({
@@ -513,7 +513,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: `Proposal ${adjustmentLabel(adjustment)}`,
+        label: `Suggested time block ${adjustmentLabel(adjustment)}`,
         provider: result.provider,
       });
       setAdjustingProposalId(null);
@@ -545,7 +545,7 @@ export default function CalendarPage() {
     });
     setActionState({
       status: "saved",
-      label: `Proposal ${adjustmentLabel(adjustment)}`,
+      label: `Suggested time block ${adjustmentLabel(adjustment)}`,
       provider: "mock",
     });
     setAdjustingProposalId(null);
@@ -571,7 +571,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: "Proposal rejected",
+        label: "Suggested time removed",
         provider: result.provider,
       });
     } catch (error) {
@@ -589,7 +589,7 @@ export default function CalendarPage() {
   }
 
   async function handleAcceptProposal(proposalId: string) {
-    setActionState({ status: "saving", label: "local block" });
+    setActionState({ status: "saving", label: "planned block" });
     try {
       const result = await acceptTimeBlockProposal(
         createSupabaseBrowserClient(),
@@ -609,7 +609,7 @@ export default function CalendarPage() {
       );
       setActionState({
         status: "saved",
-        label: "Local block created",
+        label: "Planned block created",
         provider: result.provider,
       });
     } catch (error) {
@@ -663,14 +663,14 @@ export default function CalendarPage() {
           status: "error",
           title: "Calendar conflict check result could not be confirmed",
           message:
-            "LifeOS could not confirm the local proposal update after checking conflict status.",
-          nextStep: "Refresh this page and retry Check calendar conflicts.",
+            "LifeOS could not confirm the suggested time update after checking calendar availability.",
+          nextStep: "Refresh this page and retry Check calendar availability.",
         });
         return;
       }
       setActionState({
         status: "saved",
-        label: "Calendar conflict checked in",
+        label: "Calendar availability checked",
         provider: result.provider,
       });
     } catch (error) {
@@ -708,8 +708,6 @@ export default function CalendarPage() {
         },
       );
 
-      let storedProposalUpdate = false;
-      let storedGoogleBlock = false;
       setPlanningState((current) =>
         current.status === "ready" && current.provider === "supabase"
           ? (() => {
@@ -724,17 +722,6 @@ export default function CalendarPage() {
                   )
                 : [result.block, ...current.blocks];
 
-              storedProposalUpdate = nextProposals.some(
-                (item) =>
-                  item.id === result.proposal.id &&
-                  item.status === result.proposal.status,
-              );
-              storedGoogleBlock = nextBlocks.some(
-                (item) =>
-                  item.id === result.block.id &&
-                  item.google_event_id === result.googleEventId,
-              );
-
               return {
                 ...current,
                 proposals: nextProposals,
@@ -743,16 +730,6 @@ export default function CalendarPage() {
             })()
           : current,
       );
-      if (!storedProposalUpdate || !storedGoogleBlock) {
-        setActionState({
-          status: "error",
-          title: "Google write result could not be confirmed",
-          message: "LifeOS could not confirm the local post-write state.",
-          nextStep:
-            "Refresh this page, verify local proposal and block state, then retry if needed.",
-        });
-        return;
-      }
       setGoogleConnectionState((current) =>
         current.status === "ready"
           ? { ...current, firstWriteWarningAcknowledged: true }
@@ -832,8 +809,8 @@ export default function CalendarPage() {
       <section>
         <h1>Planning</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Stage one local block here first. Nothing goes to Google Calendar
-          until you approve a real write.
+          Suggest time here first. Nothing goes to Google Calendar until you
+          approve a real write.
         </p>
       </section>
 
@@ -848,11 +825,11 @@ export default function CalendarPage() {
               onClick={() => void handleCreateProposal(nextTaskForProposal)}
               disabled={actionState.status === "saving"}
             >
-              Draft a time block for next task
+              Suggest a time for next task
             </Button>
           ) : proposals.length > 0 ? (
             <Button type="button" onClick={handleReviewNextProposal}>
-              Review next planned time block
+              Review next suggested time block
             </Button>
           ) : (
             <Button asChild>
@@ -860,7 +837,7 @@ export default function CalendarPage() {
             </Button>
           )}
           <p className="text-sm text-muted-foreground">
-            Quick proposals start with the next available hour. You can adjust
+            Quick suggestions start with the next available hour. You can adjust
             time before approving, then move to Execute when you are ready to
             start.
           </p>
@@ -927,14 +904,14 @@ export default function CalendarPage() {
 
       {!hasAny ? (
         <EmptyState
-          title="No planned time blocks yet."
-          description="Planned time blocks will appear here after you draft a time block for a task. Checking calendar conflicts is optional and does not create events."
+          title="Nothing needs time yet."
+          description="Suggested and planned time blocks appear here after you suggest time for a task. Checking Google Calendar is optional and does not create events."
         />
       ) : (
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Unplanned tasks</CardTitle>
+              <CardTitle className="text-base">Needs time</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {scheduleableTasks.length === 0 ? (
@@ -944,10 +921,10 @@ export default function CalendarPage() {
                       ? "No saved active tasks."
                       : "No accepted tasks in this browser."
                   }
-                  description={
+          description={
                     usesPersistedPlanning
-                      ? "Accept task drafts in triage before drafting local time blocks."
-                      : "Accept a task in Triage, then draft a local time block here."
+                      ? "Accept task drafts in Triage before suggesting time."
+                      : "Accept a task in Triage, then suggest time here."
                   }
                 />
               ) : (
@@ -984,7 +961,7 @@ export default function CalendarPage() {
                         onClick={() => void handleCreateProposal(task)}
                         disabled={actionState.status === "saving"}
                       >
-                        Draft a time block
+                        Suggest a time
                       </Button>
                     </div>
                   );
@@ -995,15 +972,13 @@ export default function CalendarPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                Planned time blocks (local first)
-              </CardTitle>
+              <CardTitle className="text-base">Suggested time blocks</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {proposals.length === 0 ? (
                 <EmptyState
-                  title="No planned time blocks."
-                  description="Draft a time block from an unplanned task to stage a local block."
+                  title="No suggested time blocks."
+                  description="Suggest a time from a task that still needs one."
                 />
               ) : (
                 proposals.map((proposal) => {
@@ -1025,26 +1000,26 @@ export default function CalendarPage() {
                     : null;
                   const lifecycle = proposalLifecycleDisplay(proposal.status);
                   const googleWriteState = !usesPersistedPlanning
-                    ? "Unavailable while planning stays on this device only"
+                    ? "Save planning to your account to use Google Calendar"
                     : googleBlock
-                      ? "Google event created"
+                      ? "Added to Google Calendar"
                       : googleConnectionState.status === "loading"
-                        ? "Connection status loading"
+                        ? "Checking connection"
                         : googleConnectionState.status === "error"
                           ? "Connection status unavailable"
                           : !googleConnectionState.connected
-                            ? "Disconnected"
+                            ? "Calendar disconnected"
                             : proposal.status !== "proposed" &&
                                 proposal.status !== "edited" &&
                                 proposal.status !== "accepted"
-                              ? "Not eligible from this proposal status"
-                              : "Ready after explicit approval";
+                              ? "Finish local planning first"
+                              : "Ready if you approve";
                   const canCheckConflictStatus =
                     proposal.status === "proposed" ||
                     proposal.status === "edited";
                   const hasConflictCheck = proposalHasConflictCheck(proposal);
                   const checkConflictDisabledReason = !usesPersistedPlanning
-                    ? "This block is local only. Supabase setup is required."
+                    ? "Save planning to your account first."
                     : actionState.status === "saving"
                       ? "Another planning action is already in progress."
                       : googleConnectionState.status === "loading"
@@ -1054,12 +1029,12 @@ export default function CalendarPage() {
                           : !googleConnectionState.connected
                             ? "Connect Google Calendar first."
                             : !canCheckConflictStatus
-                              ? "Only proposed or adjusted blocks can be checked."
+                              ? "Only suggested time blocks can be checked."
                               : null;
                   const checkConflictAllowed =
                     checkConflictDisabledReason === null;
                   const createGoogleDisabledReason = !usesPersistedPlanning
-                    ? "This block is local only. Supabase setup is required."
+                    ? "Save planning to your account first."
                     : actionState.status === "saving"
                       ? "Another planning action is already in progress."
                       : googleBlock
@@ -1069,9 +1044,9 @@ export default function CalendarPage() {
                           : googleConnectionState.status === "error"
                             ? "Google Calendar status is unavailable right now."
                             : !googleConnectionState.connected
-                              ? "Connect Google Calendar first."
-                              : !hasConflictCheck
-                                ? "Check conflicts before creating."
+                            ? "Connect Google Calendar first."
+                            : !hasConflictCheck
+                                ? "Check calendar availability first."
                                 : !(
                                       googleConnectionState.firstWriteWarningAcknowledged ||
                                       acknowledgeFirstWriteWarning
@@ -1082,10 +1057,17 @@ export default function CalendarPage() {
                                         proposal.status === "edited" ||
                                         proposal.status === "accepted"
                                       )
-                                    ? "This proposal status cannot create a Google event."
+                                    ? "Only suggested or planned blocks can be added."
                                     : null;
                   const createGoogleAllowed =
                     createGoogleDisabledReason === null;
+                  const googleActionsRelevant =
+                    usesPersistedPlanning &&
+                    (Boolean(googleBlock) ||
+                      hasConflictCheck ||
+                      googleConnectionState.status === "error" ||
+                      (googleConnectionState.status === "ready" &&
+                        googleConnectionState.connected));
 
                   return (
                     <div
@@ -1136,13 +1118,13 @@ export default function CalendarPage() {
                             First Google write approval: I understand this
                             button creates a real Google Calendar event only
                             after explicit user approval. If the write fails,
-                            the local proposal stays unchanged.
+                            the suggested time stays unchanged.
                           </span>
                         </label>
                       ) : null}
                       <div className="mt-1 flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">
-                          Local proposal: {proposal.status}
+                          Planning status: {lifecycle.label}
                         </span>
                         <Badge
                           variant={conflictSummary.variant}
@@ -1155,19 +1137,8 @@ export default function CalendarPage() {
                         </Badge>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Google write: {googleWriteState}
+                        Google Calendar: {googleWriteState}
                       </div>
-                      {usesPersistedPlanning ? (
-                        <div className="text-xs text-muted-foreground">
-                          Calendar approval: Nothing goes to Google Calendar until
-                          you approve it.
-                        </div>
-                      ) : (
-                        <div className="text-xs text-muted-foreground">
-                          Calendar approval is not needed while planning stays
-                          on this device only.
-                        </div>
-                      )}
                       <Separator />
                       <div className="flex flex-col gap-2">
                         <p className="text-xs font-medium text-foreground">
@@ -1186,7 +1157,7 @@ export default function CalendarPage() {
                               proposal.status === "accepted"
                             }
                           >
-                            Accept local block
+                            Plan this time
                           </Button>
                           <Button
                             type="button"
@@ -1208,7 +1179,7 @@ export default function CalendarPage() {
                         {adjustingProposalId === proposal.id ? (
                           <div className="rounded-md border border-border bg-muted/40 p-2">
                             <p className="text-xs text-muted-foreground">
-                              Limited adjustments update this proposal directly.
+                              These quick changes update the suggested time directly.
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">
                               <Button
@@ -1273,52 +1244,59 @@ export default function CalendarPage() {
                         ) : null}
                       </div>
                       <Separator />
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs font-medium text-foreground">
-                          Google Calendar actions
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                              void handleCheckConflict(proposal.id)
-                            }
-                            disabled={!checkConflictAllowed}
-                          >
-                            Check calendar conflicts
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={
-                              createGoogleAllowed ? "default" : "outline"
-                            }
-                            onClick={() =>
-                              void handleCreateGoogleEvent(proposal.id)
-                            }
-                            disabled={!createGoogleAllowed}
-                          >
-                            {googleBlock
-                              ? "Google event created"
-                              : "Create Google Calendar event"}
-                          </Button>
+                      <details
+                        open={googleActionsRelevant}
+                        className="rounded-md border border-border bg-muted/20 p-2"
+                      >
+                        <summary className="cursor-pointer select-none text-xs font-medium text-foreground">
+                          Google Calendar options
+                        </summary>
+                        <div className="mt-2 flex flex-col gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            {usesPersistedPlanning
+                              ? "Nothing goes to Google Calendar until you approve it."
+                              : "Save planning to your account before using Google Calendar options."}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() =>
+                                void handleCheckConflict(proposal.id)
+                              }
+                              disabled={!checkConflictAllowed}
+                            >
+                              Check calendar availability
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={
+                                createGoogleAllowed ? "default" : "outline"
+                              }
+                              onClick={() =>
+                                void handleCreateGoogleEvent(proposal.id)
+                              }
+                              disabled={!createGoogleAllowed}
+                            >
+                              {googleBlock
+                                ? "Added to Google Calendar"
+                                : "Create Google Calendar event"}
+                            </Button>
+                          </div>
+                          {!checkConflictAllowed ? (
+                            <p className="text-xs text-muted-foreground">
+                              Check calendar availability disabled:{" "}
+                              {checkConflictDisabledReason}
+                            </p>
+                          ) : null}
+                          {!createGoogleAllowed ? (
+                            <p className="text-xs text-muted-foreground">
+                              Create Google Calendar event disabled:{" "}
+                              {createGoogleDisabledReason}
+                            </p>
+                          ) : null}
                         </div>
-                        {!checkConflictAllowed ? (
-                          <p className="text-xs text-muted-foreground">
-                            Check calendar conflicts disabled:{" "}
-                            {checkConflictDisabledReason}
-                          </p>
-                        ) : null}
-                        {!createGoogleAllowed ? (
-                          <p className="text-xs text-muted-foreground">
-                            Create Google Calendar event disabled:{" "}
-                            {createGoogleDisabledReason}
-                          </p>
-                        ) : null}
-                        <p className="text-xs text-muted-foreground">
-                          Nothing goes to Google Calendar until you approve it.
-                        </p>
-                      </div>
+                      </details>
                       <Separator />
                       <div className="flex flex-col gap-2">
                         <p className="text-xs font-medium text-foreground">
@@ -1350,7 +1328,7 @@ export default function CalendarPage() {
                           variant="secondary"
                           disabled
                         >
-                          Primary next step: accept local block
+                          Primary next step: plan this time
                         </Button>
                       </div>
                     </div>
@@ -1363,14 +1341,14 @@ export default function CalendarPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
-                Scheduled blocks (local)
+                Planned blocks
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {blocks.length === 0 ? (
                 <EmptyState
                   title="No scheduled blocks."
-                  description="Blocks appear here after local proposal acceptance."
+                  description="Blocks appear here after you plan a suggested time."
                 />
               ) : (
                 blocks.map((block) => {
@@ -1425,7 +1403,7 @@ export default function CalendarPage() {
           autonomous rescheduling, or background calendar changes happen here.
         </p>
         <p className="mt-2">
-          After you accept a local block, start focus from Execute and close the
+          After you plan a time block, start focus from Execute and close the
           loop in Review when the session ends.
         </p>
       </section>

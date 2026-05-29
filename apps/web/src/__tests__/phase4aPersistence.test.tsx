@@ -698,7 +698,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Draft a time block" }),
+      await screen.findByRole("button", { name: "Suggest a time" }),
     );
 
     await waitFor(() => {
@@ -712,7 +712,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Proposal drafted. Saved to your account.");
+    expect(status).toHaveTextContent(
+      "Suggested time block created. Saved to your account.",
+    );
     expect(screen.getByText("Accepted")).toBeDefined();
   });
 
@@ -740,15 +742,13 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    expect(
-      await screen.findByText("No planned time blocks yet."),
-    ).toBeDefined();
+    expect(await screen.findByText("Nothing needs time yet.")).toBeDefined();
     expect(
       screen.getByRole("link", { name: "Get a task ready in Triage" }),
     ).toBeDefined();
     expect(
       screen.getByText(
-        "Planned time blocks will appear here after you draft a time block for a task. Checking calendar conflicts is optional and does not create events.",
+        "Suggested and planned time blocks appear here after you suggest time for a task. Checking Google Calendar is optional and does not create events.",
       ),
     ).toBeDefined();
   });
@@ -768,18 +768,18 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByText("Unplanned tasks")).toBeDefined();
+    expect(await screen.findByText("Needs time")).toBeDefined();
     expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(
       0,
     );
 
     fireEvent.click(
-      screen.getAllByRole("button", { name: "Draft a time block" })[0],
+      screen.getAllByRole("button", { name: "Suggest a time" })[0],
     );
 
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Proposal drafted. Saved on this device.",
+      "Suggested time block created. Saved on this device.",
     );
     expect(screen.getAllByText("Suggested time").length).toBeGreaterThan(0);
     expect(
@@ -806,7 +806,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<CalendarPage />);
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Accept local block" }),
+      await screen.findByRole("button", { name: "Plan this time" }),
     );
 
     await waitFor(() => {
@@ -817,7 +817,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Local block created. Saved to your account.",
+      "Planned block created. Saved to your account.",
     );
   });
 
@@ -857,7 +857,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Proposal moved 30 minutes later. Saved to your account.",
+      "Suggested time block moved 30 minutes later. Saved to your account.",
     );
   });
 
@@ -914,9 +914,9 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    expect(await screen.findByText("Conflict not checked")).toBeDefined();
+    expect(await screen.findByText("Calendar not checked")).toBeDefined();
     fireEvent.click(
-      await screen.findByRole("button", { name: "Check calendar conflicts" }),
+      await screen.findByRole("button", { name: "Check calendar availability" }),
     );
 
     await waitFor(() => {
@@ -925,7 +925,7 @@ describe("Phase 4A Supabase persistence UI", () => {
         proposal.id,
       );
     });
-    expect(await screen.findByText("Conflict flagged")).toBeDefined();
+    expect(await screen.findByText("Calendar conflict found")).toBeDefined();
   });
 
   it("shows an inline disabled reason when conflict checks are unavailable without Google connection", async () => {
@@ -938,13 +938,14 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
+    fireEvent.click(await screen.findByText("Google Calendar options"));
     const checkConflictButton = await screen.findByRole("button", {
-      name: "Check calendar conflicts",
+      name: "Check calendar availability",
     });
     expect(checkConflictButton).toBeDisabled();
     expect(
       screen.getByText(
-        "Check calendar conflicts disabled: Connect Google Calendar first.",
+        "Check calendar availability disabled: Connect Google Calendar first.",
       ),
     ).toBeDefined();
     expect(mocks.checkTimeBlockProposalConflict).not.toHaveBeenCalled();
@@ -1012,9 +1013,11 @@ describe("Phase 4A Supabase persistence UI", () => {
         }),
       );
     });
-    expect(await screen.findByText("Google event created")).toBeDefined();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Google Calendar event created. Saved to your account.",
+    );
     expect(
-      screen.getByText("Google write: Google event created"),
+      screen.getByText("Google Calendar: Added to Google Calendar"),
     ).toBeDefined();
   });
 
