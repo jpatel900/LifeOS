@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -25,6 +25,14 @@ const navLinks = [
   { href: "/settings/areas", label: "Areas" },
 ];
 
+const DEFAULT_AREA_ACCENT = "#64748b";
+
+function buildAreaAccentStyle(color?: string | null): CSSProperties {
+  return {
+    "--area-accent": color ?? DEFAULT_AREA_ACCENT,
+  } as CSSProperties;
+}
+
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { state, selectedAreaId, setSelectedAreaId, submitCaptureText } =
@@ -37,6 +45,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const [quickNoteStatus, setQuickNoteStatus] = useState<
     "idle" | "saved" | "error"
   >("idle");
+  const areaAccentStyle = buildAreaAccentStyle(currentArea?.color);
 
   useEffect(() => {
     const formatNow = () => new Date().toLocaleTimeString();
@@ -64,12 +73,27 @@ function AppChrome({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur">
+    <div
+      data-testid="app-shell-root"
+      style={areaAccentStyle}
+      className="relative min-h-screen bg-background"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[var(--area-accent-border)]"
+      />
+      <header className="sticky top-0 z-40 border-b border-[var(--area-accent-border)] bg-background/90 shadow-[0_16px_40px_-32px_var(--area-accent)] backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-3">
-              <Link href="/" className="text-xl font-semibold tracking-tight">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight"
+              >
+                <span
+                  aria-hidden
+                  className="h-2.5 w-2.5 rounded-full bg-[var(--area-accent)] shadow-[0_0_0_4px_var(--area-accent-soft)]"
+                />
                 LifeOS
               </Link>
               <Badge variant="secondary" className="hidden sm:inline-flex">
@@ -148,13 +172,20 @@ function AppChrome({ children }: { children: ReactNode }) {
                   <Link
                     key={link.href}
                     href={link.href}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "rounded-full px-2.5 py-1.5 text-xs transition-colors sm:px-3 sm:text-sm",
+                      "inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-colors sm:px-3 sm:text-sm",
                       isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                        ? "border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] font-medium text-foreground shadow-[inset_0_1px_0_0_var(--area-accent-soft)]"
+                        : "border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                     )}
                   >
+                    {isActive ? (
+                      <span
+                        aria-hidden
+                        className="h-2 w-2 rounded-full bg-[var(--area-accent)]"
+                      />
+                    ) : null}
                     {link.label}
                   </Link>
                 );
@@ -169,7 +200,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                 onChange={(event) =>
                   setSelectedAreaId(event.target.value || null)
                 }
-                className="h-9 min-w-0 flex-1 rounded-full sm:min-w-44 sm:flex-none"
+                className="h-9 min-w-0 flex-1 rounded-full border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] shadow-sm sm:min-w-44 sm:flex-none"
               >
                 {!hasAreas ? (
                   <option value="">No areas yet</option>
@@ -194,10 +225,13 @@ function AppChrome({ children }: { children: ReactNode }) {
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         <div
           aria-label="Current area context"
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] px-4 py-3 shadow-sm"
         >
           <span className="text-sm text-muted-foreground">Current area</span>
-          <Badge variant="secondary" className="rounded-full text-sm">
+          <Badge
+            variant="secondary"
+            className="rounded-full border border-[var(--area-accent-border)] bg-[var(--area-accent-soft)] text-sm text-foreground"
+          >
             {currentArea?.name ?? "No area selected yet"}
           </Badge>
           <span className="text-sm text-muted-foreground">
