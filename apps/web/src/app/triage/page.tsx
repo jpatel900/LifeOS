@@ -419,9 +419,11 @@ export default function TriagePage() {
 
       {saveState.status === "saved" ? (
         <Alert variant="success">
-          <AlertTitle>Saved</AlertTitle>
+          <AlertTitle>Ready for Planning</AlertTitle>
           <AlertDescription>
-            Accepted {saveState.label} and {savedViaLabel(saveState.provider)}.
+            Accepted {saveState.label}. It was{" "}
+            {savedViaLabel(saveState.provider)}. Plan time in Planning next, or
+            capture another thought.
           </AlertDescription>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline">

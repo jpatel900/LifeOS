@@ -605,6 +605,15 @@ describe("Phase 4A Supabase persistence UI", () => {
           "Clarify the next concrete step for: Call dentist tomorrow",
       });
     });
+    expect(await screen.findByText("Ready for Planning")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Accepted Call dentist tomorrow. It was saved to your account. Plan time in Planning next, or capture another thought.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Plan time for this" }),
+    ).toBeDefined();
   });
 
   it("accepting a project draft creates a project through Supabase", async () => {
@@ -772,7 +781,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Suggested time block created. Saved to your account.",
+      "Suggested time block created. It was saved to your account. Review it below, then plan it or adjust it.",
     );
     expect(screen.getByText("Accepted")).toBeDefined();
   });
@@ -838,7 +847,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Suggested time block created. Saved on this device.",
+      "Suggested time block created. It was saved on this device. Review it below, then plan it or adjust it.",
     );
     expect(screen.getAllByText("Suggested time").length).toBeGreaterThan(0);
     expect(
@@ -847,6 +856,33 @@ describe("Phase 4A Supabase persistence UI", () => {
       ).length,
     ).toBeGreaterThan(0);
     expect(mocks.createTimeBlockProposal).not.toHaveBeenCalled();
+  });
+
+  it("accepts a demo proposal and points the user to Execute next", async () => {
+    mocks.listPlanningItems.mockResolvedValue({
+      provider: "mock",
+      tasks: [],
+      proposals: [],
+      blocks: [],
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedAcceptedTask text="Call dentist tomorrow" />
+        <CalendarPage />
+      </>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Suggest a time" }),
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Plan this time" })[0]);
+
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent(
+      "Planned block created. It was saved on this device. Open Execute next when you are ready to focus.",
+    );
+    expect(screen.getByRole("link", { name: "Open Execute" })).toBeDefined();
   });
 
   it("accepting a persisted proposal creates a local calendar block", async () => {
@@ -876,8 +912,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Planned block created. Saved to your account.",
+      "Planned block created. It was saved to your account. Open Execute next when you are ready to focus.",
     );
+    expect(screen.getByRole("link", { name: "Open Execute" })).toBeDefined();
   });
 
   it("adjusts a persisted proposal through explicit inline adjustment controls", async () => {
@@ -916,7 +953,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Suggested time block moved 30 minutes later. Saved to your account.",
+      "Suggested time block moved 30 minutes later. It was saved to your account. Review the updated time below before you plan it.",
     );
   });
 
@@ -1073,8 +1110,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Google Calendar event created. Saved to your account.",
+      "Google Calendar event created. It was saved to your account. The planned block stays here and now has a linked Google Calendar event.",
     );
+    expect(screen.getByRole("link", { name: "Open Execute" })).toBeDefined();
     expect(
       screen.getByText("Google Calendar: Added to Google Calendar"),
     ).toBeDefined();
@@ -1219,7 +1257,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Session started. Saved to your account.");
+    expect(status).toHaveTextContent(
+      "Session started and saved to your account. Stay here until you can record a real outcome.",
+    );
     expect(screen.getByText("In focus")).toBeDefined();
   });
 
@@ -1307,8 +1347,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Session marked completed. Saved to your account.",
+      "Session marked completed and saved to your account. Move to Review next or plan another block.",
     );
+    expect(screen.getByRole("link", { name: "Open Review" })).toBeDefined();
   });
 
   it("keeps persisted stop as guidance instead of a fake disabled control", async () => {
@@ -1442,7 +1483,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent(
-      "Session marked missed. Saved to your account.",
+      "Session marked missed. It was saved to your account. Capture what happened, then re-plan or review it later.",
     );
     expect(screen.getByText("Needs review")).toBeDefined();
     expect(
@@ -1460,8 +1501,8 @@ describe("Phase 4A Supabase persistence UI", () => {
       screen.getByRole("link", { name: "Review this later" }),
     ).toBeDefined();
     expect(
-      screen.getByRole("link", { name: "Plan next block" }),
-    ).toBeDefined();
+      screen.getAllByRole("link", { name: "Plan next block" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("creates a persisted review entry from review data", async () => {
@@ -1505,7 +1546,10 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("Review entry saved to your account.");
+    expect(status).toHaveTextContent(
+      "Review entry saved to your account. Stay here to finish closing the loop, or move to Planning for the next block.",
+    );
+    expect(screen.getByRole("link", { name: "Open Planning" })).toBeDefined();
   });
 
   it("rolls up persisted review rows by persisted area ids", async () => {

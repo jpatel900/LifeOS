@@ -242,7 +242,9 @@ describe("Execute Focus polish", () => {
       ).toHaveAttribute("data-focus-state", "stopped"),
     );
     expect(screen.getByText("Stopped on this device")).toBeDefined();
-    expect(screen.getByRole("link", { name: "Plan next block" })).toBeDefined();
+    expect(
+      screen.getAllByRole("link", { name: "Plan next block" }).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByRole("link", { name: "Capture what got in the way" }),
     ).toBeDefined();

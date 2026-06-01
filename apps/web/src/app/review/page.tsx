@@ -429,10 +429,19 @@ export default function ReviewPage() {
 
       {actionState.status === "saved" ? (
         <Alert role="status" className="border-border bg-muted text-foreground">
-          <AlertTitle className="text-primary">Saved</AlertTitle>
+          <AlertTitle className="text-primary">Daily review saved</AlertTitle>
           <AlertDescription>
-            Review entry {savedViaLabel(actionState.provider)}.
+            Review entry {savedViaLabel(actionState.provider)}. Stay here to
+            finish closing the loop, or move to Planning for the next block.
           </AlertDescription>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/calendar">Open Planning</Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost">
+              <Link href="/capture">Capture follow-up</Link>
+            </Button>
+          </div>
         </Alert>
       ) : null}
 

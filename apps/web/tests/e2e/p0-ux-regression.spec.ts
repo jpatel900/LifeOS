@@ -12,7 +12,7 @@ async function createLocalDraftCandidate(page: Page, text: string) {
   await page
     .getByPlaceholder("What's on your mind? Type anything...")
     .fill(text);
-  await page.getByRole("button", { name: "Organize in this browser" }).click();
+  await page.getByRole("button", { name: "Save and organize" }).click();
   await page.getByRole("link", { name: "Triage" }).click();
   await expect(page).toHaveURL(/\/triage$/);
   await expect(
@@ -132,7 +132,7 @@ test("home cockpit quick capture shows truthful error/success and route links", 
   await page.getByRole("button", { name: "Save quick capture" }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
   await expect(
-    page.getByText("Saved in this browser and sent to"),
+    page.getByText("Quick capture saves on this device. Review it in Triage or Review."),
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Open Triage" }).first().click();
@@ -147,10 +147,7 @@ test("review page can create a basic review log entry and keeps next actions vis
     page.getByRole("heading", { level: 1, name: "Review" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Review log", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "No review log yet.", exact: true }),
+    page.getByRole("heading", { name: "Past reviews and notes", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Plan the next block" }),
@@ -161,9 +158,9 @@ test("review page can create a basic review log entry and keeps next actions vis
 
   await page.getByRole("button", { name: "Create daily review" }).click();
 
-  await expect(page.getByText("Review entry created in")).toBeVisible();
+  await expect(page.getByText("Daily review saved")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "No review log yet.", exact: true }),
+    page.getByRole("link", { name: "Open Planning" }),
   ).toBeVisible();
 });
 
@@ -178,14 +175,14 @@ test("capture save feedback and save-and-organize route to triage", async ({
   await page.getByRole("button", { name: "Save thought" }).click();
 
   await expect(page.getByText("Saved.")).toBeVisible();
-  await expect(page.getByText(/stored this raw capture/i)).toBeVisible();
+  await expect(page.getByText(/raw capture was saved/i)).toBeVisible();
 
   await page
     .getByPlaceholder("What's on your mind? Type anything...")
     .fill("Need a focused block for project proposal");
   await page.getByRole("button", { name: "Save and organize" }).click();
 
-  await expect(page.getByText("Sent to review.")).toBeVisible();
+  await expect(page.getByText("Drafts ready for Triage.")).toBeVisible();
   await page.getByRole("link", { name: "Review it now" }).click();
   await expect(page).toHaveURL(/\/triage$/);
   await expect(
@@ -224,7 +221,7 @@ test("accepting triage item leads to planning path", async ({ page }) => {
   await createLocalDraftCandidate(page, "Acceptable triage item for planning");
 
   await page.getByRole("button", { name: "Accept task draft" }).first().click();
-  await expect(page.getByText(/^Saved$/)).toBeVisible();
+  await expect(page.getByText("Ready for Planning")).toBeVisible();
 
   await page.getByRole("link", { name: "Plan time for this" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
@@ -314,7 +311,7 @@ test("keyboard tab path reaches key controls", async ({ page }) => {
   );
   await tabUntilFocused(
     page,
-    page.getByLabel("Current workflow area (session)"),
+    page.getByLabel("Area for this saved thought"),
   );
   await tabUntilFocused(page, page.getByLabel("What are you thinking about?"));
   await tabUntilFocused(

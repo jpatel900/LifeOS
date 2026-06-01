@@ -20,7 +20,7 @@ import {
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
-import { saveDestinationLabel, saveModeLabel } from "@/lib/statusVocabulary";
+import { saveModeLabel, savedViaLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { executeLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
@@ -281,6 +281,91 @@ function focusStateDescription(
     case "missed":
       return "Record why the block was missed, then pick the next useful step without shame.";
   }
+}
+
+function executeSuccessFeedback(
+  actionState: Extract<ActionState, { status: "saved" }>,
+  usesPersistedExecution: boolean,
+) {
+  const savedWhere = savedViaLabel(actionState.provider);
+
+  if (actionState.label === "Session started") {
+    return {
+      title: "Focus session started",
+      description: `Session started and ${savedWhere}. Stay here until you can record a real outcome.`,
+      primaryLink: null,
+      secondaryLink: null,
+    };
+  }
+
+  if (actionState.label === "Session marked paused") {
+    return {
+      title: "Session paused",
+      description: usesPersistedExecution
+        ? `Session paused and ${savedWhere}. Stay here and choose the end outcome that matches what happened.`
+        : `Session paused and ${savedWhere}. Resume here when you are ready, or end the session honestly.`,
+      primaryLink: null,
+      secondaryLink: null,
+    };
+  }
+
+  if (actionState.label === "Session marked completed") {
+    return {
+      title: "Session complete",
+      description: `Session marked completed and ${savedWhere}. Move to Review next or plan another block.`,
+      primaryLink: {
+        href: "/review",
+        label: "Open Review",
+      },
+      secondaryLink: {
+        href: "/calendar",
+        label: "Plan next block",
+      },
+    };
+  }
+
+  if (actionState.label === "Session marked stopped") {
+    return {
+      title: "Session stopped",
+      description: `Session marked stopped and ${savedWhere}. Capture what happened or plan the next block.`,
+      primaryLink: {
+        href: "/capture",
+        label: "Capture follow-up",
+      },
+      secondaryLink: {
+        href: "/calendar",
+        label: "Plan next block",
+      },
+    };
+  }
+
+  if (
+    actionState.label === "Session marked stuck" ||
+    actionState.label === "Session marked distracted" ||
+    actionState.label === "Session marked missed"
+  ) {
+    const stateLabel = actionState.label.replace("Session marked ", "");
+
+    return {
+      title: `Session ${stateLabel}`,
+      description: `${actionState.label}. It was ${savedWhere}. Capture what happened, then re-plan or review it later.`,
+      primaryLink: {
+        href: "/capture",
+        label: "Capture follow-up",
+      },
+      secondaryLink: {
+        href: "/calendar",
+        label: "Plan next block",
+      },
+    };
+  }
+
+  return {
+    title: "Execution updated",
+    description: `${actionState.label}. It was ${savedWhere}. Review the current session state below.`,
+    primaryLink: null,
+    secondaryLink: null,
+  };
 }
 
 export default function ExecutePage() {
@@ -781,15 +866,42 @@ export default function ExecutePage() {
           </p>
         ) : null}
         {actionState.status === "saved" ? (
-          <Alert
-            role="status"
-            className="border-border bg-muted text-foreground"
-          >
-            <AlertTitle className="text-primary">Saved</AlertTitle>
-            <AlertDescription>
-              {actionState.label}. Saved {saveDestinationLabel(actionState.provider)}.
-            </AlertDescription>
-          </Alert>
+          (() => {
+            const feedback = executeSuccessFeedback(
+              actionState,
+              usesPersistedExecution,
+            );
+
+            return (
+              <Alert
+                role="status"
+                className="border-border bg-muted text-foreground"
+              >
+                <AlertTitle className="text-primary">
+                  {feedback.title}
+                </AlertTitle>
+                <AlertDescription>{feedback.description}</AlertDescription>
+                {feedback.primaryLink || feedback.secondaryLink ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {feedback.primaryLink ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={feedback.primaryLink.href}>
+                          {feedback.primaryLink.label}
+                        </Link>
+                      </Button>
+                    ) : null}
+                    {feedback.secondaryLink ? (
+                      <Button asChild size="sm" variant="ghost">
+                        <Link href={feedback.secondaryLink.href}>
+                          {feedback.secondaryLink.label}
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </Alert>
+            );
+          })()
         ) : null}
         {actionState.status === "error" ? (
           <Alert variant="destructive">
@@ -854,12 +966,37 @@ export default function ExecutePage() {
       ) : null}
 
       {actionState.status === "saved" ? (
-        <Alert role="status" className="border-border bg-muted text-foreground">
-          <AlertTitle className="text-primary">Saved</AlertTitle>
-          <AlertDescription>
-            {actionState.label}. Saved {saveDestinationLabel(actionState.provider)}.
-          </AlertDescription>
-        </Alert>
+        (() => {
+          const feedback = executeSuccessFeedback(
+            actionState,
+            usesPersistedExecution,
+          );
+
+          return (
+            <Alert role="status" className="border-border bg-muted text-foreground">
+              <AlertTitle className="text-primary">{feedback.title}</AlertTitle>
+              <AlertDescription>{feedback.description}</AlertDescription>
+              {feedback.primaryLink || feedback.secondaryLink ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {feedback.primaryLink ? (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={feedback.primaryLink.href}>
+                        {feedback.primaryLink.label}
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {feedback.secondaryLink ? (
+                    <Button asChild size="sm" variant="ghost">
+                      <Link href={feedback.secondaryLink.href}>
+                        {feedback.secondaryLink.label}
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </Alert>
+          );
+        })()
       ) : null}
 
       {actionState.status === "error" ? (

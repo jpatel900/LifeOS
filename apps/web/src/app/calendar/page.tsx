@@ -23,8 +23,8 @@ import {
 import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
 import {
-  saveDestinationLabel,
   saveModeLabel,
+  savedViaLabel,
 } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
@@ -286,6 +286,72 @@ function normalizeCalendarFailure(
     title: "Planning change was not saved",
     message: "LifeOS could not confirm this local planning update.",
     nextStep: "Review state and retry.",
+  };
+}
+
+function planningSuccessFeedback(
+  actionState: Extract<ActionState, { status: "saved" }>,
+) {
+  const savedWhere = savedViaLabel(actionState.provider);
+
+  if (actionState.label === "Suggested time block created") {
+    return {
+      title: "Suggested time ready",
+      description: `Suggested time block created. It was ${savedWhere}. Review it below, then plan it or adjust it.`,
+      primaryLink: null,
+    };
+  }
+
+  if (actionState.label.startsWith("Suggested time block ")) {
+    return {
+      title: "Suggested time updated",
+      description: `${actionState.label}. It was ${savedWhere}. Review the updated time below before you plan it.`,
+      primaryLink: null,
+    };
+  }
+
+  if (actionState.label === "Suggested time removed") {
+    return {
+      title: "Suggested time removed",
+      description: `Suggested time removed. It was ${savedWhere}. Pick another task that still needs time.`,
+      primaryLink: null,
+    };
+  }
+
+  if (actionState.label === "Planned block created") {
+    return {
+      title: "Planned block ready",
+      description: `Planned block created. It was ${savedWhere}. Open Execute next when you are ready to focus.`,
+      primaryLink: {
+        href: "/execute",
+        label: "Open Execute",
+      },
+    };
+  }
+
+  if (actionState.label === "Calendar availability checked") {
+    return {
+      title: "Calendar checked",
+      description: `Calendar availability checked. It was ${savedWhere}. Review the conflict badge on this suggested time before you plan it.`,
+      primaryLink: null,
+    };
+  }
+
+  if (actionState.label === "Google Calendar event created") {
+    return {
+      title: "Google event created",
+      description: `Google Calendar event created. It was ${savedWhere}. The planned block stays here and now has a linked Google Calendar event.`,
+      primaryLink: {
+        href: "/execute",
+        label: "Open Execute",
+      },
+    };
+  }
+
+  return {
+    title: "Planning updated",
+    description: `${actionState.label}. It was ${savedWhere}. Review the updated planning state below.`,
+    primaryLink: null,
   };
 }
 
@@ -555,6 +621,26 @@ export default function CalendarPage() {
       provider: "mock",
     });
     setAdjustingProposalId(null);
+  }
+
+  function handleAcceptLocalProposal(proposalId: string) {
+    setActionState({ status: "saving", label: "planned block" });
+    acceptLocalProposal(proposalId);
+    setActionState({
+      status: "saved",
+      label: "Planned block created",
+      provider: "mock",
+    });
+  }
+
+  function handleRejectLocalPlanningProposal(proposalId: string) {
+    setActionState({ status: "saving", label: "proposal rejection" });
+    rejectLocalProposal(proposalId);
+    setActionState({
+      status: "saved",
+      label: "Suggested time removed",
+      provider: "mock",
+    });
   }
 
   async function handleRejectProposal(proposalId: string) {
@@ -890,12 +976,28 @@ export default function CalendarPage() {
       ) : null}
 
       {actionState.status === "saved" ? (
-        <Alert role="status" className="border-border bg-muted text-foreground">
-          <AlertTitle className="text-primary">Saved</AlertTitle>
-          <AlertDescription>
-            {actionState.label}. Saved {saveDestinationLabel(actionState.provider)}.
-          </AlertDescription>
-        </Alert>
+        (() => {
+          const feedback = planningSuccessFeedback(actionState);
+
+          return (
+            <Alert
+              role="status"
+              className="border-border bg-muted text-foreground"
+            >
+              <AlertTitle className="text-primary">{feedback.title}</AlertTitle>
+              <AlertDescription>{feedback.description}</AlertDescription>
+              {feedback.primaryLink ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={feedback.primaryLink.href}>
+                      {feedback.primaryLink.label}
+                    </Link>
+                  </Button>
+                </div>
+              ) : null}
+            </Alert>
+          );
+        })()
       ) : null}
 
       {actionState.status === "error" ? (
@@ -1170,7 +1272,7 @@ export default function CalendarPage() {
                             onClick={() =>
                               usesPersistedPlanning
                                 ? void handleAcceptProposal(proposal.id)
-                                : acceptLocalProposal(proposal.id)
+                                : handleAcceptLocalProposal(proposal.id)
                             }
                             disabled={
                               actionState.status === "saving" ||
@@ -1329,7 +1431,9 @@ export default function CalendarPage() {
                             onClick={() =>
                               usesPersistedPlanning
                                 ? void handleRejectProposal(proposal.id)
-                                : rejectLocalProposal(proposal.id)
+                                : handleRejectLocalPlanningProposal(
+                                    proposal.id,
+                                  )
                             }
                             disabled={
                               actionState.status === "saving" ||
