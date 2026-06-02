@@ -16,7 +16,7 @@ permissions:
 jobs:
   classify-risk:
     name: Classify PR risk
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     outputs:
       escalation_required: ${{ steps.classify.outputs.escalation_required }}
@@ -54,7 +54,7 @@ jobs:
 
   baseline-review:
     name: Codex baseline review
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
     needs:
       - classify-risk
     runs-on: ubuntu-latest
@@ -100,7 +100,10 @@ jobs:
 
   post-baseline-review:
     name: Post baseline review
-    if: github.event.pull_request.draft == false && needs.baseline-review.outputs.final_message != ''
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot' &&
+      needs.baseline-review.outputs.final_message != ''
     needs:
       - classify-risk
       - baseline-review
@@ -141,6 +144,7 @@ jobs:
     name: Codex escalated review
     if: >-
       github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot' &&
       (
         needs.classify-risk.outputs.escalation_required == 'true' ||
         contains(needs.baseline-review.outputs.final_message, 'ESCALATE_RECOMMENDED: true')
@@ -192,7 +196,10 @@ jobs:
 
   post-escalated-review:
     name: Post escalated review
-    if: github.event.pull_request.draft == false && needs.escalated-review.outputs.final_message != ''
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot' &&
+      needs.escalated-review.outputs.final_message != ''
     needs:
       - classify-risk
       - baseline-review

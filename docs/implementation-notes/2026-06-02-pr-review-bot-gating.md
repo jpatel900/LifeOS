@@ -1,0 +1,35 @@
+# PR Review Bot Gating
+
+- task name and branch: Codex PR review bot gating hardening on the current working branch
+- original scope: fix the remaining PR #118 merge blocker by narrowing Codex PR review workflow gating only; no app/runtime, dependency, CI, or deployment logic changes
+- assumptions:
+  - `openai/codex-action@v1` requires a triggering actor with write-capable repository access, so permissionless bot actors such as `dependabot[bot]` cannot complete the review job safely
+  - human-authored PR review behavior should remain unchanged
+  - CI, Vercel, and human review remain sufficient gates for bot-authored maintenance PRs
+- decisions:
+  - gated all jobs in `.github/workflows/codex-pr-review.yml` to run only for non-draft PRs whose author type is not `Bot`
+  - kept the deterministic classifier/baseline/escalated structure unchanged for human-authored PRs
+  - documented the bot-authored skip behavior in `docs/agent/PR_REVIEW_ESCALATION_POLICY.md`
+  - updated `docs/PROJECT_STATE.md` so workflow behavior and handoff guidance stay truthful
+- deviations:
+  - did not broaden `allow-bots`, permissions, or any write capability for Codex review automation
+  - did not change CI, Vercel, safe auto-merge, or dependency policy behavior
+- tradeoffs:
+  - bot-authored PRs lose automated Codex review comments, but the workflow stops producing guaranteed false-negative failures on PRs it cannot legally review
+  - using `pull_request.user.type != 'Bot'` is broader than a `dependabot[bot]` special case, but it avoids repeated failures from other permissionless automation actors under the same action constraint
+- files changed and why:
+  - `.github/workflows/codex-pr-review.yml`: skip review jobs for bot-authored PRs instead of failing inside `openai/codex-action`
+  - `docs/agent/PR_REVIEW_ESCALATION_POLICY.md`: document that Codex review is for human-authored non-draft PRs and that bot-authored PRs intentionally rely on other gates
+  - `docs/PROJECT_STATE.md`: align current governance/handoff notes with the new workflow gating rule
+- validation commands and results:
+  - pending local validation after edit: `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`
+  - pending focused workflow sanity checks: `git diff --check`
+- risks:
+  - bot-authored PRs will no longer receive Codex review comments unless a future approved review path is added
+  - if the team later wants review automation on trusted repo-generated bot PRs, this broad author-type gate may need refinement
+- deferred items:
+  - a future approved review path for trusted automation-authored PRs that does not depend on a permissionless bot actor satisfying write-access checks
+  - any broader PR review workflow redesign beyond this gating fix
+- rollback notes:
+  - revert `.github/workflows/codex-pr-review.yml`, `docs/agent/PR_REVIEW_ESCALATION_POLICY.md`, `docs/PROJECT_STATE.md`, and this note
+  - if bot-authored review support is later implemented safely, replace the broad bot-author skip with the narrower approved eligibility rule
