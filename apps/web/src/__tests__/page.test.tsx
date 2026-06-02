@@ -80,8 +80,34 @@ describe("HomePage Today cockpit", () => {
       screen.getByText(/No sample data is created until you save something/i),
     ).toBeDefined();
     expect(
-      screen.getByRole("link", { name: "Open next step" }),
+      screen.getByRole("link", { name: "Capture a thought" }),
     ).toHaveAttribute("href", "/capture");
+  });
+
+  it("matches the next-action CTA to the current queue state", async () => {
+    const storedState = createInitialWorkflowState();
+    storedState.taskDrafts = [
+      {
+        id: "task-draft-1",
+        user_id: "user-1",
+        capture_item_id: "capture-1",
+        area_id: "area-main-job",
+        title: "Review pending contract",
+        description: "Draft waiting for triage.",
+        confidence: 0.72,
+        estimated_minutes_low: 15,
+        estimated_minutes_high: 30,
+        first_tiny_step: "Open the contract notes.",
+        status: "pending",
+        created_at: "2026-05-27T12:00:00.000Z",
+      },
+    ];
+
+    renderHome(storedState);
+
+    expect(
+      await screen.findByRole("link", { name: "Review in Triage" }),
+    ).toHaveAttribute("href", "/triage");
   });
 
   it("hides empty secondary cards until they matter", async () => {

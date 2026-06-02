@@ -70,6 +70,12 @@ function AppChrome({ children }: { children: ReactNode }) {
       style={areaAccentStyle}
       className="relative min-h-screen bg-background"
     >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:border focus:border-[var(--area-accent-border)] focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--area-accent)]"
+      >
+        Skip to main content
+      </a>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[var(--area-accent-border)]"
@@ -115,12 +121,9 @@ function AppChrome({ children }: { children: ReactNode }) {
                   Save quick note
                 </Button>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline" className="rounded-full">
-                  Quick capture: device only
-                </Badge>
-                <span>Quick capture saves on this device. Review it in Triage or Review.</span>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Saved on this device only. Review in Triage or Review.
+              </p>
               {quickNoteStatus === "error" ? (
                 <p className="text-xs text-destructive">
                   Quick note was not saved. Type a note first, or use Capture.
@@ -204,9 +207,6 @@ function AppChrome({ children }: { children: ReactNode }) {
                 ))}
               </Select>
               <Badge variant="outline" className="rounded-full">
-                Device-only quick capture
-              </Badge>
-              <Badge variant="outline" className="rounded-full">
                 {now}
               </Badge>
             </div>
@@ -214,7 +214,11 @@ function AppChrome({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-5 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8"
+      >
         <div
           aria-label="Current area context"
           className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] px-4 py-3 shadow-sm"
@@ -226,9 +230,6 @@ function AppChrome({ children }: { children: ReactNode }) {
           >
             {currentArea?.name ?? "No area selected yet"}
           </Badge>
-          <span className="text-sm text-muted-foreground">
-            Session workflow area: {currentArea?.name ?? "Not set"}
-          </span>
         </div>
         <Separator />
         <DiagnosticsDisclosure>
