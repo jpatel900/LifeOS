@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     supabaseClient,
     createSupabaseBrowserClient: vi.fn(() => supabaseClient),
     listAreas: vi.fn(),
+    listCaptureItems: vi.fn(),
     createCaptureItem: vi.fn(),
   };
 });
@@ -23,6 +24,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 
 vi.mock("@/lib/data/workflow", () => ({
   listAreas: mocks.listAreas,
+  listCaptureItems: mocks.listCaptureItems,
   createCaptureItem: mocks.createCaptureItem,
 }));
 
@@ -76,6 +78,32 @@ const parseResponse: ParseCaptureResponse = {
   ambiguity_assessment: null,
 };
 
+const customArea: Area = {
+  id: "550e8400-e29b-41d4-a716-446655440102",
+  user_id: "550e8400-e29b-41d4-a716-446655440001",
+  name: "Home Admin",
+  slug: "home-admin",
+  description: "Home admin and errands.",
+  color: "#0f766e",
+  icon: "home",
+  sort_order: 1,
+  is_active: true,
+  created_at: "2026-05-07T00:00:00.000Z",
+  updated_at: "2026-05-07T00:00:00.000Z",
+};
+
+const customPersistedCapture: CaptureItem = {
+  id: "550e8400-e29b-41d4-a716-446655440202",
+  user_id: customArea.user_id,
+  area_id: customArea.id,
+  raw_text: "Schedule furnace service",
+  raw_audio_ref: null,
+  capture_mode: "text",
+  inferred_area_confidence: null,
+  status: "new",
+  created_at: "2026-05-08T13:00:00.000Z",
+};
+
 function renderCapturePage() {
   return render(
     <WorkflowProvider>
@@ -124,6 +152,7 @@ describe("CapturePage", () => {
 
   it("shows parser status as mock", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({ provider: "mock", captures: [] });
     mockParserStatusFetch("mock");
 
     renderCapturePage();
@@ -160,10 +189,21 @@ describe("CapturePage", () => {
         /Organize on this device and recent captures stay on this device/i,
       ),
     ).toBeDefined();
+    expect(
+      screen.getByRole("heading", {
+        name: "Recent saved captures on this device",
+      }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("heading", {
+        name: "Recent captures organized on this device",
+      }),
+    ).toBeDefined();
   });
 
   it("shows parser status as AI configured", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({ provider: "mock", captures: [] });
     mockParserStatusFetch("ai_configured");
 
     renderCapturePage();
@@ -175,6 +215,7 @@ describe("CapturePage", () => {
 
   it("shows parser status as AI unavailable", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({ provider: "mock", captures: [] });
     mockParserStatusFetch("ai_unavailable");
 
     renderCapturePage();
@@ -186,6 +227,7 @@ describe("CapturePage", () => {
 
   it("explains where Save thought went and can organize the saved capture", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -232,6 +274,11 @@ describe("CapturePage", () => {
         "This raw capture was saved to your account. Organize this saved thought next if you want draft suggestions.",
       ),
     ).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: "Recent saved captures" }),
+    ).toBeDefined();
+    expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
+    expect(screen.getByText("Email Taylor about launch notes")).toBeDefined();
     fireEvent.click(
       screen.getByRole("button", { name: "Organize this saved thought" }),
     );
@@ -253,6 +300,7 @@ describe("CapturePage", () => {
 
   it("submits Save thought from the main capture field with Ctrl/Cmd + Enter", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -289,6 +337,7 @@ describe("CapturePage", () => {
 
   it("saves capture, parses, and shows triage routing for low confidence", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -356,6 +405,7 @@ describe("CapturePage", () => {
 
   it("shows safe parse error and allows retry with mock parser", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -435,5 +485,49 @@ describe("CapturePage", () => {
         }),
       ),
     );
+  });
+
+  it("shows persisted saved history for a seeded area using workflow-to-persisted area mapping", async () => {
+    mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [persistedCapture],
+    });
+    mockParserStatusFetch("ai_configured");
+
+    renderCapturePage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Recent saved captures" }),
+    ).toBeDefined();
+    expect(
+      await screen.findByText("Email Taylor about launch notes"),
+    ).toBeDefined();
+    expect(screen.getByText("Area: Main Job")).toBeDefined();
+    expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
+  });
+
+  it("shows persisted saved history for a custom area without legacy id mapping", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area, customArea],
+    });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [customPersistedCapture],
+    });
+    mockParserStatusFetch("ai_configured");
+
+    renderCapturePage();
+
+    fireEvent.change(await screen.findByLabelText("Area for this saved thought"), {
+      target: { value: customArea.id },
+    });
+
+    expect(
+      await screen.findByText("Schedule furnace service"),
+    ).toBeDefined();
+    expect(screen.getByText("Area: Home Admin")).toBeDefined();
+    expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
   });
 });
