@@ -522,7 +522,12 @@ export default function AreasSettingsPage() {
                     <div className="flex flex-wrap gap-2">
                       <Button
                         type="button"
-                        variant={isSelected ? "secondary" : "outline"}
+                        variant="outline"
+                        className={
+                          isSelected
+                            ? "border-[var(--area-accent)] bg-foreground text-background ring-1 ring-[var(--area-accent-soft)] hover:bg-foreground"
+                            : undefined
+                        }
                         onClick={() => setSelectedAreaId(workflowAreaId)}
                       >
                         {isSelected ? "Using this area" : "Use this area"}

@@ -218,9 +218,12 @@ describe("source-of-truth boundaries", () => {
       readRepoFile("apps/web/src/lib/statusVocabulary.ts"),
     );
 
-    expect(appShell).toContain("Quick capture saves on this device.");
+    expect(appShell).toContain(
+      "Quick capture saves on this device and sends notes to Triage.",
+    );
     expect(appShell).toContain("Current area");
     expect(appShell).toContain("Technical area id:");
+    expect(appShell).not.toContain("Session workflow area");
     expect(capture).toContain("Save mode:");
     expect(capture).toContain("Technical save mode id:");
     expect(capture).toContain("on this device");
