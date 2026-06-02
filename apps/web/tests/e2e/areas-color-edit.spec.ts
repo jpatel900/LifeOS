@@ -49,3 +49,77 @@ test("Areas color controls stay usable at 390px width", async ({ page }) => {
   await page.goto("/settings/areas");
   await expectNoHorizontalOverflow(page);
 });
+
+test("dark-mode area accent presets keep current-area text readable and focus-visible", async ({
+  page,
+}) => {
+  await page.goto("/settings/areas");
+
+  const presets = ["Ocean", "Forest", "Sunrise", "Clay", "Violet", "Teal"];
+  const firstCard = page.getByTestId("areas-area-card").first();
+  const secondCard = page.getByTestId("areas-area-card").nth(1);
+  const selectedButton = firstCard.getByRole("button", { name: "Using this area" });
+  const otherButton = secondCard.getByRole("button", { name: "Use this area" });
+
+  await selectedButton.click();
+
+  for (const preset of presets) {
+    const presetButton = firstCard.getByRole("button", { name: preset });
+    await presetButton.click();
+
+    const selectedStateStyles = await selectedButton.evaluate((element) => {
+      const styles = window.getComputedStyle(element);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        throw new Error("Canvas context unavailable for color normalization.");
+      }
+
+      context.fillStyle = styles.color;
+      const normalizedColor = context.fillStyle;
+      context.fillStyle = styles.backgroundColor;
+      const normalizedBackground = context.fillStyle;
+
+      return {
+        color: normalizedColor,
+        backgroundColor: normalizedBackground,
+        borderColor: styles.borderColor,
+      };
+    });
+
+    expect(selectedStateStyles.color).not.toBe(
+      selectedStateStyles.backgroundColor,
+    );
+    expect(selectedStateStyles.borderColor).not.toBe(
+      selectedStateStyles.backgroundColor,
+    );
+
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(presetButton).toBeFocused();
+    const focusStyles = await presetButton.evaluate((element) => {
+      const styles = window.getComputedStyle(element);
+      return {
+        boxShadow: styles.boxShadow,
+        outlineStyle: styles.outlineStyle,
+      };
+    });
+
+    expect(focusStyles.boxShadow === "none" && focusStyles.outlineStyle === "none").toBe(
+      false,
+    );
+  }
+
+  await expect(firstCard.getByText("Main Job")).toBeVisible();
+  await expect(selectedButton).toBeVisible();
+
+  const selectedBackground = await selectedButton.evaluate(
+    (element) => window.getComputedStyle(element).backgroundColor,
+  );
+  const unselectedBackground = await otherButton.evaluate(
+    (element) => window.getComputedStyle(element).backgroundColor,
+  );
+
+  expect(selectedBackground).not.toBe(unselectedBackground);
+});
