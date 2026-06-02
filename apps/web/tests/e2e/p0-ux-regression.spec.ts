@@ -132,7 +132,7 @@ test("home cockpit quick capture shows truthful error/success and route links", 
   await page.getByRole("button", { name: "Save quick capture" }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
   await expect(
-    page.getByText("Quick capture saves on this device. Review it in Triage or Review."),
+    page.getByText("Saved on this device only. Review in Triage or Review."),
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Open Triage" }).first().click();
@@ -331,6 +331,6 @@ test("home keyboard tab path reaches cockpit controls", async ({ page }) => {
   );
   await tabUntilFocused(
     page,
-    page.getByRole("link", { name: "Open next step" }),
+    page.getByRole("link", { name: "Capture a thought" }),
   );
 });

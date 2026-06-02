@@ -47,9 +47,7 @@ describe("workflow route provider wiring", () => {
       screen.getByRole("button", { name: "Save quick note" }),
     ).toBeDefined();
     expect(
-      screen.getByText(
-        "Quick capture saves on this device. Review it in Triage or Review.",
-      ),
+      screen.getByText("Saved on this device only. Review in Triage or Review."),
     ).toBeDefined();
     expect(
       screen.getByRole("heading", { level: 1, name: "Capture" }),
