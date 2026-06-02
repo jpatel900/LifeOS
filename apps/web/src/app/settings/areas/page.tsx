@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { EmptyState } from "../../components/EmptyState";
+import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import {
   createArea,
   listAreas,
@@ -326,9 +327,10 @@ export default function AreasSettingsPage() {
       </Card>
 
       {state.status === "loading" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading areas...
-        </p>
+        <WorkflowLoadingState
+          title="Checking saved areas"
+          description="You can still prepare the next area while saved area rows load."
+        />
       ) : null}
 
       {state.status === "error" ? (
@@ -351,6 +353,11 @@ export default function AreasSettingsPage() {
             <EmptyState
               title="No active areas yet."
               description="Create your first area above before capture and planning so new work has a clear scope."
+              action={
+                <Button asChild>
+                  <Link href="#area_name">Create area</Link>
+                </Button>
+              }
             />
           ) : (
             state.areas.map((area) => {

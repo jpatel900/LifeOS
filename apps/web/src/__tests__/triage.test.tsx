@@ -146,5 +146,8 @@ describe("TriagePage", () => {
         "No pending suggestions in this browser. Go to Capture, save a thought, then return here to review it.",
       ),
     ).toBeDefined();
+    expect(
+      screen.getAllByRole("link", { name: "Go to Capture" }).length,
+    ).toBeGreaterThan(0);
   });
 });

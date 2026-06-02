@@ -232,7 +232,7 @@ describe("source-of-truth boundaries", () => {
       "Drafts shown here stay on this device until you accept them.",
     );
     expect(triage).toContain("Technical save mode id:");
-    expect(triage).toContain("does not move the item yet");
+    expect(triage).toContain("do not move the item");
     expect(calendar).toContain("Check calendar availability");
     expect(calendar).toContain("Create Google Calendar event");
     expect(calendar).toContain("Adjust time");
