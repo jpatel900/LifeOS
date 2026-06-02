@@ -162,6 +162,23 @@ function getPriorityCardOrder(cockpit: TodayCockpitModel): HomeCardKey[] {
   ];
 }
 
+function getNextActionCtaLabel(kind: TodayCockpitModel["next"]["kind"]) {
+  switch (kind) {
+    case "capture":
+      return "Capture a thought";
+    case "needs_decision":
+      return "Review in Triage";
+    case "unplanned_task":
+      return "Plan this task";
+    case "current_work":
+      return "Open Execute";
+    case "recovery":
+      return "Recover session";
+    case "health_attention":
+      return "Check Health";
+  }
+}
+
 export default function HomePage() {
   const { state, selectedAreaId, submitCaptureText } = useWorkflow();
   const [homeData, setHomeData] = useState<HomeDataState>({
@@ -437,7 +454,9 @@ export default function HomePage() {
           <p className="text-lg font-semibold">{cockpit.next.label}</p>
           <p className="text-sm text-muted-foreground">{cockpit.next.reason}</p>
           <Button asChild className="w-full sm:w-auto">
-            <Link href={cockpit.next.href}>Open next step</Link>
+            <Link href={cockpit.next.href}>
+              {getNextActionCtaLabel(cockpit.next.kind)}
+            </Link>
           </Button>
         </CardContent>
       </Card>

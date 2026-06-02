@@ -30,6 +30,27 @@ test("shell accent follows the selected area and keeps active nav explicit", asy
   await expect(shell).toHaveCSS("--area-accent", "#f97316");
 });
 
+test("skip link moves focus to main content without exposing workflow internals", async ({
+  page,
+}) => {
+  await gotoCapture(page);
+
+  const skipLink = page.getByRole("link", { name: "Skip to main content" });
+  const main = page.locator("#main-content");
+
+  await skipLink.focus();
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toBeVisible();
+  await skipLink.press("Enter");
+  await expect(main).toBeFocused();
+  await expect(page.getByText("Session workflow area")).toHaveCount(0);
+
+  const top = await main.evaluate((element) =>
+    Math.round(element.getBoundingClientRect().top),
+  );
+  expect(top).toBeGreaterThanOrEqual(0);
+});
+
 test("shell accent stays usable at mobile width without horizontal overflow", async ({
   page,
 }) => {

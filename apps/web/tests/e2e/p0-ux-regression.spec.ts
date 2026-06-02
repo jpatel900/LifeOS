@@ -74,7 +74,7 @@ async function assertNoHorizontalOverflow(page: Page, route: string) {
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
 }
 
-async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 40) {
+async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 80) {
   for (let i = 0; i < maxTabs; i += 1) {
     await page.keyboard.press("Tab");
     const focused = await locator
@@ -132,7 +132,7 @@ test("home cockpit quick capture shows truthful error/success and route links", 
   await page.getByRole("button", { name: "Save quick capture" }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
   await expect(
-    page.getByText("Quick capture saves on this device. Review it in Triage or Review."),
+    page.getByText("Saved on this device only. Review in Triage or Review."),
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Open Triage" }).first().click();
@@ -295,6 +295,10 @@ test.describe("mobile overflow checks", () => {
   }) => {
     await assertNoHorizontalOverflow(page, "/");
     await assertNoHorizontalOverflow(page, "/capture");
+    await assertNoHorizontalOverflow(page, "/triage");
+    await assertNoHorizontalOverflow(page, "/calendar");
+    await assertNoHorizontalOverflow(page, "/execute");
+    await assertNoHorizontalOverflow(page, "/review");
     await assertNoHorizontalOverflow(page, "/health");
     await assertNoHorizontalOverflow(page, "/settings/areas");
   });
@@ -331,6 +335,61 @@ test("home keyboard tab path reaches cockpit controls", async ({ page }) => {
   );
   await tabUntilFocused(
     page,
-    page.getByRole("link", { name: "Open next step" }),
+    page.getByRole("link", { name: "Capture a thought" }),
   );
+});
+
+test("triage and planning keyboard paths reach primary actions when a draft exists", async ({
+  page,
+}) => {
+  await createLocalDraftCandidate(page, "Keyboard-path planning candidate");
+  await page.locator("body").click({ position: { x: 10, y: 10 } });
+
+  await tabUntilFocused(
+    page,
+    page.getByRole("button", { name: "Accept task draft" }),
+  );
+  await page.getByRole("button", { name: "Accept task draft" }).first().click();
+
+  await expect(page.getByText("Ready for Planning")).toBeVisible();
+  await page.getByRole("link", { name: "Plan time for this" }).click();
+  await expect(page).toHaveURL(/\/calendar$/);
+  await expect(
+    page.getByRole("button", { name: "Suggest a time" }).first(),
+  ).toBeVisible();
+
+  await page.locator("body").click({ position: { x: 10, y: 10 } });
+  await tabUntilFocused(
+    page,
+    page.getByRole("button", { name: "Suggest a time" }),
+  );
+});
+
+test("execute, review, and areas keyboard paths reach key controls", async ({
+  page,
+}) => {
+  await createLocalDraftCandidate(page, "Keyboard-path execute candidate");
+  await page.getByRole("button", { name: "Accept task draft" }).first().click();
+  await page.getByRole("link", { name: "Plan time for this" }).click();
+  await expect(page).toHaveURL(/\/calendar$/);
+  await expect(
+    page.getByRole("button", { name: "Suggest a time" }).first(),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Suggest a time" }).first().click();
+  await page.getByRole("button", { name: "Plan this time" }).first().click();
+
+  await page.goto("/execute");
+  await page.locator("body").click({ position: { x: 10, y: 10 } });
+  await tabUntilFocused(page, page.getByRole("button", { name: "Start" }));
+
+  await page.goto("/review");
+  await page.locator("body").click({ position: { x: 10, y: 10 } });
+  await tabUntilFocused(
+    page,
+    page.getByRole("button", { name: "Create daily review" }),
+  );
+
+  await page.goto("/settings/areas");
+  await page.locator("body").click({ position: { x: 10, y: 10 } });
+  await tabUntilFocused(page, page.getByRole("button", { name: "Teal" }).first());
 });
