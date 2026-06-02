@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
+import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
 import {
   acceptTimeBlockProposal,
   checkTimeBlockProposalConflict,
@@ -937,9 +938,10 @@ export default function CalendarPage() {
       </Card>
 
       {planningState.status === "loading" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Checking saved planning rows. Local planning view is still available.
-        </p>
+        <WorkflowLoadingState
+          title="Checking saved planning rows"
+          description="Local planning view is still available while saved rows load."
+        />
       ) : null}
 
       <DiagnosticsDisclosure>
@@ -1014,6 +1016,11 @@ export default function CalendarPage() {
         <EmptyState
           title="Nothing needs time yet."
           description="Suggested and planned time blocks appear here after you suggest time for a task. Checking Google Calendar is optional and does not create events."
+          action={
+            <Button asChild>
+              <Link href="/triage">Get a task ready in Triage</Link>
+            </Button>
+          }
         />
       ) : (
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
@@ -1029,10 +1036,15 @@ export default function CalendarPage() {
                       ? "No saved active tasks."
                       : "No accepted tasks in this browser."
                   }
-          description={
+                  description={
                     usesPersistedPlanning
                       ? "Accept task drafts in Triage before suggesting time."
                       : "Accept a task in Triage, then suggest time here."
+                  }
+                  action={
+                    <Button asChild>
+                      <Link href="/triage">Go to Triage</Link>
+                    </Button>
                   }
                 />
               ) : (
@@ -1047,9 +1059,12 @@ export default function CalendarPage() {
                       key={task.id}
                       className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm"
                     >
-                      <div>
+                      <div className="space-y-1">
+                        <div className="font-medium">{task.title}</div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="font-medium">{task.title}</div>
+                          {area ? (
+                            <Badge variant="secondary">Area: {area.name}</Badge>
+                          ) : null}
                           <Badge variant={lifecycle.variant}>
                             {lifecycle.label}
                           </Badge>
@@ -1058,11 +1073,6 @@ export default function CalendarPage() {
                           Estimate: {task.estimated_minutes_low ?? "?"}-
                           {task.estimated_minutes_high ?? "?"} min
                         </div>
-                        {area ? (
-                          <div className="text-muted-foreground">
-                            Area: {area.name}
-                          </div>
-                        ) : null}
                       </div>
                       <Button
                         type="button"
@@ -1191,33 +1201,42 @@ export default function CalendarPage() {
                       style={buildAreaAccentStyle(accentArea?.color)}
                       className="area-accent-card flex flex-col gap-2 rounded-lg border border-border p-3 text-sm"
                     >
+                      <div className="font-medium">
+                        {task?.title ?? "Unassigned block"}
+                      </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-medium">
-                          {task?.title ?? "Unassigned block"}
-                        </div>
+                        {area ? (
+                          <Badge
+                            variant="secondary"
+                            className="area-accent-chip w-fit rounded-full"
+                          >
+                            Area: {area.name}
+                          </Badge>
+                        ) : selectedArea ? (
+                          <Badge
+                            variant="secondary"
+                            className="area-accent-chip w-fit rounded-full"
+                          >
+                            Current area: {selectedArea.name}
+                          </Badge>
+                        ) : null}
                         <Badge variant={lifecycle.variant}>
                           {lifecycle.label}
+                        </Badge>
+                        <Badge
+                          variant={conflictSummary.variant}
+                          className={cn(
+                            "text-[0.7rem]",
+                            conflictSummary.className,
+                          )}
+                        >
+                          {conflictSummary.label}
                         </Badge>
                       </div>
                       <div className="text-muted-foreground">
                         {new Date(proposal.proposed_start).toLocaleTimeString()}{" "}
                         - {new Date(proposal.proposed_end).toLocaleTimeString()}
                       </div>
-                      {area ? (
-                        <Badge
-                          variant="secondary"
-                          className="area-accent-chip w-fit rounded-full"
-                        >
-                          Area: {area.name}
-                        </Badge>
-                      ) : selectedArea ? (
-                        <Badge
-                          variant="secondary"
-                          className="area-accent-chip w-fit rounded-full"
-                        >
-                          Current area: {selectedArea.name}
-                        </Badge>
-                      ) : null}
                       <div className="text-muted-foreground">
                         {proposalRationale(proposal)}
                       </div>
@@ -1244,20 +1263,6 @@ export default function CalendarPage() {
                           </span>
                         </label>
                       ) : null}
-                      <div className="mt-1 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">
-                          Planning status: {lifecycle.label}
-                        </span>
-                        <Badge
-                          variant={conflictSummary.variant}
-                          className={cn(
-                            "text-[0.7rem]",
-                            conflictSummary.className,
-                          )}
-                        >
-                          {conflictSummary.label}
-                        </Badge>
-                      </div>
                       <div className="text-xs text-muted-foreground">
                         Google Calendar: {googleWriteState}
                       </div>
@@ -1444,16 +1449,6 @@ export default function CalendarPage() {
                             Reject
                           </Button>
                         </div>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          disabled
-                        >
-                          Primary next step: plan this time
-                        </Button>
                       </div>
                     </div>
                   );

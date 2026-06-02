@@ -153,10 +153,10 @@ test("review page can create a basic review log entry and keeps next actions vis
     page.getByRole("link", { name: "Plan the next block" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Create daily review" }),
+    page.getByRole("button", { name: "Create daily review" }).first(),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Create daily review" }).click();
+  await page.getByRole("button", { name: "Create daily review" }).first().click();
 
   await expect(page.getByText("Daily review saved")).toBeVisible();
   await expect(
@@ -206,12 +206,18 @@ test("triage edit and note actions work when an item exists", async ({
     page.getByText("AI notes are from the original capture"),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Mark for later" }).first().click();
+  await page
+    .getByRole("button", { name: "Add review-later note" })
+    .first()
+    .click();
   await expect(
     page.getByText("Added note: review later.").first(),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Add area note" }).first().click();
+  await page
+    .getByRole("button", { name: "Add area-change note" })
+    .first()
+    .click();
   await expect(
     page.getByText("Added note: consider changing area.").first(),
   ).toBeVisible();

@@ -685,7 +685,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "Mark for later" }),
+      await screen.findByRole("button", { name: "Add review-later note" }),
     );
 
     expect(await screen.findByText("Note saved in this browser")).toBeDefined();
@@ -697,14 +697,14 @@ describe("Phase 4A Supabase persistence UI", () => {
       screen.getAllByText(/Added note: review later\./).length,
     ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Add area note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add area-change note" }));
     expect(
       await screen.findByText("Added note: consider changing area."),
     ).toBeDefined();
 
     expect(
       screen.getByText(
-        "This adds a note for now; it does not move the item yet.",
+        "These notes stay on this device and do not move the item.",
       ),
     ).toBeDefined();
     expect(mocks.createTask).not.toHaveBeenCalled();
@@ -748,7 +748,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(
       await screen.findByText("Nothing to triage right now."),
     ).toBeDefined();
-    expect(screen.getByRole("link", { name: "Go to Capture" })).toBeDefined();
+    expect(
+      screen.getAllByRole("link", { name: "Go to Capture" }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("creates persisted local planning proposals from persisted tasks", async () => {
@@ -812,8 +814,8 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     expect(await screen.findByText("Nothing needs time yet.")).toBeDefined();
     expect(
-      screen.getByRole("link", { name: "Get a task ready in Triage" }),
-    ).toBeDefined();
+      screen.getAllByRole("link", { name: "Get a task ready in Triage" }).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(
         "Suggested and planned time blocks appear here after you suggest time for a task. Checking Google Calendar is optional and does not create events.",
@@ -1523,13 +1525,33 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     mocks.createReviewEntry.mockResolvedValue({
       provider: "supabase",
-      reviewEntry,
+      reviewEntry: {
+        ...reviewEntry,
+        summary_json: {
+          ...reviewEntry.summary_json,
+          reflections: {
+            move_forward: "Keep the dentist follow-up active.",
+            needs_rescheduling:
+              "Move the next planning block to tomorrow morning.",
+            reality_taught: "Afternoons were worse for focus than expected.",
+          },
+        },
+      },
     });
 
     renderWithWorkflow(<ReviewPage />);
 
+    fireEvent.change(await screen.findByLabelText("What should move forward?"), {
+      target: { value: "Keep the dentist follow-up active." },
+    });
+    fireEvent.change(screen.getByLabelText("What needs rescheduling?"), {
+      target: { value: "Move the next planning block to tomorrow morning." },
+    });
+    fireEvent.change(screen.getByLabelText("What did reality teach?"), {
+      target: { value: "Afternoons were worse for focus than expected." },
+    });
     fireEvent.click(
-      await screen.findByRole("button", { name: "Create daily review" }),
+      (await screen.findAllByRole("button", { name: "Create daily review" }))[0],
     );
 
     await waitFor(() => {
@@ -1541,6 +1563,12 @@ describe("Phase 4A Supabase persistence UI", () => {
           summary_json: expect.objectContaining({
             completed_sessions: 1,
             open_tasks: 1,
+            reflections: expect.objectContaining({
+              move_forward: "Keep the dentist follow-up active.",
+              needs_rescheduling:
+                "Move the next planning block to tomorrow morning.",
+              reality_taught: "Afternoons were worse for focus than expected.",
+            }),
           }),
         }),
       );
@@ -1550,6 +1578,8 @@ describe("Phase 4A Supabase persistence UI", () => {
       "Review entry saved to your account. Stay here to finish closing the loop, or move to Planning for the next block.",
     );
     expect(screen.getByRole("link", { name: "Open Planning" })).toBeDefined();
+    expect(screen.getByText("Move forward")).toBeDefined();
+    expect(screen.getByText("Keep the dentist follow-up active.")).toBeDefined();
   });
 
   it("rolls up persisted review rows by persisted area ids", async () => {
