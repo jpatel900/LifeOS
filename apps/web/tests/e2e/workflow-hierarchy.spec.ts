@@ -81,6 +81,9 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
   await expect(page.getByTestId("review-next-decision-card")).toHaveClass(
     /workflow-primary-card/,
   );
+  await expect(page.getByTestId("review-close-loop-card")).toHaveClass(
+    /workflow-secondary-card/,
+  );
   await expect(page.getByTestId("review-today-at-a-glance-card")).toHaveClass(
     /workflow-secondary-card/,
   );

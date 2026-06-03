@@ -30,21 +30,21 @@ Principles:
 - Review
 - Health
 
+**Read-only entry / routing surface:** Today / Home on `/` routes into the six primary workflow screens but is not a seventh mutable workflow.
+
 **Secondary / admin:** Settings (areas, policies, integrations) — supports the app but is not one of the six primary workflow screens.
 
 Suggested route map:
 
 ```text
+/
 /capture
 /triage
 /calendar
-/execute/:blockId
-/review/daily
-/review/weekly
+/execute
+/review
 /health
 /settings/areas
-/settings/policies
-/settings/integrations
 ```
 
 ## 3. Flow 1 — First-Time Setup
@@ -68,7 +68,7 @@ Create enough structure to use the system without over-onboarding.
    - default session length
    - strictness of calendar approval
 5. User optionally connects Google Calendar.
-6. App lands on Capture screen.
+6. App lands on Today / Home and the user can move into Capture or Areas immediately.
 
 ### Acceptance Criteria
 
@@ -88,16 +88,17 @@ Convert a simple thought into a task.
 1. User opens Capture.
 2. User types: "Follow up with Alex about event sponsorship."
 3. User optionally selects "Volunteer Work."
-4. User clicks "Structure."
-5. System creates task draft.
-6. User accepts.
-7. Task appears in area task list.
+4. User clicks "Save and organize."
+5. System saves the raw capture first, then creates local draft suggestions.
+6. User reviews the current item in Triage and accepts the task draft.
+7. Task appears as accepted work that can be planned.
 
 ### UI Requirements
 
 - Show raw capture.
-- Show task draft.
-- Show inferred area and confidence.
+- Show save mode and current area truthfully.
+- Show draft suggestion(s).
+- Show inferred area and confidence when AI sorting is involved.
 - Provide Accept / Edit / Reject.
 
 ### Acceptance Criteria
@@ -160,11 +161,7 @@ Resolve uncertain AI outputs before they pollute the system.
 ### Steps
 
 1. User opens Triage.
-2. Items are grouped by issue:
-   - area uncertain
-   - task/project uncertain
-   - scheduling unclear
-   - missing info
+2. One current item is primary and the rest wait in an explicit next-up queue.
 3. User chooses:
    - accept
    - edit
@@ -191,18 +188,18 @@ Suggest when to do a task without writing to calendar yet.
 ### Steps
 
 1. User selects a task.
-2. User clicks "Propose time."
+2. User clicks "Suggest a time."
 3. System fetches:
    - area policy
    - task duration range
    - time preferences
    - calendar free/busy if connected
 4. System creates 1-3 proposals.
-5. User approves, edits, rejects, or asks for alternatives.
+5. User reviews the local suggestion, adjusts it, plans it locally, or checks calendar availability.
 
 ### Acceptance Criteria
 
-- Proposals remain local until approved.
+- Suggestions and planned blocks remain local until the user explicitly asks for a Google write.
 - Rationale is shown.
 - Conflict flag is visible.
 - User can edit start/end before approval.
@@ -215,13 +212,14 @@ Write approved block to Google Calendar safely.
 
 ### Steps
 
-1. User clicks "Approve and add to calendar."
+1. User optionally checks calendar availability, then clicks "Create Google Calendar event."
 2. App shows final confirmation:
    - title
    - area
    - date/time
    - calendar
    - conflict warning if any
+   - first-write warning when relevant
 3. User confirms.
 4. Next.js server code (Route Handler or Server Action) writes the event via the calendar adapter.
 5. App stores Google event ID.
@@ -247,9 +245,9 @@ Help the user start and finish a work session.
    - current task
    - area
    - first tiny step
-   - timer
+   - focus state and timing truth
    - definition of done
-3. User starts timer.
+3. User starts a focus session.
 4. During work, user can:
    - pause
    - mark distracted
@@ -268,6 +266,7 @@ Help the user start and finish a work session.
 - Quick capture does not navigate away.
 - Marking stuck can generate a smaller next step.
 - End-session data updates logs.
+- Persisted execution does not pretend a live timer is authoritative when it is not.
 
 ## 10. Flow 8 — Missed Block Recovery
 
@@ -407,7 +406,7 @@ Avoid:
 - Discovery Question card
 - Time-block proposal card
 - Conflict badge
-- Execution timer
+- Execution focus-state card
 - Quick capture sidebar
 - Review checklist
 - Health incident card
