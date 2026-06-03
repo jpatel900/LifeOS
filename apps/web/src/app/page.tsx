@@ -34,6 +34,7 @@ import {
 } from "@/lib/today/buildTodayCockpitModel";
 import { buildAreaAccentStyle, resolveSelectedArea } from "@/lib/areaAccent";
 import { DiagnosticsDisclosure } from "./components/DiagnosticsDisclosure";
+import { EmptyState } from "./components/EmptyState";
 
 type HomeDataState =
   | { status: "loading" }
@@ -407,12 +408,14 @@ export default function HomePage() {
   }
 
   return (
-    <main className="grid gap-4">
-      <section className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Today</h1>
-        <p className="text-sm text-muted-foreground">
-          Pick one useful next move. The short loop below stays useful on a
-          fresh day and on a messy one.
+    <main className="grid gap-6 pb-6">
+      <section className="mx-auto flex w-full max-w-3xl flex-col items-center gap-2 text-center">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          Today
+        </h1>
+        <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+          One clear next move first. Everything else stays visible, quieter,
+          and read-only.
         </p>
       </section>
 
@@ -425,106 +428,116 @@ export default function HomePage() {
         </Alert>
       ) : null}
 
-      <Card
-        data-testid="today-next-card"
-        data-accent-strength="subtle"
-        style={selectedAreaStyle}
-        className="area-accent-card workflow-primary-card border-primary/40"
-      >
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle className="text-2xl">Next</CardTitle>
-              <CardDescription>
-                One useful move from the state you already have.
-              </CardDescription>
+      <section className="mx-auto grid w-full max-w-5xl gap-4">
+        <Card
+          data-testid="today-next-card"
+          data-accent-strength="subtle"
+          style={selectedAreaStyle}
+          className="area-accent-card workflow-primary-card border-primary/40 shadow-sm"
+        >
+          <CardHeader className="gap-4 pb-2 sm:pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-2">
+                <CardTitle className="text-3xl tracking-tight sm:text-4xl">
+                  Next
+                </CardTitle>
+                <CardDescription className="max-w-2xl text-sm leading-6 sm:text-base">
+                  One useful move from the state you already have.
+                </CardDescription>
+              </div>
+              {selectedArea ? (
+                <Badge
+                  variant="secondary"
+                  className="area-accent-chip inline-flex items-center gap-2 rounded-full px-3 py-1"
+                >
+                  <span
+                    aria-hidden
+                    className="area-accent-dot h-2 w-2 rounded-full"
+                  />
+                  Current area: {selectedArea.name}
+                </Badge>
+              ) : null}
             </div>
-            {selectedArea ? (
-              <Badge
-                variant="secondary"
-                className="area-accent-chip inline-flex items-center gap-2 rounded-full"
-              >
-                <span aria-hidden className="area-accent-dot h-2 w-2 rounded-full" />
-                Current area: {selectedArea.name}
-              </Badge>
-            ) : null}
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <p className="text-lg font-semibold">{cockpit.next.label}</p>
-          <p className="text-sm text-muted-foreground">{cockpit.next.reason}</p>
-          <Button asChild className="w-full sm:w-auto">
-            <Link href={cockpit.next.href}>
-              {getNextActionCtaLabel(cockpit.next.kind)}
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {showDailyLoop ? (
-        <Card className="workflow-secondary-card">
-          <CardHeader>
-            <CardTitle className="text-xl">Daily loop</CardTitle>
-            <CardDescription>
-              A calm first-run path using the routes that already exist. No
-              sample data is created until you save something.
-            </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4">
-            <ol className="grid gap-2 text-sm text-muted-foreground">
-              <li>1. Capture one real thought.</li>
-              <li>2. Decide what it is in Triage.</li>
-              <li>3. Plan one local block before you start focus.</li>
-              <li>
-                4. Use Execute while working, then close the loop in Review.
-              </li>
-            </ol>
-            <div className="grid gap-2 sm:flex sm:flex-wrap">
-              <Button asChild className="w-full sm:w-auto">
-                <Link href="/capture">Start with Capture</Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href="/triage">Open Triage</Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href="/calendar">Open Planning</Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href="/review">Open Review</Link>
+          <CardContent className="grid gap-5 sm:gap-6">
+            <div className="grid gap-2">
+              <p className="max-w-3xl text-2xl font-semibold tracking-tight sm:text-3xl">
+                {cockpit.next.label}
+              </p>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+                {cockpit.next.reason}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild size="lg" className="min-w-[14rem]">
+                <Link href={cockpit.next.href}>
+                  {getNextActionCtaLabel(cockpit.next.kind)}
+                </Link>
               </Button>
             </div>
           </CardContent>
         </Card>
-      ) : null}
 
-      {showNowPrimaryCard ? (
-        <Card className="workflow-secondary-card">
-          <CardHeader>
-            <CardTitle className="text-xl">Now</CardTitle>
-            <CardDescription>What is already in motion.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <p className="break-words font-medium">{cockpit.now.title}</p>
-            <p className="text-sm text-muted-foreground">
-              {cockpit.now.summary}
-            </p>
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href={cockpit.now.href}>Go to Execute</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
+        {showNowPrimaryCard ? (
+          <Card className="workflow-secondary-card border-border/70 bg-background/70 shadow-none">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Now</CardTitle>
+              <CardDescription>What is already in motion.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-2">
+              <p className="break-words font-medium">{cockpit.now.title}</p>
+              <p className="text-sm text-muted-foreground">
+                {cockpit.now.summary}
+              </p>
+              <div>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href={cockpit.now.href}>Go to Execute</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
+        {showDailyLoop ? (
+          <EmptyState
+            title="Daily loop"
+            description="Start with one real capture, sort it in Triage, plan one local block, then use Execute and Review to close the loop. No sample data is created until you save something."
+            action={
+              <>
+                <Button asChild className="w-full sm:w-auto">
+                  <Link href="/capture">Start with Capture</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href="/triage">Open Triage</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href="/calendar">Open Planning</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href="/review">Open Review</Link>
+                </Button>
+              </>
+            }
+          />
+        ) : null}
+      </section>
+
+      <section className="mx-auto grid w-full max-w-5xl gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visibleSecondaryCardOrder.map((cardKey) => {
           if (cardKey === "quickCapture") {
             return (
-              <Card key={cardKey} className="workflow-secondary-card">
+              <Card
+                key={cardKey}
+                className="workflow-secondary-card border-border/80 xl:col-span-2"
+              >
                 <CardHeader>
                   <CardTitle className="text-lg">Quick Capture</CardTitle>
-                  <CardDescription>Save one real thing fast.</CardDescription>
+                  <CardDescription>
+                    Save one real thing fast. Home stays read-only except this
+                    capture handoff.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-2">
+                <CardContent className="grid gap-3">
                   <Input
                     aria-label="Home quick capture text"
                     placeholder="What matters right now?"
@@ -544,7 +557,8 @@ export default function HomePage() {
                     Save quick capture
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Saves on this device and sends it to Triage.
+                    Saves on this device and sends it to Triage. No planning,
+                    execute, calendar, or health changes happen here.
                   </p>
                   {quickCaptureFeedback.status === "error" ? (
                     <p role="alert" className="text-sm text-destructive">
@@ -573,7 +587,7 @@ export default function HomePage() {
 
           if (cardKey === "needsDecision") {
             return (
-              <Card key={cardKey} className="workflow-secondary-card">
+              <Card key={cardKey} className="workflow-secondary-card shadow-none">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>Needs decision</span>
@@ -609,7 +623,7 @@ export default function HomePage() {
 
           if (cardKey === "unplanned") {
             return (
-              <Card key={cardKey} className="workflow-secondary-card">
+              <Card key={cardKey} className="workflow-secondary-card shadow-none">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>{cockpit.unplanned.title}</span>
@@ -649,7 +663,7 @@ export default function HomePage() {
 
           if (cardKey === "todayBlocks") {
             return (
-              <Card key={cardKey} className="workflow-secondary-card">
+              <Card key={cardKey} className="workflow-secondary-card shadow-none">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>Today&apos;s planned blocks</span>
@@ -714,7 +728,7 @@ export default function HomePage() {
 
           if (cardKey === "recovery") {
             return (
-              <Card key={cardKey} className="workflow-secondary-card">
+              <Card key={cardKey} className="workflow-secondary-card shadow-none">
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between gap-2 text-lg">
                     <span>Stuck / needs recovery</span>
@@ -766,37 +780,27 @@ export default function HomePage() {
           }
 
           return (
-            <Card key={cardKey} className="workflow-secondary-card">
-              <CardHeader>
-                <CardTitle className="text-lg">System trust/status</CardTitle>
-                <CardDescription>Deterministic health only.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-2 text-sm">
-                <p className="text-muted-foreground">
-                  {cockpit.systemStatus.summary}
-                </p>
+            <EmptyState
+              key={cardKey}
+              title="System trust/status"
+              description={cockpit.systemStatus.summary}
+              action={
                 <Button asChild variant="outline" className="w-full sm:w-auto">
                   <Link href={cockpit.systemStatus.href}>Open Health</Link>
                 </Button>
-              </CardContent>
-            </Card>
+              }
+            />
           );
         })}
-      </div>
+      </section>
 
       {!showNowPrimaryCard && !hasWorkflowState ? (
-        <Card className="workflow-secondary-card">
-          <CardHeader>
-            <CardTitle className="text-lg">Now</CardTitle>
-            <CardDescription>Nothing active yet.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <p className="break-words font-medium">{cockpit.now.title}</p>
-            <p className="text-sm text-muted-foreground">
-              {cockpit.now.summary}
-            </p>
-          </CardContent>
-        </Card>
+        <section className="mx-auto w-full max-w-5xl">
+          <EmptyState
+            title="Now"
+            description={`${cockpit.now.title} ${cockpit.now.summary}`}
+          />
+        </section>
       ) : null}
 
       <DiagnosticsDisclosure>

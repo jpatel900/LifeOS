@@ -61,6 +61,9 @@ describe("HomePage Today cockpit", () => {
       screen.getByRole("heading", { name: "Quick Capture" }),
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Daily loop" })).toBeDefined();
+    expect(screen.getByTestId("today-next-card")).toHaveClass(
+      "workflow-primary-card",
+    );
     expect(
       screen.queryByRole("heading", { name: "System trust/status" }),
     ).toBeNull();
@@ -77,11 +80,20 @@ describe("HomePage Today cockpit", () => {
 
     expect(screen.getByText("Capture what matters now")).toBeDefined();
     expect(
-      screen.getByText(/No sample data is created until you save something/i),
-    ).toBeDefined();
-    expect(
       screen.getByRole("link", { name: "Capture a thought" }),
     ).toHaveAttribute("href", "/capture");
+    expect(
+      screen.getByRole("button", { name: "Save quick capture" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Start with Capture" }),
+    ).toHaveAttribute("href", "/capture");
+    expect(
+      screen.getByRole("link", { name: "Open Planning" }),
+    ).toHaveAttribute("href", "/calendar");
+    expect(
+      screen.getByRole("link", { name: "Open Review" }),
+    ).toHaveAttribute("href", "/review");
   });
 
   it("matches the next-action CTA to the current queue state", async () => {
@@ -192,8 +204,8 @@ describe("HomePage Today cockpit", () => {
 
     expect(await screen.findByText("Saved.")).toBeDefined();
     expect(
-      screen.getByText(/Saved on this device and sent to/i),
-    ).toBeDefined();
+      screen.getByRole("link", { name: "Triage" }),
+    ).toHaveAttribute("href", "/triage");
 
     expect(
       screen
@@ -219,7 +231,7 @@ describe("HomePage Today cockpit", () => {
       screen.queryByText("Nothing is running right now."),
     ).toBeNull();
     expect(
-      screen.queryByText(/No sample data is created until you save something/i),
+      screen.queryByRole("link", { name: "Start with Capture" }),
     ).toBeNull();
   });
 });
