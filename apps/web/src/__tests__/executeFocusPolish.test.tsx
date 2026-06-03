@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, useRef, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area } from "@lifeos/schemas";
@@ -186,9 +186,10 @@ describe("Execute Focus polish", () => {
     );
 
     const stateCard = await screen.findByTestId("execute-focus-state-card");
+    const missionCard = screen.getByTestId("execute-current-mission-card");
     expect(stateCard).toHaveAttribute("data-focus-state", "not_started");
-    expect(screen.getByText("Ready to focus")).toBeDefined();
-    expect(screen.getByText("Current area: Main Job")).toBeDefined();
+    expect(within(missionCard).getByText("Ready to focus")).toBeDefined();
+    expect(within(stateCard).getByText("Current area: Main Job")).toBeDefined();
     expect(
       screen.getByText(
         "Capture it without losing the current mission. Keep it secondary until this focus block is done.",
@@ -205,15 +206,17 @@ describe("Execute Focus polish", () => {
       </>,
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Start focus session" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     await waitFor(() =>
       expect(
         screen.getByTestId("execute-focus-state-card"),
       ).toHaveAttribute("data-focus-state", "running"),
     );
-    expect(screen.getByText("Focus in progress")).toBeDefined();
+    expect(
+      within(screen.getByTestId("execute-current-mission-card")).getByText(
+        "Focus in progress",
+      ),
+    ).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() =>
@@ -221,14 +224,14 @@ describe("Execute Focus polish", () => {
         screen.getByTestId("execute-focus-state-card"),
       ).toHaveAttribute("data-focus-state", "paused"),
     );
-    expect(screen.getByText("Paused on purpose")).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Resume focus session" }),
+      within(screen.getByTestId("execute-current-mission-card")).getByText(
+        "Paused on purpose",
+      ),
     ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeDefined();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Resume focus session" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     await waitFor(() =>
       expect(
         screen.getByTestId("execute-focus-state-card"),
@@ -241,7 +244,11 @@ describe("Execute Focus polish", () => {
         screen.getByTestId("execute-focus-state-card"),
       ).toHaveAttribute("data-focus-state", "stopped"),
     );
-    expect(screen.getByText("Stopped on this device")).toBeDefined();
+    expect(
+      within(screen.getByTestId("execute-current-mission-card")).getByText(
+        "Stopped on this device",
+      ),
+    ).toBeDefined();
     expect(
       screen.getAllByRole("link", { name: "Plan next block" }).length,
     ).toBeGreaterThan(0);
@@ -276,8 +283,13 @@ describe("Execute Focus polish", () => {
         screen.getByTestId("execute-focus-state-card"),
       ).toHaveAttribute("data-focus-state", "paused"),
     );
-    expect(screen.getByText("Paused and waiting for a real outcome")).toBeDefined();
+    expect(
+      within(screen.getByTestId("execute-current-mission-card")).getByText(
+        "Paused and waiting for a real outcome",
+      ),
+    ).toBeDefined();
     expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Choose end outcome" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Complete" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Stuck" })).toBeDefined();
   });
 });

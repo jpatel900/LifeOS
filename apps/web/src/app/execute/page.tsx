@@ -578,6 +578,15 @@ export default function ExecutePage() {
     sessionUiState,
     usesPersistedExecution,
   );
+  const focusTruthNote = usesPersistedExecution
+    ? sessionUiState === "paused"
+      ? "Resume is intentionally unavailable here. Persisted paused sessions need a real end outcome, not a fake restart path."
+      : showPersistedStopGuidance
+        ? "Stop stays device-only. Persisted sessions need an explicit end outcome and notes."
+        : "Persisted sessions keep account truth first. Timing is recorded when you finish, not faked live."
+    : sessionUiState === "paused"
+      ? "This paused session lives only on this device, so resume stays available here."
+      : "This device-only mode keeps the session honest without pretending it was saved to your account.";
 
   async function handleStart() {
     if (!activeTask || startDisabledReason) return;
@@ -1006,39 +1015,60 @@ export default function ExecutePage() {
       ) : null}
 
       <Card
-        data-testid="execute-focus-state-card"
-        data-focus-state={sessionUiState}
+        data-testid="execute-current-mission-card"
+        data-accent-strength="strong"
         style={buildAreaAccentStyle(missionArea?.color)}
-        className="focus-state-card max-w-[820px]"
+        className="area-accent-card workflow-primary-card max-w-[980px]"
       >
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Focus state</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardHeader className="pb-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {sessionStateLabel}
+                Current mission
               </p>
-              <h2 className="text-2xl font-semibold leading-tight">
-                {focusTitle}
-              </h2>
-              <p className="max-w-2xl text-sm text-muted-foreground">
-                {focusDescription}
-              </p>
+              <CardTitle className="text-3xl font-semibold leading-tight">
+                {activeTask.title}
+              </CardTitle>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              {missionArea ? (
-                <span className="area-accent-chip inline-flex items-center gap-2 rounded-full border px-3 py-1 font-medium">
-                  <span
-                    aria-hidden="true"
-                    className="area-accent-dot size-2 rounded-full"
-                  />
-                  Current area: {missionArea.name}
-                </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+              <Badge variant={hasActiveSession ? "default" : "outline"}>
+                {sessionStateLabel}
+              </Badge>
+              {area ? (
+                <Badge
+                  variant="secondary"
+                  className="area-accent-chip w-fit rounded-full"
+                >
+                  Area: {area.name}
+                </Badge>
+              ) : selectedArea ? (
+                <Badge
+                  variant="secondary"
+                  className="area-accent-chip w-fit rounded-full"
+                >
+                  Current area: {selectedArea.name}
+                </Badge>
               ) : null}
             </div>
           </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold leading-tight">{focusTitle}</h2>
+            <p className="max-w-3xl text-sm text-muted-foreground">
+              {focusDescription}
+            </p>
+          </div>
+
+          {showEndOutcomeControls ? (
+            <p
+              id="execute-end-actions"
+              className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+            >
+              End this session
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap gap-2">
             {showStartControl ? (
@@ -1049,7 +1079,7 @@ export default function ExecutePage() {
                   onClick={() => void handleStart()}
                   disabled={startDisabledReason !== null}
                 >
-                  Start focus session
+                  Start
                 </Button>
                 <Button asChild size="lg" variant="outline">
                   <Link href="/calendar">Check Planning</Link>
@@ -1057,59 +1087,85 @@ export default function ExecutePage() {
               </>
             ) : null}
 
+            {showPauseControl ? (
+              <Button
+                type="button"
+                size="lg"
+                variant="secondary"
+                onClick={() => void handleMark("paused")}
+                disabled={pauseDisabledReason !== null}
+              >
+                Pause
+              </Button>
+            ) : null}
+
             {showResumeControl ? (
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => void handleResume()}
+                disabled={resumeDisabledReason !== null}
+              >
+                Resume
+              </Button>
+            ) : null}
+
+            {showEndOutcomeControls ? (
               <>
                 <Button
                   type="button"
                   size="lg"
-                  onClick={() => void handleResume()}
-                  disabled={resumeDisabledReason !== null}
+                  onClick={() => void handleMark("completed")}
+                  disabled={endDisabledReason !== null}
                 >
-                  Resume focus session
+                  Complete
                 </Button>
                 <Button
                   type="button"
                   size="lg"
                   variant="outline"
-                  onClick={() => void handleMark("completed")}
+                  onClick={() => void handleMark("stuck")}
                   disabled={endDisabledReason !== null}
                 >
-                  Complete this block
+                  Stuck
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => void handleMark("distracted")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Distracted
+                </Button>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => void handleMark("missed")}
+                  disabled={endDisabledReason !== null}
+                >
+                  Missed
                 </Button>
               </>
             ) : null}
 
-            {sessionUiState === "running" ? (
-              <>
-                <Button
-                  type="button"
-                  size="lg"
-                  onClick={() => void handleMark("completed")}
-                  disabled={endDisabledReason !== null}
-                >
-                  Complete this block
-                </Button>
-                <Button
-                  type="button"
-                  size="lg"
-                  variant="outline"
-                  onClick={() => void handleMark("paused")}
-                  disabled={pauseDisabledReason !== null}
-                >
-                  Pause focus session
-                </Button>
-              </>
+            {showStopControl ? (
+              <Button
+                type="button"
+                size="lg"
+                variant="ghost"
+                onClick={() => void handleMark("stopped")}
+                disabled={stopDisabledReason !== null}
+              >
+                Stop on this device
+              </Button>
             ) : null}
 
             {usesPersistedExecution && sessionUiState === "paused" ? (
-              <>
-                <Button asChild size="lg">
-                  <Link href="#execute-end-actions">Choose end outcome</Link>
-                </Button>
-                <Button asChild size="lg" variant="outline">
-                  <Link href="/review">Review context</Link>
-                </Button>
-              </>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/review">Review context</Link>
+              </Button>
             ) : null}
 
             {sessionUiState === "completed" ? (
@@ -1140,53 +1196,27 @@ export default function ExecutePage() {
             ) : null}
           </div>
 
-          {!activeBlock ? (
+          <p className="text-sm text-muted-foreground">
+            {showStartControl
+              ? "Start when you are ready to focus on this one task."
+              : showResumeControl
+                ? "Resume when you are ready, or finish the session with a real outcome."
+                : showPauseControl
+                  ? "Pause if you need to step away. Keep the outcome honest when the block ends."
+                  : showPersistedStopGuidance
+                    ? "Stop (device-only sessions) is only available when the session lives on this device. Sessions saved to your account need an end outcome and notes."
+                    : isTerminalSession
+                      ? "This session is ended. Pick the next useful move."
+                      : "Choose the control that matches what actually happened in this block."}
+          </p>
+
+          {showPersistedStopGuidance ? (
             <p className="text-sm text-muted-foreground">
-              No planned block is attached right now. You can still focus this
-              task, or plan a block first.
+              Stop (device-only sessions) is only available when the session
+              lives on this device. Sessions saved to your account need an end
+              outcome and notes.
             </p>
           ) : null}
-        </CardContent>
-      </Card>
-
-      <Card
-        data-testid="execute-current-mission-card"
-        data-accent-strength="strong"
-        style={buildAreaAccentStyle(missionArea?.color)}
-        className="area-accent-card workflow-primary-card max-w-[820px]"
-      >
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Current mission</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <h2 className="text-xl font-semibold leading-tight">
-                {activeTask.title}
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
-                {area ? (
-                  <Badge
-                    variant="secondary"
-                    className="area-accent-chip w-fit rounded-full"
-                  >
-                    Area: {area.name}
-                  </Badge>
-                ) : selectedArea ? (
-                  <Badge
-                    variant="secondary"
-                    className="area-accent-chip w-fit rounded-full"
-                  >
-                    Current area: {selectedArea.name}
-                  </Badge>
-                ) : null}
-              </div>
-            </div>
-            <Badge variant={hasActiveSession ? "default" : "outline"}>
-              {sessionStateLabel}
-            </Badge>
-          </div>
 
           <div className="grid gap-2 text-sm">
             <p className="area-accent-panel rounded-md border p-3">
@@ -1220,6 +1250,29 @@ export default function ExecutePage() {
             </div>
           </div>
 
+          {activeBlock ? (
+            <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+              <span className="font-medium">Planned block:</span> {new Date(
+                activeBlock.start_at,
+              ).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              })}{" "}
+              to{" "}
+              {new Date(activeBlock.end_at).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+              .
+            </p>
+          ) : (
+            <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+              <span className="font-medium">Planned block:</span> No planned
+              block is attached right now. You can still focus this task, or
+              plan a block first.
+            </p>
+          )}
+
           <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
             <span className="font-medium">Next recommended action:</span>{" "}
             {nextRecommendedAction}
@@ -1227,335 +1280,260 @@ export default function ExecutePage() {
         </CardContent>
       </Card>
 
-      <Card className="workflow-secondary-card max-w-[820px]">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Focus controls</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {showStartControl ? (
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Start this session
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <Card
+          data-testid="execute-focus-state-card"
+          data-focus-state={sessionUiState}
+          style={buildAreaAccentStyle(missionArea?.color)}
+          className="focus-state-card h-full"
+        >
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Focus state</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {sessionStateLabel}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  onClick={() => void handleStart()}
-                  disabled={startDisabledReason !== null}
-                >
-                  Start
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Start when you are ready to focus on this one task.
+              <h2 className="text-2xl font-semibold leading-tight">
+                {focusTitle}
+              </h2>
+              <p className="text-sm text-muted-foreground">{focusDescription}</p>
+            </div>
+
+            {missionArea ? (
+              <span className="area-accent-chip inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1 text-sm font-medium">
+                <span
+                  aria-hidden="true"
+                  className="area-accent-dot size-2 rounded-full"
+                />
+                Current area: {missionArea.name}
+              </span>
+            ) : null}
+
+            <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+              <p className="font-medium">Execution truth</p>
+              <p className="mt-1 text-muted-foreground">{focusTruthNote}</p>
+            </div>
+
+            <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+              <p className="font-medium">Save mode</p>
+              <p className="mt-1 text-muted-foreground">
+                {saveModeLabel(executeState.provider)} via{" "}
+                <strong>{executeState.provider}</strong>.
               </p>
             </div>
-          ) : null}
+          </CardContent>
+        </Card>
 
-          {showPauseControl || showResumeControl ? (
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Session state
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {showPauseControl ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => void handleMark("paused")}
-                    disabled={pauseDisabledReason !== null}
-                  >
-                    Pause
-                  </Button>
-                ) : null}
-                {showResumeControl ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void handleResume()}
-                    disabled={resumeDisabledReason !== null}
-                  >
-                    Resume
-                  </Button>
-                ) : null}
-              </div>
-              {showResumeControl ? (
-                <p className="text-sm text-muted-foreground">
-                  Resume when you are ready, or finish the session with a real
-                  outcome.
+        <Card className="workflow-secondary-card h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Recovery and support</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {isTerminalSession ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Recovery / next-step actions
                 </p>
-              ) : (
                 <p className="text-sm text-muted-foreground">
-                  Pause if you need to step away. Keep the outcome honest when
-                  the block ends.
+                  This session is ended. Pick the next useful move.
                 </p>
-              )}
-            </div>
-          ) : null}
-
-          {showEndOutcomeControls ? (
-            <div id="execute-end-actions" className="flex flex-col gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                End this session
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  onClick={() => void handleMark("completed")}
-                  disabled={endDisabledReason !== null}
-                >
-                  Complete
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleMark("stuck")}
-                  disabled={endDisabledReason !== null}
-                >
-                  Stuck
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleMark("distracted")}
-                  disabled={endDisabledReason !== null}
-                >
-                  Distracted
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleMark("missed")}
-                  disabled={endDisabledReason !== null}
-                >
-                  Missed
-                </Button>
-                {showStopControl ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => void handleMark("stopped")}
-                    disabled={stopDisabledReason !== null}
-                  >
-                    Stop on this device
-                  </Button>
-                ) : null}
-              </div>
-              {showPersistedStopGuidance ? (
-                <p className="text-sm text-muted-foreground">
-                  Stop (device-only sessions) is only available when the
-                  session lives on this device. Sessions saved to your account
-                  need an end outcome and notes.
-                </p>
-              ) : null}
-              {showStopControl ? (
-                <p className="text-sm text-muted-foreground">
-                  Stop only updates sessions saved on this device.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          {isTerminalSession ? (
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Recovery / next-step actions
-              </p>
-              <p className="text-sm text-muted-foreground">
-                This session is ended. Pick the next useful move.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild type="button" variant="outline">
-                  <Link href="/calendar">Plan another block</Link>
-                </Button>
-                <Button asChild type="button" variant="outline">
-                  <Link href="/capture">Capture what got in the way</Link>
-                </Button>
-                <Button asChild type="button" variant="outline">
-                  <Link href="/review">Review this later</Link>
-                </Button>
-                {!usesPersistedExecution && startDisabledReason === null ? (
-                  <Button type="button" onClick={() => void handleStart()}>
-                    Start another session
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          <div
-            data-testid="execute-side-thought-card"
-            className="workflow-support-panel flex flex-col gap-2 rounded-lg border p-4"
-          >
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Side thought
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Capture it without losing the current mission. Keep it secondary
-              until this focus block is done.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild type="button" variant="outline">
-                <Link href="/capture">Capture a side thought</Link>
-              </Button>
-            </div>
-          </div>
-
-          {usesPersistedExecution && terminalForm ? (
-            <>
-              <section
-                aria-label="End session details"
-                className="workflow-support-panel flex flex-col gap-3 rounded-lg border bg-muted/60 p-4"
-              >
-                <h2 className="m-0 text-[0.95rem] font-semibold">
-                  {recoveryTitle(terminalForm.status)}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {recoveryGuidance(terminalForm.status)}
-                </p>
-                {terminalForm.status !== "completed" ? (
-                  <div className="workflow-support-panel rounded-md border bg-background/60 p-3 text-sm">
-                    <p className="font-medium text-foreground">
-                      What got in the way?
-                    </p>
-                    <p className="mt-1 text-muted-foreground">
-                      Capture the blocker in plain language so your next move is
-                      clear.
-                    </p>
-                    <p className="mt-2 font-medium text-foreground">
-                      What should happen next?
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          appendRecoveryNote("Create smaller first move: ")
-                        }
-                        disabled={actionState.status === "saving"}
-                      >
-                        Create smaller first move
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => appendRecoveryNote("Reschedule later: ")}
-                        disabled={actionState.status === "saving"}
-                      >
-                        Reschedule later
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-                <label className="flex flex-col gap-1.5 text-sm text-foreground">
-                  Outcome
-                  <Select
-                    aria-label="End session outcome"
-                    value={terminalForm.outcome}
-                    onChange={(event) =>
-                      setTerminalForm((current) =>
-                        current
-                          ? {
-                              ...current,
-                              outcome: event.target
-                                .value as ExecutionSession["outcome"],
-                            }
-                          : current,
-                      )
-                    }
-                  >
-                    {terminalOutcomeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-                <label className="flex flex-col gap-1.5 text-sm text-foreground">
-                  Actual duration (minutes)
-                  <Input
-                    aria-label="Actual duration minutes"
-                    type="number"
-                    min={0}
-                    value={terminalForm.actualMinutes}
-                    onChange={(event) =>
-                      setTerminalForm((current) =>
-                        current
-                          ? { ...current, actualMinutes: event.target.value }
-                          : current,
-                      )
-                    }
-                  />
-                </label>
-                <label className="flex flex-col gap-1.5 text-sm text-foreground">
-                  Productivity rating (1-5)
-                  <Input
-                    aria-label="Productivity rating"
-                    type="number"
-                    min={1}
-                    max={5}
-                    value={terminalForm.productivityRating}
-                    onChange={(event) =>
-                      setTerminalForm((current) =>
-                        current
-                          ? {
-                              ...current,
-                              productivityRating: event.target.value,
-                            }
-                          : current,
-                      )
-                    }
-                  />
-                </label>
-                <label className="flex flex-col gap-1.5 text-sm text-foreground">
-                  Notes
-                  <Textarea
-                    aria-label="End session notes"
-                    rows={3}
-                    className="min-h-[90px]"
-                    placeholder="What got in the way? What should happen next?"
-                    value={terminalForm.notes}
-                    onChange={(event) =>
-                      setTerminalForm((current) =>
-                        current
-                          ? { ...current, notes: event.target.value }
-                          : current,
-                      )
-                    }
-                  />
-                </label>
-                {terminalFormError ? (
-                  <p role="alert" className="m-0 text-sm text-destructive">
-                    {terminalFormError}
-                  </p>
-                ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => void handleSubmitTerminalForm()}
-                    disabled={actionState.status === "saving"}
-                  >
-                    Save end session
+                  <Button asChild type="button" variant="outline">
+                    <Link href="/calendar">Plan another block</Link>
                   </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setTerminalForm(null);
-                      setTerminalFormError(null);
-                    }}
-                    disabled={actionState.status === "saving"}
-                  >
-                    Cancel
+                  <Button asChild type="button" variant="outline">
+                    <Link href="/capture">Capture what got in the way</Link>
                   </Button>
+                  <Button asChild type="button" variant="outline">
+                    <Link href="/review">Review this later</Link>
+                  </Button>
+                  {!usesPersistedExecution && startDisabledReason === null ? (
+                    <Button type="button" onClick={() => void handleStart()}>
+                      Start another session
+                    </Button>
+                  ) : null}
                 </div>
-              </section>
-            </>
-          ) : null}
-        </CardContent>
-      </Card>
+              </div>
+            ) : null}
+
+            <div
+              data-testid="execute-side-thought-card"
+              className="workflow-support-panel flex flex-col gap-2 rounded-lg border p-4"
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Side thought
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Capture it without losing the current mission. Keep it secondary
+                until this focus block is done.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild type="button" variant="outline">
+                  <Link href="/capture">Capture a side thought</Link>
+                </Button>
+              </div>
+            </div>
+
+            {usesPersistedExecution && terminalForm ? (
+              <>
+                <section
+                  aria-label="End session details"
+                  className="workflow-support-panel flex flex-col gap-3 rounded-lg border bg-muted/60 p-4"
+                >
+                  <h2 className="m-0 text-[0.95rem] font-semibold">
+                    {recoveryTitle(terminalForm.status)}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {recoveryGuidance(terminalForm.status)}
+                  </p>
+                  {terminalForm.status !== "completed" ? (
+                    <div className="workflow-support-panel rounded-md border bg-background/60 p-3 text-sm">
+                      <p className="font-medium text-foreground">
+                        What got in the way?
+                      </p>
+                      <p className="mt-1 text-muted-foreground">
+                        Capture the blocker in plain language so your next move
+                        is clear.
+                      </p>
+                      <p className="mt-2 font-medium text-foreground">
+                        What should happen next?
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            appendRecoveryNote("Create smaller first move: ")
+                          }
+                          disabled={actionState.status === "saving"}
+                        >
+                          Create smaller first move
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            appendRecoveryNote("Reschedule later: ")
+                          }
+                          disabled={actionState.status === "saving"}
+                        >
+                          Reschedule later
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                    Outcome
+                    <Select
+                      aria-label="End session outcome"
+                      value={terminalForm.outcome}
+                      onChange={(event) =>
+                        setTerminalForm((current) =>
+                          current
+                            ? {
+                                ...current,
+                                outcome: event.target
+                                  .value as ExecutionSession["outcome"],
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      {terminalOutcomeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                    Actual duration (minutes)
+                    <Input
+                      aria-label="Actual duration minutes"
+                      type="number"
+                      min={0}
+                      value={terminalForm.actualMinutes}
+                      onChange={(event) =>
+                        setTerminalForm((current) =>
+                          current
+                            ? { ...current, actualMinutes: event.target.value }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                    Productivity rating (1-5)
+                    <Input
+                      aria-label="Productivity rating"
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={terminalForm.productivityRating}
+                      onChange={(event) =>
+                        setTerminalForm((current) =>
+                          current
+                            ? {
+                                ...current,
+                                productivityRating: event.target.value,
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                    Notes
+                    <Textarea
+                      aria-label="End session notes"
+                      rows={3}
+                      className="min-h-[90px]"
+                      placeholder="What got in the way? What should happen next?"
+                      value={terminalForm.notes}
+                      onChange={(event) =>
+                        setTerminalForm((current) =>
+                          current
+                            ? { ...current, notes: event.target.value }
+                            : current,
+                        )
+                      }
+                    />
+                  </label>
+                  {terminalFormError ? (
+                    <p role="alert" className="m-0 text-sm text-destructive">
+                      {terminalFormError}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      onClick={() => void handleSubmitTerminalForm()}
+                      disabled={actionState.status === "saving"}
+                    >
+                      Save end session
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setTerminalForm(null);
+                        setTerminalFormError(null);
+                      }}
+                      disabled={actionState.status === "saving"}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </section>
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
 
       {activeSession ? (
         <Card
