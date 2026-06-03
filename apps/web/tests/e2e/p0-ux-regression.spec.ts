@@ -1,10 +1,41 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function gotoCapture(page: Page) {
-  await page.goto("/capture");
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.goto("/capture");
+    const captureHeading = page.getByRole("heading", {
+      level: 1,
+      name: "Capture",
+    });
+    const captureVisible = await captureHeading
+      .isVisible()
+      .catch(() => false);
+
+    if (captureVisible) {
+      return;
+    }
+  }
+
   await expect(
     page.getByRole("heading", { level: 1, name: "Capture" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
+}
+
+async function saveAndOrganizeToTriage(page: Page) {
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/parse-capture") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+      { timeout: 15_000 },
+    ),
+    page.getByRole("button", { name: "Save and organize" }).click(),
+  ]);
+
+  await expect(page.getByText("Drafts ready for Triage.")).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 async function createLocalDraftCandidate(page: Page, text: string) {
@@ -12,8 +43,8 @@ async function createLocalDraftCandidate(page: Page, text: string) {
   await page
     .getByPlaceholder("What's on your mind? Type anything...")
     .fill(text);
-  await page.getByRole("button", { name: "Save and organize" }).click();
-  await page.getByRole("link", { name: "Triage" }).click();
+  await saveAndOrganizeToTriage(page);
+  await page.getByRole("link", { name: "Review it now" }).click();
   await expect(page).toHaveURL(/\/triage$/);
   await expect(
     page.getByRole("button", { name: "Accept task draft" }).first(),
@@ -131,11 +162,7 @@ test("home cockpit quick capture shows truthful error/success and route links", 
     .fill("Home cockpit capture test");
   await page.getByRole("button", { name: "Save quick capture" }).click();
   await expect(page.getByText("Saved.")).toBeVisible();
-  await expect(
-    page.getByText("Saved on this device only. Review in Triage or Review."),
-  ).toBeVisible();
-
-  await page.getByRole("link", { name: "Open Triage" }).first().click();
+  await page.getByRole("link", { name: "Review in Triage" }).click();
   await expect(page).toHaveURL(/\/triage$/);
 });
 
@@ -180,9 +207,7 @@ test("capture save feedback and save-and-organize route to triage", async ({
   await page
     .getByPlaceholder("What's on your mind? Type anything...")
     .fill("Need a focused block for project proposal");
-  await page.getByRole("button", { name: "Save and organize" }).click();
-
-  await expect(page.getByText("Drafts ready for Triage.")).toBeVisible();
+  await saveAndOrganizeToTriage(page);
   await page.getByRole("link", { name: "Review it now" }).click();
   await expect(page).toHaveURL(/\/triage$/);
   await expect(

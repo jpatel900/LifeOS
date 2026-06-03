@@ -17,6 +17,17 @@ const nextCliPath = require.resolve("next/dist/bin/next", {
 const playwrightCliPath = require.resolve("@playwright/test/cli", {
   paths: [webDir, repoRoot],
 });
+const warmRoutes = [
+  "/",
+  "/capture",
+  "/triage",
+  "/calendar",
+  "/execute",
+  "/review",
+  "/settings/areas",
+  "/health",
+  "/api/parse-capture",
+];
 const serverLogBuffer = [];
 const maxBufferedLogLines = 200;
 let shuttingDown = false;
@@ -124,6 +135,43 @@ async function waitForServer(baseURL, serverProcess) {
   );
 }
 
+async function waitForRoute(baseURL, route, serverProcess) {
+  const deadline = Date.now() + startupTimeoutMs;
+  const target = new URL(route, `${baseURL}/`).toString();
+
+  while (Date.now() < deadline) {
+    if (serverProcess.exitCode !== null) {
+      throw new Error(
+        `Next dev server exited before ${target} was ready. Recent server output:\n${serverLogBuffer.join("\n")}`,
+      );
+    }
+
+    try {
+      const response = await fetch(target, {
+        signal: AbortSignal.timeout(10_000),
+      });
+
+      if (response.status >= 200 && response.status < 400) {
+        return;
+      }
+    } catch {
+      // Retry until the route warmup deadline.
+    }
+
+    await sleep(250);
+  }
+
+  throw new Error(
+    `Timed out warming ${target}. Recent server output:\n${serverLogBuffer.join("\n")}`,
+  );
+}
+
+async function warmCoreRoutes(baseURL, serverProcess) {
+  for (const route of warmRoutes) {
+    await waitForRoute(baseURL, route, serverProcess);
+  }
+}
+
 function cleanupServer(serverProcess) {
   if (
     shuttingDown ||
@@ -190,6 +238,7 @@ async function main() {
 
   try {
     await waitForServer(baseURL, serverProcess);
+    await warmCoreRoutes(baseURL, serverProcess);
   } catch (error) {
     cleanupServer(serverProcess);
     throw error;
