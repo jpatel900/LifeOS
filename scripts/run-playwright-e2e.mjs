@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import net from "node:net";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -8,8 +9,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(scriptDir, "..");
 const webDir = path.join(repoRoot, "apps", "web");
-const port = process.env.PLAYWRIGHT_PORT ?? "3100";
-const baseURL = `http://127.0.0.1:${port}`;
+const requestedPort = Number(process.env.PLAYWRIGHT_PORT ?? "3100");
 const startupTimeoutMs = 180_000;
 const nextCliPath = require.resolve("next/dist/bin/next", {
   paths: [webDir, repoRoot],
@@ -17,19 +17,6 @@ const nextCliPath = require.resolve("next/dist/bin/next", {
 const playwrightCliPath = require.resolve("@playwright/test/cli", {
   paths: [webDir, repoRoot],
 });
-const serverArgs = [
-  nextCliPath,
-  "dev",
-  "--hostname",
-  "127.0.0.1",
-  "-p",
-  port,
-];
-const testArgs = [
-  playwrightCliPath,
-  "test",
-  ...process.argv.slice(2),
-];
 const serverLogBuffer = [];
 const maxBufferedLogLines = 200;
 let shuttingDown = false;
@@ -69,10 +56,54 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForServer() {
+async function reservePort(port) {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+
+    server.unref();
+    server.on("error", reject);
+    server.listen({ host: "127.0.0.1", port }, () => {
+      const address = server.address();
+
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        if (!address || typeof address === "string") {
+          reject(new Error("Could not determine Playwright dev-server port."));
+          return;
+        }
+
+        resolve(address.port);
+      });
+    });
+  });
+}
+
+async function resolvePort() {
+  if (process.env.PLAYWRIGHT_PORT) {
+    return requestedPort;
+  }
+
+  const fallbackPort = await reservePort(0);
+  console.warn(
+    `[playwright-e2e] Using isolated port ${fallbackPort} for this run.`,
+  );
+  return fallbackPort;
+}
+
+async function waitForServer(baseURL, serverProcess) {
   const deadline = Date.now() + startupTimeoutMs;
 
   while (Date.now() < deadline) {
+    if (serverProcess.exitCode !== null) {
+      throw new Error(
+        `Next dev server exited before ${baseURL} was ready. Recent server output:\n${serverLogBuffer.join("\n")}`,
+      );
+    }
+
     try {
       const response = await fetch(baseURL, {
         signal: AbortSignal.timeout(5_000),
@@ -125,6 +156,17 @@ function exitWithSignal(serverProcess, code) {
 }
 
 async function main() {
+  const port = await resolvePort();
+  const baseURL = `http://127.0.0.1:${port}`;
+  const serverArgs = [
+    nextCliPath,
+    "dev",
+    "--hostname",
+    "127.0.0.1",
+    "-p",
+    String(port),
+  ];
+  const testArgs = [playwrightCliPath, "test", ...process.argv.slice(2)];
   const serverProcess = spawn(process.execPath, serverArgs, {
     cwd: webDir,
     env: { ...process.env, PORT: port },
@@ -147,7 +189,7 @@ async function main() {
   });
 
   try {
-    await waitForServer();
+    await waitForServer(baseURL, serverProcess);
   } catch (error) {
     cleanupServer(serverProcess);
     throw error;
