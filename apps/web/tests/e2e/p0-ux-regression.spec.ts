@@ -231,6 +231,7 @@ test("triage edit and note actions work when an item exists", async ({
     page.getByText("AI notes are from the original capture"),
   ).toBeVisible();
 
+  await page.getByText("Browser notes").first().click();
   await page
     .getByRole("button", { name: "Add review-later note" })
     .first()

@@ -896,6 +896,12 @@ export default function CalendarPage() {
   const hasAny =
     scheduleableTasks.length > 0 || proposals.length > 0 || blocks.length > 0;
   const nextTaskForProposal = scheduleableTasks[0] ?? null;
+  const visibleScheduleableTasks = scheduleableTasks.slice(0, 1);
+  const overflowScheduleableTasks = scheduleableTasks.slice(1);
+  const visibleProposals = proposals.slice(0, 1);
+  const overflowProposals = proposals.slice(1);
+  const visibleBlocks = blocks.slice(0, 2);
+  const overflowBlocks = blocks.slice(2);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1052,7 +1058,7 @@ export default function CalendarPage() {
                   }
                 />
               ) : (
-                scheduleableTasks.map((task) => {
+                visibleScheduleableTasks.map((task) => {
                   const area = usesPersistedPlanning
                     ? null
                     : getAreaById(task.area_id);
@@ -1089,6 +1095,52 @@ export default function CalendarPage() {
                   );
                 })
               )}
+              {overflowScheduleableTasks.length > 0 ? (
+                <details className="system-details-disclosure">
+                  <summary className="text-sm font-medium text-foreground">
+                    {overflowScheduleableTasks.length} more task
+                    {overflowScheduleableTasks.length === 1 ? "" : "s"} needing time
+                  </summary>
+                  <div className="mt-4 grid gap-2">
+                    {overflowScheduleableTasks.map((task) => {
+                      const area = usesPersistedPlanning
+                        ? null
+                        : getAreaById(task.area_id);
+                      const lifecycle = planningTaskLifecycleDisplay(task.status);
+
+                      return (
+                        <div
+                          key={task.id}
+                          className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="space-y-1">
+                            <div className="font-medium">{task.title}</div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {area ? (
+                                <Badge variant="secondary">Area: {area.name}</Badge>
+                              ) : null}
+                              <Badge variant={lifecycle.variant}>
+                                {lifecycle.label}
+                              </Badge>
+                            </div>
+                            <div className="text-muted-foreground">
+                              Estimate: {task.estimated_minutes_low ?? "?"}-
+                              {task.estimated_minutes_high ?? "?"} min
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={() => void handleCreateProposal(task)}
+                            disabled={actionState.status === "saving"}
+                          >
+                            Suggest a time
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -1107,7 +1159,7 @@ export default function CalendarPage() {
                   description="Suggest a time from a task that still needs one."
                 />
               ) : (
-                proposals.map((proposal) => {
+                visibleProposals.map((proposal) => {
                   const area =
                     resolveAreaById(state.areas, proposal.area_id) ??
                     getAreaById(proposal.area_id);
@@ -1248,29 +1300,6 @@ export default function CalendarPage() {
                       <div className="text-muted-foreground">
                         {proposalRationale(proposal)}
                       </div>
-                      {usesPersistedPlanning &&
-                      googleConnectionState.status === "ready" &&
-                      googleConnectionState.connected &&
-                      !googleConnectionState.firstWriteWarningAcknowledged ? (
-                        <label className="flex items-start gap-2 rounded-md border border-border bg-muted p-2 text-sm text-foreground">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 size-4 rounded border-input bg-background text-primary focus-visible:ring-2 focus-visible:ring-ring"
-                            checked={acknowledgeFirstWriteWarning}
-                            onChange={(event) =>
-                              setAcknowledgeFirstWriteWarning(
-                                event.currentTarget.checked,
-                              )
-                            }
-                          />
-                          <span>
-                            First Google write approval: I understand this
-                            button creates a real Google Calendar event only
-                            after explicit user approval. If the write fails,
-                            the suggested time stays unchanged.
-                          </span>
-                        </label>
-                      ) : null}
                       <div className="text-xs text-muted-foreground">
                         Google Calendar: {googleWriteState}
                       </div>
@@ -1392,6 +1421,29 @@ export default function CalendarPage() {
                               ? "Nothing goes to Google Calendar until you approve it."
                               : "Save planning to your account before using Google Calendar options."}
                           </p>
+                          {usesPersistedPlanning &&
+                          googleConnectionState.status === "ready" &&
+                          googleConnectionState.connected &&
+                          !googleConnectionState.firstWriteWarningAcknowledged ? (
+                            <label className="flex items-start gap-2 rounded-md border border-border bg-muted p-2 text-sm text-foreground">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 size-4 rounded border-input bg-background text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                                checked={acknowledgeFirstWriteWarning}
+                                onChange={(event) =>
+                                  setAcknowledgeFirstWriteWarning(
+                                    event.currentTarget.checked,
+                                  )
+                                }
+                              />
+                              <span>
+                                First Google write approval: I understand this
+                                button creates a real Google Calendar event only
+                                after explicit user approval. If the write fails,
+                                the suggested time stays unchanged.
+                              </span>
+                            </label>
+                          ) : null}
                           <div className="flex flex-wrap gap-2">
                             <Button
                               type="button"
@@ -1432,12 +1484,11 @@ export default function CalendarPage() {
                           ) : null}
                         </div>
                       </details>
-                      <Separator />
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs font-medium text-foreground">
-                          Admin action
-                        </p>
-                        <div className="flex flex-wrap gap-2">
+                      <details className="system-details-disclosure">
+                        <summary className="text-sm font-medium text-foreground">
+                          More options
+                        </summary>
+                        <div className="mt-4 flex flex-wrap gap-2">
                           <Button
                             type="button"
                             variant="destructive"
@@ -1457,11 +1508,58 @@ export default function CalendarPage() {
                             Reject
                           </Button>
                         </div>
-                      </div>
+                      </details>
                     </div>
                   );
                 })
               )}
+              {overflowProposals.length > 0 ? (
+                <details className="system-details-disclosure">
+                  <summary className="text-sm font-medium text-foreground">
+                    {overflowProposals.length} more suggested time block
+                    {overflowProposals.length === 1 ? "" : "s"}
+                  </summary>
+                  <div className="mt-4 grid gap-3">
+                    {overflowProposals.map((proposal) => {
+                      const task = usesPersistedPlanning
+                        ? scheduleableTasks.find(
+                            (item) => item.id === proposal.task_id,
+                          )
+                        : state.tasks.find((item) => item.id === proposal.task_id);
+                      const conflictSummary = proposalConflictSummary(proposal);
+                      const lifecycle = proposalLifecycleDisplay(proposal.status);
+                      return (
+                        <div
+                          key={proposal.id}
+                          className="rounded-lg border border-border bg-muted/20 p-3 text-sm"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">
+                              {task?.title ?? "Unassigned block"}
+                            </p>
+                            <Badge variant={lifecycle.variant}>
+                              {lifecycle.label}
+                            </Badge>
+                            <Badge
+                              variant={conflictSummary.variant}
+                              className={cn(
+                                "text-[0.7rem]",
+                                conflictSummary.className,
+                              )}
+                            >
+                              {conflictSummary.label}
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-muted-foreground">
+                            {new Date(proposal.proposed_start).toLocaleTimeString()} -{" "}
+                            {new Date(proposal.proposed_end).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -1480,7 +1578,7 @@ export default function CalendarPage() {
                   description="Blocks appear here after you plan a suggested time."
                 />
               ) : (
-                blocks.map((block) => {
+                visibleBlocks.map((block) => {
                   const area =
                     resolveAreaById(state.areas, block.area_id) ??
                     getAreaById(block.area_id);
@@ -1534,6 +1632,48 @@ export default function CalendarPage() {
                   );
                 })
               )}
+              {overflowBlocks.length > 0 ? (
+                <details className="system-details-disclosure">
+                  <summary className="text-sm font-medium text-foreground">
+                    {overflowBlocks.length} more planned block
+                    {overflowBlocks.length === 1 ? "" : "s"}
+                  </summary>
+                  <div className="mt-4 grid gap-2">
+                    {overflowBlocks.map((block) => {
+                      const area =
+                        resolveAreaById(state.areas, block.area_id) ??
+                        getAreaById(block.area_id);
+                      const task = usesPersistedPlanning
+                        ? scheduleableTasks.find((item) => item.id === block.task_id)
+                        : state.tasks.find((item) => item.id === block.task_id);
+                      const lifecycle = blockLifecycleDisplay(block.status);
+
+                      return (
+                        <div
+                          key={block.id}
+                          className="rounded-lg border border-border bg-muted/20 p-3 text-sm"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">
+                              {task?.title ?? "Block without specific task"}
+                            </p>
+                            <Badge variant={lifecycle.variant}>
+                              {lifecycle.label}
+                            </Badge>
+                            {area ? (
+                              <Badge variant="secondary">Area: {area.name}</Badge>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-muted-foreground">
+                            {new Date(block.start_at).toLocaleTimeString()} -{" "}
+                            {new Date(block.end_at).toLocaleTimeString()}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              ) : null}
             </CardContent>
           </Card>
         </div>

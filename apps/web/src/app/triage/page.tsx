@@ -128,6 +128,8 @@ export default function TriagePage() {
   const upcomingQueueItems = activeQueueItem
     ? queueItems.filter((item) => item.queueId !== activeQueueItem.queueId)
     : [];
+  const visibleUpcomingQueueItems = upcomingQueueItems.slice(0, 2);
+  const overflowUpcomingQueueItems = upcomingQueueItems.slice(2);
 
   useEffect(() => {
     let cancelled = false;
@@ -460,18 +462,6 @@ export default function TriagePage() {
         />
       ) : (
         <div className="flex flex-col gap-3">
-          <Card className="workflow-secondary-card">
-            <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm text-muted-foreground">
-              <Badge variant="outline">
-                {totalCandidates} item{totalCandidates === 1 ? "" : "s"} ready
-              </Badge>
-              <span>
-                Keep backlog thinking out of this screen. Decide the current
-                item, then continue.
-              </span>
-            </CardContent>
-          </Card>
-
           {activeQueueItem ? (
             <Card
               id="triage-current-item"
@@ -512,6 +502,9 @@ export default function TriagePage() {
                         Confidence:{" "}
                         {Math.round(activeQueueItem.draft.confidence * 100)}%
                       </Badge>
+                      <Badge variant="outline">
+                        {totalCandidates} item{totalCandidates === 1 ? "" : "s"} ready
+                      </Badge>
                     </div>
                   </div>
                 </div>
@@ -528,49 +521,16 @@ export default function TriagePage() {
 
                       return (
                         <>
-                          {assessment ? (
-                            editedDraftIds[task.id] ? (
-                              <Alert>
-                                <AlertTitle>
-                                  AI notes are from the original capture
-                                </AlertTitle>
-                                <AlertDescription>
-                                  You edited this draft. Re-sort in Capture if
-                                  you want updated AI notes.
-                                </AlertDescription>
-                              </Alert>
-                            ) : (
-                              <Card className="workflow-support-panel bg-muted/40 shadow-none">
-                                <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                                  <p className="font-medium text-foreground">
-                                    Clarity notes
-                                  </p>
-                                  <p>
-                                    First useful move:{" "}
-                                    {assessment.recommended_first_move}
-                                  </p>
-                                  <p>
-                                    Unknowns: {assessment.unknowns.join(", ")}
-                                  </p>
-                                  <p>
-                                    What not to do yet:{" "}
-                                    {assessment.what_not_to_do_yet.join(", ")}
-                                  </p>
-                                </CardContent>
-                              </Card>
-                            )
-                          ) : null}
-                          {task.description ? (
-                            <Card className="workflow-support-panel bg-muted/40 shadow-none">
-                              <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                                <p className="font-medium text-foreground">
-                                  Draft notes
-                                </p>
-                                <p className="whitespace-pre-line">
-                                  {task.description}
-                                </p>
-                              </CardContent>
-                            </Card>
+                          {assessment && editedDraftIds[task.id] ? (
+                            <Alert>
+                              <AlertTitle>
+                                AI notes are from the original capture
+                              </AlertTitle>
+                              <AlertDescription>
+                                You edited this draft. Re-sort in Capture if you
+                                want updated AI notes.
+                              </AlertDescription>
+                            </Alert>
                           ) : null}
                           {noteFeedbackByDraftId[task.id] ? (
                             <Alert variant="success">
@@ -635,50 +595,84 @@ export default function TriagePage() {
                               </CardContent>
                             </Card>
                           ) : null}
-                          <div className="grid gap-3">
-                            <div className="rounded-lg border border-border bg-background/50 p-3">
-                              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                                Decide
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <Button
-                                  type="button"
-                                  onClick={() => void handleAcceptTaskDraft(task.id)}
-                                  aria-label="Accept task draft"
-                                  disabled={saveState.status === "saving"}
-                                >
-                                  Accept as task
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  onClick={() => rejectTaskDraft(task.id)}
-                                  aria-label="Reject task draft"
-                                >
-                                  Reject
-                                </Button>
-                              </div>
+                          <div className="rounded-lg border border-border bg-background/50 p-3">
+                            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                              Decide
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                onClick={() => void handleAcceptTaskDraft(task.id)}
+                                aria-label="Accept task draft"
+                                disabled={saveState.status === "saving"}
+                              >
+                                Accept as task
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={() => rejectTaskDraft(task.id)}
+                                aria-label="Reject task draft"
+                              >
+                                Reject
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => startEditingTaskDraft(task.id)}
+                                aria-label="Edit draft"
+                              >
+                                Edit draft
+                              </Button>
                             </div>
-                            <div className="rounded-lg border border-border bg-background/50 p-3">
-                              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                                Refine
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <Button
-                                  type="button"
-                                  variant="secondary"
-                                  onClick={() => startEditingTaskDraft(task.id)}
-                                  aria-label="Edit draft"
-                                >
-                                  Edit draft
-                                </Button>
+                          </div>
+                          {assessment || task.description ? (
+                            <details className="system-details-disclosure">
+                              <summary className="text-sm font-medium text-foreground">
+                                Context and notes
+                              </summary>
+                              <div className="mt-4 grid gap-3">
+                                {assessment && !editedDraftIds[task.id] ? (
+                                  <Card className="workflow-support-panel bg-muted/40 shadow-none">
+                                    <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
+                                      <p className="font-medium text-foreground">
+                                        Clarity notes
+                                      </p>
+                                      <p>
+                                        First useful move:{" "}
+                                        {assessment.recommended_first_move}
+                                      </p>
+                                      <p>
+                                        Unknowns: {assessment.unknowns.join(", ")}
+                                      </p>
+                                      <p>
+                                        What not to do yet:{" "}
+                                        {assessment.what_not_to_do_yet.join(", ")}
+                                      </p>
+                                    </CardContent>
+                                  </Card>
+                                ) : null}
+                                {task.description ? (
+                                  <Card className="workflow-support-panel bg-muted/40 shadow-none">
+                                    <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
+                                      <p className="font-medium text-foreground">
+                                        Draft notes
+                                      </p>
+                                      <p className="whitespace-pre-line">
+                                        {task.description}
+                                      </p>
+                                    </CardContent>
+                                  </Card>
+                                ) : null}
                               </div>
-                            </div>
-                            <div className="rounded-lg border border-border bg-background/50 p-3">
-                              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                                Browser notes
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-2">
+                            </details>
+                          ) : null}
+                          <details className="system-details-disclosure">
+                            <summary className="text-sm font-medium text-foreground">
+                              Browser notes
+                            </summary>
+                            <div className="mt-4 rounded-lg border border-border bg-background/50 p-3">
+                              <div className="flex flex-wrap gap-2">
                                 <Button
                                   type="button"
                                   variant="outline"
@@ -714,25 +708,13 @@ export default function TriagePage() {
                                 These notes stay on this device and do not move the item.
                               </p>
                             </div>
-                          </div>
+                          </details>
                         </>
                       );
                     })()}
                   </>
                 ) : (
                   <>
-                    {activeQueueItem.draft.description ? (
-                      <Card className="bg-muted/40">
-                        <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                          <p className="font-medium text-foreground">
-                            Draft notes
-                          </p>
-                          <p className="whitespace-pre-line">
-                            {activeQueueItem.draft.description}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : null}
                     <div className="rounded-lg border border-border bg-background/50 p-3">
                       <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                         Decide
@@ -760,6 +742,25 @@ export default function TriagePage() {
                         </Button>
                       </div>
                     </div>
+                    {activeQueueItem.draft.description ? (
+                      <details className="system-details-disclosure">
+                        <summary className="text-sm font-medium text-foreground">
+                          Context and notes
+                        </summary>
+                        <div className="mt-4">
+                          <Card className="bg-muted/40">
+                            <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
+                              <p className="font-medium text-foreground">
+                                Draft notes
+                              </p>
+                              <p className="whitespace-pre-line">
+                                {activeQueueItem.draft.description}
+                              </p>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </details>
+                    ) : null}
                   </>
                 )}
               </CardContent>
@@ -772,7 +773,7 @@ export default function TriagePage() {
                 <CardTitle className="text-base">Waiting after this</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-2">
-                {upcomingQueueItems.map((item) => {
+                {visibleUpcomingQueueItems.map((item) => {
                   const area = getAreaById(item.draft.area_id);
                   return (
                     <div
@@ -810,6 +811,54 @@ export default function TriagePage() {
                     </div>
                   );
                 })}
+                {overflowUpcomingQueueItems.length > 0 ? (
+                  <details className="system-details-disclosure">
+                    <summary className="text-sm font-medium text-foreground">
+                      {overflowUpcomingQueueItems.length} more queued item
+                      {overflowUpcomingQueueItems.length === 1 ? "" : "s"}
+                    </summary>
+                    <div className="mt-4 grid gap-2">
+                      {overflowUpcomingQueueItems.map((item) => {
+                        const area = getAreaById(item.draft.area_id);
+                        return (
+                          <div
+                            key={item.queueId}
+                            className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="space-y-1">
+                              <p className="font-medium">{item.draft.title}</p>
+                              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                                <Badge variant="outline">
+                                  {item.kind === "task"
+                                    ? "Task suggestion"
+                                    : "Project suggestion"}
+                                </Badge>
+                                {area ? (
+                                  <Badge variant="secondary">Area: {area.name}</Badge>
+                                ) : null}
+                                <Badge variant="warning">
+                                  Confidence:{" "}
+                                  {Math.round(item.draft.confidence * 100)}%
+                                </Badge>
+                                <Badge variant={lifecycle.variant}>
+                                  {lifecycle.label}
+                                </Badge>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full sm:w-auto"
+                              onClick={() => handleSelectQueueItem(item.queueId)}
+                            >
+                              Review this next
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                ) : null}
               </CardContent>
             </Card>
           ) : null}
