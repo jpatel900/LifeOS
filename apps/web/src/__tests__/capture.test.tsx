@@ -162,32 +162,16 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(screen.getByText("Save mode:")).toBeDefined();
     expect(screen.getByText("Saved on this device only")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save thought" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save and organize" })).toBeDefined();
+    expect(screen.getByLabelText("Area for this saved thought")).toBeDefined();
+    expect(screen.getByText("Current area: Main Job")).toBeDefined();
     expect(
-      screen.getByText(
-        /Save thought and Save and organize use your current save mode/i,
-      ),
-    ).toBeDefined();
-    expect(
-      screen.getByText(
-        /The header area picker controls this device-only draft flow and the recent captures on this page/i,
-      ),
-    ).toBeDefined();
-    expect(
-      screen.getByText(
-        /Save the raw capture first. Organize it after if needed./i,
-      ),
+      screen.getByRole("button", { name: "Organize on this device" }),
     ).toBeDefined();
     expect(screen.getByText("Ctrl/Cmd + Enter")).toBeDefined();
     expect(
       screen.getByText("Saves thought from the main capture field."),
-    ).toBeDefined();
-    expect(
-      screen.getByText(/Save first, then sort into drafts for Triage./i),
-    ).toBeDefined();
-    expect(
-      screen.getByText(
-        /Organize on this device and recent captures stay on this device/i,
-      ),
     ).toBeDefined();
     expect(
       screen.getByRole("heading", {
@@ -269,11 +253,8 @@ describe("CapturePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
     expect(await screen.findByText("Saved.")).toBeDefined();
-    expect(
-      screen.getByText(
-        "This raw capture was saved to your account. Organize this saved thought next if you want draft suggestions.",
-      ),
-    ).toBeDefined();
+    expect(screen.getByRole("alert")).toBeDefined();
+    expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("heading", { name: "Recent saved captures" }),
     ).toBeDefined();
@@ -379,11 +360,8 @@ describe("CapturePage", () => {
     fireEvent.click(await screen.findByText("Save and organize"));
 
     expect(await screen.findByText("Drafts ready for Triage.")).toBeDefined();
-    expect(
-      screen.getByText(
-        "Saved first, then organized. Review the drafts in Triage next.",
-      ),
-    ).toBeDefined();
+    expect(screen.getByRole("link", { name: "Review it now" })).toBeDefined();
+    expect(screen.getByText("Drafts ready for Triage.")).toBeDefined();
     expect(
       screen.getByText(
         "Drafts were routed to triage because confidence is low.",

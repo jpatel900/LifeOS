@@ -554,31 +554,18 @@ export default function CapturePage() {
         </Alert>
       ) : null}
 
-      <Card data-testid="capture-main-card" className="workflow-primary-card max-w-3xl">
+      <Card
+        data-testid="capture-main-card"
+        className="workflow-primary-card max-w-3xl"
+      >
         <CardHeader>
-          <CardTitle>Capture a thought</CardTitle>
+          <CardTitle>Write it down</CardTitle>
           <CardDescription>
-            One real sentence is enough. Save first if you are in a rush.
+            Start with the raw thought. Choose where it should live, then save
+            or organize it.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label htmlFor="raw_capture" className="text-sm font-medium">
-            What are you thinking about?
-          </label>
-          <Textarea
-            id="raw_capture"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleCaptureShortcut}
-            rows={5}
-            placeholder="What's on your mind? Type anything..."
-            className="resize-y"
-          />
-          <p className="text-xs text-muted-foreground">
-            After Save thought or Save and organize, this field clears so you
-            can capture the next thought.
-          </p>
-
           <form
             onSubmit={handleSaveCapture}
             id="capture-save-form"
@@ -587,42 +574,69 @@ export default function CapturePage() {
             style={selectedAreaStyle}
             className="area-accent-card space-y-4 rounded-lg border p-4"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <h2 className="text-lg font-semibold">Save options</h2>
-              {selectedArea ? (
-                <Badge
-                  variant="secondary"
-                  className="area-accent-chip inline-flex items-center gap-2 rounded-full"
-                >
-                  <span
-                    aria-hidden
-                    className="area-accent-dot h-2 w-2 rounded-full"
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label htmlFor="raw_capture" className="text-sm font-medium">
+                    What are you thinking about?
+                  </label>
+                  <Textarea
+                    id="raw_capture"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={handleCaptureShortcut}
+                    rows={8}
+                    placeholder="What's on your mind? Type anything..."
+                    className="resize-y"
                   />
-                  Current area: {selectedArea.name}
-                </Badge>
-              ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  After Save thought or Save and organize, this field clears so
+                  you can capture the next thought.
+                </p>
+              </div>
+
+              <div className="space-y-3 rounded-lg border bg-background/80 p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Where should this land?</p>
+                  {selectedArea ? (
+                    <Badge
+                      variant="secondary"
+                      className="area-accent-chip inline-flex items-center gap-2 rounded-full"
+                    >
+                      <span
+                        aria-hidden
+                        className="area-accent-dot h-2 w-2 rounded-full"
+                      />
+                      Current area: {selectedArea.name}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="area_persist" className="text-sm font-medium">
+                    Area for this saved thought
+                  </label>
+                  <Select
+                    id="area_persist"
+                    value={areaId ?? ""}
+                    onChange={(e) => handleAreaChange(e.target.value)}
+                    disabled={saveState.status === "saving"}
+                    className="w-full"
+                  >
+                    <option value="">No area yet</option>
+                    {areas.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Selecting an area here also updates the header area when a
+                  matching local workflow area exists.
+                </p>
+              </div>
             </div>
-            <label htmlFor="area_persist" className="text-sm font-medium">
-              Area for this saved thought
-            </label>
-            <Select
-              id="area_persist"
-              value={areaId ?? ""}
-              onChange={(e) => handleAreaChange(e.target.value)}
-              disabled={saveState.status === "saving"}
-              className="w-full sm:max-w-xs"
-            >
-              <option value="">No area yet</option>
-              {areas.map((area) => (
-                <option key={area.id} value={area.id}>
-                  {area.name}
-                </option>
-              ))}
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Selecting an area here also updates the header area when a
-              matching local workflow area exists.
-            </p>
 
             {areasState.status === "ready" && areas.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -669,11 +683,14 @@ export default function CapturePage() {
             </div>
           </form>
 
-          <div className="grid gap-2 rounded-lg border border-dashed p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              The header area picker controls this device-only draft flow and
-              the recent captures on this page.
-            </p>
+          <div className="grid gap-3 rounded-lg border border-dashed p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Local-only draft pass</p>
+              <p className="text-xs text-muted-foreground">
+                The header area picker controls this device-only draft flow and
+                the recent captures on this page.
+              </p>
+            </div>
             <Button
               type="button"
               variant="ghost"

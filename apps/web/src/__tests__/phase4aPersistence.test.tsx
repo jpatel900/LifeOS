@@ -648,6 +648,44 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
   });
 
+  it("shows the current-focus triage surface and reviews the current item first", async () => {
+    mocks.listAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [area],
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    renderWithWorkflow(
+      <>
+        <SeedCapture text="Call dentist tomorrow" />
+        <SeedCapture text="Need a project to organize volunteer ops system" />
+        <TriagePage />
+      </>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Current focus" })).toBeDefined();
+    expect(screen.getByTestId("triage-next-action-card")).toBeDefined();
+    expect(screen.getByTestId("triage-current-item-card")).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Review current item" }),
+    ).toBeDefined();
+    expect(await screen.findByRole("heading", { name: "Waiting after this" })).toBeDefined();
+    expect(
+      screen.getAllByRole("button", { name: "Review this next" }).length,
+    ).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Review current item" }));
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+  });
+
   it("rejecting a draft does not create a Supabase task or project", async () => {
     mocks.listAreas.mockResolvedValue({
       provider: "supabase",
@@ -838,7 +876,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByText("Needs time")).toBeDefined();
+    expect(
+      await screen.findByRole("button", { name: "Suggest a time" }),
+    ).toBeDefined();
     expect(screen.getAllByText("Call dentist tomorrow").length).toBeGreaterThan(
       0,
     );

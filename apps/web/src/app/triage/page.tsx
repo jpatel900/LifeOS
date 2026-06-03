@@ -354,18 +354,21 @@ export default function TriagePage() {
       <section className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Triage</h1>
         <p className="text-sm text-muted-foreground">
-          Review one thing at a time, make the next decision, and keep moving.
+          Stay with the current item, make one decision, then move to the next.
         </p>
       </section>
 
-      <Card data-testid="triage-next-action-card" className="workflow-secondary-card">
+      <Card
+        data-testid="triage-next-action-card"
+        className="workflow-secondary-card"
+      >
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Next action</CardTitle>
+          <CardTitle className="text-base">Current focus</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
           {hasCandidates ? (
             <Button type="button" onClick={handleReviewNextItem}>
-              Open current item
+              Review current item
             </Button>
           ) : (
             <Button asChild>
@@ -457,6 +460,18 @@ export default function TriagePage() {
         />
       ) : (
         <div className="flex flex-col gap-3">
+          <Card className="workflow-secondary-card">
+            <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm text-muted-foreground">
+              <Badge variant="outline">
+                {totalCandidates} item{totalCandidates === 1 ? "" : "s"} ready
+              </Badge>
+              <span>
+                Keep backlog thinking out of this screen. Decide the current
+                item, then continue.
+              </span>
+            </CardContent>
+          </Card>
+
           {activeQueueItem ? (
             <Card
               id="triage-current-item"
@@ -474,6 +489,10 @@ export default function TriagePage() {
                     <CardTitle className="text-lg">
                       {activeQueueItem.draft.title}
                     </CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Make the next decision here before looking at anything
+                      else.
+                    </p>
                     <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                       {activeQueueItemArea ? (
                         <Badge
@@ -750,7 +769,7 @@ export default function TriagePage() {
           {upcomingQueueItems.length > 0 ? (
             <Card className="workflow-secondary-card">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Up next</CardTitle>
+                <CardTitle className="text-base">Waiting after this</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-2">
                 {upcomingQueueItems.map((item) => {

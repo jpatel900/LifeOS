@@ -902,14 +902,14 @@ export default function CalendarPage() {
       <section>
         <h1>Planning</h1>
         <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Suggest time here first. Nothing goes to Google Calendar until you
-          approve a real write.
+          Group planning by intent: pick work that needs time, shape the local
+          suggestion, then approve any real Google write explicitly.
         </p>
       </section>
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Next action</CardTitle>
+          <CardTitle className="text-base">Planning flow</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
           {nextTaskForProposal ? (
@@ -930,9 +930,9 @@ export default function CalendarPage() {
             </Button>
           )}
           <p className="text-sm text-muted-foreground">
-            Quick suggestions start with the next available hour. You can adjust
-            time before approving, then move to Execute when you are ready to
-            start.
+            Start local. Quick suggestions begin with the next available hour.
+            You can adjust time before planning it, and nothing goes to Google
+            Calendar until you approve it.
           </p>
         </CardContent>
       </Card>
@@ -1023,10 +1023,14 @@ export default function CalendarPage() {
           }
         />
       ) : (
-        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+        <div className="flex flex-col gap-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Needs time</CardTitle>
+              <CardTitle className="text-base">Needs a suggested time</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Start here. Pick the work that should get a local-first time
+                suggestion next.
+              </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {scheduleableTasks.length === 0 ? (
@@ -1057,7 +1061,7 @@ export default function CalendarPage() {
                   return (
                     <div
                       key={task.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm"
+                      className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="space-y-1">
                         <div className="font-medium">{task.title}</div>
@@ -1090,7 +1094,11 @@ export default function CalendarPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Suggested time blocks</CardTitle>
+              <CardTitle className="text-base">Ready to review</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                These are still local planning suggestions. Adjust them, plan
+                them, or check Google Calendar before any explicit write.
+              </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {proposals.length === 0 ? (
@@ -1459,9 +1467,11 @@ export default function CalendarPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">
-                Planned blocks
-              </CardTitle>
+              <CardTitle className="text-base">Already planned</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                These blocks are ready for Execute. They stay grouped here even
+                if a Google Calendar event also exists.
+              </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
               {blocks.length === 0 ? (

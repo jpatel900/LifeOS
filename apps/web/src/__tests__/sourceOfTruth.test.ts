@@ -234,10 +234,11 @@ describe("source-of-truth boundaries", () => {
     expect(statusVocabulary).toContain("AI sorting unavailable");
     expect(statusVocabulary).toContain("Saved on this device only");
     expect(statusVocabulary).toContain("Saved to account");
-    expect(triage).toContain("Accepted items are");
-    expect(triage).toContain(
-      "Drafts shown here stay on this device until you accept them.",
-    );
+    expect(triage).toContain("Current focus");
+    expect(triage).toContain("Review current item");
+    expect(triage).toContain("Current item");
+    expect(triage).toContain("Waiting after this");
+    expect(triage).toContain("Review this next");
     expect(triage).toContain("Technical save mode id:");
     expect(triage).toContain("do not move the item");
     expect(calendar).toContain("Check calendar availability");
