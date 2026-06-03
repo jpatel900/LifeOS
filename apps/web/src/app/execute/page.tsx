@@ -983,9 +983,20 @@ export default function ExecutePage() {
           );
 
           return (
-            <Alert role="status" className="border-border bg-muted text-foreground">
+            <Alert
+              role="status"
+              className="workflow-celebration-alert text-foreground"
+            >
               <AlertTitle className="text-primary">{feedback.title}</AlertTitle>
               <AlertDescription>{feedback.description}</AlertDescription>
+              <div className="workflow-celebration-meta">
+                <span className="workflow-celebration-chip">
+                  {savedViaLabel(actionState.provider)}
+                </span>
+                <span className="workflow-celebration-chip">
+                  {actionState.label}
+                </span>
+              </div>
               {feedback.primaryLink || feedback.secondaryLink ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {feedback.primaryLink ? (
@@ -1019,6 +1030,7 @@ export default function ExecutePage() {
       <Card
         data-testid="execute-current-mission-card"
         data-accent-strength="strong"
+        data-session-ui-state={sessionUiState}
         style={buildAreaAccentStyle(missionArea?.color)}
         className="area-accent-card workflow-primary-card max-w-[980px]"
       >
@@ -1205,9 +1217,7 @@ export default function ExecutePage() {
                 ? "Resume when you are ready, or finish the session with a real outcome."
                 : showPauseControl
                   ? "Pause if you need to step away. Keep the outcome honest when the block ends."
-                  : showPersistedStopGuidance
-                    ? "Stop (device-only sessions) is only available when the session lives on this device. Sessions saved to your account need an end outcome and notes."
-                    : isTerminalSession
+                  : isTerminalSession
                       ? "This session is ended. Pick the next useful move."
                       : "Choose the control that matches what actually happened in this block."}
           </p>
@@ -1228,57 +1238,61 @@ export default function ExecutePage() {
               {activeTask.first_tiny_step ??
                 "Pick one concrete action you can finish in a few minutes."}
             </p>
-            <p className="area-accent-panel rounded-md border p-3">
-              <span className="font-medium text-foreground">
-                Definition of done:
-              </span>{" "}
-              {activeTask.definition_of_done ??
-                "Complete the first useful move and note the result."}
-            </p>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="area-accent-panel rounded-md border p-3 text-sm">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Session started
+          <details className="system-details-disclosure">
+            <summary className="text-sm font-medium text-foreground">
+              Mission details
+            </summary>
+            <div className="mt-4 grid gap-3 text-sm">
+              <p className="area-accent-panel rounded-md border p-3">
+                <span className="font-medium text-foreground">
+                  Definition of done:
+                </span>{" "}
+                {activeTask.definition_of_done ??
+                  "Complete the first useful move and note the result."}
               </p>
-              <p className="mt-1 font-medium">{sessionStartedLabel}</p>
-            </div>
-            <div className="area-accent-panel rounded-md border p-3 text-sm">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Timing
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="area-accent-panel rounded-md border p-3 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Session started
+                  </p>
+                  <p className="mt-1 font-medium">{sessionStartedLabel}</p>
+                </div>
+                <div className="area-accent-panel rounded-md border p-3 text-sm">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Timing
+                  </p>
+                  <p className="mt-1 font-medium">{timingLabel}</p>
+                </div>
+              </div>
+              {activeBlock ? (
+                <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                  <span className="font-medium">Planned block:</span>{" "}
+                  {new Date(activeBlock.start_at).toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}{" "}
+                  to{" "}
+                  {new Date(activeBlock.end_at).toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                  .
+                </p>
+              ) : (
+                <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                  <span className="font-medium">Planned block:</span> No planned
+                  block is attached right now. You can still focus this task,
+                  or plan a block first.
+                </p>
+              )}
+              <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                <span className="font-medium">Next recommended action:</span>{" "}
+                {nextRecommendedAction}
               </p>
-              <p className="mt-1 font-medium">{timingLabel}</p>
             </div>
-          </div>
-
-          {activeBlock ? (
-            <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-              <span className="font-medium">Planned block:</span> {new Date(
-                activeBlock.start_at,
-              ).toLocaleTimeString([], {
-                hour: "numeric",
-                minute: "2-digit",
-              })}{" "}
-              to{" "}
-              {new Date(activeBlock.end_at).toLocaleTimeString([], {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
-              .
-            </p>
-          ) : (
-            <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-              <span className="font-medium">Planned block:</span> No planned
-              block is attached right now. You can still focus this task, or
-              plan a block first.
-            </p>
-          )}
-
-          <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-            <span className="font-medium">Next recommended action:</span>{" "}
-            {nextRecommendedAction}
-          </p>
+          </details>
         </CardContent>
       </Card>
 
@@ -1294,13 +1308,19 @@ export default function ExecutePage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {sessionStateLabel}
-              </p>
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="focus-state-orb"
+                />
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {sessionStateLabel}
+                </p>
+              </div>
               <h2 className="text-2xl font-semibold leading-tight">
                 {focusTitle}
               </h2>
-              <p className="text-sm text-muted-foreground">{focusDescription}</p>
+              <p className="text-sm text-muted-foreground">{focusTruthNote}</p>
             </div>
 
             {missionArea ? (
@@ -1313,24 +1333,34 @@ export default function ExecutePage() {
               </span>
             ) : null}
 
-            <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-              <p className="font-medium">Execution truth</p>
-              <p className="mt-1 text-muted-foreground">{focusTruthNote}</p>
-            </div>
-
-            <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-              <p className="font-medium">Save mode</p>
-              <p className="mt-1 text-muted-foreground">
-                {saveModeLabel(executeProvider)} via{" "}
-                <strong>{executeProvider}</strong>.
-              </p>
-            </div>
+            <details className="system-details-disclosure">
+              <summary className="text-sm font-medium text-foreground">
+                System details
+              </summary>
+              <div className="mt-4 grid gap-3">
+                <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                  <p className="font-medium">Execution truth</p>
+                  <p className="mt-1 text-muted-foreground">{focusDescription}</p>
+                </div>
+                <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                  <p className="font-medium">Save mode</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {saveModeLabel(executeProvider)} via{" "}
+                    <strong>{executeProvider}</strong>.
+                  </p>
+                </div>
+              </div>
+            </details>
           </CardContent>
         </Card>
 
         <Card className="workflow-secondary-card h-full">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Recovery and support</CardTitle>
+            <CardTitle className="text-base">
+              {isTerminalSession || (usesPersistedExecution && terminalForm)
+                ? "Close the loop"
+                : "Keep this block clean"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {isTerminalSession ? (
@@ -1538,16 +1568,14 @@ export default function ExecutePage() {
       </div>
 
       {activeSession ? (
-        <Card
-          aria-label="Most recent execution summary"
-          className="max-w-[820px]"
-        >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Recent execution summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1 text-sm text-muted-foreground">
+        <details className="system-details-disclosure max-w-[820px]">
+          <summary className="text-sm font-medium text-foreground">
+            Recent session details
+          </summary>
+          <div
+            aria-label="Most recent execution summary"
+            className="mt-4 grid gap-1 text-sm text-muted-foreground"
+          >
             <div>Planned: {activeSession.planned_minutes ?? 0} min</div>
             <div>Actual: {activeSession.actual_minutes ?? 0} min</div>
             {"status" in activeSession ? (
@@ -1564,8 +1592,8 @@ export default function ExecutePage() {
             {activeSession.notes ? (
               <div>Notes: {activeSession.notes}</div>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+        </details>
       ) : null}
     </div>
   );

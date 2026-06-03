@@ -148,7 +148,10 @@ function AppChrome({ children }: { children: ReactNode }) {
                 </p>
               ) : null}
               {quickNoteStatus === "saved" ? (
-                <Alert variant="success" className="max-w-sm rounded-2xl">
+                <Alert
+                  variant="success"
+                  className="workflow-celebration-alert max-w-sm rounded-2xl"
+                >
                   <AlertTitle>Saved.</AlertTitle>
                   <AlertDescription>
                     Review it in{" "}
@@ -167,6 +170,14 @@ function AppChrome({ children }: { children: ReactNode }) {
                     </Link>
                     .
                   </AlertDescription>
+                  <div className="workflow-celebration-meta">
+                    <span className="workflow-celebration-chip">
+                      Device-only
+                    </span>
+                    <span className="workflow-celebration-chip">
+                      Inbox to Triage
+                    </span>
+                  </div>
                 </Alert>
               ) : null}
             </div>

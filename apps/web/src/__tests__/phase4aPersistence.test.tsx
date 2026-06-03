@@ -1410,10 +1410,10 @@ describe("Phase 4A Supabase persistence UI", () => {
       screen.queryByRole("button", { name: "Stop (device-only sessions)" }),
     ).toBeNull();
     expect(
-      screen.getAllByText(
-        "Stop (device-only sessions) is only available when the session lives on this device. Sessions saved to your account need an end outcome and notes.",
-      ).length,
-    ).toBeGreaterThan(0);
+      screen.getByText(
+        /Stop \(device-only sessions\) is only available when the session lives on this device\./,
+      ),
+    ).toBeDefined();
   });
 
   it("hides stop in demo mode until a device-only session is actually running", async () => {

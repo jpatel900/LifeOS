@@ -32,6 +32,44 @@
   --radius: 0.75rem;
 }
 
+@keyframes workflow-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes workflow-soft-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in oklch, var(--area-accent) 0%, transparent),
+      inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 10px color-mix(in oklch, var(--area-accent) 0%, transparent),
+      0 18px 36px -28px color-mix(in oklch, var(--area-accent) 36%, transparent),
+      inset 0 1px 0 0 color-mix(in oklch, white 8%, transparent);
+  }
+}
+
+@keyframes workflow-sheen {
+  0% {
+    transform: translateX(-140%);
+  }
+
+  100% {
+    transform: translateX(180%);
+  }
+}
+
 .dark {
   --background: oklch(0.16 0.015 258);
   --foreground: oklch(0.95 0.01 262);
@@ -202,6 +240,13 @@ summary {
     transform 220ms ease;
 }
 
+.workflow-primary-card[data-session-ui-state="running"] {
+  box-shadow:
+    0 24px 48px -40px color-mix(in oklch, var(--area-accent) 30%, transparent),
+    0 0 0 1px color-mix(in oklch, var(--area-accent) 18%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 4%, white);
+}
+
 .workflow-secondary-card {
   background: color-mix(in oklch, var(--card) 90%, var(--muted));
   box-shadow:
@@ -288,6 +333,7 @@ summary {
   box-shadow:
     0 24px 48px -42px color-mix(in oklch, var(--area-accent) 52%, transparent),
     inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent);
+  animation: workflow-rise-in 280ms ease-out both;
 }
 
 .workflow-page-copy {
@@ -347,6 +393,101 @@ summary {
   box-shadow:
     inset 0 1px 0 0 var(--area-accent-soft),
     0 20px 40px -36px color-mix(in oklch, var(--area-accent) 42%, transparent);
+}
+
+.workflow-next-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.workflow-next-step-chip {
+  border: 1px solid color-mix(in oklch, var(--area-accent-border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--area-accent-soft) 62%, transparent);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+
+.workflow-celebration-alert {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in oklch, var(--area-accent-border) 82%, var(--border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--area-accent-soft) 62%, var(--card)) 0%,
+      color-mix(in oklch, var(--card) 94%, var(--muted)) 100%
+    );
+  box-shadow:
+    0 18px 36px -34px color-mix(in oklch, var(--area-accent) 34%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent);
+  animation: workflow-rise-in 220ms ease-out both;
+}
+
+.workflow-celebration-alert::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    color-mix(in oklch, white 16%, transparent) 50%,
+    transparent 100%
+  );
+  opacity: 0.55;
+  pointer-events: none;
+  transform: translateX(-140%);
+  animation: workflow-sheen 1100ms ease-out 1;
+}
+
+.workflow-celebration-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.workflow-celebration-chip {
+  border: 1px solid color-mix(in oklch, var(--area-accent-border) 72%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--card) 82%, transparent);
+  padding: 0.25rem 0.65rem;
+  font-size: 0.76rem;
+  color: var(--muted-foreground);
+}
+
+.focus-state-orb {
+  height: 0.8rem;
+  width: 0.8rem;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--muted-foreground) 48%, transparent);
+  box-shadow: 0 0 0 0 transparent;
+  transition:
+    background-color 180ms ease,
+    box-shadow 220ms ease,
+    transform 220ms ease;
+}
+
+.focus-state-card[data-focus-state="running"] .focus-state-orb {
+  background: var(--area-accent);
+  animation: workflow-soft-pulse 1600ms ease-in-out infinite;
+}
+
+.focus-state-card[data-focus-state="paused"] .focus-state-orb {
+  background: color-mix(in oklch, var(--accent) 72%, var(--foreground));
+}
+
+.focus-state-card[data-focus-state="completed"] .focus-state-orb {
+  background: color-mix(in oklch, var(--primary) 76%, var(--foreground));
+}
+
+.focus-state-card[data-focus-state="stopped"] .focus-state-orb,
+.focus-state-card[data-focus-state="stuck"] .focus-state-orb,
+.focus-state-card[data-focus-state="distracted"] .focus-state-orb,
+.focus-state-card[data-focus-state="missed"] .focus-state-orb {
+  background: color-mix(in oklch, var(--destructive) 74%, var(--foreground));
 }
 
 .system-details-disclosure {
@@ -456,5 +597,28 @@ h4 {
 @media (min-width: 768px) {
   .workflow-page-header {
     padding: 1.35rem 1.45rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-page-header,
+  .workflow-celebration-alert,
+  .focus-state-card[data-focus-state="running"] .focus-state-orb {
+    animation: none;
+  }
+
+  .workflow-celebration-alert::after {
+    display: none;
+  }
+
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary,
+  .workflow-primary-card,
+  .workflow-secondary-card {
+    transition: none;
   }
 }
