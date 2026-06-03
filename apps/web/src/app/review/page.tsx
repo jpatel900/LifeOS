@@ -20,8 +20,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
+import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
 import {
   createReviewEntry,
   listAreas,
@@ -93,6 +95,49 @@ function uniqTruthy(values: Array<string | null | undefined>) {
   );
 }
 
+function summaryObject(summary: ReviewEntry["summary_json"]) {
+  return summary && typeof summary === "object" && !Array.isArray(summary)
+    ? (summary as Record<string, unknown>)
+    : null;
+}
+
+function reviewReflections(summary: ReviewEntry["summary_json"]) {
+  const base = summaryObject(summary);
+  const reflections = base?.reflections;
+
+  if (
+    !reflections ||
+    typeof reflections !== "object" ||
+    Array.isArray(reflections)
+  ) {
+    return [];
+  }
+
+  const entries: Array<[keyof typeof reflectionsLabels, string]> = [];
+  for (const key of Object.keys(reflectionsLabels) as Array<
+    keyof typeof reflectionsLabels
+  >) {
+    const value = (reflections as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim()) {
+      entries.push([key, value.trim()]);
+    }
+  }
+
+  return entries;
+}
+
+const reflectionsLabels = {
+  move_forward: "Move forward",
+  needs_rescheduling: "Needs rescheduling",
+  reality_taught: "Reality taught",
+} as const;
+
+const emptyReflectionState = {
+  move_forward: "",
+  needs_rescheduling: "",
+  reality_taught: "",
+};
+
 export default function ReviewPage() {
   const { state, selectedAreaId } = useWorkflow();
   const [reviewState, setReviewState] = useState<ReviewState>({
@@ -101,6 +146,7 @@ export default function ReviewPage() {
   const [actionState, setActionState] = useState<ActionState>({
     status: "idle",
   });
+  const [reflections, setReflections] = useState(emptyReflectionState);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +316,18 @@ export default function ReviewPage() {
   async function handleCreateDailyReview() {
     setActionState({ status: "saving" });
     const period = todayIsoDate();
+    const trimmedReflections = {
+      move_forward: reflections.move_forward.trim(),
+      needs_rescheduling: reflections.needs_rescheduling.trim(),
+      reality_taught: reflections.reality_taught.trim(),
+    };
+    const hasReflections = Object.values(trimmedReflections).some(Boolean);
+    const reviewSummary = hasReflections
+      ? {
+          ...summary,
+          reflections: trimmedReflections,
+        }
+      : summary;
 
     try {
       const result = await createReviewEntry(createSupabaseBrowserClient(), {
@@ -277,7 +335,7 @@ export default function ReviewPage() {
         period_start: period,
         period_end: period,
         area_id: null,
-        summary_json: summary,
+        summary_json: reviewSummary,
       });
 
       setReviewState((current) =>
@@ -288,6 +346,7 @@ export default function ReviewPage() {
             }
           : current,
       );
+      setReflections(emptyReflectionState);
       setActionState({ status: "saved", provider: result.provider });
       void captureEvent({
         event: "review_submitted",
@@ -344,14 +403,67 @@ export default function ReviewPage() {
       {reviewState.status === "ready" ? (
         <Card className="workflow-quiet-card shadow-none">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Reflection prompts</CardTitle>
+            <CardTitle className="text-base">Reflection notes</CardTitle>
+            <CardDescription>
+              Keep the answers short. They save with the daily review when that
+              save path is available.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <ul className="m-0 list-disc pl-5">
-              <li>What should move forward?</li>
-              <li>What needs rescheduling?</li>
-              <li>What did reality teach?</li>
-            </ul>
+          <CardContent className="grid gap-3">
+            <div className="grid gap-1">
+              <label htmlFor="review-move-forward" className="text-sm font-medium">
+                What should move forward?
+              </label>
+              <Textarea
+                id="review-move-forward"
+                rows={2}
+                value={reflections.move_forward}
+                onChange={(event) =>
+                  setReflections((current) => ({
+                    ...current,
+                    move_forward: event.target.value,
+                  }))
+                }
+                placeholder="One task, project, or concern to keep alive."
+              />
+            </div>
+            <div className="grid gap-1">
+              <label
+                htmlFor="review-needs-rescheduling"
+                className="text-sm font-medium"
+              >
+                What needs rescheduling?
+              </label>
+              <Textarea
+                id="review-needs-rescheduling"
+                rows={2}
+                value={reflections.needs_rescheduling}
+                onChange={(event) =>
+                  setReflections((current) => ({
+                    ...current,
+                    needs_rescheduling: event.target.value,
+                  }))
+                }
+                placeholder="Name the block or work that needs a new time."
+              />
+            </div>
+            <div className="grid gap-1">
+              <label htmlFor="review-reality-taught" className="text-sm font-medium">
+                What did reality teach?
+              </label>
+              <Textarea
+                id="review-reality-taught"
+                rows={2}
+                value={reflections.reality_taught}
+                onChange={(event) =>
+                  setReflections((current) => ({
+                    ...current,
+                    reality_taught: event.target.value,
+                  }))
+                }
+                placeholder="Capture one useful lesson without turning this into a journal."
+              />
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -393,9 +505,10 @@ export default function ReviewPage() {
       ) : null}
 
       {reviewState.status === "loading" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Checking saved review rows. Local reflection is still available.
-        </p>
+        <WorkflowLoadingState
+          title="Checking saved review rows"
+          description="Local reflection is still available while saved review rows load."
+        />
       ) : null}
 
       <DiagnosticsDisclosure>
@@ -536,6 +649,11 @@ export default function ReviewPage() {
               <EmptyState
                 title="No daily review yet."
                 description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
+                action={
+                  <Button asChild>
+                    <Link href="/capture">Capture a follow-up</Link>
+                  </Button>
+                }
               />
             ) : (
               <ul className="m-0 list-disc pl-5 text-sm text-foreground">
@@ -617,6 +735,15 @@ export default function ReviewPage() {
             <EmptyState
               title="No saved review details yet."
               description="Create the first daily review and saved details will appear here."
+              action={
+                <Button
+                  type="button"
+                  onClick={() => void handleCreateDailyReview()}
+                  disabled={actionState.status === "saving"}
+                >
+                  Create daily review
+                </Button>
+              }
             />
           ) : null}
 
@@ -687,6 +814,18 @@ export default function ReviewPage() {
                           </span>
                         ) : null}
                       </div>
+                      {reviewReflections(entry.summary_json).length > 0 ? (
+                        <div className="mt-3 space-y-2 text-sm">
+                          {reviewReflections(entry.summary_json).map(([key, value]) => (
+                            <div key={key}>
+                              <p className="font-medium">
+                                {reflectionsLabels[key]}
+                              </p>
+                              <p className="text-muted-foreground">{value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}

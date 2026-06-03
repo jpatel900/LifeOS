@@ -50,4 +50,17 @@ describe("AppShell area accent", () => {
       "aria-current",
     );
   });
+
+  it("keeps workflow internals out of the primary area panel and exposes a skip link", () => {
+    render(
+      <AppShell>
+        <div>Accent probe</div>
+      </AppShell>,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Skip to main content" }),
+    ).toHaveAttribute("href", "#main-content");
+    expect(screen.queryByText(/Session workflow area/i)).toBeNull();
+  });
 });

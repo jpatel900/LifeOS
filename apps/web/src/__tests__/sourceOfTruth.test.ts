@@ -218,9 +218,12 @@ describe("source-of-truth boundaries", () => {
       readRepoFile("apps/web/src/lib/statusVocabulary.ts"),
     );
 
-    expect(appShell).toContain("Quick capture saves on this device.");
+    expect(appShell).toContain(
+      "Quick capture saves on this device and sends notes to Triage.",
+    );
     expect(appShell).toContain("Current area");
     expect(appShell).toContain("Technical area id:");
+    expect(appShell).not.toContain("Session workflow area");
     expect(capture).toContain("Save mode:");
     expect(capture).toContain("Technical save mode id:");
     expect(capture).toContain("on this device");
@@ -232,7 +235,7 @@ describe("source-of-truth boundaries", () => {
       "Drafts shown here stay on this device until you accept them.",
     );
     expect(triage).toContain("Technical save mode id:");
-    expect(triage).toContain("does not move the item yet");
+    expect(triage).toContain("do not move the item");
     expect(calendar).toContain("Check calendar availability");
     expect(calendar).toContain("Create Google Calendar event");
     expect(calendar).toContain("Adjust time");

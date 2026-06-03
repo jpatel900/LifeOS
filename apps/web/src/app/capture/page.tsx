@@ -22,6 +22,7 @@ import { getAreaById } from "@/lib/mockData";
 import {
   createCaptureItem,
   listAreas,
+  listCaptureItems,
   type DataProvider,
 } from "@/lib/data/workflow";
 import { captureEvent } from "@/lib/observability";
@@ -34,7 +35,10 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { captureLifecycleDisplay } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
-import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
+import {
+  persistedAreaIdForWorkflowAreaId,
+  workflowAreaIdForPersistedArea,
+} from "@/lib/workflowAreaMapping";
 import {
   buildAreaAccentStyle,
   resolveAreaById,
@@ -78,6 +82,12 @@ type ParserStatusState =
       preferredParser: "ai" | "mock";
     };
 
+type SavedCaptureHistoryState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; captures: CaptureItem[] }
+  | { status: "error"; message: string };
+
 type ParseCaptureApiResponse =
   | {
       ok: true;
@@ -119,11 +129,15 @@ export default function CapturePage() {
       status: "loading",
     },
   );
+  const [savedCaptureHistoryState, setSavedCaptureHistoryState] =
+    useState<SavedCaptureHistoryState>({ status: "idle" });
   const [text, setText] = useState("");
   const [areaId, setAreaId] = useState<string | null>(null);
   const [lastSavedCapture, setLastSavedCapture] = useState<CaptureItem | null>(
     null,
   );
+  const areas = areasState.status === "ready" ? areasState.areas : [];
+  const provider = areasState.status === "ready" ? areasState.provider : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +177,48 @@ export default function CapturePage() {
       cancelled = true;
     };
   }, [setSelectedAreaId]);
+
+  useEffect(() => {
+    if (provider !== "supabase") {
+      setSavedCaptureHistoryState((current) =>
+        current.status === "ready"
+          ? current
+          : { status: "ready", captures: [] },
+      );
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSavedCaptureHistory() {
+      setSavedCaptureHistoryState({ status: "loading" });
+      try {
+        const result = await listCaptureItems(createSupabaseBrowserClient());
+        if (!cancelled) {
+          setSavedCaptureHistoryState({
+            status: "ready",
+            captures: result.captures,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSavedCaptureHistoryState({
+            status: "error",
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unable to load saved capture history.",
+          });
+        }
+      }
+    }
+
+    void loadSavedCaptureHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [provider]);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,6 +264,17 @@ export default function CapturePage() {
     }
   }
 
+  function addSavedCaptureToHistory(capture: CaptureItem) {
+    setSavedCaptureHistoryState((current) => ({
+      status: "ready",
+      captures: [capture, ...(current.status === "ready" ? current.captures : [])]
+        .filter(
+          (item, index, items) =>
+            items.findIndex((candidate) => candidate.id === item.id) === index,
+        ),
+    }));
+  }
+
   async function handleSaveCapture(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await saveCaptureOnly();
@@ -228,6 +295,7 @@ export default function CapturePage() {
         capture: result.capture,
         source: "save",
       });
+      addSavedCaptureToHistory(result.capture);
       setLastSavedCapture(result.capture);
       setText("");
       setParseState({ status: "idle" });
@@ -260,9 +328,6 @@ export default function CapturePage() {
     event.preventDefault();
     void saveCaptureOnly();
   }
-
-  const areas = areasState.status === "ready" ? areasState.areas : [];
-  const provider = areasState.status === "ready" ? areasState.provider : null;
 
   async function parseCaptureForSavedCapture(
     savedCapture: CaptureItem,
@@ -347,6 +412,7 @@ export default function CapturePage() {
         capture: captureResult.capture,
         source: "save_and_organize",
       });
+      addSavedCaptureToHistory(captureResult.capture);
       setText("");
       void captureEvent({
         event: "capture_submitted",
@@ -414,10 +480,26 @@ export default function CapturePage() {
   const selectedArea = resolveSelectedArea(state.areas, selectedAreaId);
   const selectedAreaStyle = buildAreaAccentStyle(selectedArea?.color);
 
+  const persistedAreaId = selectedAreaId
+    ? persistedAreaIdForWorkflowAreaId(selectedAreaId, areas)
+    : null;
+  const selectedAreaMatches = (captureAreaId: string | null) => {
+    if (!selectedAreaId) {
+      return true;
+    }
+
+    return captureAreaId === selectedAreaId || captureAreaId === persistedAreaId;
+  };
+
   const visibleCaptures = state.captureItems.filter((capture) => {
-    if (!selectedAreaId) return true;
-    return capture.area_id === selectedAreaId;
+    return selectedAreaMatches(capture.area_id);
   });
+  const visibleSavedCaptures =
+    savedCaptureHistoryState.status === "ready"
+      ? savedCaptureHistoryState.captures.filter((capture) =>
+          selectedAreaMatches(capture.area_id),
+        )
+      : [];
 
   const latestAssessment = state.ambiguityAssessments[0];
   const latestDraft = state.taskDrafts[0];
@@ -710,12 +792,101 @@ export default function CapturePage() {
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">
-          Recent captures on this device
+          {provider === "supabase"
+            ? "Recent saved captures"
+            : "Recent saved captures on this device"}
         </h2>
+        <p className="text-sm text-muted-foreground">
+          {provider === "supabase"
+            ? "These are durable saved captures for the selected area."
+            : "These saved captures stay on this device in this browser session."}
+        </p>
+        {savedCaptureHistoryState.status === "loading" ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Checking saved capture history.
+          </p>
+        ) : null}
+        {savedCaptureHistoryState.status === "error" ? (
+          <Alert variant="destructive">
+            <AlertTitle>Saved capture history unavailable</AlertTitle>
+            <AlertDescription>
+              {savedCaptureHistoryState.message}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {savedCaptureHistoryState.status === "ready" &&
+        visibleSavedCaptures.length === 0 ? (
+          <EmptyState
+            title={
+              provider === "supabase"
+                ? "No saved captures for this area yet."
+                : "No saved captures on this device for this area yet."
+            }
+            description={
+              provider === "supabase"
+                ? "Use Save thought or Save and organize to create durable capture history for this area."
+                : "Use Save thought or Save and organize to create saved capture history on this device."
+            }
+          />
+        ) : null}
+        {savedCaptureHistoryState.status === "ready" &&
+        visibleSavedCaptures.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {visibleSavedCaptures.map((capture) => {
+              const area =
+                areas.find(
+                  (candidate) =>
+                    candidate.id === capture.area_id ||
+                    workflowAreaIdForPersistedArea(candidate) ===
+                      capture.area_id,
+                ) ?? getAreaById(capture.area_id);
+              const lifecycle = captureLifecycleDisplay(capture.status);
+              const captureAreaStyle = buildAreaAccentStyle(area?.color);
+              return (
+                <Card
+                  key={capture.id}
+                  data-testid="capture-recent-card"
+                  data-accent-strength="subtle"
+                  style={captureAreaStyle}
+                  className="area-accent-card workflow-secondary-card"
+                >
+                  <CardContent className="flex items-start justify-between gap-3 p-4">
+                    <div className="space-y-1">
+                      <p className="font-medium">{capture.raw_text}</p>
+                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                        {area ? (
+                          <Badge variant="secondary">Area: {area.name}</Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {lifecycle.detail}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">
+                      {provider === "supabase"
+                        ? "Saved to account"
+                        : "Saved in this session"}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-xl font-semibold">
+          Recent captures organized on this device
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          This local draft flow is separate from saved capture history.
+        </p>
         {visibleCaptures.length === 0 ? (
           <EmptyState
-            title="No captures on this device for this area yet."
-            description="Use Organize on this device for local draft flow, or Save thought for durable storage."
+            title="No device-only organized captures for this area yet."
+            description="Use Organize on this device for local drafts, or review saved captures above after Save thought."
           />
         ) : (
           <div className="flex flex-col gap-2">
@@ -746,7 +917,7 @@ export default function CapturePage() {
                         {lifecycle.detail}
                       </p>
                     </div>
-                    <Badge variant="secondary">Saved on this device</Badge>
+                    <Badge variant="secondary">Device-only draft</Badge>
                   </CardContent>
                 </Card>
               );

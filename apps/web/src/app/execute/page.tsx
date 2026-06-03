@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
+import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
 import {
   createExecutionSession,
   listExecutionReviewItems,
@@ -838,9 +839,10 @@ export default function ExecutePage() {
           </p>
         </section>
         {executeState.status === "loading" ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Checking saved execution rows. Device-only guidance is still available.
-          </p>
+          <WorkflowLoadingState
+            title="Checking saved execution rows"
+            description="Device-only guidance is still available while saved execution rows load."
+          />
         ) : null}
         {executeState.status === "error" ? (
           <Alert variant="destructive">
@@ -918,19 +920,16 @@ export default function ExecutePage() {
               Execute is where one planned task becomes one focused session with
               a clear end outcome.
             </p>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <Link href="/calendar">Go to Planning</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/capture">Go to Capture</Link>
-              </Button>
-            </div>
           </CardContent>
         </Card>
         <EmptyState
           title="No current task is in execution."
           description="Plan one block in Planning or capture and triage a task first."
+          action={
+            <Button asChild>
+              <Link href="/calendar">Go to Planning</Link>
+            </Button>
+          }
         />
       </div>
     );

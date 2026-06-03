@@ -11,6 +11,7 @@ import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
+import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
 import { getAreaById } from "@/lib/mockData";
 import {
   createProject,
@@ -399,9 +400,10 @@ export default function TriagePage() {
       </DiagnosticsDisclosure>
 
       {loadState.status === "loading" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Checking saved context. You can still review drafts.
-        </p>
+        <WorkflowLoadingState
+          title="Checking saved context"
+          description="You can still review drafts while account context loads."
+        />
       ) : null}
 
       {loadState.status === "error" ? (
@@ -447,6 +449,11 @@ export default function TriagePage() {
         <EmptyState
           title="Nothing to triage right now."
           description="No pending suggestions in this browser. Go to Capture, save a thought, then return here to review it."
+          action={
+            <Button asChild>
+              <Link href="/capture">Go to Capture</Link>
+            </Button>
+          }
         />
       ) : (
         <div className="flex flex-col gap-3">
@@ -468,11 +475,6 @@ export default function TriagePage() {
                       {activeQueueItem.draft.title}
                     </CardTitle>
                     <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline">
-                        {activeQueueItem.kind === "task"
-                          ? "Task suggestion"
-                          : "Project suggestion"}
-                      </Badge>
                       {activeQueueItemArea ? (
                         <Badge
                           variant="secondary"
@@ -481,14 +483,18 @@ export default function TriagePage() {
                           Area: {activeQueueItemArea.name}
                         </Badge>
                       ) : null}
+                      <Badge variant="outline">
+                        {activeQueueItem.kind === "task"
+                          ? "Task suggestion"
+                          : "Project suggestion"}
+                      </Badge>
+                      <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
                       <Badge variant="warning">
                         Confidence:{" "}
                         {Math.round(activeQueueItem.draft.confidence * 100)}%
                       </Badge>
-                      <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
                     </div>
                   </div>
-                  <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -610,66 +616,86 @@ export default function TriagePage() {
                               </CardContent>
                             </Card>
                           ) : null}
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              onClick={() => void handleAcceptTaskDraft(task.id)}
-                              aria-label="Accept task draft"
-                              disabled={saveState.status === "saving"}
-                            >
-                              Accept as task
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={() => startEditingTaskDraft(task.id)}
-                              aria-label="Edit draft"
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() =>
-                                addNoteOnlyFeedback(
-                                  task.id,
-                                  task.title,
-                                  task.description,
-                                  "Added note: review later.",
-                                )
-                              }
-                              aria-label="Mark for later"
-                            >
-                              Mark for later (note only)
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() =>
-                                addNoteOnlyFeedback(
-                                  task.id,
-                                  task.title,
-                                  task.description,
-                                  "Added note: consider changing area.",
-                                )
-                              }
-                              aria-label="Add area note"
-                            >
-                              Add area note (note only)
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              onClick={() => rejectTaskDraft(task.id)}
-                              aria-label="Reject task draft"
-                            >
-                              Reject
-                            </Button>
+                          <div className="grid gap-3">
+                            <div className="rounded-lg border border-border bg-background/50 p-3">
+                              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Decide
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  onClick={() => void handleAcceptTaskDraft(task.id)}
+                                  aria-label="Accept task draft"
+                                  disabled={saveState.status === "saving"}
+                                >
+                                  Accept as task
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  onClick={() => rejectTaskDraft(task.id)}
+                                  aria-label="Reject task draft"
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-border bg-background/50 p-3">
+                              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Refine
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => startEditingTaskDraft(task.id)}
+                                  aria-label="Edit draft"
+                                >
+                                  Edit draft
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-border bg-background/50 p-3">
+                              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Browser notes
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() =>
+                                    addNoteOnlyFeedback(
+                                      task.id,
+                                      task.title,
+                                      task.description,
+                                      "Added note: review later.",
+                                    )
+                                  }
+                                  aria-label="Add review-later note"
+                                >
+                                  Review later note
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() =>
+                                    addNoteOnlyFeedback(
+                                      task.id,
+                                      task.title,
+                                      task.description,
+                                      "Added note: consider changing area.",
+                                    )
+                                  }
+                                  aria-label="Add area-change note"
+                                >
+                                  Area change note
+                                </Button>
+                              </div>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                These notes stay on this device and do not move the item.
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            This adds a note for now; it does not move the item
-                            yet.
-                          </p>
                         </>
                       );
                     })()}
@@ -688,27 +714,32 @@ export default function TriagePage() {
                         </CardContent>
                       </Card>
                     ) : null}
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        onClick={() =>
-                          void handleAcceptProjectDraft(activeQueueItem.draft.id)
-                        }
-                        aria-label="Accept project draft"
-                        disabled={saveState.status === "saving"}
-                      >
-                        Accept as project
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={() =>
-                          rejectProjectDraft(activeQueueItem.draft.id)
-                        }
-                        aria-label="Reject project draft"
-                      >
-                        Reject
-                      </Button>
+                    <div className="rounded-lg border border-border bg-background/50 p-3">
+                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Decide
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            void handleAcceptProjectDraft(activeQueueItem.draft.id)
+                          }
+                          aria-label="Accept project draft"
+                          disabled={saveState.status === "saving"}
+                        >
+                          Accept as project
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          onClick={() =>
+                            rejectProjectDraft(activeQueueItem.draft.id)
+                          }
+                          aria-label="Reject project draft"
+                        >
+                          Reject
+                        </Button>
+                      </div>
                     </div>
                   </>
                 )}
