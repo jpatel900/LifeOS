@@ -10,11 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { buildAreaAccentStyle, resolveSelectedArea } from "@/lib/areaAccent";
 import { cn } from "@/lib/utils";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { DiagnosticsDisclosure } from "./DiagnosticsDisclosure";
+import { WorkflowPageHeader } from "./WorkflowPageHeader";
 
 const navLinks = [
   { href: "/capture", label: "Capture" },
@@ -63,6 +63,21 @@ function AppChrome({ children }: { children: ReactNode }) {
       setQuickNoteStatus("error");
     }
   }
+
+  const currentAreaSpotlight = (
+    <div
+      aria-label="Current area context"
+      className="flex flex-wrap items-center gap-2"
+    >
+      <span className="text-sm text-muted-foreground">Current area</span>
+      <Badge
+        variant="secondary"
+        className="rounded-full border border-[var(--area-accent-border)] bg-[var(--area-accent-soft)] text-sm text-foreground"
+      >
+        {currentArea?.name ?? "No area selected yet"}
+      </Badge>
+    </div>
+  );
 
   return (
     <div
@@ -219,28 +234,17 @@ function AppChrome({ children }: { children: ReactNode }) {
         tabIndex={-1}
         className="mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-5 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8"
       >
-        <div
-          aria-label="Current area context"
-          className="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] px-4 py-3 shadow-sm"
-        >
-          <span className="text-sm text-muted-foreground">Current area</span>
-          <Badge
-            variant="secondary"
-            className="rounded-full border border-[var(--area-accent-border)] bg-[var(--area-accent-soft)] text-sm text-foreground"
-          >
-            {currentArea?.name ?? "No area selected yet"}
-          </Badge>
-        </div>
-        <Separator />
-        <DiagnosticsDisclosure>
-          <p>Quick capture saves on this device and sends notes to Triage.</p>
-          <p>
-            Current area: <strong>{currentArea?.name ?? "Not set"}</strong>
-          </p>
-          <p>
-            Technical area id: <strong>{selectedAreaId ?? "none"}</strong>
-          </p>
-        </DiagnosticsDisclosure>
+        <WorkflowPageHeader spotlight={currentAreaSpotlight}>
+          <DiagnosticsDisclosure>
+            <p>Quick capture saves on this device and sends notes to Triage.</p>
+            <p>
+              Current area: <strong>{currentArea?.name ?? "Not set"}</strong>
+            </p>
+            <p>
+              Technical area id: <strong>{selectedAreaId ?? "none"}</strong>
+            </p>
+          </DiagnosticsDisclosure>
+        </WorkflowPageHeader>
         {children}
       </main>
     </div>

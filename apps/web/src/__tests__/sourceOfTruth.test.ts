@@ -196,6 +196,9 @@ describe("source-of-truth boundaries", () => {
     const appShell = normalizeWhitespace(
       readRepoFile("apps/web/src/app/components/AppShell.tsx"),
     );
+    const diagnosticsDisclosure = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/DiagnosticsDisclosure.tsx"),
+    );
     const capture = normalizeWhitespace(
       readRepoFile("apps/web/src/app/capture/page.tsx"),
     );
@@ -221,6 +224,7 @@ describe("source-of-truth boundaries", () => {
     expect(appShell).toContain(
       "Quick capture saves on this device and sends notes to Triage.",
     );
+    expect(diagnosticsDisclosure).toContain("System details");
     expect(appShell).toContain("Current area");
     expect(appShell).toContain("Technical area id:");
     expect(appShell).not.toContain("Session workflow area");
