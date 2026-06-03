@@ -427,6 +427,8 @@ export default function ExecutePage() {
 
   const usesPersistedExecution =
     executeState.status === "ready" && executeState.provider === "supabase";
+  const executeProvider =
+    executeState.status === "ready" ? executeState.provider : "mock";
   const persistedTasks = usesPersistedExecution ? executeState.tasks : [];
   const persistedBlocks = usesPersistedExecution ? executeState.blocks : [];
   const persistedSessions = usesPersistedExecution ? executeState.sessions : [];
@@ -1319,8 +1321,8 @@ export default function ExecutePage() {
             <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
               <p className="font-medium">Save mode</p>
               <p className="mt-1 text-muted-foreground">
-                {saveModeLabel(executeState.provider)} via{" "}
-                <strong>{executeState.provider}</strong>.
+                {saveModeLabel(executeProvider)} via{" "}
+                <strong>{executeProvider}</strong>.
               </p>
             </div>
           </CardContent>

@@ -28,6 +28,7 @@ coverage/
 htmlcov/
 playwright-report/
 test-results/
+.superpowers/
 
 # Supabase local
 supabase/.temp/
