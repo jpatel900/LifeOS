@@ -364,35 +364,33 @@ export default function HealthPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <WorkflowPageHeader>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Health</h1>
-          <p className="text-sm text-muted-foreground">
-            Answer the trust question first. Diagnostics stay lower on the page
-            and AI does not decide this screen.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={() => setCheckRunId((id) => id + 1)}
-            disabled={isRunDisabled}
-          >
-            Run system check
-          </Button>
-          <p
-            className="text-xs text-muted-foreground"
-            role="status"
-            aria-live="polite"
-          >
-            {isRunDisabled
-              ? "Run in progress. Please wait."
-              : feedback.status === "success" || feedback.status === "error"
-                ? feedback.message
-                : "Run a system check to refresh status."}
-          </p>
-        </div>
-      </WorkflowPageHeader>
+      <WorkflowPageHeader
+        eyebrow="Health"
+        title="Trust before diagnostics"
+        description="Answer the reliability question first. Diagnostics stay lower on the page and AI does not decide this screen."
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              onClick={() => setCheckRunId((id) => id + 1)}
+              disabled={isRunDisabled}
+            >
+              Run system check
+            </Button>
+            <p
+              className="text-xs text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              {isRunDisabled
+                ? "Run in progress. Please wait."
+                : feedback.status === "success" || feedback.status === "error"
+                  ? feedback.message
+                  : "Run a system check to refresh status."}
+            </p>
+          </div>
+        }
+      />
 
       {state.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">

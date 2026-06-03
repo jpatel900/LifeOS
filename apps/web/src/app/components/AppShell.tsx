@@ -83,7 +83,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     <div
       data-testid="app-shell-root"
       style={areaAccentStyle}
-      className="relative min-h-screen bg-background"
+      className="workflow-shell relative min-h-screen bg-background"
     >
       <a
         href="#main-content"
@@ -95,13 +95,13 @@ function AppChrome({ children }: { children: ReactNode }) {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[var(--area-accent-border)]"
       />
-      <header className="sticky top-0 z-40 border-b border-[var(--area-accent-border)] bg-background/90 shadow-[0_16px_40px_-32px_var(--area-accent)] backdrop-blur">
+      <header className="workflow-shell__header sticky top-0 z-40 border-b border-[var(--area-accent-border)] bg-background/88 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="workflow-shell__masthead flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-3">
               <Link
                 href="/"
-                className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight"
+                className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight transition-transform duration-200 hover:-translate-y-0.5"
               >
                 <span
                   aria-hidden
@@ -109,11 +109,14 @@ function AppChrome({ children }: { children: ReactNode }) {
                 />
                 LifeOS
               </Link>
-              <Badge variant="secondary" className="hidden sm:inline-flex">
+              <Badge
+                variant="secondary"
+                className="hidden rounded-full border border-white/8 bg-white/6 sm:inline-flex"
+              >
                 Personal workflow cockpit
               </Badge>
             </div>
-            <div className="flex w-full flex-col gap-1 lg:w-auto lg:items-end">
+            <div className="workflow-shell__quick-note flex w-full flex-col gap-2 lg:w-auto lg:min-w-[22rem] lg:items-end">
               <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
                 <ThemeToggle />
                 <Input
@@ -126,26 +129,26 @@ function AppChrome({ children }: { children: ReactNode }) {
                     }
                   }}
                   placeholder="Type a quick note"
-                  className="h-9 min-w-0 flex-1 sm:w-56 sm:flex-none"
+                  className="h-9 min-w-0 flex-1 rounded-full border-white/10 bg-white/4 sm:w-56 sm:flex-none"
                 />
                 <Button
                   type="button"
                   onClick={handleSaveQuickNote}
-                  className="w-full sm:w-auto"
+                  className="w-full rounded-full shadow-[0_18px_36px_-24px_var(--area-accent)] sm:w-auto"
                 >
                   Save quick note
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground lg:max-w-sm lg:text-right">
                 Saved on this device only. Review in Triage or Review.
               </p>
               {quickNoteStatus === "error" ? (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive lg:max-w-sm lg:text-right">
                   Quick note was not saved. Type a note first, or use Capture.
                 </p>
               ) : null}
               {quickNoteStatus === "saved" ? (
-                <Alert variant="success" className="max-w-sm">
+                <Alert variant="success" className="max-w-sm rounded-2xl">
                   <AlertTitle>Saved.</AlertTitle>
                   <AlertDescription>
                     Review it in{" "}
@@ -170,10 +173,7 @@ function AppChrome({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex flex-col gap-3 pb-1 lg:flex-row lg:items-center">
-            <nav
-              aria-label="Primary"
-              className="flex flex-wrap items-center gap-2 lg:flex-nowrap"
-            >
+            <nav aria-label="Primary" className="workflow-shell__nav flex flex-wrap items-center gap-2 lg:flex-nowrap">
               {navLinks.map((link) => {
                 const isActive =
                   pathname === link.href ||
@@ -184,10 +184,10 @@ function AppChrome({ children }: { children: ReactNode }) {
                     href={link.href}
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-colors sm:px-3 sm:text-sm",
+                      "inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out sm:px-3 sm:text-sm",
                       isActive
-                        ? "border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] font-medium text-foreground shadow-[inset_0_1px_0_0_var(--area-accent-soft)]"
-                        : "border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                        ? "border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] font-medium text-foreground shadow-[inset_0_1px_0_0_var(--area-accent-soft),0_14px_28px_-24px_var(--area-accent)]"
+                        : "border-transparent text-muted-foreground hover:-translate-y-0.5 hover:border-white/8 hover:bg-white/4 hover:text-accent-foreground",
                     )}
                   >
                     {isActive ? (
@@ -201,8 +201,10 @@ function AppChrome({ children }: { children: ReactNode }) {
                 );
               })}
             </nav>
-            <div className="flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
-              <span className="text-xs text-muted-foreground">Current area</span>
+            <div className="workflow-shell__status flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
+              <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                Current area
+              </span>
               <Select
                 aria-label="Current area"
                 value={selectedAreaId ?? ""}
@@ -210,7 +212,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                 onChange={(event) =>
                   setSelectedAreaId(event.target.value || null)
                 }
-                className="h-9 min-w-0 flex-1 rounded-full border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] shadow-sm sm:min-w-44 sm:flex-none"
+                className="h-9 min-w-0 flex-1 rounded-full border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] shadow-[0_16px_30px_-28px_var(--area-accent)] sm:min-w-44 sm:flex-none"
               >
                 {!hasAreas ? (
                   <option value="">No areas yet</option>
@@ -221,7 +223,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                   </option>
                 ))}
               </Select>
-              <Badge variant="outline" className="rounded-full">
+              <Badge variant="outline" className="rounded-full border-white/10 bg-white/4">
                 {now}
               </Badge>
             </div>
@@ -232,7 +234,7 @@ function AppChrome({ children }: { children: ReactNode }) {
       <main
         id="main-content"
         tabIndex={-1}
-        className="mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-5 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8"
+        className="workflow-shell__main mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-6 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8"
       >
         <WorkflowPageHeader spotlight={currentAreaSpotlight}>
           <DiagnosticsDisclosure>

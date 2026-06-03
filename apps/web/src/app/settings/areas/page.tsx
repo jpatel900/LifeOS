@@ -243,6 +243,9 @@ export default function AreasSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <WorkflowPageHeader
+        eyebrow="Quiet admin, clear ownership"
+        title="Areas"
+        description="Manage areas, accents, and account-connected behavior without adding noise to the daily workflow."
         spotlight={
           state.status === "ready" ? (
             <div className="grid gap-3 md:grid-cols-2">
@@ -262,15 +265,7 @@ export default function AreasSettingsPage() {
             </div>
           ) : null
         }
-      >
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Areas</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage areas, accents, and account-connected behavior in one
-            quieter admin surface.
-          </p>
-        </div>
-      </WorkflowPageHeader>
+      />
 
       <DiagnosticsDisclosure>
         {state.status === "ready" ? (

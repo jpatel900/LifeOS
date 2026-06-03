@@ -372,6 +372,9 @@ export default function ReviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <WorkflowPageHeader
+        eyebrow="Close the loop"
+        title="Review"
+        description="Decide what moves forward, what needs a new time, and what can stop without turning the end of the day into analysis work."
         spotlight={
           reviewState.status === "ready" ? (
             <Card
@@ -399,26 +402,18 @@ export default function ReviewPage() {
           ) : null
         }
       >
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Review</h1>
-          <p className="text-sm text-muted-foreground">
-            Close the loop without turning the end of the day into analysis
-            work. Decide what moves forward, what needs a new time, and what
-            can stop.
-          </p>
-          {selectedArea ? (
-            <Badge
-              variant="secondary"
-              className="area-accent-chip inline-flex items-center gap-2 rounded-full"
-            >
-              <span
-                aria-hidden="true"
-                className="area-accent-dot size-2 rounded-full"
-              />
-              Current area: {selectedArea.name}
-            </Badge>
-          ) : null}
-        </div>
+        {selectedArea ? (
+          <Badge
+            variant="secondary"
+            className="area-accent-chip inline-flex items-center gap-2 rounded-full"
+          >
+            <span
+              aria-hidden="true"
+              className="area-accent-dot size-2 rounded-full"
+            />
+            Current area: {selectedArea.name}
+          </Badge>
+        ) : null}
       </WorkflowPageHeader>
 
       {reviewState.status === "ready" ? (
