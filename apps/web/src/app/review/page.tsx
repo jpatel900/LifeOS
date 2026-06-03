@@ -23,6 +23,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
+import { WorkflowPageHeader } from "../components/WorkflowPageHeader";
 import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
 import {
   createReviewEntry,
@@ -370,138 +371,161 @@ export default function ReviewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section>
-        <h1>Review</h1>
-        <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Review closes the loop: carry something forward, reschedule it, or let
-          it stop for today.
-        </p>
-      </section>
-
-      {reviewState.status === "ready" ? (
-        <Card data-testid="review-next-decision-card" className="workflow-primary-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Next review decision</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              onClick={() => void handleCreateDailyReview()}
-              disabled={actionState.status === "saving"}
+      <WorkflowPageHeader
+        spotlight={
+          reviewState.status === "ready" ? (
+            <Card
+              data-testid="review-next-decision-card"
+              className="workflow-primary-card border-0 bg-transparent shadow-none"
             >
-              Create daily review
-            </Button>
-            <p className="text-sm text-muted-foreground">
-              {reviewEntries.length === 0
-                ? "Start one daily review to decide what to carry forward."
-                : "Log the day once you know what to carry forward, reschedule, or let stop."}
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Daily closure</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-2 px-0 pb-0">
+                <Button
+                  type="button"
+                  onClick={() => void handleCreateDailyReview()}
+                  disabled={actionState.status === "saving"}
+                >
+                  Create daily review
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  {reviewEntries.length === 0
+                    ? "Start one daily review to decide what should move forward."
+                    : "Log the day once you know what carries forward, what needs a new time, and what can stop."}
+                </p>
+              </CardContent>
+            </Card>
+          ) : null
+        }
+      >
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight">Review</h1>
+          <p className="text-sm text-muted-foreground">
+            Close the loop without turning the end of the day into analysis
+            work. Decide what moves forward, what needs a new time, and what
+            can stop.
+          </p>
+          {selectedArea ? (
+            <Badge
+              variant="secondary"
+              className="area-accent-chip inline-flex items-center gap-2 rounded-full"
+            >
+              <span
+                aria-hidden="true"
+                className="area-accent-dot size-2 rounded-full"
+              />
+              Current area: {selectedArea.name}
+            </Badge>
+          ) : null}
+        </div>
+      </WorkflowPageHeader>
 
       {reviewState.status === "ready" ? (
-        <Card className="workflow-quiet-card shadow-none">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Reflection notes</CardTitle>
-            <CardDescription>
-              Keep the answers short. They save with the daily review when that
-              save path is available.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="grid gap-1">
-              <label htmlFor="review-move-forward" className="text-sm font-medium">
-                What should move forward?
-              </label>
-              <Textarea
-                id="review-move-forward"
-                rows={2}
-                value={reflections.move_forward}
-                onChange={(event) =>
-                  setReflections((current) => ({
-                    ...current,
-                    move_forward: event.target.value,
-                  }))
-                }
-                placeholder="One task, project, or concern to keep alive."
-              />
-            </div>
-            <div className="grid gap-1">
-              <label
-                htmlFor="review-needs-rescheduling"
-                className="text-sm font-medium"
-              >
-                What needs rescheduling?
-              </label>
-              <Textarea
-                id="review-needs-rescheduling"
-                rows={2}
-                value={reflections.needs_rescheduling}
-                onChange={(event) =>
-                  setReflections((current) => ({
-                    ...current,
-                    needs_rescheduling: event.target.value,
-                  }))
-                }
-                placeholder="Name the block or work that needs a new time."
-              />
-            </div>
-            <div className="grid gap-1">
-              <label htmlFor="review-reality-taught" className="text-sm font-medium">
-                What did reality teach?
-              </label>
-              <Textarea
-                id="review-reality-taught"
-                rows={2}
-                value={reflections.reality_taught}
-                onChange={(event) =>
-                  setReflections((current) => ({
-                    ...current,
-                    reality_taught: event.target.value,
-                  }))
-                }
-                placeholder="Capture one useful lesson without turning this into a journal."
-              />
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <Card className="workflow-quiet-card shadow-none">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Reflection notes</CardTitle>
+              <CardDescription>
+                Keep the answers short. They save with the daily review when
+                that save path is available.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="grid gap-1">
+                <label htmlFor="review-move-forward" className="text-sm font-medium">
+                  What should move forward?
+                </label>
+                <Textarea
+                  id="review-move-forward"
+                  rows={2}
+                  value={reflections.move_forward}
+                  onChange={(event) =>
+                    setReflections((current) => ({
+                      ...current,
+                      move_forward: event.target.value,
+                    }))
+                  }
+                  placeholder="One task, project, or concern to keep alive."
+                />
+              </div>
+              <div className="grid gap-1">
+                <label
+                  htmlFor="review-needs-rescheduling"
+                  className="text-sm font-medium"
+                >
+                  What needs rescheduling?
+                </label>
+                <Textarea
+                  id="review-needs-rescheduling"
+                  rows={2}
+                  value={reflections.needs_rescheduling}
+                  onChange={(event) =>
+                    setReflections((current) => ({
+                      ...current,
+                      needs_rescheduling: event.target.value,
+                    }))
+                  }
+                  placeholder="Name the block or work that needs a new time."
+                />
+              </div>
+              <div className="grid gap-1">
+                <label htmlFor="review-reality-taught" className="text-sm font-medium">
+                  What did reality teach?
+                </label>
+                <Textarea
+                  id="review-reality-taught"
+                  rows={2}
+                  value={reflections.reality_taught}
+                  onChange={(event) =>
+                    setReflections((current) => ({
+                      ...current,
+                      reality_taught: event.target.value,
+                    }))
+                  }
+                  placeholder="Capture one useful lesson without turning this into a journal."
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-      {reviewState.status === "ready" ? (
-        <Card data-testid="review-close-loop-card" className="workflow-primary-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Close the loop</CardTitle>
-            <CardDescription>
-              Pick the next action on purpose instead of leaving the day half
-              open.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-              <p className="workflow-support-panel rounded-lg border p-3">
-                Continue or reschedule in Planning if the work still matters.
-              </p>
-              <p className="workflow-support-panel rounded-lg border p-3">
-                Capture a follow-up, carry it forward, or stop for today on purpose.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:flex sm:flex-wrap">
-              <Button asChild className="w-full sm:w-auto">
-                <Link href="/calendar">Plan the next block</Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href="/capture">Capture a follow-up</Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href="/calendar">Carry forward in Planning</Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href="/">Stop for today</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <Card
+            data-testid="review-close-loop-card"
+            className="workflow-secondary-card"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Close the loop</CardTitle>
+              <CardDescription>
+                Pick the next action on purpose instead of leaving the day half
+                open.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                <p className="workflow-support-panel rounded-lg border p-3">
+                  Continue or reschedule in Planning if the work still matters.
+                </p>
+                <p className="workflow-support-panel rounded-lg border p-3">
+                  Capture a follow-up, carry it forward, or stop for today on purpose.
+                </p>
+              </div>
+              <div className="grid gap-2 sm:flex sm:flex-wrap">
+                <Button asChild className="w-full sm:w-auto">
+                  <Link href="/calendar">Plan the next block</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href="/capture">Capture a follow-up</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href="/calendar">Carry forward in Planning</Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Link href="/">Stop for today</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       {reviewState.status === "loading" ? (

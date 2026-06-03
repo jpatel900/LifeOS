@@ -297,7 +297,7 @@ describe("workflow area accent routes", () => {
       "workflow-primary-card",
     );
     expect(screen.getByTestId("review-close-loop-card")).toHaveClass(
-      "workflow-primary-card",
+      "workflow-secondary-card",
     );
     expect(screen.getByTestId("review-today-at-a-glance-card")).toHaveClass(
       "workflow-secondary-card",
