@@ -157,11 +157,13 @@ describe("CapturePage", () => {
 
     renderCapturePage();
 
+    expect(await screen.findByText("Sorting help")).toBeDefined();
+    expect(screen.getByText("On-device sorting ready")).toBeDefined();
     expect(
-      await screen.findByText("Organization help: On-device sorting ready"),
+      screen.getByText("Save and organize will use on-device sorting."),
     ).toBeDefined();
     expect(screen.getByText("Save mode:")).toBeDefined();
-    expect(screen.getByText("Saved on this device only")).toBeDefined();
+    expect(screen.getAllByText("Saved on this device only")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Save thought" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Save and organize" })).toBeDefined();
     expect(screen.getByLabelText("Area for this saved thought")).toBeDefined();
@@ -171,7 +173,12 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(screen.getByText("Ctrl/Cmd + Enter")).toBeDefined();
     expect(
-      screen.getByText("Saves thought from the main capture field."),
+      screen.getByText("Save thought from the main field."),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        "Save raw capture when you want zero friction. Save and organize when you already want draft suggestions next.",
+      ),
     ).toBeDefined();
     expect(
       screen.getByRole("heading", {
@@ -192,8 +199,10 @@ describe("CapturePage", () => {
 
     renderCapturePage();
 
+    expect(await screen.findByText("Sorting help")).toBeDefined();
+    expect(screen.getByText("AI sorting on")).toBeDefined();
     expect(
-      await screen.findByText("Organization help: AI sorting on"),
+      screen.getByText("Save and organize will use AI sorting."),
     ).toBeDefined();
   });
 
@@ -204,8 +213,12 @@ describe("CapturePage", () => {
 
     renderCapturePage();
 
+    expect(await screen.findByText("Sorting help")).toBeDefined();
+    expect(screen.getByText("AI sorting unavailable")).toBeDefined();
     expect(
-      await screen.findByText("Organization help: AI sorting unavailable"),
+      screen.getByText(
+        "AI sorting is unavailable here. Save and organize will use on-device sorting.",
+      ),
     ).toBeDefined();
   });
 

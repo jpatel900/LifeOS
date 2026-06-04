@@ -41,7 +41,8 @@ describe("workflow route provider wiring", () => {
   it("renders the capture route through the real app shell provider", async () => {
     renderThroughAppShell(<CapturePage />);
 
-    expect(await screen.findByText(/Organization help:/)).toBeDefined();
+    expect(await screen.findByText("Raw first")).toBeDefined();
+    expect(screen.getByText("Sorting help")).toBeDefined();
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
     expect(
       screen.getByRole("button", { name: "Save quick note" }),

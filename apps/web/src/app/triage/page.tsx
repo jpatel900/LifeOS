@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
 import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
+import { WorkflowPageHeader } from "../components/WorkflowPageHeader";
 import { getAreaById } from "@/lib/mockData";
 import {
   createProject,
@@ -353,12 +354,61 @@ export default function TriagePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Triage</h1>
-        <p className="text-sm text-muted-foreground">
-          Stay with the current item, make one decision, then move to the next.
-        </p>
-      </section>
+      <WorkflowPageHeader
+        eyebrow="One decision at a time"
+        title="Triage"
+        description="Stay with the current item, make the next useful decision, then let the queue fall away behind you."
+        spotlight={
+          <div className="workflow-metric-grid">
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Current item</p>
+              <p className="workflow-metric-value text-[1.35rem]">
+                {hasCandidates ? "Ready now" : "Nothing waiting"}
+              </p>
+              <p className="workflow-metric-context">
+                {hasCandidates
+                  ? "Keep attention on one draft until it is accepted or rejected."
+                  : "Capture a new thought to create the next review decision."}
+              </p>
+            </div>
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Waiting after this</p>
+              <p className="workflow-metric-value text-[1.35rem]">
+                {upcomingQueueItems.length}
+              </p>
+              <p className="workflow-metric-context">
+                {upcomingQueueItems.length === 0
+                  ? "Nothing else will compete for attention once this item is done."
+                  : `The queue stays compressed until this decision is finished.`}
+              </p>
+            </div>
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Accepted items save</p>
+              <p className="workflow-metric-value text-[1.35rem]">
+                {loadState.status === "ready"
+                  ? saveModeLabel(loadState.provider)
+                  : "Checking"}
+              </p>
+              <p className="workflow-metric-context">
+                Drafts stay on this device until you accept them.
+              </p>
+            </div>
+          </div>
+        }
+      >
+        {activeQueueItemArea ? (
+          <Badge
+            variant="secondary"
+            className="area-accent-chip inline-flex items-center gap-2 rounded-full"
+          >
+            <span
+              aria-hidden
+              className="area-accent-dot h-2 w-2 rounded-full"
+            />
+            Current area: {activeQueueItemArea.name}
+          </Badge>
+        ) : null}
+      </WorkflowPageHeader>
 
       <Card
         data-testid="triage-next-action-card"
@@ -367,7 +417,17 @@ export default function TriagePage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Current focus</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2">
+        <CardContent className="workflow-action-tray flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="workflow-section-kicker">Next move</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {hasCandidates
+                ? upcomingQueueItems.length === 0
+                  ? "Review the current item now. Nothing else is waiting after this."
+                  : `Review the current item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after this one.`
+                : "Nothing is waiting for review. Capture a thought to create the next item."}
+            </p>
+          </div>
           {hasCandidates ? (
             <Button type="button" onClick={handleReviewNextItem}>
               Review current item
@@ -377,13 +437,6 @@ export default function TriagePage() {
               <Link href="/capture">Go to Capture</Link>
             </Button>
           )}
-          <p className="text-sm text-muted-foreground">
-            {hasCandidates
-              ? upcomingQueueItems.length === 0
-                ? "Review one item now. Nothing else is waiting after this."
-                : `Review one item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after this one.`
-              : "Nothing is waiting for review. Capture a thought to create the next item."}
-          </p>
         </CardContent>
       </Card>
 
@@ -425,13 +478,21 @@ export default function TriagePage() {
       ) : null}
 
       {saveState.status === "saved" ? (
-        <Alert variant="success">
+        <Alert variant="success" className="workflow-celebration-alert">
           <AlertTitle>Ready for Planning</AlertTitle>
           <AlertDescription>
             Accepted {saveState.label}. It was{" "}
             {savedViaLabel(saveState.provider)}. Plan time in Planning next, or
             capture another thought.
           </AlertDescription>
+          <div className="workflow-celebration-meta">
+            <span className="workflow-celebration-chip">
+              {savedViaLabel(saveState.provider)}
+            </span>
+            <span className="workflow-celebration-chip">
+              Planning is the next useful place
+            </span>
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline">
               <Link href="/calendar">Plan time for this</Link>
@@ -595,11 +656,12 @@ export default function TriagePage() {
                               </CardContent>
                             </Card>
                           ) : null}
-                          <div className="rounded-lg border border-border bg-background/50 p-3">
-                            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                              Decide
+                          <div className="workflow-action-tray">
+                            <p className="workflow-section-kicker">Decide</p>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              Keep the choice narrow: accept it, reject it, or tighten the draft before it becomes real work.
                             </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
+                            <div className="mt-3 flex flex-wrap gap-2">
                               <Button
                                 type="button"
                                 onClick={() => void handleAcceptTaskDraft(task.id)}
@@ -715,11 +777,12 @@ export default function TriagePage() {
                   </>
                 ) : (
                   <>
-                    <div className="rounded-lg border border-border bg-background/50 p-3">
-                      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                        Decide
+                    <div className="workflow-action-tray">
+                      <p className="workflow-section-kicker">Decide</p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Accept it as a project only if it is clearly bigger than one task. Otherwise reject and return to Capture for a cleaner pass.
                       </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <Button
                           type="button"
                           onClick={() =>

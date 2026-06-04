@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
+import { WorkflowPageHeader } from "../components/WorkflowPageHeader";
 import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
 import {
   acceptTimeBlockProposal,
@@ -905,13 +906,46 @@ export default function CalendarPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section>
-        <h1>Planning</h1>
-        <p className="mt-1 text-[0.95rem] text-muted-foreground">
-          Group planning by intent: pick work that needs time, shape the local
-          suggestion, then approve any real Google write explicitly.
-        </p>
-      </section>
+      <WorkflowPageHeader
+        eyebrow="Local-first planning"
+        title="Planning"
+        description="Pick the work that needs time, shape one local suggestion, then approve any real Google write explicitly. The route should feel like guided scheduling, not proposal administration."
+        spotlight={
+          <div className="workflow-metric-grid">
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Needs time</p>
+              <p className="workflow-metric-value">{scheduleableTasks.length}</p>
+              <p className="workflow-metric-context">
+                Active tasks waiting for a first slot.
+              </p>
+            </div>
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Ready to review</p>
+              <p className="workflow-metric-value">{proposals.length}</p>
+              <p className="workflow-metric-context">
+                Suggested times still waiting for your decision.
+              </p>
+            </div>
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Already planned</p>
+              <p className="workflow-metric-value">{blocks.length}</p>
+              <p className="workflow-metric-context">
+                Blocks already ready for Execute.
+              </p>
+            </div>
+          </div>
+        }
+      >
+        {selectedArea ? (
+          <Badge
+            variant="secondary"
+            className="area-accent-chip inline-flex items-center gap-2 rounded-full"
+          >
+            <span aria-hidden="true" className="area-accent-dot size-2 rounded-full" />
+            Current area: {selectedArea.name}
+          </Badge>
+        ) : null}
+      </WorkflowPageHeader>
 
       <Card
         data-testid="planning-flow-card"
@@ -920,29 +954,56 @@ export default function CalendarPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Planning flow</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-2">
-          {nextTaskForProposal ? (
-            <Button
-              type="button"
-              onClick={() => void handleCreateProposal(nextTaskForProposal)}
-              disabled={actionState.status === "saving"}
-            >
-              Suggest a time for next task
-            </Button>
-          ) : proposals.length > 0 ? (
-            <Button type="button" onClick={handleReviewNextProposal}>
-              Review next suggested time block
-            </Button>
-          ) : (
-            <Button asChild>
-              <Link href="/triage">Get a task ready in Triage</Link>
-            </Button>
-          )}
-          <p className="text-sm text-muted-foreground">
-            Start local. Quick suggestions begin with the next available hour.
-            You can adjust time before planning it, and nothing goes to Google
-            Calendar until you approve it.
-          </p>
+        <CardContent className="grid gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(18rem,1.05fr)] lg:items-start">
+          <div className="workflow-action-tray">
+            <p className="workflow-section-kicker">Next planning move</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Start local. Quick suggestions begin with the next available hour.
+              You can adjust time before planning it, and nothing goes to Google
+              Calendar until you approve it.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {nextTaskForProposal ? (
+                <Button
+                  type="button"
+                  onClick={() => void handleCreateProposal(nextTaskForProposal)}
+                  disabled={actionState.status === "saving"}
+                >
+                  Suggest a time for next task
+                </Button>
+              ) : proposals.length > 0 ? (
+                <Button type="button" onClick={handleReviewNextProposal}>
+                  Review next suggested time block
+                </Button>
+              ) : (
+                <Button asChild>
+                  <Link href="/triage">Get a task ready in Triage</Link>
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="workflow-metric-grid">
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Save mode</p>
+              <p className="workflow-metric-value text-[1.35rem]">
+                {planningState.status === "ready"
+                  ? saveModeLabel(planningState.provider)
+                  : "Checking"}
+              </p>
+              <p className="workflow-metric-context">
+                Local planning stays useful even before account-backed rows load.
+              </p>
+            </div>
+            <div className="workflow-metric-card">
+              <p className="workflow-metric-label">Google writes</p>
+              <p className="workflow-metric-value text-[1.35rem]">
+                Explicit only
+              </p>
+              <p className="workflow-metric-context">
+                Nothing reaches Google Calendar until you approve it.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -993,10 +1054,18 @@ export default function CalendarPage() {
           return (
             <Alert
               role="status"
-              className="border-border bg-muted text-foreground"
+              className="workflow-celebration-alert border-border bg-muted text-foreground"
             >
               <AlertTitle className="text-primary">{feedback.title}</AlertTitle>
               <AlertDescription>{feedback.description}</AlertDescription>
+              <div className="workflow-celebration-meta">
+                <span className="workflow-celebration-chip">
+                  {savedViaLabel(actionState.provider)}
+                </span>
+                <span className="workflow-celebration-chip">
+                  {actionState.label}
+                </span>
+              </div>
               {feedback.primaryLink ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button asChild size="sm" variant="outline">
@@ -1313,7 +1382,7 @@ export default function CalendarPage() {
                         Google Calendar: {googleWriteState}
                       </div>
                       <Separator />
-                      <div className="flex flex-col gap-2">
+                      <div className="workflow-action-tray flex flex-col gap-2">
                         <p className="text-xs font-medium text-foreground">
                           Local planning actions
                         </p>
