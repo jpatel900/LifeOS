@@ -913,7 +913,10 @@ export default function CalendarPage() {
         </p>
       </section>
 
-      <Card>
+      <Card
+        data-testid="planning-flow-card"
+        className="workflow-secondary-card"
+      >
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Planning flow</CardTitle>
         </CardHeader>
@@ -1030,7 +1033,10 @@ export default function CalendarPage() {
         />
       ) : (
         <div className="flex flex-col gap-4">
-          <Card>
+          <Card
+            data-testid="planning-needs-time-card"
+            className="workflow-primary-card"
+          >
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Needs a suggested time</CardTitle>
               <p className="text-sm text-muted-foreground">
@@ -1144,7 +1150,10 @@ export default function CalendarPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            data-testid="planning-ready-review-card"
+            className="workflow-secondary-card"
+          >
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Ready to review</CardTitle>
               <p className="text-sm text-muted-foreground">
@@ -1563,7 +1572,10 @@ export default function CalendarPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card
+            data-testid="planning-planned-blocks-card"
+            className="workflow-secondary-card"
+          >
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Already planned</CardTitle>
               <p className="text-sm text-muted-foreground">

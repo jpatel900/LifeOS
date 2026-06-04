@@ -427,6 +427,13 @@ export default function ReviewPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
+              <div className="workflow-action-tray">
+                <p className="workflow-section-kicker">Short on purpose</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  This should feel like clearing mental residue, not filling out
+                  a report.
+                </p>
+              </div>
               <div className="grid gap-1">
                 <label htmlFor="review-move-forward" className="text-sm font-medium">
                   What should move forward?
@@ -497,26 +504,30 @@ export default function ReviewPage() {
             </CardHeader>
             <CardContent className="grid gap-3">
               <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
-                <p className="workflow-support-panel rounded-lg border p-3">
+                <p className="workflow-action-tray">
                   Continue or reschedule in Planning if the work still matters.
                 </p>
-                <p className="workflow-support-panel rounded-lg border p-3">
+                <p className="workflow-action-tray">
                   Capture a follow-up, carry it forward, or stop for today on purpose.
                 </p>
               </div>
-              <div className="grid gap-2 sm:flex sm:flex-wrap">
-                <Button asChild className="w-full sm:w-auto">
-                  <Link href="/calendar">Plan the next block</Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/capture">Capture a follow-up</Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/calendar">Carry forward in Planning</Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/">Stop for today</Link>
-                </Button>
+              <div className="workflow-action-tray grid gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild className="w-full sm:w-auto">
+                    <Link href="/calendar">Plan the next block</Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                    <Link href="/capture">Capture a follow-up</Link>
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                    <Link href="/calendar">Carry forward in Planning</Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                    <Link href="/">Stop for today</Link>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -675,22 +686,55 @@ export default function ReviewPage() {
                 }
               />
             ) : (
-              <ul className="m-0 list-disc pl-5 text-sm text-foreground">
-                <li>Captured and waiting: {capturedWaiting.length}</li>
-                <li>Planned blocks: {plannedBlocks.length}</li>
-                <li>Completed sessions: {completed.length}</li>
-                <li>Missed sessions: {missed.length}</li>
-                <li>Distracted sessions: {distracted.length}</li>
-                <li>Stuck sessions: {stuck.length}</li>
-                <li>Still open: {openTasks.length}</li>
-              </ul>
+              <div className="workflow-metric-grid">
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Captured waiting</p>
+                  <p className="workflow-metric-value">{capturedWaiting.length}</p>
+                  <p className="workflow-metric-context">
+                    Items still waiting for a decision.
+                  </p>
+                </div>
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Planned</p>
+                  <p className="workflow-metric-value">{plannedBlocks.length}</p>
+                  <p className="workflow-metric-context">
+                    Blocks already placed on the day.
+                  </p>
+                </div>
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Completed</p>
+                  <p className="workflow-metric-value">{completed.length}</p>
+                  <p className="workflow-metric-context">
+                    Sessions that closed cleanly.
+                  </p>
+                </div>
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Needs recovery</p>
+                  <p className="workflow-metric-value">
+                    {missed.length + distracted.length + stuck.length}
+                  </p>
+                  <p className="workflow-metric-context">
+                    Missed, distracted, or stuck sessions.
+                  </p>
+                </div>
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Still open</p>
+                  <p className="workflow-metric-value">{openTasks.length}</p>
+                  <p className="workflow-metric-context">
+                    Work likely to carry forward.
+                  </p>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="workflow-secondary-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Area backlog this week</CardTitle>
+            <CardDescription>
+              Which areas are accumulating unfinished weight versus actually moving.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {tasks.length === 0 ? (
@@ -715,28 +759,49 @@ export default function ReviewPage() {
                         style={buildAreaAccentStyle(
                           area?.color ?? summary.area.color,
                         )}
-                        className="area-accent-card rounded-lg border p-3 text-sm"
+                        className="area-accent-card rounded-lg border p-4 text-sm"
                       >
-                        <div className="font-medium">
-                          {area?.name ?? summary.area.name}
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium">
+                              {area?.name ?? summary.area.name}
+                            </div>
+                            <p className="mt-1 text-muted-foreground">
+                              {summary.open > summary.done
+                                ? "More is still open than finished."
+                                : "This area is moving, not just accumulating."}
+                            </p>
+                          </div>
+                          <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
+                            {summary.sessions} session
+                            {summary.sessions === 1 ? "" : "s"}
+                          </span>
                         </div>
-                        <div className="text-muted-foreground">
-                          Open tasks: {summary.open}
+                        <p className="mt-3 text-muted-foreground">
+                          Sessions recorded: {summary.sessions}
+                        </p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <div className="workflow-support-panel rounded-lg border p-3">
+                            <p className="workflow-section-kicker">Open</p>
+                            <p className="mt-2 text-lg font-semibold text-foreground">
+                              {summary.open}
+                            </p>
+                          </div>
+                          <div className="workflow-support-panel rounded-lg border p-3">
+                            <p className="workflow-section-kicker">Completed</p>
+                            <p className="mt-2 text-lg font-semibold text-foreground">
+                              {summary.done}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-muted-foreground">
-                          Completed tasks: {summary.done}
-                        </div>
-                      <div className="text-muted-foreground">
-                        Sessions recorded: {summary.sessions}
+                        {summary.latestReview ? (
+                          <div className="mt-3 text-muted-foreground">
+                            Last review: {formatReviewDate(summary.latestReview.period_end)}
+                          </div>
+                        ) : null}
                       </div>
-                      {summary.latestReview ? (
-                        <div className="text-muted-foreground">
-                          Last review: {formatReviewDate(summary.latestReview.period_end)}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             )}
           </CardContent>

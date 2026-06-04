@@ -369,7 +369,7 @@ export default function HealthPage() {
         title="Trust before diagnostics"
         description="Answer the reliability question first. Diagnostics stay lower on the page and AI does not decide this screen."
         actions={
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="workflow-action-tray flex flex-wrap items-center gap-3">
             <Button
               type="button"
               onClick={() => setCheckRunId((id) => id + 1)}
@@ -434,20 +434,15 @@ export default function HealthPage() {
                 Checked at {state.result.checkedAt}
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-3">
+            <CardContent className="workflow-metric-grid">
               {trustRows.map((row) => (
-                <div
-                  key={row.title}
-                  className="workflow-support-panel rounded-lg border p-3 text-sm"
-                >
+                <div key={row.title} className="workflow-metric-card">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-foreground">
-                      {row.title}
-                    </span>
+                    <span className="workflow-metric-label">{row.title}</span>
                     <Badge variant={row.variant}>{row.status}</Badge>
                   </div>
-                  <p className="mt-2 text-muted-foreground">{row.summary}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="workflow-metric-context">{row.summary}</p>
+                  <p className="mt-3 text-xs text-muted-foreground">
                     Next step: {row.nextStep}
                   </p>
                 </div>
@@ -476,9 +471,12 @@ export default function HealthPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               {attentionChecks.length > 0 ? (
-                <ul className="list-disc pl-4">
+                <ul className="grid gap-3">
                   {attentionChecks.map((check) => (
-                    <li key={`${check.id}-attention`}>
+                    <li
+                      key={`${check.id}-attention`}
+                      className="workflow-action-tray"
+                    >
                       <span className="font-medium text-foreground">
                         {displaySubsystem(check.subsystem)}:
                       </span>{" "}
@@ -497,7 +495,7 @@ export default function HealthPage() {
               {state.result.checks.map((check) => {
                 const display = humanStatus(check.summary, check.status);
                 return (
-                  <Card key={check.id}>
+                  <Card key={check.id} className="workflow-quiet-card shadow-none">
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-lg capitalize">

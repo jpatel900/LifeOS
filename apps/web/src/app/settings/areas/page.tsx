@@ -248,18 +248,22 @@ export default function AreasSettingsPage() {
         description="Manage areas, accents, and account-connected behavior without adding noise to the daily workflow."
         spotlight={
           state.status === "ready" ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="workflow-support-panel rounded-lg border p-3 text-sm">
-                <p className="font-medium text-foreground">Save mode</p>
-                <p className="mt-1 text-muted-foreground">
+            <div className="workflow-metric-grid">
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Save mode</p>
+                <p className="workflow-metric-value text-[1.35rem]">
                   {saveModeLabel(state.provider)}
                 </p>
+                <p className="workflow-metric-context">
+                  This page stays truthful about whether changes are saved to
+                  your account.
+                </p>
               </div>
-              <div className="workflow-support-panel rounded-lg border p-3 text-sm">
-                <p className="font-medium text-foreground">What this page controls</p>
-                <p className="mt-1 text-muted-foreground">
-                  Areas, accents, and account-connected behavior without adding
-                  noise to the daily workflow.
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Active areas</p>
+                <p className="workflow-metric-value">{state.areas.length}</p>
+                <p className="workflow-metric-context">
+                  Clear scopes help Capture, Planning, and Review stay legible.
                 </p>
               </div>
             </div>
@@ -286,6 +290,13 @@ export default function AreasSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleCreateArea} className="space-y-4">
+            <div className="workflow-action-tray">
+              <p className="workflow-section-kicker">Opinionated default</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Keep area names short and concrete. If you hesitate, the area is
+                probably too broad.
+              </p>
+            </div>
             <div className="grid gap-2 sm:max-w-md">
               <label htmlFor="area_name" className="text-sm font-medium">
                 Area name
@@ -423,15 +434,24 @@ export default function AreasSettingsPage() {
                 >
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
-                      <CardTitle className="text-xl">{area.name}</CardTitle>
-                      {isSelected ? (
-                        <Badge
-                          variant="secondary"
-                          className="area-accent-chip rounded-full"
-                        >
-                          Current area
-                        </Badge>
-                      ) : null}
+                      <div className="space-y-1">
+                        <p className="workflow-section-kicker">Area</p>
+                        <CardTitle className="text-xl">{area.name}</CardTitle>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isSelected ? (
+                          <Badge
+                            variant="secondary"
+                            className="area-accent-chip rounded-full"
+                          >
+                            Current area
+                          </Badge>
+                        ) : null}
+                        <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
+                          {openTasks + plannedBlocks} active signal
+                          {openTasks + plannedBlocks === 1 ? "" : "s"}
+                        </span>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4 text-sm">
@@ -537,75 +557,79 @@ export default function AreasSettingsPage() {
                       ) : null}
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={
-                          isSelected
-                            ? "border-[var(--area-accent)] bg-foreground text-background ring-1 ring-[var(--area-accent-soft)] hover:bg-foreground"
-                            : undefined
-                        }
-                        onClick={() => setSelectedAreaId(workflowAreaId)}
-                      >
-                        {isSelected ? "Using this area" : "Use this area"}
-                      </Button>
-                      <Button asChild>
-                        <Link
-                          href="/capture"
+                    <div className="workflow-action-tray grid gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={
+                            isSelected
+                              ? "border-[var(--area-accent)] bg-foreground text-background ring-1 ring-[var(--area-accent-soft)] hover:bg-foreground"
+                              : undefined
+                          }
                           onClick={() => setSelectedAreaId(workflowAreaId)}
                         >
-                          Capture here
-                        </Link>
-                      </Button>
-                      <Button asChild variant="outline">
-                        <Link
-                          href="/calendar"
-                          onClick={() => setSelectedAreaId(workflowAreaId)}
-                        >
-                          Plan area
-                        </Link>
-                      </Button>
-                      <Button asChild variant="outline">
-                        <Link
-                          href="/review"
-                          onClick={() => setSelectedAreaId(workflowAreaId)}
-                        >
-                          Review area
-                        </Link>
-                      </Button>
-                      {removeState.status === "confirming" &&
-                      removeState.areaId === area.id ? (
-                        <>
+                          {isSelected ? "Using this area" : "Use this area"}
+                        </Button>
+                        <Button asChild>
+                          <Link
+                            href="/capture"
+                            onClick={() => setSelectedAreaId(workflowAreaId)}
+                          >
+                            Capture here
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline">
+                          <Link
+                            href="/calendar"
+                            onClick={() => setSelectedAreaId(workflowAreaId)}
+                          >
+                            Plan area
+                          </Link>
+                        </Button>
+                        <Button asChild variant="outline">
+                          <Link
+                            href="/review"
+                            onClick={() => setSelectedAreaId(workflowAreaId)}
+                          >
+                            Review area
+                          </Link>
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {removeState.status === "confirming" &&
+                        removeState.areaId === area.id ? (
+                          <>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={() => void handleConfirmRemoveArea(area)}
+                            >
+                              Confirm remove
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => setRemoveState({ status: "idle" })}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
                           <Button
                             type="button"
                             variant="destructive"
-                            onClick={() => void handleConfirmRemoveArea(area)}
+                            onClick={() =>
+                              setRemoveState({
+                                status: "confirming",
+                                areaId: area.id,
+                              })
+                            }
                           >
-                            Confirm remove
+                            Remove area
                           </Button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => setRemoveState({ status: "idle" })}
-                          >
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          onClick={() =>
-                            setRemoveState({
-                              status: "confirming",
-                              areaId: area.id,
-                            })
-                          }
-                        >
-                          Remove area
-                        </Button>
-                      )}
+                        )}
+                      </div>
                     </div>
 
                     {removeState.status === "saving" &&
@@ -675,7 +699,7 @@ export default function AreasSettingsPage() {
 
       <GoogleCalendarConnectionPanel />
 
-      <Card className="border-dashed border-destructive/60 bg-destructive/5">
+      <Card className="workflow-secondary-card border-dashed border-destructive/60 bg-destructive/5">
         <CardHeader>
           <CardTitle className="text-lg">Local reset</CardTitle>
         </CardHeader>

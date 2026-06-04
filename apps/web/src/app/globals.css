@@ -536,6 +536,73 @@ summary {
   background: color-mix(in oklch, var(--muted) 68%, transparent);
 }
 
+.workflow-metric-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+}
+
+.workflow-metric-card {
+  border: 1px solid color-mix(in oklch, var(--border) 82%, var(--area-accent-border));
+  border-radius: 1rem;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--card) 94%, var(--muted)) 0%,
+      color-mix(in oklch, var(--muted) 42%, var(--card)) 100%
+    );
+  padding: 0.95rem 1rem;
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent),
+    0 16px 32px -30px color-mix(in oklch, var(--foreground) 20%, transparent);
+}
+
+.workflow-metric-label {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.workflow-metric-value {
+  margin-top: 0.45rem;
+  font-family:
+    "Fraunces",
+    "IBM Plex Sans",
+    "Inter",
+    system-ui,
+    sans-serif;
+  font-size: clamp(1.55rem, 2vw + 0.65rem, 2.2rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.workflow-metric-context {
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+
+.workflow-action-tray {
+  border: 1px solid color-mix(in oklch, var(--border) 80%, var(--area-accent-border));
+  border-radius: 1rem;
+  background: color-mix(in oklch, var(--card) 88%, var(--muted));
+  padding: 0.9rem 1rem;
+  box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent);
+}
+
+.workflow-section-kicker {
+  margin: 0;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
 .focus-state-card {
   border-color: var(--area-accent-border);
   background:

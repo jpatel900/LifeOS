@@ -768,7 +768,10 @@ export default function TriagePage() {
           ) : null}
 
           {upcomingQueueItems.length > 0 ? (
-            <Card className="workflow-secondary-card">
+            <Card
+              data-testid="triage-waiting-queue-card"
+              className="workflow-secondary-card"
+            >
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Waiting after this</CardTitle>
               </CardHeader>
