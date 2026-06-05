@@ -255,7 +255,7 @@ function AppChrome({ children }: { children: ReactNode }) {
         className="workflow-shell__main mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-6 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8"
       >
         <WorkflowPageHeader spotlight={currentAreaSpotlight}>
-          <DiagnosticsDisclosure>
+          <DiagnosticsDisclosure title="Quick capture details">
             <p>Quick capture saves on this device and sends notes to Triage.</p>
           </DiagnosticsDisclosure>
         </WorkflowPageHeader>

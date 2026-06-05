@@ -271,7 +271,7 @@ export default function AreasSettingsPage() {
         }
       />
 
-      <DiagnosticsDisclosure>
+      <DiagnosticsDisclosure title="Areas details">
         {state.status === "ready" ? (
           <>
             <p>

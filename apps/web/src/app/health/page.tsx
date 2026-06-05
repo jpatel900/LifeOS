@@ -490,7 +490,7 @@ export default function HealthPage() {
             </CardContent>
           </Card>
 
-          <DiagnosticsDisclosure>
+          <DiagnosticsDisclosure title="Health details">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {state.result.checks.map((check) => {
                 const display = humanStatus(check.summary, check.status);

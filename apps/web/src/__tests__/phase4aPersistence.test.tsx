@@ -1320,7 +1320,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(screen.getByText("No current task is in execution.")).toBeDefined();
     expect(
       screen.getByText(
-        "Plan one block in Planning or capture and triage a task first.",
+        "Plan one block in Planning first. Execute is for turning one planned task into one focused session with a clear end outcome.",
       ),
     ).toBeDefined();
   });

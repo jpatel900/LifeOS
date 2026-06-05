@@ -1014,7 +1014,7 @@ export default function CalendarPage() {
         />
       ) : null}
 
-      <DiagnosticsDisclosure>
+      <DiagnosticsDisclosure title="Planning details">
         {planningState.status === "ready" ? (
           <>
             <p>

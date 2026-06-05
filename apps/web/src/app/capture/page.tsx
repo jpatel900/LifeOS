@@ -543,7 +543,7 @@ export default function CapturePage() {
         }
       />
 
-      <DiagnosticsDisclosure>
+      <DiagnosticsDisclosure title="Capture details">
         <p>
           Save thought and Save and organize use your current save mode.
           Organize on this device and recent captures stay on this device.
@@ -713,23 +713,28 @@ export default function CapturePage() {
             </div>
           </form>
 
-          <div className="workflow-action-tray grid gap-3 border-dashed sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Local-only draft pass</p>
-              <p className="text-xs text-muted-foreground">
-                The header area picker controls this device-only draft flow and
-                the recent captures on this page.
-              </p>
+          <details className="system-details-disclosure workflow-inline-disclosure">
+            <summary className="text-sm font-medium text-foreground">
+              On-device draft pass
+            </summary>
+            <div className="mt-3 grid gap-3 border-dashed sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Keep local drafts secondary</p>
+                <p className="text-xs text-muted-foreground">
+                  The header area picker controls this device-only draft flow
+                  and the recent captures on this page.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleStructure}
+                className="w-full sm:w-auto"
+              >
+                Organize on this device
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleStructure}
-              className="w-full sm:w-auto"
-            >
-              Organize on this device
-            </Button>
-          </div>
+          </details>
 
           {latestDraft && latestAssessment && latestProposalDraft ? (
             <Card className="workflow-secondary-card border-cyan-500/40 bg-cyan-500/10">
@@ -942,55 +947,57 @@ export default function CapturePage() {
         ) : null}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold">
+      <details className="system-details-disclosure">
+        <summary className="text-sm font-medium text-foreground">
           Recent captures organized on this device
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          This local draft flow is separate from saved capture history.
-        </p>
-        {visibleCaptures.length === 0 ? (
-          <EmptyState
-            title="No device-only organized captures for this area yet."
-            description="Use Organize on this device for local drafts, or review saved captures above after Save thought."
-          />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {visibleCaptures.map((capture) => {
-              const area =
-                resolveAreaById(state.areas, capture.area_id) ??
-                getAreaById(capture.area_id);
-              const lifecycle = captureLifecycleDisplay(capture.status);
-              const captureAreaStyle = buildAreaAccentStyle(area?.color);
-              return (
-                <Card
-                  key={capture.id}
-                  data-testid="capture-recent-card"
-                  data-accent-strength="subtle"
-                  style={captureAreaStyle}
-                  className="area-accent-card workflow-secondary-card"
-                >
-                  <CardContent className="flex items-start justify-between gap-3 p-4">
-                    <div className="space-y-1">
-                      <p className="font-medium">{capture.raw_text}</p>
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
-                        {area ? (
-                          <Badge variant="secondary">Area: {area.name}</Badge>
-                        ) : null}
+        </summary>
+        <div className="mt-4 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This local draft flow is separate from saved capture history.
+          </p>
+          {visibleCaptures.length === 0 ? (
+            <EmptyState
+              title="No device-only organized captures for this area yet."
+              description="Use Organize on this device for local drafts, or review saved captures above after Save thought."
+            />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {visibleCaptures.map((capture) => {
+                const area =
+                  resolveAreaById(state.areas, capture.area_id) ??
+                  getAreaById(capture.area_id);
+                const lifecycle = captureLifecycleDisplay(capture.status);
+                const captureAreaStyle = buildAreaAccentStyle(area?.color);
+                return (
+                  <Card
+                    key={capture.id}
+                    data-testid="capture-recent-card"
+                    data-accent-strength="subtle"
+                    style={captureAreaStyle}
+                    className="area-accent-card workflow-secondary-card"
+                  >
+                    <CardContent className="flex items-start justify-between gap-3 p-4">
+                      <div className="space-y-1">
+                        <p className="font-medium">{capture.raw_text}</p>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                          {area ? (
+                            <Badge variant="secondary">Area: {area.name}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {lifecycle.detail}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {lifecycle.detail}
-                      </p>
-                    </div>
-                    <Badge variant="secondary">Device-only draft</Badge>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                      <Badge variant="secondary">Device-only draft</Badge>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   );
 }

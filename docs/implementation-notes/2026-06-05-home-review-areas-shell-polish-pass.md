@@ -25,6 +25,9 @@ No schema, migration, auth, parser, calendar-write approval, or persistence cont
 - Triage no longer renders a duplicate `Current focus` CTA when the queue is empty.
 - Planning empty state no longer repeats the same CTA that already exists in the primary `Planning flow` surface.
 - Health no longer renders a second green success block when the healthy-state summary is already visible.
+- Capture now demotes the device-only draft pass and device-only organized-capture history behind quieter disclosures so the writing surface and saved-history truth stay primary.
+- Execute now removes the redundant `What Execute is for` card from the empty state, folds the purpose into the fallback CTA copy, renames detail surfaces more intentionally, and keeps recovery/session detail secondary instead of parallel to the mission.
+- Route-level diagnostics now use route-specific disclosure labels (`Today details`, `Capture details`, `Planning details`, etc.) instead of repeating the same generic label everywhere.
 
 ## Why this pass
 

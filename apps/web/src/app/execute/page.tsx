@@ -861,7 +861,7 @@ export default function ExecutePage() {
             <AlertDescription>{executeState.message}</AlertDescription>
           </Alert>
         ) : null}
-        <DiagnosticsDisclosure>
+        <DiagnosticsDisclosure title="Execute details">
           {executeState.status === "ready" ? (
             <>
               <p>
@@ -922,20 +922,9 @@ export default function ExecutePage() {
             <AlertDescription>{actionState.message}</AlertDescription>
           </Alert>
         ) : null}
-        <Card className="workflow-primary-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">What Execute is for</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground">
-              Execute is where one planned task becomes one focused session with
-              a clear end outcome.
-            </p>
-          </CardContent>
-        </Card>
         <EmptyState
           title="No current task is in execution."
-          description="Plan one block in Planning or capture and triage a task first."
+          description="Plan one block in Planning first. Execute is for turning one planned task into one focused session with a clear end outcome."
           action={
             <Button asChild>
               <Link href="/calendar">Go to Planning</Link>
@@ -956,7 +945,7 @@ export default function ExecutePage() {
         </p>
       </section>
 
-      <DiagnosticsDisclosure>
+      <DiagnosticsDisclosure title="Execute details">
         {executeState.status === "ready" ? (
           <>
             <p>
@@ -1345,7 +1334,7 @@ export default function ExecutePage() {
 
             <details className="system-details-disclosure">
               <summary className="text-sm font-medium text-foreground">
-                System details
+                Execution truth
               </summary>
               <div className="mt-4 grid gap-3">
                 <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
@@ -1584,7 +1573,7 @@ export default function ExecutePage() {
       {activeSession ? (
         <details className="system-details-disclosure max-w-[820px]">
           <summary className="text-sm font-medium text-foreground">
-            Recent session details
+            Session record
           </summary>
           <div
             aria-label="Most recent execution summary"

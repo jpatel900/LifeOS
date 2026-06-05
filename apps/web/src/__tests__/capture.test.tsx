@@ -168,9 +168,7 @@ describe("CapturePage", () => {
     expect(screen.getByRole("button", { name: "Save and organize" })).toBeDefined();
     expect(screen.getByLabelText("Area for this saved thought")).toBeDefined();
     expect(screen.getByText("Current area: Main Job")).toBeDefined();
-    expect(
-      screen.getByRole("button", { name: "Organize on this device" }),
-    ).toBeDefined();
+    expect(screen.getByText("On-device draft pass")).toBeDefined();
     expect(screen.getByText("Ctrl/Cmd + Enter")).toBeDefined();
     expect(
       screen.getByText("Save thought from the main field."),
@@ -186,9 +184,7 @@ describe("CapturePage", () => {
       }),
     ).toBeDefined();
     expect(
-      screen.getByRole("heading", {
-        name: "Recent captures organized on this device",
-      }),
+      screen.getByText("Recent captures organized on this device"),
     ).toBeDefined();
   });
 

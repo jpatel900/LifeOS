@@ -542,7 +542,7 @@ export default function ReviewPage() {
         />
       ) : null}
 
-      <DiagnosticsDisclosure>
+      <DiagnosticsDisclosure title="Review details">
         {reviewState.status === "ready" ? (
           <>
             <p>

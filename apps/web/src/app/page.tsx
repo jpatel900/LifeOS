@@ -806,7 +806,7 @@ export default function HomePage() {
         </details>
       ) : null}
 
-      <DiagnosticsDisclosure>
+      <DiagnosticsDisclosure title="Today details">
         <p>{statusLabel(homeData.status)}</p>
         {homeData.status !== "loading" && homeData.issues.length > 0 ? (
           <ul className="list-disc pl-5">

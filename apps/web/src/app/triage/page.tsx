@@ -434,7 +434,7 @@ export default function TriagePage() {
         </Card>
       ) : null}
 
-      <DiagnosticsDisclosure>
+      <DiagnosticsDisclosure title="Triage details">
         {loadState.status === "ready" ? (
           <>
             <p>
