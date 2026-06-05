@@ -141,7 +141,7 @@ test("header quick note save feedback shows clear error then success", async ({
   ).toBeVisible();
 });
 
-test("home cockpit quick capture shows truthful error/success and route links", async ({
+test("home cockpit stays read-only and points the user to Capture", async ({
   page,
 }) => {
   await page.goto("/");
@@ -151,19 +151,13 @@ test("home cockpit quick capture shows truthful error/success and route links", 
   await expect(page.getByRole("heading", { name: "Next" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Daily loop" })).toBeVisible();
   await expect(
-    page.getByText("No sample data is created until you save something."),
+    page.getByText("Home stays read-only."),
   ).toBeVisible();
-
-  await page.getByRole("button", { name: "Save quick capture" }).click();
-  await expect(page.getByText("Type a note first.")).toBeVisible();
-
-  await page
-    .getByLabel("Home quick capture text")
-    .fill("Home cockpit capture test");
-  await page.getByRole("button", { name: "Save quick capture" }).click();
-  await expect(page.getByText("Saved.")).toBeVisible();
-  await page.getByRole("link", { name: "Review in Triage" }).click();
-  await expect(page).toHaveURL(/\/triage$/);
+  await expect(
+    page.getByRole("button", { name: "Save quick capture" }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "Capture a thought" }).click();
+  await expect(page).toHaveURL(/\/capture$/);
 });
 
 test("review page can create a basic review log entry and keeps next actions visible", async ({
@@ -174,16 +168,14 @@ test("review page can create a basic review log entry and keeps next actions vis
     page.getByRole("heading", { level: 1, name: "Review" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Past reviews and notes", exact: true }),
+    page.getByText("Review details and history"),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Plan the next block" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Create daily review" }).first(),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create daily review" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Create daily review" }).first().click();
+  await page.getByRole("button", { name: "Create daily review" }).click();
 
   await expect(page.getByText("Daily review saved")).toBeVisible();
   await expect(
@@ -290,6 +282,7 @@ test("areas reset cancel preserves state and confirm shows success", async ({
     page.getByRole("heading", { level: 1, name: "Areas" }),
   ).toBeVisible();
 
+  await page.getByText("Local reset", { exact: true }).click();
   await page.getByRole("button", { name: "Reset this browser" }).click();
   await expect(
     page.getByText("Reset local data on this browser?"),
@@ -360,11 +353,6 @@ test("home keyboard tab path reaches cockpit controls", async ({ page }) => {
   await page.goto("/");
   await page.locator("body").click({ position: { x: 10, y: 10 } });
 
-  await tabUntilFocused(page, page.getByLabel("Home quick capture text"));
-  await tabUntilFocused(
-    page,
-    page.getByRole("button", { name: "Save quick capture" }),
-  );
   await tabUntilFocused(
     page,
     page.getByRole("link", { name: "Capture a thought" }),
@@ -423,5 +411,5 @@ test("execute, review, and areas keyboard paths reach key controls", async ({
 
   await page.goto("/settings/areas");
   await page.locator("body").click({ position: { x: 10, y: 10 } });
-  await tabUntilFocused(page, page.getByRole("button", { name: "Teal" }).first());
+  await tabUntilFocused(page, page.getByRole("button", { name: "Create area" }));
 });

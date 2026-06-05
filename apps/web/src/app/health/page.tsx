@@ -534,15 +534,6 @@ export default function HealthPage() {
         </>
       ) : null}
 
-      {state.status === "ready" &&
-      state.result.checks.every((check) => check.status === "healthy") ? (
-        <Alert variant="success">
-          <AlertTitle>No blocking issues right now</AlertTitle>
-          <AlertDescription>
-            Core workflow checks look healthy for this snapshot.
-          </AlertDescription>
-        </Alert>
-      ) : null}
     </div>
   );
 }

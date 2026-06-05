@@ -187,13 +187,15 @@ describe("Execute Focus polish", () => {
 
     const stateCard = await screen.findByTestId("execute-focus-state-card");
     const missionCard = screen.getByTestId("execute-current-mission-card");
+    const sideThoughtCard = screen.getByTestId("execute-side-thought-card");
     expect(stateCard).toHaveAttribute("data-focus-state", "not_started");
     expect(within(missionCard).getByText("Ready to focus")).toBeDefined();
     expect(within(stateCard).getByText("Current area: Main Job")).toBeDefined();
+    expect(within(sideThoughtCard).getByText("Protect focus")).toBeDefined();
     expect(
-      screen.getByText(
-        "Capture it without losing the current mission. Keep it secondary until this focus block is done.",
-      ),
+      within(sideThoughtCard).getByRole("link", {
+        name: "Capture a side thought",
+      }),
     ).toBeDefined();
     expect(screen.queryByText("Recovery / next-step actions")).toBeNull();
   });

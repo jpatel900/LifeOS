@@ -199,6 +199,7 @@ describe("source-of-truth boundaries", () => {
     const diagnosticsDisclosure = normalizeWhitespace(
       readRepoFile("apps/web/src/app/components/DiagnosticsDisclosure.tsx"),
     );
+    const home = normalizeWhitespace(readRepoFile("apps/web/src/app/page.tsx"));
     const capture = normalizeWhitespace(
       readRepoFile("apps/web/src/app/capture/page.tsx"),
     );
@@ -226,8 +227,8 @@ describe("source-of-truth boundaries", () => {
     );
     expect(diagnosticsDisclosure).toContain("System details");
     expect(appShell).toContain("Current area");
-    expect(appShell).toContain("Technical area id:");
     expect(appShell).not.toContain("Session workflow area");
+    expect(home).toContain("Home stays read-only.");
     expect(capture).toContain("Save mode:");
     expect(capture).toContain("Technical save mode id:");
     expect(capture).toContain("on this device");

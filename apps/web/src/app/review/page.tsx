@@ -418,78 +418,82 @@ export default function ReviewPage() {
 
       {reviewState.status === "ready" ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <Card className="workflow-quiet-card shadow-none">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Reflection notes</CardTitle>
-              <CardDescription>
-                Keep the answers short. They save with the daily review when
-                that save path is available.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              <div className="workflow-action-tray">
-                <p className="workflow-section-kicker">Short on purpose</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  This should feel like clearing mental residue, not filling out
-                  a report.
-                </p>
-              </div>
-              <div className="grid gap-1">
-                <label htmlFor="review-move-forward" className="text-sm font-medium">
-                  What should move forward?
-                </label>
-                <Textarea
-                  id="review-move-forward"
-                  rows={2}
-                  value={reflections.move_forward}
-                  onChange={(event) =>
-                    setReflections((current) => ({
-                      ...current,
-                      move_forward: event.target.value,
-                    }))
-                  }
-                  placeholder="One task, project, or concern to keep alive."
-                />
-              </div>
-              <div className="grid gap-1">
-                <label
-                  htmlFor="review-needs-rescheduling"
-                  className="text-sm font-medium"
-                >
-                  What needs rescheduling?
-                </label>
-                <Textarea
-                  id="review-needs-rescheduling"
-                  rows={2}
-                  value={reflections.needs_rescheduling}
-                  onChange={(event) =>
-                    setReflections((current) => ({
-                      ...current,
-                      needs_rescheduling: event.target.value,
-                    }))
-                  }
-                  placeholder="Name the block or work that needs a new time."
-                />
-              </div>
-              <div className="grid gap-1">
-                <label htmlFor="review-reality-taught" className="text-sm font-medium">
-                  What did reality teach?
-                </label>
-                <Textarea
-                  id="review-reality-taught"
-                  rows={2}
-                  value={reflections.reality_taught}
-                  onChange={(event) =>
-                    setReflections((current) => ({
-                      ...current,
-                      reality_taught: event.target.value,
-                    }))
-                  }
-                  placeholder="Capture one useful lesson without turning this into a journal."
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <details className="system-details-disclosure">
+            <summary className="text-sm font-medium text-foreground">
+              Reflection notes
+            </summary>
+            <Card className="mt-4 workflow-quiet-card shadow-none">
+              <CardHeader className="pb-3">
+                <CardDescription>
+                  Keep the answers short. They save with the daily review when
+                  that save path is available.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="workflow-action-tray">
+                  <p className="workflow-section-kicker">Short on purpose</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    This should feel like clearing mental residue, not filling
+                    out a report.
+                  </p>
+                </div>
+                <div className="grid gap-1">
+                  <label htmlFor="review-move-forward" className="text-sm font-medium">
+                    What should move forward?
+                  </label>
+                  <Textarea
+                    id="review-move-forward"
+                    rows={2}
+                    value={reflections.move_forward}
+                    onChange={(event) =>
+                      setReflections((current) => ({
+                        ...current,
+                        move_forward: event.target.value,
+                      }))
+                    }
+                    placeholder="One task, project, or concern to keep alive."
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <label
+                    htmlFor="review-needs-rescheduling"
+                    className="text-sm font-medium"
+                  >
+                    What needs rescheduling?
+                  </label>
+                  <Textarea
+                    id="review-needs-rescheduling"
+                    rows={2}
+                    value={reflections.needs_rescheduling}
+                    onChange={(event) =>
+                      setReflections((current) => ({
+                        ...current,
+                        needs_rescheduling: event.target.value,
+                      }))
+                    }
+                    placeholder="Name the block or work that needs a new time."
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <label htmlFor="review-reality-taught" className="text-sm font-medium">
+                    What did reality teach?
+                  </label>
+                  <Textarea
+                    id="review-reality-taught"
+                    rows={2}
+                    value={reflections.reality_taught}
+                    onChange={(event) =>
+                      setReflections((current) => ({
+                        ...current,
+                        reality_taught: event.target.value,
+                      }))
+                    }
+                    placeholder="Capture one useful lesson without turning this into a journal."
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </details>
 
           <Card
             data-testid="review-close-loop-card"
@@ -521,9 +525,6 @@ export default function ReviewPage() {
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button asChild variant="outline" className="w-full sm:w-auto">
-                    <Link href="/calendar">Carry forward in Planning</Link>
-                  </Button>
                   <Button asChild variant="outline" className="w-full sm:w-auto">
                     <Link href="/">Stop for today</Link>
                   </Button>
@@ -669,8 +670,12 @@ export default function ReviewPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-        <Card className="workflow-secondary-card">
+      <details className="system-details-disclosure">
+        <summary className="text-sm font-medium text-foreground">
+          Review details and history
+        </summary>
+        <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+          <Card className="workflow-secondary-card">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Counts</CardTitle>
           </CardHeader>
@@ -727,87 +732,87 @@ export default function ReviewPage() {
               </div>
             )}
           </CardContent>
-        </Card>
+          </Card>
 
-        <Card className="workflow-secondary-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Area backlog this week</CardTitle>
-            <CardDescription>
-              Which areas are accumulating unfinished weight versus actually moving.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {tasks.length === 0 ? (
-              <EmptyState
-                title="No weekly review yet."
-                description="Area-level patterns will appear here once you accept tasks and run sessions."
-              />
-            ) : (
-              <div className="flex flex-col gap-2">
-                {areaSummaries
-                  .filter(
-                    (summary) =>
-                      summary.open + summary.done + summary.sessions > 0,
-                  )
-                  .map((summary) => {
-                    const area = getAreaById(summary.area.id);
-                    return (
-                      <div
-                        key={summary.area.id}
-                        data-testid="review-area-summary-card"
-                        data-accent-strength="subtle"
-                        style={buildAreaAccentStyle(
-                          area?.color ?? summary.area.color,
-                        )}
-                        className="area-accent-card rounded-lg border p-4 text-sm"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="font-medium">
-                              {area?.name ?? summary.area.name}
+          <Card className="workflow-secondary-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Area backlog this week</CardTitle>
+              <CardDescription>
+                Which areas are accumulating unfinished weight versus actually moving.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {tasks.length === 0 ? (
+                <EmptyState
+                  title="No weekly review yet."
+                  description="Area-level patterns will appear here once you accept tasks and run sessions."
+                />
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {areaSummaries
+                    .filter(
+                      (summary) =>
+                        summary.open + summary.done + summary.sessions > 0,
+                    )
+                    .map((summary) => {
+                      const area = getAreaById(summary.area.id);
+                      return (
+                        <div
+                          key={summary.area.id}
+                          data-testid="review-area-summary-card"
+                          data-accent-strength="subtle"
+                          style={buildAreaAccentStyle(
+                            area?.color ?? summary.area.color,
+                          )}
+                          className="area-accent-card rounded-lg border p-4 text-sm"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="font-medium">
+                                {area?.name ?? summary.area.name}
+                              </div>
+                              <p className="mt-1 text-muted-foreground">
+                                {summary.open > summary.done
+                                  ? "More is still open than finished."
+                                  : "This area is moving, not just accumulating."}
+                              </p>
                             </div>
-                            <p className="mt-1 text-muted-foreground">
-                              {summary.open > summary.done
-                                ? "More is still open than finished."
-                                : "This area is moving, not just accumulating."}
-                            </p>
+                            <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
+                              {summary.sessions} session
+                              {summary.sessions === 1 ? "" : "s"}
+                            </span>
                           </div>
-                          <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
-                            {summary.sessions} session
-                            {summary.sessions === 1 ? "" : "s"}
-                          </span>
+                          <p className="mt-3 text-muted-foreground">
+                            Sessions recorded: {summary.sessions}
+                          </p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <div className="workflow-support-panel rounded-lg border p-3">
+                              <p className="workflow-section-kicker">Open</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">
+                                {summary.open}
+                              </p>
+                            </div>
+                            <div className="workflow-support-panel rounded-lg border p-3">
+                              <p className="workflow-section-kicker">Completed</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">
+                                {summary.done}
+                              </p>
+                            </div>
+                          </div>
+                          {summary.latestReview ? (
+                            <div className="mt-3 text-muted-foreground">
+                              Last review: {formatReviewDate(summary.latestReview.period_end)}
+                            </div>
+                          ) : null}
                         </div>
-                        <p className="mt-3 text-muted-foreground">
-                          Sessions recorded: {summary.sessions}
-                        </p>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <div className="workflow-support-panel rounded-lg border p-3">
-                            <p className="workflow-section-kicker">Open</p>
-                            <p className="mt-2 text-lg font-semibold text-foreground">
-                              {summary.open}
-                            </p>
-                          </div>
-                          <div className="workflow-support-panel rounded-lg border p-3">
-                            <p className="workflow-section-kicker">Completed</p>
-                            <p className="mt-2 text-lg font-semibold text-foreground">
-                              {summary.done}
-                            </p>
-                          </div>
-                        </div>
-                        {summary.latestReview ? (
-                          <div className="mt-3 text-muted-foreground">
-                            Last review: {formatReviewDate(summary.latestReview.period_end)}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-      <Card className="workflow-quiet-card shadow-none">
+                      );
+                    })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+        <Card className="mt-4 workflow-quiet-card shadow-none">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Past reviews and notes</CardTitle>
           <CardDescription>
@@ -819,15 +824,6 @@ export default function ReviewPage() {
             <EmptyState
               title="No saved review details yet."
               description="Create the first daily review and saved details will appear here."
-              action={
-                <Button
-                  type="button"
-                  onClick={() => void handleCreateDailyReview()}
-                  disabled={actionState.status === "saving"}
-                >
-                  Create daily review
-                </Button>
-              }
             />
           ) : null}
 
@@ -930,7 +926,8 @@ export default function ReviewPage() {
             </details>
           ) : null}
         </CardContent>
-      </Card>
+        </Card>
+      </details>
     </div>
   );
 }

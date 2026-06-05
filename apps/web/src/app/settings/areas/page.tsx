@@ -488,75 +488,6 @@ export default function AreasSettingsPage() {
                         : "No saved review for this area yet."}
                     </p>
 
-                    <div
-                      data-testid="areas-color-panel"
-                      className="area-accent-panel rounded-lg border p-3"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className="font-medium text-foreground">
-                            Accent color
-                          </p>
-                          <p className="text-muted-foreground">
-                            Accent helps you recognize this area faster. The
-                            area name always stays visible.
-                          </p>
-                        </div>
-                        <Badge
-                          variant="secondary"
-                          className="area-accent-chip rounded-full"
-                        >
-                          {area.color ? "Custom accent" : "Default accent"}
-                        </Badge>
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {AREA_COLOR_PRESETS.map((preset) => (
-                          <Button
-                            key={preset.value}
-                            type="button"
-                            size="sm"
-                            variant={
-                              area.color === preset.value
-                                ? "secondary"
-                                : "outline"
-                            }
-                            className="gap-2"
-                            onClick={() =>
-                              void handleUpdateAreaColor(area, preset.value)
-                            }
-                            disabled={isUpdatingColor}
-                          >
-                            <span
-                              aria-hidden="true"
-                              className="size-3 rounded-full border border-black/10"
-                              style={{ backgroundColor: preset.value }}
-                            />
-                            {preset.label}
-                          </Button>
-                        ))}
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={area.color === null ? "secondary" : "ghost"}
-                          onClick={() => void handleUpdateAreaColor(area, null)}
-                          disabled={isUpdatingColor}
-                        >
-                          Default
-                        </Button>
-                      </div>
-
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        Preview updates immediately on this card. Reset uses the
-                        default accent token instead of inventing a fake theme.
-                      </p>
-                      {isUpdatingColor ? (
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Saving accent...
-                        </p>
-                      ) : null}
-                    </div>
-
                     <div className="workflow-action-tray grid gap-3">
                       <div className="flex flex-wrap gap-2">
                         <Button
@@ -579,56 +510,6 @@ export default function AreasSettingsPage() {
                             Capture here
                           </Link>
                         </Button>
-                        <Button asChild variant="outline">
-                          <Link
-                            href="/calendar"
-                            onClick={() => setSelectedAreaId(workflowAreaId)}
-                          >
-                            Plan area
-                          </Link>
-                        </Button>
-                        <Button asChild variant="outline">
-                          <Link
-                            href="/review"
-                            onClick={() => setSelectedAreaId(workflowAreaId)}
-                          >
-                            Review area
-                          </Link>
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {removeState.status === "confirming" &&
-                        removeState.areaId === area.id ? (
-                          <>
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              onClick={() => void handleConfirmRemoveArea(area)}
-                            >
-                              Confirm remove
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={() => setRemoveState({ status: "idle" })}
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={() =>
-                              setRemoveState({
-                                status: "confirming",
-                                areaId: area.id,
-                              })
-                            }
-                          >
-                            Remove area
-                          </Button>
-                        )}
                       </div>
                     </div>
 
@@ -639,18 +520,160 @@ export default function AreasSettingsPage() {
                       </p>
                     ) : null}
 
-                    <details className="rounded-lg border border-border bg-background/50 p-3 text-xs text-muted-foreground">
+                    <details className="rounded-lg border border-border bg-background/50 p-3 text-sm text-muted-foreground">
                       <summary className="cursor-pointer select-none font-medium text-foreground">
-                        Area diagnostics
+                        Area actions and settings
                       </summary>
-                      <div className="mt-2 space-y-1">
-                        <p>
-                          Technical area slug: <strong>{area.slug}</strong>
-                        </p>
-                        <p>
-                          Workflow area id:{" "}
-                          <strong>{workflowAreaId ?? "not mapped"}</strong>
-                        </p>
+                      <div className="mt-3 grid gap-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button asChild variant="outline" size="sm">
+                            <Link
+                              href="/calendar"
+                              onClick={() => setSelectedAreaId(workflowAreaId)}
+                            >
+                              Plan area
+                            </Link>
+                          </Button>
+                          <Button asChild variant="outline" size="sm">
+                            <Link
+                              href="/review"
+                              onClick={() => setSelectedAreaId(workflowAreaId)}
+                            >
+                              Review area
+                            </Link>
+                          </Button>
+                        </div>
+
+                        <div
+                          data-testid="areas-color-panel"
+                          className="area-accent-panel rounded-lg border p-3"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <p className="font-medium text-foreground">
+                                Accent color
+                              </p>
+                              <p className="text-muted-foreground">
+                                Accent helps you recognize this area faster. The
+                                area name always stays visible.
+                              </p>
+                            </div>
+                            <Badge
+                              variant="secondary"
+                              className="area-accent-chip rounded-full"
+                            >
+                              {area.color ? "Custom accent" : "Default accent"}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {AREA_COLOR_PRESETS.map((preset) => (
+                              <Button
+                                key={preset.value}
+                                type="button"
+                                size="sm"
+                                variant={
+                                  area.color === preset.value
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                                className="gap-2"
+                                onClick={() =>
+                                  void handleUpdateAreaColor(area, preset.value)
+                                }
+                                disabled={isUpdatingColor}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className="size-3 rounded-full border border-black/10"
+                                  style={{ backgroundColor: preset.value }}
+                                />
+                                {preset.label}
+                              </Button>
+                            ))}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                area.color === null ? "secondary" : "ghost"
+                              }
+                              onClick={() =>
+                                void handleUpdateAreaColor(area, null)
+                              }
+                              disabled={isUpdatingColor}
+                            >
+                              Default
+                            </Button>
+                          </div>
+
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            Preview updates immediately on this card. Reset uses
+                            the default accent token instead of inventing a fake
+                            theme.
+                          </p>
+                          {isUpdatingColor ? (
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Saving accent...
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          {removeState.status === "confirming" &&
+                          removeState.areaId === area.id ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() =>
+                                  void handleConfirmRemoveArea(area)
+                                }
+                              >
+                                Confirm remove
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() =>
+                                  setRemoveState({ status: "idle" })
+                                }
+                              >
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              onClick={() =>
+                                setRemoveState({
+                                  status: "confirming",
+                                  areaId: area.id,
+                                })
+                              }
+                            >
+                              Remove area
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="rounded-lg border border-border bg-background/60 p-3 text-xs">
+                          <p className="font-medium text-foreground">
+                            Area diagnostics
+                          </p>
+                          <div className="mt-2 space-y-1">
+                            <p>
+                              Technical area slug: <strong>{area.slug}</strong>
+                            </p>
+                            <p>
+                              Workflow area id:{" "}
+                              <strong>{workflowAreaId ?? "not mapped"}</strong>
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </details>
                   </CardContent>
@@ -697,65 +720,74 @@ export default function AreasSettingsPage() {
         </Alert>
       ) : null}
 
-      <GoogleCalendarConnectionPanel />
+      <details className="system-details-disclosure">
+        <summary className="text-sm font-medium text-foreground">
+          Calendar connection details
+        </summary>
+        <div className="mt-4">
+          <GoogleCalendarConnectionPanel />
+        </div>
+      </details>
 
-      <Card className="workflow-secondary-card border-dashed border-destructive/60 bg-destructive/5">
-        <CardHeader>
-          <CardTitle className="text-lg">Local reset</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            This only clears on-device data on this device. It does not delete
-            cloud data.
-          </p>
-          {resetState === "success" ? (
-            <Alert variant="success" role="status" aria-live="polite">
-              <AlertTitle>Local browser data reset.</AlertTitle>
-            </Alert>
-          ) : null}
-          {resetState === "confirming" ? (
-            <Alert variant="destructive" role="alert">
-              <AlertTitle>Reset local data on this browser?</AlertTitle>
-              <AlertDescription>
-                This clears on-device data for this device only,
-                including captures, drafts, ambiguity checks, and planned time
-                blocks. It does not delete cloud data.
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
+      <details className="system-details-disclosure">
+        <summary className="text-sm font-medium text-foreground">
+          Local reset
+        </summary>
+        <Card className="mt-4 workflow-secondary-card border-dashed border-destructive/60 bg-destructive/5">
+          <CardContent className="space-y-3 pt-6 text-sm text-muted-foreground">
+            <p>
+              This only clears on-device data on this device. It does not
+              delete cloud data.
+            </p>
+            {resetState === "success" ? (
+              <Alert variant="success" role="status" aria-live="polite">
+                <AlertTitle>Local browser data reset.</AlertTitle>
+              </Alert>
+            ) : null}
             {resetState === "confirming" ? (
-              <>
+              <Alert variant="destructive" role="alert">
+                <AlertTitle>Reset local data on this browser?</AlertTitle>
+                <AlertDescription>
+                  This clears on-device data for this device only, including
+                  captures, drafts, ambiguity checks, and planned time blocks.
+                  It does not delete cloud data.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {resetState === "confirming" ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      resetWorkflow();
+                      setResetState("success");
+                    }}
+                  >
+                    Yes, reset this browser
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setResetState("idle")}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
                 <Button
                   type="button"
                   variant="destructive"
-                  onClick={() => {
-                    resetWorkflow();
-                    setResetState("success");
-                  }}
+                  onClick={() => setResetState("confirming")}
                 >
-                  Yes, reset this browser
+                  Reset this browser
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setResetState("idle")}
-                >
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => setResetState("confirming")}
-              >
-                Reset this browser
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </details>
     </div>
   );
 }

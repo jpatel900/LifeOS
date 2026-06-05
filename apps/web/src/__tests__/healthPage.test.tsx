@@ -80,7 +80,9 @@ describe("HealthPage", () => {
       screen.getByRole("button", { name: "Run system check" }),
     ).toBeDefined();
     expect(await screen.findByText("No active warnings")).toBeDefined();
-    expect(await screen.findByText("No blocking issues right now")).toBeDefined();
+    expect(
+      screen.queryByText("No blocking issues right now"),
+    ).not.toBeInTheDocument();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
     expect(screen.getByText("Google Calendar")).toBeDefined();
   });

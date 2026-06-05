@@ -1094,11 +1094,6 @@ export default function CalendarPage() {
         <EmptyState
           title="Nothing needs time yet."
           description="Suggested and planned time blocks appear here after you suggest time for a task. Checking Google Calendar is optional and does not create events."
-          action={
-            <Button asChild>
-              <Link href="/triage">Get a task ready in Triage</Link>
-            </Button>
-          }
         />
       ) : (
         <div className="flex flex-col gap-4">

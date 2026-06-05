@@ -38,6 +38,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     "idle" | "saved" | "error"
   >("idle");
   const areaAccentStyle = buildAreaAccentStyle(currentArea?.color);
+  const showQuickNote = pathname !== "/";
 
   useEffect(() => {
     const formatNow = () => new Date().toLocaleTimeString();
@@ -119,35 +120,41 @@ function AppChrome({ children }: { children: ReactNode }) {
             <div className="workflow-shell__quick-note flex w-full flex-col gap-2 lg:w-auto lg:min-w-[22rem] lg:items-end">
               <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
                 <ThemeToggle />
-                <Input
-                  aria-label="Quick note text"
-                  value={quickNoteText}
-                  onChange={(event) => {
-                    setQuickNoteText(event.target.value);
-                    if (quickNoteStatus !== "idle") {
-                      setQuickNoteStatus("idle");
-                    }
-                  }}
-                  placeholder="Type a quick note"
-                  className="h-9 min-w-0 flex-1 rounded-full border-white/10 bg-white/4 sm:w-56 sm:flex-none"
-                />
-                <Button
-                  type="button"
-                  onClick={handleSaveQuickNote}
-                  className="w-full rounded-full shadow-[0_18px_36px_-24px_var(--area-accent)] sm:w-auto"
-                >
-                  Save quick note
-                </Button>
+                {showQuickNote ? (
+                  <>
+                    <Input
+                      aria-label="Quick note text"
+                      value={quickNoteText}
+                      onChange={(event) => {
+                        setQuickNoteText(event.target.value);
+                        if (quickNoteStatus !== "idle") {
+                          setQuickNoteStatus("idle");
+                        }
+                      }}
+                      placeholder="Type a quick note"
+                      className="h-9 min-w-0 flex-1 rounded-full border-white/10 bg-white/4 sm:w-56 sm:flex-none"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleSaveQuickNote}
+                      className="w-full rounded-full shadow-[0_18px_36px_-24px_var(--area-accent)] sm:w-auto"
+                    >
+                      Save quick note
+                    </Button>
+                  </>
+                ) : null}
               </div>
-              <p className="text-xs text-muted-foreground lg:max-w-sm lg:text-right">
-                Saved on this device only. Review in Triage or Review.
-              </p>
-              {quickNoteStatus === "error" ? (
+              {showQuickNote ? (
+                <p className="text-xs text-muted-foreground lg:max-w-sm lg:text-right">
+                  Saved on this device only. Review in Triage or Review.
+                </p>
+              ) : null}
+              {showQuickNote && quickNoteStatus === "error" ? (
                 <p className="text-xs text-destructive lg:max-w-sm lg:text-right">
                   Quick note was not saved. Type a note first, or use Capture.
                 </p>
               ) : null}
-              {quickNoteStatus === "saved" ? (
+              {showQuickNote && quickNoteStatus === "saved" ? (
                 <Alert
                   variant="success"
                   className="workflow-celebration-alert max-w-sm rounded-2xl"
@@ -250,12 +257,6 @@ function AppChrome({ children }: { children: ReactNode }) {
         <WorkflowPageHeader spotlight={currentAreaSpotlight}>
           <DiagnosticsDisclosure>
             <p>Quick capture saves on this device and sends notes to Triage.</p>
-            <p>
-              Current area: <strong>{currentArea?.name ?? "Not set"}</strong>
-            </p>
-            <p>
-              Technical area id: <strong>{selectedAreaId ?? "none"}</strong>
-            </p>
           </DiagnosticsDisclosure>
         </WorkflowPageHeader>
         {children}

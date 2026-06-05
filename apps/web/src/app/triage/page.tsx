@@ -410,35 +410,29 @@ export default function TriagePage() {
         ) : null}
       </WorkflowPageHeader>
 
-      <Card
-        data-testid="triage-next-action-card"
-        className="workflow-secondary-card"
-      >
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Current focus</CardTitle>
-        </CardHeader>
-        <CardContent className="workflow-action-tray flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="workflow-section-kicker">Next move</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {hasCandidates
-                ? upcomingQueueItems.length === 0
+      {hasCandidates ? (
+        <Card
+          data-testid="triage-next-action-card"
+          className="workflow-secondary-card"
+        >
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Current focus</CardTitle>
+          </CardHeader>
+          <CardContent className="workflow-action-tray flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="workflow-section-kicker">Next move</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {upcomingQueueItems.length === 0
                   ? "Review the current item now. Nothing else is waiting after this."
-                  : `Review the current item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after this one.`
-                : "Nothing is waiting for review. Capture a thought to create the next item."}
-            </p>
-          </div>
-          {hasCandidates ? (
+                  : `Review the current item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after this one.`}
+              </p>
+            </div>
             <Button type="button" onClick={handleReviewNextItem}>
               Review current item
             </Button>
-          ) : (
-            <Button asChild>
-              <Link href="/capture">Go to Capture</Link>
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <DiagnosticsDisclosure>
         {loadState.status === "ready" ? (

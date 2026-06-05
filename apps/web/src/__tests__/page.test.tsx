@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "../app/page";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
@@ -56,10 +56,6 @@ describe("HomePage Today cockpit", () => {
       screen.getByRole("heading", { level: 1, name: "Today" }),
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Next" })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Now" })).toBeDefined();
-    expect(
-      screen.getByRole("heading", { name: "Quick Capture" }),
-    ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Daily loop" })).toBeDefined();
     expect(screen.getByTestId("today-next-card")).toHaveClass(
       "workflow-primary-card",
@@ -74,7 +70,7 @@ describe("HomePage Today cockpit", () => {
     });
   });
 
-  it("shows one dominant next action and an empty-state capture fallback", async () => {
+  it("shows one dominant next action and a read-only empty-state fallback", async () => {
     renderHome();
     await waitFor(() => expect(listPlanningItems).toHaveBeenCalled());
 
@@ -83,17 +79,14 @@ describe("HomePage Today cockpit", () => {
       screen.getByRole("link", { name: "Capture a thought" }),
     ).toHaveAttribute("href", "/capture");
     expect(
-      screen.getByRole("button", { name: "Save quick capture" }),
+      screen.getByText(/Home stays read-only\./i),
     ).toBeDefined();
     expect(
-      screen.getByRole("link", { name: "Start with Capture" }),
-    ).toHaveAttribute("href", "/capture");
+      screen.queryByRole("button", { name: "Save quick capture" }),
+    ).toBeNull();
     expect(
-      screen.getByRole("link", { name: "Open Planning" }),
-    ).toHaveAttribute("href", "/calendar");
-    expect(
-      screen.getByRole("link", { name: "Open Review" }),
-    ).toHaveAttribute("href", "/review");
+      screen.queryByRole("textbox", { name: "Home quick capture text" }),
+    ).toBeNull();
   });
 
   it("matches the next-action CTA to the current queue state", async () => {
@@ -183,55 +176,18 @@ describe("HomePage Today cockpit", () => {
     ).toBeDefined();
   });
 
-  it("shows visible Quick Capture validation on empty submit", async () => {
+  it("keeps Home read-only instead of exposing capture mutation controls", async () => {
     renderHome();
     await waitFor(() => expect(listPlanningItems).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: "Save quick capture" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Type a note first.");
-  });
-
-  it("shows truthful Quick Capture success and allowed route links", async () => {
-    renderHome();
-
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Home quick capture text" }),
-      {
-        target: { value: "Home capture test" },
-      },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save quick capture" }));
-
-    expect(await screen.findByText("Saved.")).toBeDefined();
     expect(
-      screen.getByRole("link", { name: "Triage" }),
-    ).toHaveAttribute("href", "/triage");
-
-    expect(
-      screen
-        .getAllByRole("link", { name: "Open Triage" })
-        .some((link) => link.getAttribute("href") === "/triage"),
-    ).toBe(true);
-    expect(
-      screen.queryByRole("link", { name: "Open Planning" }),
+      screen.queryByRole("button", { name: "Save quick capture" }),
     ).toBeNull();
     expect(
-      screen.queryByRole("link", { name: "Open Health" }),
+      screen.queryByRole("textbox", { name: "Home quick capture text" }),
     ).toBeNull();
     expect(
-      screen.getByRole("heading", { name: /Needs decision/i }),
-    ).toBeDefined();
-    expect(
-      screen.queryByRole("heading", { name: "System trust/status" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("heading", { name: "Daily loop" }),
-    ).toBeNull();
-    expect(
-      screen.queryByText("Nothing is running right now."),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("link", { name: "Start with Capture" }),
-    ).toBeNull();
+      screen.getByRole("link", { name: "Capture a thought" }),
+    ).toHaveAttribute("href", "/capture");
   });
 });

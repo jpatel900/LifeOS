@@ -1222,15 +1222,8 @@ export default function ExecutePage() {
                       : "Choose the control that matches what actually happened in this block."}
           </p>
 
-          {showPersistedStopGuidance ? (
-            <p className="text-sm text-muted-foreground">
-              Stop (device-only sessions) is only available when the session
-              lives on this device. Sessions saved to your account need an end
-              outcome and notes.
-            </p>
-          ) : null}
-
-          <div className="grid gap-2 text-sm">
+          <div className="workflow-action-tray grid gap-3 text-sm">
+            <p className="workflow-section-kicker">Keep focus narrow</p>
             <p className="area-accent-panel rounded-md border p-3">
               <span className="font-medium text-foreground">
                 First tiny step:
@@ -1238,9 +1231,30 @@ export default function ExecutePage() {
               {activeTask.first_tiny_step ??
                 "Pick one concrete action you can finish in a few minutes."}
             </p>
+
+            <details className="system-details-disclosure workflow-inline-disclosure">
+              <summary className="text-sm font-medium text-foreground">
+                Execution guidance
+              </summary>
+              <div className="mt-3 grid gap-3 text-sm text-muted-foreground">
+                {showPersistedStopGuidance ? (
+                  <p>
+                    Stop (device-only sessions) is only available when the
+                    session lives on this device. Sessions saved to your account
+                    need an end outcome and notes.
+                  </p>
+                ) : null}
+                <p>
+                  <span className="font-medium text-foreground">
+                    Next recommended action:
+                  </span>{" "}
+                  {nextRecommendedAction}
+                </p>
+              </div>
+            </details>
           </div>
 
-          <details className="system-details-disclosure">
+          <details className="system-details-disclosure workflow-inline-disclosure">
             <summary className="text-sm font-medium text-foreground">
               Mission details
             </summary>
@@ -1287,10 +1301,6 @@ export default function ExecutePage() {
                   or plan a block first.
                 </p>
               )}
-              <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-                <span className="font-medium">Next recommended action:</span>{" "}
-                {nextRecommendedAction}
-              </p>
             </div>
           </details>
         </CardContent>
@@ -1390,23 +1400,27 @@ export default function ExecutePage() {
               </div>
             ) : null}
 
-            <div
-              data-testid="execute-side-thought-card"
-              className="workflow-support-panel flex flex-col gap-2 rounded-lg border p-4"
-            >
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Side thought
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Capture it without losing the current mission. Keep it secondary
-                until this focus block is done.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild type="button" variant="outline">
-                  <Link href="/capture">Capture a side thought</Link>
-                </Button>
-              </div>
-            </div>
+            {!terminalForm ? (
+              <details
+                data-testid="execute-side-thought-card"
+                className="system-details-disclosure workflow-inline-disclosure"
+              >
+                <summary className="text-sm font-medium text-foreground">
+                  Protect focus
+                </summary>
+                <div className="mt-3 grid gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Capture side thoughts without turning this screen into an
+                    inbox. Keep them secondary until the current mission is done.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button asChild type="button" variant="outline">
+                      <Link href="/capture">Capture a side thought</Link>
+                    </Button>
+                  </div>
+                </div>
+              </details>
+            ) : null}
 
             {usesPersistedExecution && terminalForm ? (
               <>

@@ -11,7 +11,6 @@ import type {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -127,7 +126,6 @@ function normalizeSession(session: ExecutionSession): TodayCockpitSession {
 }
 
 type HomeCardKey =
-  | "quickCapture"
   | "needsDecision"
   | "unplanned"
   | "todayBlocks"
@@ -135,7 +133,6 @@ type HomeCardKey =
   | "systemStatus";
 
 const DEFAULT_CARD_ORDER: HomeCardKey[] = [
-  "quickCapture",
   "needsDecision",
   "unplanned",
   "todayBlocks",
@@ -152,7 +149,7 @@ function getPriorityCardOrder(cockpit: TodayCockpitModel): HomeCardKey[] {
     needs_decision: "needsDecision",
     current_work: "todayBlocks",
     unplanned_task: "unplanned",
-    capture: "quickCapture",
+    capture: "needsDecision",
     health_attention: "systemStatus",
   };
   const priorityCard = prioritizedCardByNextKind[cockpit.next.kind];
@@ -197,17 +194,18 @@ function getNextActionSupportSteps(kind: TodayCockpitModel["next"]["kind"]) {
   }
 }
 
+function splitPreviewItems<T>(items: T[], visibleCount = 2) {
+  return {
+    visible: items.slice(0, visibleCount),
+    overflow: items.slice(visibleCount),
+  };
+}
+
 export default function HomePage() {
-  const { state, selectedAreaId, submitCaptureText } = useWorkflow();
+  const { state, selectedAreaId } = useWorkflow();
   const [homeData, setHomeData] = useState<HomeDataState>({
     status: "loading",
   });
-  const [quickCaptureText, setQuickCaptureText] = useState("");
-  const [quickCaptureFeedback, setQuickCaptureFeedback] = useState<
-    | { status: "idle" }
-    | { status: "error"; message: string }
-    | { status: "saved" }
-  >({ status: "idle" });
 
   useEffect(() => {
     let cancelled = false;
@@ -386,9 +384,7 @@ export default function HomePage() {
   const showSystemStatusCard =
     cockpit.dataDegraded || cockpit.next.kind === "health_attention";
   const visibleSecondaryCardOrder = prioritizedCardOrder.filter((cardKey) => {
-    switch (cardKey) {
-      case "quickCapture":
-        return true;
+      switch (cardKey) {
       case "needsDecision":
         return cockpit.needsDecision.count > 0;
       case "unplanned":
@@ -401,115 +397,16 @@ export default function HomePage() {
         return showSystemStatusCard;
     }
   });
-  const shouldPinQuickCapture =
-    showDailyLoop ||
-    cockpit.next.kind === "capture" ||
-    quickCaptureFeedback.status !== "idle" ||
-    quickCaptureText.trim().length > 0;
-  const focusOrderedSecondaryCardOrder: HomeCardKey[] = shouldPinQuickCapture
-    ? [
-        "quickCapture" satisfies HomeCardKey,
-        ...visibleSecondaryCardOrder.filter((cardKey) => cardKey !== "quickCapture"),
-      ]
+  const focusOrderedSecondaryCardOrder = showDailyLoop
+    ? []
     : visibleSecondaryCardOrder;
   const featuredSecondaryCardOrder = focusOrderedSecondaryCardOrder.slice(0, 1);
   const overflowSecondaryCardOrder = focusOrderedSecondaryCardOrder.slice(1);
-  const overflowSummaryLabel = overflowSecondaryCardOrder.includes("quickCapture")
-    ? "Quick capture and more context"
-    : "More context";
-
-  function handleQuickCaptureSubmit() {
-    const trimmed = quickCaptureText.trim();
-    if (!trimmed) {
-      setQuickCaptureFeedback({
-        status: "error",
-        message: "Type a note first.",
-      });
-      return;
-    }
-
-    try {
-      submitCaptureText(trimmed, selectedAreaId);
-      setQuickCaptureText("");
-      setQuickCaptureFeedback({ status: "saved" });
-    } catch {
-      setQuickCaptureFeedback({
-        status: "error",
-        message: "Quick capture was not saved. Open Capture and try again.",
-      });
-    }
-  }
+  const overflowSummaryLabel = "More context";
 
   function renderHomeSupportCard(cardKey: HomeCardKey) {
-    if (cardKey === "quickCapture") {
-      return (
-        <Card
-          key={cardKey}
-          className="workflow-secondary-card border-border/80 xl:col-span-2"
-        >
-          <CardHeader>
-            <CardTitle className="text-lg">Quick Capture</CardTitle>
-            <CardDescription>
-              Save one real thing fast. Home stays read-only except this
-              capture handoff.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            <Input
-              aria-label="Home quick capture text"
-              placeholder="What matters right now?"
-              value={quickCaptureText}
-              onChange={(event) => {
-                setQuickCaptureText(event.target.value);
-                if (quickCaptureFeedback.status !== "idle") {
-                  setQuickCaptureFeedback({ status: "idle" });
-                }
-              }}
-            />
-            <Button
-              type="button"
-              onClick={handleQuickCaptureSubmit}
-              className="w-full sm:w-auto"
-            >
-              Save quick capture
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Saves on this device and sends it to Triage. No planning,
-              execute, calendar, or health changes happen here.
-            </p>
-            {quickCaptureFeedback.status === "error" ? (
-              <p role="alert" className="text-sm text-destructive">
-                {quickCaptureFeedback.message}
-              </p>
-            ) : null}
-            {quickCaptureFeedback.status === "saved" ? (
-              <Alert
-                variant="success"
-                role="status"
-                className="workflow-celebration-alert"
-              >
-                <AlertTitle>Saved.</AlertTitle>
-                <AlertDescription>
-                  Saved on this device and sent to{" "}
-                  <Link href="/triage" className="underline underline-offset-2">
-                    Triage
-                  </Link>
-                  .
-                </AlertDescription>
-                <div className="workflow-celebration-meta">
-                  <span className="workflow-celebration-chip">Device-only</span>
-                  <span className="workflow-celebration-chip">
-                    Ready for Triage
-                  </span>
-                </div>
-              </Alert>
-            ) : null}
-          </CardContent>
-        </Card>
-      );
-    }
-
     if (cardKey === "needsDecision") {
+      const { visible, overflow } = splitPreviewItems(cockpit.needsDecision.items);
       return (
         <Card key={cardKey} className="workflow-secondary-card shadow-none">
           <CardHeader>
@@ -527,11 +424,32 @@ export default function HomePage() {
             {cockpit.needsDecision.count === 0 ? (
               <p className="text-muted-foreground">No drafts waiting.</p>
             ) : (
-              cockpit.needsDecision.items.map((item) => (
-                <p key={item.id} className="break-words text-foreground">
-                  {item.title}
-                </p>
-              ))
+              <>
+                <div className="workflow-compact-list">
+                  {visible.map((item) => (
+                    <div key={item.id} className="workflow-compact-item">
+                      <p className="break-words text-foreground">{item.title}</p>
+                    </div>
+                  ))}
+                </div>
+                {overflow.length > 0 ? (
+                  <details className="system-details-disclosure workflow-inline-disclosure">
+                    <summary className="text-sm font-medium text-foreground">
+                      {overflow.length} more draft
+                      {overflow.length === 1 ? "" : "s"}
+                    </summary>
+                    <div className="workflow-compact-list mt-3">
+                      {overflow.map((item) => (
+                        <div key={item.id} className="workflow-compact-item">
+                          <p className="break-words text-foreground">
+                            {item.title}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </>
             )}
             <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link href="/triage">Open Triage</Link>
@@ -542,6 +460,7 @@ export default function HomePage() {
     }
 
     if (cardKey === "unplanned") {
+      const { visible, overflow } = splitPreviewItems(cockpit.unplanned.items);
       return (
         <Card key={cardKey} className="workflow-secondary-card shadow-none">
           <CardHeader>
@@ -559,11 +478,32 @@ export default function HomePage() {
             {cockpit.unplanned.items.length === 0 ? (
               <p className="text-muted-foreground">No tasks need planning.</p>
             ) : (
-              cockpit.unplanned.items.map((task) => (
-                <p key={task.id} className="break-words text-foreground">
-                  {task.title}
-                </p>
-              ))
+              <>
+                <div className="workflow-compact-list">
+                  {visible.map((task) => (
+                    <div key={task.id} className="workflow-compact-item">
+                      <p className="break-words text-foreground">{task.title}</p>
+                    </div>
+                  ))}
+                </div>
+                {overflow.length > 0 ? (
+                  <details className="system-details-disclosure workflow-inline-disclosure">
+                    <summary className="text-sm font-medium text-foreground">
+                      {overflow.length} more task
+                      {overflow.length === 1 ? "" : "s"}
+                    </summary>
+                    <div className="workflow-compact-list mt-3">
+                      {overflow.map((task) => (
+                        <div key={task.id} className="workflow-compact-item">
+                          <p className="break-words text-foreground">
+                            {task.title}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </>
             )}
             <Button asChild variant="outline" className="w-full sm:w-auto">
               <Link href="/calendar">Open Planning</Link>
@@ -574,6 +514,7 @@ export default function HomePage() {
     }
 
     if (cardKey === "todayBlocks") {
+      const { visible, overflow } = splitPreviewItems(cockpit.todayBlocks);
       return (
         <Card key={cardKey} className="workflow-secondary-card shadow-none">
           <CardHeader>
@@ -591,25 +532,58 @@ export default function HomePage() {
             {cockpit.todayBlocks.length === 0 ? (
               <p className="text-muted-foreground">Nothing planned today.</p>
             ) : (
-              cockpit.todayBlocks.map((block) => {
-                const task = tasks.find((item) => item.id === block.taskId);
-                return (
-                  <div
-                    key={block.id}
-                    className="rounded-md border border-border p-2"
-                  >
-                    <p className="break-words font-medium">
-                      {task?.title ?? "Planned block"}
-                    </p>
-                    <p className="text-muted-foreground">
-                      {formatBlockTime(block.startAt, block.endAt)}
-                    </p>
-                    <Badge variant="outline" className="mt-1">
-                      {block.status}
-                    </Badge>
-                  </div>
-                );
-              })
+              <>
+                <div className="workflow-compact-list">
+                  {visible.map((block) => {
+                    const task = tasks.find((item) => item.id === block.taskId);
+                    return (
+                      <div
+                        key={block.id}
+                        className="workflow-compact-item"
+                      >
+                        <p className="break-words font-medium">
+                          {task?.title ?? "Planned block"}
+                        </p>
+                        <p className="mt-1 text-muted-foreground">
+                          {formatBlockTime(block.startAt, block.endAt)}
+                        </p>
+                        <Badge variant="outline" className="mt-2">
+                          {block.status}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+                {overflow.length > 0 ? (
+                  <details className="system-details-disclosure workflow-inline-disclosure">
+                    <summary className="text-sm font-medium text-foreground">
+                      {overflow.length} more block
+                      {overflow.length === 1 ? "" : "s"}
+                    </summary>
+                    <div className="workflow-compact-list mt-3">
+                      {overflow.map((block) => {
+                        const task = tasks.find((item) => item.id === block.taskId);
+                        return (
+                          <div
+                            key={block.id}
+                            className="workflow-compact-item"
+                          >
+                            <p className="break-words font-medium">
+                              {task?.title ?? "Planned block"}
+                            </p>
+                            <p className="mt-1 text-muted-foreground">
+                              {formatBlockTime(block.startAt, block.endAt)}
+                            </p>
+                            <Badge variant="outline" className="mt-2">
+                              {block.status}
+                            </Badge>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                ) : null}
+              </>
             )}
             <div className="grid gap-2 sm:flex">
               <Button asChild variant="outline" className="w-full sm:w-auto">
@@ -627,6 +601,7 @@ export default function HomePage() {
     }
 
     if (cardKey === "recovery") {
+      const { visible, overflow } = splitPreviewItems(cockpit.recoveryItems);
       return (
         <Card key={cardKey} className="workflow-secondary-card shadow-none">
           <CardHeader>
@@ -644,15 +619,36 @@ export default function HomePage() {
             {cockpit.recoveryItems.length === 0 ? (
               <p className="text-muted-foreground">Nothing needs recovery.</p>
             ) : (
-              cockpit.recoveryItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-md border border-border p-2"
-                >
-                  <p className="break-words font-medium">{item.label}</p>
-                  <p className="text-muted-foreground">{item.reason}</p>
+              <>
+                <div className="workflow-compact-list">
+                  {visible.map((item) => (
+                    <div key={item.id} className="workflow-compact-item">
+                      <p className="break-words font-medium">{item.label}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {item.reason}
+                      </p>
+                    </div>
+                  ))}
                 </div>
-              ))
+                {overflow.length > 0 ? (
+                  <details className="system-details-disclosure workflow-inline-disclosure">
+                    <summary className="text-sm font-medium text-foreground">
+                      {overflow.length} more recovery item
+                      {overflow.length === 1 ? "" : "s"}
+                    </summary>
+                    <div className="workflow-compact-list mt-3">
+                      {overflow.map((item) => (
+                        <div key={item.id} className="workflow-compact-item">
+                          <p className="break-words font-medium">{item.label}</p>
+                          <p className="mt-1 text-muted-foreground">
+                            {item.reason}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+              </>
             )}
             {cockpit.recoveryItems.length > 0 ? (
               <div className="grid gap-2 sm:flex">
@@ -745,13 +741,21 @@ export default function HomePage() {
                 </Link>
               </Button>
             </div>
-            <div className="workflow-next-steps" aria-label="Suggested follow-through">
-              {getNextActionSupportSteps(cockpit.next.kind).map((step) => (
-                <span key={step} className="workflow-next-step-chip">
-                  {step}
-                </span>
-              ))}
-            </div>
+            <details className="system-details-disclosure workflow-inline-disclosure">
+              <summary className="text-sm font-medium text-foreground">
+                Suggested follow-through
+              </summary>
+              <div
+                className="workflow-next-steps mt-3"
+                aria-label="Suggested follow-through"
+              >
+                {getNextActionSupportSteps(cockpit.next.kind).map((step) => (
+                  <span key={step} className="workflow-next-step-chip">
+                    {step}
+                  </span>
+                ))}
+              </div>
+            </details>
           </CardContent>
         </Card>
 
@@ -778,23 +782,7 @@ export default function HomePage() {
         {showDailyLoop ? (
           <EmptyState
             title="Daily loop"
-            description="Start with one real capture, sort it in Triage, plan one local block, then use Execute and Review to close the loop. No sample data is created until you save something."
-            action={
-              <>
-                <Button asChild className="w-full sm:w-auto">
-                  <Link href="/capture">Start with Capture</Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/triage">Open Triage</Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/calendar">Open Planning</Link>
-                </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto">
-                  <Link href="/review">Open Review</Link>
-                </Button>
-              </>
-            }
+            description="Capture one real thing, sort it in Triage, plan one local block, then let Execute and Review close the loop. Home stays read-only."
           />
         ) : null}
       </section>
@@ -816,15 +804,6 @@ export default function HomePage() {
             )}
           </div>
         </details>
-      ) : null}
-
-      {!showNowPrimaryCard && !hasWorkflowState ? (
-        <section className="mx-auto w-full max-w-5xl">
-          <EmptyState
-            title="Now"
-            description={`${cockpit.now.title} ${cockpit.now.summary}`}
-          />
-        </section>
       ) : null}
 
       <DiagnosticsDisclosure>
