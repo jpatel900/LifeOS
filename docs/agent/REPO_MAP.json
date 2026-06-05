@@ -131,30 +131,42 @@
       ]
     },
     "ui": {
-      "purpose": "App shell, route composition, and workflow-provider-backed UI surfaces.",
+      "purpose": "App shell, route composition, workflow-provider-backed UI surfaces, and the active world-class UX program state.",
       "readFirst": [
-        "apps/web/src/app/layout.tsx",
+        "docs/UI_UX_WORLD_CLASS_ROADMAP.md",
+        "docs/PROJECT_STATE.md",
+        "docs/implementation-notes/2026-06-05-home-review-areas-shell-polish-pass.md",
         "apps/web/src/app/components/AppShell.tsx",
+        "apps/web/src/app/components/WorkflowPageHeader.tsx",
         "apps/web/src/lib/WorkflowContext.tsx"
       ],
       "likelyFiles": [
+        "apps/web/src/app/layout.tsx",
+        "apps/web/src/app/page.tsx",
         "apps/web/src/app/capture/page.tsx",
+        "apps/web/src/app/triage/page.tsx",
         "apps/web/src/app/calendar/page.tsx",
         "apps/web/src/app/execute/page.tsx",
         "apps/web/src/app/review/page.tsx",
         "apps/web/src/app/health/page.tsx",
+        "apps/web/src/app/settings/areas/page.tsx",
         "apps/web/src/app/global-error.tsx",
-        "apps/web/src/__tests__/WorkflowContext.test.tsx",
-        "apps/web/src/__tests__/sourceOfTruth.test.ts"
+        "apps/web/src/__tests__/page.test.tsx",
+        "apps/web/src/__tests__/executeFocusPolish.test.tsx",
+        "apps/web/src/__tests__/sourceOfTruth.test.ts",
+        "apps/web/tests/e2e/p0-ux-regression.spec.ts",
+        "apps/web/tests/e2e/workflow-hierarchy.spec.ts",
+        "apps/web/tests/e2e/interaction-feedback.spec.ts"
       ],
       "risks": [
+        "Home must remain read-only and shell mutation must stay off `/`.",
         "Provider/shell regressions can hide behind direct page tests.",
         "Hydration and browser-storage timing matter.",
         "Mock-safe fallback behavior must remain intact."
       ],
       "quickChecks": [
-        "pnpm --filter @lifeos/web test -- WorkflowContext.test.tsx sourceOfTruth.test.ts",
-        "pnpm --filter @lifeos/web test -- capture.test.tsx"
+        "pnpm --filter @lifeos/web test -- src/__tests__/sourceOfTruth.test.ts src/__tests__/page.test.tsx src/__tests__/executeFocusPolish.test.tsx",
+        "pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts"
       ]
     },
     "health-observability": {

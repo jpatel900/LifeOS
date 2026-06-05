@@ -23,10 +23,17 @@ Use the smallest relevant context first.
 | `docs`                 | `pnpm agent:context docs`                 |
 | `tests`                | `pnpm agent:context tests`                |
 
+For world-class UI/UX polish work, `ui` context must then route through:
+
+1. `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
+2. `docs/PROJECT_STATE.md`
+3. the latest roadmap-linked implementation note
+
 ## Escalation Path
 
 1. Start here or with `pnpm agent:context <area>`.
-2. Read `docs/PROJECT_STATE.md` only when you need current status or implementation notes.
-3. Pull the smallest relevant authority docs for the risk surface.
+2. For active UI/UX program work, read `docs/UI_UX_WORLD_CLASS_ROADMAP.md` before `docs/PROJECT_STATE.md`.
+3. Read `docs/PROJECT_STATE.md` only when you need current status or implementation notes.
+4. Pull the smallest relevant authority docs for the risk surface.
 
 Keep `docs/agent/REPO_MAP.json` concise. Update it only when source paths or risk surfaces materially change.
