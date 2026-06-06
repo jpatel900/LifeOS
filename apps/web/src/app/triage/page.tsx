@@ -697,11 +697,10 @@ export default function TriagePage() {
                             </div>
                           </div>
                           {assessment || task.description ? (
-                            <details className="system-details-disclosure">
-                              <summary className="text-sm font-medium text-foreground">
-                                Context and notes
-                              </summary>
-                              <div className="mt-4 grid gap-3">
+                            <DiagnosticsDisclosure
+                              title="Context and notes"
+                              contentClassName="mt-4 grid gap-3"
+                            >
                                 {assessment && !editedDraftIds[task.id] ? (
                                   <div className="workflow-admin-card space-y-1 rounded-xl p-3 text-sm text-muted-foreground">
                                     <p className="font-medium text-foreground">
@@ -730,14 +729,13 @@ export default function TriagePage() {
                                     </p>
                                   </div>
                                 ) : null}
-                              </div>
-                            </details>
+                            </DiagnosticsDisclosure>
                           ) : null}
-                          <details className="system-details-disclosure">
-                            <summary className="text-sm font-medium text-foreground">
-                              Browser notes
-                            </summary>
-                            <div className="mt-4 rounded-lg border border-border bg-background/50 p-3">
+                          <DiagnosticsDisclosure
+                            title="Browser notes"
+                            contentClassName="mt-4"
+                          >
+                            <div className="rounded-lg border border-border bg-background/50 p-3">
                               <div className="flex flex-wrap gap-2">
                                 <Button
                                   type="button"
@@ -775,7 +773,7 @@ export default function TriagePage() {
                                 the item.
                               </p>
                             </div>
-                          </details>
+                          </DiagnosticsDisclosure>
                         </>
                       );
                     })()}
@@ -815,11 +813,10 @@ export default function TriagePage() {
                       </div>
                     </div>
                     {activeQueueItem.draft.description ? (
-                      <details className="system-details-disclosure">
-                        <summary className="text-sm font-medium text-foreground">
-                          Context and notes
-                        </summary>
-                        <div className="mt-4">
+                      <DiagnosticsDisclosure
+                        title="Context and notes"
+                        contentClassName="mt-4"
+                      >
                           <div className="workflow-admin-card space-y-1 rounded-xl p-3 text-sm text-muted-foreground">
                             <p className="font-medium text-foreground">
                               Draft notes
@@ -828,8 +825,7 @@ export default function TriagePage() {
                               {activeQueueItem.draft.description}
                             </p>
                           </div>
-                        </div>
-                      </details>
+                      </DiagnosticsDisclosure>
                     ) : null}
                   </>
                 )}
@@ -885,12 +881,10 @@ export default function TriagePage() {
                   );
                 })}
                 {overflowUpcomingQueueItems.length > 0 ? (
-                  <details className="system-details-disclosure">
-                    <summary className="text-sm font-medium text-foreground">
-                      {overflowUpcomingQueueItems.length} more queued item
-                      {overflowUpcomingQueueItems.length === 1 ? "" : "s"}
-                    </summary>
-                    <div className="mt-4 grid gap-2">
+                  <DiagnosticsDisclosure
+                    title={`${overflowUpcomingQueueItems.length} more queued item${overflowUpcomingQueueItems.length === 1 ? "" : "s"}`}
+                    contentClassName="mt-4 grid gap-2"
+                  >
                       {overflowUpcomingQueueItems.map((item) => {
                         const area = getAreaById(item.draft.area_id);
                         return (
@@ -933,8 +927,7 @@ export default function TriagePage() {
                           </div>
                         );
                       })}
-                    </div>
-                  </details>
+                  </DiagnosticsDisclosure>
                 ) : null}
               </CardContent>
             </Card>

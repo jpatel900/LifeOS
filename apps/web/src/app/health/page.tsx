@@ -25,6 +25,7 @@ import {
   systemCheckSaveLabel,
 } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
 
 type HealthLoadState =
   | { status: "loading" }
@@ -397,9 +398,10 @@ export default function HealthPage() {
       />
 
       {state.status === "loading" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading health...
-        </p>
+        <WorkflowLoadingState
+          title="Loading health..."
+          description="Checking saved subsystem status and local trust signals."
+        />
       ) : null}
 
       {state.status === "error" ? (

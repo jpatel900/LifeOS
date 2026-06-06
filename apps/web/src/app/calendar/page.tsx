@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
@@ -1182,13 +1183,10 @@ export default function CalendarPage() {
                 })
               )}
               {overflowScheduleableTasks.length > 0 ? (
-                <details className="system-details-disclosure">
-                  <summary className="text-sm font-medium text-foreground">
-                    {overflowScheduleableTasks.length} more task
-                    {overflowScheduleableTasks.length === 1 ? "" : "s"} needing
-                    time
-                  </summary>
-                  <div className="mt-4 grid gap-2">
+                <DiagnosticsDisclosure
+                  title={`${overflowScheduleableTasks.length} more task${overflowScheduleableTasks.length === 1 ? "" : "s"} needing time`}
+                  contentClassName="mt-4 grid gap-2"
+                >
                     {overflowScheduleableTasks.map((task) => {
                       const area = usesPersistedPlanning
                         ? null
@@ -1229,8 +1227,7 @@ export default function CalendarPage() {
                         </div>
                       );
                     })}
-                  </div>
-                </details>
+                </DiagnosticsDisclosure>
               ) : null}
             </CardContent>
           </Card>
@@ -1503,14 +1500,13 @@ export default function CalendarPage() {
                         ) : null}
                       </div>
                       <Separator />
-                      <details
+                      <DiagnosticsDisclosure
+                        title="Google Calendar options"
                         open={googleActionsRelevant}
                         className="workflow-admin-card rounded-md p-2"
+                        summaryClassName="cursor-pointer select-none text-xs font-medium text-foreground"
+                        contentClassName="mt-2 flex flex-col gap-2 text-sm text-muted-foreground"
                       >
-                        <summary className="cursor-pointer select-none text-xs font-medium text-foreground">
-                          Google Calendar options
-                        </summary>
-                        <div className="mt-2 flex flex-col gap-2">
                           <p className="text-xs text-muted-foreground">
                             {usesPersistedPlanning
                               ? "Nothing goes to Google Calendar until you approve it."
@@ -1520,7 +1516,7 @@ export default function CalendarPage() {
                           googleConnectionState.status === "ready" &&
                           googleConnectionState.connected &&
                           !googleConnectionState.firstWriteWarningAcknowledged ? (
-                            <label className="workflow-admin-card flex items-start gap-2 rounded-md p-2 text-sm text-foreground">
+                            <Label className="workflow-admin-card flex items-start gap-2 rounded-md p-2 text-sm text-foreground">
                               <input
                                 type="checkbox"
                                 className="mt-0.5 size-4 rounded border-input bg-background text-primary focus-visible:ring-2 focus-visible:ring-ring"
@@ -1537,7 +1533,7 @@ export default function CalendarPage() {
                                 after explicit user approval. If the write
                                 fails, the suggested time stays unchanged.
                               </span>
-                            </label>
+                            </Label>
                           ) : null}
                           <div className="flex flex-wrap gap-2">
                             <Button
@@ -1577,13 +1573,11 @@ export default function CalendarPage() {
                               {createGoogleDisabledReason}
                             </p>
                           ) : null}
-                        </div>
-                      </details>
-                      <details className="system-details-disclosure">
-                        <summary className="text-sm font-medium text-foreground">
-                          More options
-                        </summary>
-                        <div className="mt-4 flex flex-wrap gap-2 workflow-admin-card rounded-xl p-3">
+                      </DiagnosticsDisclosure>
+                      <DiagnosticsDisclosure
+                        title="More options"
+                        contentClassName="mt-4 flex flex-wrap gap-2 workflow-admin-card rounded-xl p-3"
+                      >
                           <Button
                             type="button"
                             variant="destructive"
@@ -1600,19 +1594,16 @@ export default function CalendarPage() {
                           >
                             Reject
                           </Button>
-                        </div>
-                      </details>
+                      </DiagnosticsDisclosure>
                     </div>
                   );
                 })
               )}
               {overflowProposals.length > 0 ? (
-                <details className="system-details-disclosure">
-                  <summary className="text-sm font-medium text-foreground">
-                    {overflowProposals.length} more suggested time block
-                    {overflowProposals.length === 1 ? "" : "s"}
-                  </summary>
-                  <div className="mt-4 grid gap-3">
+                <DiagnosticsDisclosure
+                  title={`${overflowProposals.length} more suggested time block${overflowProposals.length === 1 ? "" : "s"}`}
+                  contentClassName="mt-4 grid gap-3"
+                >
                     {overflowProposals.map((proposal) => {
                       const task = usesPersistedPlanning
                         ? scheduleableTasks.find(
@@ -1657,10 +1648,9 @@ export default function CalendarPage() {
                             ).toLocaleTimeString()}
                           </p>
                         </div>
-                      );
-                    })}
-                  </div>
-                </details>
+                        );
+                      })}
+                </DiagnosticsDisclosure>
               ) : null}
             </CardContent>
           </Card>
@@ -1738,12 +1728,10 @@ export default function CalendarPage() {
                 })
               )}
               {overflowBlocks.length > 0 ? (
-                <details className="system-details-disclosure">
-                  <summary className="text-sm font-medium text-foreground">
-                    {overflowBlocks.length} more planned block
-                    {overflowBlocks.length === 1 ? "" : "s"}
-                  </summary>
-                  <div className="mt-4 grid gap-2">
+                <DiagnosticsDisclosure
+                  title={`${overflowBlocks.length} more planned block${overflowBlocks.length === 1 ? "" : "s"}`}
+                  contentClassName="mt-4 grid gap-2"
+                >
                     {overflowBlocks.map((block) => {
                       const area =
                         resolveAreaById(state.areas, block.area_id) ??
@@ -1780,8 +1768,7 @@ export default function CalendarPage() {
                         </div>
                       );
                     })}
-                  </div>
-                </details>
+                </DiagnosticsDisclosure>
               ) : null}
             </CardContent>
           </Card>

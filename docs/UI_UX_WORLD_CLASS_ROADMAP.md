@@ -34,7 +34,7 @@ For LifeOS frontend work, the target is not "make everything stock shadcn."
 
 Latest supporting proof:
 
-- `2026-06-06`: the first implementation slice of this guardrail is landed. The app now has shared app-local `Label` and `Skeleton` primitives, `DiagnosticsDisclosure` is the standard wrapper for the touched system-details flows, `/login` now uses the same authored card/form system as the rest of the app instead of raw inline-styled markup, and the touched routes reuse the same primitive/disclosure vocabulary more consistently without flattening route identity. Proof: `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web build`, `pnpm --filter @lifeos/web type-check` after rerun post-build for the known `.next/types` race, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`.
+- `2026-06-06`: the current route-level implementation pass of this guardrail is complete. The app now has shared app-local `Label` and `Skeleton` primitives, `WorkflowLoadingState` uses the shared skeleton system, `DiagnosticsDisclosure` is the standard wrapper for repeated system-details flows, `/login` now uses the same authored card/form system as the rest of the app instead of raw inline-styled markup, and repeated label/disclosure/loading seams across Home, Capture, Triage, Planning, Execute, Review, Health, Areas, and Google Calendar settings now route through the shared primitive layer without flattening route identity. Proof: `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web build`, `pnpm --filter @lifeos/web type-check`, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`.
 
 ## Program north star
 
@@ -134,6 +134,7 @@ Add these when area-accent behavior itself changes:
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-home-execute.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-review-health-areas.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-capture-planning-triage.md`
+- `docs/implementation-notes/2026-06-06-shadcn-consistency-plan-completion.md`
 - `docs/implementation-notes/2026-06-06-shadcn-primitive-consistency-pass.md`
 - `docs/implementation-notes/2026-06-05-home-review-areas-shell-polish-pass.md`
 - `docs/implementation-notes/2026-06-04-home-execute-ia-reduction-pass.md`

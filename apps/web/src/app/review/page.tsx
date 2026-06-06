@@ -861,11 +861,12 @@ export default function ReviewPage() {
             ) : null}
 
             {reviewEntries.length > 0 ? (
-              <details className="rounded-lg border border-border bg-card p-4 text-sm">
-                <summary className="cursor-pointer select-none font-medium">
-                  Open saved review details
-                </summary>
-                <div className="mt-3 grid gap-3">
+              <DiagnosticsDisclosure
+                title="Open saved review details"
+                className="rounded-lg border border-border bg-card p-4 text-sm"
+                summaryClassName="cursor-pointer select-none font-medium text-foreground"
+                contentClassName="mt-3 grid gap-3 text-sm text-muted-foreground"
+              >
                   {reviewEntries.map((entry) => {
                     const lifecycle = reviewedLifecycleDisplay();
                     const areaName =
@@ -946,21 +947,22 @@ export default function ReviewPage() {
                       </div>
                     );
                   })}
-                </div>
-              </details>
+              </DiagnosticsDisclosure>
             ) : null}
 
             {localReviewLog.length > 0 ? (
-              <details className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
-                <summary className="cursor-pointer select-none font-medium">
-                  Open raw browser notes
-                </summary>
+              <DiagnosticsDisclosure
+                title="Open raw browser notes"
+                className="rounded-lg border border-border bg-muted/30 p-4 text-sm"
+                summaryClassName="cursor-pointer select-none font-medium text-foreground"
+                contentClassName="mt-3 text-sm text-foreground"
+              >
                 <ul className="mt-3 m-0 list-disc pl-5 text-foreground">
                   {localReviewLog.map((entry, index) => (
                     <li key={`${entry}-${index}`}>{entry}</li>
                   ))}
                 </ul>
-              </details>
+              </DiagnosticsDisclosure>
             ) : null}
           </CardContent>
         </Card>
