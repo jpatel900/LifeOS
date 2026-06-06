@@ -1,7 +1,7 @@
 # LifeOS UI/UX Modernization Design
 
 Date: 2026-06-03
-Status: Draft for review
+Status: Historical precursor; active execution guidance now lives in `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
 Scope: Visual and UX modernization of the existing LifeOS web app without feature expansion
 
 ## Purpose
@@ -32,6 +32,7 @@ Bias toward the newer shipped direction when all of the following are true:
 - Home remains read-only.
 - External calendar writes remain explicit, approval-gated, and visibly truthful.
 - Save-state truth remains explicit, especially `Saved to account` versus `Saved on this device only`.
+- Shared primitives and repeated interaction patterns should move through the app-local shadcn-compatible layer; route composition and product authorship stay custom.
 - The app should feel calm, beautiful, and opinionated at rest, then visually intensify around the current next action.
 - Progressive disclosure should do most of the work for reducing clutter.
 - The interface should preserve executive function for the work itself rather than spending it on interpretation.
@@ -145,9 +146,15 @@ Practical translation:
 
 This should be executed as an anchor-led product pass, skewed slightly toward a broader modernization pass.
 
+Current update after the June 6 frontend-governance and consistency work:
+
+- the shared primitive/disclosure/loading layer is already landed
+- future UX execution should reuse that layer instead of reopening primitive cleanup as a separate redesign task
+
 Phase shape:
 
 1. Foundation layer
+   - shared primitive and token layer
    - shared shell hierarchy
    - typography refinements
    - surface tiers
@@ -227,10 +234,10 @@ Guardrails:
 
 ## Recommended next step
 
-Write the implementation plan around the anchor-led product pass:
+Use the active roadmap pass queue rather than treating this historical spec as the live task list. The right next move is the currently active roadmap pass:
 
-1. shared visual system and shell hierarchy
-2. Home redesign
-3. Execute redesign
-4. baseline modernization across remaining screens
-5. doctrine/test/doc reconciliation
+1. `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
+2. the latest linked implementation note for that pass
+3. the route-level proof surfaces named there
+
+If a fresh implementation plan is rewritten from this spec, it should start from the already-landed shared primitive layer instead of planning primitive cleanup from scratch.

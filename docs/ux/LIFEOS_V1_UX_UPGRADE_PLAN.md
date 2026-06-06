@@ -1,5 +1,9 @@
 # LifeOS V1 UX Upgrade Plan
 
+Historical planning input only.
+
+The current canonical active UX program is `docs/UI_UX_WORLD_CLASS_ROADMAP.md`. Use this file as supporting intent and heuristics, not as the live execution queue.
+
 ## Purpose
 
 Define the next product-experience layer for LifeOS V1 so UI work lands against one coherent target instead of a series of disconnected polish passes.
@@ -27,6 +31,25 @@ That means:
 - Existing routes remain stable unless a separate approved issue changes information architecture.
 - Calendar writes remain explicit-approval only.
 - Color is an orientation layer, not a truth substitute.
+
+## Frontend system foundation
+
+LifeOS now has an explicit frontend split:
+
+- app-local shadcn-compatible primitives and shared patterns live in `apps/web/src/components/ui`
+- route composition, shell identity, area accents, and flagship/support/admin authorship stay custom
+
+Use that split on purpose:
+
+- prefer extending or composing existing primitives before creating route-local controls, labels, loading scaffolds, or disclosure wrappers
+- prefer token-first styling via `apps/web/src/app/globals.css`
+- do not paste stock shadcn layouts over the product
+- add a new primitive only when a repeated seam, accessibility problem, or consistency problem is real
+
+Current status:
+
+- the route-level primitive/disclosure/loading consistency cleanup is already complete
+- future UX work should build on that shared layer, not reopen it as a separate modernization pass
 
 ## Out of scope
 
@@ -109,6 +132,7 @@ This is not a user-theme system. It is an orientation vocabulary.
 - Diagnostics belong behind quieter affordances when not essential to the main task.
 - Empty states should show one useful next move, not multiple equally weighted recovery paths.
 - Avoid large stacks of same-weight bordered cards.
+- Repeated support patterns such as labels, loading states, and diagnostics should route through shared primitives before adding route-specific markup.
 
 ## Button hierarchy rules
 
@@ -133,6 +157,7 @@ This is not a user-theme system. It is an orientation vocabulary.
 - Do not claim undo exists unless it is real.
 - Feedback copy should avoid internal implementation language.
 - Important feedback should be perceivable without relying on color alone.
+- If feedback scaffolding repeats across routes, prefer a shared primitive or shared pattern instead of another page-local variant.
 
 ## Lifecycle and lane clarity rules
 
@@ -204,15 +229,21 @@ This is not a user-theme system. It is an orientation vocabulary.
 Recommended order:
 
 1. UX plan and scorecard
-2. area accent tokens and default palette
-3. shell-level area accent
-4. area accent on core workflow cards
-5. area color editing if persistence already exists safely
-6. visual hierarchy pass
-7. interaction feedback pass
-8. Focus flagship polish
-9. mobile/accessibility/keyboard smoke pass
-10. nav label review only after the preceding work clarifies the intended product voice
+2. shared primitive and token foundation
+3. area accent tokens and default palette
+4. shell-level area accent
+5. area accent on core workflow cards
+6. area color editing if persistence already exists safely
+7. visual hierarchy pass
+8. interaction feedback pass
+9. Focus flagship polish
+10. mobile/accessibility/keyboard smoke pass
+11. nav label review only after the preceding work clarifies the intended product voice
+
+Current note:
+
+- Step 2 is already materially landed through the app-local shadcn-compatible primitive layer and the completed repeated-seam cleanup.
+- Do not treat it as unfinished unless new repetition or accessibility drift appears.
 
 ## PR completion checklist
 

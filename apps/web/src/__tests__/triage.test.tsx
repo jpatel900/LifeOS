@@ -155,7 +155,7 @@ describe("TriagePage", () => {
     ).toBeDefined();
     expect(
       screen.getByText(
-        "No pending suggestions in this browser. Go to Capture, save a thought, then return here to review it.",
+        "No pending suggestions here. Save a thought in Capture, then come back.",
       ),
     ).toBeDefined();
     expect(

@@ -907,7 +907,7 @@ export default function CalendarPage() {
       <WorkflowPageHeader
         eyebrow="Local-first planning"
         title="Planning"
-        description="Pick the work that needs time, shape one local suggestion, then approve any real Google write explicitly. The route should feel like guided scheduling, not proposal administration."
+        description="Start local, shape one suggestion, and approve any real Google write explicitly."
         spotlight={
           <Card
             data-testid="planning-header-summary-card"
@@ -934,7 +934,7 @@ export default function CalendarPage() {
                 <p className="workflow-metric-label">Already planned</p>
                 <p className="workflow-metric-value">{blocks.length}</p>
                 <p className="workflow-metric-context">
-                  Blocks already ready for Execute.
+                  Ready to start in Execute.
                 </p>
               </div>
             </CardContent>
@@ -969,9 +969,8 @@ export default function CalendarPage() {
           <div className="workflow-action-tray">
             <p className="workflow-section-kicker">Next planning move</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Start local. Quick suggestions begin with the next available hour.
-              You can adjust time before planning it, and nothing goes to Google
-              Calendar until you approve it.
+              Start local. Suggest one time, adjust it if needed, and approve
+              any Google write separately.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {nextTaskForProposal ? (
@@ -1002,8 +1001,7 @@ export default function CalendarPage() {
                   : "Checking"}
               </p>
               <p className="workflow-metric-context">
-                Local planning stays useful even before account-backed rows
-                load.
+                Planning still works before account rows load.
               </p>
             </div>
             <div className="workflow-metric-card">
@@ -1012,7 +1010,7 @@ export default function CalendarPage() {
                 Explicit only
               </p>
               <p className="workflow-metric-context">
-                Nothing reaches Google Calendar until you approve it.
+                Real Google writes stay approval-gated.
               </p>
             </div>
           </div>
@@ -1108,7 +1106,7 @@ export default function CalendarPage() {
       {!hasAny ? (
         <EmptyState
           title="Nothing needs time yet."
-          description="Suggested and planned time blocks appear here after you suggest time for a task. Checking Google Calendar is optional and does not create events."
+          description="Suggest time for a task and it will appear here."
         />
       ) : (
         <div className="flex flex-col gap-4">
@@ -1121,8 +1119,7 @@ export default function CalendarPage() {
                 Needs a suggested time
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Start here. Pick the work that should get a local-first time
-                suggestion next.
+                Pick the next task that should get a local suggestion.
               </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
@@ -1239,8 +1236,8 @@ export default function CalendarPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Ready to review</CardTitle>
               <p className="text-sm text-muted-foreground">
-                These are still local planning suggestions. Adjust them, plan
-                them, or check Google Calendar before any explicit write.
+                Adjust it, plan it, or check Google Calendar before any real
+                write.
               </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
@@ -1434,8 +1431,7 @@ export default function CalendarPage() {
                         {adjustingProposalId === proposal.id ? (
                           <div className="workflow-admin-card rounded-md p-2">
                             <p className="text-xs text-muted-foreground">
-                              These quick changes update the suggested time
-                              directly.
+                              Quick adjustments update the suggestion directly.
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">
                               <Button
@@ -1662,8 +1658,8 @@ export default function CalendarPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Already planned</CardTitle>
               <p className="text-sm text-muted-foreground">
-                These blocks are ready for Execute. They stay grouped here even
-                if a Google Calendar event also exists.
+                Ready for Execute. A linked Google event does not move them
+                somewhere else.
               </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
@@ -1777,13 +1773,12 @@ export default function CalendarPage() {
 
       <section className="mt-2 text-xs text-muted-foreground">
         <p>
-          Time proposals stay local first. Free/busy checks are manual and
-          advisory only. No Google Calendar events, OpenAI scheduling,
-          autonomous rescheduling, or background calendar changes happen here.
+          Local suggestions stay here until you approve a real Google event.
+          Free/busy checks are manual only. No autonomous rescheduling or
+          background calendar changes happen here.
         </p>
         <p className="mt-2">
-          After you plan a time block, start focus from Execute and close the
-          loop in Review when the session ends.
+          Next: start focus in Execute, then close the loop in Review.
         </p>
       </section>
     </div>

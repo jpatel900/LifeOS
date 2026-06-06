@@ -516,7 +516,7 @@ export default function CapturePage() {
       <WorkflowPageHeader
         eyebrow="Raw first"
         title="Capture"
-        description="Get the thought out before you shape it. Save the raw version first, then organize only if you want help deciding what it is."
+        description="Write first. Decide what it is second."
         spotlight={
           <Card
             data-testid="capture-header-summary-card"
@@ -529,7 +529,7 @@ export default function CapturePage() {
                   {provider ? saveModeLabel(provider) : "Checking"}
                 </p>
                 <p className="workflow-metric-context">
-                  Raw capture truth stays explicit before any sorting step.
+                  This is where Save thought goes.
                 </p>
               </div>
               <div className="workflow-metric-card">
@@ -545,7 +545,7 @@ export default function CapturePage() {
                   {selectedArea?.name ?? "None yet"}
                 </p>
                 <p className="workflow-metric-context">
-                  You can save unscoped, but area keeps later planning cleaner.
+                  Optional, but it helps later planning.
                 </p>
               </div>
             </CardContent>
@@ -555,8 +555,8 @@ export default function CapturePage() {
 
       <DiagnosticsDisclosure title="Capture details">
         <p>
-          Save thought and Save and organize use your current save mode.
-          Organize on this device and recent captures stay on this device.
+          Save thought uses your current save mode. Organize on this device
+          stays local to this browser.
         </p>
         {provider ? (
           <>
@@ -623,8 +623,8 @@ export default function CapturePage() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  After Save thought or Save and organize, this field clears so
-                  you can capture the next thought.
+                  The field clears after save so you can capture the next
+                  thought.
                 </p>
               </div>
 
@@ -664,8 +664,7 @@ export default function CapturePage() {
                   </Select>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Selecting an area here also updates the header area when a
-                  matching local workflow area exists.
+                  Optional. You can leave this unscoped.
                 </p>
               </div>
             </div>
@@ -684,13 +683,12 @@ export default function CapturePage() {
                     Choose the fastest valid path
                   </p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Save raw capture when you want zero friction. Save and
-                    organize when you already want draft suggestions next.
+                    Save the raw thought, or create drafts for Triage now.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Badge variant="outline">Ctrl/Cmd + Enter</Badge>
-                  <span>Save thought from the main field.</span>
+                  <span>Save from the main field.</span>
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -705,7 +703,7 @@ export default function CapturePage() {
                       : "Save thought"}
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Save the raw capture first. Organize it after if needed.
+                    Store the raw thought.
                   </p>
                 </div>
                 <div className="grid gap-1">
@@ -723,7 +721,7 @@ export default function CapturePage() {
                       : "Save and organize"}
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Save first, then sort into drafts for Triage.
+                    Create drafts for Triage.
                   </p>
                 </div>
               </div>
@@ -731,7 +729,7 @@ export default function CapturePage() {
           </form>
 
           <DiagnosticsDisclosure
-            title="On-device draft pass"
+            title="Local draft pass"
             className="workflow-inline-disclosure"
             contentClassName="mt-3 grid gap-3 workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
           >
@@ -740,8 +738,7 @@ export default function CapturePage() {
                 Keep local drafts secondary
               </p>
               <p className="text-xs text-muted-foreground">
-                The header area picker controls this device-only draft flow and
-                the recent captures on this page.
+                Use this only when you want browser-local draft suggestions.
               </p>
             </div>
             <Button
@@ -883,11 +880,6 @@ export default function CapturePage() {
             ? "Recent saved captures"
             : "Recent saved captures on this device"}
         </h2>
-        <p className="text-sm text-muted-foreground">
-          {provider === "supabase"
-            ? "These are durable saved captures for the selected area."
-            : "These saved captures stay on this device in this browser session."}
-        </p>
         {savedCaptureHistoryState.status === "loading" ? (
           <p role="status" className="text-sm text-muted-foreground">
             Checking saved capture history.
@@ -966,16 +958,13 @@ export default function CapturePage() {
       </section>
 
       <DiagnosticsDisclosure
-        title="Recent captures organized on this device"
+        title="Device-only drafts"
         contentClassName="mt-4"
       >
         <div
           data-testid="capture-device-history-card"
           className="space-y-3 workflow-admin-card rounded-xl p-4 text-sm text-muted-foreground"
         >
-          <p className="text-sm text-muted-foreground">
-            This local draft flow is separate from saved capture history.
-          </p>
           {visibleCaptures.length === 0 ? (
             <EmptyState
               title="No device-only organized captures for this area yet."

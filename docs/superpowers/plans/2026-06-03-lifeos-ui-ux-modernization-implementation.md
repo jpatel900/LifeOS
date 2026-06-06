@@ -1,17 +1,28 @@
 # LifeOS UI/UX Modernization Implementation Plan
 
+Historical implementation plan only.
+
+The canonical active UX execution queue is now `docs/UI_UX_WORLD_CLASS_ROADMAP.md`. This file remains useful as implementation history and decomposition, but it is no longer the live source of truth for what should execute next.
+
+Current update after the June 6 frontend-governance and shadcn-consistency work:
+
+- the shared primitive/disclosure/loading layer is already landed
+- route-level repeated seam cleanup is complete
+- future UX work should extend the current app-local primitive layer instead of reopening those foundation tasks from scratch
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Modernize the LifeOS web UI so it feels materially more premium, low-friction, and visually rewarding while preserving all existing truthfulness, read-only, and approval-gated behavior boundaries.
 
-**Architecture:** Keep the current route structure and workflow semantics, but introduce a stronger shared visual system, calmer shell, tighter disclosure model, and more opinionated page hierarchy. Concentrate the strongest redesign energy on `Home` and `Execute`, then apply a lighter but still meaningful modernization pass across the remaining primary screens and reconcile docs/tests afterward.
+**Architecture:** Keep the current route structure and workflow semantics, but introduce a stronger shared visual system, calmer shell, tighter disclosure model, and more opinionated page hierarchy. Use the existing app-local shadcn-compatible primitive layer for shared controls and repeated seams, while keeping route composition and product authorship custom. Concentrate the strongest redesign energy on `Home` and `Execute`, then apply a lighter but still meaningful modernization pass across the remaining primary screens and reconcile docs/tests afterward.
 
-**Tech Stack:** Next.js 15 App Router, React client components, Tailwind v4 via `globals.css`, shadcn-style UI primitives, Vitest, Playwright, pnpm workspaces
+**Tech Stack:** Next.js 15 App Router, React client components, Tailwind v4 via `globals.css`, app-local shadcn-compatible UI primitives, Vitest, Playwright, pnpm workspaces
 
 ---
 
 ## Context to read before implementation
 
+- Active roadmap: `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
 - Design spec: `docs/superpowers/specs/2026-06-03-lifeos-ui-ux-modernization-design.md`
 - Guardrails: `AGENTS.md`
 - Current shipped UX status: `docs/PROJECT_STATE.md`
@@ -22,12 +33,16 @@
 
 ### Shared visual system and shell
 
+- Modify or extend: `apps/web/src/components/ui/**`
+  - Prefer app-local primitives for shared controls, labels, loading scaffolds, and repeated form structure.
 - Modify: `apps/web/src/app/globals.css`
   - Add the new shell, flagship-card, support-panel, disclosure, motion, and page-rhythm classes.
 - Modify: `apps/web/src/app/components/AppShell.tsx`
   - Recompose the app shell so nav, current-area context, quick capture, and shell hierarchy feel calmer and more premium.
 - Modify: `apps/web/src/app/components/DiagnosticsDisclosure.tsx`
   - Standardize the disclosure pattern around `System details`.
+- Modify: `apps/web/src/app/components/WorkflowLoadingState.tsx`
+  - Keep shared loading scaffolds consistent instead of repeating route-local placeholder markup.
 - Create: `apps/web/src/app/components/WorkflowPageHeader.tsx`
   - Shared page-level hero/header component for consistent screen framing.
 
@@ -66,6 +81,7 @@
 ## Task 1: Build the shared visual system and shell hierarchy
 
 **Files:**
+
 - Create: `apps/web/src/app/components/WorkflowPageHeader.tsx`
 - Modify: `apps/web/src/app/globals.css`
 - Modify: `apps/web/src/app/components/AppShell.tsx`
@@ -143,7 +159,9 @@ export function WorkflowPageHeader({
         <p className="workflow-page-description">{description}</p>
       </div>
       {actions ? <div className="workflow-page-actions">{actions}</div> : null}
-      {spotlight ? <div className="workflow-page-spotlight">{spotlight}</div> : null}
+      {spotlight ? (
+        <div className="workflow-page-spotlight">{spotlight}</div>
+      ) : null}
     </section>
   );
 }
@@ -173,11 +191,24 @@ Update the disclosure component and shell copy to standardize on `System details
 Add the new classes in `globals.css`.
 
 ```css
-.workflow-page-header { display:grid; gap:1rem; }
-.workflow-page-title { font-size:clamp(2.25rem,4vw,3.75rem); line-height:0.95; }
-.workflow-page-spotlight { border-radius:1.5rem; }
-.workflow-system-details { border:1px solid var(--border); border-radius:1rem; }
-.workflow-system-details__body { padding:0.875rem 1rem 1rem; }
+.workflow-page-header {
+  display: grid;
+  gap: 1rem;
+}
+.workflow-page-title {
+  font-size: clamp(2.25rem, 4vw, 3.75rem);
+  line-height: 0.95;
+}
+.workflow-page-spotlight {
+  border-radius: 1.5rem;
+}
+.workflow-system-details {
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+}
+.workflow-system-details__body {
+  padding: 0.875rem 1rem 1rem;
+}
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
@@ -196,6 +227,7 @@ git commit -m "feat: add shared UI modernization shell system"
 ## Task 2: Redesign Home as the read-only flagship cockpit
 
 **Files:**
+
 - Modify: `apps/web/src/app/page.tsx`
 - Modify: `apps/web/src/app/components/EmptyState.tsx`
 - Modify: `apps/web/src/__tests__/page.test.tsx`
@@ -240,7 +272,10 @@ Recompose Home around a shared header plus one dominant next-action block, then 
   title={cockpit.headline}
   description={cockpit.summary}
   spotlight={
-    <Card data-testid="home-next-action-card" className="workflow-flagship-card">
+    <Card
+      data-testid="home-next-action-card"
+      className="workflow-flagship-card"
+    >
       <CardHeader>
         <CardTitle>{cockpit.next.title}</CardTitle>
       </CardHeader>
@@ -258,7 +293,9 @@ Recompose Home around a shared header plus one dominant next-action block, then 
 Keep Home read-only by limiting actions to links and quick local capture only.
 
 ```tsx
-expect(home).not.toMatch(/acceptTimeBlockProposal|createGoogleCalendarEventFromProposal|markExecutionSession/);
+expect(home).not.toMatch(
+  /acceptTimeBlockProposal|createGoogleCalendarEventFromProposal|markExecutionSession/,
+);
 ```
 
 Update `EmptyState.tsx` so empty states support the calmer premium visual system.
@@ -287,6 +324,7 @@ git commit -m "feat: redesign Home as flagship read-only cockpit"
 ## Task 3: Redesign Execute as the flagship focus surface
 
 **Files:**
+
 - Modify: `apps/web/src/app/execute/page.tsx`
 - Modify: `apps/web/src/__tests__/executeFocusPolish.test.tsx`
 - Modify: `apps/web/src/__tests__/phase4aPersistence.test.tsx`
@@ -308,9 +346,9 @@ it("keeps Execute centered on one mission with stable valid controls", async () 
 Add a persistence truthfulness assertion that stop semantics remain explicit.
 
 ```ts
-expect(normalizeWhitespace(readRepoFile("apps/web/src/app/execute/page.tsx"))).toContain(
-  "Stop on this device",
-);
+expect(
+  normalizeWhitespace(readRepoFile("apps/web/src/app/execute/page.tsx")),
+).toContain("Stop on this device");
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -330,12 +368,20 @@ Turn the current session-state block into the visual center of the screen and mo
   title={focusStateTitle(uiState, usesPersistedExecution)}
   description={focusStateDescription(uiState, usesPersistedExecution)}
   spotlight={
-    <Card data-testid="execute-focus-hero" className="workflow-flagship-card focus-state-card">
+    <Card
+      data-testid="execute-focus-hero"
+      className="workflow-flagship-card focus-state-card"
+    >
       <CardHeader>
-        <CardTitle>{currentTask?.title ?? "Choose a task to focus on"}</CardTitle>
+        <CardTitle>
+          {currentTask?.title ?? "Choose a task to focus on"}
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <p>{currentTask?.first_tiny_step ?? "Start with the smallest visible move."}</p>
+        <p>
+          {currentTask?.first_tiny_step ??
+            "Start with the smallest visible move."}
+        </p>
         <div className="workflow-primary-actions">{primaryButtons}</div>
       </CardContent>
     </Card>
@@ -369,6 +415,7 @@ git commit -m "feat: redesign Execute as flagship focus surface"
 ## Task 4: Modernize Capture, Triage, and Planning without changing scope
 
 **Files:**
+
 - Modify: `apps/web/src/app/capture/page.tsx`
 - Modify: `apps/web/src/app/triage/page.tsx`
 - Modify: `apps/web/src/app/calendar/page.tsx`
@@ -393,8 +440,12 @@ it("keeps capture writing-first while preserving save truth", () => {
 Add a triage/planning persistence assertion that current-item and local-first truths remain explicit.
 
 ```ts
-expect(source).toContain("Drafts shown here stay on this device until you accept them.");
-expect(source).toContain("Nothing goes to Google Calendar until you approve it.");
+expect(source).toContain(
+  "Drafts shown here stay on this device until you accept them.",
+);
+expect(source).toContain(
+  "Nothing goes to Google Calendar until you approve it.",
+);
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -421,8 +472,14 @@ Make Capture writing-first.
 Make Triage current-item-first.
 
 ```tsx
-<Card id="triage-current-item" data-testid="triage-current-item" className="workflow-flagship-card">
-  <CardHeader><CardTitle>{activeQueueItem?.draft.title}</CardTitle></CardHeader>
+<Card
+  id="triage-current-item"
+  data-testid="triage-current-item"
+  className="workflow-flagship-card"
+>
+  <CardHeader>
+    <CardTitle>{activeQueueItem?.draft.title}</CardTitle>
+  </CardHeader>
 </Card>
 ```
 
@@ -453,6 +510,7 @@ git commit -m "feat: modernize Capture Triage and Planning UX"
 ## Task 5: Modernize Review, Health, and Areas as quieter supporting surfaces
 
 **Files:**
+
 - Modify: `apps/web/src/app/review/page.tsx`
 - Modify: `apps/web/src/app/health/page.tsx`
 - Modify: `apps/web/src/app/settings/areas/page.tsx`
@@ -477,9 +535,9 @@ it("keeps Health centered on the top-level reliability answer", async () => {
 Add an areas assertion that admin truth stays available while the page becomes quieter.
 
 ```ts
-expect(normalizeWhitespace(readRepoFile("apps/web/src/app/settings/areas/page.tsx"))).toContain(
-  "Save mode:",
-);
+expect(
+  normalizeWhitespace(readRepoFile("apps/web/src/app/settings/areas/page.tsx")),
+).toContain("Save mode:");
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -536,6 +594,7 @@ git commit -m "feat: modernize Review Health and Areas surfaces"
 ## Task 6: Reconcile docs, refresh proofs, and close the modernization pass
 
 **Files:**
+
 - Modify: `docs/UX_FLOWS.md`
 - Modify: `docs/PROJECT_STATE.md`
 - Modify: `apps/web/src/__tests__/sourceOfTruth.test.ts`
@@ -548,7 +607,9 @@ If visible truthfulness or disclosure wording changed intentionally, update the 
 ```ts
 expect(appShell).toContain("System details");
 expect(health).toContain("Can I rely on LifeOS today?");
-expect(calendar).toContain("Nothing goes to Google Calendar until you approve it.");
+expect(calendar).toContain(
+  "Nothing goes to Google Calendar until you approve it.",
+);
 ```
 
 Refresh the browser hierarchy proof with the new flagship card markers.

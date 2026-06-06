@@ -77,9 +77,9 @@ test("workflow cards reuse area accent tokens across core routes", async ({
   await page.getByLabel("What are you thinking about?").fill(
     "Playwright capture for accent proof",
   );
-  await page.getByText("On-device draft pass").click();
+  await page.getByText("Local draft pass").click();
   await page.getByRole("button", { name: "Organize on this device" }).click();
-  await page.getByText("Recent captures organized on this device").click();
+  await page.getByText("Device-only drafts").click();
   await expect(page.getByTestId("capture-recent-card").first()).toBeVisible();
   await expect(page.getByTestId("capture-recent-card").first()).toHaveCSS(
     "--area-accent",

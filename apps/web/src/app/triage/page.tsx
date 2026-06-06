@@ -362,7 +362,7 @@ export default function TriagePage() {
       <WorkflowPageHeader
         eyebrow="One decision at a time"
         title="Triage"
-        description="Stay with the current item, make the next useful decision, then let the queue fall away behind you."
+        description="Stay with the current item, make the next decision, then let the rest wait."
         spotlight={
           <Card
             data-testid="triage-header-summary-card"
@@ -376,8 +376,8 @@ export default function TriagePage() {
                 </p>
                 <p className="workflow-metric-context">
                   {hasCandidates
-                    ? "Keep attention on one draft until it is accepted or rejected."
-                    : "Capture a new thought to create the next review decision."}
+                    ? "Finish one draft before touching the rest."
+                    : "Capture first, then come back here."}
                 </p>
               </div>
               <div className="workflow-metric-card">
@@ -387,8 +387,8 @@ export default function TriagePage() {
                 </p>
                 <p className="workflow-metric-context">
                   {upcomingQueueItems.length === 0
-                    ? "Nothing else will compete for attention once this item is done."
-                    : `The queue stays compressed until this decision is finished.`}
+                    ? "The queue clears when this is done."
+                    : "The rest stays compressed until this is done."}
                 </p>
               </div>
               <div className="workflow-metric-card">
@@ -399,7 +399,7 @@ export default function TriagePage() {
                     : "Checking"}
                 </p>
                 <p className="workflow-metric-context">
-                  Drafts stay on this device until you accept them.
+                  Nothing syncs until you accept it.
                 </p>
               </div>
             </CardContent>
@@ -433,8 +433,8 @@ export default function TriagePage() {
               <p className="workflow-section-kicker">Next move</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 {upcomingQueueItems.length === 0
-                  ? "Review the current item now. Nothing else is waiting after this."
-                  : `Review the current item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after this one.`}
+                  ? "Review this item now. Nothing waits after it."
+                  : `Review this item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after it.`}
               </p>
             </div>
             <Button type="button" onClick={handleReviewNextItem}>
@@ -448,8 +448,8 @@ export default function TriagePage() {
         {loadState.status === "ready" ? (
           <>
             <p>
-              Accepted items are {savedViaLabel(loadState.provider)}. Drafts
-              shown here stay on this device until you accept them.
+              Accepted items are {savedViaLabel(loadState.provider)}. Pending
+              drafts stay on this device.
             </p>
             <p>
               Save mode: <strong>{saveModeLabel(loadState.provider)}</strong>
@@ -464,7 +464,7 @@ export default function TriagePage() {
       {loadState.status === "loading" ? (
         <WorkflowLoadingState
           title="Checking saved context"
-          description="You can still review drafts while account context loads."
+          description="You can review drafts while account context loads."
         />
       ) : null}
 
@@ -518,7 +518,7 @@ export default function TriagePage() {
       {totalCandidates === 0 ? (
         <EmptyState
           title="Nothing to triage right now."
-          description="No pending suggestions in this browser. Go to Capture, save a thought, then return here to review it."
+          description="No pending suggestions here. Save a thought in Capture, then come back."
           action={
             <Button asChild>
               <Link href="/capture">Go to Capture</Link>
@@ -543,8 +543,7 @@ export default function TriagePage() {
                       {activeQueueItem.draft.title}
                     </CardTitle>
                     <p className="workflow-surface-body max-w-2xl text-sm text-muted-foreground">
-                      Make the next decision here before looking at anything
-                      else.
+                      Decide this before looking at anything else.
                     </p>
                     <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                       {activeQueueItemArea ? (
@@ -664,8 +663,7 @@ export default function TriagePage() {
                           <div className="workflow-action-tray">
                             <p className="workflow-section-kicker">Decide</p>
                             <p className="mt-2 text-sm text-muted-foreground">
-                              Keep the choice narrow: accept it, reject it, or
-                              tighten the draft before it becomes real work.
+                              Accept it, reject it, or tighten the draft first.
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2">
                               <Button
@@ -769,8 +767,7 @@ export default function TriagePage() {
                                 </Button>
                               </div>
                               <p className="mt-2 text-xs text-muted-foreground">
-                                These notes stay on this device and do not move
-                                the item.
+                                Device-only notes. They do not move the item.
                               </p>
                             </div>
                           </DiagnosticsDisclosure>
@@ -784,8 +781,7 @@ export default function TriagePage() {
                       <p className="workflow-section-kicker">Decide</p>
                       <p className="mt-2 text-sm text-muted-foreground">
                         Accept it as a project only if it is clearly bigger than
-                        one task. Otherwise reject and return to Capture for a
-                        cleaner pass.
+                        one task. Otherwise reject it and return to Capture.
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button

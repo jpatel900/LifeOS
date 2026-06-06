@@ -371,7 +371,7 @@ export default function ReviewPage() {
       <WorkflowPageHeader
         eyebrow="Close the loop"
         title="Review"
-        description="Decide what moves forward, what needs a new time, and what can stop without turning the end of the day into analysis work."
+        description="Decide what moves forward, what needs a new time, and what can stop."
         spotlight={
           reviewState.status === "ready" ? (
             <Card
@@ -386,8 +386,7 @@ export default function ReviewPage() {
               </CardHeader>
               <CardContent className="grid gap-4 text-sm text-muted-foreground">
                 <p className="workflow-surface-body max-w-2xl">
-                  Decide what moves forward, what needs a new time, and what can
-                  stop without reopening the whole day.
+                  Close the day without reopening the whole thing.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
@@ -399,8 +398,8 @@ export default function ReviewPage() {
                   </Button>
                   <p className="text-sm text-muted-foreground">
                     {reviewEntries.length === 0
-                      ? "Start one daily review to decide what should move forward."
-                      : "Log the day once you know what carries forward, what needs a new time, and what can stop."}
+                      ? "Start one daily review."
+                      : "Save the day once you know what carries forward."}
                   </p>
                 </div>
               </CardContent>
@@ -435,15 +434,14 @@ export default function ReviewPage() {
               <CardHeader className="pb-3">
                 <CardDescription>
                   Keep the answers short. They save with the daily review when
-                  that save path is available.
+                  available.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
                 <div className="workflow-action-tray">
                   <p className="workflow-section-kicker">Short on purpose</p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    This should feel like clearing mental residue, not filling
-                    out a report.
+                    Clear residue. Do not write a report.
                   </p>
                 </div>
                 <div className="grid gap-1">
@@ -508,18 +506,16 @@ export default function ReviewPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Close the loop</CardTitle>
               <CardDescription>
-                Pick the next action on purpose instead of leaving the day half
-                open.
+                Pick the next action on purpose.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
               <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
                 <p className="workflow-action-tray">
-                  Continue or reschedule in Planning if the work still matters.
+                  Keep it moving in Planning if it still matters.
                 </p>
                 <p className="workflow-action-tray">
-                  Capture a follow-up, carry it forward, or stop for today on
-                  purpose.
+                  Capture a follow-up, carry it forward, or stop on purpose.
                 </p>
               </div>
               <div className="workflow-action-tray grid gap-3">
@@ -553,7 +549,7 @@ export default function ReviewPage() {
       {reviewState.status === "loading" ? (
         <WorkflowLoadingState
           title="Checking saved review rows"
-          description="Local reflection is still available while saved review rows load."
+          description="Local reflection still works while saved review rows load."
         />
       ) : null}
 
@@ -620,8 +616,8 @@ export default function ReviewPage() {
             <div className="space-y-1">
               <CardTitle className="text-base">Today at a glance</CardTitle>
               <CardDescription>
-                Group the day into what was captured, planned, finished,
-                interrupted, and still open.
+                Group the day into captured, planned, finished, interrupted,
+                and still open.
               </CardDescription>
             </div>
             {selectedArea ? (
@@ -700,7 +696,7 @@ export default function ReviewPage() {
               {captures.length === 0 && sessions.length === 0 ? (
                 <EmptyState
                   title="No daily review yet."
-                  description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
+                  description="Complete the core workflow and the local review summary will appear here."
                   action={
                     <Button asChild>
                       <Link href="/capture">Capture a follow-up</Link>
@@ -715,7 +711,7 @@ export default function ReviewPage() {
                       {capturedWaiting.length}
                     </p>
                     <p className="workflow-metric-context">
-                      Items still waiting for a decision.
+                      Still waiting for a decision.
                     </p>
                   </div>
                   <div className="workflow-metric-card">
@@ -724,14 +720,14 @@ export default function ReviewPage() {
                       {plannedBlocks.length}
                     </p>
                     <p className="workflow-metric-context">
-                      Blocks already placed on the day.
+                      Already placed on the day.
                     </p>
                   </div>
                   <div className="workflow-metric-card">
                     <p className="workflow-metric-label">Completed</p>
                     <p className="workflow-metric-value">{completed.length}</p>
                     <p className="workflow-metric-context">
-                      Sessions that closed cleanly.
+                      Closed cleanly.
                     </p>
                   </div>
                   <div className="workflow-metric-card">
@@ -761,15 +757,14 @@ export default function ReviewPage() {
                 Area backlog this week
               </CardTitle>
               <CardDescription>
-                Which areas are accumulating unfinished weight versus actually
-                moving.
+                Which areas are accumulating weight versus actually moving.
               </CardDescription>
             </CardHeader>
             <CardContent>
               {tasks.length === 0 ? (
                 <EmptyState
                   title="No weekly review yet."
-                  description="Area-level patterns will appear here once you accept tasks and run sessions."
+                  description="Area patterns will appear here once you accept tasks and run sessions."
                 />
               ) : (
                 <div className="flex flex-col gap-2">
@@ -848,8 +843,7 @@ export default function ReviewPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Past reviews and notes</CardTitle>
             <CardDescription>
-              Open this only when you need the saved detail or raw browser
-              notes.
+              Open this only when you need saved detail or raw browser notes.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">

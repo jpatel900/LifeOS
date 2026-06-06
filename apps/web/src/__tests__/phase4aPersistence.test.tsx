@@ -741,9 +741,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeDefined();
 
     expect(
-      screen.getByText(
-        "These notes stay on this device and do not move the item.",
-      ),
+      screen.getByText("Device-only notes. They do not move the item."),
     ).toBeDefined();
     expect(mocks.createTask).not.toHaveBeenCalled();
   });
@@ -856,7 +854,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     ).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        "Suggested and planned time blocks appear here after you suggest time for a task. Checking Google Calendar is optional and does not create events.",
+        "Suggest time for a task and it will appear here.",
       ),
     ).toBeDefined();
   });

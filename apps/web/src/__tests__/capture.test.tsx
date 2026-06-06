@@ -173,22 +173,18 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(screen.getByLabelText("Area for this saved thought")).toBeDefined();
     expect(screen.getByText("Current area: Main Job")).toBeDefined();
-    expect(screen.getByText("On-device draft pass")).toBeDefined();
+    expect(screen.getByText("Local draft pass")).toBeDefined();
     expect(screen.getByText("Ctrl/Cmd + Enter")).toBeDefined();
-    expect(screen.getByText("Save thought from the main field.")).toBeDefined();
+    expect(screen.getByText("Save from the main field.")).toBeDefined();
     expect(
-      screen.getByText(
-        "Save raw capture when you want zero friction. Save and organize when you already want draft suggestions next.",
-      ),
+      screen.getByText("Save the raw thought, or create drafts for Triage now."),
     ).toBeDefined();
     expect(
       screen.getByRole("heading", {
         name: "Recent saved captures on this device",
       }),
     ).toBeDefined();
-    expect(
-      screen.getByText("Recent captures organized on this device"),
-    ).toBeDefined();
+    expect(screen.getByText("Device-only drafts")).toBeDefined();
     expect(screen.getByTestId("capture-main-card")).toHaveClass(
       "workflow-flagship-card",
     );

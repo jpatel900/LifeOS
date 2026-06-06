@@ -248,7 +248,7 @@ export default function AreasSettingsPage() {
       <WorkflowPageHeader
         eyebrow="Quiet admin, clear ownership"
         title="Areas"
-        description="Manage areas, accents, and account-connected behavior without adding noise to the daily workflow."
+        description="Manage areas, accents, and account-connected behavior without adding daily noise."
         spotlight={
           state.status === "ready" ? (
             <Card
@@ -262,16 +262,14 @@ export default function AreasSettingsPage() {
                     {saveModeLabel(state.provider)}
                   </p>
                   <p className="workflow-metric-context">
-                    This page stays truthful about whether changes are saved to
-                    your account.
+                    This page stays truthful about where changes save.
                   </p>
                 </div>
                 <div className="workflow-metric-card">
                   <p className="workflow-metric-label">Active areas</p>
                   <p className="workflow-metric-value">{state.areas.length}</p>
                   <p className="workflow-metric-context">
-                    Clear scopes help Capture, Planning, and Review stay
-                    legible.
+                    Clear scopes keep Capture, Planning, and Review legible.
                   </p>
                 </div>
               </CardContent>
@@ -308,8 +306,8 @@ export default function AreasSettingsPage() {
             <div className="workflow-action-tray">
               <p className="workflow-section-kicker">Opinionated default</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Keep area names short and concrete. If you hesitate, the area is
-                probably too broad.
+                Keep names short and concrete. If you hesitate, it is probably
+                too broad.
               </p>
             </div>
             <div className="grid gap-2 sm:max-w-md">
@@ -345,7 +343,7 @@ export default function AreasSettingsPage() {
                   : "Create area"}
               </Button>
               <p className="text-sm text-muted-foreground">
-                New work should have a clear area before you plan or review it.
+                New work should have a clear area before planning or review.
               </p>
             </div>
           </form>
@@ -371,7 +369,7 @@ export default function AreasSettingsPage() {
       {state.status === "loading" ? (
         <WorkflowLoadingState
           title="Checking saved areas"
-          description="You can still prepare the next area while saved area rows load."
+          description="You can prepare the next area while saved rows load."
         />
       ) : null}
 
@@ -381,9 +379,9 @@ export default function AreasSettingsPage() {
           <AlertDescription>
             <p>{state.message}</p>
             <p>
-              If Supabase is configured, make sure you are signed in and the
-              local stack is running. Without Supabase env vars, this page uses
-              local-only areas.
+              If Supabase is configured, sign in and make sure the local stack
+              is running. Without Supabase env vars, this page uses local-only
+              areas.
             </p>
           </AlertDescription>
         </Alert>
@@ -394,7 +392,7 @@ export default function AreasSettingsPage() {
           {state.areas.length === 0 ? (
             <EmptyState
               title="No active areas yet."
-              description="Create your first area above before capture and planning so new work has a clear scope."
+              description="Create your first area above so new work has a clear scope."
               action={
                 <Button asChild>
                   <Link href="#area_name">Create area</Link>
@@ -480,7 +478,7 @@ export default function AreasSettingsPage() {
                         <p className="mt-1 text-muted-foreground">
                           {openTasks === 0
                             ? "Nothing active here right now."
-                            : "Work is waiting to be planned or executed."}
+                            : "Work is waiting for planning or execution."}
                         </p>
                       </div>
                       <div className="area-accent-panel rounded-lg border p-3">
@@ -491,7 +489,7 @@ export default function AreasSettingsPage() {
                         <p className="mt-1 text-muted-foreground">
                           {plannedBlocks === 0
                             ? "No block is scheduled for this area."
-                            : "A block already exists for this area."}
+                            : "A block already exists here."}
                         </p>
                       </div>
                     </div>
@@ -568,8 +566,8 @@ export default function AreasSettingsPage() {
                                 Accent color
                               </p>
                               <p className="text-muted-foreground">
-                                Accent helps you recognize this area faster. The
-                                area name always stays visible.
+                                Accent helps you recognize the area faster. The
+                                name always stays visible.
                               </p>
                             </div>
                             <Badge
@@ -622,8 +620,7 @@ export default function AreasSettingsPage() {
 
                           <p className="mt-3 text-xs text-muted-foreground">
                             Preview updates immediately on this card. Reset uses
-                            the default accent token instead of inventing a fake
-                            theme.
+                            the default accent token.
                           </p>
                           {isUpdatingColor ? (
                             <p className="mt-2 text-xs text-muted-foreground">
