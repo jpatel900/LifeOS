@@ -26,7 +26,12 @@ const navLinks = [
   { href: "/settings/areas", label: "Areas" },
 ];
 
-const quietShellContextRoutes = new Set(["/execute", "/review"]);
+const quietShellContextRoutes = new Set([
+  "/capture",
+  "/calendar",
+  "/execute",
+  "/review",
+]);
 
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();

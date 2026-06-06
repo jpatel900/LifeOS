@@ -616,8 +616,8 @@ export default function ReviewPage() {
             <div className="space-y-1">
               <CardTitle className="text-base">Today at a glance</CardTitle>
               <CardDescription>
-                Group the day into captured, planned, finished, interrupted,
-                and still open.
+                Group the day into captured, planned, finished, interrupted, and
+                still open.
               </CardDescription>
             </div>
             {selectedArea ? (
@@ -726,9 +726,7 @@ export default function ReviewPage() {
                   <div className="workflow-metric-card">
                     <p className="workflow-metric-label">Completed</p>
                     <p className="workflow-metric-value">{completed.length}</p>
-                    <p className="workflow-metric-context">
-                      Closed cleanly.
-                    </p>
+                    <p className="workflow-metric-context">Closed cleanly.</p>
                   </div>
                   <div className="workflow-metric-card">
                     <p className="workflow-metric-label">Needs recovery</p>
@@ -861,86 +859,84 @@ export default function ReviewPage() {
                 summaryClassName="cursor-pointer select-none font-medium text-foreground"
                 contentClassName="mt-3 grid gap-3 text-sm text-muted-foreground"
               >
-                  {reviewEntries.map((entry) => {
-                    const lifecycle = reviewedLifecycleDisplay();
-                    const areaName =
-                      entry.area_id === null
-                        ? "All areas"
-                        : (areas.find((area) => area.id === entry.area_id)
-                            ?.name ?? "Saved area");
-                    const completedCount = summaryNumber(
-                      entry.summary_json,
-                      "completed_sessions",
-                    );
-                    const openCount = summaryNumber(
-                      entry.summary_json,
-                      "open_tasks",
-                    );
-                    const missedCount = summaryNumber(
-                      entry.summary_json,
-                      "missed_sessions",
-                    );
+                {reviewEntries.map((entry) => {
+                  const lifecycle = reviewedLifecycleDisplay();
+                  const areaName =
+                    entry.area_id === null
+                      ? "All areas"
+                      : (areas.find((area) => area.id === entry.area_id)
+                          ?.name ?? "Saved area");
+                  const completedCount = summaryNumber(
+                    entry.summary_json,
+                    "completed_sessions",
+                  );
+                  const openCount = summaryNumber(
+                    entry.summary_json,
+                    "open_tasks",
+                  );
+                  const missedCount = summaryNumber(
+                    entry.summary_json,
+                    "missed_sessions",
+                  );
 
-                    return (
-                      <div
-                        key={entry.id}
-                        className="rounded-lg border border-border bg-background/50 p-4"
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium">
-                                {entry.review_type} review for{" "}
-                                {formatReviewDate(entry.period_end)}
-                              </p>
-                              <Badge variant={lifecycle.variant}>
-                                {lifecycle.label}
-                              </Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                              {areaName}
+                  return (
+                    <div
+                      key={entry.id}
+                      className="rounded-lg border border-border bg-background/50 p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium">
+                              {entry.review_type} review for{" "}
+                              {formatReviewDate(entry.period_end)}
                             </p>
+                            <Badge variant={lifecycle.variant}>
+                              {lifecycle.label}
+                            </Badge>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            Saved {new Date(entry.created_at).toLocaleString()}
+                          <p className="text-sm text-muted-foreground">
+                            {areaName}
                           </p>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          {completedCount !== null ? (
-                            <span className="rounded-full border border-border px-2 py-1">
-                              Completed sessions: {completedCount}
-                            </span>
-                          ) : null}
-                          {openCount !== null ? (
-                            <span className="rounded-full border border-border px-2 py-1">
-                              Open tasks: {openCount}
-                            </span>
-                          ) : null}
-                          {missedCount !== null ? (
-                            <span className="rounded-full border border-border px-2 py-1">
-                              Missed sessions: {missedCount}
-                            </span>
-                          ) : null}
-                        </div>
-                        {reviewReflections(entry.summary_json).length > 0 ? (
-                          <div className="mt-3 space-y-2 text-sm">
-                            {reviewReflections(entry.summary_json).map(
-                              ([key, value]) => (
-                                <div key={key}>
-                                  <p className="font-medium">
-                                    {reflectionsLabels[key]}
-                                  </p>
-                                  <p className="text-muted-foreground">
-                                    {value}
-                                  </p>
-                                </div>
-                              ),
-                            )}
-                          </div>
+                        <p className="text-xs text-muted-foreground">
+                          Saved {new Date(entry.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {completedCount !== null ? (
+                          <span className="rounded-full border border-border px-2 py-1">
+                            Completed sessions: {completedCount}
+                          </span>
+                        ) : null}
+                        {openCount !== null ? (
+                          <span className="rounded-full border border-border px-2 py-1">
+                            Open tasks: {openCount}
+                          </span>
+                        ) : null}
+                        {missedCount !== null ? (
+                          <span className="rounded-full border border-border px-2 py-1">
+                            Missed sessions: {missedCount}
+                          </span>
                         ) : null}
                       </div>
-                    );
-                  })}
+                      {reviewReflections(entry.summary_json).length > 0 ? (
+                        <div className="mt-3 space-y-2 text-sm">
+                          {reviewReflections(entry.summary_json).map(
+                            ([key, value]) => (
+                              <div key={key}>
+                                <p className="font-medium">
+                                  {reflectionsLabels[key]}
+                                </p>
+                                <p className="text-muted-foreground">{value}</p>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </DiagnosticsDisclosure>
             ) : null}
 

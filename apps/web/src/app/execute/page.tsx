@@ -1234,9 +1234,9 @@ export default function ExecutePage() {
             >
               {showPersistedStopGuidance ? (
                 <p>
-                  Stop (device-only sessions) is only available when the
-                  session lives on this device. Sessions saved to your account
-                  need an end outcome and notes.
+                  Stop (device-only sessions) is only available when the session
+                  lives on this device. Sessions saved to your account need an
+                  end outcome and notes.
                 </p>
               ) : null}
               <p>

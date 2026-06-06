@@ -520,7 +520,7 @@ export default function CapturePage() {
         spotlight={
           <Card
             data-testid="capture-header-summary-card"
-            className="workflow-secondary-card workflow-support-card"
+            className="workflow-secondary-card workflow-support-card workflow-quiet-card"
           >
             <CardContent className="workflow-metric-grid pt-6">
               <div className="workflow-metric-card">

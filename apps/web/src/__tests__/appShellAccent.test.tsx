@@ -30,9 +30,8 @@ describe("AppShell area accent", () => {
     });
 
     expect(shell.style.getPropertyValue("--area-accent")).toBe("#f97316");
-    expect(screen.getByLabelText("Current area context")).toHaveTextContent(
-      "Side Project",
-    );
+    expect(areaSelect).toHaveValue("area-side-project");
+    expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
   });
 
   it("marks the active nav item with aria-current", () => {

@@ -53,9 +53,11 @@ describe("workflow route provider wiring", () => {
       screen.getByRole("button", { name: "Save quick note" }),
     ).toBeDefined();
     expect(
-      screen.getByText("Saved on this device only. Review in Triage or Review."),
+      screen.getByText(
+        "Saved on this device only. Review in Triage or Review.",
+      ),
     ).toBeDefined();
-    expect(screen.getByTestId("app-shell-context-header")).toBeDefined();
+    expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
     expect(
       screen.getByRole("heading", { level: 1, name: "Capture" }),
     ).toBeDefined();
@@ -64,13 +66,29 @@ describe("workflow route provider wiring", () => {
     ).toBeDefined();
   });
 
-  it("removes the extra shell context band on Execute and Review", async () => {
+  it("removes the extra shell context band on Capture, Planning, Execute, and Review", async () => {
+    renderThroughAppShell(<CapturePage />, "/capture");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Capture" }),
+    ).toBeDefined();
+    expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
+
+    renderThroughAppShell(<CalendarPage />, "/calendar");
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Planning" }),
+    ).toBeDefined();
+    expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
+
     renderThroughAppShell(<ExecutePage />, "/execute");
-    expect(await screen.findByRole("heading", { level: 1, name: "Execute" })).toBeDefined();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Execute" }),
+    ).toBeDefined();
     expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
 
     renderThroughAppShell(<ReviewPage />, "/review");
-    expect(await screen.findByRole("heading", { level: 1, name: "Review" })).toBeDefined();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Review" }),
+    ).toBeDefined();
     expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
   });
 

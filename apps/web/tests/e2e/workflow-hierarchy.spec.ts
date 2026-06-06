@@ -230,6 +230,7 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
   );
 
   await page.goto("/capture");
+  await expect(page.getByTestId("app-shell-context-header")).toHaveCount(0);
   await expect(page.getByTestId("capture-main-card")).toHaveClass(
     /workflow-flagship-card/,
   );
@@ -248,6 +249,7 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
 
   await seedPlanningHierarchyState(page);
   await page.goto("/calendar");
+  await expect(page.getByTestId("app-shell-context-header")).toHaveCount(0);
   await expect(page.getByTestId("planning-flow-card")).toHaveClass(
     /workflow-flagship-card/,
   );

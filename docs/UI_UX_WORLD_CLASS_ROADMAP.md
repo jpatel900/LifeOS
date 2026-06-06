@@ -63,7 +63,7 @@ The five target outcomes are:
 | ------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Stronger visual authorship and craft | `done`    | Shared shell polish, premium-feel passes, and the explicit flagship/support/admin taxonomy now cover shell and all eight primary routes.                                           | Future visual work should stay inside this authored system. The larger remaining gaps are now copy density, shell burden, interaction cadence, and route identity. |
 | Less explanation-by-default          | `done`    | June 3-6 declutter passes removed duplicate empty-state guidance and tightened copy budgets across Capture, Planning, Triage, Review, and Areas without changing truth boundaries. | Further improvement now comes more from shell compression, interaction cadence, and route identity than from more blanket helper-copy trimming.                    |
-| Calmer, more effortless shell        | `planned` | The shell is materially calmer and Home no longer carries shell mutation.                                                                                                          | The shell still consumes more attention than a fully invisible frame on action-heavy routes.                                                                       |
+| Calmer, more effortless shell        | `done`    | The shell is materially calmer, Home no longer carries shell mutation, and Capture/Planning/Execute/Review now suppress the extra shell-context band so route-local action wins faster. | Future UX work should treat shell quieting as maintenance. The larger remaining gains now come from interaction cadence and stronger route identity, not more blanket chrome reduction. |
 | Sharper interaction feel and closure | `planned` | Inline closure feedback now exists across Capture, Triage, Planning, Execute, and Review.                                                                                          | The cadence is not yet tight enough or visually consistent enough to feel like one authored system.                                                                |
 | More memorable route identity        | `planned` | Home, Execute, Triage, Capture, and Planning now have clearer editorial framing.                                                                                                   | Distinction is still uneven. Several routes still read as strong variants of one template instead of unmistakable scenes.                                          |
 
@@ -77,8 +77,8 @@ Use this as a review checklist, not as permission to skip browser proof. Counts 
 | Capture  | Raw-first intake          | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The copy budget is now materially tighter; the larger remaining gains are later-pass interaction cadence and route distinctiveness, not more helper trimming. |
 | Triage   | One decision at a time    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The copy budget is now materially tighter; the larger remaining gains are later-pass interaction cadence and route distinctiveness, not more helper trimming. |
 | Planning | Local-first scheduling    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The copy budget is now materially tighter; the larger remaining gains are later-pass interaction cadence and route distinctiveness, not more helper trimming. |
-| Execute  | One mission               | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Mission-first hierarchy is real, but shell/support burden still competes more than it should in longer states.                                                |
-| Review   | Closure and carry-forward | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The copy budget is now materially tighter; the larger remaining gains are shell burden and interaction cadence, not more blanket helper trimming.             |
+| Execute  | One mission               | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The shell is quieter now; the larger remaining gains are interaction cadence and stronger route identity once the mission card already wins the scan.         |
+| Review   | Closure and carry-forward | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The shell is quieter now; the larger remaining gains are interaction cadence and a more unmistakable route voice, not more blanket shell reduction.           |
 | Health   | Trust before diagnostics  | `1`                       | `1`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Visual center of gravity is now clearer, but interaction cadence between healthy, warning, and failure states still needs a tighter shared standard.          |
 | Areas    | Quiet ownership admin     | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | The copy budget is now materially tighter; the larger remaining gains are calmer shell framing and stronger route identity, not more blanket helper trimming. |
 
@@ -90,7 +90,7 @@ Use this as a review checklist, not as permission to skip browser proof. Counts 
 | `1. Finish the not-embarrassing gate everywhere` | `done`    | Remove remaining cognitive-overload regressions and keep one dominant path per route.                       | No route shows two competing primary CTAs at first render, duplicate empty-state explainers stay gone, repeated area/save truth stays demoted, and narrow-screen first scan is materially shorter than the pre-program baseline. | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, `interaction-feedback`            |
 | `2. Build a real visual authorship system`       | `done`    | Turn the already-shipped premium passes into an explicit, reduced, shared visual language.                  | Card variants are reduced to a small explicit set, headers feel like one family, accent use is selective, and every screen has one clear visual center of gravity.                                                               | Full repo bar plus `workflow-card-accent` and `execute-focus-flagship`                         |
 | `3. Remove explanation-by-default`               | `done`    | Cut residual helper copy and disclosure sprawl that still survives below the fold.                          | Default visible word count drops route-by-route, no route needs three stacked explanation blocks to make sense, and route purpose is legible in one sentence from the UI alone.                                                  | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, targeted route tests              |
-| `4. Make the shell feel invisible`               | `planned` | Reduce shell burden so route-local action clearly outranks chrome on every primary screen.                  | 390px shell height drops again, keyboard flow stays intact, and shell surfaces never outrank route-local action on Capture, Planning, Execute, or Review.                                                                        | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, focused shell/browser checks      |
+| `4. Make the shell feel invisible`               | `done`    | Reduce shell burden so route-local action clearly outranks chrome on every primary screen.                  | 390px shell height drops again, keyboard flow stays intact, and shell surfaces never outrank route-local action on Capture, Planning, Execute, or Review.                                                                        | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, focused shell/browser checks      |
 | `5. Add interaction feel and closure`            | `planned` | Tighten motion, feedback cadence, and action-near confirmation so the app stops feeling merely correct.     | Every primary action has local closure feedback, no action leaves state change ambiguous, and feedback rhythm reads as one system.                                                                                               | Full repo bar plus `interaction-feedback` and focused route tests                              |
 | `6. Give each route a memorable identity`        | `planned` | Make the routes feel like one product without flattening them into one generic template.                    | Screens are distinguishable at a glance, route purpose is legible without reading every label, and the product feels composed rather than templated.                                                                             | Full repo bar plus screenshot/browser review, `workflow-card-accent`, `execute-focus-flagship` |
 
@@ -129,6 +129,14 @@ Latest Pass 3B slice:
 
 - `2026-06-06`: Review and Areas now close the current explanation-reduction program without changing persistence, auth, parser, or external-write truth boundaries. Review shortens the editorial/header copy, compresses reflection and close-the-loop helper language, tightens loading and summary wording, and trims lower-page admin/history descriptions. Areas shortens the editorial/header copy, compresses save-mode and active-area helper text, tightens create-area guidance, shortens loading and empty-state wording, and trims area-card/admin accent explanations while keeping reset/remove honesty intact. Proof: `pnpm --filter @lifeos/web test -- src/__tests__/phase4aPersistence.test.tsx src/__tests__/routeSmoke.test.tsx src/__tests__/sourceOfTruth.test.ts`, `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`, `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web type-check`, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web build`.
 
+Latest Pass 4A slice:
+
+- `2026-06-06`: Execute and Review now open under quieter shell framing without changing route semantics, keyboard reachability, or truth boundaries. The extra shell-context band is intentionally suppressed on those two routes, the shared shell header drops to a quieter shadow treatment there, and the main support cards on both routes are visually demoted so the mission/closure flagship card wins the first scan faster at desktop and `390px`. Proof: `pnpm --filter @lifeos/web test -- src/__tests__/routeSmoke.test.tsx src/__tests__/executeFocusPolish.test.tsx src/__tests__/workflowAreaAccent.test.tsx`, `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web build`, `pnpm --filter @lifeos/web type-check`, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`.
+
+Latest Pass 4B slice:
+
+- `2026-06-06`: Capture and Planning now complete the current shell-quieting program without changing route semantics, keyboard reachability, parser/save truth, persistence, or Google approval gates. `AppShell` now also suppresses the extra shell-context band on `/capture` and `/calendar`, and each route's top summary spotlight is visually demoted so the raw-intake/planning-flow flagship card wins the first scan faster at desktop and `390px`. Proof: `pnpm --filter @lifeos/web test -- src/__tests__/routeSmoke.test.tsx src/__tests__/capture.test.tsx src/__tests__/workflowAreaAccent.test.tsx`, `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web build`, `pnpm --filter @lifeos/web type-check`, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`.
+
 ## Proof contract for UX passes
 
 Default UX-pass gate:
@@ -156,6 +164,7 @@ Add these when area-accent behavior itself changes:
 - `docs/implementation-notes/2026-06-06-pass-3a-planning-explanation-reduction.md`
 - `docs/implementation-notes/2026-06-06-pass-3a-triage-explanation-reduction.md`
 - `docs/implementation-notes/2026-06-06-pass-3b-review-areas-explanation-reduction.md`
+- `docs/implementation-notes/2026-06-06-pass-4a-execute-review-shell-quieting.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-home-execute.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-review-health-areas.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-capture-planning-triage.md`
@@ -177,34 +186,34 @@ Historical inputs only, not active program state:
 
 ## Next recommended pass
 
-### Pass 4A: Make the shell feel quieter on Execute and Review
+### Pass 5A: Tighten interaction cadence on Capture and Planning
 
 This is the next pass a fresh agent should execute.
 
 Why this pass first:
 
-- Pass 3 is now materially closed. The bigger remaining drag is not wording density; it is how much shell and support chrome still competes with the active route on longer, action-heavy screens.
-- Execute is the clearest remaining hotspot for shell burden, and Review is the next clean candidate now that its copy budget is under control.
-- This should land before motion or route-identity work, because those later passes are harder to judge when the shell is still louder than it should be.
+- The shell-quieting program is now complete on the primary routes that needed it most.
+- Capture and Planning already have the right flagship structure, but their action feedback and state cadence still feel more merely correct than authored.
+- This should land before route-identity experiments because interaction rhythm is easier to judge once shell competition is no longer the main problem.
 
 Scope:
 
-- reduce shell and surrounding support burden on Execute and Review so route-local action clearly outranks chrome
-- keep keyboard reachability and route truthfulness intact at 390px
-- prefer demotion, disclosure, spacing, and emphasis changes over new components or layout churn
-- reuse the current shared primitive/disclosure layer instead of inventing shell-local replacements
+- tighten action-near feedback and recovery cadence on Capture and Planning so local save/sort/plan outcomes feel like one authored system
+- keep keyboard reachability, route truthfulness, and explicit Google approval behavior intact at `390px`
+- prefer small feedback, spacing, emphasis, and disclosure refinements over new component families or layout churn
+- reuse the current shared primitive/disclosure layer instead of inventing route-local feedback systems
 - no schema, auth, parser, persistence, or Google write changes
 
 Priority files:
 
-- `apps/web/src/app/execute/page.tsx`
-- `apps/web/src/app/review/page.tsx`
+- `apps/web/src/app/capture/page.tsx`
+- `apps/web/src/app/calendar/page.tsx`
 - shared tests and proof only as needed
 
 Acceptance criteria:
 
-- shell surfaces do not outrank the route-local next action on the touched routes
-- 390px first-screen scan is calmer on Execute and Review
+- primary actions and their completion/failure states feel closer in timing, visual weight, and next-step guidance across Capture and Planning
+- no action leaves local-vs-account-vs-Google state ambiguous
 - keyboard path and route truthfulness stay intact
 - existing route truthfulness, approval gates, and mock/persisted honesty stay intact
 
