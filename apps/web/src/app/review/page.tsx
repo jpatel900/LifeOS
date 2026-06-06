@@ -501,7 +501,7 @@ export default function ReviewPage() {
 
           <Card
             data-testid="review-close-loop-card"
-            className="workflow-secondary-card workflow-support-card"
+            className="workflow-secondary-card workflow-support-card workflow-quiet-card"
           >
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Close the loop</CardTitle>
@@ -609,7 +609,7 @@ export default function ReviewPage() {
         data-testid="review-today-at-a-glance-card"
         data-accent-strength="subtle"
         style={selectedAreaStyle}
-        className="area-accent-card workflow-secondary-card workflow-support-card"
+        className="area-accent-card workflow-secondary-card workflow-support-card workflow-quiet-card"
       >
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-start justify-between gap-3">

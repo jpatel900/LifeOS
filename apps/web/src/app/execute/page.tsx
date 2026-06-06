@@ -1304,7 +1304,7 @@ export default function ExecutePage() {
           data-testid="execute-focus-state-card"
           data-focus-state={sessionUiState}
           style={buildAreaAccentStyle(missionArea?.color)}
-          className="focus-state-card workflow-support-card h-full"
+          className="focus-state-card workflow-support-card workflow-quiet-card h-full"
         >
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Focus state</CardTitle>
@@ -1352,7 +1352,7 @@ export default function ExecutePage() {
           </CardContent>
         </Card>
 
-        <Card className="workflow-secondary-card workflow-support-card h-full">
+        <Card className="workflow-secondary-card workflow-support-card workflow-quiet-card h-full">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
               {isTerminalSession || (usesPersistedExecution && terminalForm)

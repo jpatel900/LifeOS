@@ -263,11 +263,13 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
 
   await seedExecuteMission(page);
   await page.goto("/execute");
+  await expect(page.getByTestId("app-shell-context-header")).toHaveCount(0);
   await expect(page.getByTestId("execute-current-mission-card")).toHaveClass(
     /workflow-flagship-card/,
   );
 
   await page.goto("/review");
+  await expect(page.getByTestId("app-shell-context-header")).toHaveCount(0);
   await expect(page.getByTestId("review-next-decision-card")).toHaveClass(
     /workflow-flagship-card/,
   );

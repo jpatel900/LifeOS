@@ -26,6 +26,8 @@ const navLinks = [
   { href: "/settings/areas", label: "Areas" },
 ];
 
+const quietShellContextRoutes = new Set(["/execute", "/review"]);
+
 function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { state, selectedAreaId, setSelectedAreaId, submitCaptureText } =
@@ -39,6 +41,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   >("idle");
   const areaAccentStyle = buildAreaAccentStyle(currentArea?.color);
   const showQuickNote = pathname !== "/";
+  const usesQuietShellContext = quietShellContextRoutes.has(pathname ?? "");
 
   useEffect(() => {
     const formatNow = () => new Date().toLocaleTimeString();
@@ -96,7 +99,12 @@ function AppChrome({ children }: { children: ReactNode }) {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[var(--area-accent-border)]"
       />
-      <header className="workflow-shell__header sticky top-0 z-40 border-b border-[var(--area-accent-border)] bg-background/88 backdrop-blur-xl">
+      <header
+        className={cn(
+          "workflow-shell__header sticky top-0 z-40 border-b border-[var(--area-accent-border)] bg-background/88 backdrop-blur-xl",
+          usesQuietShellContext && "workflow-shell__header--quiet",
+        )}
+      >
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4 sm:px-6 lg:px-8">
           <div className="workflow-shell__masthead flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-center gap-3">
@@ -256,18 +264,28 @@ function AppChrome({ children }: { children: ReactNode }) {
       <main
         id="main-content"
         tabIndex={-1}
-        className="workflow-shell__main mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-6 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8"
+        className={cn(
+          "workflow-shell__main mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-6 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8",
+          usesQuietShellContext && "workflow-shell__main--shell-quiet",
+        )}
       >
-        <WorkflowPageHeader
-          className="workflow-shell-context-header"
-          spotlight={currentAreaSpotlight}
-          spotlightClassName="workflow-shell-context-spotlight"
-          bodyClassName="workflow-shell-context-body"
-        >
-          <DiagnosticsDisclosure title="Quick capture details">
-            <p>Quick capture saves on this device and sends notes to Triage.</p>
-          </DiagnosticsDisclosure>
-        </WorkflowPageHeader>
+        {!usesQuietShellContext ? (
+          <WorkflowPageHeader
+            className="workflow-shell-context-header"
+            spotlight={currentAreaSpotlight}
+            spotlightClassName="workflow-shell-context-spotlight"
+            bodyClassName="workflow-shell-context-body"
+          >
+            <DiagnosticsDisclosure
+              title="Quick capture details"
+              data-testid="app-shell-context-header"
+            >
+              <p>
+                Quick capture saves on this device and sends notes to Triage.
+              </p>
+            </DiagnosticsDisclosure>
+          </WorkflowPageHeader>
+        ) : null}
         {children}
       </main>
     </div>

@@ -12,11 +12,16 @@ import TriagePage from "../app/triage/page";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/capture",
+const navigationMock = vi.hoisted(() => ({
+  pathname: "/capture",
 }));
 
-function renderThroughAppShell(children: ReactNode) {
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigationMock.pathname,
+}));
+
+function renderThroughAppShell(children: ReactNode, pathname = "/capture") {
+  navigationMock.pathname = pathname;
   return render(<AppShell>{children}</AppShell>);
 }
 
@@ -50,12 +55,23 @@ describe("workflow route provider wiring", () => {
     expect(
       screen.getByText("Saved on this device only. Review in Triage or Review."),
     ).toBeDefined();
+    expect(screen.getByTestId("app-shell-context-header")).toBeDefined();
     expect(
       screen.getByRole("heading", { level: 1, name: "Capture" }),
     ).toBeDefined();
     expect(
       screen.getByPlaceholderText("What's on your mind? Type anything..."),
     ).toBeDefined();
+  });
+
+  it("removes the extra shell context band on Execute and Review", async () => {
+    renderThroughAppShell(<ExecutePage />, "/execute");
+    expect(await screen.findByRole("heading", { level: 1, name: "Execute" })).toBeDefined();
+    expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
+
+    renderThroughAppShell(<ReviewPage />, "/review");
+    expect(await screen.findByRole("heading", { level: 1, name: "Review" })).toBeDefined();
+    expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
   });
 
   it("shows quick note save feedback in the app shell", async () => {
