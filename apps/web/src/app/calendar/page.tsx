@@ -355,6 +355,40 @@ function planningSuccessFeedback(
   };
 }
 
+function planningPendingFeedback(
+  actionState: Extract<ActionState, { status: "saving" }>,
+) {
+  if (actionState.label === "calendar conflict check") {
+    return {
+      title: "Checking calendar availability",
+      description:
+        "The suggested time stays local while LifeOS checks Google Calendar availability.",
+    };
+  }
+
+  if (actionState.label === "Google Calendar event") {
+    return {
+      title: "Creating Google Calendar event",
+      description:
+        "The suggested time stays unchanged until Google confirms the event.",
+    };
+  }
+
+  if (actionState.label === "planned block") {
+    return {
+      title: "Creating planned block",
+      description:
+        "LifeOS is moving this suggested time into your planned blocks now.",
+    };
+  }
+
+  return {
+    title: "Updating planning",
+    description:
+      "Keep this view open while LifeOS saves the latest planning change.",
+  };
+}
+
 export default function CalendarPage() {
   const {
     state,
@@ -1053,9 +1087,18 @@ export default function CalendarPage() {
       ) : null}
 
       {actionState.status === "saving" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Saving {actionState.label}...
-        </p>
+        <Alert role="status" className="workflow-celebration-alert">
+          <AlertTitle>{planningPendingFeedback(actionState).title}</AlertTitle>
+          <AlertDescription>
+            {planningPendingFeedback(actionState).description}
+          </AlertDescription>
+          <div className="workflow-celebration-meta">
+            <span className="workflow-celebration-chip">Planning in progress</span>
+            <span className="workflow-celebration-chip">
+              {actionState.label}
+            </span>
+          </div>
+        </Alert>
       ) : null}
 
       {actionState.status === "saved"
@@ -1085,6 +1128,19 @@ export default function CalendarPage() {
                       <Link href={feedback.primaryLink.href}>
                         {feedback.primaryLink.label}
                       </Link>
+                    </Button>
+                  </div>
+                ) : actionState.label === "Suggested time block created" ||
+                  actionState.label.startsWith("Suggested time block ") ||
+                  actionState.label === "Calendar availability checked" ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleReviewNextProposal}
+                    >
+                      Review next suggested time block
                     </Button>
                   </div>
                 ) : null}

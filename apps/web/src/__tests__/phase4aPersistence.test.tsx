@@ -889,6 +889,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent(
       "Suggested time block created. It was saved on this device. Review it below, then plan it or adjust it.",
     );
+    expect(
+      screen.getByRole("button", { name: "Review next suggested time block" }),
+    ).toBeDefined();
     expect(screen.getAllByText("Suggested time").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
@@ -995,6 +998,9 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent(
       "Suggested time block moved 30 minutes later. It was saved to your account. Review the updated time below before you plan it.",
     );
+    expect(
+      screen.getByRole("button", { name: "Review next suggested time block" }),
+    ).toBeDefined();
   });
 
   it("checks a persisted proposal for conflicts and updates the badge", async () => {

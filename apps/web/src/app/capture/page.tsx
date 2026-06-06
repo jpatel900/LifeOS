@@ -112,6 +112,39 @@ type ParseCaptureStatusApiResponse =
     }
   | { ok: false; error: string };
 
+type CaptureFeedback =
+  | {
+      role: "status";
+      variant?: "default" | "success";
+      title: string;
+      description: string;
+      chips?: string[];
+      action?:
+        | {
+            kind: "button";
+            label: string;
+            onClick: () => void;
+          }
+        | {
+            kind: "link";
+            label: string;
+            href: string;
+          };
+      detail?: string;
+    }
+  | {
+      role: "alert";
+      variant: "destructive";
+      title: string;
+      description: string;
+      chips?: string[];
+      action?: {
+        kind: "button";
+        label: string;
+        onClick: () => void;
+      };
+    };
+
 export default function CapturePage() {
   const {
     state,
@@ -510,6 +543,114 @@ export default function CapturePage() {
   const latestAssessment = state.ambiguityAssessments[0];
   const latestDraft = state.taskDrafts[0];
   const latestProposalDraft = state.timeBlockProposalDrafts[0];
+  const savedWhere =
+    saveState.status === "saved" ? savedViaLabel(saveState.provider) : null;
+  const captureFeedback: CaptureFeedback | null = (() => {
+    if (parseState.status === "parsing") {
+      return {
+        role: "status",
+        title:
+          parseState.parserMode === "mock"
+            ? "Retrying with on-device sorting"
+            : "Organizing saved thought",
+        description:
+          "Raw thought is already saved. Sorting is creating drafts for Triage now.",
+        chips: [
+          savedWhere ?? "Saved first",
+          parseState.parserMode === "mock"
+            ? "On-device sorting"
+            : "AI sorting",
+        ],
+      };
+    }
+
+    if (parseState.status === "parsed") {
+      return {
+        role: "status",
+        title: "Drafts ready for Triage.",
+        description: `Created ${parseState.draftCount} draft${parseState.draftCount === 1 ? "" : "s"}. Review them in Triage before you accept anything.`,
+        chips: [
+          savedWhere ?? "Saved first",
+          `${parseState.draftCount} draft${parseState.draftCount === 1 ? "" : "s"}`,
+          "Review before acceptance",
+        ],
+        action: {
+          kind: "link",
+          label: "Review it now",
+          href: "/triage",
+        },
+        detail: parseState.triageRequired
+          ? parseState.lowConfidence
+            ? "Drafts were routed to triage because confidence is low."
+            : "Drafts were routed to triage for review before acceptance."
+          : "Capture is parseable and drafts are still reviewable in triage before acceptance.",
+      };
+    }
+
+    if (parseState.status === "error") {
+      return {
+        role: "alert",
+        variant: "destructive",
+        title: "AI sorting stopped safely",
+        description: parseState.message,
+        chips: savedWhere ? [savedWhere, "Raw capture is safely stored"] : [],
+        action:
+          parseState.canRetryWithMock && lastSavedCapture
+            ? {
+                kind: "button",
+                label: "Retry with on-device sorting",
+                onClick: () => void handleRetryWithMockParser(),
+              }
+            : undefined,
+      };
+    }
+
+    if (saveState.status === "saving") {
+      return {
+        role: "status",
+        title: "Saving raw thought",
+        description:
+          "Keep this tab open while LifeOS stores the raw thought first.",
+      };
+    }
+
+    if (saveState.status === "saved") {
+      return {
+        role: "status",
+        variant: "success",
+        title: "Saved.",
+        description:
+          saveState.source === "save_and_organize"
+            ? "Saved first, then organized. Review the drafts in Triage next."
+            : `This raw capture was ${savedViaLabel(saveState.provider)}. Organize this saved thought next if you want draft suggestions.`,
+        chips: [
+          savedViaLabel(saveState.provider),
+          saveState.source === "save_and_organize"
+            ? "Drafts can be reviewed next"
+            : "Raw capture is safely stored",
+        ],
+        action:
+          saveState.source === "save"
+            ? {
+                kind: "button",
+                label: "Organize this saved thought",
+                onClick: () => void handleOrganizeSavedCapture(),
+              }
+            : undefined,
+      };
+    }
+
+    if (saveState.status === "error") {
+      return {
+        role: "alert",
+        variant: "destructive",
+        title: "Capture was not saved",
+        description: saveState.message,
+      };
+    }
+
+    return null;
+  })();
 
   return (
     <div className="flex flex-col gap-6">
@@ -776,100 +917,49 @@ export default function CapturePage() {
         </CardContent>
       </Card>
 
-      {saveState.status === "saved" ? (
-        <Alert variant="success" className="workflow-celebration-alert">
-          <AlertTitle>Saved.</AlertTitle>
-          <AlertDescription>
-            {saveState.source === "save_and_organize"
-              ? "Saved first, then organized. Review the drafts in Triage next."
-              : `This raw capture was ${savedViaLabel(saveState.provider)}. Organize this saved thought next if you want draft suggestions.`}
-          </AlertDescription>
-          <div className="workflow-celebration-meta">
-            <span className="workflow-celebration-chip">
-              {savedViaLabel(saveState.provider)}
-            </span>
-            <span className="workflow-celebration-chip">
-              {saveState.source === "save_and_organize"
-                ? "Drafts can be reviewed next"
-                : "Raw capture is safely stored"}
-            </span>
-          </div>
-          {saveState.source === "save" ? (
-            <div className="mt-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void handleOrganizeSavedCapture()}
-                disabled={parseState.status === "parsing"}
-              >
-                {parseState.status === "parsing"
-                  ? "Organizing saved capture..."
-                  : "Organize this saved thought"}
-              </Button>
+      {captureFeedback ? (
+        <Alert
+          role={captureFeedback.role}
+          variant={captureFeedback.variant}
+          className={
+            captureFeedback.role === "status"
+              ? "workflow-celebration-alert"
+              : undefined
+          }
+        >
+          <AlertTitle>{captureFeedback.title}</AlertTitle>
+          <AlertDescription>{captureFeedback.description}</AlertDescription>
+          {captureFeedback.chips && captureFeedback.chips.length > 0 ? (
+            <div className="workflow-celebration-meta">
+              {captureFeedback.chips.map((chip) => (
+                <span key={chip} className="workflow-celebration-chip">
+                  {chip}
+                </span>
+              ))}
             </div>
           ) : null}
-        </Alert>
-      ) : null}
-
-      {saveState.status === "error" ? (
-        <Alert variant="destructive">
-          <AlertTitle>Capture was not saved</AlertTitle>
-          <AlertDescription>{saveState.message}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {parseState.status === "parsed" ? (
-        <Alert className="workflow-celebration-alert">
-          <AlertTitle>Drafts ready for Triage.</AlertTitle>
-          <AlertDescription>
-            Created <strong>{parseState.draftCount}</strong> draft
-            {parseState.draftCount === 1 ? "" : "s"}. Review them in Triage
-            before you accept anything.
-          </AlertDescription>
-          <div className="workflow-celebration-meta">
-            <span className="workflow-celebration-chip">
-              {parseState.draftCount} draft
-              {parseState.draftCount === 1 ? "" : "s"}
-            </span>
-            <span className="workflow-celebration-chip">
-              Review before acceptance
-            </span>
-          </div>
-          <div className="mt-2">
-            <Button asChild size="sm" variant="outline">
-              <Link href="/triage">Review it now</Link>
-            </Button>
-          </div>
-          {parseState.triageRequired ? (
-            <AlertDescription>
-              {parseState.lowConfidence
-                ? "Drafts were routed to triage because confidence is low."
-                : "Drafts were routed to triage for review before acceptance."}
-            </AlertDescription>
-          ) : (
-            <AlertDescription>
-              Capture is parseable and drafts are still reviewable in triage
-              before acceptance.
-            </AlertDescription>
-          )}
-        </Alert>
-      ) : null}
-
-      {parseState.status === "error" ? (
-        <Alert variant="destructive">
-          <AlertTitle>AI sorting stopped safely</AlertTitle>
-          <AlertDescription>{parseState.message}</AlertDescription>
-          {parseState.canRetryWithMock && lastSavedCapture ? (
+          {captureFeedback.action ? (
             <div className="mt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleRetryWithMockParser()}
-              >
-                Retry with on-device sorting
-              </Button>
+              {captureFeedback.action.kind === "button" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={captureFeedback.action.onClick}
+                >
+                  {captureFeedback.action.label}
+                </Button>
+              ) : (
+                <Button asChild size="sm" variant="outline">
+                  <Link href={captureFeedback.action.href}>
+                    {captureFeedback.action.label}
+                  </Link>
+                </Button>
+              )}
             </div>
+          ) : null}
+          {"detail" in captureFeedback && captureFeedback.detail ? (
+            <AlertDescription>{captureFeedback.detail}</AlertDescription>
           ) : null}
         </Alert>
       ) : null}

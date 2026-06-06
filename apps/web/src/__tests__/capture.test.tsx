@@ -276,7 +276,7 @@ describe("CapturePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
     expect(await screen.findByText("Saved.")).toBeDefined();
-    expect(screen.getByRole("alert")).toBeDefined();
+    expect(screen.getByRole("status")).toBeDefined();
     expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("heading", { name: "Recent saved captures" }),
@@ -390,6 +390,10 @@ describe("CapturePage", () => {
 
     expect(await screen.findByText("Drafts ready for Triage.")).toBeDefined();
     expect(screen.getByRole("link", { name: "Review it now" })).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: "Organize this saved thought" }),
+    ).toBeNull();
+    expect(screen.queryByText("Saved.")).toBeNull();
     expect(screen.getByText("Drafts ready for Triage.")).toBeDefined();
     expect(
       screen.getByText(
@@ -477,6 +481,7 @@ describe("CapturePage", () => {
         "Capture was saved, but AI sorting stopped safely. Retry with on-device sorting.",
       ),
     ).toBeDefined();
+    expect(screen.getByText("Raw capture is safely stored")).toBeDefined();
     expect(
       screen.queryByText("AI failure: stack trace should not leak"),
     ).toBeNull();

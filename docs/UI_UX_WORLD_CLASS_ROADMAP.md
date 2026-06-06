@@ -64,7 +64,7 @@ The five target outcomes are:
 | Stronger visual authorship and craft | `done`    | Shared shell polish, premium-feel passes, and the explicit flagship/support/admin taxonomy now cover shell and all eight primary routes.                                           | Future visual work should stay inside this authored system. The larger remaining gaps are now copy density, shell burden, interaction cadence, and route identity. |
 | Less explanation-by-default          | `done`    | June 3-6 declutter passes removed duplicate empty-state guidance and tightened copy budgets across Capture, Planning, Triage, Review, and Areas without changing truth boundaries. | Further improvement now comes more from shell compression, interaction cadence, and route identity than from more blanket helper-copy trimming.                    |
 | Calmer, more effortless shell        | `done`    | The shell is materially calmer, Home no longer carries shell mutation, and Capture/Planning/Execute/Review now suppress the extra shell-context band so route-local action wins faster. | Future UX work should treat shell quieting as maintenance. The larger remaining gains now come from interaction cadence and stronger route identity, not more blanket chrome reduction. |
-| Sharper interaction feel and closure | `planned` | Inline closure feedback now exists across Capture, Triage, Planning, Execute, and Review.                                                                                          | The cadence is not yet tight enough or visually consistent enough to feel like one authored system.                                                                |
+| Sharper interaction feel and closure | `active`  | Inline closure feedback now exists across Capture, Triage, Planning, Execute, and Review, and Capture/Planning now use a tighter authored feedback cadence for save/sort/plan outcomes. | The cadence is still uneven across the rest of the workflow, especially outside Capture and Planning.                                                               |
 | More memorable route identity        | `planned` | Home, Execute, Triage, Capture, and Planning now have clearer editorial framing.                                                                                                   | Distinction is still uneven. Several routes still read as strong variants of one template instead of unmistakable scenes.                                          |
 
 ## Route scorecard
@@ -137,6 +137,10 @@ Latest Pass 4B slice:
 
 - `2026-06-06`: Capture and Planning now complete the current shell-quieting program without changing route semantics, keyboard reachability, parser/save truth, persistence, or Google approval gates. `AppShell` now also suppresses the extra shell-context band on `/capture` and `/calendar`, and each route's top summary spotlight is visually demoted so the raw-intake/planning-flow flagship card wins the first scan faster at desktop and `390px`. Proof: `pnpm --filter @lifeos/web test -- src/__tests__/routeSmoke.test.tsx src/__tests__/capture.test.tsx src/__tests__/workflowAreaAccent.test.tsx`, `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web build`, `pnpm --filter @lifeos/web type-check`, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`.
 
+Latest Pass 5A slice:
+
+- `2026-06-06`: Capture and Planning now start the interaction-cadence program with tighter action-near feedback and less fragmented status behavior, without changing parser/save truth, persistence, auth, or Google approval gates. Capture now resolves save/organize outcomes to one dominant feedback surface at a time instead of stacking raw-save and parse-success messaging, keeps the raw-capture-stored truth visible when AI sorting fails, and uses the same authored success surface for save, parse, and in-flight organize states. Planning now upgrades in-flight actions from plain muted text to authored status feedback and exposes `Review next suggested time block` immediately after suggestion-oriented updates so the next useful move is visible near the confirmation instead of buried in the page. Proof: `pnpm --filter @lifeos/web test -- src/__tests__/capture.test.tsx src/__tests__/phase4aPersistence.test.tsx`, `pnpm --filter @lifeos/web test:e2e -- tests/e2e/interaction-feedback.spec.ts`, `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web build`, `pnpm --filter @lifeos/web type-check`, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`.
+
 ## Proof contract for UX passes
 
 Default UX-pass gate:
@@ -186,34 +190,34 @@ Historical inputs only, not active program state:
 
 ## Next recommended pass
 
-### Pass 5A: Tighten interaction cadence on Capture and Planning
+### Pass 5B: Extend authored interaction cadence to Execute and Review
 
 This is the next pass a fresh agent should execute.
 
 Why this pass first:
 
-- The shell-quieting program is now complete on the primary routes that needed it most.
-- Capture and Planning already have the right flagship structure, but their action feedback and state cadence still feel more merely correct than authored.
-- This should land before route-identity experiments because interaction rhythm is easier to judge once shell competition is no longer the main problem.
+- Capture and Planning now establish the intended feedback cadence pattern, so the next honest extension is the two routes where action closure matters most after that: Execute and Review.
+- These routes already have strong flagship hierarchy and quieter shell framing, which makes feedback rhythm easier to judge without chrome noise.
+- This should still land before route-identity experiments because clearer feedback timing is a more objective next gain than broader visual experimentation.
 
 Scope:
 
-- tighten action-near feedback and recovery cadence on Capture and Planning so local save/sort/plan outcomes feel like one authored system
-- keep keyboard reachability, route truthfulness, and explicit Google approval behavior intact at `390px`
+- tighten action-near feedback and recovery cadence on Execute and Review so start/pause/end/save outcomes feel like one authored system
+- keep keyboard reachability, route truthfulness, and explicit persisted-vs-local behavior intact at `390px`
 - prefer small feedback, spacing, emphasis, and disclosure refinements over new component families or layout churn
 - reuse the current shared primitive/disclosure layer instead of inventing route-local feedback systems
 - no schema, auth, parser, persistence, or Google write changes
 
 Priority files:
 
-- `apps/web/src/app/capture/page.tsx`
-- `apps/web/src/app/calendar/page.tsx`
+- `apps/web/src/app/execute/page.tsx`
+- `apps/web/src/app/review/page.tsx`
 - shared tests and proof only as needed
 
 Acceptance criteria:
 
-- primary actions and their completion/failure states feel closer in timing, visual weight, and next-step guidance across Capture and Planning
-- no action leaves local-vs-account-vs-Google state ambiguous
+- primary actions and their completion/failure states feel closer in timing, visual weight, and next-step guidance across Execute and Review
+- no action leaves persisted-vs-local review/execution state ambiguous
 - keyboard path and route truthfulness stay intact
 - existing route truthfulness, approval gates, and mock/persisted honesty stay intact
 
