@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "../components/EmptyState";
 import { WorkflowLoadingState } from "../components/WorkflowLoadingState";
@@ -610,12 +611,12 @@ export default function TriagePage() {
                           {editingDraftId === task.id ? (
                             <div className="workflow-admin-card space-y-3 rounded-xl p-3">
                               <div className="space-y-1">
-                                <label
+                                <Label
                                   htmlFor={`${task.id}-title`}
                                   className="text-xs font-medium"
                                 >
                                   Title
-                                </label>
+                                </Label>
                                 <Input
                                   id={`${task.id}-title`}
                                   value={editTitle}
@@ -625,12 +626,12 @@ export default function TriagePage() {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label
+                                <Label
                                   htmlFor={`${task.id}-description`}
                                   className="text-xs font-medium"
                                 >
                                   Description
-                                </label>
+                                </Label>
                                 <Textarea
                                   id={`${task.id}-description`}
                                   value={editDescription}

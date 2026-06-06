@@ -454,12 +454,11 @@ export default function HomePage() {
                   ))}
                 </div>
                 {overflow.length > 0 ? (
-                  <details className="system-details-disclosure workflow-inline-disclosure">
-                    <summary className="text-sm font-medium text-foreground">
-                      {overflow.length} more draft
-                      {overflow.length === 1 ? "" : "s"}
-                    </summary>
-                    <div className="workflow-compact-list mt-3">
+                  <DiagnosticsDisclosure
+                    title={`${overflow.length} more draft${overflow.length === 1 ? "" : "s"}`}
+                    className="workflow-inline-disclosure"
+                    contentClassName="workflow-compact-list mt-3 text-sm text-muted-foreground"
+                  >
                       {overflow.map((item) => (
                         <div key={item.id} className="workflow-compact-item">
                           <p className="break-words text-foreground">
@@ -467,8 +466,7 @@ export default function HomePage() {
                           </p>
                         </div>
                       ))}
-                    </div>
-                  </details>
+                  </DiagnosticsDisclosure>
                 ) : null}
               </>
             )}
@@ -513,12 +511,11 @@ export default function HomePage() {
                   ))}
                 </div>
                 {overflow.length > 0 ? (
-                  <details className="system-details-disclosure workflow-inline-disclosure">
-                    <summary className="text-sm font-medium text-foreground">
-                      {overflow.length} more task
-                      {overflow.length === 1 ? "" : "s"}
-                    </summary>
-                    <div className="workflow-compact-list mt-3">
+                  <DiagnosticsDisclosure
+                    title={`${overflow.length} more task${overflow.length === 1 ? "" : "s"}`}
+                    className="workflow-inline-disclosure"
+                    contentClassName="workflow-compact-list mt-3 text-sm text-muted-foreground"
+                  >
                       {overflow.map((task) => (
                         <div key={task.id} className="workflow-compact-item">
                           <p className="break-words text-foreground">
@@ -526,8 +523,7 @@ export default function HomePage() {
                           </p>
                         </div>
                       ))}
-                    </div>
-                  </details>
+                  </DiagnosticsDisclosure>
                 ) : null}
               </>
             )}
@@ -579,12 +575,11 @@ export default function HomePage() {
                   })}
                 </div>
                 {overflow.length > 0 ? (
-                  <details className="system-details-disclosure workflow-inline-disclosure">
-                    <summary className="text-sm font-medium text-foreground">
-                      {overflow.length} more block
-                      {overflow.length === 1 ? "" : "s"}
-                    </summary>
-                    <div className="workflow-compact-list mt-3">
+                  <DiagnosticsDisclosure
+                    title={`${overflow.length} more block${overflow.length === 1 ? "" : "s"}`}
+                    className="workflow-inline-disclosure"
+                    contentClassName="workflow-compact-list mt-3 text-sm text-muted-foreground"
+                  >
                       {overflow.map((block) => {
                         const task = tasks.find(
                           (item) => item.id === block.taskId,
@@ -603,8 +598,7 @@ export default function HomePage() {
                           </div>
                         );
                       })}
-                    </div>
-                  </details>
+                  </DiagnosticsDisclosure>
                 ) : null}
               </>
             )}
@@ -657,12 +651,11 @@ export default function HomePage() {
                   ))}
                 </div>
                 {overflow.length > 0 ? (
-                  <details className="system-details-disclosure workflow-inline-disclosure">
-                    <summary className="text-sm font-medium text-foreground">
-                      {overflow.length} more recovery item
-                      {overflow.length === 1 ? "" : "s"}
-                    </summary>
-                    <div className="workflow-compact-list mt-3">
+                  <DiagnosticsDisclosure
+                    title={`${overflow.length} more recovery item${overflow.length === 1 ? "" : "s"}`}
+                    className="workflow-inline-disclosure"
+                    contentClassName="workflow-compact-list mt-3 text-sm text-muted-foreground"
+                  >
                       {overflow.map((item) => (
                         <div key={item.id} className="workflow-compact-item">
                           <p className="break-words font-medium">
@@ -673,8 +666,7 @@ export default function HomePage() {
                           </p>
                         </div>
                       ))}
-                    </div>
-                  </details>
+                  </DiagnosticsDisclosure>
                 ) : null}
               </>
             )}
@@ -770,12 +762,13 @@ export default function HomePage() {
                 </Link>
               </Button>
             </div>
-            <details className="system-details-disclosure workflow-inline-disclosure">
-              <summary className="text-sm font-medium text-foreground">
-                Suggested follow-through
-              </summary>
+            <DiagnosticsDisclosure
+              title="Suggested follow-through"
+              className="workflow-inline-disclosure"
+              contentClassName="mt-3 text-sm text-muted-foreground"
+            >
               <div
-                className="workflow-next-steps mt-3"
+                className="workflow-next-steps"
                 aria-label="Suggested follow-through"
               >
                 {getNextActionSupportSteps(cockpit.next.kind).map((step) => (
@@ -784,7 +777,7 @@ export default function HomePage() {
                   </span>
                 ))}
               </div>
-            </details>
+            </DiagnosticsDisclosure>
           </CardContent>
         </Card>
 
@@ -823,16 +816,17 @@ export default function HomePage() {
       </section>
 
       {overflowSecondaryCardOrder.length > 0 ? (
-        <details className="system-details-disclosure mx-auto w-full max-w-5xl">
-          <summary className="text-sm font-medium text-foreground">
-            {overflowSummaryLabel}
-          </summary>
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <DiagnosticsDisclosure
+          title={overflowSummaryLabel}
+          className="mx-auto w-full max-w-5xl"
+          contentClassName="mt-4"
+        >
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {overflowSecondaryCardOrder.map((cardKey) =>
               renderHomeSupportCard(cardKey),
             )}
           </div>
-        </details>
+        </DiagnosticsDisclosure>
       ) : null}
 
       <DiagnosticsDisclosure title="Today details">

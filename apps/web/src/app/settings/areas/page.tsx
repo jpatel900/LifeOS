@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { EmptyState } from "../../components/EmptyState";
@@ -312,9 +313,7 @@ export default function AreasSettingsPage() {
               </p>
             </div>
             <div className="grid gap-2 sm:max-w-md">
-              <label htmlFor="area_name" className="text-sm font-medium">
-                Area name
-              </label>
+              <Label htmlFor="area_name">Area name</Label>
               <Input
                 id="area_name"
                 value={newAreaName}
@@ -329,9 +328,7 @@ export default function AreasSettingsPage() {
               />
             </div>
             <div className="grid gap-2 sm:max-w-xl">
-              <label htmlFor="area_description" className="text-sm font-medium">
-                Description
-              </label>
+              <Label htmlFor="area_description">Description</Label>
               <Textarea
                 id="area_description"
                 value={newAreaDescription}
@@ -537,11 +534,11 @@ export default function AreasSettingsPage() {
                       </p>
                     ) : null}
 
-                    <details className="workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground">
-                      <summary className="cursor-pointer select-none font-medium text-foreground">
-                        Area actions and settings
-                      </summary>
-                      <div className="mt-3 grid gap-3">
+                    <DiagnosticsDisclosure
+                      title="Area actions and settings"
+                      className="workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground"
+                      contentClassName="mt-3 grid gap-3 text-sm text-muted-foreground"
+                    >
                         <div className="flex flex-wrap gap-2">
                           <Button asChild variant="outline" size="sm">
                             <Link
@@ -691,8 +688,7 @@ export default function AreasSettingsPage() {
                             </p>
                           </div>
                         </div>
-                      </div>
-                    </details>
+                    </DiagnosticsDisclosure>
                   </CardContent>
                 </Card>
               );
@@ -737,22 +733,17 @@ export default function AreasSettingsPage() {
         </Alert>
       ) : null}
 
-      <details className="system-details-disclosure">
-        <summary className="text-sm font-medium text-foreground">
-          Calendar connection details
-        </summary>
-        <div className="mt-4">
-          <GoogleCalendarConnectionPanel />
-        </div>
-      </details>
+      <DiagnosticsDisclosure
+        title="Calendar connection details"
+        contentClassName="mt-4"
+      >
+        <GoogleCalendarConnectionPanel />
+      </DiagnosticsDisclosure>
 
-      <details className="system-details-disclosure">
-        <summary className="text-sm font-medium text-foreground">
-          Local reset
-        </summary>
+      <DiagnosticsDisclosure title="Local reset" contentClassName="mt-4">
         <Card
           data-testid="areas-local-reset-card"
-          className="mt-4 workflow-admin-card border-destructive/60 bg-destructive/5"
+          className="workflow-admin-card border-destructive/60 bg-destructive/5"
         >
           <CardContent className="space-y-3 pt-6 text-sm text-muted-foreground">
             <p>
@@ -807,7 +798,7 @@ export default function AreasSettingsPage() {
             </div>
           </CardContent>
         </Card>
-      </details>
+      </DiagnosticsDisclosure>
     </div>
   );
 }

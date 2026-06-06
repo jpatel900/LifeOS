@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
@@ -1226,77 +1227,75 @@ export default function ExecutePage() {
                 "Pick one concrete action you can finish in a few minutes."}
             </p>
 
-            <details className="system-details-disclosure workflow-inline-disclosure">
-              <summary className="text-sm font-medium text-foreground">
-                Execution guidance
-              </summary>
-              <div className="mt-3 grid gap-3 text-sm text-muted-foreground">
-                {showPersistedStopGuidance ? (
-                  <p>
-                    Stop (device-only sessions) is only available when the
-                    session lives on this device. Sessions saved to your account
-                    need an end outcome and notes.
-                  </p>
-                ) : null}
+            <DiagnosticsDisclosure
+              title="Execution guidance"
+              className="workflow-inline-disclosure"
+              contentClassName="mt-3 grid gap-3 text-sm text-muted-foreground"
+            >
+              {showPersistedStopGuidance ? (
                 <p>
-                  <span className="font-medium text-foreground">
-                    Next recommended action:
-                  </span>{" "}
-                  {nextRecommendedAction}
+                  Stop (device-only sessions) is only available when the
+                  session lives on this device. Sessions saved to your account
+                  need an end outcome and notes.
                 </p>
-              </div>
-            </details>
+              ) : null}
+              <p>
+                <span className="font-medium text-foreground">
+                  Next recommended action:
+                </span>{" "}
+                {nextRecommendedAction}
+              </p>
+            </DiagnosticsDisclosure>
           </div>
 
-          <details className="system-details-disclosure workflow-inline-disclosure">
-            <summary className="text-sm font-medium text-foreground">
-              Mission details
-            </summary>
-            <div className="mt-4 grid gap-3 text-sm">
-              <p className="area-accent-panel rounded-md border p-3">
-                <span className="font-medium text-foreground">
-                  Definition of done:
-                </span>{" "}
-                {activeTask.definition_of_done ??
-                  "Complete the first useful move and note the result."}
-              </p>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="area-accent-panel rounded-md border p-3 text-sm">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Session started
-                  </p>
-                  <p className="mt-1 font-medium">{sessionStartedLabel}</p>
-                </div>
-                <div className="area-accent-panel rounded-md border p-3 text-sm">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Timing
-                  </p>
-                  <p className="mt-1 font-medium">{timingLabel}</p>
-                </div>
+          <DiagnosticsDisclosure
+            title="Mission details"
+            className="workflow-inline-disclosure"
+            contentClassName="mt-4 grid gap-3 text-sm"
+          >
+            <p className="area-accent-panel rounded-md border p-3">
+              <span className="font-medium text-foreground">
+                Definition of done:
+              </span>{" "}
+              {activeTask.definition_of_done ??
+                "Complete the first useful move and note the result."}
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="area-accent-panel rounded-md border p-3 text-sm">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Session started
+                </p>
+                <p className="mt-1 font-medium">{sessionStartedLabel}</p>
               </div>
-              {activeBlock ? (
-                <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-                  <span className="font-medium">Planned block:</span>{" "}
-                  {new Date(activeBlock.start_at).toLocaleTimeString([], {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}{" "}
-                  to{" "}
-                  {new Date(activeBlock.end_at).toLocaleTimeString([], {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                  .
+              <div className="area-accent-panel rounded-md border p-3 text-sm">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Timing
                 </p>
-              ) : (
-                <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-                  <span className="font-medium">Planned block:</span> No planned
-                  block is attached right now. You can still focus this task, or
-                  plan a block first.
-                </p>
-              )}
+                <p className="mt-1 font-medium">{timingLabel}</p>
+              </div>
             </div>
-          </details>
+            {activeBlock ? (
+              <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                <span className="font-medium">Planned block:</span>{" "}
+                {new Date(activeBlock.start_at).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}{" "}
+                to{" "}
+                {new Date(activeBlock.end_at).toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+                .
+              </p>
+            ) : (
+              <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                <span className="font-medium">Planned block:</span> No planned
+                block is attached right now. You can still focus this task, or
+                plan a block first.
+              </p>
+            )}
+          </DiagnosticsDisclosure>
         </CardContent>
       </Card>
 
@@ -1334,26 +1333,22 @@ export default function ExecutePage() {
               </span>
             ) : null}
 
-            <details className="system-details-disclosure">
-              <summary className="text-sm font-medium text-foreground">
-                Execution truth
-              </summary>
-              <div className="mt-4 grid gap-3">
-                <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-                  <p className="font-medium">Execution truth</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {focusDescription}
-                  </p>
-                </div>
-                <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-                  <p className="font-medium">Save mode</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {saveModeLabel(executeProvider)} via{" "}
-                    <strong>{executeProvider}</strong>.
-                  </p>
-                </div>
+            <DiagnosticsDisclosure
+              title="Execution truth"
+              contentClassName="mt-4 grid gap-3"
+            >
+              <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                <p className="font-medium">Execution truth</p>
+                <p className="mt-1 text-muted-foreground">{focusDescription}</p>
               </div>
-            </details>
+              <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
+                <p className="font-medium">Save mode</p>
+                <p className="mt-1 text-muted-foreground">
+                  {saveModeLabel(executeProvider)} via{" "}
+                  <strong>{executeProvider}</strong>.
+                </p>
+              </div>
+            </DiagnosticsDisclosure>
           </CardContent>
         </Card>
 
@@ -1394,26 +1389,22 @@ export default function ExecutePage() {
             ) : null}
 
             {!terminalForm ? (
-              <details
+              <DiagnosticsDisclosure
+                title="Protect focus"
                 data-testid="execute-side-thought-card"
-                className="system-details-disclosure workflow-inline-disclosure"
+                className="workflow-inline-disclosure"
+                contentClassName="mt-3 grid gap-3"
               >
-                <summary className="text-sm font-medium text-foreground">
-                  Protect focus
-                </summary>
-                <div className="mt-3 grid gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    Capture side thoughts without turning this screen into an
-                    inbox. Keep them secondary until the current mission is
-                    done.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild type="button" variant="outline">
-                      <Link href="/capture">Capture a side thought</Link>
-                    </Button>
-                  </div>
+                <p className="text-sm text-muted-foreground">
+                  Capture side thoughts without turning this screen into an
+                  inbox. Keep them secondary until the current mission is done.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild type="button" variant="outline">
+                    <Link href="/capture">Capture a side thought</Link>
+                  </Button>
                 </div>
-              </details>
+              </DiagnosticsDisclosure>
             ) : null}
 
             {usesPersistedExecution && terminalForm ? (
@@ -1466,7 +1457,7 @@ export default function ExecutePage() {
                       </div>
                     </div>
                   ) : null}
-                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  <Label className="flex flex-col gap-1.5 text-sm text-foreground">
                     Outcome
                     <Select
                       aria-label="End session outcome"
@@ -1489,8 +1480,8 @@ export default function ExecutePage() {
                         </option>
                       ))}
                     </Select>
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  </Label>
+                  <Label className="flex flex-col gap-1.5 text-sm text-foreground">
                     Actual duration (minutes)
                     <Input
                       aria-label="Actual duration minutes"
@@ -1505,8 +1496,8 @@ export default function ExecutePage() {
                         )
                       }
                     />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  </Label>
+                  <Label className="flex flex-col gap-1.5 text-sm text-foreground">
                     Productivity rating (1-5)
                     <Input
                       aria-label="Productivity rating"
@@ -1525,8 +1516,8 @@ export default function ExecutePage() {
                         )
                       }
                     />
-                  </label>
-                  <label className="flex flex-col gap-1.5 text-sm text-foreground">
+                  </Label>
+                  <Label className="flex flex-col gap-1.5 text-sm text-foreground">
                     Notes
                     <Textarea
                       aria-label="End session notes"
@@ -1542,7 +1533,7 @@ export default function ExecutePage() {
                         )
                       }
                     />
-                  </label>
+                  </Label>
                   {terminalFormError ? (
                     <p role="alert" className="m-0 text-sm text-destructive">
                       {terminalFormError}
@@ -1576,14 +1567,12 @@ export default function ExecutePage() {
       </div>
 
       {activeSession ? (
-        <details className="system-details-disclosure max-w-[820px]">
-          <summary className="text-sm font-medium text-foreground">
-            Session record
-          </summary>
-          <div
-            aria-label="Most recent execution summary"
-            className="mt-4 grid gap-1 text-sm text-muted-foreground"
-          >
+        <DiagnosticsDisclosure
+          title="Session record"
+          className="max-w-[820px]"
+          contentClassName="mt-4 grid gap-1 text-sm text-muted-foreground"
+        >
+          <div aria-label="Most recent execution summary">
             <div>Planned: {activeSession.planned_minutes ?? 0} min</div>
             <div>Actual: {activeSession.actual_minutes ?? 0} min</div>
             {"status" in activeSession ? (
@@ -1601,7 +1590,7 @@ export default function ExecutePage() {
               <div>Notes: {activeSession.notes}</div>
             ) : null}
           </div>
-        </details>
+        </DiagnosticsDisclosure>
       ) : null}
     </div>
   );

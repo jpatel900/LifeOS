@@ -20,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
@@ -423,13 +424,13 @@ export default function ReviewPage() {
 
       {reviewState.status === "ready" ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <details className="system-details-disclosure">
-            <summary className="text-sm font-medium text-foreground">
-              Reflection notes
-            </summary>
+          <DiagnosticsDisclosure
+            title="Reflection notes"
+            contentClassName="mt-4 space-y-0"
+          >
             <Card
               data-testid="review-reflections-card"
-              className="mt-4 workflow-admin-card"
+              className="workflow-admin-card"
             >
               <CardHeader className="pb-3">
                 <CardDescription>
@@ -446,12 +447,9 @@ export default function ReviewPage() {
                   </p>
                 </div>
                 <div className="grid gap-1">
-                  <label
-                    htmlFor="review-move-forward"
-                    className="text-sm font-medium"
-                  >
+                  <Label htmlFor="review-move-forward">
                     What should move forward?
-                  </label>
+                  </Label>
                   <Textarea
                     id="review-move-forward"
                     rows={2}
@@ -466,12 +464,9 @@ export default function ReviewPage() {
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label
-                    htmlFor="review-needs-rescheduling"
-                    className="text-sm font-medium"
-                  >
+                  <Label htmlFor="review-needs-rescheduling">
                     What needs rescheduling?
-                  </label>
+                  </Label>
                   <Textarea
                     id="review-needs-rescheduling"
                     rows={2}
@@ -486,12 +481,9 @@ export default function ReviewPage() {
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label
-                    htmlFor="review-reality-taught"
-                    className="text-sm font-medium"
-                  >
+                  <Label htmlFor="review-reality-taught">
                     What did reality teach?
-                  </label>
+                  </Label>
                   <Textarea
                     id="review-reality-taught"
                     rows={2}
@@ -507,7 +499,7 @@ export default function ReviewPage() {
                 </div>
               </CardContent>
             </Card>
-          </details>
+          </DiagnosticsDisclosure>
 
           <Card
             data-testid="review-close-loop-card"
@@ -695,11 +687,11 @@ export default function ReviewPage() {
         </CardContent>
       </Card>
 
-      <details className="system-details-disclosure">
-        <summary className="text-sm font-medium text-foreground">
-          Review details and history
-        </summary>
-        <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
+      <DiagnosticsDisclosure
+        title="Review details and history"
+        contentClassName="mt-4 space-y-4"
+      >
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           <Card className="workflow-secondary-card workflow-support-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Counts</CardTitle>
@@ -972,7 +964,7 @@ export default function ReviewPage() {
             ) : null}
           </CardContent>
         </Card>
-      </details>
+      </DiagnosticsDisclosure>
     </div>
   );
 }

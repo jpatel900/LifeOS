@@ -15,6 +15,15 @@ Default allowed for LifeOS development:
 - `openai-docs` / `openai-developers` only for OpenAI API, Responses API, Structured Outputs, models, prompts, and schema contracts
 - `Sentry` only during Sentry-related observability work
 
+## Frontend Routing Rule
+
+When the task touches `apps/web/components.json`, `apps/web/src/components/ui/**`, shared interaction patterns, or token-level styling in `apps/web/src/app/globals.css`:
+
+- prefer `frontend-ui-engineering`
+- use a shadcn skill when the work is specifically about primitives, component installation, composition, or shadcn conventions
+- prefer app-local shadcn-compatible primitives over route-local one-off controls
+- do not use shadcn as an excuse to turn shell/layout/route identity into generic stock components
+
 Avoid by default unless explicitly requested:
 
 - Slack

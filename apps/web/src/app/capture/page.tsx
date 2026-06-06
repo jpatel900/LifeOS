@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
@@ -608,9 +609,9 @@ export default function CapturePage() {
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <label htmlFor="raw_capture" className="text-sm font-medium">
+                  <Label htmlFor="raw_capture">
                     What are you thinking about?
-                  </label>
+                  </Label>
                   <Textarea
                     id="raw_capture"
                     value={text}
@@ -644,9 +645,9 @@ export default function CapturePage() {
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  <label htmlFor="area_persist" className="text-sm font-medium">
+                  <Label htmlFor="area_persist">
                     Area for this saved thought
-                  </label>
+                  </Label>
                   <Select
                     id="area_persist"
                     value={areaId ?? ""}
@@ -729,30 +730,29 @@ export default function CapturePage() {
             </div>
           </form>
 
-          <details className="system-details-disclosure workflow-inline-disclosure">
-            <summary className="text-sm font-medium text-foreground">
-              On-device draft pass
-            </summary>
-            <div className="mt-3 grid gap-3 workflow-admin-card rounded-xl p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">
-                  Keep local drafts secondary
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  The header area picker controls this device-only draft flow
-                  and the recent captures on this page.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={handleStructure}
-                className="w-full sm:w-auto"
-              >
-                Organize on this device
-              </Button>
+          <DiagnosticsDisclosure
+            title="On-device draft pass"
+            className="workflow-inline-disclosure"
+            contentClassName="mt-3 grid gap-3 workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+          >
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                Keep local drafts secondary
+              </p>
+              <p className="text-xs text-muted-foreground">
+                The header area picker controls this device-only draft flow and
+                the recent captures on this page.
+              </p>
             </div>
-          </details>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleStructure}
+              className="w-full sm:w-auto"
+            >
+              Organize on this device
+            </Button>
+          </DiagnosticsDisclosure>
 
           {latestDraft && latestAssessment && latestProposalDraft ? (
             <div className="workflow-admin-card space-y-1 rounded-xl border-cyan-500/40 bg-cyan-500/10 p-4 text-sm">
@@ -965,13 +965,13 @@ export default function CapturePage() {
         ) : null}
       </section>
 
-      <details className="system-details-disclosure">
-        <summary className="text-sm font-medium text-foreground">
-          Recent captures organized on this device
-        </summary>
+      <DiagnosticsDisclosure
+        title="Recent captures organized on this device"
+        contentClassName="mt-4"
+      >
         <div
           data-testid="capture-device-history-card"
-          className="mt-4 space-y-3 workflow-admin-card rounded-xl p-4"
+          className="space-y-3 workflow-admin-card rounded-xl p-4 text-sm text-muted-foreground"
         >
           <p className="text-sm text-muted-foreground">
             This local draft flow is separate from saved capture history.
@@ -1020,7 +1020,7 @@ export default function CapturePage() {
             </div>
           )}
         </div>
-      </details>
+      </DiagnosticsDisclosure>
     </div>
   );
 }

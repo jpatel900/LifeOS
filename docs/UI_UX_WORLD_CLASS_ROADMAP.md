@@ -22,6 +22,20 @@ Every fresh UI/UX run should begin with:
 5. the latest linked implementation note for the active roadmap pass
 6. the proof surfaces named in that roadmap pass
 
+## Frontend system guardrail
+
+For LifeOS frontend work, the target is not "make everything stock shadcn."
+
+- Push shared primitives and common interaction patterns toward app-local shadcn-compatible components in `apps/web/src/components/ui`.
+- Reuse or extend the existing token system in `apps/web/src/app/globals.css` before inventing page-local visual treatments.
+- Keep `AppShell`, workflow headers, route identity, area accents, and the flagship/support/admin surface system intentionally custom.
+- Add or replace primitives only where they improve consistency, accessibility, or repeated usage. Do not churn stable product composition just to increase shadcn coverage.
+- Treat this as the stable split going forward: shadcn for the primitive layer and shared patterns, custom code for product-specific composition and authorship.
+
+Latest supporting proof:
+
+- `2026-06-06`: the first implementation slice of this guardrail is landed. The app now has shared app-local `Label` and `Skeleton` primitives, `DiagnosticsDisclosure` is the standard wrapper for the touched system-details flows, `/login` now uses the same authored card/form system as the rest of the app instead of raw inline-styled markup, and the touched routes reuse the same primitive/disclosure vocabulary more consistently without flattening route identity. Proof: `pnpm --filter @lifeos/web lint`, `pnpm --filter @lifeos/web build`, `pnpm --filter @lifeos/web type-check` after rerun post-build for the known `.next/types` race, `pnpm --filter @lifeos/web test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`.
+
 ## Program north star
 
 Use the hybrid model:
@@ -120,6 +134,7 @@ Add these when area-accent behavior itself changes:
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-home-execute.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-review-health-areas.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-capture-planning-triage.md`
+- `docs/implementation-notes/2026-06-06-shadcn-primitive-consistency-pass.md`
 - `docs/implementation-notes/2026-06-05-home-review-areas-shell-polish-pass.md`
 - `docs/implementation-notes/2026-06-04-home-execute-ia-reduction-pass.md`
 - `docs/implementation-notes/2026-06-04-capture-planning-premium-feel-pass.md`

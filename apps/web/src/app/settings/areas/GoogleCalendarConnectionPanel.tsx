@@ -5,6 +5,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 interface GoogleCalendarConnectionSummary {
@@ -469,9 +471,14 @@ export function GoogleCalendarConnectionPanel() {
         ) : null}
 
         {panelState.status === "loading" ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Loading Google Calendar connection...
-          </p>
+          <div role="status" className="space-y-3" aria-live="polite">
+            <Skeleton className="h-4 w-44" />
+            <Skeleton className="h-4 max-w-xl" />
+            <div className="flex flex-wrap gap-3">
+              <Skeleton className="h-10 w-44" />
+              <Skeleton className="h-10 w-40" />
+            </div>
+          </div>
         ) : null}
 
         {panelState.status === "error" ? (
@@ -535,15 +542,16 @@ export function GoogleCalendarConnectionPanel() {
             ) : null}
 
             {panelState.connection?.granted_scopes_json?.length ? (
-              <details className="text-sm text-muted-foreground">
-                <summary className="cursor-pointer select-none">
-                  Advanced details
-                </summary>
-                <p className="mt-2">
+              <DiagnosticsDisclosure
+                title="Advanced details"
+                className="text-sm text-muted-foreground"
+                summaryClassName="text-sm font-medium text-foreground"
+              >
+                <p>
                   Granted OAuth scopes:{" "}
                   {panelState.connection.granted_scopes_json.join(", ")}
                 </p>
-              </details>
+              </DiagnosticsDisclosure>
             ) : null}
           </>
         ) : null}

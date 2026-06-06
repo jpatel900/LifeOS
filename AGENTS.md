@@ -322,6 +322,17 @@ Avoid:
 - analytics before workflows
 - fake precision
 
+## 15A. Frontend Primitive Discipline
+
+- Treat `apps/web/components.json`, `apps/web/src/components/ui/**`, and the token system in `apps/web/src/app/globals.css` as the active frontend foundation.
+- Move shared primitives and repeated interaction patterns toward app-local shadcn-compatible components before inventing route-local one-offs.
+- Prefer extending or composing existing primitives for buttons, inputs, alerts, cards, dialogs, sheets, tabs, menus, skeletons, and form structure instead of duplicating similar markup per page.
+- Keep product shell, route identity, area accents, flagship/support/admin surface taxonomy, and editorial composition intentionally custom. Do not flatten LifeOS into stock shadcn screens.
+- Prefer token-first styling through `globals.css` and semantic utility classes. Avoid per-page raw color literals or near-duplicate visual treatments when a shared primitive or token should exist instead.
+- Add a new primitive only when it solves repeated usage, accessibility, or consistency problems. Do not import shadcn components just to increase component count.
+- `packages/ui` is not the canonical frontend system today. Until shared cross-package UI is a real need, keep the authoritative primitive layer in `apps/web/src/components/ui`.
+- When working on frontend code, optimize for this split: shadcn for the primitive layer and common patterns; custom code for product-specific composition and route character.
+
 ## 16. Implementation Order
 
 Preferred order:
