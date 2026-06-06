@@ -3,20 +3,24 @@ import { cn } from "@/lib/utils";
 
 interface WorkflowPageHeaderProps {
   actions?: ReactNode;
+  bodyClassName?: string;
   children?: ReactNode;
   className?: string;
   description?: ReactNode;
   eyebrow?: ReactNode;
+  spotlightClassName?: string;
   spotlight?: ReactNode;
   title?: ReactNode;
 }
 
 export function WorkflowPageHeader({
   actions,
+  bodyClassName,
   children,
   className,
   description,
   eyebrow,
+  spotlightClassName,
   spotlight,
   title,
 }: WorkflowPageHeaderProps) {
@@ -48,11 +52,17 @@ export function WorkflowPageHeader({
             </div>
           ) : null}
           {spotlight ? (
-            <div className="workflow-page-spotlight">{spotlight}</div>
+            <div className={cn("workflow-page-spotlight", spotlightClassName)}>
+              {spotlight}
+            </div>
           ) : null}
         </div>
       ) : null}
-      {children ? <div className="workflow-page-body">{children}</div> : null}
+      {children ? (
+        <div className={cn("workflow-page-body", bodyClassName)}>
+          {children}
+        </div>
+      ) : null}
     </section>
   );
 }

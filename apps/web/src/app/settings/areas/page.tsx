@@ -153,7 +153,9 @@ export default function AreasSettingsPage() {
       });
 
       const nextAreas =
-        state.status === "ready" ? [...state.areas, result.area] : [result.area];
+        state.status === "ready"
+          ? [...state.areas, result.area]
+          : [result.area];
       replaceReadyAreas(nextAreas);
       setSelectedAreaId(workflowAreaIdForPersistedArea(result.area));
       setNewAreaName("");
@@ -248,25 +250,31 @@ export default function AreasSettingsPage() {
         description="Manage areas, accents, and account-connected behavior without adding noise to the daily workflow."
         spotlight={
           state.status === "ready" ? (
-            <div className="workflow-metric-grid">
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Save mode</p>
-                <p className="workflow-metric-value text-[1.35rem]">
-                  {saveModeLabel(state.provider)}
-                </p>
-                <p className="workflow-metric-context">
-                  This page stays truthful about whether changes are saved to
-                  your account.
-                </p>
-              </div>
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Active areas</p>
-                <p className="workflow-metric-value">{state.areas.length}</p>
-                <p className="workflow-metric-context">
-                  Clear scopes help Capture, Planning, and Review stay legible.
-                </p>
-              </div>
-            </div>
+            <Card
+              data-testid="areas-header-summary-card"
+              className="workflow-secondary-card workflow-support-card"
+            >
+              <CardContent className="workflow-metric-grid pt-6">
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Save mode</p>
+                  <p className="workflow-metric-value text-[1.35rem]">
+                    {saveModeLabel(state.provider)}
+                  </p>
+                  <p className="workflow-metric-context">
+                    This page stays truthful about whether changes are saved to
+                    your account.
+                  </p>
+                </div>
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Active areas</p>
+                  <p className="workflow-metric-value">{state.areas.length}</p>
+                  <p className="workflow-metric-context">
+                    Clear scopes help Capture, Planning, and Review stay
+                    legible.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           ) : null
         }
       />
@@ -284,9 +292,15 @@ export default function AreasSettingsPage() {
         ) : null}
       </DiagnosticsDisclosure>
 
-      <Card data-testid="areas-create-card" className="workflow-primary-card">
+      <Card
+        data-testid="areas-create-card"
+        className="workflow-primary-card workflow-flagship-card"
+      >
         <CardHeader>
-          <CardTitle className="text-lg">Create area</CardTitle>
+          <p className="workflow-surface-kicker">Ownership starts here</p>
+          <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
+            Create area
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleCreateArea} className="space-y-4">
@@ -329,7 +343,9 @@ export default function AreasSettingsPage() {
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" disabled={createState.status === "saving"}>
-                {createState.status === "saving" ? "Creating..." : "Create area"}
+                {createState.status === "saving"
+                  ? "Creating..."
+                  : "Create area"}
               </Button>
               <p className="text-sm text-muted-foreground">
                 New work should have a clear area before you plan or review it.
@@ -430,7 +446,7 @@ export default function AreasSettingsPage() {
                   data-testid="areas-area-card"
                   data-accent-strength={isSelected ? "subtle" : undefined}
                   style={buildAreaAccentStyle(area.color)}
-                  className="area-accent-card workflow-secondary-card"
+                  className="area-accent-card workflow-secondary-card workflow-support-card"
                 >
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -472,7 +488,8 @@ export default function AreasSettingsPage() {
                       </div>
                       <div className="area-accent-panel rounded-lg border p-3">
                         <p className="font-medium text-foreground">
-                          {plannedBlocks} planned block{plannedBlocks === 1 ? "" : "s"}
+                          {plannedBlocks} planned block
+                          {plannedBlocks === 1 ? "" : "s"}
                         </p>
                         <p className="mt-1 text-muted-foreground">
                           {plannedBlocks === 0
@@ -520,7 +537,7 @@ export default function AreasSettingsPage() {
                       </p>
                     ) : null}
 
-                    <details className="rounded-lg border border-border bg-background/50 p-3 text-sm text-muted-foreground">
+                    <details className="workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground">
                       <summary className="cursor-pointer select-none font-medium text-foreground">
                         Area actions and settings
                       </summary>
@@ -546,7 +563,7 @@ export default function AreasSettingsPage() {
 
                         <div
                           data-testid="areas-color-panel"
-                          className="area-accent-panel rounded-lg border p-3"
+                          className="workflow-admin-card rounded-xl p-3"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="space-y-1">
@@ -660,7 +677,7 @@ export default function AreasSettingsPage() {
                           )}
                         </div>
 
-                        <div className="rounded-lg border border-border bg-background/60 p-3 text-xs">
+                        <div className="workflow-admin-card rounded-xl p-3 text-xs">
                           <p className="font-medium text-foreground">
                             Area diagnostics
                           </p>
@@ -733,11 +750,14 @@ export default function AreasSettingsPage() {
         <summary className="text-sm font-medium text-foreground">
           Local reset
         </summary>
-        <Card className="mt-4 workflow-secondary-card border-dashed border-destructive/60 bg-destructive/5">
+        <Card
+          data-testid="areas-local-reset-card"
+          className="mt-4 workflow-admin-card border-destructive/60 bg-destructive/5"
+        >
           <CardContent className="space-y-3 pt-6 text-sm text-muted-foreground">
             <p>
-              This only clears on-device data on this device. It does not
-              delete cloud data.
+              This only clears on-device data on this device. It does not delete
+              cloud data.
             </p>
             {resetState === "success" ? (
               <Alert variant="success" role="status" aria-live="polite">

@@ -221,6 +221,9 @@ describe("source-of-truth boundaries", () => {
     const statusVocabulary = normalizeWhitespace(
       readRepoFile("apps/web/src/lib/statusVocabulary.ts"),
     );
+    const globalsCss = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/globals.css"),
+    );
 
     expect(appShell).toContain(
       "Quick capture saves on this device and sends notes to Triage.",
@@ -258,6 +261,9 @@ describe("source-of-truth boundaries", () => {
     expect(settings).toContain("Save mode:");
     expect(settings).toContain("Technical save mode id:");
     expect(settings).toContain("planned time blocks");
+    expect(globalsCss).toContain(".workflow-flagship-card");
+    expect(globalsCss).toContain(".workflow-support-card");
+    expect(globalsCss).toContain(".workflow-admin-card");
   });
 
   it("keeps Home as read-only workflow routing with no calendar/event write helpers", () => {

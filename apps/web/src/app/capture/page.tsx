@@ -268,11 +268,13 @@ export default function CapturePage() {
   function addSavedCaptureToHistory(capture: CaptureItem) {
     setSavedCaptureHistoryState((current) => ({
       status: "ready",
-      captures: [capture, ...(current.status === "ready" ? current.captures : [])]
-        .filter(
-          (item, index, items) =>
-            items.findIndex((candidate) => candidate.id === item.id) === index,
-        ),
+      captures: [
+        capture,
+        ...(current.status === "ready" ? current.captures : []),
+      ].filter(
+        (item, index, items) =>
+          items.findIndex((candidate) => candidate.id === item.id) === index,
+      ),
     }));
   }
 
@@ -489,7 +491,9 @@ export default function CapturePage() {
       return true;
     }
 
-    return captureAreaId === selectedAreaId || captureAreaId === persistedAreaId;
+    return (
+      captureAreaId === selectedAreaId || captureAreaId === persistedAreaId
+    );
   };
 
   const visibleCaptures = state.captureItems.filter((capture) => {
@@ -513,33 +517,38 @@ export default function CapturePage() {
         title="Capture"
         description="Get the thought out before you shape it. Save the raw version first, then organize only if you want help deciding what it is."
         spotlight={
-          <div className="workflow-metric-grid">
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Save mode</p>
-              <p className="workflow-metric-value text-[1.35rem]">
-                {provider ? saveModeLabel(provider) : "Checking"}
-              </p>
-              <p className="workflow-metric-context">
-                Raw capture truth stays explicit before any sorting step.
-              </p>
-            </div>
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Sorting help</p>
-              <p className="workflow-metric-value text-[1.35rem]">
-                {parserStatusLabel}
-              </p>
-              <p className="workflow-metric-context">{parserStatusDetail}</p>
-            </div>
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Current area</p>
-              <p className="workflow-metric-value text-[1.35rem]">
-                {selectedArea?.name ?? "None yet"}
-              </p>
-              <p className="workflow-metric-context">
-                You can save unscoped, but area keeps later planning cleaner.
-              </p>
-            </div>
-          </div>
+          <Card
+            data-testid="capture-header-summary-card"
+            className="workflow-secondary-card workflow-support-card"
+          >
+            <CardContent className="workflow-metric-grid pt-6">
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Save mode</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {provider ? saveModeLabel(provider) : "Checking"}
+                </p>
+                <p className="workflow-metric-context">
+                  Raw capture truth stays explicit before any sorting step.
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Sorting help</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {parserStatusLabel}
+                </p>
+                <p className="workflow-metric-context">{parserStatusDetail}</p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Current area</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {selectedArea?.name ?? "None yet"}
+                </p>
+                <p className="workflow-metric-context">
+                  You can save unscoped, but area keeps later planning cleaner.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         }
       />
 
@@ -575,11 +584,14 @@ export default function CapturePage() {
 
       <Card
         data-testid="capture-main-card"
-        className="workflow-primary-card max-w-3xl"
+        className="workflow-primary-card workflow-flagship-card max-w-3xl"
       >
         <CardHeader>
-          <CardTitle>Write it down</CardTitle>
-          <CardDescription>
+          <p className="workflow-surface-kicker">Capture first</p>
+          <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
+            Write it down
+          </CardTitle>
+          <CardDescription className="workflow-surface-body max-w-2xl text-sm">
             Start with the raw thought. Save the simplest valid version, then
             decide whether it needs sorting help.
           </CardDescription>
@@ -591,7 +603,7 @@ export default function CapturePage() {
             data-testid="capture-save-options-card"
             data-accent-strength="subtle"
             style={selectedAreaStyle}
-            className="area-accent-card space-y-4 rounded-lg border p-4"
+            className="area-accent-panel space-y-4 rounded-xl border p-4"
           >
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-start">
               <div className="space-y-3">
@@ -667,10 +679,12 @@ export default function CapturePage() {
             <div className="workflow-action-tray grid gap-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="workflow-section-kicker">Choose the fastest valid path</p>
+                  <p className="workflow-section-kicker">
+                    Choose the fastest valid path
+                  </p>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Save raw capture when you want zero friction. Save and organize when
-                    you already want draft suggestions next.
+                    Save raw capture when you want zero friction. Save and
+                    organize when you already want draft suggestions next.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -685,7 +699,9 @@ export default function CapturePage() {
                     disabled={saveState.status === "saving"}
                     className="w-full"
                   >
-                    {saveState.status === "saving" ? "Saving..." : "Save thought"}
+                    {saveState.status === "saving"
+                      ? "Saving..."
+                      : "Save thought"}
                   </Button>
                   <p className="text-xs text-muted-foreground">
                     Save the raw capture first. Organize it after if needed.
@@ -717,9 +733,11 @@ export default function CapturePage() {
             <summary className="text-sm font-medium text-foreground">
               On-device draft pass
             </summary>
-            <div className="mt-3 grid gap-3 border-dashed sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="mt-3 grid gap-3 workflow-admin-card rounded-xl p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div className="space-y-1">
-                <p className="text-sm font-medium">Keep local drafts secondary</p>
+                <p className="text-sm font-medium">
+                  Keep local drafts secondary
+                </p>
                 <p className="text-xs text-muted-foreground">
                   The header area picker controls this device-only draft flow
                   and the recent captures on this page.
@@ -737,28 +755,26 @@ export default function CapturePage() {
           </details>
 
           {latestDraft && latestAssessment && latestProposalDraft ? (
-            <Card className="workflow-secondary-card border-cyan-500/40 bg-cyan-500/10">
-              <CardContent className="space-y-1 p-4 text-sm">
-                <p className="font-semibold">
-                  On-device sorting created suggestions.
-                </p>
-                <p>Suggested task: {latestDraft.title}</p>
-                <p>
-                  First suggested action:{" "}
-                  {latestAssessment.recommended_first_move}
-                </p>
-                <p>
-                  Suggested time block:{" "}
-                  {new Date(
-                    latestProposalDraft.proposed_start,
-                  ).toLocaleTimeString()}{" "}
-                  –{" "}
-                  {new Date(
-                    latestProposalDraft.proposed_end,
-                  ).toLocaleTimeString()}
-                </p>
-              </CardContent>
-            </Card>
+            <div className="workflow-admin-card space-y-1 rounded-xl border-cyan-500/40 bg-cyan-500/10 p-4 text-sm">
+              <p className="font-semibold text-foreground">
+                On-device sorting created suggestions.
+              </p>
+              <p>Suggested task: {latestDraft.title}</p>
+              <p>
+                First suggested action:{" "}
+                {latestAssessment.recommended_first_move}
+              </p>
+              <p>
+                Suggested time block:{" "}
+                {new Date(
+                  latestProposalDraft.proposed_start,
+                ).toLocaleTimeString()}{" "}
+                –{" "}
+                {new Date(
+                  latestProposalDraft.proposed_end,
+                ).toLocaleTimeString()}
+              </p>
+            </div>
           ) : null}
         </CardContent>
       </Card>
@@ -919,13 +935,15 @@ export default function CapturePage() {
                   data-testid="capture-recent-card"
                   data-accent-strength="subtle"
                   style={captureAreaStyle}
-                  className="area-accent-card workflow-secondary-card"
+                  className="area-accent-card workflow-secondary-card workflow-support-card"
                 >
                   <CardContent className="flex items-start justify-between gap-3 p-4">
                     <div className="space-y-1">
                       <p className="font-medium">{capture.raw_text}</p>
                       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                        <Badge variant={lifecycle.variant}>
+                          {lifecycle.label}
+                        </Badge>
                         {area ? (
                           <Badge variant="secondary">Area: {area.name}</Badge>
                         ) : null}
@@ -951,7 +969,10 @@ export default function CapturePage() {
         <summary className="text-sm font-medium text-foreground">
           Recent captures organized on this device
         </summary>
-        <div className="mt-4 space-y-3">
+        <div
+          data-testid="capture-device-history-card"
+          className="mt-4 space-y-3 workflow-admin-card rounded-xl p-4"
+        >
           <p className="text-sm text-muted-foreground">
             This local draft flow is separate from saved capture history.
           </p>
@@ -974,13 +995,15 @@ export default function CapturePage() {
                     data-testid="capture-recent-card"
                     data-accent-strength="subtle"
                     style={captureAreaStyle}
-                    className="area-accent-card workflow-secondary-card"
+                    className="area-accent-card workflow-secondary-card workflow-support-card"
                   >
                     <CardContent className="flex items-start justify-between gap-3 p-4">
                       <div className="space-y-1">
                         <p className="font-medium">{capture.raw_text}</p>
                         <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                          <Badge variant={lifecycle.variant}>
+                            {lifecycle.label}
+                          </Badge>
                           {area ? (
                             <Badge variant="secondary">Area: {area.name}</Badge>
                           ) : null}

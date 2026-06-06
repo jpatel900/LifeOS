@@ -41,10 +41,7 @@ import {
   reviewedLifecycleDisplay,
 } from "@/lib/workflowLifecycle";
 import { useWorkflow } from "@/lib/WorkflowContext";
-import {
-  buildAreaAccentStyle,
-  resolveSelectedArea,
-} from "@/lib/areaAccent";
+import { buildAreaAccentStyle, resolveSelectedArea } from "@/lib/areaAccent";
 
 type ReviewState =
   | { status: "loading" }
@@ -194,7 +191,9 @@ export default function ReviewPage() {
 
   const usesPersistedReview =
     reviewState.status === "ready" && reviewState.provider === "supabase";
-  const captures = usesPersistedReview ? reviewState.captures : state.captureItems;
+  const captures = usesPersistedReview
+    ? reviewState.captures
+    : state.captureItems;
   const tasks = usesPersistedReview ? reviewState.tasks : state.tasks;
   const blocks = usesPersistedReview
     ? reviewState.blocks
@@ -231,17 +230,14 @@ export default function ReviewPage() {
   );
   const openTasks = tasks.filter((task) => task.status === "active");
   const capturedWaiting = captures.filter(
-    (capture) =>
-      capture.status !== "resolved" && capture.status !== "archived",
+    (capture) => capture.status !== "resolved" && capture.status !== "archived",
   );
   const plannedBlocks = blocks.filter(
     (block) => block.status === "scheduled" || block.status === "running",
   );
   const completedTitles = uniqTruthy([
     ...completed.map((session) => taskById.get(session.task_id ?? "")?.title),
-    ...tasks
-      .filter((task) => task.status === "done")
-      .map((task) => task.title),
+    ...tasks.filter((task) => task.status === "done").map((task) => task.title),
   ]);
   const plannedTitles = uniqTruthy(
     plannedBlocks.map((block) => taskById.get(block.task_id ?? "")?.title),
@@ -379,24 +375,33 @@ export default function ReviewPage() {
           reviewState.status === "ready" ? (
             <Card
               data-testid="review-next-decision-card"
-              className="workflow-primary-card border-0 bg-transparent shadow-none"
+              className="workflow-primary-card workflow-flagship-card"
             >
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Daily closure</CardTitle>
+              <CardHeader className="pb-4">
+                <p className="workflow-surface-kicker">Closure-first</p>
+                <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
+                  Daily closure
+                </CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-wrap items-center gap-2 px-0 pb-0">
-                <Button
-                  type="button"
-                  onClick={() => void handleCreateDailyReview()}
-                  disabled={actionState.status === "saving"}
-                >
-                  Create daily review
-                </Button>
-                <p className="text-sm text-muted-foreground">
-                  {reviewEntries.length === 0
-                    ? "Start one daily review to decide what should move forward."
-                    : "Log the day once you know what carries forward, what needs a new time, and what can stop."}
+              <CardContent className="grid gap-4 text-sm text-muted-foreground">
+                <p className="workflow-surface-body max-w-2xl">
+                  Decide what moves forward, what needs a new time, and what can
+                  stop without reopening the whole day.
                 </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => void handleCreateDailyReview()}
+                    disabled={actionState.status === "saving"}
+                  >
+                    Create daily review
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    {reviewEntries.length === 0
+                      ? "Start one daily review to decide what should move forward."
+                      : "Log the day once you know what carries forward, what needs a new time, and what can stop."}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           ) : null
@@ -422,7 +427,10 @@ export default function ReviewPage() {
             <summary className="text-sm font-medium text-foreground">
               Reflection notes
             </summary>
-            <Card className="mt-4 workflow-quiet-card shadow-none">
+            <Card
+              data-testid="review-reflections-card"
+              className="mt-4 workflow-admin-card"
+            >
               <CardHeader className="pb-3">
                 <CardDescription>
                   Keep the answers short. They save with the daily review when
@@ -438,7 +446,10 @@ export default function ReviewPage() {
                   </p>
                 </div>
                 <div className="grid gap-1">
-                  <label htmlFor="review-move-forward" className="text-sm font-medium">
+                  <label
+                    htmlFor="review-move-forward"
+                    className="text-sm font-medium"
+                  >
                     What should move forward?
                   </label>
                   <Textarea
@@ -475,7 +486,10 @@ export default function ReviewPage() {
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label htmlFor="review-reality-taught" className="text-sm font-medium">
+                  <label
+                    htmlFor="review-reality-taught"
+                    className="text-sm font-medium"
+                  >
                     What did reality teach?
                   </label>
                   <Textarea
@@ -497,7 +511,7 @@ export default function ReviewPage() {
 
           <Card
             data-testid="review-close-loop-card"
-            className="workflow-secondary-card"
+            className="workflow-secondary-card workflow-support-card"
           >
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Close the loop</CardTitle>
@@ -512,7 +526,8 @@ export default function ReviewPage() {
                   Continue or reschedule in Planning if the work still matters.
                 </p>
                 <p className="workflow-action-tray">
-                  Capture a follow-up, carry it forward, or stop for today on purpose.
+                  Capture a follow-up, carry it forward, or stop for today on
+                  purpose.
                 </p>
               </div>
               <div className="workflow-action-tray grid gap-3">
@@ -520,12 +535,20 @@ export default function ReviewPage() {
                   <Button asChild className="w-full sm:w-auto">
                     <Link href="/calendar">Plan the next block</Link>
                   </Button>
-                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
                     <Link href="/capture">Capture a follow-up</Link>
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button asChild variant="outline" className="w-full sm:w-auto">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                  >
                     <Link href="/">Stop for today</Link>
                   </Button>
                 </div>
@@ -545,9 +568,7 @@ export default function ReviewPage() {
       <DiagnosticsDisclosure title="Review details">
         {reviewState.status === "ready" ? (
           <>
-            <p>
-              Review entries are {savedViaLabel(reviewState.provider)}.
-            </p>
+            <p>Review entries are {savedViaLabel(reviewState.provider)}.</p>
             <p>
               Save mode: <strong>{saveModeLabel(reviewState.provider)}</strong>
             </p>
@@ -600,7 +621,7 @@ export default function ReviewPage() {
         data-testid="review-today-at-a-glance-card"
         data-accent-strength="subtle"
         style={selectedAreaStyle}
-        className="area-accent-card workflow-secondary-card"
+        className="area-accent-card workflow-secondary-card workflow-support-card"
       >
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -642,20 +663,24 @@ export default function ReviewPage() {
               {(() => {
                 const lifecycle = reviewGroupLifecycleDisplay(group.lifecycle);
                 return (
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{group.title}</p>
-                    <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{group.title}</p>
+                        <Badge variant={lifecycle.variant}>
+                          {lifecycle.label}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {group.count === 0
+                          ? group.empty
+                          : `${group.count} item${group.count === 1 ? "" : "s"}`}
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
+                      {group.count}
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {group.count === 0 ? group.empty : `${group.count} item${group.count === 1 ? "" : "s"}`}
-                  </p>
-                </div>
-                <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
-                  {group.count}
-                </span>
-              </div>
                 );
               })()}
               {group.items.length > 0 ? (
@@ -675,70 +700,77 @@ export default function ReviewPage() {
           Review details and history
         </summary>
         <div className="mt-4 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-          <Card className="workflow-secondary-card">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Counts</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {captures.length === 0 && sessions.length === 0 ? (
-              <EmptyState
-                title="No daily review yet."
-                description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
-                action={
-                  <Button asChild>
-                    <Link href="/capture">Capture a follow-up</Link>
-                  </Button>
-                }
-              />
-            ) : (
-              <div className="workflow-metric-grid">
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Captured waiting</p>
-                  <p className="workflow-metric-value">{capturedWaiting.length}</p>
-                  <p className="workflow-metric-context">
-                    Items still waiting for a decision.
-                  </p>
+          <Card className="workflow-secondary-card workflow-support-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Counts</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {captures.length === 0 && sessions.length === 0 ? (
+                <EmptyState
+                  title="No daily review yet."
+                  description="Complete the capture, triage, calendar, and execute flow to see a local review summary."
+                  action={
+                    <Button asChild>
+                      <Link href="/capture">Capture a follow-up</Link>
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="workflow-metric-grid">
+                  <div className="workflow-metric-card">
+                    <p className="workflow-metric-label">Captured waiting</p>
+                    <p className="workflow-metric-value">
+                      {capturedWaiting.length}
+                    </p>
+                    <p className="workflow-metric-context">
+                      Items still waiting for a decision.
+                    </p>
+                  </div>
+                  <div className="workflow-metric-card">
+                    <p className="workflow-metric-label">Planned</p>
+                    <p className="workflow-metric-value">
+                      {plannedBlocks.length}
+                    </p>
+                    <p className="workflow-metric-context">
+                      Blocks already placed on the day.
+                    </p>
+                  </div>
+                  <div className="workflow-metric-card">
+                    <p className="workflow-metric-label">Completed</p>
+                    <p className="workflow-metric-value">{completed.length}</p>
+                    <p className="workflow-metric-context">
+                      Sessions that closed cleanly.
+                    </p>
+                  </div>
+                  <div className="workflow-metric-card">
+                    <p className="workflow-metric-label">Needs recovery</p>
+                    <p className="workflow-metric-value">
+                      {missed.length + distracted.length + stuck.length}
+                    </p>
+                    <p className="workflow-metric-context">
+                      Missed, distracted, or stuck sessions.
+                    </p>
+                  </div>
+                  <div className="workflow-metric-card">
+                    <p className="workflow-metric-label">Still open</p>
+                    <p className="workflow-metric-value">{openTasks.length}</p>
+                    <p className="workflow-metric-context">
+                      Work likely to carry forward.
+                    </p>
+                  </div>
                 </div>
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Planned</p>
-                  <p className="workflow-metric-value">{plannedBlocks.length}</p>
-                  <p className="workflow-metric-context">
-                    Blocks already placed on the day.
-                  </p>
-                </div>
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Completed</p>
-                  <p className="workflow-metric-value">{completed.length}</p>
-                  <p className="workflow-metric-context">
-                    Sessions that closed cleanly.
-                  </p>
-                </div>
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Needs recovery</p>
-                  <p className="workflow-metric-value">
-                    {missed.length + distracted.length + stuck.length}
-                  </p>
-                  <p className="workflow-metric-context">
-                    Missed, distracted, or stuck sessions.
-                  </p>
-                </div>
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Still open</p>
-                  <p className="workflow-metric-value">{openTasks.length}</p>
-                  <p className="workflow-metric-context">
-                    Work likely to carry forward.
-                  </p>
-                </div>
-              </div>
-            )}
-          </CardContent>
+              )}
+            </CardContent>
           </Card>
 
-          <Card className="workflow-secondary-card">
+          <Card className="workflow-secondary-card workflow-support-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Area backlog this week</CardTitle>
+              <CardTitle className="text-base">
+                Area backlog this week
+              </CardTitle>
               <CardDescription>
-                Which areas are accumulating unfinished weight versus actually moving.
+                Which areas are accumulating unfinished weight versus actually
+                moving.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -793,7 +825,9 @@ export default function ReviewPage() {
                               </p>
                             </div>
                             <div className="workflow-support-panel rounded-lg border p-3">
-                              <p className="workflow-section-kicker">Completed</p>
+                              <p className="workflow-section-kicker">
+                                Completed
+                              </p>
                               <p className="mt-2 text-lg font-semibold text-foreground">
                                 {summary.done}
                               </p>
@@ -801,7 +835,10 @@ export default function ReviewPage() {
                           </div>
                           {summary.latestReview ? (
                             <div className="mt-3 text-muted-foreground">
-                              Last review: {formatReviewDate(summary.latestReview.period_end)}
+                              Last review:{" "}
+                              {formatReviewDate(
+                                summary.latestReview.period_end,
+                              )}
                             </div>
                           ) : null}
                         </div>
@@ -812,120 +849,128 @@ export default function ReviewPage() {
             </CardContent>
           </Card>
         </div>
-        <Card className="mt-4 workflow-quiet-card shadow-none">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Past reviews and notes</CardTitle>
-          <CardDescription>
-            Open this only when you need the saved detail or raw browser notes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          {reviewEntries.length === 0 && localReviewLog.length === 0 ? (
-            <EmptyState
-              title="No saved review details yet."
-              description="Create the first daily review and saved details will appear here."
-            />
-          ) : null}
+        <Card
+          data-testid="review-history-card"
+          className="mt-4 workflow-admin-card"
+        >
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Past reviews and notes</CardTitle>
+            <CardDescription>
+              Open this only when you need the saved detail or raw browser
+              notes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {reviewEntries.length === 0 && localReviewLog.length === 0 ? (
+              <EmptyState
+                title="No saved review details yet."
+                description="Create the first daily review and saved details will appear here."
+              />
+            ) : null}
 
-          {reviewEntries.length > 0 ? (
-            <details className="rounded-lg border border-border bg-card p-4 text-sm">
-              <summary className="cursor-pointer select-none font-medium">
-                Open saved review details
-              </summary>
-              <div className="mt-3 grid gap-3">
-                {reviewEntries.map((entry) => {
-                  const lifecycle = reviewedLifecycleDisplay();
-                  const areaName =
-                    entry.area_id === null
-                      ? "All areas"
-                      : (areas.find((area) => area.id === entry.area_id)?.name ??
-                        "Saved area");
-                  const completedCount = summaryNumber(
-                    entry.summary_json,
-                    "completed_sessions",
-                  );
-                  const openCount = summaryNumber(
-                    entry.summary_json,
-                    "open_tasks",
-                  );
-                  const missedCount = summaryNumber(
-                    entry.summary_json,
-                    "missed_sessions",
-                  );
+            {reviewEntries.length > 0 ? (
+              <details className="rounded-lg border border-border bg-card p-4 text-sm">
+                <summary className="cursor-pointer select-none font-medium">
+                  Open saved review details
+                </summary>
+                <div className="mt-3 grid gap-3">
+                  {reviewEntries.map((entry) => {
+                    const lifecycle = reviewedLifecycleDisplay();
+                    const areaName =
+                      entry.area_id === null
+                        ? "All areas"
+                        : (areas.find((area) => area.id === entry.area_id)
+                            ?.name ?? "Saved area");
+                    const completedCount = summaryNumber(
+                      entry.summary_json,
+                      "completed_sessions",
+                    );
+                    const openCount = summaryNumber(
+                      entry.summary_json,
+                      "open_tasks",
+                    );
+                    const missedCount = summaryNumber(
+                      entry.summary_json,
+                      "missed_sessions",
+                    );
 
-                  return (
-                    <div
-                      key={entry.id}
-                      className="rounded-lg border border-border bg-background/50 p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-medium">
-                              {entry.review_type} review for{" "}
-                              {formatReviewDate(entry.period_end)}
+                    return (
+                      <div
+                        key={entry.id}
+                        className="rounded-lg border border-border bg-background/50 p-4"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">
+                                {entry.review_type} review for{" "}
+                                {formatReviewDate(entry.period_end)}
+                              </p>
+                              <Badge variant={lifecycle.variant}>
+                                {lifecycle.label}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {areaName}
                             </p>
-                            <Badge variant={lifecycle.variant}>
-                              {lifecycle.label}
-                            </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {areaName}
+                          <p className="text-xs text-muted-foreground">
+                            Saved {new Date(entry.created_at).toLocaleString()}
                           </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Saved {new Date(entry.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {completedCount !== null ? (
-                          <span className="rounded-full border border-border px-2 py-1">
-                            Completed sessions: {completedCount}
-                          </span>
-                        ) : null}
-                        {openCount !== null ? (
-                          <span className="rounded-full border border-border px-2 py-1">
-                            Open tasks: {openCount}
-                          </span>
-                        ) : null}
-                        {missedCount !== null ? (
-                          <span className="rounded-full border border-border px-2 py-1">
-                            Missed sessions: {missedCount}
-                          </span>
-                        ) : null}
-                      </div>
-                      {reviewReflections(entry.summary_json).length > 0 ? (
-                        <div className="mt-3 space-y-2 text-sm">
-                          {reviewReflections(entry.summary_json).map(([key, value]) => (
-                            <div key={key}>
-                              <p className="font-medium">
-                                {reflectionsLabels[key]}
-                              </p>
-                              <p className="text-muted-foreground">{value}</p>
-                            </div>
-                          ))}
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {completedCount !== null ? (
+                            <span className="rounded-full border border-border px-2 py-1">
+                              Completed sessions: {completedCount}
+                            </span>
+                          ) : null}
+                          {openCount !== null ? (
+                            <span className="rounded-full border border-border px-2 py-1">
+                              Open tasks: {openCount}
+                            </span>
+                          ) : null}
+                          {missedCount !== null ? (
+                            <span className="rounded-full border border-border px-2 py-1">
+                              Missed sessions: {missedCount}
+                            </span>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </details>
-          ) : null}
+                        {reviewReflections(entry.summary_json).length > 0 ? (
+                          <div className="mt-3 space-y-2 text-sm">
+                            {reviewReflections(entry.summary_json).map(
+                              ([key, value]) => (
+                                <div key={key}>
+                                  <p className="font-medium">
+                                    {reflectionsLabels[key]}
+                                  </p>
+                                  <p className="text-muted-foreground">
+                                    {value}
+                                  </p>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            ) : null}
 
-          {localReviewLog.length > 0 ? (
-            <details className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
-              <summary className="cursor-pointer select-none font-medium">
-                Open raw browser notes
-              </summary>
-              <ul className="mt-3 m-0 list-disc pl-5 text-foreground">
-                {localReviewLog.map((entry, index) => (
-                  <li key={`${entry}-${index}`}>{entry}</li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </CardContent>
+            {localReviewLog.length > 0 ? (
+              <details className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                <summary className="cursor-pointer select-none font-medium">
+                  Open raw browser notes
+                </summary>
+                <ul className="mt-3 m-0 list-disc pl-5 text-foreground">
+                  {localReviewLog.map((entry, index) => (
+                    <li key={`${entry}-${index}`}>{entry}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </CardContent>
         </Card>
       </details>
     </div>

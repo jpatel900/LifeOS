@@ -71,10 +71,7 @@ function humanStatus(
   return { label: "Needs attention", variant: "destructive" as const };
 }
 
-function findCheck(
-  checks: HealthDashboardResult["checks"],
-  subsystem: string,
-) {
+function findCheck(checks: HealthDashboardResult["checks"], subsystem: string) {
   return checks.find((check) => check.subsystem === subsystem) ?? null;
 }
 
@@ -104,7 +101,8 @@ function buildSavingRow(result: HealthDashboardResult): TrustRow {
       status: "Saved on this device only",
       summary:
         "Core workflow stays usable without account sync, but new work stays on this device.",
-      nextStep: "Sign in and configure account sync when you want saved account data.",
+      nextStep:
+        "Sign in and configure account sync when you want saved account data.",
       variant: "secondary",
     };
   }
@@ -128,7 +126,8 @@ function buildSavingRow(result: HealthDashboardResult): TrustRow {
       title: "Saving",
       status: "Save failed",
       summary: toUserText(
-        result.persistenceMessage ?? "The latest health snapshot could not be saved.",
+        result.persistenceMessage ??
+          "The latest health snapshot could not be saved.",
       ),
       nextStep: "Verify account access, then run the check again.",
       variant: "destructive",
@@ -142,7 +141,7 @@ function buildSavingRow(result: HealthDashboardResult): TrustRow {
       summary: toUserText(
         authCheck?.status === "critical"
           ? authCheck.summary
-          : captureCheck?.summary ?? "Saved account data is unavailable.",
+          : (captureCheck?.summary ?? "Saved account data is unavailable."),
       ),
       nextStep: "Fix account access before relying on saved account data.",
       variant: "destructive",
@@ -153,7 +152,8 @@ function buildSavingRow(result: HealthDashboardResult): TrustRow {
     title: "Saving",
     status: "Not saved",
     summary: toUserText(
-      result.persistenceMessage ?? "Account sync is not active for this session.",
+      result.persistenceMessage ??
+        "Account sync is not active for this session.",
     ),
     nextStep: "Sign in if you want new checks and saved rows in your account.",
     variant: "warning",
@@ -199,7 +199,8 @@ function buildCalendarRow(result: HealthDashboardResult): TrustRow {
       title: "Calendar",
       status: calendarConnectionLabel(status),
       summary: "Google Calendar is connected for approval-gated writes.",
-      nextStep: "Conflict checks and event creation still require explicit action.",
+      nextStep:
+        "Conflict checks and event creation still require explicit action.",
       variant: "success",
     };
   }
@@ -208,7 +209,8 @@ function buildCalendarRow(result: HealthDashboardResult): TrustRow {
     return {
       title: "Calendar",
       status: calendarConnectionLabel(status),
-      summary: "Planning still works locally, but Google writes are unavailable until you connect.",
+      summary:
+        "Planning still works locally, but Google writes are unavailable until you connect.",
       nextStep: "Connect Google Calendar in Areas when you need it.",
       variant: "warning",
     };
@@ -218,7 +220,8 @@ function buildCalendarRow(result: HealthDashboardResult): TrustRow {
     title: "Calendar",
     status: calendarConnectionLabel(status),
     summary: "Planning stays local until Google Calendar is configured.",
-    nextStep: "Optional: configure Google Calendar in Areas if you want external writes.",
+    nextStep:
+      "Optional: configure Google Calendar in Areas if you want external writes.",
     variant: "secondary",
   };
 }
@@ -236,7 +239,8 @@ function buildReliabilitySummary(result: HealthDashboardResult) {
     return {
       label: "Not fully",
       variant: "destructive" as const,
-      summary: "Fix the blocking item below before relying on saved account data.",
+      summary:
+        "Fix the blocking item below before relying on saved account data.",
     };
   }
 
@@ -407,12 +411,16 @@ export default function HealthPage() {
 
       {state.status === "ready" ? (
         <>
-          <Card data-testid="health-reliability-card" className="workflow-primary-card">
+          <Card
+            data-testid="health-reliability-card"
+            className="workflow-primary-card workflow-flagship-card"
+          >
             <CardHeader>
-              <CardTitle className="text-xl">
+              <p className="workflow-surface-kicker">Reliability first</p>
+              <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
                 Can I rely on LifeOS today?
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="workflow-surface-body max-w-2xl text-sm">
                 Start with the plain answer, then open diagnostics only if you
                 need the raw subsystem view.
               </CardDescription>
@@ -427,9 +435,14 @@ export default function HealthPage() {
             </CardContent>
           </Card>
 
-          <Card data-testid="health-trust-summary-card" className="workflow-secondary-card">
+          <Card
+            data-testid="health-trust-summary-card"
+            className="workflow-secondary-card workflow-support-card"
+          >
             <CardHeader>
-              <CardTitle className="text-lg">Today&apos;s trust summary</CardTitle>
+              <CardTitle className="text-lg">
+                Today&apos;s trust summary
+              </CardTitle>
               <CardDescription>
                 Checked at {state.result.checkedAt}
               </CardDescription>
@@ -451,10 +464,11 @@ export default function HealthPage() {
           </Card>
 
           <Card
+            data-testid="health-attention-card"
             className={
               attentionChecks.length > 0
-                ? "workflow-primary-card"
-                : "workflow-secondary-card"
+                ? "workflow-secondary-card workflow-support-card"
+                : "workflow-secondary-card workflow-support-card"
             }
           >
             <CardHeader>
@@ -495,7 +509,7 @@ export default function HealthPage() {
               {state.result.checks.map((check) => {
                 const display = humanStatus(check.summary, check.status);
                 return (
-                  <Card key={check.id} className="workflow-quiet-card shadow-none">
+                  <Card key={check.id} className="workflow-admin-card">
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-lg capitalize">
@@ -525,7 +539,8 @@ export default function HealthPage() {
               Technical save mode id: <strong>{state.result.provider}</strong>
             </p>
             <p>
-              Technical save result id: <strong>{state.result.persistence}</strong>
+              Technical save result id:{" "}
+              <strong>{state.result.persistence}</strong>
             </p>
             {state.result.persistenceMessage ? (
               <p>{toUserText(state.result.persistenceMessage)}</p>
@@ -533,7 +548,6 @@ export default function HealthPage() {
           </DiagnosticsDisclosure>
         </>
       ) : null}
-
     </div>
   );
 }

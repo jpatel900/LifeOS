@@ -39,28 +39,28 @@ The five target outcomes are:
 
 ## Outcome status
 
-| Outcome                              | Status    | Current evidence                                                                                                          | Current gap                                                                                                                        |
-| ------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Stronger visual authorship and craft | `active`  | Shared shell polish, premium-feel passes, and stronger route headers are shipped.                                         | The visual system is still more implicit than explicit. Surface taxonomy and accent rules need to be codified and reduced further. |
-| Less explanation-by-default          | `active`  | June 3-5 declutter and correction passes removed duplicate empty-state guidance and moved more detail behind disclosures. | Several routes still carry too many lower-page support reveals and too much parallel explanation once expanded.                    |
-| Calmer, more effortless shell        | `planned` | The shell is materially calmer and Home no longer carries shell mutation.                                                 | The shell still consumes more attention than a fully invisible frame on action-heavy routes.                                       |
-| Sharper interaction feel and closure | `planned` | Inline closure feedback now exists across Capture, Triage, Planning, Execute, and Review.                                 | The cadence is not yet tight enough or visually consistent enough to feel like one authored system.                                |
-| More memorable route identity        | `planned` | Home, Execute, Triage, Capture, and Planning now have clearer editorial framing.                                          | Distinction is still uneven. Several routes still read as strong variants of one template instead of unmistakable scenes.          |
+| Outcome                              | Status    | Current evidence                                                                                                                         | Current gap                                                                                                                                                        |
+| ------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stronger visual authorship and craft | `done`    | Shared shell polish, premium-feel passes, and the explicit flagship/support/admin taxonomy now cover shell and all eight primary routes. | Future visual work should stay inside this authored system. The larger remaining gaps are now copy density, shell burden, interaction cadence, and route identity. |
+| Less explanation-by-default          | `active`  | June 3-5 declutter and correction passes removed duplicate empty-state guidance and moved more detail behind disclosures.                | Several routes still carry too many lower-page support reveals and too much parallel explanation once expanded.                                                    |
+| Calmer, more effortless shell        | `planned` | The shell is materially calmer and Home no longer carries shell mutation.                                                                | The shell still consumes more attention than a fully invisible frame on action-heavy routes.                                                                       |
+| Sharper interaction feel and closure | `planned` | Inline closure feedback now exists across Capture, Triage, Planning, Execute, and Review.                                                | The cadence is not yet tight enough or visually consistent enough to feel like one authored system.                                                                |
+| More memorable route identity        | `planned` | Home, Execute, Triage, Capture, and Planning now have clearer editorial framing.                                                         | Distinction is still uneven. Several routes still read as strong variants of one template instead of unmistakable scenes.                                          |
 
 ## Route scorecard
 
 Use this as a review checklist, not as permission to skip browser proof. Counts below are current contract-level expectations as of `2026-06-05`, grounded in shipped notes and route source, and should be re-counted during future browser passes when a route changes materially.
 
-| Route    | Editorial identity        | Primary CTA count at rest | Disclosure count at rest | Read-only or mutating | 390px first-screen scan | Closure feedback explicit | Distinct identity now | Main remaining gap                                                                                                                  |
-| -------- | ------------------------- | ------------------------- | ------------------------ | --------------------- | ----------------------- | ------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | Instrument panel          | `1`                       | `3`                      | `read-only`           | `acceptable`            | `n/a`                     | `strong`              | Still needs an even more authored flagship surface taxonomy so support cards feel intentionally secondary instead of merely hidden. |
-| Capture  | Raw-first intake          | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | The writing surface now wins, but lower-page helper/history surfaces still carry more disclosure weight than ideal.                 |
-| Triage   | One decision at a time    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | Expanded current-item state still exposes too many secondary reveals once the user is inside the card.                              |
-| Planning | Local-first scheduling    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | The route is clearer, but proposal/admin/disclosure density still needs a stricter authored hierarchy.                              |
-| Execute  | One mission               | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Mission-first hierarchy is real, but shell/support burden still competes more than it should in longer states.                      |
-| Review   | Closure and carry-forward | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | Closure-first is landed, but history/detail sections still feel heavier than a world-class closing loop.                            |
-| Health   | Trust before diagnostics  | `1`                       | `1`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | Trust framing is honest, but healthy/degraded surfaces still need a more unmistakable visual center of gravity.                     |
-| Areas    | Quiet ownership admin     | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | Admin and destructive depth are quieter now, but the route still needs a cleaner authored admin pattern below the top summary.      |
+| Route    | Editorial identity        | Primary CTA count at rest | Disclosure count at rest | Read-only or mutating | 390px first-screen scan | Closure feedback explicit | Distinct identity now | Main remaining gap                                                                                                                                           |
+| -------- | ------------------------- | ------------------------- | ------------------------ | --------------------- | ----------------------- | ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Home     | Instrument panel          | `1`                       | `3`                      | `read-only`           | `acceptable`            | `n/a`                     | `strong`              | Still needs an even more authored flagship surface taxonomy so support cards feel intentionally secondary instead of merely hidden.                          |
+| Capture  | Raw-first intake          | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The flagship writing surface is now clear, but saved-history and device-only helper copy still need a stricter copy budget in Pass 3.                        |
+| Triage   | One decision at a time    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The current-item hierarchy is now clear, but context and browser-note disclosures still carry too much explanation once opened.                              |
+| Planning | Local-first scheduling    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The flagship planning flow is now clear, but proposal and Google/admin detail still carry too much explanatory copy once expanded.                           |
+| Execute  | One mission               | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Mission-first hierarchy is real, but shell/support burden still competes more than it should in longer states.                                               |
+| Review   | Closure and carry-forward | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The route now has a real closure-first flagship and calmer admin/history surfaces, but below-the-fold copy/disclosure weight still needs trimming in Pass 3. |
+| Health   | Trust before diagnostics  | `1`                       | `1`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Visual center of gravity is now clearer, but interaction cadence between healthy, warning, and failure states still needs a tighter shared standard.         |
+| Areas    | Quiet ownership admin     | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `medium`              | The flagship create-area surface and quieter admin cards are landed, but the route still carries more expanded admin depth than ideal.                       |
 
 ## Ordered pass queue
 
@@ -68,8 +68,8 @@ Use this as a review checklist, not as permission to skip browser proof. Counts 
 | ------------------------------------------------ | --------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `0. Durable planning spine`                      | `done`    | Install one canonical roadmap, route fresh agents through it, and stop reconstructing UX history from chat. | Roadmap exists, `ui` context points to roadmap -> `PROJECT_STATE` -> latest proof note, and docs ownership rules are explicit.                                                                                                   | `pnpm agent:context ui`, formatting check, diff check                                          |
 | `1. Finish the not-embarrassing gate everywhere` | `done`    | Remove remaining cognitive-overload regressions and keep one dominant path per route.                       | No route shows two competing primary CTAs at first render, duplicate empty-state explainers stay gone, repeated area/save truth stays demoted, and narrow-screen first scan is materially shorter than the pre-program baseline. | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, `interaction-feedback`            |
-| `2. Build a real visual authorship system`       | `active`  | Turn the already-shipped premium passes into an explicit, reduced, shared visual language.                  | Card variants are reduced to a small explicit set, headers feel like one family, accent use is selective, and every screen has one clear visual center of gravity.                                                               | Full repo bar plus `workflow-card-accent` and `execute-focus-flagship`                         |
-| `3. Remove explanation-by-default`               | `planned` | Cut residual helper copy and disclosure sprawl that still survives below the fold.                          | Default visible word count drops route-by-route, no route needs three stacked explanation blocks to make sense, and route purpose is legible in one sentence from the UI alone.                                                  | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, targeted route tests              |
+| `2. Build a real visual authorship system`       | `done`    | Turn the already-shipped premium passes into an explicit, reduced, shared visual language.                  | Card variants are reduced to a small explicit set, headers feel like one family, accent use is selective, and every screen has one clear visual center of gravity.                                                               | Full repo bar plus `workflow-card-accent` and `execute-focus-flagship`                         |
+| `3. Remove explanation-by-default`               | `active`  | Cut residual helper copy and disclosure sprawl that still survives below the fold.                          | Default visible word count drops route-by-route, no route needs three stacked explanation blocks to make sense, and route purpose is legible in one sentence from the UI alone.                                                  | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, targeted route tests              |
 | `4. Make the shell feel invisible`               | `planned` | Reduce shell burden so route-local action clearly outranks chrome on every primary screen.                  | 390px shell height drops again, keyboard flow stays intact, and shell surfaces never outrank route-local action on Capture, Planning, Execute, or Review.                                                                        | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, focused shell/browser checks      |
 | `5. Add interaction feel and closure`            | `planned` | Tighten motion, feedback cadence, and action-near confirmation so the app stops feeling merely correct.     | Every primary action has local closure feedback, no action leaves state change ambiguous, and feedback rhythm reads as one system.                                                                                               | Full repo bar plus `interaction-feedback` and focused route tests                              |
 | `6. Give each route a memorable identity`        | `planned` | Make the routes feel like one product without flattening them into one generic template.                    | Screens are distinguishable at a glance, route purpose is legible without reading every label, and the product feels composed rather than templated.                                                                             | Full repo bar plus screenshot/browser review, `workflow-card-accent`, `execute-focus-flagship` |
@@ -82,7 +82,13 @@ This gate is treated as done because the May 27 through June 5 shipped batches a
 
 ### Pass 2 notes
 
-This is the active pass because the product is no longer embarrassing, but it is not yet world-class. The current UI has many good local decisions and strong proof, but the authored visual system still lives too much in code and recent notes instead of one compact contract future agents can apply consistently.
+This pass is now complete enough to treat the explicit authored surface system as shipped contract rather than ongoing experiment. Future route work should reuse this vocabulary instead of inventing new near-duplicate card or header patterns.
+
+Latest landed slice:
+
+- `2026-06-05`: shared surface taxonomy is now explicit in code instead of implied only by local route tweaks. `globals.css`, `WorkflowPageHeader`, `AppShell`, Home, and Execute now distinguish flagship, support, admin, and shell-context surfaces more intentionally while preserving read-only Home, mission-first Execute, and existing truth boundaries. Proof: `pnpm lint`, `pnpm build`, rerun `pnpm type-check` after the known `.next/types` race, `pnpm test`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/workflow-card-accent.spec.ts tests/e2e/execute-focus-flagship.spec.ts tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts`.
+- `2026-06-05`: the same authored surface taxonomy now extends into Review, Health, and Areas instead of stopping at Home and Execute. Review now uses one closure-first flagship plus quieter support/admin disclosures, Health now keeps reliability as the only flagship with support/admin diagnostics demoted appropriately, and Areas now distinguishes flagship creation, support summaries, and quieter admin/reset surfaces without changing route truthfulness or any schema/auth/parser/calendar/persistence boundary. Proof: `pnpm lint`, `pnpm build`, rerun `pnpm type-check` after the known `.next/types` race, `pnpm test`, `pnpm --filter @lifeos/web test -- src/__tests__/healthPage.test.tsx src/__tests__/workflowAreaAccent.test.tsx src/__tests__/phase4aPersistence.test.tsx`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/workflow-card-accent.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts tests/e2e/p0-ux-regression.spec.ts tests/e2e/execute-focus-flagship.spec.ts`.
+- `2026-06-05`: Capture, Planning, and Triage now complete the same authored surface contract instead of keeping route-local hierarchy drift. Capture now uses a true flagship writing surface plus quieter support/admin history flows, Planning now treats `Planning flow` as the single flagship with task/proposal/block surfaces demoted appropriately, and Triage now keeps the current item as the only flagship while queue/context/browser-note surfaces stay clearly secondary. Proof: `pnpm lint`, `pnpm build`, rerun `pnpm type-check` after the known `.next/types` race, `pnpm test`, `pnpm --filter @lifeos/web test -- src/__tests__/capture.test.tsx src/__tests__/triage.test.tsx src/__tests__/workflowAreaAccent.test.tsx src/__tests__/phase4aPersistence.test.tsx src/__tests__/sourceOfTruth.test.ts`, and `pnpm --filter @lifeos/web test:e2e -- tests/e2e/workflow-card-accent.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts tests/e2e/p0-ux-regression.spec.ts tests/e2e/execute-focus-flagship.spec.ts`.
 
 ### Pass 3-6 notes
 
@@ -111,6 +117,9 @@ Add these when area-accent behavior itself changes:
 
 ## Most relevant shipped proof
 
+- `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-home-execute.md`
+- `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-review-health-areas.md`
+- `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-capture-planning-triage.md`
 - `docs/implementation-notes/2026-06-05-home-review-areas-shell-polish-pass.md`
 - `docs/implementation-notes/2026-06-04-home-execute-ia-reduction-pass.md`
 - `docs/implementation-notes/2026-06-04-capture-planning-premium-feel-pass.md`
@@ -125,38 +134,37 @@ Historical inputs only, not active program state:
 
 ## Next recommended pass
 
-### Pass 2A: Codify the visual authorship system
+### Pass 3A: Remove explanation-by-default from Capture, Planning, and Triage
 
 This is the next pass a fresh agent should execute.
 
 Why this pass first:
 
-- The product already removed most obvious route-level embarrassment.
-- Recent work improved hierarchy and copy, but the visual system is still too implicit.
-- Without an explicit authorship pass, later copy/shell/motion work will drift into inconsistent local cleanup.
+- The authored surface system is now explicit across all primary routes, so more hierarchy work would mostly churn.
+- The next obvious gap is visible word count and repeated helper/disclosure copy, especially on Capture, Planning, and Triage where opened details still explain too much.
+- These three routes now have stable visual centers of gravity, which makes copy reduction safer and easier to verify.
 
 Scope:
 
-- shared shell and page primitives first
-- flagship routes second
+- reduce repeated helper and disclosure copy above and just below the fold
+- keep one purpose sentence, one dominant CTA, and one secondary truth/disclosure label per route
+- move duplicative explanation into existing disclosures or delete it
 - no schema, auth, parser, persistence, or Google write changes
 
 Priority files:
 
-- `apps/web/src/app/globals.css`
-- `apps/web/src/app/components/AppShell.tsx`
-- `apps/web/src/app/components/WorkflowPageHeader.tsx`
-- `apps/web/src/app/page.tsx`
-- `apps/web/src/app/execute/page.tsx`
-- if needed after those are stable: `apps/web/src/app/review/page.tsx`, `apps/web/src/app/health/page.tsx`, `apps/web/src/app/settings/areas/page.tsx`
+- `apps/web/src/app/capture/page.tsx`
+- `apps/web/src/app/calendar/page.tsx`
+- `apps/web/src/app/triage/page.tsx`
+- shared tests and proof only as needed
 
 Acceptance criteria:
 
-- define and use a small explicit card taxonomy for flagship, primary workflow, support, disclosure, and admin surfaces
-- reduce equal-weight outlined panels
-- make accent use selective and purposeful instead of decorative
-- keep Home read-only and keep Execute mission-first
-- preserve existing route truthfulness, approval gates, and mock/persisted honesty
+- default visible word count drops on all three touched routes
+- no route depends on stacked explanation blocks to explain the main action
+- parser/save/local-first/approval truth stays explicit once instead of repeated in parallel
+- route purpose is understandable in one sentence from the UI alone
+- existing route truthfulness, approval gates, and mock/persisted honesty stay intact
 
 Proof:
 
@@ -164,4 +172,4 @@ Proof:
 - `pnpm type-check`
 - `pnpm test`
 - `pnpm build`
-- `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts tests/e2e/workflow-card-accent.spec.ts tests/e2e/execute-focus-flagship.spec.ts`
+- `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts tests/e2e/interaction-feedback.spec.ts`

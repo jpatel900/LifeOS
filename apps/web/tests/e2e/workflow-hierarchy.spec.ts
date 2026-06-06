@@ -226,69 +226,69 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
 }) => {
   await page.goto("/");
   await expect(page.getByTestId("today-next-card")).toHaveClass(
-    /workflow-primary-card/,
+    /workflow-flagship-card/,
   );
 
   await page.goto("/capture");
   await expect(page.getByTestId("capture-main-card")).toHaveClass(
-    /workflow-primary-card/,
+    /workflow-flagship-card/,
   );
 
   await seedTriageQueue(page);
   await page.goto("/triage");
   await expect(page.getByTestId("triage-current-item-card")).toHaveClass(
-    /workflow-primary-card/,
+    /workflow-flagship-card/,
   );
   await expect(page.getByTestId("triage-next-action-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-support-card/,
   );
   await expect(page.getByTestId("triage-waiting-queue-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-support-card/,
   );
 
   await seedPlanningHierarchyState(page);
   await page.goto("/calendar");
-  await expect(page.getByTestId("planning-needs-time-card")).toHaveClass(
-    /workflow-primary-card/,
-  );
   await expect(page.getByTestId("planning-flow-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-flagship-card/,
+  );
+  await expect(page.getByTestId("planning-needs-time-card")).toHaveClass(
+    /workflow-support-card/,
   );
   await expect(page.getByTestId("planning-ready-review-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-support-card/,
   );
   await expect(page.getByTestId("planning-planned-blocks-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-support-card/,
   );
 
   await seedExecuteMission(page);
   await page.goto("/execute");
   await expect(page.getByTestId("execute-current-mission-card")).toHaveClass(
-    /workflow-primary-card/,
+    /workflow-flagship-card/,
   );
 
   await page.goto("/review");
   await expect(page.getByTestId("review-next-decision-card")).toHaveClass(
-    /workflow-primary-card/,
+    /workflow-flagship-card/,
   );
   await expect(page.getByTestId("review-close-loop-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-support-card/,
   );
   await expect(page.getByTestId("review-today-at-a-glance-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-support-card/,
   );
 
   await page.goto("/settings/areas");
   await expect(page.getByTestId("areas-create-card")).toHaveClass(
-    /workflow-primary-card/,
+    /workflow-flagship-card/,
   );
 
   await page.goto("/health");
   await expect(page.getByTestId("health-reliability-card")).toHaveClass(
-    /workflow-primary-card/,
+    /workflow-flagship-card/,
   );
   await expect(page.getByTestId("health-trust-summary-card")).toHaveClass(
-    /workflow-secondary-card/,
+    /workflow-support-card/,
   );
 });
 

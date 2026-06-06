@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { Area, Phase2ProjectDraft, Phase2TaskDraft } from "@lifeos/schemas";
+import type {
+  Area,
+  Phase2ProjectDraft,
+  Phase2TaskDraft,
+} from "@lifeos/schemas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -122,9 +126,9 @@ export default function TriagePage() {
     queueItems[0] ??
     null;
   const activeQueueItemArea = activeQueueItem
-    ? resolveAreaById(state.areas, activeQueueItem.draft.area_id) ??
+    ? (resolveAreaById(state.areas, activeQueueItem.draft.area_id) ??
       getAreaById(activeQueueItem.draft.area_id) ??
-      null
+      null)
     : null;
   const upcomingQueueItems = activeQueueItem
     ? queueItems.filter((item) => item.queueId !== activeQueueItem.queueId)
@@ -359,41 +363,46 @@ export default function TriagePage() {
         title="Triage"
         description="Stay with the current item, make the next useful decision, then let the queue fall away behind you."
         spotlight={
-          <div className="workflow-metric-grid">
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Current item</p>
-              <p className="workflow-metric-value text-[1.35rem]">
-                {hasCandidates ? "Ready now" : "Nothing waiting"}
-              </p>
-              <p className="workflow-metric-context">
-                {hasCandidates
-                  ? "Keep attention on one draft until it is accepted or rejected."
-                  : "Capture a new thought to create the next review decision."}
-              </p>
-            </div>
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Waiting after this</p>
-              <p className="workflow-metric-value text-[1.35rem]">
-                {upcomingQueueItems.length}
-              </p>
-              <p className="workflow-metric-context">
-                {upcomingQueueItems.length === 0
-                  ? "Nothing else will compete for attention once this item is done."
-                  : `The queue stays compressed until this decision is finished.`}
-              </p>
-            </div>
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Accepted items save</p>
-              <p className="workflow-metric-value text-[1.35rem]">
-                {loadState.status === "ready"
-                  ? saveModeLabel(loadState.provider)
-                  : "Checking"}
-              </p>
-              <p className="workflow-metric-context">
-                Drafts stay on this device until you accept them.
-              </p>
-            </div>
-          </div>
+          <Card
+            data-testid="triage-header-summary-card"
+            className="workflow-secondary-card workflow-support-card"
+          >
+            <CardContent className="workflow-metric-grid pt-6">
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Current item</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {hasCandidates ? "Ready now" : "Nothing waiting"}
+                </p>
+                <p className="workflow-metric-context">
+                  {hasCandidates
+                    ? "Keep attention on one draft until it is accepted or rejected."
+                    : "Capture a new thought to create the next review decision."}
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Waiting after this</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {upcomingQueueItems.length}
+                </p>
+                <p className="workflow-metric-context">
+                  {upcomingQueueItems.length === 0
+                    ? "Nothing else will compete for attention once this item is done."
+                    : `The queue stays compressed until this decision is finished.`}
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Accepted items save</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {loadState.status === "ready"
+                    ? saveModeLabel(loadState.provider)
+                    : "Checking"}
+                </p>
+                <p className="workflow-metric-context">
+                  Drafts stay on this device until you accept them.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         }
       >
         {activeQueueItemArea ? (
@@ -413,7 +422,7 @@ export default function TriagePage() {
       {hasCandidates ? (
         <Card
           data-testid="triage-next-action-card"
-          className="workflow-secondary-card"
+          className="workflow-secondary-card workflow-support-card"
         >
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Current focus</CardTitle>
@@ -523,18 +532,16 @@ export default function TriagePage() {
               data-testid="triage-current-item-card"
               data-accent-strength="subtle"
               style={buildAreaAccentStyle(activeQueueItemArea?.color)}
-              className="area-accent-card workflow-primary-card"
+              className="area-accent-card workflow-primary-card workflow-flagship-card"
             >
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      Current item
-                    </p>
-                    <CardTitle className="text-lg">
+                    <p className="workflow-surface-kicker">Current item</p>
+                    <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
                       {activeQueueItem.draft.title}
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="workflow-surface-body max-w-2xl text-sm text-muted-foreground">
                       Make the next decision here before looking at anything
                       else.
                     </p>
@@ -552,13 +559,16 @@ export default function TriagePage() {
                           ? "Task suggestion"
                           : "Project suggestion"}
                       </Badge>
-                      <Badge variant={lifecycle.variant}>{lifecycle.label}</Badge>
+                      <Badge variant={lifecycle.variant}>
+                        {lifecycle.label}
+                      </Badge>
                       <Badge variant="warning">
                         Confidence:{" "}
                         {Math.round(activeQueueItem.draft.confidence * 100)}%
                       </Badge>
                       <Badge variant="outline">
-                        {totalCandidates} item{totalCandidates === 1 ? "" : "s"} ready
+                        {totalCandidates} item{totalCandidates === 1 ? "" : "s"}{" "}
+                        ready
                       </Badge>
                     </div>
                   </div>
@@ -589,76 +599,79 @@ export default function TriagePage() {
                           ) : null}
                           {noteFeedbackByDraftId[task.id] ? (
                             <Alert variant="success">
-                              <AlertTitle>Note saved in this browser</AlertTitle>
+                              <AlertTitle>
+                                Note saved in this browser
+                              </AlertTitle>
                               <AlertDescription>
                                 {noteFeedbackByDraftId[task.id]}
                               </AlertDescription>
                             </Alert>
                           ) : null}
                           {editingDraftId === task.id ? (
-                            <Card className="workflow-support-panel bg-muted/40 shadow-none">
-                              <CardContent className="space-y-3 p-3">
-                                <div className="space-y-1">
-                                  <label
-                                    htmlFor={`${task.id}-title`}
-                                    className="text-xs font-medium"
-                                  >
-                                    Title
-                                  </label>
-                                  <Input
-                                    id={`${task.id}-title`}
-                                    value={editTitle}
-                                    onChange={(event) =>
-                                      setEditTitle(event.target.value)
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <label
-                                    htmlFor={`${task.id}-description`}
-                                    className="text-xs font-medium"
-                                  >
-                                    Description
-                                  </label>
-                                  <Textarea
-                                    id={`${task.id}-description`}
-                                    value={editDescription}
-                                    onChange={(event) =>
-                                      setEditDescription(event.target.value)
-                                    }
-                                    rows={3}
-                                  />
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={() => applyTaskDraftEdit(task.id)}
-                                    disabled={!editTitle.trim()}
-                                  >
-                                    Save edit
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setEditingDraftId(null)}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
+                            <div className="workflow-admin-card space-y-3 rounded-xl p-3">
+                              <div className="space-y-1">
+                                <label
+                                  htmlFor={`${task.id}-title`}
+                                  className="text-xs font-medium"
+                                >
+                                  Title
+                                </label>
+                                <Input
+                                  id={`${task.id}-title`}
+                                  value={editTitle}
+                                  onChange={(event) =>
+                                    setEditTitle(event.target.value)
+                                  }
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label
+                                  htmlFor={`${task.id}-description`}
+                                  className="text-xs font-medium"
+                                >
+                                  Description
+                                </label>
+                                <Textarea
+                                  id={`${task.id}-description`}
+                                  value={editDescription}
+                                  onChange={(event) =>
+                                    setEditDescription(event.target.value)
+                                  }
+                                  rows={3}
+                                />
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => applyTaskDraftEdit(task.id)}
+                                  disabled={!editTitle.trim()}
+                                >
+                                  Save edit
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setEditingDraftId(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
                           ) : null}
                           <div className="workflow-action-tray">
                             <p className="workflow-section-kicker">Decide</p>
                             <p className="mt-2 text-sm text-muted-foreground">
-                              Keep the choice narrow: accept it, reject it, or tighten the draft before it becomes real work.
+                              Keep the choice narrow: accept it, reject it, or
+                              tighten the draft before it becomes real work.
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2">
                               <Button
                                 type="button"
-                                onClick={() => void handleAcceptTaskDraft(task.id)}
+                                onClick={() =>
+                                  void handleAcceptTaskDraft(task.id)
+                                }
                                 aria-label="Accept task draft"
                                 disabled={saveState.status === "saving"}
                               >
@@ -689,36 +702,32 @@ export default function TriagePage() {
                               </summary>
                               <div className="mt-4 grid gap-3">
                                 {assessment && !editedDraftIds[task.id] ? (
-                                  <Card className="workflow-support-panel bg-muted/40 shadow-none">
-                                    <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                                      <p className="font-medium text-foreground">
-                                        Clarity notes
-                                      </p>
-                                      <p>
-                                        First useful move:{" "}
-                                        {assessment.recommended_first_move}
-                                      </p>
-                                      <p>
-                                        Unknowns: {assessment.unknowns.join(", ")}
-                                      </p>
-                                      <p>
-                                        What not to do yet:{" "}
-                                        {assessment.what_not_to_do_yet.join(", ")}
-                                      </p>
-                                    </CardContent>
-                                  </Card>
+                                  <div className="workflow-admin-card space-y-1 rounded-xl p-3 text-sm text-muted-foreground">
+                                    <p className="font-medium text-foreground">
+                                      Clarity notes
+                                    </p>
+                                    <p>
+                                      First useful move:{" "}
+                                      {assessment.recommended_first_move}
+                                    </p>
+                                    <p>
+                                      Unknowns: {assessment.unknowns.join(", ")}
+                                    </p>
+                                    <p>
+                                      What not to do yet:{" "}
+                                      {assessment.what_not_to_do_yet.join(", ")}
+                                    </p>
+                                  </div>
                                 ) : null}
                                 {task.description ? (
-                                  <Card className="workflow-support-panel bg-muted/40 shadow-none">
-                                    <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                                      <p className="font-medium text-foreground">
-                                        Draft notes
-                                      </p>
-                                      <p className="whitespace-pre-line">
-                                        {task.description}
-                                      </p>
-                                    </CardContent>
-                                  </Card>
+                                  <div className="workflow-admin-card space-y-1 rounded-xl p-3 text-sm text-muted-foreground">
+                                    <p className="font-medium text-foreground">
+                                      Draft notes
+                                    </p>
+                                    <p className="whitespace-pre-line">
+                                      {task.description}
+                                    </p>
+                                  </div>
                                 ) : null}
                               </div>
                             </details>
@@ -761,7 +770,8 @@ export default function TriagePage() {
                                 </Button>
                               </div>
                               <p className="mt-2 text-xs text-muted-foreground">
-                                These notes stay on this device and do not move the item.
+                                These notes stay on this device and do not move
+                                the item.
                               </p>
                             </div>
                           </details>
@@ -774,13 +784,17 @@ export default function TriagePage() {
                     <div className="workflow-action-tray">
                       <p className="workflow-section-kicker">Decide</p>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Accept it as a project only if it is clearly bigger than one task. Otherwise reject and return to Capture for a cleaner pass.
+                        Accept it as a project only if it is clearly bigger than
+                        one task. Otherwise reject and return to Capture for a
+                        cleaner pass.
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button
                           type="button"
                           onClick={() =>
-                            void handleAcceptProjectDraft(activeQueueItem.draft.id)
+                            void handleAcceptProjectDraft(
+                              activeQueueItem.draft.id,
+                            )
                           }
                           aria-label="Accept project draft"
                           disabled={saveState.status === "saving"}
@@ -805,16 +819,14 @@ export default function TriagePage() {
                           Context and notes
                         </summary>
                         <div className="mt-4">
-                          <Card className="bg-muted/40">
-                            <CardContent className="space-y-1 p-3 text-sm text-muted-foreground">
-                              <p className="font-medium text-foreground">
-                                Draft notes
-                              </p>
-                              <p className="whitespace-pre-line">
-                                {activeQueueItem.draft.description}
-                              </p>
-                            </CardContent>
-                          </Card>
+                          <div className="workflow-admin-card space-y-1 rounded-xl p-3 text-sm text-muted-foreground">
+                            <p className="font-medium text-foreground">
+                              Draft notes
+                            </p>
+                            <p className="whitespace-pre-line">
+                              {activeQueueItem.draft.description}
+                            </p>
+                          </div>
                         </div>
                       </details>
                     ) : null}
@@ -827,7 +839,7 @@ export default function TriagePage() {
           {upcomingQueueItems.length > 0 ? (
             <Card
               data-testid="triage-waiting-queue-card"
-              className="workflow-secondary-card"
+              className="workflow-secondary-card workflow-support-card"
             >
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Waiting after this</CardTitle>
@@ -894,7 +906,9 @@ export default function TriagePage() {
                                     : "Project suggestion"}
                                 </Badge>
                                 {area ? (
-                                  <Badge variant="secondary">Area: {area.name}</Badge>
+                                  <Badge variant="secondary">
+                                    Area: {area.name}
+                                  </Badge>
                                 ) : null}
                                 <Badge variant="warning">
                                   Confidence:{" "}
@@ -909,7 +923,9 @@ export default function TriagePage() {
                               type="button"
                               variant="outline"
                               className="w-full sm:w-auto"
-                              onClick={() => handleSelectQueueItem(item.queueId)}
+                              onClick={() =>
+                                handleSelectQueueItem(item.queueId)
+                              }
                             >
                               Review this next
                             </Button>

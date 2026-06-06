@@ -237,7 +237,7 @@ describe("HealthPage", () => {
     expect(await screen.findByText("System check complete.")).toBeDefined();
   });
 
-  it("keeps the top health answer visually primary and the trust summary secondary", async () => {
+  it("keeps the top health answer as the flagship surface and diagnostics quieter", async () => {
     mocks.getHealthDashboard.mockResolvedValue(
       readyResult([
         {
@@ -254,10 +254,13 @@ describe("HealthPage", () => {
     render(<HealthPage />);
 
     expect(await screen.findByTestId("health-reliability-card")).toHaveClass(
-      "workflow-primary-card",
+      "workflow-flagship-card",
     );
     expect(screen.getByTestId("health-trust-summary-card")).toHaveClass(
-      "workflow-secondary-card",
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("health-attention-card")).toHaveClass(
+      "workflow-support-card",
     );
   });
 });

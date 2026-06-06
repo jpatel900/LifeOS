@@ -121,8 +121,19 @@ describe("TriagePage", () => {
     expect(await screen.findByText("Ready now")).toBeDefined();
     expect(screen.getAllByText("Current item")).toHaveLength(2);
     expect(screen.getAllByText("Needs decision").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("triage-header-summary-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("triage-next-action-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("triage-current-item-card")).toHaveClass(
+      "workflow-flagship-card",
+    );
     expect(screen.getByText("Call dentist tomorrow")).toBeDefined();
-    expect(screen.getByText("First useful move: Check office hours")).toBeDefined();
+    expect(
+      screen.getByText("First useful move: Check office hours"),
+    ).toBeDefined();
     expect(screen.getByText("Plan annual review rollout")).toBeDefined();
     expect(screen.queryByText("Project scope notes")).toBeNull();
 

@@ -30,7 +30,9 @@ vi.mock("@/lib/data/workflow", () => ({
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
-function renderHome(storedState?: ReturnType<typeof createInitialWorkflowState>) {
+function renderHome(
+  storedState?: ReturnType<typeof createInitialWorkflowState>,
+) {
   window.sessionStorage.clear();
   if (storedState) {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(storedState));
@@ -57,8 +59,12 @@ describe("HomePage Today cockpit", () => {
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Next" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Daily loop" })).toBeDefined();
+    expect(screen.getByText("Instrument panel")).toBeDefined();
     expect(screen.getByTestId("today-next-card")).toHaveClass(
       "workflow-primary-card",
+    );
+    expect(screen.getByTestId("today-next-card")).toHaveClass(
+      "workflow-flagship-card",
     );
     expect(
       screen.queryByRole("heading", { name: "System trust/status" }),
@@ -78,9 +84,7 @@ describe("HomePage Today cockpit", () => {
     expect(
       screen.getByRole("link", { name: "Capture a thought" }),
     ).toHaveAttribute("href", "/capture");
-    expect(
-      screen.getByText(/Home stays read-only\./i),
-    ).toBeDefined();
+    expect(screen.getByText(/Home stays read-only\./i)).toBeDefined();
     expect(
       screen.queryByRole("button", { name: "Save quick capture" }),
     ).toBeNull();
@@ -154,9 +158,7 @@ describe("HomePage Today cockpit", () => {
     );
 
     expect(screen.queryByRole("heading", { name: "Daily loop" })).toBeNull();
-    expect(
-      screen.queryByText("Nothing is running right now."),
-    ).toBeNull();
+    expect(screen.queryByText("Nothing is running right now.")).toBeNull();
     expect(
       screen.getByRole("heading", { name: /Needs decision/i }),
     ).toBeDefined();

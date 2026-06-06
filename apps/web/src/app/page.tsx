@@ -182,13 +182,29 @@ function getNextActionSupportSteps(kind: TodayCockpitModel["next"]["kind"]) {
     case "capture":
       return ["Save one thought", "Sort it in Triage", "Plan one real block"];
     case "needs_decision":
-      return ["Accept one draft", "Plan the accepted work", "Ignore the rest for now"];
+      return [
+        "Accept one draft",
+        "Plan the accepted work",
+        "Ignore the rest for now",
+      ];
     case "unplanned_task":
-      return ["Choose one slot", "Keep scope narrow", "Leave Google writes explicit"];
+      return [
+        "Choose one slot",
+        "Keep scope narrow",
+        "Leave Google writes explicit",
+      ];
     case "current_work":
-      return ["Stay with one mission", "Record a real outcome", "Close the loop in Review"];
+      return [
+        "Stay with one mission",
+        "Record a real outcome",
+        "Close the loop in Review",
+      ];
     case "recovery":
-      return ["Capture what happened", "Make the next move smaller", "Re-plan only what matters"];
+      return [
+        "Capture what happened",
+        "Make the next move smaller",
+        "Re-plan only what matters",
+      ];
     case "health_attention":
       return ["Verify trust first", "Fix the blocker", "Return to Today"];
   }
@@ -384,7 +400,7 @@ export default function HomePage() {
   const showSystemStatusCard =
     cockpit.dataDegraded || cockpit.next.kind === "health_attention";
   const visibleSecondaryCardOrder = prioritizedCardOrder.filter((cardKey) => {
-      switch (cardKey) {
+    switch (cardKey) {
       case "needsDecision":
         return cockpit.needsDecision.count > 0;
       case "unplanned":
@@ -406,16 +422,19 @@ export default function HomePage() {
 
   function renderHomeSupportCard(cardKey: HomeCardKey) {
     if (cardKey === "needsDecision") {
-      const { visible, overflow } = splitPreviewItems(cockpit.needsDecision.items);
+      const { visible, overflow } = splitPreviewItems(
+        cockpit.needsDecision.items,
+      );
       return (
-        <Card key={cardKey} className="workflow-secondary-card shadow-none">
+        <Card
+          key={cardKey}
+          className="workflow-secondary-card workflow-support-card shadow-none"
+        >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
               <span>Needs decision</span>
               {cockpit.needsDecision.count > 0 ? (
-                <Badge variant="secondary">
-                  {cockpit.needsDecision.count}
-                </Badge>
+                <Badge variant="secondary">{cockpit.needsDecision.count}</Badge>
               ) : null}
             </CardTitle>
             <CardDescription>Drafts waiting in Triage.</CardDescription>
@@ -428,7 +447,9 @@ export default function HomePage() {
                 <div className="workflow-compact-list">
                   {visible.map((item) => (
                     <div key={item.id} className="workflow-compact-item">
-                      <p className="break-words text-foreground">{item.title}</p>
+                      <p className="break-words text-foreground">
+                        {item.title}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -462,7 +483,10 @@ export default function HomePage() {
     if (cardKey === "unplanned") {
       const { visible, overflow } = splitPreviewItems(cockpit.unplanned.items);
       return (
-        <Card key={cardKey} className="workflow-secondary-card shadow-none">
+        <Card
+          key={cardKey}
+          className="workflow-secondary-card workflow-support-card shadow-none"
+        >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
               <span>{cockpit.unplanned.title}</span>
@@ -482,7 +506,9 @@ export default function HomePage() {
                 <div className="workflow-compact-list">
                   {visible.map((task) => (
                     <div key={task.id} className="workflow-compact-item">
-                      <p className="break-words text-foreground">{task.title}</p>
+                      <p className="break-words text-foreground">
+                        {task.title}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -516,14 +542,15 @@ export default function HomePage() {
     if (cardKey === "todayBlocks") {
       const { visible, overflow } = splitPreviewItems(cockpit.todayBlocks);
       return (
-        <Card key={cardKey} className="workflow-secondary-card shadow-none">
+        <Card
+          key={cardKey}
+          className="workflow-secondary-card workflow-support-card shadow-none"
+        >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
               <span>Today&apos;s planned blocks</span>
               {cockpit.todayBlocks.length > 0 ? (
-                <Badge variant="secondary">
-                  {cockpit.todayBlocks.length}
-                </Badge>
+                <Badge variant="secondary">{cockpit.todayBlocks.length}</Badge>
               ) : null}
             </CardTitle>
             <CardDescription>Today in local time.</CardDescription>
@@ -537,10 +564,7 @@ export default function HomePage() {
                   {visible.map((block) => {
                     const task = tasks.find((item) => item.id === block.taskId);
                     return (
-                      <div
-                        key={block.id}
-                        className="workflow-compact-item"
-                      >
+                      <div key={block.id} className="workflow-compact-item">
                         <p className="break-words font-medium">
                           {task?.title ?? "Planned block"}
                         </p>
@@ -562,12 +586,11 @@ export default function HomePage() {
                     </summary>
                     <div className="workflow-compact-list mt-3">
                       {overflow.map((block) => {
-                        const task = tasks.find((item) => item.id === block.taskId);
+                        const task = tasks.find(
+                          (item) => item.id === block.taskId,
+                        );
                         return (
-                          <div
-                            key={block.id}
-                            className="workflow-compact-item"
-                          >
+                          <div key={block.id} className="workflow-compact-item">
                             <p className="break-words font-medium">
                               {task?.title ?? "Planned block"}
                             </p>
@@ -603,7 +626,10 @@ export default function HomePage() {
     if (cardKey === "recovery") {
       const { visible, overflow } = splitPreviewItems(cockpit.recoveryItems);
       return (
-        <Card key={cardKey} className="workflow-secondary-card shadow-none">
+        <Card
+          key={cardKey}
+          className="workflow-secondary-card workflow-support-card shadow-none"
+        >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
               <span>Stuck / needs recovery</span>
@@ -639,7 +665,9 @@ export default function HomePage() {
                     <div className="workflow-compact-list mt-3">
                       {overflow.map((item) => (
                         <div key={item.id} className="workflow-compact-item">
-                          <p className="break-words font-medium">{item.label}</p>
+                          <p className="break-words font-medium">
+                            {item.label}
+                          </p>
                           <p className="mt-1 text-muted-foreground">
                             {item.reason}
                           </p>
@@ -696,18 +724,19 @@ export default function HomePage() {
           data-next-kind={cockpit.next.kind}
           data-accent-strength="subtle"
           style={selectedAreaStyle}
-          className="area-accent-card workflow-primary-card border-primary/40 shadow-sm"
+          className="area-accent-card workflow-primary-card workflow-flagship-card border-primary/40 shadow-sm"
         >
           <CardHeader className="gap-4 pb-2 sm:pb-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              <div className="space-y-3">
+                <p className="workflow-surface-kicker">Instrument panel</p>
+                <h1 className="workflow-surface-title text-3xl font-semibold tracking-tight sm:text-4xl">
                   Today
                 </h1>
                 <CardTitle className="text-2xl tracking-tight sm:text-3xl">
                   Next
                 </CardTitle>
-                <CardDescription className="max-w-2xl text-sm leading-6 sm:text-base">
+                <CardDescription className="workflow-surface-body max-w-2xl text-sm leading-6 sm:text-base">
                   One useful move from the state you already have.
                 </CardDescription>
               </div>
@@ -760,7 +789,7 @@ export default function HomePage() {
         </Card>
 
         {showNowPrimaryCard ? (
-          <Card className="workflow-secondary-card border-border/70 bg-background/70 shadow-none">
+          <Card className="workflow-secondary-card workflow-support-card border-border/70 bg-background/70 shadow-none">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Now</CardTitle>
               <CardDescription>What is already in motion.</CardDescription>

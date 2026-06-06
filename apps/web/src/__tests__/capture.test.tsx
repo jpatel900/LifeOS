@@ -152,7 +152,10 @@ describe("CapturePage", () => {
 
   it("shows parser status as mock", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
-    mocks.listCaptureItems.mockResolvedValue({ provider: "mock", captures: [] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "mock",
+      captures: [],
+    });
     mockParserStatusFetch("mock");
 
     renderCapturePage();
@@ -165,14 +168,14 @@ describe("CapturePage", () => {
     expect(screen.getByText("Save mode:")).toBeDefined();
     expect(screen.getAllByText("Saved on this device only")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Save thought" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Save and organize" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Save and organize" }),
+    ).toBeDefined();
     expect(screen.getByLabelText("Area for this saved thought")).toBeDefined();
     expect(screen.getByText("Current area: Main Job")).toBeDefined();
     expect(screen.getByText("On-device draft pass")).toBeDefined();
     expect(screen.getByText("Ctrl/Cmd + Enter")).toBeDefined();
-    expect(
-      screen.getByText("Save thought from the main field."),
-    ).toBeDefined();
+    expect(screen.getByText("Save thought from the main field.")).toBeDefined();
     expect(
       screen.getByText(
         "Save raw capture when you want zero friction. Save and organize when you already want draft suggestions next.",
@@ -186,11 +189,20 @@ describe("CapturePage", () => {
     expect(
       screen.getByText("Recent captures organized on this device"),
     ).toBeDefined();
+    expect(screen.getByTestId("capture-main-card")).toHaveClass(
+      "workflow-flagship-card",
+    );
+    expect(screen.getByTestId("capture-header-summary-card")).toHaveClass(
+      "workflow-support-card",
+    );
   });
 
   it("shows parser status as AI configured", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
-    mocks.listCaptureItems.mockResolvedValue({ provider: "mock", captures: [] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "mock",
+      captures: [],
+    });
     mockParserStatusFetch("ai_configured");
 
     renderCapturePage();
@@ -204,7 +216,10 @@ describe("CapturePage", () => {
 
   it("shows parser status as AI unavailable", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
-    mocks.listCaptureItems.mockResolvedValue({ provider: "mock", captures: [] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "mock",
+      captures: [],
+    });
     mockParserStatusFetch("ai_unavailable");
 
     renderCapturePage();
@@ -220,7 +235,10 @@ describe("CapturePage", () => {
 
   it("explains where Save thought went and can organize the saved capture", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
-    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -290,7 +308,10 @@ describe("CapturePage", () => {
 
   it("submits Save thought from the main capture field with Ctrl/Cmd + Enter", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
-    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -327,7 +348,10 @@ describe("CapturePage", () => {
 
   it("saves capture, parses, and shows triage routing for low confidence", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
-    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -392,7 +416,10 @@ describe("CapturePage", () => {
 
   it("shows safe parse error and allows retry with mock parser", async () => {
     mocks.listAreas.mockResolvedValue({ provider: "supabase", areas: [area] });
-    mocks.listCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [],
+    });
     mocks.createCaptureItem.mockResolvedValue({
       provider: "supabase",
       capture: persistedCapture,
@@ -507,13 +534,14 @@ describe("CapturePage", () => {
 
     renderCapturePage();
 
-    fireEvent.change(await screen.findByLabelText("Area for this saved thought"), {
-      target: { value: customArea.id },
-    });
+    fireEvent.change(
+      await screen.findByLabelText("Area for this saved thought"),
+      {
+        target: { value: customArea.id },
+      },
+    );
 
-    expect(
-      await screen.findByText("Schedule furnace service"),
-    ).toBeDefined();
+    expect(await screen.findByText("Schedule furnace service")).toBeDefined();
     expect(screen.getByText("Area: Home Admin")).toBeDefined();
     expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
   });

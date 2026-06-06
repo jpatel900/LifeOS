@@ -473,9 +473,9 @@ export default function ExecutePage() {
       null)
     : (blocks.find((block) => block.task_id === activeTask?.id) ?? null);
   const area = activeTask
-    ? resolveAreaById(state.areas, activeTask.area_id) ??
+    ? (resolveAreaById(state.areas, activeTask.area_id) ??
       getAreaById(activeTask.area_id) ??
-      null
+      null)
     : null;
   const selectedArea = resolveSelectedArea(state.areas, selectedAreaId);
   const missionArea = area ?? selectedArea;
@@ -865,7 +865,8 @@ export default function ExecutePage() {
           {executeState.status === "ready" ? (
             <>
               <p>
-                Save mode: <strong>{saveModeLabel(executeState.provider)}</strong>
+                Save mode:{" "}
+                <strong>{saveModeLabel(executeState.provider)}</strong>
               </p>
               <p>
                 Technical save mode id: <strong>{executeState.provider}</strong>
@@ -878,44 +879,44 @@ export default function ExecutePage() {
             Saving {actionState.label}...
           </p>
         ) : null}
-        {actionState.status === "saved" ? (
-          (() => {
-            const feedback = executeSuccessFeedback(
-              actionState,
-              usesPersistedExecution,
-            );
+        {actionState.status === "saved"
+          ? (() => {
+              const feedback = executeSuccessFeedback(
+                actionState,
+                usesPersistedExecution,
+              );
 
-            return (
-              <Alert
-                role="status"
-                className="border-border bg-muted text-foreground"
-              >
-                <AlertTitle className="text-primary">
-                  {feedback.title}
-                </AlertTitle>
-                <AlertDescription>{feedback.description}</AlertDescription>
-                {feedback.primaryLink || feedback.secondaryLink ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {feedback.primaryLink ? (
-                      <Button asChild size="sm" variant="outline">
-                        <Link href={feedback.primaryLink.href}>
-                          {feedback.primaryLink.label}
-                        </Link>
-                      </Button>
-                    ) : null}
-                    {feedback.secondaryLink ? (
-                      <Button asChild size="sm" variant="ghost">
-                        <Link href={feedback.secondaryLink.href}>
-                          {feedback.secondaryLink.label}
-                        </Link>
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </Alert>
-            );
-          })()
-        ) : null}
+              return (
+                <Alert
+                  role="status"
+                  className="border-border bg-muted text-foreground"
+                >
+                  <AlertTitle className="text-primary">
+                    {feedback.title}
+                  </AlertTitle>
+                  <AlertDescription>{feedback.description}</AlertDescription>
+                  {feedback.primaryLink || feedback.secondaryLink ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {feedback.primaryLink ? (
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={feedback.primaryLink.href}>
+                            {feedback.primaryLink.label}
+                          </Link>
+                        </Button>
+                      ) : null}
+                      {feedback.secondaryLink ? (
+                        <Button asChild size="sm" variant="ghost">
+                          <Link href={feedback.secondaryLink.href}>
+                            {feedback.secondaryLink.label}
+                          </Link>
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </Alert>
+              );
+            })()
+          : null}
         {actionState.status === "error" ? (
           <Alert variant="destructive">
             <AlertTitle>Execution change was not saved</AlertTitle>
@@ -964,50 +965,52 @@ export default function ExecutePage() {
         </p>
       ) : null}
 
-      {actionState.status === "saved" ? (
-        (() => {
-          const feedback = executeSuccessFeedback(
-            actionState,
-            usesPersistedExecution,
-          );
+      {actionState.status === "saved"
+        ? (() => {
+            const feedback = executeSuccessFeedback(
+              actionState,
+              usesPersistedExecution,
+            );
 
-          return (
-            <Alert
-              role="status"
-              className="workflow-celebration-alert text-foreground"
-            >
-              <AlertTitle className="text-primary">{feedback.title}</AlertTitle>
-              <AlertDescription>{feedback.description}</AlertDescription>
-              <div className="workflow-celebration-meta">
-                <span className="workflow-celebration-chip">
-                  {savedViaLabel(actionState.provider)}
-                </span>
-                <span className="workflow-celebration-chip">
-                  {actionState.label}
-                </span>
-              </div>
-              {feedback.primaryLink || feedback.secondaryLink ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {feedback.primaryLink ? (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={feedback.primaryLink.href}>
-                        {feedback.primaryLink.label}
-                      </Link>
-                    </Button>
-                  ) : null}
-                  {feedback.secondaryLink ? (
-                    <Button asChild size="sm" variant="ghost">
-                      <Link href={feedback.secondaryLink.href}>
-                        {feedback.secondaryLink.label}
-                      </Link>
-                    </Button>
-                  ) : null}
+            return (
+              <Alert
+                role="status"
+                className="workflow-celebration-alert text-foreground"
+              >
+                <AlertTitle className="text-primary">
+                  {feedback.title}
+                </AlertTitle>
+                <AlertDescription>{feedback.description}</AlertDescription>
+                <div className="workflow-celebration-meta">
+                  <span className="workflow-celebration-chip">
+                    {savedViaLabel(actionState.provider)}
+                  </span>
+                  <span className="workflow-celebration-chip">
+                    {actionState.label}
+                  </span>
                 </div>
-              ) : null}
-            </Alert>
-          );
-        })()
-      ) : null}
+                {feedback.primaryLink || feedback.secondaryLink ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {feedback.primaryLink ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={feedback.primaryLink.href}>
+                          {feedback.primaryLink.label}
+                        </Link>
+                      </Button>
+                    ) : null}
+                    {feedback.secondaryLink ? (
+                      <Button asChild size="sm" variant="ghost">
+                        <Link href={feedback.secondaryLink.href}>
+                          {feedback.secondaryLink.label}
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </Alert>
+            );
+          })()
+        : null}
 
       {actionState.status === "error" ? (
         <Alert variant="destructive">
@@ -1021,15 +1024,15 @@ export default function ExecutePage() {
         data-accent-strength="strong"
         data-session-ui-state={sessionUiState}
         style={buildAreaAccentStyle(missionArea?.color)}
-        className="area-accent-card workflow-primary-card max-w-[980px]"
+        className="area-accent-card workflow-primary-card workflow-flagship-card max-w-[980px]"
       >
         <CardHeader className="pb-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <p className="workflow-surface-kicker text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                 Current mission
               </p>
-              <CardTitle className="text-3xl font-semibold leading-tight">
+              <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
                 {activeTask.title}
               </CardTitle>
             </div>
@@ -1058,8 +1061,10 @@ export default function ExecutePage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold leading-tight">{focusTitle}</h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">
+            <h2 className="text-xl font-semibold leading-tight">
+              {focusTitle}
+            </h2>
+            <p className="workflow-surface-body max-w-3xl text-sm text-muted-foreground">
               {focusDescription}
             </p>
           </div>
@@ -1207,8 +1212,8 @@ export default function ExecutePage() {
                 : showPauseControl
                   ? "Pause if you need to step away. Keep the outcome honest when the block ends."
                   : isTerminalSession
-                      ? "This session is ended. Pick the next useful move."
-                      : "Choose the control that matches what actually happened in this block."}
+                    ? "This session is ended. Pick the next useful move."
+                    : "Choose the control that matches what actually happened in this block."}
           </p>
 
           <div className="workflow-action-tray grid gap-3 text-sm">
@@ -1286,8 +1291,8 @@ export default function ExecutePage() {
               ) : (
                 <p className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
                   <span className="font-medium">Planned block:</span> No planned
-                  block is attached right now. You can still focus this task,
-                  or plan a block first.
+                  block is attached right now. You can still focus this task, or
+                  plan a block first.
                 </p>
               )}
             </div>
@@ -1300,7 +1305,7 @@ export default function ExecutePage() {
           data-testid="execute-focus-state-card"
           data-focus-state={sessionUiState}
           style={buildAreaAccentStyle(missionArea?.color)}
-          className="focus-state-card h-full"
+          className="focus-state-card workflow-support-card h-full"
         >
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Focus state</CardTitle>
@@ -1308,10 +1313,7 @@ export default function ExecutePage() {
           <CardContent className="flex flex-col gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="focus-state-orb"
-                />
+                <span aria-hidden="true" className="focus-state-orb" />
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                   {sessionStateLabel}
                 </p>
@@ -1339,7 +1341,9 @@ export default function ExecutePage() {
               <div className="mt-4 grid gap-3">
                 <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
                   <p className="font-medium">Execution truth</p>
-                  <p className="mt-1 text-muted-foreground">{focusDescription}</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {focusDescription}
+                  </p>
                 </div>
                 <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
                   <p className="font-medium">Save mode</p>
@@ -1353,7 +1357,7 @@ export default function ExecutePage() {
           </CardContent>
         </Card>
 
-        <Card className="workflow-secondary-card h-full">
+        <Card className="workflow-secondary-card workflow-support-card h-full">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
               {isTerminalSession || (usesPersistedExecution && terminalForm)
@@ -1400,7 +1404,8 @@ export default function ExecutePage() {
                 <div className="mt-3 grid gap-3">
                   <p className="text-sm text-muted-foreground">
                     Capture side thoughts without turning this screen into an
-                    inbox. Keep them secondary until the current mission is done.
+                    inbox. Keep them secondary until the current mission is
+                    done.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <Button asChild type="button" variant="outline">

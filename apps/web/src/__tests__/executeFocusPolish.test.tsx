@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { useEffect, useRef, type ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area } from "@lifeos/schemas";
@@ -188,6 +194,7 @@ describe("Execute Focus polish", () => {
     const stateCard = await screen.findByTestId("execute-focus-state-card");
     const missionCard = screen.getByTestId("execute-current-mission-card");
     const sideThoughtCard = screen.getByTestId("execute-side-thought-card");
+    expect(missionCard).toHaveClass("workflow-flagship-card");
     expect(stateCard).toHaveAttribute("data-focus-state", "not_started");
     expect(within(missionCard).getByText("Ready to focus")).toBeDefined();
     expect(within(stateCard).getByText("Current area: Main Job")).toBeDefined();
@@ -210,9 +217,10 @@ describe("Execute Focus polish", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Start" }));
     await waitFor(() =>
-      expect(
-        screen.getByTestId("execute-focus-state-card"),
-      ).toHaveAttribute("data-focus-state", "running"),
+      expect(screen.getByTestId("execute-focus-state-card")).toHaveAttribute(
+        "data-focus-state",
+        "running",
+      ),
     );
     expect(
       within(screen.getByTestId("execute-current-mission-card")).getByText(
@@ -222,9 +230,10 @@ describe("Execute Focus polish", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() =>
-      expect(
-        screen.getByTestId("execute-focus-state-card"),
-      ).toHaveAttribute("data-focus-state", "paused"),
+      expect(screen.getByTestId("execute-focus-state-card")).toHaveAttribute(
+        "data-focus-state",
+        "paused",
+      ),
     );
     expect(
       within(screen.getByTestId("execute-current-mission-card")).getByText(
@@ -235,16 +244,20 @@ describe("Execute Focus polish", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Resume" }));
     await waitFor(() =>
-      expect(
-        screen.getByTestId("execute-focus-state-card"),
-      ).toHaveAttribute("data-focus-state", "running"),
+      expect(screen.getByTestId("execute-focus-state-card")).toHaveAttribute(
+        "data-focus-state",
+        "running",
+      ),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Stop on this device" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Stop on this device" }),
+    );
     await waitFor(() =>
-      expect(
-        screen.getByTestId("execute-focus-state-card"),
-      ).toHaveAttribute("data-focus-state", "stopped"),
+      expect(screen.getByTestId("execute-focus-state-card")).toHaveAttribute(
+        "data-focus-state",
+        "stopped",
+      ),
     );
     expect(
       within(screen.getByTestId("execute-current-mission-card")).getByText(
@@ -257,7 +270,9 @@ describe("Execute Focus polish", () => {
     expect(
       screen.getByRole("link", { name: "Capture what got in the way" }),
     ).toBeDefined();
-    expect(screen.getByRole("link", { name: "Review this later" })).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Review this later" }),
+    ).toBeDefined();
     expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
   });
 
@@ -281,9 +296,10 @@ describe("Execute Focus polish", () => {
       ),
     );
     await waitFor(() =>
-      expect(
-        screen.getByTestId("execute-focus-state-card"),
-      ).toHaveAttribute("data-focus-state", "paused"),
+      expect(screen.getByTestId("execute-focus-state-card")).toHaveAttribute(
+        "data-focus-state",
+        "paused",
+      ),
     );
     expect(
       within(screen.getByTestId("execute-current-mission-card")).getByText(

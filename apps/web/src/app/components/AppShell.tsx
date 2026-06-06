@@ -112,7 +112,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               </Link>
               <Badge
                 variant="secondary"
-                className="hidden rounded-full border border-white/8 bg-white/6 sm:inline-flex"
+                className="workflow-shell-panel hidden rounded-full sm:inline-flex"
               >
                 Personal workflow cockpit
               </Badge>
@@ -191,7 +191,10 @@ function AppChrome({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex flex-col gap-3 pb-1 lg:flex-row lg:items-center">
-            <nav aria-label="Primary" className="workflow-shell__nav flex flex-wrap items-center gap-2 lg:flex-nowrap">
+            <nav
+              aria-label="Primary"
+              className="workflow-shell__nav workflow-shell-panel flex flex-wrap items-center gap-2 lg:flex-nowrap"
+            >
               {navLinks.map((link) => {
                 const isActive =
                   pathname === link.href ||
@@ -219,7 +222,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                 );
               })}
             </nav>
-            <div className="workflow-shell__status flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
+            <div className="workflow-shell__status workflow-shell-panel flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
               <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                 Current area
               </span>
@@ -232,16 +235,17 @@ function AppChrome({ children }: { children: ReactNode }) {
                 }
                 className="h-9 min-w-0 flex-1 rounded-full border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] shadow-[0_16px_30px_-28px_var(--area-accent)] sm:min-w-44 sm:flex-none"
               >
-                {!hasAreas ? (
-                  <option value="">No areas yet</option>
-                ) : null}
+                {!hasAreas ? <option value="">No areas yet</option> : null}
                 {state.areas.map((area) => (
                   <option key={area.id} value={area.id}>
                     {area.name}
                   </option>
                 ))}
               </Select>
-              <Badge variant="outline" className="rounded-full border-white/10 bg-white/4">
+              <Badge
+                variant="outline"
+                className="rounded-full border-white/10 bg-white/4"
+              >
                 {now}
               </Badge>
             </div>
@@ -254,7 +258,12 @@ function AppChrome({ children }: { children: ReactNode }) {
         tabIndex={-1}
         className="workflow-shell__main mx-auto flex w-full max-w-7xl scroll-mt-28 flex-col gap-6 px-4 py-6 focus-visible:outline-none sm:px-6 lg:px-8"
       >
-        <WorkflowPageHeader spotlight={currentAreaSpotlight}>
+        <WorkflowPageHeader
+          className="workflow-shell-context-header"
+          spotlight={currentAreaSpotlight}
+          spotlightClassName="workflow-shell-context-spotlight"
+          bodyClassName="workflow-shell-context-body"
+        >
           <DiagnosticsDisclosure title="Quick capture details">
             <p>Quick capture saves on this device and sends notes to Triage.</p>
           </DiagnosticsDisclosure>

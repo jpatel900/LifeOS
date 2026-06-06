@@ -24,10 +24,7 @@ import {
 } from "@/lib/data/workflow";
 import { getAreaById } from "@/lib/mockData";
 import { captureEvent } from "@/lib/observability";
-import {
-  saveModeLabel,
-  savedViaLabel,
-} from "@/lib/statusVocabulary";
+import { saveModeLabel, savedViaLabel } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   blockLifecycleDisplay,
@@ -911,29 +908,36 @@ export default function CalendarPage() {
         title="Planning"
         description="Pick the work that needs time, shape one local suggestion, then approve any real Google write explicitly. The route should feel like guided scheduling, not proposal administration."
         spotlight={
-          <div className="workflow-metric-grid">
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Needs time</p>
-              <p className="workflow-metric-value">{scheduleableTasks.length}</p>
-              <p className="workflow-metric-context">
-                Active tasks waiting for a first slot.
-              </p>
-            </div>
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Ready to review</p>
-              <p className="workflow-metric-value">{proposals.length}</p>
-              <p className="workflow-metric-context">
-                Suggested times still waiting for your decision.
-              </p>
-            </div>
-            <div className="workflow-metric-card">
-              <p className="workflow-metric-label">Already planned</p>
-              <p className="workflow-metric-value">{blocks.length}</p>
-              <p className="workflow-metric-context">
-                Blocks already ready for Execute.
-              </p>
-            </div>
-          </div>
+          <Card
+            data-testid="planning-header-summary-card"
+            className="workflow-secondary-card workflow-support-card"
+          >
+            <CardContent className="workflow-metric-grid pt-6">
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Needs time</p>
+                <p className="workflow-metric-value">
+                  {scheduleableTasks.length}
+                </p>
+                <p className="workflow-metric-context">
+                  Active tasks waiting for a first slot.
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Ready to review</p>
+                <p className="workflow-metric-value">{proposals.length}</p>
+                <p className="workflow-metric-context">
+                  Suggested times still waiting for your decision.
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Already planned</p>
+                <p className="workflow-metric-value">{blocks.length}</p>
+                <p className="workflow-metric-context">
+                  Blocks already ready for Execute.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         }
       >
         {selectedArea ? (
@@ -941,7 +945,10 @@ export default function CalendarPage() {
             variant="secondary"
             className="area-accent-chip inline-flex items-center gap-2 rounded-full"
           >
-            <span aria-hidden="true" className="area-accent-dot size-2 rounded-full" />
+            <span
+              aria-hidden="true"
+              className="area-accent-dot size-2 rounded-full"
+            />
             Current area: {selectedArea.name}
           </Badge>
         ) : null}
@@ -949,10 +956,13 @@ export default function CalendarPage() {
 
       <Card
         data-testid="planning-flow-card"
-        className="workflow-secondary-card"
+        className="workflow-primary-card workflow-flagship-card"
       >
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Planning flow</CardTitle>
+          <p className="workflow-surface-kicker">Guide the next block</p>
+          <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
+            Planning flow
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-[minmax(0,0.95fr)_minmax(18rem,1.05fr)] lg:items-start">
           <div className="workflow-action-tray">
@@ -991,7 +1001,8 @@ export default function CalendarPage() {
                   : "Checking"}
               </p>
               <p className="workflow-metric-context">
-                Local planning stays useful even before account-backed rows load.
+                Local planning stays useful even before account-backed rows
+                load.
               </p>
             </div>
             <div className="workflow-metric-card">
@@ -1018,7 +1029,8 @@ export default function CalendarPage() {
         {planningState.status === "ready" ? (
           <>
             <p>
-              Save mode: <strong>{saveModeLabel(planningState.provider)}</strong>
+              Save mode:{" "}
+              <strong>{saveModeLabel(planningState.provider)}</strong>
             </p>
             <p>
               Technical save mode id: <strong>{planningState.provider}</strong>
@@ -1047,38 +1059,40 @@ export default function CalendarPage() {
         </p>
       ) : null}
 
-      {actionState.status === "saved" ? (
-        (() => {
-          const feedback = planningSuccessFeedback(actionState);
+      {actionState.status === "saved"
+        ? (() => {
+            const feedback = planningSuccessFeedback(actionState);
 
-          return (
-            <Alert
-              role="status"
-              className="workflow-celebration-alert border-border bg-muted text-foreground"
-            >
-              <AlertTitle className="text-primary">{feedback.title}</AlertTitle>
-              <AlertDescription>{feedback.description}</AlertDescription>
-              <div className="workflow-celebration-meta">
-                <span className="workflow-celebration-chip">
-                  {savedViaLabel(actionState.provider)}
-                </span>
-                <span className="workflow-celebration-chip">
-                  {actionState.label}
-                </span>
-              </div>
-              {feedback.primaryLink ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={feedback.primaryLink.href}>
-                      {feedback.primaryLink.label}
-                    </Link>
-                  </Button>
+            return (
+              <Alert
+                role="status"
+                className="workflow-celebration-alert border-border bg-muted text-foreground"
+              >
+                <AlertTitle className="text-primary">
+                  {feedback.title}
+                </AlertTitle>
+                <AlertDescription>{feedback.description}</AlertDescription>
+                <div className="workflow-celebration-meta">
+                  <span className="workflow-celebration-chip">
+                    {savedViaLabel(actionState.provider)}
+                  </span>
+                  <span className="workflow-celebration-chip">
+                    {actionState.label}
+                  </span>
                 </div>
-              ) : null}
-            </Alert>
-          );
-        })()
-      ) : null}
+                {feedback.primaryLink ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={feedback.primaryLink.href}>
+                        {feedback.primaryLink.label}
+                      </Link>
+                    </Button>
+                  </div>
+                ) : null}
+              </Alert>
+            );
+          })()
+        : null}
 
       {actionState.status === "error" ? (
         <Alert variant="destructive">
@@ -1099,10 +1113,12 @@ export default function CalendarPage() {
         <div className="flex flex-col gap-4">
           <Card
             data-testid="planning-needs-time-card"
-            className="workflow-primary-card"
+            className="workflow-secondary-card workflow-support-card"
           >
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Needs a suggested time</CardTitle>
+              <CardTitle className="text-base">
+                Needs a suggested time
+              </CardTitle>
               <p className="text-sm text-muted-foreground">
                 Start here. Pick the work that should get a local-first time
                 suggestion next.
@@ -1169,14 +1185,17 @@ export default function CalendarPage() {
                 <details className="system-details-disclosure">
                   <summary className="text-sm font-medium text-foreground">
                     {overflowScheduleableTasks.length} more task
-                    {overflowScheduleableTasks.length === 1 ? "" : "s"} needing time
+                    {overflowScheduleableTasks.length === 1 ? "" : "s"} needing
+                    time
                   </summary>
                   <div className="mt-4 grid gap-2">
                     {overflowScheduleableTasks.map((task) => {
                       const area = usesPersistedPlanning
                         ? null
                         : getAreaById(task.area_id);
-                      const lifecycle = planningTaskLifecycleDisplay(task.status);
+                      const lifecycle = planningTaskLifecycleDisplay(
+                        task.status,
+                      );
 
                       return (
                         <div
@@ -1187,7 +1206,9 @@ export default function CalendarPage() {
                             <div className="font-medium">{task.title}</div>
                             <div className="flex flex-wrap items-center gap-2">
                               {area ? (
-                                <Badge variant="secondary">Area: {area.name}</Badge>
+                                <Badge variant="secondary">
+                                  Area: {area.name}
+                                </Badge>
                               ) : null}
                               <Badge variant={lifecycle.variant}>
                                 {lifecycle.label}
@@ -1216,7 +1237,7 @@ export default function CalendarPage() {
 
           <Card
             data-testid="planning-ready-review-card"
-            className="workflow-secondary-card"
+            className="workflow-secondary-card workflow-support-card"
           >
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Ready to review</CardTitle>
@@ -1296,8 +1317,8 @@ export default function CalendarPage() {
                           : googleConnectionState.status === "error"
                             ? "Google Calendar status is unavailable right now."
                             : !googleConnectionState.connected
-                            ? "Connect Google Calendar first."
-                            : !hasConflictCheck
+                              ? "Connect Google Calendar first."
+                              : !hasConflictCheck
                                 ? "Check calendar availability first."
                                 : !(
                                       googleConnectionState.firstWriteWarningAcknowledged ||
@@ -1332,7 +1353,7 @@ export default function CalendarPage() {
                       }
                       data-accent-strength="subtle"
                       style={buildAreaAccentStyle(accentArea?.color)}
-                      className="area-accent-card flex flex-col gap-2 rounded-lg border border-border p-3 text-sm"
+                      className="area-accent-card workflow-secondary-card workflow-support-card flex flex-col gap-2 rounded-lg p-3 text-sm"
                     >
                       <div className="font-medium">
                         {task?.title ?? "Unassigned block"}
@@ -1414,9 +1435,10 @@ export default function CalendarPage() {
                           </Button>
                         </div>
                         {adjustingProposalId === proposal.id ? (
-                          <div className="rounded-md border border-border bg-muted/40 p-2">
+                          <div className="workflow-admin-card rounded-md p-2">
                             <p className="text-xs text-muted-foreground">
-                              These quick changes update the suggested time directly.
+                              These quick changes update the suggested time
+                              directly.
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">
                               <Button
@@ -1483,7 +1505,7 @@ export default function CalendarPage() {
                       <Separator />
                       <details
                         open={googleActionsRelevant}
-                        className="rounded-md border border-border bg-muted/20 p-2"
+                        className="workflow-admin-card rounded-md p-2"
                       >
                         <summary className="cursor-pointer select-none text-xs font-medium text-foreground">
                           Google Calendar options
@@ -1498,7 +1520,7 @@ export default function CalendarPage() {
                           googleConnectionState.status === "ready" &&
                           googleConnectionState.connected &&
                           !googleConnectionState.firstWriteWarningAcknowledged ? (
-                            <label className="flex items-start gap-2 rounded-md border border-border bg-muted p-2 text-sm text-foreground">
+                            <label className="workflow-admin-card flex items-start gap-2 rounded-md p-2 text-sm text-foreground">
                               <input
                                 type="checkbox"
                                 className="mt-0.5 size-4 rounded border-input bg-background text-primary focus-visible:ring-2 focus-visible:ring-ring"
@@ -1512,8 +1534,8 @@ export default function CalendarPage() {
                               <span>
                                 First Google write approval: I understand this
                                 button creates a real Google Calendar event only
-                                after explicit user approval. If the write fails,
-                                the suggested time stays unchanged.
+                                after explicit user approval. If the write
+                                fails, the suggested time stays unchanged.
                               </span>
                             </label>
                           ) : null}
@@ -1561,16 +1583,14 @@ export default function CalendarPage() {
                         <summary className="text-sm font-medium text-foreground">
                           More options
                         </summary>
-                        <div className="mt-4 flex flex-wrap gap-2">
+                        <div className="mt-4 flex flex-wrap gap-2 workflow-admin-card rounded-xl p-3">
                           <Button
                             type="button"
                             variant="destructive"
                             onClick={() =>
                               usesPersistedPlanning
                                 ? void handleRejectProposal(proposal.id)
-                                : handleRejectLocalPlanningProposal(
-                                    proposal.id,
-                                  )
+                                : handleRejectLocalPlanningProposal(proposal.id)
                             }
                             disabled={
                               actionState.status === "saving" ||
@@ -1598,13 +1618,17 @@ export default function CalendarPage() {
                         ? scheduleableTasks.find(
                             (item) => item.id === proposal.task_id,
                           )
-                        : state.tasks.find((item) => item.id === proposal.task_id);
+                        : state.tasks.find(
+                            (item) => item.id === proposal.task_id,
+                          );
                       const conflictSummary = proposalConflictSummary(proposal);
-                      const lifecycle = proposalLifecycleDisplay(proposal.status);
+                      const lifecycle = proposalLifecycleDisplay(
+                        proposal.status,
+                      );
                       return (
                         <div
                           key={proposal.id}
-                          className="rounded-lg border border-border bg-muted/20 p-3 text-sm"
+                          className="workflow-admin-card rounded-lg p-3 text-sm"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-medium">
@@ -1624,8 +1648,13 @@ export default function CalendarPage() {
                             </Badge>
                           </div>
                           <p className="mt-1 text-muted-foreground">
-                            {new Date(proposal.proposed_start).toLocaleTimeString()} -{" "}
-                            {new Date(proposal.proposed_end).toLocaleTimeString()}
+                            {new Date(
+                              proposal.proposed_start,
+                            ).toLocaleTimeString()}{" "}
+                            -{" "}
+                            {new Date(
+                              proposal.proposed_end,
+                            ).toLocaleTimeString()}
                           </p>
                         </div>
                       );
@@ -1638,7 +1667,7 @@ export default function CalendarPage() {
 
           <Card
             data-testid="planning-planned-blocks-card"
-            className="workflow-secondary-card"
+            className="workflow-secondary-card workflow-support-card"
           >
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Already planned</CardTitle>
@@ -1672,7 +1701,7 @@ export default function CalendarPage() {
                       data-testid="planning-scheduled-block-card"
                       data-accent-strength="subtle"
                       style={buildAreaAccentStyle(accentArea?.color)}
-                      className="area-accent-card flex flex-col gap-1 rounded-lg border border-border p-3 text-sm"
+                      className="area-accent-card workflow-secondary-card workflow-support-card flex flex-col gap-1 rounded-lg p-3 text-sm"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="font-medium">
@@ -1720,14 +1749,16 @@ export default function CalendarPage() {
                         resolveAreaById(state.areas, block.area_id) ??
                         getAreaById(block.area_id);
                       const task = usesPersistedPlanning
-                        ? scheduleableTasks.find((item) => item.id === block.task_id)
+                        ? scheduleableTasks.find(
+                            (item) => item.id === block.task_id,
+                          )
                         : state.tasks.find((item) => item.id === block.task_id);
                       const lifecycle = blockLifecycleDisplay(block.status);
 
                       return (
                         <div
                           key={block.id}
-                          className="rounded-lg border border-border bg-muted/20 p-3 text-sm"
+                          className="workflow-admin-card rounded-lg p-3 text-sm"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-medium">
@@ -1737,7 +1768,9 @@ export default function CalendarPage() {
                               {lifecycle.label}
                             </Badge>
                             {area ? (
-                              <Badge variant="secondary">Area: {area.name}</Badge>
+                              <Badge variant="secondary">
+                                Area: {area.name}
+                              </Badge>
                             ) : null}
                           </div>
                           <p className="mt-1 text-muted-foreground">

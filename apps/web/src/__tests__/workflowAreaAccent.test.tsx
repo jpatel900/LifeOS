@@ -223,7 +223,13 @@ describe("workflow area accent routes", () => {
       }),
     );
     expect(screen.getByTestId("capture-main-card")).toHaveClass(
-      "workflow-primary-card",
+      "workflow-flagship-card",
+    );
+    expect(screen.getByTestId("capture-header-summary-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("capture-device-history-card")).toHaveClass(
+      "workflow-admin-card",
     );
     expect(screen.getByText("Current area: Main Job")).toBeDefined();
     expect(screen.getByTestId("capture-recent-card")).toHaveStyle({
@@ -244,11 +250,14 @@ describe("workflow area accent routes", () => {
         "--area-accent": "#2563eb",
       }),
     );
+    expect(screen.getByTestId("triage-header-summary-card")).toHaveClass(
+      "workflow-support-card",
+    );
     expect(screen.getByTestId("triage-next-action-card")).toHaveClass(
-      "workflow-secondary-card",
+      "workflow-support-card",
     );
     expect(screen.getByTestId("triage-current-item-card")).toHaveClass(
-      "workflow-primary-card",
+      "workflow-flagship-card",
     );
     expect(screen.getAllByText("Area: Main Job")[0]).toBeDefined();
   });
@@ -261,6 +270,21 @@ describe("workflow area accent routes", () => {
         "--area-accent": "#2563eb",
       }),
     );
+    expect(screen.getByTestId("planning-header-summary-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("planning-flow-card")).toHaveClass(
+      "workflow-flagship-card",
+    );
+    expect(screen.getByTestId("planning-needs-time-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("planning-ready-review-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("planning-planned-blocks-card")).toHaveClass(
+      "workflow-support-card",
+    );
     expect(screen.getByTestId("planning-scheduled-block-card")).toHaveStyle({
       "--area-accent": "#2563eb",
     });
@@ -271,9 +295,7 @@ describe("workflow area accent routes", () => {
     renderWithWorkflow(<ExecutePage />);
 
     await waitFor(() =>
-      expect(
-        screen.getByTestId("execute-current-mission-card"),
-      ).toHaveStyle({
+      expect(screen.getByTestId("execute-current-mission-card")).toHaveStyle({
         "--area-accent": "#2563eb",
       }),
     );
@@ -287,20 +309,24 @@ describe("workflow area accent routes", () => {
     renderWithWorkflow(<ReviewPage />);
 
     await waitFor(() =>
-      expect(
-        screen.getByTestId("review-today-at-a-glance-card"),
-      ).toHaveStyle({
+      expect(screen.getByTestId("review-today-at-a-glance-card")).toHaveStyle({
         "--area-accent": "#2563eb",
       }),
     );
     expect(screen.getByTestId("review-next-decision-card")).toHaveClass(
-      "workflow-primary-card",
+      "workflow-flagship-card",
     );
     expect(screen.getByTestId("review-close-loop-card")).toHaveClass(
-      "workflow-secondary-card",
+      "workflow-support-card",
     );
     expect(screen.getByTestId("review-today-at-a-glance-card")).toHaveClass(
-      "workflow-secondary-card",
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("review-reflections-card")).toHaveClass(
+      "workflow-admin-card",
+    );
+    expect(screen.getByTestId("review-history-card")).toHaveClass(
+      "workflow-admin-card",
     );
     expect(screen.getByTestId("review-carry-forward-card")).toBeDefined();
   });
@@ -314,7 +340,16 @@ describe("workflow area accent routes", () => {
       }),
     );
     expect(screen.getByTestId("areas-create-card")).toHaveClass(
-      "workflow-primary-card",
+      "workflow-flagship-card",
+    );
+    expect(screen.getByTestId("areas-header-summary-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("areas-area-card")).toHaveClass(
+      "workflow-support-card",
+    );
+    expect(screen.getByTestId("areas-local-reset-card")).toHaveClass(
+      "workflow-admin-card",
     );
   });
 });
