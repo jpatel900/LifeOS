@@ -58,6 +58,44 @@ const AREA_COLOR_PRESETS = [
   { label: "Teal", value: "#0f766e" },
 ] as const;
 
+function createFeedback(
+  createState:
+    | { status: "idle" }
+    | { status: "saving" }
+    | { status: "saved"; areaName: string }
+    | { status: "error"; message: string },
+) {
+  if (createState.status === "saving") {
+    return {
+      variant: "default" as const,
+      title: "Creating area",
+      description:
+        "LifeOS is saving the new area before it appears in active pickers.",
+      nextStep: "Keep this page open until the new area is ready to use.",
+    };
+  }
+
+  if (createState.status === "saved") {
+    return {
+      variant: "success" as const,
+      title: "Area created.",
+      description: `${createState.areaName} is now available in active area pickers.`,
+      nextStep: "Use it now, or keep creating the scopes you actually need.",
+    };
+  }
+
+  if (createState.status === "error") {
+    return {
+      variant: "destructive" as const,
+      title: "Area could not be created",
+      description: createState.message,
+      nextStep: "Fix the problem, then try creating the area again.",
+    };
+  }
+
+  return null;
+}
+
 export default function AreasSettingsPage() {
   const {
     state: workflowState,
@@ -83,7 +121,7 @@ export default function AreasSettingsPage() {
     | { status: "confirming"; areaId: string }
     | { status: "saving"; areaId: string }
     | { status: "saved"; areaName: string }
-    | { status: "error"; message: string }
+    | { status: "error"; areaId: string; message: string }
   >({ status: "idle" });
 
   function sortAreas(areas: Area[]) {
@@ -185,6 +223,7 @@ export default function AreasSettingsPage() {
     } catch (error) {
       setRemoveState({
         status: "error",
+        areaId: area.id,
         message:
           error instanceof Error ? error.message : "Unable to remove area.",
       });
@@ -196,6 +235,13 @@ export default function AreasSettingsPage() {
     | { status: "saved"; areaName: string; color: string | null }
     | { status: "error"; areaName: string; message: string }
   >({ status: "idle" });
+  const createAreaFeedback = createFeedback(createState);
+  const currentArea =
+    state.status === "ready"
+      ? (state.areas.find(
+          (area) => workflowAreaIdForPersistedArea(area) === selectedAreaId,
+        ) ?? null)
+      : null;
 
   async function handleUpdateAreaColor(area: Area, color: string | null) {
     if (state.status !== "ready") {
@@ -246,14 +292,16 @@ export default function AreasSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <WorkflowPageHeader
-        eyebrow="Quiet admin, clear ownership"
+        className="workflow-page-header--areas"
+        spotlightClassName="workflow-page-spotlight--areas"
+        eyebrow="Ownership boundaries"
         title="Areas"
-        description="Manage areas, accents, and account-connected behavior without adding daily noise."
+        description="Use areas as clear ownership boundaries. Keep them specific enough to trust and quiet enough not to distract from daily work."
         spotlight={
           state.status === "ready" ? (
             <Card
               data-testid="areas-header-summary-card"
-              className="workflow-secondary-card workflow-support-card"
+              className="workflow-secondary-card workflow-support-card areas-ownership-summary-card"
             >
               <CardContent className="workflow-metric-grid pt-6">
                 <div className="workflow-metric-card">
@@ -270,6 +318,15 @@ export default function AreasSettingsPage() {
                   <p className="workflow-metric-value">{state.areas.length}</p>
                   <p className="workflow-metric-context">
                     Clear scopes keep Capture, Planning, and Review legible.
+                  </p>
+                </div>
+                <div className="workflow-metric-card">
+                  <p className="workflow-metric-label">Current area</p>
+                  <p className="workflow-metric-value text-[1.35rem]">
+                    {currentArea?.name ?? "None selected"}
+                  </p>
+                  <p className="workflow-metric-context">
+                    Change it only when the ownership boundary really changes.
                   </p>
                 </div>
               </CardContent>
@@ -330,7 +387,12 @@ export default function AreasSettingsPage() {
               <Textarea
                 id="area_description"
                 value={newAreaDescription}
-                onChange={(event) => setNewAreaDescription(event.target.value)}
+                onChange={(event) => {
+                  setNewAreaDescription(event.target.value);
+                  if (createState.status !== "idle") {
+                    setCreateState({ status: "idle" });
+                  }
+                }}
                 placeholder="What belongs in this area?"
                 rows={3}
                 disabled={createState.status === "saving"}
@@ -348,19 +410,35 @@ export default function AreasSettingsPage() {
             </div>
           </form>
 
-          {createState.status === "saved" ? (
-            <Alert variant="success" role="status">
-              <AlertTitle>Area created.</AlertTitle>
+          {createAreaFeedback ? (
+            <Alert
+              variant={createAreaFeedback.variant}
+              role={
+                createAreaFeedback.variant === "destructive"
+                  ? "alert"
+                  : "status"
+              }
+              className={
+                createAreaFeedback.variant === "success"
+                  ? "workflow-celebration-alert text-foreground"
+                  : undefined
+              }
+            >
+              <AlertTitle
+                className={
+                  createAreaFeedback.variant === "success"
+                    ? "text-primary"
+                    : undefined
+                }
+              >
+                {createAreaFeedback.title}
+              </AlertTitle>
               <AlertDescription>
-                {createState.areaName} is now available in active area pickers.
+                {createAreaFeedback.description}
               </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {createState.status === "error" ? (
-            <Alert variant="destructive" role="alert">
-              <AlertTitle>Area could not be created</AlertTitle>
-              <AlertDescription>{createState.message}</AlertDescription>
+              <p className="text-sm font-medium">
+                {createAreaFeedback.nextStep}
+              </p>
             </Alert>
           ) : null}
         </CardContent>
@@ -388,7 +466,7 @@ export default function AreasSettingsPage() {
       ) : null}
 
       {state.status === "ready" ? (
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <section className="grid grid-cols-1 gap-4">
           {state.areas.length === 0 ? (
             <EmptyState
               title="No active areas yet."
@@ -434,6 +512,59 @@ export default function AreasSettingsPage() {
                   : null;
               const isUpdatingColor =
                 colorState.status === "saving" && colorState.areaId === area.id;
+              const colorFeedback =
+                colorState.status === "saving" && colorState.areaId === area.id
+                  ? {
+                      variant: "default" as const,
+                      title: "Saving accent",
+                      description:
+                        "LifeOS is updating this area accent before it settles everywhere else.",
+                      nextStep:
+                        "Keep this card open until the accent save finishes.",
+                    }
+                  : colorState.status === "saved" &&
+                      colorState.areaName === area.name
+                    ? {
+                        variant: "success" as const,
+                        title: "Accent updated.",
+                        description: `${colorState.areaName} now uses ${
+                          colorState.color
+                            ? "the selected accent."
+                            : "the default accent."
+                        }`,
+                        nextStep:
+                          "Use accents for recognition only. The area name stays the source of truth.",
+                      }
+                    : colorState.status === "error" &&
+                        colorState.areaName === area.name
+                      ? {
+                          variant: "destructive" as const,
+                          title: "Accent could not be updated",
+                          description: colorState.message,
+                          nextStep:
+                            "The previous accent is still active. Retry only if the change still matters.",
+                        }
+                      : null;
+              const removeFeedback =
+                removeState.status === "saving" && removeState.areaId === area.id
+                  ? {
+                      variant: "default" as const,
+                      title: "Removing area from active use",
+                      description:
+                        "LifeOS is updating active pickers before this card disappears.",
+                      nextStep:
+                        "Keep this page open until active areas finish refreshing.",
+                    }
+                  : removeState.status === "error" &&
+                      removeState.areaId === area.id
+                    ? {
+                        variant: "destructive" as const,
+                        title: "Area could not be removed",
+                        description: removeState.message,
+                        nextStep:
+                          "The area is still active. Fix the issue, then retry only if removal still matters.",
+                      }
+                    : null;
 
               return (
                 <Card
@@ -441,7 +572,7 @@ export default function AreasSettingsPage() {
                   data-testid="areas-area-card"
                   data-accent-strength={isSelected ? "subtle" : undefined}
                   style={buildAreaAccentStyle(area.color)}
-                  className="area-accent-card workflow-secondary-card workflow-support-card"
+                  className="area-accent-card workflow-secondary-card workflow-support-card areas-record-card"
                 >
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -525,18 +656,29 @@ export default function AreasSettingsPage() {
                       </div>
                     </div>
 
-                    {removeState.status === "saving" &&
-                    removeState.areaId === area.id ? (
-                      <p className="text-sm text-muted-foreground">
-                        Removing area...
-                      </p>
-                    ) : null}
-
                     <DiagnosticsDisclosure
-                      title="Area actions and settings"
+                      title="Ownership actions and settings"
                       className="workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground"
                       contentClassName="mt-3 grid gap-3 text-sm text-muted-foreground"
                     >
+                        {removeFeedback ? (
+                          <Alert
+                            variant={removeFeedback.variant}
+                            role={
+                              removeFeedback.variant === "destructive"
+                                ? "alert"
+                                : "status"
+                            }
+                          >
+                            <AlertTitle>{removeFeedback.title}</AlertTitle>
+                            <AlertDescription>
+                              {removeFeedback.description}
+                            </AlertDescription>
+                            <p className="text-sm font-medium">
+                              {removeFeedback.nextStep}
+                            </p>
+                          </Alert>
+                        ) : null}
                         <div className="flex flex-wrap gap-2">
                           <Button asChild variant="outline" size="sm">
                             <Link
@@ -622,10 +764,36 @@ export default function AreasSettingsPage() {
                             Preview updates immediately on this card. Reset uses
                             the default accent token.
                           </p>
-                          {isUpdatingColor ? (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              Saving accent...
-                            </p>
+                          {colorFeedback ? (
+                            <Alert
+                              variant={colorFeedback.variant}
+                              role={
+                                colorFeedback.variant === "destructive"
+                                  ? "alert"
+                                  : "status"
+                              }
+                              className={
+                                colorFeedback.variant === "success"
+                                  ? "mt-3 workflow-celebration-alert text-foreground"
+                                  : "mt-3"
+                              }
+                            >
+                              <AlertTitle
+                                className={
+                                  colorFeedback.variant === "success"
+                                    ? "text-primary"
+                                    : undefined
+                                }
+                              >
+                                {colorFeedback.title}
+                              </AlertTitle>
+                              <AlertDescription>
+                                {colorFeedback.description}
+                              </AlertDescription>
+                              <p className="text-sm font-medium">
+                                {colorFeedback.nextStep}
+                              </p>
+                            </Alert>
                           ) : null}
                         </div>
 
@@ -673,7 +841,7 @@ export default function AreasSettingsPage() {
 
                         <div className="workflow-admin-card rounded-xl p-3 text-xs">
                           <p className="font-medium text-foreground">
-                            Area diagnostics
+                            Area record
                           </p>
                           <div className="mt-2 space-y-1">
                             <p>
@@ -701,32 +869,10 @@ export default function AreasSettingsPage() {
             {removeState.areaName} is now excluded from active pickers and new
             work assignment.
           </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {removeState.status === "error" ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTitle>Area could not be removed</AlertTitle>
-          <AlertDescription>{removeState.message}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      {colorState.status === "saved" ? (
-        <Alert variant="success" role="status">
-          <AlertTitle>Accent updated.</AlertTitle>
-          <AlertDescription>
-            {colorState.areaName} now uses{" "}
-            {colorState.color ? "the selected accent." : "the default accent."}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {colorState.status === "error" ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTitle>Accent could not be updated</AlertTitle>
-          <AlertDescription>
-            {colorState.areaName}: {colorState.message}
-          </AlertDescription>
+          <p className="text-sm font-medium">
+            Pick another current area if you still need one for capture,
+            planning, or review.
+          </p>
         </Alert>
       ) : null}
 
@@ -750,6 +896,10 @@ export default function AreasSettingsPage() {
             {resetState === "success" ? (
               <Alert variant="success" role="status" aria-live="polite">
                 <AlertTitle>Local browser data reset.</AlertTitle>
+                <AlertDescription>
+                  This browser now starts from empty local state. Cloud data
+                  stays untouched.
+                </AlertDescription>
               </Alert>
             ) : null}
             {resetState === "confirming" ? (

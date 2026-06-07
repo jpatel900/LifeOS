@@ -370,6 +370,45 @@ function executeSuccessFeedback(
   };
 }
 
+function executePendingFeedback(
+  actionState: Extract<ActionState, { status: "saving" }>,
+) {
+  if (actionState.label === "session") {
+    return {
+      title: "Starting focus session",
+      description:
+        "LifeOS is saving the session start before anything else changes here.",
+    };
+  }
+
+  if (actionState.label === "Pause") {
+    return {
+      title: "Pausing session",
+      description:
+        "The current mission stays active while LifeOS records the pause state.",
+    };
+  }
+
+  if (
+    actionState.label === "Complete" ||
+    actionState.label === "Mark missed" ||
+    actionState.label === "Mark distracted" ||
+    actionState.label === "Mark stuck"
+  ) {
+    return {
+      title: "Saving end-of-session outcome",
+      description:
+        "LifeOS is recording what happened before it changes the session state.",
+    };
+  }
+
+  return {
+    title: "Saving execution update",
+    description:
+      "Keep this view open while LifeOS records the latest execution change.",
+  };
+}
+
 export default function ExecutePage() {
   const { state, selectedAreaId, startTaskSession, markSession } =
     useWorkflow();
@@ -871,14 +910,25 @@ export default function ExecutePage() {
               </p>
               <p>
                 Technical save mode id: <strong>{executeState.provider}</strong>
-              </p>
-            </>
-          ) : null}
-        </DiagnosticsDisclosure>
-        {actionState.status === "saving" ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Saving {actionState.label}...
-          </p>
+            </p>
+          </>
+        ) : null}
+      </DiagnosticsDisclosure>
+      {actionState.status === "saving" ? (
+          <Alert role="status" className="workflow-celebration-alert text-foreground">
+            <AlertTitle className="text-primary">
+              {executePendingFeedback(actionState).title}
+            </AlertTitle>
+            <AlertDescription>
+              {executePendingFeedback(actionState).description}
+            </AlertDescription>
+            <div className="workflow-celebration-meta">
+              <span className="workflow-celebration-chip">Execution in progress</span>
+              <span className="workflow-celebration-chip">
+                {actionState.label}
+              </span>
+            </div>
+          </Alert>
         ) : null}
         {actionState.status === "saved"
           ? (() => {
@@ -922,6 +972,10 @@ export default function ExecutePage() {
           <Alert variant="destructive">
             <AlertTitle>Execution change was not saved</AlertTitle>
             <AlertDescription>{actionState.message}</AlertDescription>
+            <p className="text-sm font-medium text-destructive">
+              Current mission is unchanged. Retry here or capture what happened
+              before moving on.
+            </p>
           </Alert>
         ) : null}
         <EmptyState
@@ -939,15 +993,18 @@ export default function ExecutePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Execute</h1>
-        <p className="text-sm text-muted-foreground">
-          Keep one current mission visible until you decide what happened and
-          what comes next.
-        </p>
+      <section className="execute-route-brief rounded-3xl border px-5 py-5 sm:px-6">
+        <div className="space-y-1">
+          <p className="workflow-surface-kicker">Mission room</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Execute</h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Keep one current mission visible until you can say what happened
+            and what deserves the next block.
+          </p>
+        </div>
       </section>
 
-      <DiagnosticsDisclosure title="Execute details">
+      <DiagnosticsDisclosure title="Mission record">
         {executeState.status === "ready" ? (
           <>
             <p>
@@ -961,9 +1018,20 @@ export default function ExecutePage() {
       </DiagnosticsDisclosure>
 
       {actionState.status === "saving" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Saving {actionState.label}...
-        </p>
+        <Alert role="status" className="workflow-celebration-alert text-foreground">
+          <AlertTitle className="text-primary">
+            {executePendingFeedback(actionState).title}
+          </AlertTitle>
+          <AlertDescription>
+            {executePendingFeedback(actionState).description}
+          </AlertDescription>
+          <div className="workflow-celebration-meta">
+            <span className="workflow-celebration-chip">Execution in progress</span>
+            <span className="workflow-celebration-chip">
+              {actionState.label}
+            </span>
+          </div>
+        </Alert>
       ) : null}
 
       {actionState.status === "saved"
@@ -1017,6 +1085,10 @@ export default function ExecutePage() {
         <Alert variant="destructive">
           <AlertTitle>Execution change was not saved</AlertTitle>
           <AlertDescription>{actionState.message}</AlertDescription>
+          <p className="text-sm font-medium text-destructive">
+            Current mission is unchanged. Retry here or capture what happened
+            before moving on.
+          </p>
         </Alert>
       ) : null}
 
@@ -1025,13 +1097,13 @@ export default function ExecutePage() {
         data-accent-strength="strong"
         data-session-ui-state={sessionUiState}
         style={buildAreaAccentStyle(missionArea?.color)}
-        className="area-accent-card workflow-primary-card workflow-flagship-card max-w-[980px]"
+        className="area-accent-card execute-mission-card workflow-primary-card workflow-flagship-card max-w-[980px]"
       >
         <CardHeader className="pb-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <p className="workflow-surface-kicker text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Current mission
+                One mission
               </p>
               <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
                 {activeTask.title}
@@ -1207,18 +1279,18 @@ export default function ExecutePage() {
 
           <p className="text-sm text-muted-foreground">
             {showStartControl
-              ? "Start when you are ready to focus on this one task."
+              ? "Start when you are ready to work this mission and nothing else."
               : showResumeControl
-                ? "Resume when you are ready, or finish the session with a real outcome."
+                ? "Resume when you are ready, or finish the mission with a real outcome."
                 : showPauseControl
                   ? "Pause if you need to step away. Keep the outcome honest when the block ends."
                   : isTerminalSession
                     ? "This session is ended. Pick the next useful move."
-                    : "Choose the control that matches what actually happened in this block."}
+                    : "Choose the control that matches what actually happened in this mission block."}
           </p>
 
           <div className="workflow-action-tray grid gap-3 text-sm">
-            <p className="workflow-section-kicker">Keep focus narrow</p>
+            <p className="workflow-section-kicker">Guard the lane</p>
             <p className="area-accent-panel rounded-md border p-3">
               <span className="font-medium text-foreground">
                 First tiny step:
@@ -1249,7 +1321,7 @@ export default function ExecutePage() {
           </div>
 
           <DiagnosticsDisclosure
-            title="Mission details"
+            title="Mission record"
             className="workflow-inline-disclosure"
             contentClassName="mt-4 grid gap-3 text-sm"
           >
@@ -1304,10 +1376,10 @@ export default function ExecutePage() {
           data-testid="execute-focus-state-card"
           data-focus-state={sessionUiState}
           style={buildAreaAccentStyle(missionArea?.color)}
-          className="focus-state-card workflow-support-card workflow-quiet-card h-full"
+          className="focus-state-card execute-state-card workflow-support-card workflow-quiet-card h-full"
         >
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Focus state</CardTitle>
+            <CardTitle className="text-base">Mission state</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="space-y-1">
@@ -1352,12 +1424,12 @@ export default function ExecutePage() {
           </CardContent>
         </Card>
 
-        <Card className="workflow-secondary-card workflow-support-card workflow-quiet-card h-full">
+        <Card className="execute-support-card workflow-secondary-card workflow-support-card workflow-quiet-card h-full">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
               {isTerminalSession || (usesPersistedExecution && terminalForm)
-                ? "Close the loop"
-                : "Keep this block clean"}
+                ? "Recovery lane"
+                : "Keep the lane clear"}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -1390,7 +1462,7 @@ export default function ExecutePage() {
 
             {!terminalForm ? (
               <DiagnosticsDisclosure
-                title="Protect focus"
+                title="Protect the mission"
                 data-testid="execute-side-thought-card"
                 className="workflow-inline-disclosure"
                 contentClassName="mt-3 grid gap-3"

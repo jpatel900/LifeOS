@@ -262,14 +262,14 @@ test("health page loads and run-check shows disabled and enabled states", async 
   const statusLine = page.getByRole("status").first();
   await expect(runCheck).toBeVisible();
   await expect(statusLine).toHaveText(
-    /Run in progress\. Please wait\.|System check complete\./,
+    /Running system check|System check complete\./,
   );
 
   await waitForHealthResult(page);
   await expect(runCheck).toBeEnabled();
   await runCheck.click();
   await expect(statusLine).toHaveText(
-    /Run in progress\. Please wait\.|System check complete\./,
+    /Running system check|System check complete\./,
   );
   await expect(page.getByText("System check complete.")).toBeVisible();
 });

@@ -92,6 +92,57 @@ type TrustRow = {
   variant: "success" | "secondary" | "warning" | "destructive";
 };
 
+function healthRunFeedback(
+  state: HealthLoadState,
+  feedback: CheckFeedbackState,
+  checkedAt: string | null,
+) {
+  if (state.status === "error") {
+    return {
+      variant: "destructive" as const,
+      title: "Health checks could not load",
+      description: state.message,
+      chips: ["Fix issue", "Run again"],
+      nextStep: "Fix the connection or session issue, then run the check again.",
+    };
+  }
+
+  if (feedback.status === "running") {
+    return {
+      variant: "default" as const,
+      title: "Running system check",
+      description:
+        "LifeOS is refreshing saved subsystem status before it updates the trust answer below.",
+      chips: ["Health in progress", "Refresh status"],
+      nextStep: "Keep this page open until the latest trust answer is ready.",
+    };
+  }
+
+  if (feedback.status === "success") {
+    return {
+      variant: "success" as const,
+      title: "System check complete.",
+      description: checkedAt
+        ? `The trust answer below now reflects the latest saved status from ${checkedAt}.`
+        : "The trust answer below now reflects the latest saved status.",
+      chips: ["Latest health snapshot", "Trust answer updated"],
+      nextStep: "Start with the plain answer first, then open diagnostics only if needed.",
+    };
+  }
+
+  if (feedback.status === "error") {
+    return {
+      variant: "destructive" as const,
+      title: "Last run failed",
+      description: feedback.message,
+      chips: ["Fix issue", "Run again"],
+      nextStep: "Fix the issue, then run the system check again.",
+    };
+  }
+
+  return null;
+}
+
 function buildSavingRow(result: HealthDashboardResult): TrustRow {
   const authCheck = findCheck(result.checks, "auth session");
   const captureCheck = findCheck(result.checks, "capture persistence");
@@ -364,15 +415,22 @@ export default function HealthPage() {
           buildCalendarRow(state.result),
         ]
       : [];
+  const repairQueueCount = attentionChecks.length;
+  const runFeedback = healthRunFeedback(
+    state,
+    feedback,
+    state.status === "ready" ? state.result.checkedAt : null,
+  );
 
   const isRunDisabled = state.status === "loading";
 
   return (
     <div className="flex flex-col gap-6">
       <WorkflowPageHeader
-        eyebrow="Health"
-        title="Trust before diagnostics"
-        description="Answer the reliability question first. Diagnostics stay lower on the page and AI does not decide this screen."
+        className="workflow-page-header--health"
+        eyebrow="Trust and repair"
+        title="Health"
+        description="Use this like a trust-and-repair desk. Start with the answer, then fix only what blocks today&apos;s work."
         actions={
           <div className="workflow-action-tray flex flex-wrap items-center gap-3">
             <Button
@@ -382,20 +440,39 @@ export default function HealthPage() {
             >
               Run system check
             </Button>
-            <p
-              className="text-xs text-muted-foreground"
-              role="status"
-              aria-live="polite"
-            >
-              {isRunDisabled
-                ? "Run in progress. Please wait."
-                : feedback.status === "success" || feedback.status === "error"
-                  ? feedback.message
-                  : "Run a system check to refresh status."}
-            </p>
           </div>
         }
       />
+
+      {runFeedback ? (
+        <Alert
+          variant={runFeedback.variant}
+          role={runFeedback.variant === "destructive" ? "alert" : "status"}
+          aria-live="polite"
+          className={
+            runFeedback.variant === "success"
+              ? "workflow-celebration-alert text-foreground"
+              : undefined
+          }
+        >
+          <AlertTitle
+            className={
+              runFeedback.variant === "success" ? "text-primary" : undefined
+            }
+          >
+            {runFeedback.title}
+          </AlertTitle>
+          <AlertDescription>{runFeedback.description}</AlertDescription>
+          <div className="workflow-celebration-meta">
+            {runFeedback.chips.map((chip) => (
+              <span key={chip} className="workflow-celebration-chip">
+                {chip}
+              </span>
+            ))}
+          </div>
+          <p className="text-sm font-medium">{runFeedback.nextStep}</p>
+        </Alert>
+      ) : null}
 
       {state.status === "loading" ? (
         <WorkflowLoadingState
@@ -404,21 +481,14 @@ export default function HealthPage() {
         />
       ) : null}
 
-      {state.status === "error" ? (
-        <Alert variant="destructive">
-          <AlertTitle>Health checks could not load</AlertTitle>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      ) : null}
-
       {state.status === "ready" ? (
         <>
           <Card
             data-testid="health-reliability-card"
-            className="workflow-primary-card workflow-flagship-card"
+            className="workflow-primary-card workflow-flagship-card health-flagship-card"
           >
             <CardHeader>
-              <p className="workflow-surface-kicker">Reliability first</p>
+              <p className="workflow-surface-kicker">Trust answer first</p>
               <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
                 Can I rely on LifeOS today?
               </CardTitle>
@@ -439,14 +509,13 @@ export default function HealthPage() {
 
           <Card
             data-testid="health-trust-summary-card"
-            className="workflow-secondary-card workflow-support-card"
+            className="workflow-secondary-card workflow-support-card health-trust-map-card"
           >
             <CardHeader>
-              <CardTitle className="text-lg">
-                Today&apos;s trust summary
-              </CardTitle>
+              <CardTitle className="text-lg">Trust map</CardTitle>
               <CardDescription>
-                Checked at {state.result.checkedAt}
+                Checked at {state.result.checkedAt}. Read what is saved, what
+                is local-only, and what still needs setup.
               </CardDescription>
             </CardHeader>
             <CardContent className="workflow-metric-grid">
@@ -467,22 +536,16 @@ export default function HealthPage() {
 
           <Card
             data-testid="health-attention-card"
-            className={
-              attentionChecks.length > 0
-                ? "workflow-secondary-card workflow-support-card"
-                : "workflow-secondary-card workflow-support-card"
-            }
+            className="workflow-secondary-card workflow-support-card health-repair-card"
           >
             <CardHeader>
               <CardTitle className="text-xl">
-                {attentionChecks.length > 0
-                  ? "What needs attention now"
-                  : "No active warnings"}
+                {attentionChecks.length > 0 ? "Repair queue" : "Repair queue is clear"}
               </CardTitle>
               <CardDescription>
                 {attentionChecks.length > 0
-                  ? "Resolve these first before relying on the affected part of the app."
-                  : "Core workflow looks usable right now. Open diagnostics only if you need subsystem detail."}
+                  ? `Fix these ${repairQueueCount} blocking or setup item${repairQueueCount === 1 ? "" : "s"} before relying on the affected part of the app.`
+                  : "Nothing is blocking the core workflow right now. Open diagnostics only if you need subsystem detail."}
               </CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
@@ -491,7 +554,7 @@ export default function HealthPage() {
                   {attentionChecks.map((check) => (
                     <li
                       key={`${check.id}-attention`}
-                      className="workflow-action-tray"
+                      className="area-accent-panel health-repair-item rounded-xl border p-3"
                     >
                       <span className="font-medium text-foreground">
                         {displaySubsystem(check.subsystem)}:
@@ -501,7 +564,7 @@ export default function HealthPage() {
                   ))}
                 </ul>
               ) : (
-                <p>Core workflow looks usable today.</p>
+                <p>Nothing is blocking today&apos;s core workflow.</p>
               )}
             </CardContent>
           </Card>

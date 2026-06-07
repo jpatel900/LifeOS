@@ -79,7 +79,7 @@ describe("HealthPage", () => {
     expect(
       screen.getByRole("button", { name: "Run system check" }),
     ).toBeDefined();
-    expect(await screen.findByText("No active warnings")).toBeDefined();
+    expect(await screen.findByText("Repair queue is clear")).toBeDefined();
     expect(
       screen.queryByText("No blocking issues right now"),
     ).not.toBeInTheDocument();
@@ -113,7 +113,7 @@ describe("HealthPage", () => {
 
     render(<HealthPage />);
 
-    expect(await screen.findByText("What needs attention now")).toBeDefined();
+    expect(await screen.findByText("Repair queue")).toBeDefined();
     expect(screen.getByRole("listitem")).toHaveTextContent(
       "auth session: Supabase auth is unavailable in the current client.",
     );
@@ -147,7 +147,7 @@ describe("HealthPage", () => {
 
     const runButton = screen.getByRole("button", { name: "Run system check" });
     expect(runButton).toBeDisabled();
-    expect(screen.getByText("Run in progress. Please wait.")).toBeDefined();
+    expect(screen.getByText("Running system check")).toBeDefined();
 
     if (!resolveDashboard) {
       throw new Error("resolveDashboard was not set.");
@@ -255,12 +255,15 @@ describe("HealthPage", () => {
 
     expect(await screen.findByTestId("health-reliability-card")).toHaveClass(
       "workflow-flagship-card",
+      "health-flagship-card",
     );
     expect(screen.getByTestId("health-trust-summary-card")).toHaveClass(
       "workflow-support-card",
+      "health-trust-map-card",
     );
     expect(screen.getByTestId("health-attention-card")).toHaveClass(
       "workflow-support-card",
+      "health-repair-card",
     );
   });
 });

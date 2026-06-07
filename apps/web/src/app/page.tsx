@@ -217,6 +217,20 @@ function splitPreviewItems<T>(items: T[], visibleCount = 2) {
   };
 }
 
+function homeSupportCardClassName(
+  emphasis: "featured" | "overflow" = "overflow",
+) {
+  return [
+    "workflow-secondary-card",
+    "workflow-support-card",
+    "shadow-none",
+    "home-support-card",
+    emphasis === "featured"
+      ? "home-featured-support-card"
+      : "home-overflow-support-card",
+  ].join(" ");
+}
+
 export default function HomePage() {
   const { state, selectedAreaId } = useWorkflow();
   const [homeData, setHomeData] = useState<HomeDataState>({
@@ -420,7 +434,10 @@ export default function HomePage() {
   const overflowSecondaryCardOrder = focusOrderedSecondaryCardOrder.slice(1);
   const overflowSummaryLabel = "More context";
 
-  function renderHomeSupportCard(cardKey: HomeCardKey) {
+  function renderHomeSupportCard(
+    cardKey: HomeCardKey,
+    emphasis: "featured" | "overflow" = "overflow",
+  ) {
     if (cardKey === "needsDecision") {
       const { visible, overflow } = splitPreviewItems(
         cockpit.needsDecision.items,
@@ -428,7 +445,8 @@ export default function HomePage() {
       return (
         <Card
           key={cardKey}
-          className="workflow-secondary-card workflow-support-card shadow-none"
+          data-testid="home-needs-decision-card"
+          className={homeSupportCardClassName(emphasis)}
         >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
@@ -483,7 +501,8 @@ export default function HomePage() {
       return (
         <Card
           key={cardKey}
-          className="workflow-secondary-card workflow-support-card shadow-none"
+          data-testid="home-unplanned-card"
+          className={homeSupportCardClassName(emphasis)}
         >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
@@ -540,7 +559,8 @@ export default function HomePage() {
       return (
         <Card
           key={cardKey}
-          className="workflow-secondary-card workflow-support-card shadow-none"
+          data-testid="home-today-blocks-card"
+          className={homeSupportCardClassName(emphasis)}
         >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
@@ -622,7 +642,8 @@ export default function HomePage() {
       return (
         <Card
           key={cardKey}
-          className="workflow-secondary-card workflow-support-card shadow-none"
+          data-testid="home-recovery-card"
+          className={homeSupportCardClassName(emphasis)}
         >
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 text-lg">
@@ -716,7 +737,7 @@ export default function HomePage() {
           data-next-kind={cockpit.next.kind}
           data-accent-strength="subtle"
           style={selectedAreaStyle}
-          className="area-accent-card workflow-primary-card workflow-flagship-card border-primary/40 shadow-sm"
+          className="area-accent-card home-cockpit-flagship-card workflow-primary-card workflow-flagship-card border-primary/40 shadow-sm"
         >
           <CardHeader className="gap-4 pb-2 sm:pb-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -782,7 +803,10 @@ export default function HomePage() {
         </Card>
 
         {showNowPrimaryCard ? (
-          <Card className="workflow-secondary-card workflow-support-card border-border/70 bg-background/70 shadow-none">
+          <Card
+            data-testid="home-now-card"
+            className="home-now-card workflow-secondary-card workflow-support-card border-border/70 bg-background/70 shadow-none"
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">Now</CardTitle>
               <CardDescription>What is already in motion.</CardDescription>
@@ -811,19 +835,19 @@ export default function HomePage() {
 
       <section className="mx-auto grid w-full max-w-5xl gap-4 md:grid-cols-2 xl:grid-cols-3">
         {featuredSecondaryCardOrder.map((cardKey) =>
-          renderHomeSupportCard(cardKey),
+          renderHomeSupportCard(cardKey, "featured"),
         )}
       </section>
 
       {overflowSecondaryCardOrder.length > 0 ? (
         <DiagnosticsDisclosure
           title={overflowSummaryLabel}
-          className="mx-auto w-full max-w-5xl"
+          className="home-overflow-disclosure mx-auto w-full max-w-5xl"
           contentClassName="mt-4"
         >
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {overflowSecondaryCardOrder.map((cardKey) =>
-              renderHomeSupportCard(cardKey),
+              renderHomeSupportCard(cardKey, "overflow"),
             )}
           </div>
         </DiagnosticsDisclosure>

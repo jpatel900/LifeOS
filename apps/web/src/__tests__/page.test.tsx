@@ -65,6 +65,7 @@ describe("HomePage Today cockpit", () => {
     );
     expect(screen.getByTestId("today-next-card")).toHaveClass(
       "workflow-flagship-card",
+      "home-cockpit-flagship-card",
     );
     expect(
       screen.queryByRole("heading", { name: "System trust/status" }),
@@ -162,6 +163,9 @@ describe("HomePage Today cockpit", () => {
     expect(
       screen.getByRole("heading", { name: /Needs decision/i }),
     ).toBeDefined();
+    expect(screen.getByTestId("home-needs-decision-card")).toHaveClass(
+      "home-featured-support-card",
+    );
   });
 
   it("shows degraded account-data state without crashing", async () => {

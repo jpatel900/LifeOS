@@ -195,10 +195,12 @@ describe("Execute Focus polish", () => {
     const missionCard = screen.getByTestId("execute-current-mission-card");
     const sideThoughtCard = screen.getByTestId("execute-side-thought-card");
     expect(missionCard).toHaveClass("workflow-flagship-card");
+    expect(missionCard).toHaveClass("execute-mission-card");
     expect(stateCard).toHaveAttribute("data-focus-state", "not_started");
+    expect(stateCard).toHaveClass("execute-state-card");
     expect(within(missionCard).getByText("Ready to focus")).toBeDefined();
     expect(within(stateCard).getByText("Current area: Main Job")).toBeDefined();
-    expect(within(sideThoughtCard).getByText("Protect focus")).toBeDefined();
+    expect(within(sideThoughtCard).getByText("Protect the mission")).toBeDefined();
     expect(
       within(sideThoughtCard).getByRole("link", {
         name: "Capture a side thought",

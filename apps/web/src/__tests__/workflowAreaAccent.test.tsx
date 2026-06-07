@@ -205,6 +205,7 @@ describe("workflow area accent routes", () => {
     );
     expect(screen.getByTestId("today-next-card")).toHaveClass(
       "workflow-primary-card",
+      "home-cockpit-flagship-card",
     );
     expect(screen.getByText("Current area: Main Job")).toBeDefined();
   });
@@ -301,6 +302,7 @@ describe("workflow area accent routes", () => {
     );
     expect(screen.getByTestId("execute-current-mission-card")).toHaveClass(
       "workflow-primary-card",
+      "execute-mission-card",
     );
     expect(screen.getAllByText(/Current area: Main Job/)[0]).toBeDefined();
   });
@@ -315,18 +317,23 @@ describe("workflow area accent routes", () => {
     );
     expect(screen.getByTestId("review-next-decision-card")).toHaveClass(
       "workflow-flagship-card",
+      "review-closure-card",
     );
     expect(screen.getByTestId("review-close-loop-card")).toHaveClass(
       "workflow-support-card",
+      "review-carry-forward-actions-card",
     );
     expect(screen.getByTestId("review-today-at-a-glance-card")).toHaveClass(
       "workflow-support-card",
+      "review-board-card",
     );
     expect(screen.getByTestId("review-reflections-card")).toHaveClass(
       "workflow-admin-card",
+      "review-reflections-card-frame",
     );
     expect(screen.getByTestId("review-history-card")).toHaveClass(
       "workflow-admin-card",
+      "review-history-card-frame",
     );
     expect(screen.getByTestId("review-carry-forward-card")).toBeDefined();
   });
@@ -344,9 +351,11 @@ describe("workflow area accent routes", () => {
     );
     expect(screen.getByTestId("areas-header-summary-card")).toHaveClass(
       "workflow-support-card",
+      "areas-ownership-summary-card",
     );
     expect(screen.getByTestId("areas-area-card")).toHaveClass(
       "workflow-support-card",
+      "areas-record-card",
     );
     expect(screen.getByTestId("areas-local-reset-card")).toHaveClass(
       "workflow-admin-card",

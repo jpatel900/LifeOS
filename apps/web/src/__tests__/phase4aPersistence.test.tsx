@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area, CaptureItem } from "@lifeos/schemas";
 import CalendarPage from "../app/calendar/page";
@@ -274,7 +274,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<AreasSettingsPage />);
 
-    expect(await screen.findByText("Main Job")).toBeDefined();
+    expect((await screen.findAllByText("Main Job")).length).toBeGreaterThan(0);
     expect(screen.getByText("Save mode:")).toBeDefined();
     expect(screen.getByText("supabase")).toBeDefined();
     expect(screen.queryByText("Slug: main-job")).toBeNull();
@@ -367,7 +367,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       description: "Longer focus sessions.",
     });
     expect(await screen.findByText("Area created.")).toBeDefined();
-    expect(screen.getByText("Deep Work")).toBeDefined();
+    expect(screen.getAllByText("Deep Work").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: /Use this area|Using this area/ }),
     ).toBeDefined();
@@ -413,7 +413,11 @@ describe("Phase 4A Supabase persistence UI", () => {
       );
     });
     expect(areaCard).toHaveStyle({ "--area-accent": "#0f766e" });
-    expect(await screen.findByText("Accent updated.")).toBeDefined();
+    expect(
+      await within(screen.getByTestId("areas-color-panel")).findByText(
+        "Accent updated.",
+      ),
+    ).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "Default" }));
 
@@ -509,6 +513,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Local browser data reset.");
+    expect(status).toHaveTextContent("Cloud data stays untouched.");
   });
 
   it("saves capture_items through Supabase from the capture page", async () => {
@@ -1395,7 +1400,12 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(status).toHaveTextContent(
       "Session marked completed and saved to your account. Move to Review next or plan another block.",
     );
-    expect(screen.getByRole("link", { name: "Open Review" })).toBeDefined();
+    expect(
+      within(status).getByRole("link", { name: "Open Review" }),
+    ).toBeDefined();
+    expect(
+      within(status).getByRole("link", { name: "Plan next block" }),
+    ).toBeDefined();
   });
 
   it("keeps persisted stop as guidance instead of a fake disabled control", async () => {
@@ -1441,7 +1451,9 @@ describe("Phase 4A Supabase persistence UI", () => {
       screen.queryByRole("button", { name: "Stop on this device" }),
     ).toBeNull();
     expect(
-      screen.getByText("Start when you are ready to focus on this one task."),
+      screen.getByText(
+        "Start when you are ready to work this mission and nothing else.",
+      ),
     ).toBeDefined();
   });
 
@@ -1624,6 +1636,7 @@ describe("Phase 4A Supabase persistence UI", () => {
       "Review entry saved to your account. Stay here to finish closing the loop, or move to Planning for the next block.",
     );
     expect(screen.getByRole("link", { name: "Open Planning" })).toBeDefined();
+    expect(screen.getByRole("link", { name: "Capture follow-up" })).toBeDefined();
     expect(screen.getByText("Move forward")).toBeDefined();
     expect(screen.getByText("Keep the dentist follow-up active.")).toBeDefined();
   });
@@ -1651,7 +1664,7 @@ describe("Phase 4A Supabase persistence UI", () => {
     expect(screen.getAllByText("Open tasks: 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Sessions recorded: 1")).toBeDefined();
     expect(screen.getByText("Reviewed")).toBeDefined();
-    expect(screen.getByText("Today at a glance")).toBeDefined();
+    expect(screen.getByText("Carry-forward board")).toBeDefined();
     expect(screen.getByText("Past reviews and notes")).toBeDefined();
     expect(screen.getByText("Open saved review details")).toBeDefined();
     expect(screen.getByText(/daily review for/i)).toBeDefined();

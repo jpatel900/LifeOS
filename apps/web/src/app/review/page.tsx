@@ -64,6 +64,14 @@ type ActionState =
   | { status: "saved"; provider: DataProvider }
   | { status: "error"; message: string };
 
+function reviewPendingFeedback() {
+  return {
+    title: "Saving daily review",
+    description:
+      "LifeOS is storing this review entry before anything changes in the history below.",
+  };
+}
+
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -369,25 +377,56 @@ export default function ReviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <WorkflowPageHeader
-        eyebrow="Close the loop"
+        className="workflow-page-header--review"
+        spotlightClassName="workflow-page-spotlight--review"
+        eyebrow="Closure and carry-forward"
         title="Review"
-        description="Decide what moves forward, what needs a new time, and what can stop."
+        description="Decide what still deserves time, what needs a reset, and what can stop cleanly."
         spotlight={
           reviewState.status === "ready" ? (
             <Card
               data-testid="review-next-decision-card"
-              className="workflow-primary-card workflow-flagship-card"
+              className="review-closure-card workflow-primary-card workflow-flagship-card"
             >
               <CardHeader className="pb-4">
-                <p className="workflow-surface-kicker">Closure-first</p>
+                <p className="workflow-surface-kicker">Carry-forward desk</p>
                 <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
-                  Daily closure
+                  Close today cleanly
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 text-sm text-muted-foreground">
                 <p className="workflow-surface-body max-w-2xl">
-                  Close the day without reopening the whole thing.
+                  Decide what deserves another block and what can stop here.
                 </p>
+                <div className="review-closure-metric-grid">
+                  <div className="review-closure-metric">
+                    <p className="workflow-section-kicker">Carry forward</p>
+                    <p className="review-closure-metric-value">
+                      {openTasks.length}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Still active after today.
+                    </p>
+                  </div>
+                  <div className="review-closure-metric">
+                    <p className="workflow-section-kicker">Needs recovery</p>
+                    <p className="review-closure-metric-value">
+                      {missed.length + distracted.length + stuck.length}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Missed, stuck, or distracted.
+                    </p>
+                  </div>
+                  <div className="review-closure-metric">
+                    <p className="workflow-section-kicker">Completed</p>
+                    <p className="review-closure-metric-value">
+                      {completed.length}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Closed cleanly today.
+                    </p>
+                  </div>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
@@ -398,8 +437,8 @@ export default function ReviewPage() {
                   </Button>
                   <p className="text-sm text-muted-foreground">
                     {reviewEntries.length === 0
-                      ? "Start one daily review."
-                      : "Save the day once you know what carries forward."}
+                      ? "Start one daily closure pass."
+                      : "Save once the carry-forward list feels honest."}
                   </p>
                 </div>
               </CardContent>
@@ -424,12 +463,12 @@ export default function ReviewPage() {
       {reviewState.status === "ready" ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <DiagnosticsDisclosure
-            title="Reflection notes"
+            title="Carry-forward notes"
             contentClassName="mt-4 space-y-0"
           >
             <Card
               data-testid="review-reflections-card"
-              className="workflow-admin-card"
+              className="review-reflections-card-frame workflow-admin-card"
             >
               <CardHeader className="pb-3">
                 <CardDescription>
@@ -501,21 +540,21 @@ export default function ReviewPage() {
 
           <Card
             data-testid="review-close-loop-card"
-            className="workflow-secondary-card workflow-support-card workflow-quiet-card"
+            className="review-carry-forward-actions-card workflow-secondary-card workflow-support-card workflow-quiet-card"
           >
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Close the loop</CardTitle>
+              <CardTitle className="text-base">Carry-forward actions</CardTitle>
               <CardDescription>
-                Pick the next action on purpose.
+                Route the residue on purpose.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
               <div className="grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
                 <p className="workflow-action-tray">
-                  Keep it moving in Planning if it still matters.
+                  Move it into Planning only if it still deserves time.
                 </p>
                 <p className="workflow-action-tray">
-                  Capture a follow-up, carry it forward, or stop on purpose.
+                  Capture residue, re-time the work, or stop it cleanly.
                 </p>
               </div>
               <div className="workflow-action-tray grid gap-3">
@@ -553,7 +592,7 @@ export default function ReviewPage() {
         />
       ) : null}
 
-      <DiagnosticsDisclosure title="Review details">
+      <DiagnosticsDisclosure title="Review record">
         {reviewState.status === "ready" ? (
           <>
             <p>Review entries are {savedViaLabel(reviewState.provider)}.</p>
@@ -575,18 +614,35 @@ export default function ReviewPage() {
       ) : null}
 
       {actionState.status === "saving" ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Creating daily review...
-        </p>
+        <Alert role="status" className="workflow-celebration-alert text-foreground">
+          <AlertTitle className="text-primary">
+            {reviewPendingFeedback().title}
+          </AlertTitle>
+          <AlertDescription>
+            {reviewPendingFeedback().description}
+          </AlertDescription>
+          <div className="workflow-celebration-meta">
+            <span className="workflow-celebration-chip">Review in progress</span>
+            <span className="workflow-celebration-chip">Daily review</span>
+          </div>
+        </Alert>
       ) : null}
 
       {actionState.status === "saved" ? (
-        <Alert role="status" className="border-border bg-muted text-foreground">
+        <Alert role="status" className="workflow-celebration-alert text-foreground">
           <AlertTitle className="text-primary">Daily review saved</AlertTitle>
           <AlertDescription>
             Review entry {savedViaLabel(actionState.provider)}. Stay here to
             finish closing the loop, or move to Planning for the next block.
           </AlertDescription>
+          <div className="workflow-celebration-meta">
+            <span className="workflow-celebration-chip">
+              {savedViaLabel(actionState.provider)}
+            </span>
+            <span className="workflow-celebration-chip">
+              Close the loop
+            </span>
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button asChild size="sm" variant="outline">
               <Link href="/calendar">Open Planning</Link>
@@ -602,6 +658,9 @@ export default function ReviewPage() {
         <Alert variant="destructive">
           <AlertTitle>Review entry was not saved</AlertTitle>
           <AlertDescription>{actionState.message}</AlertDescription>
+          <p className="text-sm font-medium text-destructive">
+            Reflection notes are still here. Retry the save before moving on.
+          </p>
         </Alert>
       ) : null}
 
@@ -609,15 +668,15 @@ export default function ReviewPage() {
         data-testid="review-today-at-a-glance-card"
         data-accent-strength="subtle"
         style={selectedAreaStyle}
-        className="area-accent-card workflow-secondary-card workflow-support-card workflow-quiet-card"
+        className="area-accent-card review-board-card workflow-secondary-card workflow-support-card workflow-quiet-card"
       >
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
-              <CardTitle className="text-base">Today at a glance</CardTitle>
+              <CardTitle className="text-base">Carry-forward board</CardTitle>
               <CardDescription>
-                Group the day into captured, planned, finished, interrupted, and
-                still open.
+                Read the day as residue, finished work, recovery, and work that
+                still deserves time.
               </CardDescription>
             </div>
             {selectedArea ? (
@@ -684,11 +743,11 @@ export default function ReviewPage() {
       </Card>
 
       <DiagnosticsDisclosure
-        title="Review details and history"
+        title="Saved review details and history"
         contentClassName="mt-4 space-y-4"
       >
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-          <Card className="workflow-secondary-card workflow-support-card">
+          <Card className="review-counts-card workflow-secondary-card workflow-support-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Counts</CardTitle>
             </CardHeader>
@@ -749,7 +808,7 @@ export default function ReviewPage() {
             </CardContent>
           </Card>
 
-          <Card className="workflow-secondary-card workflow-support-card">
+          <Card className="review-area-backlog-card workflow-secondary-card workflow-support-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
                 Area backlog this week
@@ -836,7 +895,7 @@ export default function ReviewPage() {
         </div>
         <Card
           data-testid="review-history-card"
-          className="mt-4 workflow-admin-card"
+          className="review-history-card-frame mt-4 workflow-admin-card"
         >
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Past reviews and notes</CardTitle>
