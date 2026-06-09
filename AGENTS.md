@@ -144,6 +144,7 @@ For medium/high-risk or non-obvious governance, workflow, or phase work, add an 
 - Do not read all docs by default.
 - Do not paste full logs or full files into handoffs unless necessary.
 - `docs/agent/CONTEXT_INDEX.md` and `docs/agent/REPO_MAP.json` are orientation aids, not authority documents.
+- For UI/UX planning, `docs/UI_UX_WORLD_CLASS_ROADMAP.md` is the single active plan. Amend or explicitly retire it before creating any new competing UI/UX plan document.
 - Existing validation, security, RLS, schema, and calendar approval rules still apply.
 
 ## 7. Schema and AI Rules

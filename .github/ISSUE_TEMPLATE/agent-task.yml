@@ -78,7 +78,7 @@ body:
     id: acceptance_criteria
     attributes:
       label: Acceptance criteria
-      description: Write concrete checks. If the criteria are missing or fuzzy, the task is not ready. For docs tasks, include the exact doc target and the exact wording or ordering to add or change.
+      description: Write concrete checks. If the criteria are missing or fuzzy, the task is not ready. For docs tasks, include the exact doc target and the exact wording or ordering to add or change. For route-level UI work, include required proof and unchanged-boundary checks too.
       placeholder: |
         - Only the targeted UI copy changes.
         - The approval gate wording is explicit and truthful.
@@ -161,6 +161,20 @@ body:
       render: shell
     validations:
       required: true
+  - type: textarea
+    id: ui_proof_requirements
+    attributes:
+      label: UI proof requirements
+      description: Required for route-level UI, shell, capture, home, planning, execute, review, health, areas, or visual work. State the required mobile proof, desktop proof, tests run, what should become simpler, and what must stay intentionally unchanged. For non-UI tasks, say `Not required` and why.
+      placeholder: |
+        - Mobile proof: `390px` first viewport on `/capture` after the change
+        - Desktop proof: `/capture` at rest after the change
+        - Tests run: `pnpm --filter @lifeos/web test -- src/__tests__/capture.test.tsx src/__tests__/routeSmoke.test.tsx`
+        - Browser/manual proof: `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts`
+        - What became simpler: textarea and `Save thought` appear before metrics and support content
+        - Intentionally unchanged: raw-save-first safety, local fallback truth, parser contract, and external-write behavior
+    validations:
+      required: true
   - type: markdown
     attributes:
       value: |
@@ -174,7 +188,11 @@ body:
           - `pnpm type-check`
           - `pnpm test`
           - `pnpm build`
+          - mobile screenshot proof when first-scan, shell, or hierarchy behavior changes
+          - desktop screenshot proof for the same changed route
           - Playwright or equivalent browser/manual proof when user-facing behavior changes
+          - a short note on what became simpler
+          - a short note on what stayed intentionally unchanged
           - for T2 cross-flow or behavior-clarity work, include a scenario pack or explain why it is not required
         - `parser`
           - focused schema/parser tests where available
@@ -219,6 +237,6 @@ body:
     id: notes_context
     attributes:
       label: Notes/context
-      description: Extra constraints, exact routes, screenshots, linked issues, or known pitfalls.
+      description: Extra constraints, exact routes, screenshots, linked issues, states to capture, or known pitfalls.
       placeholder: >
         Mention exact files, routes, tests, or phrases that must stay unchanged. For docs tasks, include the exact target file and the exact order or wording expected if the title alone is not enough.

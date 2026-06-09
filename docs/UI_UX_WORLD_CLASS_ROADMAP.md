@@ -1,15 +1,43 @@
 # UI/UX World-Class Roadmap
 
+Status: Active UI/UX roadmap and proof-routing spine for Pass 7 and later UX work
+Purpose: Define the live UX program state, ordered passes, proof routing, and long-lived UX direction
+Read when: Starting, implementing, reviewing, or auditing UI/UX work
+Do not use for: Shipped product truth or runtime proof by itself
+Superseded by: n/a
+
 This file is the canonical long-lived UX program for LifeOS.
 
 - `docs/PROJECT_STATE.md` is shipped truth and current status.
 - This roadmap is future intent, active UX program state, and proof routing.
 - `docs/implementation-notes/*.md` are historical proof.
 - If this roadmap disagrees with runtime, tests, or `PROJECT_STATE`, runtime/tests/`PROJECT_STATE` win.
+- Current active program state is Pass 7. Passes 0 through 6 below remain shipped history and guardrails, not the next execution queue.
 - Every UX pass must update all three surfaces:
   - roadmap status row
   - `PROJECT_STATE` summary bullet
   - dated implementation note
+
+## Pass 7 reopen note
+
+Passes 0 through 6 shipped real UX gains, but the program is not maintenance-only.
+
+Pass 7 reopens the roadmap for active work on:
+
+- first-scan clarity
+- diagnostic staging
+- route restraint
+- mobile-first hierarchy
+- proof-based final audit before closeout
+
+Earlier outcomes can stay marked `done` without implying the UI is finished. Pass 7 exists because clarity, diagnostics staging, and final proof still need active work across docs, tests, shell, and route surfaces.
+
+## Duplicate-plan guardrail
+
+- If the work is still live, amend this roadmap instead of creating a second active UI/UX plan.
+- If a plan is no longer live, retire or archive it explicitly before opening a replacement.
+- Use `docs/implementation-notes/*.md` for dated proof and bounded completion notes, not for a second active queue.
+- Temporary control-plane supplements must link back here and must not present themselves as the active roadmap.
 
 ## Fresh-run protocol
 
@@ -61,11 +89,11 @@ The five target outcomes are:
 
 | Outcome                              | Status    | Current evidence                                                                                                                                                                   | Current gap                                                                                                                                                        |
 | ------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Stronger visual authorship and craft | `done`    | Shared shell polish, premium-feel passes, and the explicit flagship/support/admin taxonomy now cover shell and all eight primary routes.                                           | Future visual work should stay inside this authored system. The larger remaining gaps are now copy density, shell burden, interaction cadence, and route identity. |
-| Less explanation-by-default          | `done`    | June 3-6 declutter passes removed duplicate empty-state guidance and tightened copy budgets across Capture, Planning, Triage, Review, and Areas without changing truth boundaries. | Further improvement now comes more from shell compression, interaction cadence, and route identity than from more blanket helper-copy trimming.                    |
-| Calmer, more effortless shell        | `done`    | The shell is materially calmer, Home no longer carries shell mutation, and Capture/Planning/Execute/Review now suppress the extra shell-context band so route-local action wins faster. | Future UX work should treat shell quieting as maintenance. The larger remaining gains now come from interaction cadence and stronger route identity, not more blanket chrome reduction. |
-| Sharper interaction feel and closure | `done`    | Authored action-near feedback now exists across Capture, Triage, Planning, Execute, Review, Health, and Areas, and the primary workflow routes now share one tighter cadence system instead of mixing old flat status lines with newer authored alerts. | Future interaction work should be maintenance-oriented unless a real route-level exception or ambiguity returns.                                                     |
-| More memorable route identity        | `done`    | Home, Execute, Triage, Capture, Planning, Review, Health, and Areas now have route-specific editorial framing strong enough that the product reads as composed rather than templated. | Future route-identity work should be maintenance-oriented unless a new route starts blurring back into the shared template.                                        |
+| Stronger visual authorship and craft | `done`    | Shared shell polish, premium-feel passes, and the explicit flagship/support/admin taxonomy now cover shell and all eight primary routes.                                           | Pass 7 should protect this authored system while reducing clutter, staging diagnostics later, and avoiding broad restyling churn.                                  |
+| Less explanation-by-default          | `done`    | June 3-6 declutter passes removed duplicate empty-state guidance and tightened copy budgets across Capture, Planning, Triage, Review, and Areas without changing truth boundaries. | Pass 7 now focuses on first-scan clarity and diagnostic staging, not another generic helper-copy trimming spree.                                                    |
+| Calmer, more effortless shell        | `done`    | The shell is materially calmer, Home no longer carries shell mutation, and Capture/Planning/Execute/Review now suppress the extra shell-context band so route-local action wins faster. | Pass 7 must verify shell restraint under mobile first-viewport pressure and keep route-local action dominant.                                                       |
+| Sharper interaction feel and closure | `done`    | Authored action-near feedback now exists across Capture, Triage, Planning, Execute, Review, Health, and Areas, and the primary workflow routes now share one tighter cadence system instead of mixing old flat status lines with newer authored alerts. | Pass 7 must now tighten degraded-state language, diagnostics-before-action sequencing, and proof rather than reopen broad interaction styling.                      |
+| More memorable route identity        | `done`    | Home, Execute, Triage, Capture, Planning, Review, Health, and Areas now have route-specific editorial framing strong enough that the product reads as composed rather than templated. | Pass 7 must preserve route identity while simplifying support surfaces and moving heavier diagnostics into the right home.                                          |
 
 ## Route scorecard
 
@@ -73,14 +101,14 @@ Use this as a review checklist, not as permission to skip browser proof. Counts 
 
 | Route    | Editorial identity        | Primary CTA count at rest | Disclosure count at rest | Read-only or mutating | 390px first-screen scan | Closure feedback explicit | Distinct identity now | Main remaining gap                                                                                                                                            |
 | -------- | ------------------------- | ------------------------- | ------------------------ | --------------------- | ----------------------- | ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | Instrument panel          | `1`                       | `3`                      | `read-only`           | `acceptable`            | `n/a`                     | `strong`              | Maintenance only: protect the authored flagship/support split so overflow cards stay intentionally quiet instead of drifting back into equal weight.          |
-| Capture  | Raw-first intake          | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The copy budget is now materially tighter; the larger remaining gains are later-pass interaction cadence and route distinctiveness, not more helper trimming. |
-| Triage   | One decision at a time    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The copy budget is now materially tighter; the larger remaining gains are later-pass interaction cadence and route distinctiveness, not more helper trimming. |
-| Planning | Local-first scheduling    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The copy budget is now materially tighter; the larger remaining gains are later-pass interaction cadence and route distinctiveness, not more helper trimming. |
-| Execute  | Mission room              | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The route identity is now clearer; future work should protect the one-mission frame instead of reopening shell or status noise.                                |
-| Review   | Carry-forward desk        | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The route identity is now clearer; future work should protect the carry-forward framing instead of re-expanding generic summary noise.                         |
-| Health   | Trust-and-repair desk     | `1`                       | `1`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The route identity is now clearer; future work should protect that trust-first framing instead of reopening diagnostics-heavy noise.                               |
-| Areas    | Quiet ownership registry  | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | The route now reads more like authored ownership admin; the next identity gains belong more on flagship workflow routes than here.                                |
+| Home     | Instrument panel          | `1`                       | `3`                      | `read-only`           | `acceptable`            | `n/a`                     | `strong`              | Pass 7 must keep Home as a launchpad, calm degraded states down, and reduce support clutter without breaking read-only truth.                                   |
+| Capture  | Raw-first intake          | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep raw input and the primary save action dominant while pushing metrics, history, and diagnostics later.                                          |
+| Triage   | One decision at a time    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep one current decision visually primary and demote support context, system detail, and queue noise further.                                      |
+| Planning | Local-first scheduling    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must separate local planning flow, external approval staging, and deeper diagnostics more cleanly.                                                       |
+| Execute  | Mission room              | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep one mission, one visible state, and one next move dominant while staging support detail later.                                                 |
+| Review   | Carry-forward desk        | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep carry-forward decisions ahead of metrics, historical detail, and lower-value support copy.                                                     |
+| Health   | Trust-and-repair desk     | `1`                       | `1`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must make Health the clear diagnostic home so the other workflow routes can stay calmer.                                                                 |
+| Areas    | Quiet ownership registry  | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep Areas clearly secondary and admin-oriented in the overall workflow hierarchy.                                                                   |
 
 ## Ordered pass queue
 
@@ -93,6 +121,7 @@ Use this as a review checklist, not as permission to skip browser proof. Counts 
 | `4. Make the shell feel invisible`               | `done`    | Reduce shell burden so route-local action clearly outranks chrome on every primary screen.                  | 390px shell height drops again, keyboard flow stays intact, and shell surfaces never outrank route-local action on Capture, Planning, Execute, or Review.                                                                        | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, focused shell/browser checks      |
 | `5. Add interaction feel and closure`            | `done`    | Tighten motion, feedback cadence, and action-near confirmation so the app stops feeling merely correct.     | Every primary action has local closure feedback, no action leaves state change ambiguous, and feedback rhythm reads as one system.                                                                                               | Full repo bar plus `interaction-feedback` and focused route tests                              |
 | `6. Give each route a memorable identity`        | `done`    | Make the routes feel like one product without flattening them into one generic template.                    | Screens are distinguishable at a glance, route purpose is legible without reading every label, and the product feels composed rather than templated.                                                                             | Full repo bar plus screenshot/browser review, `workflow-card-accent`, `execute-focus-flagship` |
+| `7. Recover clarity and diagnostic staging`      | `active`  | Reassert one active roadmap, tighten first-scan discipline, stage diagnostics after action, and require proof-based final audit before closeout. | Pass 7 docs, setup, tests, and shared-rule gates finish before route implementation, older plan docs are explicitly historical, the information hierarchy doctrine routes user/safety/diagnostic/developer truth intentionally, UI review expectations require behavior/tests/screenshot proof before completion claims, and final route audit uses the canonical Pass 7 rubric rather than ad hoc review notes.          | `docs/agent/UI_UX_DOC_INVENTORY.md`, `docs/agent/UI_PASS_7_EXECUTION_MAP.md`, `docs/agent/UI_INFORMATION_HIERARCHY_DOCTRINE.md`, `docs/agent/UI_AGENT_GUIDE.md`, `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`, plus later route-proof gates |
 
 ## Pass notes
 
@@ -205,22 +234,25 @@ Add these when area-accent behavior itself changes:
 
 Historical inputs only, not active program state:
 
-- `docs/ux/LIFEOS_V1_UX_UPGRADE_PLAN.md`
-- `docs/ux/LIFEOS_V1_UX_SCORECARD.md`
+- `docs/archive/ui-ux/LIFEOS_V1_UX_UPGRADE_PLAN.md`
+- `docs/archive/ui-ux/LIFEOS_V1_UX_SCORECARD.md`
+- `docs/archive/ui-ux/2026-06-03-lifeos-ui-ux-modernization-design.md`
+- `docs/archive/ui-ux/2026-06-03-lifeos-ui-ux-modernization-implementation.md`
 
 ## Next recommended pass
 
-### No active implementation pass
+### Active implementation pass: 7
 
-The current UX roadmap is complete enough to treat as shipped contract rather than an open redesign stream.
+The current UX roadmap is not maintenance-only anymore. Pass 7 is the active UI/UX program.
 
 What a fresh agent should do next:
 
-- treat the current route identity, shell burden, authored feedback system, and shared primitive layer as maintenance rules
-- only reopen UX implementation when a specific route regression, browser-proof failure, or clearly bounded new requirement appears
-- if a new UX pass is needed later, begin with a fresh route-level audit instead of assuming there is a hidden Pass 6C waiting
+- finish docs hygiene first so the roadmap is unquestionably singular
+- complete the review/setup and tests/shared-rules gates before route implementation
+- treat Passes 0 through 6 as shipped history and maintenance guardrails, not the active queue
+- do not start route work until issues `#147` through `#168` and `#200` through `#202` are complete
 
-Default proof if a future UX regression fix is needed:
+Default proof while Pass 7 is active:
 
 - `pnpm lint`
 - `pnpm type-check`

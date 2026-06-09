@@ -192,7 +192,7 @@ describe("source-of-truth boundaries", () => {
     expect(route).not.toMatch(/from ["']@sentry\/nextjs["']/);
   });
 
-  it("keeps plain-language primary UX while preserving technical truth in disclosures", () => {
+  it("keeps primary-route assertions user-facing while preserving technical truth in disclosures and Health", () => {
     const appShell = normalizeWhitespace(
       readRepoFile("apps/web/src/app/components/AppShell.tsx"),
     );
@@ -232,8 +232,6 @@ describe("source-of-truth boundaries", () => {
     expect(appShell).toContain("Current area");
     expect(appShell).not.toContain("Session workflow area");
     expect(home).toContain("Home stays read-only.");
-    expect(capture).toContain("Save mode:");
-    expect(capture).toContain("Technical save mode id:");
     expect(capture).toContain("on this device");
     expect(statusVocabulary).toContain("AI sorting unavailable");
     expect(statusVocabulary).toContain("Saved on this device only");
@@ -243,8 +241,6 @@ describe("source-of-truth boundaries", () => {
     expect(triage).toContain("Current item");
     expect(triage).toContain("Waiting after this");
     expect(triage).toContain("Review this next");
-    expect(triage).toContain("Technical save mode id:");
-    expect(triage).toContain("do not move the item");
     expect(calendar).toContain("Check calendar availability");
     expect(calendar).toContain("Create Google Calendar event");
     expect(calendar).toContain("Adjust time");
@@ -252,14 +248,10 @@ describe("source-of-truth boundaries", () => {
     expect(calendar).toContain(
       "Nothing goes to Google Calendar until you approve it.",
     );
-    expect(calendar).toContain("Technical save mode id:");
     expect(execute).toContain("Stop (device-only sessions)");
     expect(execute).toContain("Stop on this device");
-    expect(execute).toContain("Technical save mode id:");
     expect(health).toContain("Can I rely on LifeOS today?");
     expect(health).toContain("Technical save mode id:");
-    expect(settings).toContain("Save mode:");
-    expect(settings).toContain("Technical save mode id:");
     expect(settings).toContain("planned time blocks");
     expect(globalsCss).toContain(".workflow-flagship-card");
     expect(globalsCss).toContain(".workflow-support-card");

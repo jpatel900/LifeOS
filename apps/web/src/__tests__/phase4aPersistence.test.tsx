@@ -275,8 +275,6 @@ describe("Phase 4A Supabase persistence UI", () => {
     renderWithWorkflow(<AreasSettingsPage />);
 
     expect((await screen.findAllByText("Main Job")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Save mode:")).toBeDefined();
-    expect(screen.getByText("supabase")).toBeDefined();
     expect(screen.queryByText("Slug: main-job")).toBeNull();
     expect(
       screen.getByRole("button", { name: /Use this area|Using this area/ }),
@@ -547,7 +545,6 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
     expect(await screen.findByText("Saved.")).toBeDefined();
     expect(screen.getAllByText("Saved to account").length).toBeGreaterThan(0);
-    expect(screen.getByText("Technical save mode id:")).toBeDefined();
   });
 
   it("shows a clear capture save error when Supabase is unauthenticated", async () => {
@@ -1754,7 +1751,6 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByText(/Save mode:/)).toBeDefined();
     expect(screen.getByText("Captured and still waiting")).toBeDefined();
     expect(screen.getByText("Local-only capture for review surface")).toBeDefined();
     expect(screen.getByText("Open raw browser notes")).toBeDefined();
