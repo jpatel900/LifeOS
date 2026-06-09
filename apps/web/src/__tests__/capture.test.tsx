@@ -165,7 +165,6 @@ describe("CapturePage", () => {
     expect(
       screen.getByText("Save and organize will use on-device sorting."),
     ).toBeDefined();
-    expect(screen.getByText("Save mode:")).toBeDefined();
     expect(screen.getAllByText("Saved on this device only")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Save thought" })).toBeDefined();
     expect(

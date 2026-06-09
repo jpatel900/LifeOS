@@ -1,5 +1,11 @@
 # UX_FLOWS.md
 
+Status: Authority UX contract for current workflow behavior
+Purpose: Define route semantics, navigation roles, workflow-state expectations, and user-facing behavior rules
+Read when: Changing or reviewing workflow UX behavior
+Do not use for: Active implementation queue, shipped change log, or historical proof by itself
+Superseded by: n/a
+
 # UX Flows — Area-Scoped Personal Workflow Cockpit
 
 ## 1. UX Principles
