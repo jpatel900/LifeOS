@@ -123,7 +123,10 @@ async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 80) {
 test("header quick note save feedback shows clear error then success", async ({
   page,
 }) => {
-  await gotoCapture(page);
+  await page.goto("/triage");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Triage" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "Save quick note" }).click();
   await expect(
@@ -333,11 +336,6 @@ test("keyboard tab path reaches key controls", async ({ page }) => {
   await gotoCapture(page);
   await page.locator("body").click({ position: { x: 10, y: 10 } });
 
-  await tabUntilFocused(page, page.getByLabel("Quick note text"));
-  await tabUntilFocused(
-    page,
-    page.getByRole("button", { name: "Save quick note" }),
-  );
   await tabUntilFocused(
     page,
     page.getByLabel("Area for this saved thought"),

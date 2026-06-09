@@ -723,7 +723,7 @@ export default function HomePage() {
   return (
     <main className="grid gap-6 pb-6">
       {homeData.status === "degraded" ? (
-        <Alert variant="destructive">
+        <Alert variant="warning" data-severity="warning">
           <AlertTitle>Account data is partially unavailable</AlertTitle>
           <AlertDescription>
             Showing local data where available. You can continue safely.

@@ -45,7 +45,7 @@ function AppChrome({ children }: { children: ReactNode }) {
     "idle" | "saved" | "error"
   >("idle");
   const areaAccentStyle = buildAreaAccentStyle(currentArea?.color);
-  const showQuickNote = pathname !== "/";
+  const showQuickNote = pathname !== "/" && pathname !== "/capture";
   const usesQuietShellContext = quietShellContextRoutes.has(pathname ?? "");
 
   useEffect(() => {

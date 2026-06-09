@@ -268,6 +268,60 @@ What changed:
 - focused route tests still prove save behavior and persistence truth without locking in clutter-heavy implementation copy
 ```
 
+## Issue #160 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- first-viewport browser proof:
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+  - `apps/web/tests/e2e/p0-ux-regression.spec.ts`
+- Capture hierarchy runtime adjustments:
+  - `apps/web/src/app/capture/page.tsx`
+  - `apps/web/src/app/components/AppShell.tsx`
+
+What changed:
+- Home and Capture now have explicit `390px` first-viewport tests that check the dominant task surface and primary action arrive before support or diagnostic content
+- `/capture` now suppresses the shell quick-note composer because it duplicated the route's own raw-input job and crowded the first viewport
+- the Capture route now places the raw-entry card, textarea, and `Save thought` action ahead of the support summary and `Capture details` on mobile without changing raw-save or parse safety behavior
+```
+
+## Issue #165 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- severity vocabulary: `docs/agent/UI_SEVERITY_VOCABULARY.md`
+- roadmap wiring: `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
+- UI guide routing update: `docs/agent/UI_AGENT_GUIDE.md`
+
+What changed:
+- Pass 7 now has one compact severity vocabulary for `success`, `info`, `warning`, and `danger`
+- the vocabulary explicitly separates calm degraded-but-usable states from blocked or failed states
+- the doc also records the current primitive mapping so future work can use `info` intent without forcing a broad component rewrite first
+```
+
+## Issue #161 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- focused severity tests:
+  - `apps/web/src/__tests__/page.test.tsx`
+  - `apps/web/src/__tests__/healthPage.test.tsx`
+- narrow route-state fix:
+  - `apps/web/src/app/page.tsx`
+  - `apps/web/src/app/health/page.tsx`
+
+What changed:
+- severity tests now prove that recoverable degraded states do not read like hard failures, while blocked trust still does
+- Home account-data degradation now uses warning severity because local workflow remains usable
+- Health now exposes canonical `data-severity` proof on its main status surfaces so `info`, `warning`, and `danger` can be asserted without brittle color-only tests
+```
+
 ## No body replacement required yet
 
 - `#146` already has the child issue index and phase grouping.

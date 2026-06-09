@@ -30,6 +30,12 @@ vi.mock("@/lib/data/workflow", () => ({
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 
+function expectBefore(first: HTMLElement, second: HTMLElement) {
+  expect(
+    first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0);
+}
+
 function renderHome(
   storedState?: ReturnType<typeof createInitialWorkflowState>,
 ) {
@@ -168,15 +174,19 @@ describe("HomePage Today cockpit", () => {
     );
   });
 
-  it("shows degraded account-data state without crashing", async () => {
+  it("shows degraded account-data state as a recoverable warning", async () => {
     vi.mocked(listPlanningItems).mockRejectedValueOnce(
       new Error("Sign in before loading planning rows."),
     );
     renderHome();
 
-    expect(
-      await screen.findByText("Account data is partially unavailable"),
-    ).toBeDefined();
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveAttribute("data-severity", "warning");
+    expect(alert).toHaveTextContent("Account data is partially unavailable");
+    expect(alert).toHaveTextContent(
+      "Showing local data where available. You can continue safely.",
+    );
+    expect(alert).not.toHaveTextContent("Health checks could not load");
     expect(
       screen.getByRole("heading", { level: 1, name: "Today" }),
     ).toBeDefined();
@@ -195,5 +205,15 @@ describe("HomePage Today cockpit", () => {
     expect(
       screen.getByRole("link", { name: "Capture a thought" }),
     ).toHaveAttribute("href", "/capture");
+  });
+
+  it("keeps Today details after the primary next action", async () => {
+    renderHome();
+    await waitFor(() => expect(listPlanningItems).toHaveBeenCalled());
+
+    const primaryCta = screen.getByRole("link", { name: "Capture a thought" });
+    const todayDetails = screen.getByText("Today details", { exact: true });
+
+    expectBefore(primaryCta, todayDetails);
   });
 });

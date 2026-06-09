@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function expectNoHorizontalOverflow(page: Page) {
   const layout = await page.evaluate(() => {
@@ -16,6 +16,52 @@ async function expectNoHorizontalOverflow(page: Page) {
   });
 
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewportWidth + 1);
+}
+
+async function expectElementWithinViewport(
+  page: Page,
+  locator: Locator,
+  label: string,
+) {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+
+  expect(box, `${label} should have a visible bounding box.`).not.toBeNull();
+  expect(viewport, "Viewport size should be available.").not.toBeNull();
+  expect(box!.y, `${label} should start in the first viewport.`).toBeGreaterThanOrEqual(0);
+  expect(
+    box!.y + box!.height,
+    `${label} should remain visible in the first viewport.`,
+  ).toBeLessThanOrEqual(viewport!.height);
+}
+
+async function expectElementStartsWithinViewport(
+  page: Page,
+  locator: Locator,
+  label: string,
+) {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+
+  expect(box, `${label} should have a visible bounding box.`).not.toBeNull();
+  expect(viewport, "Viewport size should be available.").not.toBeNull();
+  expect(box!.y, `${label} should start in the first viewport.`).toBeGreaterThanOrEqual(0);
+  expect(box!.y, `${label} should start before the first viewport ends.`).toBeLessThan(
+    viewport!.height,
+  );
+}
+
+async function expectTopBefore(
+  first: Locator,
+  second: Locator,
+  message: string,
+) {
+  const firstBox = await first.boundingBox();
+  const secondBox = await second.boundingBox();
+
+  expect(firstBox, "First element should have a visible bounding box.").not.toBeNull();
+  expect(secondBox, "Second element should have a visible bounding box.").not.toBeNull();
+  expect(firstBox!.y, message).toBeLessThan(secondBox!.y);
 }
 
 async function seedExecuteMission(page: Page) {
@@ -312,4 +358,63 @@ test("hierarchy pass stays usable at 390px width", async ({ page }) => {
     await page.goto(route);
     await expectNoHorizontalOverflow(page);
   }
+});
+
+test("home keeps the next action ahead of support and diagnostic surfaces at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const nextCard = page.getByTestId("today-next-card");
+  const nextAction = page.getByRole("link", { name: "Capture a thought" });
+  const dailyLoop = page.getByText("Daily loop", { exact: true });
+  const todayDetails = page.getByText("Today details", { exact: true });
+
+  await expect(nextCard).toBeVisible();
+  await expect(nextAction).toBeVisible();
+  await expectElementWithinViewport(page, nextAction, "Home next action");
+  await expectTopBefore(
+    nextCard,
+    dailyLoop,
+    "Home should show the dominant next-action card before Daily loop support content.",
+  );
+  await expectTopBefore(
+    nextCard,
+    todayDetails,
+    "Home should keep the dominant next-action card above Today details diagnostics.",
+  );
+});
+
+test("capture keeps raw input and primary actions ahead of support and diagnostics at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/capture");
+
+  const mainCard = page.getByTestId("capture-main-card");
+  const textarea = page.getByPlaceholder("What's on your mind? Type anything...");
+  const saveThought = page.getByRole("button", { name: "Save thought" });
+  const saveAndOrganize = page.getByRole("button", {
+    name: "Save and organize",
+  });
+  const summaryCard = page.getByTestId("capture-header-summary-card");
+  const captureDetails = page.getByText("Capture details", { exact: true });
+
+  await expect(mainCard).toBeVisible();
+  await expect(textarea).toBeVisible();
+  await expect(saveThought).toBeVisible();
+  await expect(saveAndOrganize).toBeVisible();
+  await expectElementStartsWithinViewport(page, textarea, "Capture textarea");
+  await expectElementWithinViewport(page, saveThought, "Capture Save thought button");
+  await expectTopBefore(
+    mainCard,
+    summaryCard,
+    "Capture should place the raw-input card before support summary content on mobile.",
+  );
+  await expectTopBefore(
+    mainCard,
+    captureDetails,
+    "Capture should place the raw-input card before Capture details diagnostics on mobile.",
+  );
 });
