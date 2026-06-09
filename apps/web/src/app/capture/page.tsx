@@ -11,14 +11,12 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DiagnosticsDisclosure } from "../components/DiagnosticsDisclosure";
 import { EmptyState } from "../components/EmptyState";
-import { WorkflowPageHeader } from "../components/WorkflowPageHeader";
 import { buildParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 import { getAreaById } from "@/lib/mockData";
 import {
@@ -654,63 +652,6 @@ export default function CapturePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <WorkflowPageHeader
-        eyebrow="Raw first"
-        title="Capture"
-        description="Write first. Decide what it is second."
-        spotlight={
-          <Card
-            data-testid="capture-header-summary-card"
-            className="workflow-secondary-card workflow-support-card workflow-quiet-card"
-          >
-            <CardContent className="workflow-metric-grid pt-6">
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Save mode</p>
-                <p className="workflow-metric-value text-[1.35rem]">
-                  {provider ? saveModeLabel(provider) : "Checking"}
-                </p>
-                <p className="workflow-metric-context">
-                  This is where Save thought goes.
-                </p>
-              </div>
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Sorting help</p>
-                <p className="workflow-metric-value text-[1.35rem]">
-                  {parserStatusLabel}
-                </p>
-                <p className="workflow-metric-context">{parserStatusDetail}</p>
-              </div>
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Current area</p>
-                <p className="workflow-metric-value text-[1.35rem]">
-                  {selectedArea?.name ?? "None yet"}
-                </p>
-                <p className="workflow-metric-context">
-                  Optional, but it helps later planning.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        }
-      />
-
-      <DiagnosticsDisclosure title="Capture details">
-        <p>
-          Save thought uses your current save mode. Organize on this device
-          stays local to this browser.
-        </p>
-        {provider ? (
-          <>
-            <p>
-              Save mode: <strong>{saveModeLabel(provider)}</strong>
-            </p>
-            <p>
-              Technical save mode id: <strong>{provider}</strong>
-            </p>
-          </>
-        ) : null}
-      </DiagnosticsDisclosure>
-
       {areasState.status === "loading" ? (
         <p role="status" className="text-sm text-muted-foreground">
           Checking saved areas. You can still capture now.
@@ -729,13 +670,12 @@ export default function CapturePage() {
         className="workflow-primary-card workflow-flagship-card max-w-3xl"
       >
         <CardHeader>
-          <p className="workflow-surface-kicker">Capture first</p>
-          <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
-            Write it down
-          </CardTitle>
+          <p className="workflow-surface-kicker">Raw first</p>
+          <h1 className="workflow-surface-title text-3xl font-semibold leading-tight">
+            Capture
+          </h1>
           <CardDescription className="workflow-surface-body max-w-2xl text-sm">
-            Start with the raw thought. Save the simplest valid version, then
-            decide whether it needs sorting help.
+            Write first. Decide what it is second.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -758,7 +698,7 @@ export default function CapturePage() {
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={handleCaptureShortcut}
-                    rows={8}
+                    rows={4}
                     placeholder="What's on your mind? Type anything..."
                     className="resize-y"
                   />
@@ -767,6 +707,57 @@ export default function CapturePage() {
                   The field clears after save so you can capture the next
                   thought.
                 </p>
+
+                <div className="workflow-action-tray grid gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="workflow-section-kicker">
+                        Choose the fastest valid path
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Save the raw thought, or create drafts for Triage now.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline">Ctrl/Cmd + Enter</Badge>
+                      <span>Save from the main field.</span>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1">
+                      <Button
+                        type="submit"
+                        disabled={saveState.status === "saving"}
+                        className="w-full"
+                      >
+                        {saveState.status === "saving"
+                          ? "Saving..."
+                          : "Save thought"}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Store the raw thought.
+                      </p>
+                    </div>
+                    <div className="grid gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleSaveAndParse()}
+                        disabled={parseState.status === "parsing"}
+                        className="w-full"
+                      >
+                        {parseState.status === "parsing"
+                          ? parseState.parserMode === "mock"
+                            ? "Retrying with on-device sorting..."
+                            : "Saving and sorting..."
+                          : "Save and organize"}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Create drafts for Triage.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="workflow-action-tray space-y-3">
@@ -816,57 +807,6 @@ export default function CapturePage() {
                 unscoped capture.
               </p>
             ) : null}
-
-            <div className="workflow-action-tray grid gap-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="workflow-section-kicker">
-                    Choose the fastest valid path
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Save the raw thought, or create drafts for Triage now.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline">Ctrl/Cmd + Enter</Badge>
-                  <span>Save from the main field.</span>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-1">
-                  <Button
-                    type="submit"
-                    disabled={saveState.status === "saving"}
-                    className="w-full"
-                  >
-                    {saveState.status === "saving"
-                      ? "Saving..."
-                      : "Save thought"}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Store the raw thought.
-                  </p>
-                </div>
-                <div className="grid gap-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void handleSaveAndParse()}
-                    disabled={parseState.status === "parsing"}
-                    className="w-full"
-                  >
-                    {parseState.status === "parsing"
-                      ? parseState.parserMode === "mock"
-                        ? "Retrying with on-device sorting..."
-                        : "Saving and sorting..."
-                      : "Save and organize"}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Create drafts for Triage.
-                  </p>
-                </div>
-              </div>
-            </div>
           </form>
 
           <DiagnosticsDisclosure
@@ -963,6 +903,56 @@ export default function CapturePage() {
           ) : null}
         </Alert>
       ) : null}
+
+      <Card
+        data-testid="capture-header-summary-card"
+        className="workflow-secondary-card workflow-support-card workflow-quiet-card"
+      >
+        <CardContent className="workflow-metric-grid pt-6">
+          <div className="workflow-metric-card">
+            <p className="workflow-metric-label">Save mode</p>
+            <p className="workflow-metric-value text-[1.35rem]">
+              {provider ? saveModeLabel(provider) : "Checking"}
+            </p>
+            <p className="workflow-metric-context">
+              This is where Save thought goes.
+            </p>
+          </div>
+          <div className="workflow-metric-card">
+            <p className="workflow-metric-label">Sorting help</p>
+            <p className="workflow-metric-value text-[1.35rem]">
+              {parserStatusLabel}
+            </p>
+            <p className="workflow-metric-context">{parserStatusDetail}</p>
+          </div>
+          <div className="workflow-metric-card">
+            <p className="workflow-metric-label">Current area</p>
+            <p className="workflow-metric-value text-[1.35rem]">
+              {selectedArea?.name ?? "None yet"}
+            </p>
+            <p className="workflow-metric-context">
+              Optional, but it helps later planning.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <DiagnosticsDisclosure title="Capture details">
+        <p>
+          Save thought uses your current save mode. Organize on this device
+          stays local to this browser.
+        </p>
+        {provider ? (
+          <>
+            <p>
+              Save mode: <strong>{saveModeLabel(provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{provider}</strong>
+            </p>
+          </>
+        ) : null}
+      </DiagnosticsDisclosure>
 
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">

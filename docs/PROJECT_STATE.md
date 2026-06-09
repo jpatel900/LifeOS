@@ -19,6 +19,9 @@ Superseded by: n/a
 - Established the Pass 7 control-plane docs under `docs/agent/UI_PASS_7_EXECUTION_MAP.md`, `docs/agent/UI_PASS_7_LABEL_PLAN.md`, and `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`, with matching implementation notes for the hardening gate.
 - Completed the UI/UX doc inventory and roadmap consolidation so `docs/UI_UX_WORLD_CLASS_ROADMAP.md` now names Pass 7 as the active implementation pass and older UX plans are treated as historical inputs, not the live queue.
 - Reopened the active roadmap explicitly as a clarity-and-diagnostic-staging program instead of a maintenance-only UX posture, while keeping prior passes recorded as shipped history.
+- Added mobile first-viewport proof for Home and Capture, and simplified `/capture` so raw input plus `Save thought` land before support or diagnostic surfaces at `390px`.
+- Defined the shared UI severity vocabulary so Pass 7 can distinguish calm degraded-but-usable states from blocked or failed states before expanding degraded-state tests and copy.
+- Added severity regression proof for recoverable versus blocked states, and corrected Home so partial account-data degradation warns calmly instead of reading like a hard failure.
 - Landed the prior UX trust and hierarchy passes that produced the current shipped route posture across Home, Capture, Triage, Planning, Execute, Review, Health, and Areas.
 - Added durable browser-level regression proof for critical UX paths in `apps/web/tests/e2e/p0-ux-regression.spec.ts`.
 - Hardened Google Calendar safety with connect and disconnect flows, manual free or busy checks, and explicit approval-gated event creation only.
@@ -36,7 +39,7 @@ Superseded by: n/a
 1. Finish Pass 7 sequentially from docs hygiene through audit using `docs/UI_UX_WORLD_CLASS_ROADMAP.md` and `docs/agent/UI_PASS_7_EXECUTION_MAP.md`; do not start route implementation before the docs, review, and test gates are complete.
 2. Restore GitHub write auth or manually backfill the prepared Pass 7 issue comments and labels from `docs/agent/UI_PASS_7_GITHUB_UPDATES.md` and `docs/agent/UI_PASS_7_LABEL_PLAN.md`.
 3. Re-run authenticated production smoke for issue `#93` without weakening Vercel deployment protection.
-4. Keep `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts` in the validation path for UX-affecting changes.
+4. Keep `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts` in the validation path for UX-affecting hierarchy or shell changes.
 5. Treat any future Google Calendar expansion as explicit follow-on scope only: all-day conflict handling first, then app-created event update or cancel after human approval.
 
 ## Important implementation notes
@@ -45,13 +48,15 @@ Superseded by: n/a
 - `docs/UI_UX_WORLD_CLASS_ROADMAP.md` is the sole active UI/UX plan. `docs/agent/UI_PASS_7_EXECUTION_MAP.md` is a control-plane supplement, not shipped product truth. `docs/implementation-notes/*.md` are proof and history.
 - UI work is not done on lint, docs, or code review alone. When route hierarchy, shell, or degraded states change, require behavior checks, focused tests, and mobile plus desktop proof before claiming completion.
 - Primary workflow routes should foreground user action truth, keep safety truth near the relevant action, route diagnostic truth into details or Health unless the route is blocked, and keep developer truth out of primary workflow copy.
+- Use `docs/agent/UI_SEVERITY_VOCABULARY.md` when deciding whether a route state is `info`, `warning`, or `danger`; recoverable degraded states should not read like hard failures.
+- Home account-data degradation is intentionally `warning`, not `danger`, because local workflow remains usable. Reserve destructive severity for blocked trust or real failures.
 - Home must remain read-only and action-forward. It routes users to workflow screens but does not mutate workflow state directly.
 - Capture must preserve raw-save-first behavior. Raw captures are persisted before parsing, and AI or mock fallback behavior must stay intact.
 - Triage stays one-current-item-first. Tests or UI flows that need another draft must move it into focus deliberately.
 - Planning stays local-first. Google Calendar remains secondary, explicitly approval-gated, and server-only.
 - `/execute` should emphasize one active mission and must not fake persisted timing truth.
 - `/health` is the diagnostic home. Primary workflow routes may stage deeper system detail behind disclosures, but Health owns the repair-first diagnostic surface.
-- `AppShell` intentionally suppresses the extra shell-context band on `/capture`, `/calendar`, `/execute`, and `/review`.
+- `AppShell` intentionally suppresses the extra shell-context band on `/capture`, `/calendar`, `/execute`, and `/review`; `/capture` also suppresses the shell quick-note composer so the route's own raw-input workflow stays primary.
 - Frontend split: shared shadcn-compatible primitives live in `apps/web/src/components/ui`, while shell identity and route composition stay custom.
 - `WorkflowProvider` must keep SSR and first client render structurally identical; persisted session state restores after mount.
 - Browser code must not import parser helpers, Google token or OAuth helpers, or service-role helpers. Use route handlers and server-only modules.

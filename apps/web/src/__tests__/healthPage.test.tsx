@@ -84,6 +84,12 @@ describe("HealthPage", () => {
       screen.queryByText("No blocking issues right now"),
     ).not.toBeInTheDocument();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    expect(document.querySelectorAll('[data-severity="info"]').length).toBe(
+      3,
+    );
+    expect(document.querySelectorAll('[data-severity="danger"]').length).toBe(
+      0,
+    );
     expect(screen.getByText("Google Calendar")).toBeDefined();
   });
 
@@ -128,11 +134,62 @@ describe("HealthPage", () => {
     render(<HealthPage />);
 
     const alert = await screen.findByRole("alert");
+    expect(alert).toHaveAttribute("data-severity", "danger");
     expect(alert).toHaveTextContent("Health checks could not load");
     expect(alert).toHaveTextContent(
       "Unable to load health checks right now. Verify auth/session and storage mode, then retry.",
     );
     expect(alert).not.toHaveTextContent("sk-secret-123");
+  });
+
+  it("treats disconnected calendar support as a warning, not a hard failure", async () => {
+    mocks.getHealthDashboard.mockResolvedValue(
+      readyResult([
+        {
+          id: "auth",
+          subsystem: "auth session",
+          status: "healthy",
+          score: 100,
+          summary: "Authenticated Supabase session is active.",
+          details: { summary: "Authenticated Supabase session is active." },
+        },
+        {
+          id: "capture",
+          subsystem: "capture persistence",
+          status: "healthy",
+          score: 100,
+          summary: "Capture persistence is available.",
+          details: { summary: "Capture persistence is available." },
+        },
+        {
+          id: "google-calendar",
+          subsystem: "Google Calendar",
+          status: "watch",
+          score: 60,
+          summary:
+            "Google Calendar is disconnected, but planning remains local-only.",
+          details: {
+            configured: true,
+            connection_present: false,
+            summary:
+              "Google Calendar is disconnected, but planning remains local-only.",
+          },
+        },
+      ]),
+    );
+
+    render(<HealthPage />);
+
+    expect(await screen.findByText("Disconnected")).toHaveAttribute(
+      "data-severity",
+      "warning",
+    );
+    expect(
+      screen.getByText(
+        "Planning still works locally, but Google writes are unavailable until you connect.",
+      ),
+    ).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("shows a visible disabled reason while a system check is running", async () => {

@@ -92,6 +92,22 @@ type TrustRow = {
   variant: "success" | "secondary" | "warning" | "destructive";
 };
 
+function canonicalSeverityForVariant(
+  variant: "default" | "success" | "secondary" | "warning" | "destructive",
+) {
+  switch (variant) {
+    case "success":
+      return "success";
+    case "warning":
+      return "warning";
+    case "destructive":
+      return "danger";
+    case "secondary":
+    case "default":
+      return "info";
+  }
+}
+
 function healthRunFeedback(
   state: HealthLoadState,
   feedback: CheckFeedbackState,
@@ -447,6 +463,7 @@ export default function HealthPage() {
       {runFeedback ? (
         <Alert
           variant={runFeedback.variant}
+          data-severity={canonicalSeverityForVariant(runFeedback.variant)}
           role={runFeedback.variant === "destructive" ? "alert" : "status"}
           aria-live="polite"
           className={
@@ -499,7 +516,12 @@ export default function HealthPage() {
             </CardHeader>
             <CardContent className="text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center gap-3">
-                <Badge variant={reliabilitySummary?.variant ?? "secondary"}>
+                <Badge
+                  variant={reliabilitySummary?.variant ?? "secondary"}
+                  data-severity={canonicalSeverityForVariant(
+                    reliabilitySummary?.variant ?? "secondary",
+                  )}
+                >
                   {reliabilitySummary?.label}
                 </Badge>
                 <span>{reliabilitySummary?.summary}</span>
@@ -523,7 +545,12 @@ export default function HealthPage() {
                 <div key={row.title} className="workflow-metric-card">
                   <div className="flex items-center justify-between gap-2">
                     <span className="workflow-metric-label">{row.title}</span>
-                    <Badge variant={row.variant}>{row.status}</Badge>
+                    <Badge
+                      variant={row.variant}
+                      data-severity={canonicalSeverityForVariant(row.variant)}
+                    >
+                      {row.status}
+                    </Badge>
                   </div>
                   <p className="workflow-metric-context">{row.summary}</p>
                   <p className="mt-3 text-xs text-muted-foreground">

@@ -18,6 +18,7 @@ Superseded by: n/a; expand this guide in place rather than creating a competing 
 ## Load later only when needed
 
 - `docs/agent/UI_INFORMATION_HIERARCHY_DOCTRINE.md` when copy, degraded states, diagnostics staging, or first-viewport hierarchy are in scope
+- `docs/agent/UI_SEVERITY_VOCABULARY.md` when degraded states, blocked states, alert tone, or severity tests are in scope
 - `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md` when auditing or preparing closeout proof
 - `docs/implementation-notes/*.md` only when the roadmap or current route work points to a specific note
 - `docs/archive/ui-ux/*.md` only when a roadmap or implementation note explicitly needs historical rationale

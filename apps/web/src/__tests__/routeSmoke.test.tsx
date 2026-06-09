@@ -50,13 +50,9 @@ describe("workflow route provider wiring", () => {
     expect(screen.getByText("Sorting help")).toBeDefined();
     expect(screen.getByRole("navigation", { name: "Primary" })).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Save quick note" }),
-    ).toBeDefined();
-    expect(
-      screen.getByText(
-        "Saved on this device only. Review in Triage or Review.",
-      ),
-    ).toBeDefined();
+      screen.queryByRole("button", { name: "Save quick note" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Quick note text")).toBeNull();
     expect(screen.queryByTestId("app-shell-context-header")).toBeNull();
     expect(
       screen.getByRole("heading", { level: 1, name: "Capture" }),
@@ -93,7 +89,7 @@ describe("workflow route provider wiring", () => {
   });
 
   it("shows quick note save feedback in the app shell", async () => {
-    renderThroughAppShell(<CapturePage />);
+    renderThroughAppShell(<TriagePage />, "/triage");
 
     fireEvent.click(screen.getByRole("button", { name: "Save quick note" }));
     expect(

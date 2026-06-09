@@ -112,6 +112,12 @@ function renderCapturePage() {
   );
 }
 
+function expectBefore(first: HTMLElement, second: HTMLElement) {
+  expect(
+    first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0);
+}
+
 function mockParserStatusFetch(
   status: "mock" | "ai_configured" | "ai_unavailable",
 ) {
@@ -226,6 +232,33 @@ describe("CapturePage", () => {
         "AI sorting is unavailable here. Save and organize will use on-device sorting.",
       ),
     ).toBeDefined();
+  });
+
+  it("keeps local draft and diagnostics details after the primary actions", async () => {
+    mocks.listAreas.mockResolvedValue({ provider: "mock", areas: [area] });
+    mocks.listCaptureItems.mockResolvedValue({
+      provider: "mock",
+      captures: [],
+    });
+    mockParserStatusFetch("mock");
+
+    renderCapturePage();
+
+    const saveThought = await screen.findByRole("button", {
+      name: "Save thought",
+    });
+    const saveAndOrganize = screen.getByRole("button", {
+      name: "Save and organize",
+    });
+    const localDraftPass = screen.getByText("Local draft pass", {
+      exact: true,
+    });
+    const captureDetails = screen.getByText("Capture details", {
+      exact: true,
+    });
+
+    expectBefore(saveThought, localDraftPass);
+    expectBefore(saveAndOrganize, captureDetails);
   });
 
   it("explains where Save thought went and can organize the saved capture", async () => {
