@@ -55,7 +55,7 @@ type HomeDataState =
 function statusLabel(status: "loading" | "ready" | "degraded") {
   if (status === "loading") return "Checking account data and local state.";
   if (status === "degraded")
-    return "Account data is partially unavailable. Local state is still available.";
+    return "Account data is partially unavailable. Local state is still available. Check Health if this keeps happening.";
   return "Account data and local state are available.";
 }
 
@@ -726,7 +726,8 @@ export default function HomePage() {
         <Alert variant="warning" data-severity="warning">
           <AlertTitle>Account data is partially unavailable</AlertTitle>
           <AlertDescription>
-            Showing local data where available. You can continue safely.
+            Showing local data where available. You can continue safely and
+            check Health if this keeps happening.
           </AlertDescription>
         </Alert>
       ) : null}

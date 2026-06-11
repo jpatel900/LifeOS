@@ -627,16 +627,18 @@ export default function HealthPage() {
               System check save result:{" "}
               <strong>{systemCheckSaveLabel(state.result.persistence)}</strong>
             </p>
-            <p>
-              Technical save mode id: <strong>{state.result.provider}</strong>
-            </p>
-            <p>
-              Technical save result id:{" "}
-              <strong>{state.result.persistence}</strong>
-            </p>
             {state.result.persistenceMessage ? (
               <p>{toUserText(state.result.persistenceMessage)}</p>
             ) : null}
+            <DiagnosticsDisclosure detailLevel="developer">
+              <p>
+                Technical save mode id: <strong>{state.result.provider}</strong>
+              </p>
+              <p>
+                Technical save result id:{" "}
+                <strong>{state.result.persistence}</strong>
+              </p>
+            </DiagnosticsDisclosure>
           </DiagnosticsDisclosure>
         </>
       ) : null}

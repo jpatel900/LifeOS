@@ -22,6 +22,13 @@ Superseded by: n/a
 - Added mobile first-viewport proof for Home and Capture, and simplified `/capture` so raw input plus `Save thought` land before support or diagnostic surfaces at `390px`.
 - Defined the shared UI severity vocabulary so Pass 7 can distinguish calm degraded-but-usable states from blocked or failed states before expanding degraded-state tests and copy.
 - Added severity regression proof for recoverable versus blocked states, and corrected Home so partial account-data degradation warns calmly instead of reading like a hard failure.
+- Added the shared degraded-state copy contract so warning and blocked copy now has one explicit rule: say what happened, what still works, and the next move.
+- Standardized the system-versus-developer detail boundary around `DiagnosticsDisclosure`, and moved Health technical identifiers under an explicit developer disclosure.
+- Added diagnostics-before-action regression proof for Home and Capture, and quieted the shell context band on `/` so Home’s route-local launchpad stays ahead of shell support content.
+- Documented the shared `390px` mobile surface budget and wired it into UI review plus issue-proof requirements so shell and route work now has an explicit clutter ceiling.
+- Added shell-clutter regression coverage so quiet routes keep the extra shell context band off, Home and Capture keep quick-note controls off, and mobile shell nav still exposes one clear active state without overflow.
+- Split `Areas` out of the primary shell workflow nav and into a supporting admin affordance, with focused tests plus mobile and desktop shell screenshots proving the new role.
+- Calmed the mobile shell nav by forcing the primary workflow links into a single horizontal lane instead of a wrapped chip cloud, with Playwright proof that route access remains intact.
 - Landed the prior UX trust and hierarchy passes that produced the current shipped route posture across Home, Capture, Triage, Planning, Execute, Review, Health, and Areas.
 - Added durable browser-level regression proof for critical UX paths in `apps/web/tests/e2e/p0-ux-regression.spec.ts`.
 - Hardened Google Calendar safety with connect and disconnect flows, manual free or busy checks, and explicit approval-gated event creation only.
@@ -49,14 +56,21 @@ Superseded by: n/a
 - UI work is not done on lint, docs, or code review alone. When route hierarchy, shell, or degraded states change, require behavior checks, focused tests, and mobile plus desktop proof before claiming completion.
 - Primary workflow routes should foreground user action truth, keep safety truth near the relevant action, route diagnostic truth into details or Health unless the route is blocked, and keep developer truth out of primary workflow copy.
 - Use `docs/agent/UI_SEVERITY_VOCABULARY.md` when deciding whether a route state is `info`, `warning`, or `danger`; recoverable degraded states should not read like hard failures.
+- Use `docs/agent/UI_DEGRADED_STATE_COPY.md` when degraded or blocked copy changes. Default to: what happened, what still works, and what the user should do next.
+- Use `docs/agent/UI_DETAILS_BOUNDARY.md` when exposing route detail. `System details` may support recovery on workflow routes; `Developer details` belong in explicit lower-level disclosures or Health.
 - Home account-data degradation is intentionally `warning`, not `danger`, because local workflow remains usable. Reserve destructive severity for blocked trust or real failures.
+- `AppShell` intentionally suppresses the extra shell-context band on `/`, `/capture`, `/calendar`, `/execute`, and `/review`; Home should not have shell-level support content above its own flagship next-action surface.
+- `Areas` should not read as part of the primary workflow loop in shell navigation. Keep it reachable, but visibly secondary and admin-oriented.
+- On mobile, the primary workflow nav should stay a single horizontal lane. Preserve route access with scroll before letting the nav wrap into stacked chip rows.
+- Use `docs/agent/UI_MOBILE_SURFACE_BUDGET.md` when reviewing shell or first-viewport changes. If a route needs multiple support surfaces above the fold at `390px`, the structure is probably wrong.
+- Keep `apps/web/tests/e2e/shell-clutter.spec.ts` in the validation path for AppShell, nav, or route-shell hierarchy changes.
 - Home must remain read-only and action-forward. It routes users to workflow screens but does not mutate workflow state directly.
 - Capture must preserve raw-save-first behavior. Raw captures are persisted before parsing, and AI or mock fallback behavior must stay intact.
 - Triage stays one-current-item-first. Tests or UI flows that need another draft must move it into focus deliberately.
 - Planning stays local-first. Google Calendar remains secondary, explicitly approval-gated, and server-only.
 - `/execute` should emphasize one active mission and must not fake persisted timing truth.
 - `/health` is the diagnostic home. Primary workflow routes may stage deeper system detail behind disclosures, but Health owns the repair-first diagnostic surface.
-- `AppShell` intentionally suppresses the extra shell-context band on `/capture`, `/calendar`, `/execute`, and `/review`; `/capture` also suppresses the shell quick-note composer so the route's own raw-input workflow stays primary.
+- `AppShell` intentionally suppresses the extra shell-context band on `/`, `/capture`, `/calendar`, `/execute`, and `/review`; `/capture` also suppresses the shell quick-note composer so the route's own raw-input workflow stays primary.
 - Frontend split: shared shadcn-compatible primitives live in `apps/web/src/components/ui`, while shell identity and route composition stay custom.
 - `WorkflowProvider` must keep SSR and first client render structurally identical; persisted session state restores after mount.
 - Browser code must not import parser helpers, Google token or OAuth helpers, or service-role helpers. Use route handlers and server-only modules.

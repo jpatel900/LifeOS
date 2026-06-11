@@ -53,7 +53,7 @@ export function aiSortingAvailabilityDetail(status: AiSortingAvailability) {
     case "ai_configured":
       return "Save and organize will use AI sorting.";
     case "ai_unavailable":
-      return "AI sorting is unavailable here. Save and organize will use on-device sorting.";
+      return "AI sorting is unavailable here. Save and organize will use on-device sorting. Add AI setup later if you want AI-assisted sorting.";
     case "mock":
       return "Save and organize will use on-device sorting.";
   }

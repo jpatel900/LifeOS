@@ -229,7 +229,7 @@ describe("CapturePage", () => {
     expect(screen.getByText("AI sorting unavailable")).toBeDefined();
     expect(
       screen.getByText(
-        "AI sorting is unavailable here. Save and organize will use on-device sorting.",
+        "AI sorting is unavailable here. Save and organize will use on-device sorting. Add AI setup later if you want AI-assisted sorting.",
       ),
     ).toBeDefined();
   });

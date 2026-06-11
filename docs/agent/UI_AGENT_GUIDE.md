@@ -19,6 +19,10 @@ Superseded by: n/a; expand this guide in place rather than creating a competing 
 
 - `docs/agent/UI_INFORMATION_HIERARCHY_DOCTRINE.md` when copy, degraded states, diagnostics staging, or first-viewport hierarchy are in scope
 - `docs/agent/UI_SEVERITY_VOCABULARY.md` when degraded states, blocked states, alert tone, or severity tests are in scope
+- `docs/agent/UI_DEGRADED_STATE_COPY.md` when degraded-state wording, recovery phrasing, or next-step language is in scope
+- `docs/agent/UI_DETAILS_BOUNDARY.md` when deciding what belongs in route details versus developer-only detail
+- `docs/agent/UI_MOBILE_SURFACE_BUDGET.md` when first-viewport, shell, or mobile clutter questions are in scope
+- `docs/agent/UI_SCREENSHOT_EVIDENCE_WORKFLOW.md` when screenshot proof is required and you need the storage or review-note workflow
 - `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md` when auditing or preparing closeout proof
 - `docs/implementation-notes/*.md` only when the roadmap or current route work points to a specific note
 - `docs/archive/ui-ux/*.md` only when a roadmap or implementation note explicitly needs historical rationale
@@ -49,6 +53,7 @@ For any workflow-route UI change, verify these questions in code, tests, and ren
 - Is safety truth visible before the user could misunderstand save, sync, or external-write behavior?
 - Are diagnostics staged after action unless the route is blocked?
 - Did developer detail stay out of the primary workflow surface?
+- If the route is degraded, does the copy say what happened, what still works, and the next useful move?
 - Did the route keep its contract:
   - `Home` stays read-only
   - `Capture` keeps raw-save recoverability and local fallback truth
@@ -72,6 +77,15 @@ Use screenshots to prove hierarchy, not decoration. A valid screenshot should ma
 - whether the route is calm or cluttered at first scan
 
 If the issue changes only docs or tests, screenshots are not required unless the issue explicitly asks for browser proof.
+
+Use `docs/agent/UI_MOBILE_SURFACE_BUDGET.md` when deciding whether the route stayed within the allowed first-viewport clutter ceiling at `390px`.
+
+Use `docs/agent/UI_SCREENSHOT_EVIDENCE_WORKFLOW.md` for the operational part:
+
+- where local screenshot files should live during work
+- how to name them
+- what short review note must accompany them
+- how to reference the chosen files in handoff or GitHub proof
 
 ## Test and command expectations
 

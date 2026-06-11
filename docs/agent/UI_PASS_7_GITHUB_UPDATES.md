@@ -322,6 +322,160 @@ What changed:
 - Health now exposes canonical `data-severity` proof on its main status surfaces so `info`, `warning`, and `danger` can be asserted without brittle color-only tests
 ```
 
+## Issue #163 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- focused diagnostics-order tests:
+  - `apps/web/src/__tests__/page.test.tsx`
+  - `apps/web/src/__tests__/capture.test.tsx`
+  - `apps/web/src/__tests__/routeSmoke.test.tsx`
+- browser hierarchy proof:
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- narrow shell fix:
+  - `apps/web/src/app/components/AppShell.tsx`
+
+What changed:
+- Home and Capture now have direct regression coverage proving their details and diagnostic disclosures stay after the primary action contract
+- `/` now joins the quiet-shell route set so the shell context band no longer pushes Home support content above the route-local launchpad
+- the workflow hierarchy browser suite now passes again at `390px` with Home and Capture both keeping action ahead of details
+```
+
+## Issue #164 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- screenshot workflow: `docs/agent/UI_SCREENSHOT_EVIDENCE_WORKFLOW.md`
+- routing update: `docs/agent/UI_AGENT_GUIDE.md`
+
+What changed:
+- Pass 7 now has one operational screenshot workflow instead of scattered proof reminders
+- the workflow defines the minimum required images, the local storage location under ignored `apps/web/test-results/`, filename guidance, and the short review note that must accompany each screenshot set
+- the UI guide now points to that workflow when screenshot proof is required
+```
+
+## Issue #168 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- mobile budget rule: `docs/agent/UI_MOBILE_SURFACE_BUDGET.md`
+- review wiring: `docs/agent/UI_AGENT_GUIDE.md`
+- issue-template wiring: `.github/ISSUE_TEMPLATE/agent-task.yml`
+- static proof hook: `apps/web/src/__tests__/sourceOfTruth.test.ts`
+
+What changed:
+- Pass 7 now has one explicit `390px` first-viewport clutter budget for shell and route work
+- the UI guide and issue template now require reviewers to state whether a changed route stayed inside that budget and what moved lower or behind disclosure
+- source-of-truth coverage now protects the existence of that budget and its review hook so later shell work cannot quietly drop it
+```
+
+## Issue #162 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- focused shell clutter tests:
+  - `apps/web/src/__tests__/routeSmoke.test.tsx`
+  - `apps/web/tests/e2e/shell-clutter.spec.ts`
+
+What changed:
+- quiet routes now have explicit regression coverage for the extra shell context band staying off
+- Home and Capture now have explicit regression coverage for keeping shell quick-note controls off
+- mobile shell coverage now also proves there is one active nav item and one visible shell input path on a non-quiet route without horizontal overflow
+```
+
+## Issue #166 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- degraded-state copy rule: `docs/agent/UI_DEGRADED_STATE_COPY.md`
+- narrow runtime alignments:
+  - `apps/web/src/app/page.tsx`
+  - `apps/web/src/lib/statusVocabulary.ts`
+- focused proof:
+  - `apps/web/src/__tests__/page.test.tsx`
+  - `apps/web/src/__tests__/capture.test.tsx`
+
+What changed:
+- Pass 7 now has one explicit degraded-state copy contract: say what happened, what still works, and the next move
+- Home degraded account-data copy now points users toward the safe next move instead of stopping at a warning
+- the shared Capture AI-unavailable detail now explains fallback behavior and the optional next setup step without leaking technical jargon
+```
+
+## Issue #167 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- detail-boundary rule: `docs/agent/UI_DETAILS_BOUNDARY.md`
+- disclosure primitive update:
+  - `apps/web/src/app/components/DiagnosticsDisclosure.tsx`
+- Health example and focused proof:
+  - `apps/web/src/app/health/page.tsx`
+  - `apps/web/src/__tests__/diagnosticsDisclosure.test.tsx`
+  - `apps/web/src/__tests__/sourceOfTruth.test.ts`
+
+What changed:
+- `DiagnosticsDisclosure` now distinguishes `system` versus `developer` detail explicitly through a shared `detailLevel` seam
+- Health keeps repair-facing system detail visible, while technical identifiers now sit under an explicit developer disclosure
+- the static guard now protects the new detail-boundary docs and the shared disclosure semantics so later route work has one durable standard
+```
+
+## Issue #169 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- shell/nav runtime update:
+  - `apps/web/src/app/components/AppShell.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/routeSmoke.test.tsx`
+  - `apps/web/src/__tests__/appShellAccent.test.tsx`
+  - `apps/web/tests/e2e/shell-clutter.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/169-areas-nav-role/mobile-triage-shell.png`
+  - `apps/web/test-results/pass-7/169-areas-nav-role/desktop-triage-shell.png`
+  - `apps/web/test-results/pass-7/169-areas-nav-role/mobile-areas-shell.png`
+  - `apps/web/test-results/pass-7/169-areas-nav-role/desktop-areas-shell.png`
+
+What changed:
+- `Areas` no longer sits inside the primary workflow loop nav beside Capture, Triage, Planning, Execute, Review, and Health
+- the shell now exposes `Areas admin` through a separate supporting nav affordance so ownership/admin work reads as secondary without losing access
+- focused DOM and Playwright proof now guard that split so later shell work cannot quietly promote `Areas` back into the primary loop
+```
+
+## Issue #170 comment
+
+```md
+Implemented locally because GitHub write auth is unavailable in this environment.
+
+Artifacts:
+- shell/nav runtime update:
+  - `apps/web/src/app/components/AppShell.tsx`
+- browser proof:
+  - `apps/web/tests/e2e/shell-clutter.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/170-mobile-nav-calm/mobile-triage-shell.png`
+  - `apps/web/test-results/pass-7/170-mobile-nav-calm/mobile-areas-shell.png`
+  - `apps/web/test-results/pass-7/170-mobile-nav-calm/desktop-triage-shell.png`
+
+What changed:
+- the mobile primary nav now stays on one horizontal lane instead of wrapping into multiple rows
+- route access is preserved by horizontal scroll rather than by stacking more shell height above the route
+- Playwright now asserts the mobile primary nav stays single-row on non-quiet routes so later shell work cannot quietly reintroduce the wrapped chip cloud
+```
+
 ## No body replacement required yet
 
 - `#146` already has the child issue index and phase grouping.
