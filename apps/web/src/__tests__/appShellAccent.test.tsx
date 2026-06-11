@@ -48,6 +48,11 @@ describe("AppShell area accent", () => {
     expect(screen.getByRole("link", { name: "Review" })).not.toHaveAttribute(
       "aria-current",
     );
+    expect(
+      screen.getByRole("link", { name: "Areas admin" }),
+    ).not.toHaveAttribute(
+      "aria-current",
+    );
   });
 
   it("keeps workflow internals out of the primary area panel and exposes a skip link", () => {

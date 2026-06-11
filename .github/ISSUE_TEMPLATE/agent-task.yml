@@ -171,6 +171,9 @@ body:
         - Desktop proof: `/capture` at rest after the change
         - Tests run: `pnpm --filter @lifeos/web test -- src/__tests__/capture.test.tsx src/__tests__/routeSmoke.test.tsx`
         - Browser/manual proof: `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts`
+        - Surface budget: state whether the route stayed inside the documented `390px` mobile surface budget and what moved lower or behind disclosure
+        - Degraded-state contract: if warning or blocked copy changed, state how the final copy says what happened, what still works, and the next move
+        - Details boundary: state what stayed in `System details`, what moved into `Developer details`, or why that distinction was not needed
         - What became simpler: textarea and `Save thought` appear before metrics and support content
         - Intentionally unchanged: raw-save-first safety, local fallback truth, parser contract, and external-write behavior
     validations:

@@ -224,11 +224,28 @@ describe("source-of-truth boundaries", () => {
     const globalsCss = normalizeWhitespace(
       readRepoFile("apps/web/src/app/globals.css"),
     );
+    const uiGuide = normalizeWhitespace(
+      readRepoFile("docs/agent/UI_AGENT_GUIDE.md"),
+    );
+    const degradedStateCopy = normalizeWhitespace(
+      readRepoFile("docs/agent/UI_DEGRADED_STATE_COPY.md"),
+    );
+    const detailsBoundary = normalizeWhitespace(
+      readRepoFile("docs/agent/UI_DETAILS_BOUNDARY.md"),
+    );
+    const mobileSurfaceBudget = normalizeWhitespace(
+      readRepoFile("docs/agent/UI_MOBILE_SURFACE_BUDGET.md"),
+    );
+    const issueTemplate = normalizeWhitespace(
+      readRepoFile(".github/ISSUE_TEMPLATE/agent-task.yml"),
+    );
 
     expect(appShell).toContain(
       "Quick capture saves on this device and sends notes to Triage.",
     );
     expect(diagnosticsDisclosure).toContain("System details");
+    expect(diagnosticsDisclosure).toContain("Developer details");
+    expect(diagnosticsDisclosure).toContain('data-detail-level={detailLevel}');
     expect(appShell).toContain("Current area");
     expect(appShell).not.toContain("Session workflow area");
     expect(home).toContain("Home stays read-only.");
@@ -251,11 +268,25 @@ describe("source-of-truth boundaries", () => {
     expect(execute).toContain("Stop (device-only sessions)");
     expect(execute).toContain("Stop on this device");
     expect(health).toContain("Can I rely on LifeOS today?");
+    expect(health).toContain('detailLevel="developer"');
     expect(health).toContain("Technical save mode id:");
     expect(settings).toContain("planned time blocks");
     expect(globalsCss).toContain(".workflow-flagship-card");
     expect(globalsCss).toContain(".workflow-support-card");
     expect(globalsCss).toContain(".workflow-admin-card");
+    expect(uiGuide).toContain("UI_MOBILE_SURFACE_BUDGET.md");
+    expect(uiGuide).toContain("UI_DEGRADED_STATE_COPY.md");
+    expect(uiGuide).toContain("UI_DETAILS_BOUNDARY.md");
+    expect(degradedStateCopy).toContain("What happened?");
+    expect(degradedStateCopy).toContain("What still works?");
+    expect(degradedStateCopy).toContain("What should the user do next?");
+    expect(detailsBoundary).toContain("detailLevel");
+    expect(detailsBoundary).toContain("Developer details");
+    expect(mobileSurfaceBudget).toContain("Use `390px` width");
+    expect(mobileSurfaceBudget).toContain(
+      "The route’s primary action or primary input must also start in the first viewport.",
+    );
+    expect(issueTemplate).toContain("Surface budget:");
   });
 
   it("keeps Home as read-only workflow routing with no calendar/event write helpers", () => {

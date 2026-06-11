@@ -184,7 +184,7 @@ describe("HomePage Today cockpit", () => {
     expect(alert).toHaveAttribute("data-severity", "warning");
     expect(alert).toHaveTextContent("Account data is partially unavailable");
     expect(alert).toHaveTextContent(
-      "Showing local data where available. You can continue safely.",
+      "Showing local data where available. You can continue safely and check Health if this keeps happening.",
     );
     expect(alert).not.toHaveTextContent("Health checks could not load");
     expect(

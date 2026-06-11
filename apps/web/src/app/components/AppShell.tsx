@@ -16,17 +16,19 @@ import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { DiagnosticsDisclosure } from "./DiagnosticsDisclosure";
 import { WorkflowPageHeader } from "./WorkflowPageHeader";
 
-const navLinks = [
+const primaryNavLinks = [
   { href: "/capture", label: "Capture" },
   { href: "/triage", label: "Triage" },
   { href: "/calendar", label: "Planning" },
   { href: "/execute", label: "Execute" },
   { href: "/review", label: "Review" },
   { href: "/health", label: "Health" },
-  { href: "/settings/areas", label: "Areas" },
 ];
 
+const supportingNavLinks = [{ href: "/settings/areas", label: "Areas admin" }];
+
 const quietShellContextRoutes = new Set([
+  "/",
   "/capture",
   "/calendar",
   "/execute",
@@ -206,9 +208,9 @@ function AppChrome({ children }: { children: ReactNode }) {
           <div className="flex flex-col gap-3 pb-1 lg:flex-row lg:items-center">
             <nav
               aria-label="Primary"
-              className="workflow-shell__nav workflow-shell-panel flex flex-wrap items-center gap-2 lg:flex-nowrap"
+              className="workflow-shell__nav workflow-shell-panel flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              {navLinks.map((link) => {
+              {primaryNavLinks.map((link) => {
                 const isActive =
                   pathname === link.href ||
                   (link.href !== "/capture" && pathname?.startsWith(link.href));
@@ -218,7 +220,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                     href={link.href}
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out sm:px-3 sm:text-sm",
+                      "inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out sm:px-3 sm:text-sm",
                       isActive
                         ? "border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] font-medium text-foreground shadow-[inset_0_1px_0_0_var(--area-accent-soft),0_14px_28px_-24px_var(--area-accent)]"
                         : "border-transparent text-muted-foreground hover:-translate-y-0.5 hover:border-white/8 hover:bg-white/4 hover:text-accent-foreground",
@@ -235,7 +237,39 @@ function AppChrome({ children }: { children: ReactNode }) {
                 );
               })}
             </nav>
-            <div className="workflow-shell__status workflow-shell-panel flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
+            <div className="workflow-shell__status flex w-full flex-wrap items-center gap-2 lg:ml-auto lg:w-auto lg:flex-nowrap">
+              <nav
+                aria-label="Supporting"
+                data-testid="app-shell-supporting-nav"
+                className="workflow-shell-panel flex items-center gap-2"
+              >
+                {supportingNavLinks.map((link) => {
+                  const isActive =
+                    pathname === link.href || pathname?.startsWith(link.href);
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out sm:px-3 sm:text-sm",
+                        isActive
+                          ? "border-[var(--area-accent-border)] bg-[var(--area-accent-soft)] font-medium text-foreground"
+                          : "border-transparent text-muted-foreground hover:border-white/8 hover:bg-white/4 hover:text-foreground",
+                      )}
+                    >
+                      {isActive ? (
+                        <span
+                          aria-hidden
+                          className="h-2 w-2 rounded-full bg-[var(--area-accent)]"
+                        />
+                      ) : null}
+                      {link.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div className="workflow-shell-panel flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap">
               <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                 Current area
               </span>
@@ -261,6 +295,7 @@ function AppChrome({ children }: { children: ReactNode }) {
               >
                 {now}
               </Badge>
+              </div>
             </div>
           </div>
         </div>

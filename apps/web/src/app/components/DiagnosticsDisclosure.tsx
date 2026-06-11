@@ -5,6 +5,7 @@ interface DiagnosticsDisclosureProps
   extends Omit<ComponentPropsWithoutRef<"details">, "children" | "title"> {
   children: ReactNode;
   className?: string;
+  detailLevel?: "system" | "developer";
   title?: string;
   summaryClassName?: string;
   contentClassName?: string;
@@ -13,20 +14,28 @@ interface DiagnosticsDisclosureProps
 export function DiagnosticsDisclosure({
   children,
   className,
-  title = "System details",
+  detailLevel = "system",
+  title,
   summaryClassName,
   contentClassName,
   ...props
 }: DiagnosticsDisclosureProps) {
+  const resolvedTitle =
+    title ?? (detailLevel === "developer" ? "Developer details" : "System details");
+
   return (
-    <details className={cn("system-details-disclosure", className)} {...props}>
+    <details
+      className={cn("system-details-disclosure", className)}
+      data-detail-level={detailLevel}
+      {...props}
+    >
       <summary
         className={cn(
           "cursor-pointer select-none text-sm font-medium text-foreground transition-colors",
           summaryClassName,
         )}
       >
-        {title}
+        {resolvedTitle}
       </summary>
       <div
         className={cn(
