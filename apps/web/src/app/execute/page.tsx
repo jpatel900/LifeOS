@@ -915,7 +915,11 @@ export default function ExecutePage() {
         ) : null}
       </DiagnosticsDisclosure>
       {actionState.status === "saving" ? (
-          <Alert role="status" className="workflow-celebration-alert text-foreground">
+          <Alert
+            role="status"
+            aria-live="polite"
+            className="workflow-celebration-alert text-foreground"
+          >
             <AlertTitle className="text-primary">
               {executePendingFeedback(actionState).title}
             </AlertTitle>
@@ -1004,21 +1008,12 @@ export default function ExecutePage() {
         </div>
       </section>
 
-      <DiagnosticsDisclosure title="Mission record">
-        {executeState.status === "ready" ? (
-          <>
-            <p>
-              Save mode: <strong>{saveModeLabel(executeState.provider)}</strong>
-            </p>
-            <p>
-              Technical save mode id: <strong>{executeState.provider}</strong>
-            </p>
-          </>
-        ) : null}
-      </DiagnosticsDisclosure>
-
       {actionState.status === "saving" ? (
-        <Alert role="status" className="workflow-celebration-alert text-foreground">
+        <Alert
+          role="status"
+          aria-live="polite"
+          className="workflow-celebration-alert text-foreground"
+        >
           <AlertTitle className="text-primary">
             {executePendingFeedback(actionState).title}
           </AlertTitle>
@@ -1044,6 +1039,7 @@ export default function ExecutePage() {
             return (
               <Alert
                 role="status"
+                aria-live="polite"
                 className="workflow-celebration-alert text-foreground"
               >
                 <AlertTitle className="text-primary">
@@ -1379,7 +1375,7 @@ export default function ExecutePage() {
           className="focus-state-card execute-state-card workflow-support-card workflow-quiet-card h-full"
         >
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Mission state</CardTitle>
+            <CardTitle className="text-base">Visible state</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="space-y-1">
@@ -1389,10 +1385,12 @@ export default function ExecutePage() {
                   {sessionStateLabel}
                 </p>
               </div>
-              <h2 className="text-2xl font-semibold leading-tight">
+              <p className="text-base font-semibold leading-tight text-foreground">
                 {focusTitle}
-              </h2>
-              <p className="text-sm text-muted-foreground">{focusTruthNote}</p>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {focusTruthNote}
+              </p>
             </div>
 
             {missionArea ? (
@@ -1406,11 +1404,11 @@ export default function ExecutePage() {
             ) : null}
 
             <DiagnosticsDisclosure
-              title="Execution truth"
+              title="Mission truth"
               contentClassName="mt-4 grid gap-3"
             >
               <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
-                <p className="font-medium">Execution truth</p>
+                <p className="font-medium">What this state means</p>
                 <p className="mt-1 text-muted-foreground">{focusDescription}</p>
               </div>
               <div className="area-accent-panel rounded-md border p-3 text-sm text-foreground">
@@ -1424,23 +1422,23 @@ export default function ExecutePage() {
           </CardContent>
         </Card>
 
-        <Card className="execute-support-card workflow-secondary-card workflow-support-card workflow-quiet-card h-full">
+        <Card
+          data-testid="execute-next-move-card"
+          className="execute-support-card workflow-secondary-card workflow-support-card workflow-quiet-card h-full"
+        >
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {isTerminalSession || (usesPersistedExecution && terminalForm)
-                ? "Recovery lane"
-                : "Keep the lane clear"}
-            </CardTitle>
+            <CardTitle className="text-base">Next move</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
+            <div className="workflow-action-tray">
+              <p className="workflow-section-kicker">Do this next</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {nextRecommendedAction}
+              </p>
+            </div>
+
             {isTerminalSession ? (
               <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Recovery / next-step actions
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  This session is ended. Pick the next useful move.
-                </p>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild type="button" variant="outline">
                     <Link href="/calendar">Plan another block</Link>
@@ -1462,7 +1460,7 @@ export default function ExecutePage() {
 
             {!terminalForm ? (
               <DiagnosticsDisclosure
-                title="Protect the mission"
+                title="Side thoughts"
                 data-testid="execute-side-thought-card"
                 className="workflow-inline-disclosure"
                 contentClassName="mt-3 grid gap-3"

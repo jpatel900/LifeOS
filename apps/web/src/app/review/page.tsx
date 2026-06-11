@@ -592,7 +592,7 @@ export default function ReviewPage() {
         />
       ) : null}
 
-      <DiagnosticsDisclosure title="Review record">
+      <DiagnosticsDisclosure title="Save details">
         {reviewState.status === "ready" ? (
           <>
             <p>Review entries are {savedViaLabel(reviewState.provider)}.</p>
@@ -614,7 +614,11 @@ export default function ReviewPage() {
       ) : null}
 
       {actionState.status === "saving" ? (
-        <Alert role="status" className="workflow-celebration-alert text-foreground">
+        <Alert
+          role="status"
+          aria-live="polite"
+          className="workflow-celebration-alert text-foreground"
+        >
           <AlertTitle className="text-primary">
             {reviewPendingFeedback().title}
           </AlertTitle>
@@ -629,7 +633,11 @@ export default function ReviewPage() {
       ) : null}
 
       {actionState.status === "saved" ? (
-        <Alert role="status" className="workflow-celebration-alert text-foreground">
+        <Alert
+          role="status"
+          aria-live="polite"
+          className="workflow-celebration-alert text-foreground"
+        >
           <AlertTitle className="text-primary">Daily review saved</AlertTitle>
           <AlertDescription>
             Review entry {savedViaLabel(actionState.provider)}. Stay here to
@@ -664,88 +672,88 @@ export default function ReviewPage() {
         </Alert>
       ) : null}
 
-      <Card
-        data-testid="review-today-at-a-glance-card"
-        data-accent-strength="subtle"
-        style={selectedAreaStyle}
-        className="area-accent-card review-board-card workflow-secondary-card workflow-support-card workflow-quiet-card"
-      >
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <CardTitle className="text-base">Carry-forward board</CardTitle>
-              <CardDescription>
-                Read the day as residue, finished work, recovery, and work that
-                still deserves time.
-              </CardDescription>
-            </div>
-            {selectedArea ? (
-              <Badge
-                variant="secondary"
-                className="area-accent-chip rounded-full"
-              >
-                Current area: {selectedArea.name}
-              </Badge>
-            ) : null}
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {summaryGroups.map((group) => (
-            <div
-              key={group.title}
-              data-testid={
-                group.lifecycle === "carry_forward"
-                  ? "review-carry-forward-card"
-                  : undefined
-              }
-              data-accent-strength={
-                group.lifecycle === "carry_forward" ? "subtle" : undefined
-              }
-              className={
-                group.lifecycle === "carry_forward"
-                  ? "area-accent-card rounded-lg border p-4"
-                  : "area-accent-panel rounded-lg border p-4"
-              }
-            >
-              {(() => {
-                const lifecycle = reviewGroupLifecycleDisplay(group.lifecycle);
-                return (
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">{group.title}</p>
-                        <Badge variant={lifecycle.variant}>
-                          {lifecycle.label}
-                        </Badge>
-                      </div>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {group.count === 0
-                          ? group.empty
-                          : `${group.count} item${group.count === 1 ? "" : "s"}`}
-                      </p>
-                    </div>
-                    <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
-                      {group.count}
-                    </span>
-                  </div>
-                );
-              })()}
-              {group.items.length > 0 ? (
-                <ul className="mt-3 list-disc pl-5 text-sm text-foreground">
-                  {group.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
       <DiagnosticsDisclosure
-        title="Saved review details and history"
+        title="Review details and history"
         contentClassName="mt-4 space-y-4"
       >
+        <Card
+          data-testid="review-today-at-a-glance-card"
+          data-accent-strength="subtle"
+          style={selectedAreaStyle}
+          className="area-accent-card review-board-card workflow-secondary-card workflow-support-card workflow-quiet-card"
+        >
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <CardTitle className="text-base">Carry-forward board</CardTitle>
+                <CardDescription>
+                  Read the day as residue, finished work, recovery, and work that
+                  still deserves time.
+                </CardDescription>
+              </div>
+              {selectedArea ? (
+                <Badge
+                  variant="secondary"
+                  className="area-accent-chip rounded-full"
+                >
+                  Current area: {selectedArea.name}
+                </Badge>
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {summaryGroups.map((group) => (
+              <div
+                key={group.title}
+                data-testid={
+                  group.lifecycle === "carry_forward"
+                    ? "review-carry-forward-card"
+                    : undefined
+                }
+                data-accent-strength={
+                  group.lifecycle === "carry_forward" ? "subtle" : undefined
+                }
+                className={
+                  group.lifecycle === "carry_forward"
+                    ? "area-accent-card rounded-lg border p-4"
+                    : "area-accent-panel rounded-lg border p-4"
+                }
+              >
+                {(() => {
+                  const lifecycle = reviewGroupLifecycleDisplay(group.lifecycle);
+                  return (
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{group.title}</p>
+                          <Badge variant={lifecycle.variant}>
+                            {lifecycle.label}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {group.count === 0
+                            ? group.empty
+                            : `${group.count} item${group.count === 1 ? "" : "s"}`}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground">
+                        {group.count}
+                      </span>
+                    </div>
+                  );
+                })()}
+                {group.items.length > 0 ? (
+                  <ul className="mt-3 list-disc pl-5 text-sm text-foreground">
+                    {group.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
           <Card className="review-counts-card workflow-secondary-card workflow-support-card">
             <CardHeader className="pb-3">

@@ -64,8 +64,8 @@ describe("HomePage Today cockpit", () => {
       screen.getByRole("heading", { level: 1, name: "Today" }),
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Next" })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Daily loop" })).toBeDefined();
     expect(screen.getByText("Instrument panel")).toBeDefined();
+    expect(screen.getByTestId("home-read-only-note")).toBeDefined();
     expect(screen.getByTestId("today-next-card")).toHaveClass(
       "workflow-primary-card",
     );
@@ -91,7 +91,9 @@ describe("HomePage Today cockpit", () => {
     expect(
       screen.getByRole("link", { name: "Capture a thought" }),
     ).toHaveAttribute("href", "/capture");
-    expect(screen.getByText(/Home stays read-only\./i)).toBeDefined();
+    expect(screen.getByTestId("home-read-only-note")).toHaveTextContent(
+      "Home stays read-only. Capture one real thing, sort it in Triage, then plan one real block.",
+    );
     expect(
       screen.queryByRole("button", { name: "Save quick capture" }),
     ).toBeNull();
@@ -182,9 +184,9 @@ describe("HomePage Today cockpit", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveAttribute("data-severity", "warning");
-    expect(alert).toHaveTextContent("Account data is partially unavailable");
+    expect(alert).toHaveTextContent("Some account data did not load");
     expect(alert).toHaveTextContent(
-      "Showing local data where available. You can continue safely and check Health if this keeps happening.",
+      "Local workflow is still available. You can keep moving and check Health if this keeps happening.",
     );
     expect(alert).not.toHaveTextContent("Health checks could not load");
     expect(

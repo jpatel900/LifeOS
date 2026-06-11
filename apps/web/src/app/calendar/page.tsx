@@ -942,38 +942,6 @@ export default function CalendarPage() {
         eyebrow="Local-first planning"
         title="Planning"
         description="Start local, shape one suggestion, and approve any real Google write explicitly."
-        spotlight={
-          <Card
-            data-testid="planning-header-summary-card"
-            className="workflow-secondary-card workflow-support-card workflow-quiet-card"
-          >
-            <CardContent className="workflow-metric-grid pt-6">
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Needs time</p>
-                <p className="workflow-metric-value">
-                  {scheduleableTasks.length}
-                </p>
-                <p className="workflow-metric-context">
-                  Active tasks waiting for a first slot.
-                </p>
-              </div>
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Ready to review</p>
-                <p className="workflow-metric-value">{proposals.length}</p>
-                <p className="workflow-metric-context">
-                  Suggested times still waiting for your decision.
-                </p>
-              </div>
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Already planned</p>
-                <p className="workflow-metric-value">{blocks.length}</p>
-                <p className="workflow-metric-context">
-                  Ready to start in Execute.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        }
       >
         {selectedArea ? (
           <Badge
@@ -1087,7 +1055,11 @@ export default function CalendarPage() {
       ) : null}
 
       {actionState.status === "saving" ? (
-        <Alert role="status" className="workflow-celebration-alert">
+        <Alert
+          role="status"
+          aria-live="polite"
+          className="workflow-celebration-alert"
+        >
           <AlertTitle>{planningPendingFeedback(actionState).title}</AlertTitle>
           <AlertDescription>
             {planningPendingFeedback(actionState).description}
@@ -1108,6 +1080,7 @@ export default function CalendarPage() {
             return (
               <Alert
                 role="status"
+                aria-live="polite"
                 className="workflow-celebration-alert border-border bg-muted text-foreground"
               >
                 <AlertTitle className="text-primary">
@@ -1282,6 +1255,40 @@ export default function CalendarPage() {
                     })}
                 </DiagnosticsDisclosure>
               ) : null}
+            </CardContent>
+          </Card>
+
+          <Card
+            data-testid="planning-queue-summary-card"
+            className="workflow-secondary-card workflow-support-card workflow-quiet-card"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Planning snapshot</CardTitle>
+            </CardHeader>
+            <CardContent className="workflow-metric-grid">
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Needs time</p>
+                <p className="workflow-metric-value">
+                  {scheduleableTasks.length}
+                </p>
+                <p className="workflow-metric-context">
+                  Active tasks waiting for a first slot.
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Ready to review</p>
+                <p className="workflow-metric-value">{proposals.length}</p>
+                <p className="workflow-metric-context">
+                  Suggested times still waiting for your decision.
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Already planned</p>
+                <p className="workflow-metric-value">{blocks.length}</p>
+                <p className="workflow-metric-context">
+                  Ready to start in Execute.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -1553,7 +1560,7 @@ export default function CalendarPage() {
                       </div>
                       <Separator />
                       <DiagnosticsDisclosure
-                        title="Google Calendar options"
+                        title="Google write approval"
                         open={googleActionsRelevant}
                         className="workflow-admin-card rounded-md p-2"
                         summaryClassName="cursor-pointer select-none text-xs font-medium text-foreground"
@@ -1561,8 +1568,8 @@ export default function CalendarPage() {
                       >
                           <p className="text-xs text-muted-foreground">
                             {usesPersistedPlanning
-                              ? "Nothing goes to Google Calendar until you approve it."
-                              : "Save planning to your account before using Google Calendar options."}
+                              ? "Google write only happens after you approve it."
+                              : "Save planning to your account before Google write approval is available."}
                           </p>
                           {usesPersistedPlanning &&
                           googleConnectionState.status === "ready" &&

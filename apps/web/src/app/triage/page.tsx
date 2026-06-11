@@ -363,48 +363,6 @@ export default function TriagePage() {
         eyebrow="One decision at a time"
         title="Triage"
         description="Stay with the current item, make the next decision, then let the rest wait."
-        spotlight={
-          <Card
-            data-testid="triage-header-summary-card"
-            className="workflow-secondary-card workflow-support-card"
-          >
-            <CardContent className="workflow-metric-grid pt-6">
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Current item</p>
-                <p className="workflow-metric-value text-[1.35rem]">
-                  {hasCandidates ? "Ready now" : "Nothing waiting"}
-                </p>
-                <p className="workflow-metric-context">
-                  {hasCandidates
-                    ? "Finish one draft before touching the rest."
-                    : "Capture first, then come back here."}
-                </p>
-              </div>
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Waiting after this</p>
-                <p className="workflow-metric-value text-[1.35rem]">
-                  {upcomingQueueItems.length}
-                </p>
-                <p className="workflow-metric-context">
-                  {upcomingQueueItems.length === 0
-                    ? "The queue clears when this is done."
-                    : "The rest stays compressed until this is done."}
-                </p>
-              </div>
-              <div className="workflow-metric-card">
-                <p className="workflow-metric-label">Accepted items save</p>
-                <p className="workflow-metric-value text-[1.35rem]">
-                  {loadState.status === "ready"
-                    ? saveModeLabel(loadState.provider)
-                    : "Checking"}
-                </p>
-                <p className="workflow-metric-context">
-                  Nothing syncs until you accept it.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        }
       >
         {activeQueueItemArea ? (
           <Badge
@@ -419,47 +377,6 @@ export default function TriagePage() {
           </Badge>
         ) : null}
       </WorkflowPageHeader>
-
-      {hasCandidates ? (
-        <Card
-          data-testid="triage-next-action-card"
-          className="workflow-secondary-card workflow-support-card"
-        >
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Current focus</CardTitle>
-          </CardHeader>
-          <CardContent className="workflow-action-tray flex flex-wrap items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="workflow-section-kicker">Next move</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {upcomingQueueItems.length === 0
-                  ? "Review this item now. Nothing waits after it."
-                  : `Review this item now. ${upcomingQueueItems.length} ${upcomingQueueItems.length === 1 ? "item waits" : "items wait"} after it.`}
-              </p>
-            </div>
-            <Button type="button" onClick={handleReviewNextItem}>
-              Review current item
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <DiagnosticsDisclosure title="Triage details">
-        {loadState.status === "ready" ? (
-          <>
-            <p>
-              Accepted items are {savedViaLabel(loadState.provider)}. Pending
-              drafts stay on this device.
-            </p>
-            <p>
-              Save mode: <strong>{saveModeLabel(loadState.provider)}</strong>
-            </p>
-            <p>
-              Technical save mode id: <strong>{loadState.provider}</strong>.
-            </p>
-          </>
-        ) : null}
-      </DiagnosticsDisclosure>
 
       {loadState.status === "loading" ? (
         <WorkflowLoadingState
@@ -482,7 +399,12 @@ export default function TriagePage() {
       ) : null}
 
       {saveState.status === "saved" ? (
-        <Alert variant="success" className="workflow-celebration-alert">
+        <Alert
+          variant="success"
+          role="status"
+          aria-live="polite"
+          className="workflow-celebration-alert"
+        >
           <AlertTitle>Ready for Planning</AlertTitle>
           <AlertDescription>
             Accepted {saveState.label}. It was{" "}
@@ -598,7 +520,11 @@ export default function TriagePage() {
                             </Alert>
                           ) : null}
                           {noteFeedbackByDraftId[task.id] ? (
-                            <Alert variant="success">
+                            <Alert
+                              variant="success"
+                              role="status"
+                              aria-live="polite"
+                            >
                               <AlertTitle>
                                 Note saved in this browser
                               </AlertTitle>
@@ -928,8 +854,69 @@ export default function TriagePage() {
               </CardContent>
             </Card>
           ) : null}
+
+          <Card
+            data-testid="triage-queue-summary-card"
+            className="workflow-secondary-card workflow-support-card"
+          >
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Queue snapshot</CardTitle>
+            </CardHeader>
+            <CardContent className="workflow-metric-grid">
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Current item</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {hasCandidates ? "Ready now" : "Nothing waiting"}
+                </p>
+                <p className="workflow-metric-context">
+                  {hasCandidates
+                    ? "Finish one draft before touching the rest."
+                    : "Capture first, then come back here."}
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Waiting after this</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {upcomingQueueItems.length}
+                </p>
+                <p className="workflow-metric-context">
+                  {upcomingQueueItems.length === 0
+                    ? "The queue clears when this is done."
+                    : "The rest stays compressed until this is done."}
+                </p>
+              </div>
+              <div className="workflow-metric-card">
+                <p className="workflow-metric-label">Accepted items save</p>
+                <p className="workflow-metric-value text-[1.35rem]">
+                  {loadState.status === "ready"
+                    ? saveModeLabel(loadState.provider)
+                    : "Checking"}
+                </p>
+                <p className="workflow-metric-context">
+                  Nothing syncs until you accept it.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
+
+      <DiagnosticsDisclosure title="Triage details">
+        {loadState.status === "ready" ? (
+          <>
+            <p>
+              Accepted items are {savedViaLabel(loadState.provider)}. Pending
+              drafts stay on this device.
+            </p>
+            <p>
+              Save mode: <strong>{saveModeLabel(loadState.provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{loadState.provider}</strong>.
+            </p>
+          </>
+        ) : null}
+      </DiagnosticsDisclosure>
     </div>
   );
 }

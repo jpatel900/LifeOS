@@ -293,60 +293,24 @@ export default function AreasSettingsPage() {
     <div className="flex flex-col gap-6">
       <WorkflowPageHeader
         className="workflow-page-header--areas"
-        spotlightClassName="workflow-page-spotlight--areas"
         eyebrow="Ownership boundaries"
         title="Areas"
         description="Use areas as clear ownership boundaries. Keep them specific enough to trust and quiet enough not to distract from daily work."
-        spotlight={
-          state.status === "ready" ? (
-            <Card
-              data-testid="areas-header-summary-card"
-              className="workflow-secondary-card workflow-support-card areas-ownership-summary-card"
-            >
-              <CardContent className="workflow-metric-grid pt-6">
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Save mode</p>
-                  <p className="workflow-metric-value text-[1.35rem]">
-                    {saveModeLabel(state.provider)}
-                  </p>
-                  <p className="workflow-metric-context">
-                    This page stays truthful about where changes save.
-                  </p>
-                </div>
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Active areas</p>
-                  <p className="workflow-metric-value">{state.areas.length}</p>
-                  <p className="workflow-metric-context">
-                    Clear scopes keep Capture, Planning, and Review legible.
-                  </p>
-                </div>
-                <div className="workflow-metric-card">
-                  <p className="workflow-metric-label">Current area</p>
-                  <p className="workflow-metric-value text-[1.35rem]">
-                    {currentArea?.name ?? "None selected"}
-                  </p>
-                  <p className="workflow-metric-context">
-                    Change it only when the ownership boundary really changes.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null
-        }
-      />
-
-      <DiagnosticsDisclosure title="Areas details">
+      >
         {state.status === "ready" ? (
-          <>
-            <p>
-              Save mode: <strong>{saveModeLabel(state.provider)}</strong>
-            </p>
-            <p>
-              Technical save mode id: <strong>{state.provider}</strong>
-            </p>
-          </>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">
+              Save mode: {saveModeLabel(state.provider)}
+            </Badge>
+            <Badge variant="outline">
+              Active areas: {state.areas.length}
+            </Badge>
+            <Badge variant="secondary" className="area-accent-chip rounded-full">
+              Current area: {currentArea?.name ?? "None selected"}
+            </Badge>
+          </div>
         ) : null}
-      </DiagnosticsDisclosure>
+      </WorkflowPageHeader>
 
       <Card
         data-testid="areas-create-card"
@@ -418,6 +382,11 @@ export default function AreasSettingsPage() {
                   ? "alert"
                   : "status"
               }
+              aria-live={
+                createAreaFeedback.variant === "destructive"
+                  ? undefined
+                  : "polite"
+              }
               className={
                 createAreaFeedback.variant === "success"
                   ? "workflow-celebration-alert text-foreground"
@@ -443,6 +412,19 @@ export default function AreasSettingsPage() {
           ) : null}
         </CardContent>
       </Card>
+
+      <DiagnosticsDisclosure title="Registry details">
+        {state.status === "ready" ? (
+          <>
+            <p>
+              Save mode: <strong>{saveModeLabel(state.provider)}</strong>
+            </p>
+            <p>
+              Technical save mode id: <strong>{state.provider}</strong>
+            </p>
+          </>
+        ) : null}
+      </DiagnosticsDisclosure>
 
       {state.status === "loading" ? (
         <WorkflowLoadingState
@@ -645,7 +627,7 @@ export default function AreasSettingsPage() {
                         >
                           {isSelected ? "Using this area" : "Use this area"}
                         </Button>
-                        <Button asChild>
+                        <Button asChild variant="outline">
                           <Link
                             href="/capture"
                             onClick={() => setSelectedAreaId(workflowAreaId)}
@@ -657,7 +639,7 @@ export default function AreasSettingsPage() {
                     </div>
 
                     <DiagnosticsDisclosure
-                      title="Ownership actions and settings"
+                      title="Registry actions and settings"
                       className="workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground"
                       contentClassName="mt-3 grid gap-3 text-sm text-muted-foreground"
                     >
@@ -772,6 +754,11 @@ export default function AreasSettingsPage() {
                                   ? "alert"
                                   : "status"
                               }
+                              aria-live={
+                                colorFeedback.variant === "destructive"
+                                  ? undefined
+                                  : "polite"
+                              }
                               className={
                                 colorFeedback.variant === "success"
                                   ? "mt-3 workflow-celebration-alert text-foreground"
@@ -877,7 +864,7 @@ export default function AreasSettingsPage() {
       ) : null}
 
       <DiagnosticsDisclosure
-        title="Calendar connection details"
+        title="Google Calendar admin"
         contentClassName="mt-4"
       >
         <GoogleCalendarConnectionPanel />

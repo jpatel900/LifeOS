@@ -7,6 +7,10 @@ Do not use for: Runtime truth or shipped UX status
 Superseded by: Authenticated GitHub comments and metadata once the backfill is applied
 Reason not applied: `gh` is installed, but `gh auth status` reports the default token is invalid in this environment
 
+Latest verification:
+
+- `2026-06-11`: `gh auth status` still reports `The token in default is invalid.`
+
 ## Issue #146 comment
 
 ```md
@@ -251,6 +255,47 @@ What changed:
 - UI validation guidance now treats screenshot and simplification proof as part of completion, not optional commentary
 ```
 
+## Issue #198 comment
+
+```md
+Implemented locally because GitHub write auth is still unavailable in this environment.
+
+Artifacts:
+- final audit note: `docs/implementation-notes/2026-06-11-pass-7-final-audit.md`
+- rubric: `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`
+- screenshot packet: `apps/web/test-results/pass-7/final-audit/`
+
+Audit result:
+- Pass 7 final audit passed on `2026-06-11`
+- no route scored `0`
+- every route average is at least `2.4`
+- `Home` and `Capture` each clear the higher `2.7` threshold
+
+Residual weaknesses called out in the audit instead of hidden:
+- AppShell is acceptable but still not perfect; mobile shell chrome remains dense and the quick-capture disclosure still spends vertical space above some route bodies
+- Review is calmer than before but still the densest audited workflow route on desktop
+```
+
+## Issue #199 comment
+
+```md
+Implemented locally because GitHub write auth is still unavailable in this environment.
+
+Artifacts:
+- closeout audit: `docs/implementation-notes/2026-06-11-pass-7-final-audit.md`
+- updated roadmap truth: `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
+- updated shipped handoff: `docs/PROJECT_STATE.md`
+
+What changed:
+- Pass 7 is now marked closed instead of active
+- the roadmap is back in maintenance posture and does not invent a fake next pass
+- the route scorecard now records residual guardrails instead of still claiming final audit is pending
+
+Known remaining gaps outside Pass 7 scope:
+- GitHub CLI auth is still broken locally, so labels and milestone backfill remain partially manual
+- issue `#93` production acceptance proof is still incomplete
+```
+
 ## Issue #159 comment
 
 ```md
@@ -476,8 +521,548 @@ What changed:
 - Playwright now asserts the mobile primary nav stays single-row on non-quiet routes so later shell work cannot quietly reintroduce the wrapped chip cloud
 ```
 
+## Issue #171 comment
+
+```md
+Implemented locally.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/components/AppShell.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/routeSmoke.test.tsx`
+  - `apps/web/tests/e2e/shell-clutter.spec.ts`
+  - `apps/web/tests/e2e/p0-ux-regression.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/171-shell-route-behavior/2026-06-11-171-triage-mobile-rest.png`
+  - `apps/web/test-results/pass-7/171-shell-route-behavior/2026-06-11-171-triage-desktop-rest.png`
+
+What changed:
+- the shell quick-note composer is now collapsed by default on non-quiet routes and only opens after an explicit `Quick note` action
+- route-local work now lands ahead of shell note input and save controls in the resting first viewport
+- Home and Capture keep their stricter shell suppression unchanged, so this pass only quieted the routes that still needed it
+```
+
+## Issue #172 comment
+
+```md
+Implemented locally.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/components/AppShell.tsx`
+- focused proof:
+  - `apps/web/tests/e2e/shell-clutter.spec.ts`
+  - `apps/web/tests/e2e/app-shell-accent.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/172-area-display-pass/2026-06-11-172-triage-mobile-rest.png`
+  - `apps/web/test-results/pass-7/172-area-display-pass/2026-06-11-172-triage-desktop-rest.png`
+
+What changed:
+- the duplicate shell-level area spotlight was removed from the non-quiet context header
+- area stays visible through the persistent shell area control, so trust is preserved without repeating the same context twice
+- focused browser proof now guards the quieter first viewport on mobile and desktop
+```
+
+## Issue #173 comment
+
+```md
+Implemented locally as part of the Capture hierarchy recovery batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/capture/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/capture.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/173-176-capture-hierarchy/2026-06-11-173-176-capture-mobile-rest.png`
+  - `apps/web/test-results/pass-7/173-176-capture-hierarchy/2026-06-11-173-176-capture-desktop-rest.png`
+
+What changed:
+- Capture now lands on the raw-input card first instead of summary or detail surfaces
+- the textarea plus the two primary save actions remain in the first viewport at `390px`
+- focused browser proof now asserts that the main capture card stays ahead of support summary content and `Capture details`
+```
+
+## Issue #174 comment
+
+```md
+Implemented locally together with `#173`.
+
+Artifacts:
+- route hierarchy update:
+  - `apps/web/src/app/capture/page.tsx`
+- focused proof:
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+
+What changed:
+- the primary save controls stay directly under the raw-input surface instead of being pushed below metrics or diagnostics
+- optional area selection remains available near the action cluster without becoming a competing support surface
+- browser proof now guards that both primary save actions stay ahead of support and diagnostic content at rest
+```
+
+## Issue #175 comment
+
+```md
+Implemented locally together with `#173`.
+
+Artifacts:
+- route copy and disclosure alignment:
+  - `apps/web/src/app/capture/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/capture.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+
+What changed:
+- `Capture details` remains available, but it stays clearly after the main capture actions and support summary
+- device-only draft history remains behind disclosure instead of competing with the raw-entry job
+- focused tests now guard that local draft and diagnostic disclosures stay after the primary actions
+```
+
+## Issue #176 comment
+
+```md
+Implemented locally together with `#173-#175`.
+
+Artifacts:
+- route copy update:
+  - `apps/web/src/app/capture/page.tsx`
+- focused test updates:
+  - `apps/web/src/__tests__/capture.test.tsx`
+  - `apps/web/tests/e2e/workflow-card-accent.spec.ts`
+
+What changed:
+- the Capture action cluster now uses calmer, more direct labels: `Choose what happens next`, `Save the thought now, or send drafts to Triage.`, and `Optional area`
+- the local organize disclosure now reads `Organize on this device`, with supporting copy that keeps browser-local drafts explicitly secondary
+- test selectors were tightened to target the actual controls instead of ambiguous repeated text, which makes the proof less brittle
+```
+
+## Issue #177 comment
+
+```md
+Implemented locally as an explicit proof closeout after `#173-#176`.
+
+Artifacts:
+- focused safety proof:
+  - `apps/web/src/__tests__/capture.test.tsx`
+  - `apps/web/src/__tests__/phase4aPersistence.test.tsx`
+  - `apps/web/src/__tests__/sourceOfTruth.test.ts`
+- batch proof note:
+  - `docs/implementation-notes/2026-06-11-capture-hierarchy-recovery.md`
+
+What changed:
+- no new runtime behavior was needed because Capture already preserved raw-save-first semantics
+- focused tests now re-prove that `Save thought` persists raw text first, save failures stay explicit, and parse failures still say the raw capture is safely stored
+- static source-of-truth coverage still keeps parser and Google Calendar boundaries out of the client route while the hierarchy cleanup stays landed
+```
+
+## Issue #178 comment
+
+```md
+Implemented locally as part of the Home launchpad recovery batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/page.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/178-181-home-launchpad/2026-06-11-178-181-home-mobile-rest.png`
+  - `apps/web/test-results/pass-7/178-181-home-launchpad/2026-06-11-178-181-home-desktop-rest.png`
+
+What changed:
+- Home degraded account-data copy now reads more calmly and accurately: some account data did not load, local workflow still works, and Health is the next diagnostic stop if the problem persists
+- the route still exposes the warning truth when account data fails partially, but it no longer sounds like a total outage
+- the Home launchpad remains usable and read-only under that degraded state
+```
+
+## Issue #179 comment
+
+```md
+Implemented locally together with `#180`.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/page.tsx`
+- browser proof:
+  - `apps/web/tests/e2e/p0-ux-regression.spec.ts`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+
+What changed:
+- Home now reads more clearly as a launchpad instead of a mini dashboard
+- the separate `Daily loop` empty-state card was removed because it duplicated the flagship launch surface
+- the read-only launch guidance now lives as a quieter note inside the `Today / Next` card instead of as its own support surface
+```
+
+## Issue #180 comment
+
+```md
+Implemented locally together with `#179`.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/page.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+
+What changed:
+- Home support-card clutter dropped by one full surface at rest because the `Daily loop` card is gone
+- the flagship disclosure label was shortened from `Suggested follow-through` to `After this`
+- first-viewport browser proof now captures the quieter mobile and desktop Home resting state directly
+```
+
+## Issue #181 comment
+
+```md
+Implemented locally as explicit proof after the Home cleanup.
+
+Artifacts:
+- focused proof:
+  - `apps/web/src/__tests__/page.test.tsx`
+  - `apps/web/src/__tests__/sourceOfTruth.test.ts`
+  - `apps/web/tests/e2e/p0-ux-regression.spec.ts`
+- batch proof note:
+  - `docs/implementation-notes/2026-06-11-home-launchpad-recovery.md`
+
+What changed:
+- Home still exposes no mutation controls and still routes the user to workflow screens instead of changing workflow state directly
+- unit and browser proof now check the quieter launchpad structure rather than the removed `Daily loop` card
+- the route remains read-only while the UI gets simpler
+```
+
+## Issue #182 comment
+
+```md
+Implemented locally as part of the Triage recovery batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/triage/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/triage.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/182-183-triage-decision/2026-06-11-182-183-triage-mobile-rest.png`
+  - `apps/web/test-results/pass-7/182-183-triage-decision/2026-06-11-182-183-triage-desktop-rest.png`
+
+What changed:
+- Triage now lands directly on the current item instead of a summary or preamble card about the current item
+- focused browser proof now asserts the current decision sits ahead of queue summary and route diagnostics on mobile and desktop
+- the old `Current focus` support card was removed because it duplicated the flagship decision surface
+```
+
+## Issue #183 comment
+
+```md
+Implemented locally together with `#182`.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/triage/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/triage.test.tsx`
+  - `apps/web/src/__tests__/phase4aPersistence.test.tsx`
+  - `apps/web/src/__tests__/sourceOfTruth.test.ts`
+
+What changed:
+- support context and queue summary now stay secondary to the current decision
+- Triage details remain available, but they now land after the current item and lower support surfaces
+- persistence and static truth tests now protect the quieter current-item-first contract instead of the removed preamble card
+```
+
+## Issue #184 comment
+
+```md
+Implemented locally as part of the Planning recovery batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/calendar/page.tsx`
+- focused proof:
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/184-185-planning-flow/2026-06-11-184-185-planning-mobile-rest.png`
+  - `apps/web/test-results/pass-7/184-185-planning-flow/2026-06-11-184-185-planning-desktop-rest.png`
+
+What changed:
+- Planning now lands on the local-first `Planning flow` flagship before support summary or route diagnostics
+- the old header spotlight summary moved lower into a quieter `Planning snapshot` support card
+- browser proof now asserts the local-first flow stays ahead of that summary and of `Planning details` on mobile and desktop
+```
+
+## Issue #185 comment
+
+```md
+Implemented locally together with `#184` without changing Google behavior.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/calendar/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/phase4aPersistence.test.tsx`
+  - `apps/web/src/__tests__/sourceOfTruth.test.ts`
+
+What changed:
+- `Google Calendar options` now reads `Google write approval` because the surface is an explicit approval gate
+- the lead copy now says `Google write only happens after you approve it.`
+- Google write behavior, approval gating, OAuth scope, and persistence rules are unchanged; only the staging and wording are clearer
+```
+
+## Issue #186 comment
+
+```md
+Implemented locally as the Execute recovery batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/execute/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/executeFocusPolish.test.tsx`
+  - `apps/web/src/__tests__/phase4aPersistence.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/186-execute-mission/2026-06-11-186-execute-mobile-rest.png`
+  - `apps/web/test-results/pass-7/186-execute-mission/2026-06-11-186-execute-desktop-rest.png`
+
+What changed:
+- Execute now keeps the current mission clearly above the quieter visible-state card and the new `Next move` support lane
+- the redundant top-of-route `Mission record` disclosure was removed because it competed with the flagship mission surface
+- focused browser proof now asserts the mission card stays above both support surfaces on mobile and desktop
+```
+
+## Issue #187 comment
+
+```md
+Implemented locally as the Review recovery batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/review/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/phase4aPersistence.test.tsx`
+  - `apps/web/src/__tests__/workflowAreaAccent.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/187-review-carry-forward/2026-06-11-187-review-mobile-rest.png`
+  - `apps/web/test-results/pass-7/187-review-carry-forward/2026-06-11-187-review-desktop-rest.png`
+
+What changed:
+- Review now keeps the closure flagship and carry-forward actions visible first
+- the carry-forward board plus saved-history surfaces moved behind the lower `Review details and history` disclosure
+- browser proof now asserts those heavier board/history surfaces stay below the carry-forward action path at rest
+```
+
+## Issue #188 comment
+
+```md
+Implemented locally as the Health diagnostic-home batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/health/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/healthPage.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/188-health-diagnostic-home/2026-06-11-188-health-mobile-rest.png`
+  - `apps/web/test-results/pass-7/188-health-diagnostic-home/2026-06-11-188-health-desktop-rest.png`
+
+What changed:
+- Health now states more explicitly that it is the diagnostic home when other workflow routes point the user here
+- the first-load success alert was removed so the flagship trust answer stays in the first mobile viewport instead of being pushed down by celebratory feedback
+- manual re-runs still surface clear success or failure feedback near the action, so repair truth stays explicit without cluttering the resting state
+```
+
+## Issue #189 comment
+
+```md
+Implemented locally as the Areas admin-registry batch.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/settings/areas/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/workflowAreaAccent.test.tsx`
+  - `apps/web/src/__tests__/phase4aPersistence.test.tsx`
+  - `apps/web/tests/e2e/workflow-hierarchy.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/189-areas-admin-registry/2026-06-11-189-areas-mobile-rest.png`
+  - `apps/web/test-results/pass-7/189-areas-admin-registry/2026-06-11-189-areas-desktop-rest.png`
+
+What changed:
+- Areas no longer opens with a separate header summary card above the flagship create-area surface
+- registry details now sit below the create card, area record actions are calmer, and the Google section now reads as `Google Calendar admin`
+- browser proof now asserts the create-area card stays above registry records and lower admin detail on mobile and desktop
+```
+
 ## No body replacement required yet
 
 - `#146` already has the child issue index and phase grouping.
 - `#200` already states the backlog-hardening goal and acceptance criteria.
 - The shared execution map was chosen deliberately to avoid bloating every child issue body with repeated control-plane text.
+
+## Issue #190 comment
+
+```md
+Implemented locally as the first visual-system restraint slice.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/globals.css`
+  - `apps/web/src/components/ui/card.tsx`
+- browser proof:
+  - `apps/web/tests/e2e/workflow-card-accent.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/190-card-depth-restraint/2026-06-11-190-home-desktop-rest.png`
+  - `apps/web/test-results/pass-7/190-card-depth-restraint/2026-06-11-190-areas-mobile-rest.png`
+
+What changed:
+- shared flagship, support, admin, and nested panel surfaces now read with less stacked depth and fewer competing card variants
+- the fix landed primarily in the shared surface layer instead of route-by-route card churn
+- route hierarchy is unchanged; the UI just feels less boxed in
+```
+
+## Issue #191 comment
+
+```md
+Implemented locally together with `#190`.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/globals.css`
+  - `apps/web/src/components/ui/button.tsx`
+  - `apps/web/src/components/ui/input.tsx`
+  - `apps/web/src/components/ui/select.tsx`
+  - `apps/web/src/components/ui/textarea.tsx`
+- browser proof:
+  - `apps/web/tests/e2e/workflow-card-accent.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/191-type-density/2026-06-11-191-execute-desktop-rest.png`
+
+What changed:
+- shared type rhythm, header spacing, and control density are tighter and calmer
+- dark-mode muted and border contrast is slightly stronger so authored surfaces read more cleanly
+- the `sm` button size now clears the same touch-friendly floor as the default button instead of shrinking below it
+```
+
+## Issue #192 comment
+
+```md
+Implemented locally as the shared visual-noise reduction slice.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/globals.css`
+  - `apps/web/src/components/ui/button.tsx`
+  - `apps/web/src/components/ui/card.tsx`
+- browser proof:
+  - `apps/web/tests/e2e/workflow-card-accent.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/192-visual-restraint/2026-06-11-192-review-desktop-rest.png`
+  - `apps/web/test-results/pass-7/192-visual-restraint/2026-06-11-192-capture-mobile-rest.png`
+
+What changed:
+- shadows, gradients, inset highlights, and accent spill are all quieter across shared workflow surfaces
+- support and admin surfaces now compete less with flagship route cards
+- LifeOS route identity remains authored; only the excess visual noise was removed
+```
+
+## Issue #193 comment
+
+```md
+Implemented locally as the mobile control-density pass.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/components/AppShell.tsx`
+  - `apps/web/src/components/ui/button.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/appShellAccent.test.tsx`
+- browser proof:
+  - `apps/web/tests/e2e/workflow-card-accent.spec.ts`
+- screenshot evidence:
+  - `apps/web/test-results/pass-7/193-mobile-targets/2026-06-11-193-execute-mobile-shell-targets.png`
+
+What changed:
+- primary nav pills, supporting nav, area selection, quick-note entry, and shell status controls now keep a touch-friendly mobile target floor
+- the shell still stays calmer than earlier passes because the target increase landed alongside the shared surface restraint work
+- browser proof now asserts that those core mobile shell controls stay at or above the target floor instead of relying on screenshots alone
+```
+
+## Issue #194 comment
+
+```md
+Implemented locally as the accessibility-baseline hardening pass.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/components/AppShell.tsx`
+  - `apps/web/src/app/components/WorkflowLoadingState.tsx`
+  - `apps/web/src/app/capture/page.tsx`
+  - `apps/web/src/app/triage/page.tsx`
+  - `apps/web/src/app/calendar/page.tsx`
+  - `apps/web/src/app/execute/page.tsx`
+  - `apps/web/src/app/review/page.tsx`
+  - `apps/web/src/app/settings/areas/page.tsx`
+- focused proof:
+  - `apps/web/src/__tests__/sourceOfTruth.test.ts`
+- browser proof:
+  - `apps/web/tests/e2e/accessibility-baseline.spec.ts`
+
+What changed:
+- non-destructive workflow feedback now announces through polite live regions instead of relying on default alert semantics
+- browser proof now checks representative dark-mode contrast, visible keyboard focus, and status semantics on real workflow surfaces
+- the fix stayed in shared semantics and proof; route hierarchy and product behavior are unchanged
+```
+
+## Issue #195 comment
+
+```md
+Implemented locally as the reduced-motion restraint pass.
+
+Artifacts:
+- runtime update:
+  - `apps/web/src/app/globals.css`
+- browser proof:
+  - `apps/web/tests/e2e/motion-performance.spec.ts`
+
+What changed:
+- reduced-motion mode now explicitly suppresses the running focus-orb transition in addition to the existing celebration and primary-card motion cuts
+- browser proof now checks reduced-motion behavior on interactive shell chrome, celebration feedback, and Execute focus-state motion
+- motion stays authored where allowed, but it now proves it can get out of the way when the user asks
+```
+
+## Issue #196 comment
+
+```md
+Implemented locally as the perceived-speed and layout-stability proof pass.
+
+Artifacts:
+- browser proof:
+  - `apps/web/tests/e2e/motion-performance.spec.ts`
+
+What changed:
+- the new performance proof warms Capture, then checks that the route becomes usable quickly on client-side navigation instead of waiting for support data
+- the same proof now guards that the flagship capture card does not jump materially after the route settles
+- this is intentionally perceived-speed proof, not a brittle cold-compile benchmark
+```
+
+## Issue #197 comment
+
+```md
+Implemented locally by extending the existing screenshot workflow into the final packet format.
+
+Artifacts:
+- docs update:
+  - `docs/agent/UI_SCREENSHOT_EVIDENCE_WORKFLOW.md`
+- proof note:
+  - `docs/implementation-notes/2026-06-11-accessibility-motion-performance-evidence.md`
+
+What changed:
+- the screenshot workflow now defines the final packet section order instead of stopping at per-issue capture rules
+- the doc now includes the current Pass 7 packet index, pointing at the already-captured screenshot folders that the final audit should use
+- final audit prep now has one evidence format instead of scattered screenshot reminders across issue comments and notes
+```

@@ -23,8 +23,8 @@
   --input: oklch(0.9 0.01 260);
   --ring: oklch(0.72 0.11 240);
   --area-accent: oklch(0.56 0.03 255);
-  --area-accent-soft: color-mix(in oklch, var(--area-accent) 12%, white);
-  --area-accent-muted: color-mix(in oklch, var(--area-accent) 20%, white);
+  --area-accent-soft: color-mix(in oklch, var(--area-accent) 10%, white);
+  --area-accent-muted: color-mix(in oklch, var(--area-accent) 18%, white);
   --area-accent-border: color-mix(
     in oklch,
     var(--area-accent) 28%,
@@ -38,7 +38,7 @@
   );
   --area-accent-surface: color-mix(
     in oklch,
-    var(--area-accent) 8%,
+    var(--area-accent) 6%,
     var(--card)
   );
   --radius: 0.75rem;
@@ -93,24 +93,24 @@
   --primary-foreground: oklch(0.19 0.01 260);
   --secondary: oklch(0.29 0.015 258);
   --secondary-foreground: oklch(0.95 0.01 262);
-  --muted: oklch(0.27 0.012 258);
-  --muted-foreground: oklch(0.74 0.015 262);
+  --muted: oklch(0.28 0.012 258);
+  --muted-foreground: oklch(0.78 0.015 262);
   --accent: oklch(0.35 0.03 235);
   --accent-foreground: oklch(0.96 0.01 262);
   --destructive: oklch(0.66 0.21 27);
   --destructive-foreground: oklch(0.97 0.01 30);
-  --border: oklch(0.34 0.015 258);
-  --input: oklch(0.34 0.015 258);
+  --border: oklch(0.38 0.015 258);
+  --input: oklch(0.38 0.015 258);
   --ring: oklch(0.75 0.13 242);
   --area-accent: oklch(0.72 0.03 255);
   --area-accent-soft: color-mix(
     in oklch,
-    var(--area-accent) 18%,
+    var(--area-accent) 16%,
     var(--background)
   );
   --area-accent-muted: color-mix(
     in oklch,
-    var(--area-accent) 30%,
+    var(--area-accent) 28%,
     var(--muted)
   );
   --area-accent-border: color-mix(
@@ -126,7 +126,7 @@
   );
   --area-accent-surface: color-mix(
     in oklch,
-    var(--area-accent) 14%,
+    var(--area-accent) 12%,
     var(--card)
   );
 }
@@ -176,12 +176,12 @@ body {
   background:
     radial-gradient(
       circle at top center,
-      color-mix(in oklch, var(--area-accent) 12%, transparent) 0%,
+      color-mix(in oklch, var(--area-accent) 9%, transparent) 0%,
       transparent 36%
     ),
     radial-gradient(
       circle at 20% 0%,
-      color-mix(in oklch, var(--primary) 10%, transparent) 0%,
+      color-mix(in oklch, var(--primary) 8%, transparent) 0%,
       transparent 28%
     ),
     var(--background);
@@ -194,40 +194,34 @@ select,
 textarea,
 summary {
   transition:
-    color 180ms ease,
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease,
-    opacity 180ms ease;
+    color 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
 }
 
 .area-accent-card {
   border-color: var(--area-accent-border);
-  background: linear-gradient(
-    180deg,
-    var(--area-accent-surface) 0%,
-    color-mix(in oklch, var(--area-accent-surface) 55%, var(--card)) 100%
-  );
-  box-shadow:
-    inset 4px 0 0 0 var(--area-accent),
-    inset 0 1px 0 0 var(--area-accent-soft);
+  background: color-mix(in oklch, var(--area-accent-surface) 88%, var(--card));
+  box-shadow: inset 3px 0 0 0 var(--area-accent);
 }
 
 .area-accent-card[data-accent-strength="strong"] {
   background: linear-gradient(
     180deg,
     var(--area-accent-muted) 0%,
-    color-mix(in oklch, var(--area-accent-surface) 82%, var(--card)) 100%
+    color-mix(in oklch, var(--area-accent-surface) 74%, var(--card)) 100%
   );
   box-shadow:
-    inset 6px 0 0 0 var(--area-accent),
-    0 20px 40px -36px var(--area-accent);
+    inset 4px 0 0 0 var(--area-accent),
+    0 16px 32px -34px color-mix(in oklch, var(--area-accent) 22%, transparent);
 }
 
 .area-accent-panel {
   border-color: var(--area-accent-border);
-  background: color-mix(in oklch, var(--area-accent-soft) 72%, var(--card));
+  background: color-mix(in oklch, var(--area-accent-soft) 58%, var(--card));
 }
 
 .area-accent-chip {
@@ -245,16 +239,16 @@ summary {
   border-color: color-mix(in oklch, var(--foreground) 8%, var(--border));
   background: linear-gradient(
     180deg,
-    color-mix(in oklch, var(--card) 82%, var(--muted)) 0%,
+    color-mix(in oklch, var(--card) 88%, var(--muted)) 0%,
     var(--card) 100%
   );
   box-shadow:
-    0 24px 48px -40px color-mix(in oklch, var(--foreground) 24%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 4%, white);
+    0 18px 36px -38px color-mix(in oklch, var(--foreground) 18%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 3%, white);
   transition:
-    border-color 180ms ease,
-    box-shadow 220ms ease,
-    transform 220ms ease;
+    border-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
 }
 
 .workflow-flagship-card {
@@ -265,28 +259,28 @@ summary {
     var(--area-accent-border) 82%,
     var(--border)
   );
-  border-radius: 1.65rem;
+  border-radius: 1.5rem;
   background:
     radial-gradient(
       circle at top right,
-      color-mix(in oklch, var(--area-accent-soft) 82%, transparent) 0%,
-      transparent 44%
+      color-mix(in oklch, var(--area-accent-soft) 70%, transparent) 0%,
+      transparent 40%
     ),
     linear-gradient(
       180deg,
-      color-mix(in oklch, var(--area-accent-surface) 86%, var(--card)) 0%,
-      color-mix(in oklch, var(--card) 94%, var(--muted)) 100%
+      color-mix(in oklch, var(--area-accent-surface) 74%, var(--card)) 0%,
+      color-mix(in oklch, var(--card) 95%, var(--muted)) 100%
     );
   box-shadow:
-    0 30px 60px -42px color-mix(in oklch, var(--area-accent) 34%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, white 7%, transparent);
+    0 22px 44px -40px color-mix(in oklch, var(--area-accent) 22%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent);
 }
 
 .workflow-flagship-card::before {
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
-  height: 0.24rem;
+  height: 0.2rem;
   background: linear-gradient(
     90deg,
     color-mix(in oklch, var(--area-accent) 72%, white) 0%,
@@ -297,20 +291,20 @@ summary {
 
 .workflow-primary-card[data-session-ui-state="running"] {
   box-shadow:
-    0 24px 48px -40px color-mix(in oklch, var(--area-accent) 30%, transparent),
-    0 0 0 1px color-mix(in oklch, var(--area-accent) 18%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 4%, white);
+    0 18px 36px -38px color-mix(in oklch, var(--area-accent) 22%, transparent),
+    0 0 0 1px color-mix(in oklch, var(--area-accent) 14%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 3%, white);
 }
 
 .workflow-secondary-card {
-  background: color-mix(in oklch, var(--card) 90%, var(--muted));
+  background: color-mix(in oklch, var(--card) 92%, var(--muted));
   box-shadow:
-    0 12px 30px -28px color-mix(in oklch, var(--foreground) 16%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 4%, white);
+    0 10px 24px -28px color-mix(in oklch, var(--foreground) 12%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, var(--foreground) 3%, white);
   transition:
-    border-color 180ms ease,
-    box-shadow 220ms ease,
-    transform 220ms ease;
+    border-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
 }
 
 .workflow-support-card {
@@ -319,19 +313,19 @@ summary {
     var(--area-accent-border) 40%,
     var(--border)
   );
-  border-radius: 1.3rem;
+  border-radius: 1.2rem;
   background: linear-gradient(
     180deg,
-    color-mix(in oklch, var(--card) 94%, var(--area-accent-soft)) 0%,
-    color-mix(in oklch, var(--card) 88%, var(--muted)) 100%
+    color-mix(in oklch, var(--card) 95%, var(--area-accent-soft)) 0%,
+    color-mix(in oklch, var(--card) 91%, var(--muted)) 100%
   );
   box-shadow:
-    0 18px 38px -34px color-mix(in oklch, var(--foreground) 16%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent);
+    0 12px 26px -32px color-mix(in oklch, var(--foreground) 12%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 3%, transparent);
 }
 
 .workflow-quiet-card {
-  background: color-mix(in oklch, var(--card) 76%, var(--muted));
+  background: color-mix(in oklch, var(--card) 82%, var(--muted));
   box-shadow: none;
 }
 
@@ -341,10 +335,8 @@ summary {
     var(--border) 88%,
     var(--area-accent-border)
   );
-  background: color-mix(in oklch, var(--card) 94%, var(--muted));
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 3%, transparent),
-    0 10px 24px -30px color-mix(in oklch, var(--foreground) 10%, transparent);
+  background: color-mix(in oklch, var(--card) 95%, var(--muted));
+  box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 2%, transparent);
 }
 
 .workflow-admin-card {
@@ -355,17 +347,17 @@ summary {
     var(--border)
   );
   border-radius: 1.1rem;
-  background: color-mix(in oklch, var(--card) 84%, var(--muted));
+  background: color-mix(in oklch, var(--card) 88%, var(--muted));
   box-shadow: none;
 }
 
 .workflow-shell-panel {
   border: 1px solid
     color-mix(in oklch, var(--area-accent-border) 58%, transparent);
-  background: color-mix(in oklch, var(--card) 82%, transparent);
+  background: color-mix(in oklch, var(--card) 86%, transparent);
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent),
-    0 18px 32px -30px color-mix(in oklch, var(--foreground) 18%, transparent);
+    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent),
+    0 12px 24px -28px color-mix(in oklch, var(--foreground) 12%, transparent);
 }
 
 .workflow-shell::before {
@@ -376,7 +368,7 @@ summary {
   background:
     radial-gradient(
       circle at top center,
-      color-mix(in oklch, var(--area-accent) 10%, transparent) 0%,
+      color-mix(in oklch, var(--area-accent) 8%, transparent) 0%,
       transparent 42%
     ),
     linear-gradient(
@@ -389,14 +381,14 @@ summary {
 
 .workflow-shell__header {
   box-shadow:
-    0 28px 54px -44px color-mix(in oklch, var(--area-accent) 48%, transparent),
+    0 18px 34px -36px color-mix(in oklch, var(--area-accent) 28%, transparent),
     inset 0 -1px 0 0
       color-mix(in oklch, var(--area-accent-border) 82%, transparent);
 }
 
 .workflow-shell__header--quiet {
   box-shadow:
-    0 18px 34px -38px color-mix(in oklch, var(--area-accent) 26%, transparent),
+    0 12px 22px -28px color-mix(in oklch, var(--area-accent) 18%, transparent),
     inset 0 -1px 0 0
       color-mix(in oklch, var(--area-accent-border) 72%, transparent);
 }
@@ -424,7 +416,7 @@ summary {
 }
 
 .workflow-shell__main--shell-quiet {
-  gap: 1.15rem;
+  gap: 1rem;
 }
 
 .workflow-shell-context-header {
@@ -450,33 +442,33 @@ summary {
 
 .workflow-page-header {
   display: grid;
-  gap: 1.25rem;
+  gap: 1rem;
   border: 1px solid
     color-mix(in oklch, var(--area-accent-border) 78%, var(--border));
-  border-radius: 1.75rem;
+  border-radius: 1.5rem;
   background: linear-gradient(
     180deg,
-    color-mix(in oklch, var(--area-accent-soft) 46%, var(--card)) 0%,
-    color-mix(in oklch, var(--card) 92%, var(--muted)) 100%
+    color-mix(in oklch, var(--area-accent-soft) 34%, var(--card)) 0%,
+    color-mix(in oklch, var(--card) 94%, var(--muted)) 100%
   );
-  padding: 1.1rem;
+  padding: 1rem;
   box-shadow:
-    0 24px 48px -42px color-mix(in oklch, var(--area-accent) 52%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent);
+    0 16px 32px -34px color-mix(in oklch, var(--area-accent) 24%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent);
   animation: workflow-rise-in 280ms ease-out both;
 }
 
 .workflow-page-copy {
   display: grid;
   align-content: start;
-  gap: 0.8rem;
+  gap: 0.7rem;
 }
 
 .workflow-page-eyebrow {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
@@ -484,7 +476,7 @@ summary {
 .workflow-page-title {
   margin: 0;
   font-family: "Fraunces", "IBM Plex Sans", "Inter", system-ui, sans-serif;
-  font-size: clamp(2rem, 2.4vw + 1.2rem, 3.15rem);
+  font-size: clamp(1.9rem, 2vw + 1.2rem, 2.9rem);
   line-height: 0.98;
   letter-spacing: -0.03em;
   text-wrap: balance;
@@ -492,8 +484,8 @@ summary {
 
 .workflow-page-description {
   max-width: 56rem;
-  font-size: 0.98rem;
-  line-height: 1.65;
+  font-size: 0.96rem;
+  line-height: 1.55;
   color: var(--muted-foreground);
   text-wrap: pretty;
 }
@@ -502,22 +494,22 @@ summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .workflow-page-body {
   display: grid;
-  gap: 0.9rem;
+  gap: 0.8rem;
 }
 
 .workflow-page-spotlight {
   border: 1px solid var(--area-accent-border);
-  border-radius: 1.25rem;
-  background: color-mix(in oklch, var(--area-accent-soft) 72%, var(--card));
-  padding: 1rem 1.05rem;
+  border-radius: 1.1rem;
+  background: color-mix(in oklch, var(--area-accent-soft) 60%, var(--card));
+  padding: 0.95rem 1rem;
   box-shadow:
     inset 0 1px 0 0 var(--area-accent-soft),
-    0 20px 40px -36px color-mix(in oklch, var(--area-accent) 42%, transparent);
+    0 12px 26px -30px color-mix(in oklch, var(--area-accent) 20%, transparent);
 }
 
 .workflow-page-header--health {
@@ -534,8 +526,8 @@ summary {
       color-mix(in oklch, var(--card) 94%, var(--muted)) 100%
     );
   box-shadow:
-    0 24px 48px -42px color-mix(in oklch, var(--primary) 28%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, white 7%, transparent);
+    0 16px 32px -36px color-mix(in oklch, var(--primary) 18%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent);
 }
 
 .workflow-page-header--health .workflow-page-eyebrow {
@@ -556,8 +548,8 @@ summary {
       color-mix(in oklch, var(--card) 92%, var(--secondary)) 100%
     );
   box-shadow:
-    0 18px 40px -42px color-mix(in oklch, var(--foreground) 18%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent);
+    0 12px 26px -30px color-mix(in oklch, var(--foreground) 12%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent);
 }
 
 .workflow-page-header--areas .workflow-page-eyebrow {
@@ -576,7 +568,7 @@ summary {
   );
   box-shadow:
     inset 0 1px 0 0 var(--area-accent-soft),
-    0 14px 32px -34px color-mix(in oklch, var(--foreground) 14%, transparent);
+    0 10px 22px -28px color-mix(in oklch, var(--foreground) 10%, transparent);
 }
 
 .workflow-page-header--review {
@@ -593,8 +585,8 @@ summary {
       color-mix(in oklch, var(--card) 89%, var(--secondary)) 100%
     );
   box-shadow:
-    0 18px 38px -38px color-mix(in oklch, var(--foreground) 18%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent);
+    0 12px 24px -30px color-mix(in oklch, var(--foreground) 12%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent);
 }
 
 .workflow-page-header--review .workflow-page-eyebrow {
@@ -612,8 +604,8 @@ summary {
     color-mix(in oklch, var(--card) 88%, var(--muted)) 100%
   );
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent),
-    0 16px 34px -36px color-mix(in oklch, var(--foreground) 16%, transparent);
+    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent),
+    0 10px 22px -28px color-mix(in oklch, var(--foreground) 10%, transparent);
 }
 
 .home-cockpit-flagship-card {
@@ -629,8 +621,8 @@ summary {
       color-mix(in oklch, var(--card) 90%, var(--secondary)) 100%
     );
   box-shadow:
-    0 24px 44px -40px color-mix(in oklch, var(--area-accent) 28%, transparent),
-    inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent);
+    0 16px 30px -34px color-mix(in oklch, var(--area-accent) 18%, transparent),
+    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent);
 }
 
 .home-now-card {
@@ -642,7 +634,7 @@ summary {
 }
 
 .home-support-card {
-  box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent);
+  box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 3%, transparent);
 }
 
 .home-featured-support-card {
@@ -653,8 +645,8 @@ summary {
     color-mix(in oklch, var(--card) 90%, var(--muted)) 100%
   );
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 5%, transparent),
-    0 16px 32px -34px color-mix(in oklch, var(--foreground) 14%, transparent);
+    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent),
+    0 10px 22px -28px color-mix(in oklch, var(--foreground) 10%, transparent);
 }
 
 .home-overflow-support-card {
@@ -874,12 +866,10 @@ summary {
   );
   background: linear-gradient(
     180deg,
-    color-mix(in oklch, var(--card) 90%, var(--area-accent-soft)) 0%,
-    color-mix(in oklch, var(--card) 84%, var(--muted)) 100%
+    color-mix(in oklch, var(--card) 93%, var(--area-accent-soft)) 0%,
+    color-mix(in oklch, var(--card) 88%, var(--muted)) 100%
   );
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent),
-    0 14px 32px -30px color-mix(in oklch, var(--foreground) 14%, transparent);
+  box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 3%, transparent);
 }
 
 .workflow-surface-kicker {
@@ -1193,6 +1183,10 @@ h4 {
 
   .workflow-celebration-alert::after {
     display: none;
+  }
+
+  .focus-state-orb {
+    transition: none;
   }
 
   a,

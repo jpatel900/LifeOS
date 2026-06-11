@@ -49,6 +49,12 @@ function renderTriagePage(
   );
 }
 
+function expectBefore(first: HTMLElement, second: HTMLElement) {
+  expect(
+    first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).not.toBe(0);
+}
+
 describe("TriagePage", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
@@ -118,18 +124,21 @@ describe("TriagePage", () => {
 
     renderTriagePage(storedState);
 
-    expect(await screen.findByText("Ready now")).toBeDefined();
-    expect(screen.getAllByText("Current item")).toHaveLength(2);
+    const currentItem = await screen.findByTestId("triage-current-item-card");
+    const queueSummary = screen.getByTestId("triage-queue-summary-card");
+    const triageDetails = screen.getByText("Triage details", { exact: true });
+
+    expect(screen.getByText("Ready now")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Triage" })).toBeDefined();
     expect(screen.getAllByText("Needs decision").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("triage-header-summary-card")).toHaveClass(
+    expect(queueSummary).toHaveClass(
       "workflow-support-card",
     );
-    expect(screen.getByTestId("triage-next-action-card")).toHaveClass(
-      "workflow-support-card",
-    );
-    expect(screen.getByTestId("triage-current-item-card")).toHaveClass(
+    expect(currentItem).toHaveClass(
       "workflow-flagship-card",
     );
+    expectBefore(currentItem, queueSummary);
+    expectBefore(queueSummary, triageDetails);
     expect(screen.getByText("Call dentist tomorrow")).toBeDefined();
     expect(
       screen.getByText("First useful move: Check office hours"),

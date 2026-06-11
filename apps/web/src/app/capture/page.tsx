@@ -712,10 +712,10 @@ export default function CapturePage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="workflow-section-kicker">
-                        Choose the fastest valid path
+                        Choose what happens next
                       </p>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Save the raw thought, or create drafts for Triage now.
+                        Save the thought now, or send drafts to Triage.
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -762,7 +762,7 @@ export default function CapturePage() {
 
               <div className="workflow-action-tray space-y-3">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">Where should this land?</p>
+                  <p className="text-sm font-medium">Optional area</p>
                   {selectedArea ? (
                     <Badge
                       variant="secondary"
@@ -810,13 +810,13 @@ export default function CapturePage() {
           </form>
 
           <DiagnosticsDisclosure
-            title="Local draft pass"
+            title="Organize on this device"
             className="workflow-inline-disclosure"
             contentClassName="mt-3 grid gap-3 workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
           >
             <div className="space-y-1">
               <p className="text-sm font-medium">
-                Keep local drafts secondary
+                Keep device-only drafts secondary
               </p>
               <p className="text-xs text-muted-foreground">
                 Use this only when you want browser-local draft suggestions.
@@ -860,6 +860,7 @@ export default function CapturePage() {
       {captureFeedback ? (
         <Alert
           role={captureFeedback.role}
+          aria-live={captureFeedback.role === "status" ? "polite" : undefined}
           variant={captureFeedback.variant}
           className={
             captureFeedback.role === "status"

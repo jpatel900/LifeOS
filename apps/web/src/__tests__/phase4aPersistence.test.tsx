@@ -650,15 +650,10 @@ describe("Phase 4A Supabase persistence UI", () => {
     });
   });
 
-  it("shows the current-focus triage surface and reviews the current item first", async () => {
+  it("keeps triage current-item-first while leaving the rest of the queue secondary", async () => {
     mocks.listAreas.mockResolvedValue({
       provider: "supabase",
       areas: [area],
-    });
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: scrollIntoView,
     });
 
     renderWithWorkflow(
@@ -669,23 +664,14 @@ describe("Phase 4A Supabase persistence UI", () => {
       </>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Current focus" })).toBeDefined();
-    expect(screen.getByTestId("triage-next-action-card")).toBeDefined();
-    expect(screen.getByTestId("triage-current-item-card")).toBeDefined();
+    expect(await screen.findByTestId("triage-current-item-card")).toBeDefined();
+    expect(screen.getByTestId("triage-queue-summary-card")).toBeDefined();
     expect(
-      screen.getByRole("button", { name: "Review current item" }),
+      await screen.findByRole("heading", { name: "Waiting after this" }),
     ).toBeDefined();
-    expect(await screen.findByRole("heading", { name: "Waiting after this" })).toBeDefined();
     expect(
       screen.getAllByRole("button", { name: "Review this next" }).length,
     ).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole("button", { name: "Review current item" }));
-
-    expect(scrollIntoView).toHaveBeenCalledWith({
-      behavior: "smooth",
-      block: "start",
-    });
   });
 
   it("rejecting a draft does not create a Supabase task or project", async () => {
@@ -1082,7 +1068,7 @@ describe("Phase 4A Supabase persistence UI", () => {
 
     renderWithWorkflow(<CalendarPage />);
 
-    fireEvent.click(await screen.findByText("Google Calendar options"));
+    fireEvent.click(await screen.findByText("Google write approval"));
     const checkConflictButton = await screen.findByRole("button", {
       name: "Check calendar availability",
     });
@@ -1483,10 +1469,10 @@ describe("Phase 4A Supabase persistence UI", () => {
       (await screen.findAllByText("Stopped on this device")).length,
     ).toBeGreaterThan(0);
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Session stopped on this device. Decide the next useful step.",
-      ),
-    ).toBeDefined();
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: "Start another session" }),
     ).toBeDefined();
@@ -1544,10 +1530,10 @@ describe("Phase 4A Supabase persistence UI", () => {
     );
     expect(screen.getByText("Needs review")).toBeDefined();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         "Session ended as missed. Capture why it was missed, then re-plan.",
-      ),
-    ).toBeDefined();
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByRole("link", { name: "Plan another block" }),
     ).toBeDefined();

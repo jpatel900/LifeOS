@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -28,6 +30,24 @@ async function expectSingleRowNav(page: Page, label: string) {
     });
 
   expect(rows).toBe(1);
+}
+
+async function captureShellEvidence(
+  page: Page,
+  issueSlug: string,
+  filename: string,
+) {
+  const shellEvidenceDir = path.join(
+    process.cwd(),
+    "test-results",
+    "pass-7",
+    issueSlug,
+  );
+  mkdirSync(shellEvidenceDir, { recursive: true });
+  await page.screenshot({
+    path: path.join(shellEvidenceDir, filename),
+    fullPage: false,
+  });
 }
 
 test.describe("shell clutter guards", () => {
@@ -71,7 +91,7 @@ test.describe("shell clutter guards", () => {
     }
   });
 
-  test("mobile shell keeps one active nav item and one visible shell input path on triage", async ({
+  test("mobile shell keeps quick note secondary until opened on triage", async ({
     page,
   }) => {
     await page.goto("/triage");
@@ -79,12 +99,20 @@ test.describe("shell clutter guards", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Triage" }),
     ).toBeVisible();
-    await expect(page.getByRole("textbox", { name: "Quick note text" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Quick note" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Quick note text" })).toHaveCount(0);
     await expect(
       page.locator('[aria-label="Primary"] a[aria-current="page"]'),
     ).toHaveCount(1);
     await expectSingleRowNav(page, "Primary");
     await expect(page.getByTestId("app-shell-context-header")).toBeVisible();
+    await captureShellEvidence(
+      page,
+      "171-shell-route-behavior",
+      "2026-06-11-171-triage-mobile-rest.png",
+    );
+    await page.getByRole("button", { name: "Quick note" }).click();
+    await expect(page.getByRole("textbox", { name: "Quick note text" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
@@ -101,4 +129,68 @@ test.describe("shell clutter guards", () => {
     await expectSingleRowNav(page, "Primary");
     await expectNoHorizontalOverflow(page);
   });
+});
+
+test("desktop shell keeps quick note secondary until opened on triage", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/triage");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Triage" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Quick note" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Quick note text" })).toHaveCount(0);
+  await expect(
+    page.locator('[aria-label="Primary"] a[aria-current="page"]'),
+  ).toHaveCount(1);
+  await expect(page.getByTestId("app-shell-context-header")).toBeVisible();
+  await captureShellEvidence(
+    page,
+    "171-shell-route-behavior",
+    "2026-06-11-171-triage-desktop-rest.png",
+  );
+});
+
+test("shell context header stops repeating area text on triage", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/triage");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Triage" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Current area context")).toContainText("Main Job");
+  await expect(page.getByLabel("Current area context")).toContainText("Area");
+  await expect(page.getByTestId("app-shell-context-header")).toBeVisible();
+  await expect(page.getByTestId("app-shell-context-header")).not.toContainText(
+    "Current area",
+  );
+  await captureShellEvidence(
+    page,
+    "172-area-display-pass",
+    "2026-06-11-172-triage-mobile-rest.png",
+  );
+});
+
+test("desktop shell keeps area visible without the extra spotlight repeat", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/triage");
+
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Triage" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Current area context")).toContainText("Main Job");
+  await expect(page.getByTestId("app-shell-context-header")).not.toContainText(
+    "Current area",
+  );
+  await captureShellEvidence(
+    page,
+    "172-area-display-pass",
+    "2026-06-11-172-triage-desktop-rest.png",
+  );
 });

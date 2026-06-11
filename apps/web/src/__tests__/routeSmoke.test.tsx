@@ -163,6 +163,8 @@ describe("workflow route provider wiring", () => {
   it("shows quick note save feedback in the app shell", async () => {
     renderThroughAppShell(<TriagePage />, "/triage");
 
+    expect(screen.queryByLabelText("Quick note text")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Quick note" }));
     fireEvent.click(screen.getByRole("button", { name: "Save quick note" }));
     expect(
       await screen.findByText(

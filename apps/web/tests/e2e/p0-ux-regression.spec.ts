@@ -128,6 +128,8 @@ test("header quick note save feedback shows clear error then success", async ({
     page.getByRole("heading", { level: 1, name: "Triage" }),
   ).toBeVisible();
 
+  await expect(page.getByRole("textbox", { name: "Quick note text" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Quick note" }).click();
   await page.getByRole("button", { name: "Save quick note" }).click();
   await expect(
     page.getByText(
@@ -152,10 +154,8 @@ test("home cockpit stays read-only and points the user to Capture", async ({
     page.getByRole("heading", { level: 1, name: "Today" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Next" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Daily loop" })).toBeVisible();
-  await expect(
-    page.getByText("Home stays read-only."),
-  ).toBeVisible();
+  await expect(page.getByText("Daily loop", { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("home-read-only-note")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Save quick capture" }),
   ).toHaveCount(0);
@@ -262,18 +262,17 @@ test("health page loads and run-check shows disabled and enabled states", async 
 }) => {
   await page.goto("/health");
   const runCheck = page.getByRole("button", { name: "Run system check" });
-  const statusLine = page.getByRole("status").first();
   await expect(runCheck).toBeVisible();
-  await expect(statusLine).toHaveText(
-    /Running system check|System check complete\./,
-  );
+  await expect(page.getByText("Running system check")).toHaveCount(0);
+  await expect(page.getByText("System check complete.")).toHaveCount(0);
+  await expect(page.getByText("System check failed.")).toHaveCount(0);
 
   await waitForHealthResult(page);
   await expect(runCheck).toBeEnabled();
   await runCheck.click();
-  await expect(statusLine).toHaveText(
-    /Running system check|System check complete\./,
-  );
+  await expect(
+    page.getByText(/Running system check|System check complete\./),
+  ).toBeVisible();
   await expect(page.getByText("System check complete.")).toBeVisible();
 });
 

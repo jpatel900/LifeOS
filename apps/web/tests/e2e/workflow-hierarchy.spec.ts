@@ -1,4 +1,62 @@
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+
+const homeEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "178-181-home-launchpad",
+);
+
+const triageEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "182-183-triage-decision",
+);
+
+const planningEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "184-185-planning-flow",
+);
+
+const captureEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "173-176-capture-hierarchy",
+);
+
+const executeEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "186-execute-mission",
+);
+
+const reviewEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "187-review-carry-forward",
+);
+
+const healthEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "188-health-diagnostic-home",
+);
+
+const areasEvidenceDir = path.join(
+  process.cwd(),
+  "test-results",
+  "pass-7",
+  "189-areas-admin-registry",
+);
 
 async function expectNoHorizontalOverflow(page: Page) {
   const layout = await page.evaluate(() => {
@@ -62,6 +120,18 @@ async function expectTopBefore(
   expect(firstBox, "First element should have a visible bounding box.").not.toBeNull();
   expect(secondBox, "Second element should have a visible bounding box.").not.toBeNull();
   expect(firstBox!.y, message).toBeLessThan(secondBox!.y);
+}
+
+async function captureWorkflowEvidence(
+  page: Page,
+  evidenceDir: string,
+  filename: string,
+) {
+  mkdirSync(evidenceDir, { recursive: true });
+  await page.screenshot({
+    path: path.join(evidenceDir, filename),
+    fullPage: false,
+  });
 }
 
 async function seedExecuteMission(page: Page) {
@@ -286,10 +356,10 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
   await expect(page.getByTestId("triage-current-item-card")).toHaveClass(
     /workflow-flagship-card/,
   );
-  await expect(page.getByTestId("triage-next-action-card")).toHaveClass(
+  await expect(page.getByTestId("triage-waiting-queue-card")).toHaveClass(
     /workflow-support-card/,
   );
-  await expect(page.getByTestId("triage-waiting-queue-card")).toHaveClass(
+  await expect(page.getByTestId("triage-queue-summary-card")).toHaveClass(
     /workflow-support-card/,
   );
 
@@ -298,6 +368,9 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
   await expect(page.getByTestId("app-shell-context-header")).toHaveCount(0);
   await expect(page.getByTestId("planning-flow-card")).toHaveClass(
     /workflow-flagship-card/,
+  );
+  await expect(page.getByTestId("planning-queue-summary-card")).toHaveClass(
+    /workflow-support-card/,
   );
   await expect(page.getByTestId("planning-needs-time-card")).toHaveClass(
     /workflow-support-card/,
@@ -315,6 +388,9 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
   await expect(page.getByTestId("execute-current-mission-card")).toHaveClass(
     /workflow-flagship-card/,
   );
+  await expect(page.getByTestId("execute-next-move-card")).toHaveClass(
+    /workflow-support-card/,
+  );
 
   await page.goto("/review");
   await expect(page.getByTestId("app-shell-context-header")).toHaveCount(0);
@@ -324,14 +400,14 @@ test("workflow screens keep one dominant card and quieter supporting cards", asy
   await expect(page.getByTestId("review-close-loop-card")).toHaveClass(
     /workflow-support-card/,
   );
-  await expect(page.getByTestId("review-today-at-a-glance-card")).toHaveClass(
-    /workflow-support-card/,
-  );
+  await expect(page.getByText("Review details and history", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("review-today-at-a-glance-card")).not.toBeVisible();
 
   await page.goto("/settings/areas");
   await expect(page.getByTestId("areas-create-card")).toHaveClass(
     /workflow-flagship-card/,
   );
+  await expect(page.getByTestId("areas-header-summary-card")).toHaveCount(0);
 
   await page.goto("/health");
   await expect(page.getByTestId("health-reliability-card")).toHaveClass(
@@ -368,21 +444,50 @@ test("home keeps the next action ahead of support and diagnostic surfaces at 390
 
   const nextCard = page.getByTestId("today-next-card");
   const nextAction = page.getByRole("link", { name: "Capture a thought" });
-  const dailyLoop = page.getByText("Daily loop", { exact: true });
+  const readOnlyNote = page.getByTestId("home-read-only-note");
   const todayDetails = page.getByText("Today details", { exact: true });
 
   await expect(nextCard).toBeVisible();
   await expect(nextAction).toBeVisible();
+  await expect(readOnlyNote).toBeVisible();
+  await expect(page.getByText("Daily loop", { exact: true })).toHaveCount(0);
   await expectElementWithinViewport(page, nextAction, "Home next action");
-  await expectTopBefore(
-    nextCard,
-    dailyLoop,
-    "Home should show the dominant next-action card before Daily loop support content.",
-  );
   await expectTopBefore(
     nextCard,
     todayDetails,
     "Home should keep the dominant next-action card above Today details diagnostics.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    homeEvidenceDir,
+    "2026-06-11-178-181-home-mobile-rest.png",
+  );
+});
+
+test("home keeps the launchpad quiet and read-only on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/");
+
+  const nextCard = page.getByTestId("today-next-card");
+  const nextAction = page.getByRole("link", { name: "Capture a thought" });
+  const readOnlyNote = page.getByTestId("home-read-only-note");
+  const todayDetails = page.getByText("Today details", { exact: true });
+
+  await expect(nextCard).toBeVisible();
+  await expect(nextAction).toBeVisible();
+  await expect(readOnlyNote).toBeVisible();
+  await expect(page.getByText("Daily loop", { exact: true })).toHaveCount(0);
+  await expectTopBefore(
+    nextCard,
+    todayDetails,
+    "Home should keep Today details below the launchpad card on desktop.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    homeEvidenceDir,
+    "2026-06-11-178-181-home-desktop-rest.png",
   );
 });
 
@@ -416,5 +521,430 @@ test("capture keeps raw input and primary actions ahead of support and diagnosti
     mainCard,
     captureDetails,
     "Capture should place the raw-input card before Capture details diagnostics on mobile.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    captureEvidenceDir,
+    "2026-06-11-173-176-capture-mobile-rest.png",
+  );
+});
+
+test("triage keeps the current decision ahead of queue summary and diagnostics at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedTriageQueue(page);
+  await page.goto("/triage");
+
+  const currentItem = page.getByTestId("triage-current-item-card");
+  const queueSummary = page.getByTestId("triage-queue-summary-card");
+  const triageDetails = page.getByText("Triage details", { exact: true });
+
+  await expect(currentItem).toBeVisible();
+  await expectElementStartsWithinViewport(
+    page,
+    currentItem,
+    "Triage current item",
+  );
+  await expectTopBefore(
+    currentItem,
+    queueSummary,
+    "Triage should place the current decision before the queue summary on mobile.",
+  );
+  await expectTopBefore(
+    currentItem,
+    triageDetails,
+    "Triage should keep Triage details diagnostics after the current decision on mobile.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    triageEvidenceDir,
+    "2026-06-11-182-183-triage-mobile-rest.png",
+  );
+});
+
+test("planning keeps the local-first flow ahead of support summary and diagnostics at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedPlanningHierarchyState(page);
+  await page.goto("/calendar");
+
+  const flowCard = page.getByTestId("planning-flow-card");
+  const queueSummary = page.getByTestId("planning-queue-summary-card");
+  const planningDetails = page.getByText("Planning details", { exact: true });
+
+  await expect(flowCard).toBeVisible();
+  await expectElementStartsWithinViewport(
+    page,
+    flowCard,
+    "Planning flow card",
+  );
+  await expectTopBefore(
+    flowCard,
+    queueSummary,
+    "Planning should place the local-first flow before the planning summary on mobile.",
+  );
+  await expectTopBefore(
+    flowCard,
+    planningDetails,
+    "Planning should keep Planning details diagnostics after the local-first flow on mobile.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    planningEvidenceDir,
+    "2026-06-11-184-185-planning-mobile-rest.png",
+  );
+});
+
+test("capture keeps raw input ahead of support summary and details on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/capture");
+
+  const mainCard = page.getByTestId("capture-main-card");
+  const saveThought = page.getByRole("button", { name: "Save thought" });
+  const saveAndOrganize = page.getByRole("button", {
+    name: "Save and organize",
+  });
+  const summaryCard = page.getByTestId("capture-header-summary-card");
+  const captureDetails = page.getByText("Capture details", { exact: true });
+
+  await expect(mainCard).toBeVisible();
+  await expect(saveThought).toBeVisible();
+  await expect(saveAndOrganize).toBeVisible();
+  await expectTopBefore(
+    mainCard,
+    summaryCard,
+    "Capture should keep the raw-input card before support summary content on desktop.",
+  );
+  await expectTopBefore(
+    mainCard,
+    captureDetails,
+    "Capture should keep Capture details diagnostics after the main raw-input card on desktop.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    captureEvidenceDir,
+    "2026-06-11-173-176-capture-desktop-rest.png",
+  );
+});
+
+test("triage keeps the current decision ahead of queue summary and diagnostics on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await seedTriageQueue(page);
+  await page.goto("/triage");
+
+  const currentItem = page.getByTestId("triage-current-item-card");
+  const queueSummary = page.getByTestId("triage-queue-summary-card");
+  const triageDetails = page.getByText("Triage details", { exact: true });
+
+  await expect(currentItem).toBeVisible();
+  await expectTopBefore(
+    currentItem,
+    queueSummary,
+    "Triage should keep the current decision ahead of the queue summary on desktop.",
+  );
+  await expectTopBefore(
+    currentItem,
+    triageDetails,
+    "Triage should keep Triage details diagnostics after the current decision on desktop.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    triageEvidenceDir,
+    "2026-06-11-182-183-triage-desktop-rest.png",
+  );
+});
+
+test("planning keeps the local-first flow ahead of support summary and diagnostics on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await seedPlanningHierarchyState(page);
+  await page.goto("/calendar");
+
+  const flowCard = page.getByTestId("planning-flow-card");
+  const queueSummary = page.getByTestId("planning-queue-summary-card");
+  const planningDetails = page.getByText("Planning details", { exact: true });
+
+  await expect(flowCard).toBeVisible();
+  await expectTopBefore(
+    flowCard,
+    queueSummary,
+    "Planning should keep the local-first flow ahead of the planning summary on desktop.",
+  );
+  await expectTopBefore(
+    flowCard,
+    planningDetails,
+    "Planning should keep Planning details diagnostics after the local-first flow on desktop.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    planningEvidenceDir,
+    "2026-06-11-184-185-planning-desktop-rest.png",
+  );
+});
+
+test("execute keeps one mission ahead of visible state and next-move support at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedExecuteMission(page);
+  await page.goto("/execute");
+
+  const missionCard = page.getByTestId("execute-current-mission-card");
+  const stateCard = page.getByTestId("execute-focus-state-card");
+  const nextMoveCard = page.getByTestId("execute-next-move-card");
+
+  await expect(missionCard).toBeVisible();
+  await expectElementStartsWithinViewport(
+    page,
+    missionCard,
+    "Execute mission card",
+  );
+  await expectTopBefore(
+    missionCard,
+    stateCard,
+    "Execute should keep the current mission above the visible-state card on mobile.",
+  );
+  await expectTopBefore(
+    missionCard,
+    nextMoveCard,
+    "Execute should keep the current mission above the next-move lane on mobile.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    executeEvidenceDir,
+    "2026-06-11-186-execute-mobile-rest.png",
+  );
+});
+
+test("execute keeps one mission ahead of visible state and next-move support on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await seedExecuteMission(page);
+  await page.goto("/execute");
+
+  const missionCard = page.getByTestId("execute-current-mission-card");
+  const stateCard = page.getByTestId("execute-focus-state-card");
+  const nextMoveCard = page.getByTestId("execute-next-move-card");
+
+  await expect(missionCard).toBeVisible();
+  await expectTopBefore(
+    missionCard,
+    stateCard,
+    "Execute should keep the current mission above the visible-state card on desktop.",
+  );
+  await expectTopBefore(
+    missionCard,
+    nextMoveCard,
+    "Execute should keep the current mission above the next-move lane on desktop.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    executeEvidenceDir,
+    "2026-06-11-186-execute-desktop-rest.png",
+  );
+});
+
+test("review keeps closure and carry-forward actions ahead of board and history at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/review");
+
+  const nextDecisionCard = page.getByTestId("review-next-decision-card");
+  const closeLoopCard = page.getByTestId("review-close-loop-card");
+  const reviewDetails = page.getByText("Review details and history", {
+    exact: true,
+  });
+
+  await expect(nextDecisionCard).toBeVisible();
+  await expect(closeLoopCard).toBeVisible();
+  await expectElementStartsWithinViewport(
+    page,
+    nextDecisionCard,
+    "Review next-decision card",
+  );
+  await expectTopBefore(
+    nextDecisionCard,
+    closeLoopCard,
+    "Review should keep the closure flagship above carry-forward routing on mobile.",
+  );
+  await expectTopBefore(
+    closeLoopCard,
+    reviewDetails,
+    "Review should keep board and history details below the carry-forward actions on mobile.",
+  );
+  await expect(page.getByTestId("review-today-at-a-glance-card")).not.toBeVisible();
+  await captureWorkflowEvidence(
+    page,
+    reviewEvidenceDir,
+    "2026-06-11-187-review-mobile-rest.png",
+  );
+});
+
+test("review keeps closure and carry-forward actions ahead of board and history on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/review");
+
+  const nextDecisionCard = page.getByTestId("review-next-decision-card");
+  const closeLoopCard = page.getByTestId("review-close-loop-card");
+  const reviewDetails = page.getByText("Review details and history", {
+    exact: true,
+  });
+
+  await expect(nextDecisionCard).toBeVisible();
+  await expect(closeLoopCard).toBeVisible();
+  await expectTopBefore(
+    nextDecisionCard,
+    closeLoopCard,
+    "Review should keep the closure flagship above carry-forward routing on desktop.",
+  );
+  await expectTopBefore(
+    closeLoopCard,
+    reviewDetails,
+    "Review should keep board and history details below the carry-forward actions on desktop.",
+  );
+  await expect(page.getByTestId("review-today-at-a-glance-card")).not.toBeVisible();
+  await captureWorkflowEvidence(
+    page,
+    reviewEvidenceDir,
+    "2026-06-11-187-review-desktop-rest.png",
+  );
+});
+
+test("health keeps the trust answer ahead of route diagnostics at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/health");
+
+  const reliabilityCard = page.getByTestId("health-reliability-card");
+  const trustMapCard = page.getByTestId("health-trust-summary-card");
+  const healthDetails = page.getByText("System and developer details", {
+    exact: true,
+  });
+
+  await expect(reliabilityCard).toBeVisible();
+  await expectElementStartsWithinViewport(
+    page,
+    reliabilityCard,
+    "Health reliability card",
+  );
+  await expectTopBefore(
+    reliabilityCard,
+    trustMapCard,
+    "Health should keep the trust answer above the trust map on mobile.",
+  );
+  await expectTopBefore(
+    reliabilityCard,
+    healthDetails,
+    "Health should keep lower-level diagnostics below the trust answer on mobile.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    healthEvidenceDir,
+    "2026-06-11-188-health-mobile-rest.png",
+  );
+});
+
+test("health keeps the trust answer ahead of route diagnostics on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/health");
+
+  const reliabilityCard = page.getByTestId("health-reliability-card");
+  const trustMapCard = page.getByTestId("health-trust-summary-card");
+  const healthDetails = page.getByText("System and developer details", {
+    exact: true,
+  });
+
+  await expect(reliabilityCard).toBeVisible();
+  await expectTopBefore(
+    reliabilityCard,
+    trustMapCard,
+    "Health should keep the trust answer above the trust map on desktop.",
+  );
+  await expectTopBefore(
+    reliabilityCard,
+    healthDetails,
+    "Health should keep lower-level diagnostics below the trust answer on desktop.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    healthEvidenceDir,
+    "2026-06-11-188-health-desktop-rest.png",
+  );
+});
+
+test("areas keeps creation ahead of registry records and lower admin details at 390px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/settings/areas");
+
+  const createCard = page.getByTestId("areas-create-card");
+  const firstAreaCard = page.getByTestId("areas-area-card").first();
+  const registryDetails = page.getByText("Registry details", { exact: true });
+
+  await expect(createCard).toBeVisible();
+  await expect(page.getByTestId("areas-header-summary-card")).toHaveCount(0);
+  await expectElementStartsWithinViewport(
+    page,
+    createCard,
+    "Areas create card",
+  );
+  await expectTopBefore(
+    createCard,
+    firstAreaCard,
+    "Areas should keep create-area work above registry records on mobile.",
+  );
+  await expectTopBefore(
+    createCard,
+    registryDetails,
+    "Areas should keep lower admin details below the create-area card on mobile.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    areasEvidenceDir,
+    "2026-06-11-189-areas-mobile-rest.png",
+  );
+});
+
+test("areas keeps creation ahead of registry records and lower admin details on desktop", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto("/settings/areas");
+
+  const createCard = page.getByTestId("areas-create-card");
+  const firstAreaCard = page.getByTestId("areas-area-card").first();
+  const registryDetails = page.getByText("Registry details", { exact: true });
+
+  await expect(createCard).toBeVisible();
+  await expect(page.getByTestId("areas-header-summary-card")).toHaveCount(0);
+  await expectTopBefore(
+    createCard,
+    firstAreaCard,
+    "Areas should keep create-area work above registry records on desktop.",
+  );
+  await expectTopBefore(
+    createCard,
+    registryDetails,
+    "Areas should keep lower admin details below the create-area card on desktop.",
+  );
+  await captureWorkflowEvidence(
+    page,
+    areasEvidenceDir,
+    "2026-06-11-189-areas-desktop-rest.png",
   );
 });

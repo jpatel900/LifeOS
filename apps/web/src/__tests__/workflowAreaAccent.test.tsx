@@ -251,10 +251,7 @@ describe("workflow area accent routes", () => {
         "--area-accent": "#2563eb",
       }),
     );
-    expect(screen.getByTestId("triage-header-summary-card")).toHaveClass(
-      "workflow-support-card",
-    );
-    expect(screen.getByTestId("triage-next-action-card")).toHaveClass(
+    expect(screen.getByTestId("triage-queue-summary-card")).toHaveClass(
       "workflow-support-card",
     );
     expect(screen.getByTestId("triage-current-item-card")).toHaveClass(
@@ -271,11 +268,11 @@ describe("workflow area accent routes", () => {
         "--area-accent": "#2563eb",
       }),
     );
-    expect(screen.getByTestId("planning-header-summary-card")).toHaveClass(
-      "workflow-support-card",
-    );
     expect(screen.getByTestId("planning-flow-card")).toHaveClass(
       "workflow-flagship-card",
+    );
+    expect(screen.getByTestId("planning-queue-summary-card")).toHaveClass(
+      "workflow-support-card",
     );
     expect(screen.getByTestId("planning-needs-time-card")).toHaveClass(
       "workflow-support-card",
@@ -349,10 +346,7 @@ describe("workflow area accent routes", () => {
     expect(screen.getByTestId("areas-create-card")).toHaveClass(
       "workflow-flagship-card",
     );
-    expect(screen.getByTestId("areas-header-summary-card")).toHaveClass(
-      "workflow-support-card",
-      "areas-ownership-summary-card",
-    );
+    expect(screen.queryByTestId("areas-header-summary-card")).toBeNull();
     expect(screen.getByTestId("areas-area-card")).toHaveClass(
       "workflow-support-card",
       "areas-record-card",

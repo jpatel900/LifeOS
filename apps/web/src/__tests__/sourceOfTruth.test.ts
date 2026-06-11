@@ -253,17 +253,17 @@ describe("source-of-truth boundaries", () => {
     expect(statusVocabulary).toContain("AI sorting unavailable");
     expect(statusVocabulary).toContain("Saved on this device only");
     expect(statusVocabulary).toContain("Saved to account");
-    expect(triage).toContain("Current focus");
-    expect(triage).toContain("Review current item");
     expect(triage).toContain("Current item");
+    expect(triage).toContain("Decide this before looking at anything else.");
     expect(triage).toContain("Waiting after this");
+    expect(triage).toContain("Queue snapshot");
     expect(triage).toContain("Review this next");
     expect(calendar).toContain("Check calendar availability");
     expect(calendar).toContain("Create Google Calendar event");
     expect(calendar).toContain("Adjust time");
-    expect(calendar).toContain("Google Calendar options");
+    expect(calendar).toContain("Google write approval");
     expect(calendar).toContain(
-      "Nothing goes to Google Calendar until you approve it.",
+      "Google write only happens after you approve it.",
     );
     expect(execute).toContain("Stop (device-only sessions)");
     expect(execute).toContain("Stop on this device");
@@ -401,5 +401,50 @@ describe("source-of-truth boundaries", () => {
     expect(() =>
       readRepoFile("apps/web/langfuse.server.config.ts"),
     ).not.toThrow();
+  });
+
+  it("uses polite live regions for non-destructive workflow feedback", () => {
+    const appShell = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/AppShell.tsx"),
+    );
+    const capture = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/capture/page.tsx"),
+    );
+    const triage = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/triage/page.tsx"),
+    );
+    const calendar = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/calendar/page.tsx"),
+    );
+    const execute = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/execute/page.tsx"),
+    );
+    const review = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/review/page.tsx"),
+    );
+    const health = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/health/page.tsx"),
+    );
+    const settings = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/settings/areas/page.tsx"),
+    );
+    const loadingState = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/WorkflowLoadingState.tsx"),
+    );
+
+    expect(appShell).toContain('role="status"');
+    expect(appShell).toContain('aria-live="polite"');
+    expect(capture).toContain(
+      'aria-live={captureFeedback.role === "status" ? "polite" : undefined}',
+    );
+    expect(triage).toContain('variant="success" role="status" aria-live="polite"');
+    expect(calendar).toContain('role="status" aria-live="polite"');
+    expect(execute).toContain('role="status" aria-live="polite"');
+    expect(review).toContain('role="status" aria-live="polite"');
+    expect(health).toContain('aria-live="polite"');
+    expect(settings).toContain('createAreaFeedback.variant === "destructive" ? undefined : "polite"');
+    expect(settings).toContain('colorFeedback.variant === "destructive" ? undefined : "polite"');
+    expect(loadingState).toContain('role="status"');
+    expect(loadingState).toContain('aria-live="polite"');
   });
 });

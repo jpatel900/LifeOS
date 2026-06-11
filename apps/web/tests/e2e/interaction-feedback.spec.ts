@@ -22,10 +22,6 @@ test("workflow actions explain what happened and where to go next", async ({
 
   await page.getByRole("link", { name: "Review it now" }).click();
   await expect(page).toHaveURL(/\/triage$/);
-  await expect(page.getByRole("heading", { name: "Current focus" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Review current item" }),
-  ).toBeVisible();
   await expect(page.getByTestId("triage-current-item-card")).toBeVisible();
 
   await page.getByRole("button", { name: "Accept task draft" }).first().click();

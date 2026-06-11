@@ -55,7 +55,7 @@ type HomeDataState =
 function statusLabel(status: "loading" | "ready" | "degraded") {
   if (status === "loading") return "Checking account data and local state.";
   if (status === "degraded")
-    return "Account data is partially unavailable. Local state is still available. Check Health if this keeps happening.";
+    return "Some account data did not load. Local state is still available. Check Health if this keeps happening.";
   return "Account data and local state are available.";
 }
 
@@ -724,10 +724,10 @@ export default function HomePage() {
     <main className="grid gap-6 pb-6">
       {homeData.status === "degraded" ? (
         <Alert variant="warning" data-severity="warning">
-          <AlertTitle>Account data is partially unavailable</AlertTitle>
+          <AlertTitle>Some account data did not load</AlertTitle>
           <AlertDescription>
-            Showing local data where available. You can continue safely and
-            check Health if this keeps happening.
+            Local workflow is still available. You can keep moving and check
+            Health if this keeps happening.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -784,8 +784,17 @@ export default function HomePage() {
                 </Link>
               </Button>
             </div>
+            {showDailyLoop ? (
+              <p
+                data-testid="home-read-only-note"
+                className="max-w-2xl text-sm text-muted-foreground"
+              >
+                Home stays read-only. Capture one real thing, sort it in
+                Triage, then plan one real block.
+              </p>
+            ) : null}
             <DiagnosticsDisclosure
-              title="Suggested follow-through"
+              title="After this"
               className="workflow-inline-disclosure"
               contentClassName="mt-3 text-sm text-muted-foreground"
             >
@@ -824,13 +833,6 @@ export default function HomePage() {
               </div>
             </CardContent>
           </Card>
-        ) : null}
-
-        {showDailyLoop ? (
-          <EmptyState
-            title="Daily loop"
-            description="Capture one real thing, sort it in Triage, plan one local block, then let Execute and Review close the loop. Home stays read-only."
-          />
         ) : null}
       </section>
 

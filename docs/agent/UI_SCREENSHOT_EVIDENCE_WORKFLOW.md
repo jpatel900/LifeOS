@@ -85,6 +85,56 @@ When writing the issue comment, PR note, or implementation note, reference scree
 
 If the final storage location changes outside the repo, keep the same note structure and replace the path with the actual attachment or review link.
 
+## Final packet format
+
+Issue `#197` extends this workflow into the final screenshot evidence packet used by the Pass 7 audit.
+
+Use one compact packet note with these sections in this order:
+
+1. `Routes covered`
+2. `Mobile screenshots`
+3. `Desktop screenshots`
+4. `What got simpler`
+5. `What moved into details`
+6. `What stayed intentionally unchanged`
+7. `Commands run`
+8. `Remaining gaps`
+
+Do not turn the packet into a narrative diary. It is an evidence index.
+
+## Current Pass 7 packet index
+
+`apps/web/test-results/` is refreshed by later Playwright runs, so the final packet must be generated immediately before the final audit.
+
+Current required packet target:
+
+- `apps/web/test-results/pass-7/final-audit/`
+
+Generate it with:
+
+- `pnpm --filter @lifeos/web test:e2e -- tests/e2e/final-audit-packet.spec.ts`
+
+The packet should contain:
+
+- `app-shell-mobile-rest.png`
+- `app-shell-desktop-rest.png`
+- `home-mobile-rest.png`
+- `home-desktop-rest.png`
+- `capture-mobile-rest.png`
+- `capture-desktop-rest.png`
+- `triage-mobile-rest.png`
+- `triage-desktop-rest.png`
+- `planning-mobile-rest.png`
+- `planning-desktop-rest.png`
+- `execute-mobile-rest.png`
+- `execute-desktop-rest.png`
+- `review-mobile-rest.png`
+- `review-desktop-rest.png`
+- `health-mobile-rest.png`
+- `health-desktop-rest.png`
+- `areas-mobile-rest.png`
+- `areas-desktop-rest.png`
+
 ## Boundaries
 
 - Screenshots do not replace tests.

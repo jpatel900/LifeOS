@@ -43,6 +43,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   const hasAreas = state.areas.length > 0;
   const [now, setNow] = useState("--:--:--");
   const [quickNoteText, setQuickNoteText] = useState("");
+  const [isQuickNoteOpen, setIsQuickNoteOpen] = useState(false);
   const [quickNoteStatus, setQuickNoteStatus] = useState<
     "idle" | "saved" | "error"
   >("idle");
@@ -59,6 +60,12 @@ function AppChrome({ children }: { children: ReactNode }) {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    setIsQuickNoteOpen(false);
+    setQuickNoteText("");
+    setQuickNoteStatus("idle");
+  }, [pathname]);
+
   function handleSaveQuickNote() {
     const value = quickNoteText.trim();
     if (!value) {
@@ -69,26 +76,12 @@ function AppChrome({ children }: { children: ReactNode }) {
     try {
       submitCaptureText(value, selectedAreaId);
       setQuickNoteText("");
+      setIsQuickNoteOpen(false);
       setQuickNoteStatus("saved");
     } catch {
       setQuickNoteStatus("error");
     }
   }
-
-  const currentAreaSpotlight = (
-    <div
-      aria-label="Current area context"
-      className="flex flex-wrap items-center gap-2"
-    >
-      <span className="text-sm text-muted-foreground">Current area</span>
-      <Badge
-        variant="secondary"
-        className="rounded-full border border-[var(--area-accent-border)] bg-[var(--area-accent-soft)] text-sm text-foreground"
-      >
-        {currentArea?.name ?? "No area selected yet"}
-      </Badge>
-    </div>
-  );
 
   return (
     <div
@@ -132,11 +125,36 @@ function AppChrome({ children }: { children: ReactNode }) {
                 Personal workflow cockpit
               </Badge>
             </div>
-            <div className="workflow-shell__quick-note flex w-full flex-col gap-2 lg:w-auto lg:min-w-[22rem] lg:items-end">
+            <div className="workflow-shell__quick-note flex w-full flex-col gap-2 lg:w-auto lg:min-w-[18rem] lg:items-end">
               <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
                 <ThemeToggle />
                 {showQuickNote ? (
-                  <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    aria-expanded={isQuickNoteOpen}
+                    aria-controls="shell-quick-note-composer"
+                    onClick={() => {
+                      setIsQuickNoteOpen((current) => !current);
+                      if (quickNoteStatus === "saved") {
+                        setQuickNoteStatus("idle");
+                      }
+                    }}
+                    className="h-10 rounded-full border border-white/10 bg-white/4 px-4"
+                  >
+                    {isQuickNoteOpen ? "Hide quick note" : "Quick note"}
+                  </Button>
+                ) : null}
+              </div>
+              {showQuickNote && isQuickNoteOpen ? (
+                <div
+                  id="shell-quick-note-composer"
+                  className="workflow-shell-panel flex w-full flex-col gap-2 rounded-2xl p-3 lg:max-w-sm"
+                >
+                  <p className="text-xs text-muted-foreground">
+                    Saved on this device only. Review in Triage or Review.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
                       aria-label="Quick note text"
                       value={quickNoteText}
@@ -147,32 +165,30 @@ function AppChrome({ children }: { children: ReactNode }) {
                         }
                       }}
                       placeholder="Type a quick note"
-                      className="h-9 min-w-0 flex-1 rounded-full border-white/10 bg-white/4 sm:w-56 sm:flex-none"
+                      className="h-10 min-w-0 flex-1 rounded-2xl border-white/10 bg-white/4"
                     />
                     <Button
                       type="button"
                       onClick={handleSaveQuickNote}
-                      className="w-full rounded-full shadow-[0_18px_36px_-24px_var(--area-accent)] sm:w-auto"
+                      className="h-10 w-full rounded-full px-4 shadow-none sm:w-auto"
                     >
                       Save quick note
                     </Button>
-                  </>
-                ) : null}
-              </div>
-              {showQuickNote ? (
-                <p className="text-xs text-muted-foreground lg:max-w-sm lg:text-right">
-                  Saved on this device only. Review in Triage or Review.
-                </p>
-              ) : null}
-              {showQuickNote && quickNoteStatus === "error" ? (
-                <p className="text-xs text-destructive lg:max-w-sm lg:text-right">
-                  Quick note was not saved. Type a note first, or use Capture.
-                </p>
+                  </div>
+                  {quickNoteStatus === "error" ? (
+                    <p className="text-xs text-destructive">
+                      Quick note was not saved. Type a note first, or use
+                      Capture.
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
               {showQuickNote && quickNoteStatus === "saved" ? (
                 <Alert
                   variant="success"
-                  className="workflow-celebration-alert max-w-sm rounded-2xl"
+                  role="status"
+                  aria-live="polite"
+                  className="max-w-sm rounded-2xl px-3 py-2 lg:text-right"
                 >
                   <AlertTitle>Saved.</AlertTitle>
                   <AlertDescription>
@@ -192,14 +208,6 @@ function AppChrome({ children }: { children: ReactNode }) {
                     </Link>
                     .
                   </AlertDescription>
-                  <div className="workflow-celebration-meta">
-                    <span className="workflow-celebration-chip">
-                      Device-only
-                    </span>
-                    <span className="workflow-celebration-chip">
-                      Inbox to Triage
-                    </span>
-                  </div>
                 </Alert>
               ) : null}
             </div>
@@ -220,10 +228,10 @@ function AppChrome({ children }: { children: ReactNode }) {
                     href={link.href}
                     aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out sm:px-3 sm:text-sm",
+                      "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm transition-all duration-200 ease-out sm:px-3.5",
                       isActive
-                        ? "border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] font-medium text-foreground shadow-[inset_0_1px_0_0_var(--area-accent-soft),0_14px_28px_-24px_var(--area-accent)]"
-                        : "border-transparent text-muted-foreground hover:-translate-y-0.5 hover:border-white/8 hover:bg-white/4 hover:text-accent-foreground",
+                        ? "border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] font-medium text-foreground shadow-[inset_0_1px_0_0_var(--area-accent-soft),0_10px_20px_-22px_var(--area-accent)]"
+                        : "border-transparent text-muted-foreground hover:border-white/8 hover:bg-white/4 hover:text-accent-foreground",
                     )}
                   >
                     {isActive ? (
@@ -252,7 +260,7 @@ function AppChrome({ children }: { children: ReactNode }) {
                       href={link.href}
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
-                        "inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs transition-all duration-200 ease-out sm:px-3 sm:text-sm",
+                        "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm transition-all duration-200 ease-out sm:px-3.5",
                         isActive
                           ? "border-[var(--area-accent-border)] bg-[var(--area-accent-soft)] font-medium text-foreground"
                           : "border-transparent text-muted-foreground hover:border-white/8 hover:bg-white/4 hover:text-foreground",
@@ -269,32 +277,35 @@ function AppChrome({ children }: { children: ReactNode }) {
                   );
                 })}
               </nav>
-              <div className="workflow-shell-panel flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap">
-              <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                Current area
-              </span>
-              <Select
-                aria-label="Current area"
-                value={selectedAreaId ?? ""}
-                disabled={!hasAreas}
-                onChange={(event) =>
-                  setSelectedAreaId(event.target.value || null)
-                }
-                className="h-9 min-w-0 flex-1 rounded-full border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] shadow-[0_16px_30px_-28px_var(--area-accent)] sm:min-w-44 sm:flex-none"
+              <div
+                aria-label="Current area context"
+                className="workflow-shell-panel flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap"
               >
-                {!hasAreas ? <option value="">No areas yet</option> : null}
-                {state.areas.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
-                ))}
-              </Select>
-              <Badge
-                variant="outline"
-                className="rounded-full border-white/10 bg-white/4"
-              >
-                {now}
-              </Badge>
+                <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  Area
+                </span>
+                <Select
+                  aria-label="Current area"
+                  value={selectedAreaId ?? ""}
+                  disabled={!hasAreas}
+                  onChange={(event) =>
+                    setSelectedAreaId(event.target.value || null)
+                  }
+                  className="h-10 min-w-0 flex-1 rounded-full border-[var(--area-accent-border)] bg-[var(--area-accent-surface)] shadow-none sm:min-w-44 sm:flex-none"
+                >
+                  {!hasAreas ? <option value="">No areas yet</option> : null}
+                  {state.areas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </Select>
+                <Badge
+                  variant="outline"
+                  className="flex h-10 items-center rounded-full border-white/10 bg-white/4 px-3"
+                >
+                  {now}
+                </Badge>
               </div>
             </div>
           </div>
@@ -312,8 +323,6 @@ function AppChrome({ children }: { children: ReactNode }) {
         {!usesQuietShellContext ? (
           <WorkflowPageHeader
             className="workflow-shell-context-header"
-            spotlight={currentAreaSpotlight}
-            spotlightClassName="workflow-shell-context-spotlight"
             bodyClassName="workflow-shell-context-body"
           >
             <DiagnosticsDisclosure

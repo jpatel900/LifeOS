@@ -204,7 +204,8 @@ describe("HealthPage", () => {
 
     const runButton = screen.getByRole("button", { name: "Run system check" });
     expect(runButton).toBeDisabled();
-    expect(screen.getByText("Running system check")).toBeDefined();
+    expect(screen.getByText("Loading health...")).toBeDefined();
+    expect(screen.queryByText("Running system check")).toBeNull();
 
     if (!resolveDashboard) {
       throw new Error("resolveDashboard was not set.");
@@ -225,7 +226,8 @@ describe("HealthPage", () => {
       ]),
     );
 
-    expect(await screen.findByText("System check complete.")).toBeDefined();
+    expect(await screen.findByTestId("health-reliability-card")).toBeDefined();
+    expect(screen.queryByText("System check complete.")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Run system check" }),
     ).not.toBeDisabled();
@@ -283,7 +285,8 @@ describe("HealthPage", () => {
 
     render(<HealthPage />);
 
-    expect(await screen.findByText("System check complete.")).toBeDefined();
+    expect(await screen.findByTestId("health-reliability-card")).toBeDefined();
+    expect(screen.queryByText("System check complete.")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Run system check" }));
 

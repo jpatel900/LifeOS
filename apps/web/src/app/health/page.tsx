@@ -358,11 +358,16 @@ export default function HealthPage() {
     let cancelled = false;
 
     async function runSystemCheck() {
+      const isManualRun = checkRunId > 0;
       setState({ status: "loading" });
-      setFeedback({
-        status: "running",
-        message: "Run in progress. Please wait.",
-      });
+      setFeedback(
+        isManualRun
+          ? {
+              status: "running",
+              message: "Run in progress. Please wait.",
+            }
+          : { status: "idle" },
+      );
       try {
         const result = await withTimeout(
           getHealthDashboard(createSupabaseBrowserClient()),
@@ -380,10 +385,14 @@ export default function HealthPage() {
             },
           });
           setState({ status: "ready", result });
-          setFeedback({
-            status: "success",
-            message: "System check complete.",
-          });
+          setFeedback(
+            isManualRun
+              ? {
+                  status: "success",
+                  message: "System check complete.",
+                }
+              : { status: "idle" },
+          );
         }
       } catch (error) {
         if (!cancelled) {
@@ -396,10 +405,14 @@ export default function HealthPage() {
             status: "error",
             message: errorMessage,
           });
-          setFeedback({
-            status: "error",
-            message: "Last run failed. Fix the issue and run the check again.",
-          });
+          setFeedback(
+            isManualRun
+              ? {
+                  status: "error",
+                  message: "Last run failed. Fix the issue and run the check again.",
+                }
+              : { status: "idle" },
+          );
         }
       }
     }
@@ -446,7 +459,7 @@ export default function HealthPage() {
         className="workflow-page-header--health"
         eyebrow="Trust and repair"
         title="Health"
-        description="Use this like a trust-and-repair desk. Start with the answer, then fix only what blocks today&apos;s work."
+        description="Use this like a trust-and-repair desk. Start with the answer, then fix only what blocks today&apos;s work. If another route tells you to check Health, the raw diagnostic trail lives here."
         actions={
           <div className="workflow-action-tray flex flex-wrap items-center gap-3">
             <Button
@@ -534,10 +547,11 @@ export default function HealthPage() {
             className="workflow-secondary-card workflow-support-card health-trust-map-card"
           >
             <CardHeader>
-              <CardTitle className="text-lg">Trust map</CardTitle>
+              <CardTitle className="text-lg">Workflow trust map</CardTitle>
               <CardDescription>
                 Checked at {state.result.checkedAt}. Read what is saved, what
-                is local-only, and what still needs setup.
+                is local-only, and what still needs setup before you trust a
+                route again.
               </CardDescription>
             </CardHeader>
             <CardContent className="workflow-metric-grid">
@@ -596,7 +610,7 @@ export default function HealthPage() {
             </CardContent>
           </Card>
 
-          <DiagnosticsDisclosure title="Health details">
+          <DiagnosticsDisclosure title="System and developer details">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {state.result.checks.map((check) => {
                 const display = humanStatus(check.summary, check.status);

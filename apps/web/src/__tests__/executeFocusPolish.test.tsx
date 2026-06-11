@@ -200,7 +200,7 @@ describe("Execute Focus polish", () => {
     expect(stateCard).toHaveClass("execute-state-card");
     expect(within(missionCard).getByText("Ready to focus")).toBeDefined();
     expect(within(stateCard).getByText("Current area: Main Job")).toBeDefined();
-    expect(within(sideThoughtCard).getByText("Protect the mission")).toBeDefined();
+    expect(within(sideThoughtCard).getByText("Side thoughts")).toBeDefined();
     expect(
       within(sideThoughtCard).getByRole("link", {
         name: "Capture a side thought",

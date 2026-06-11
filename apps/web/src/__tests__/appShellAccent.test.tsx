@@ -67,4 +67,20 @@ describe("AppShell area accent", () => {
     ).toHaveAttribute("href", "#main-content");
     expect(screen.queryByText(/Session workflow area/i)).toBeNull();
   });
+
+  it("keeps mobile shell controls at touch-friendly sizes", () => {
+    render(
+      <AppShell>
+        <div>Accent probe</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByRole("link", { name: "Capture" }).className).toContain(
+      "min-h-10",
+    );
+    expect(
+      screen.getByRole("link", { name: "Areas admin" }).className,
+    ).toContain("min-h-10");
+    expect(screen.getByLabelText("Current area").className).toContain("h-10");
+  });
 });

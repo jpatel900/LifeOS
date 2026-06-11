@@ -178,11 +178,13 @@ describe("CapturePage", () => {
     ).toBeDefined();
     expect(screen.getByLabelText("Area for this saved thought")).toBeDefined();
     expect(screen.getByText("Current area: Main Job")).toBeDefined();
-    expect(screen.getByText("Local draft pass")).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Organize on this device" }),
+    ).toBeDefined();
     expect(screen.getByText("Ctrl/Cmd + Enter")).toBeDefined();
     expect(screen.getByText("Save from the main field.")).toBeDefined();
     expect(
-      screen.getByText("Save the raw thought, or create drafts for Triage now."),
+      screen.getByText("Save the thought now, or send drafts to Triage."),
     ).toBeDefined();
     expect(
       screen.getByRole("heading", {
@@ -250,8 +252,8 @@ describe("CapturePage", () => {
     const saveAndOrganize = screen.getByRole("button", {
       name: "Save and organize",
     });
-    const localDraftPass = screen.getByText("Local draft pass", {
-      exact: true,
+    const localDraftPass = screen.getByRole("button", {
+      name: "Organize on this device",
     });
     const captureDetails = screen.getByText("Capture details", {
       exact: true,

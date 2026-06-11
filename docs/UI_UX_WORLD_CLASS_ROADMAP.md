@@ -1,6 +1,6 @@
 # UI/UX World-Class Roadmap
 
-Status: Active UI/UX roadmap and proof-routing spine for Pass 7 and later UX work
+Status: Active UI/UX roadmap and proof-routing spine after Pass 7 closeout
 Purpose: Define the live UX program state, ordered passes, proof routing, and long-lived UX direction
 Read when: Starting, implementing, reviewing, or auditing UI/UX work
 Do not use for: Shipped product truth or runtime proof by itself
@@ -12,7 +12,7 @@ This file is the canonical long-lived UX program for LifeOS.
 - This roadmap is future intent, active UX program state, and proof routing.
 - `docs/implementation-notes/*.md` are historical proof.
 - If this roadmap disagrees with runtime, tests, or `PROJECT_STATE`, runtime/tests/`PROJECT_STATE` win.
-- Current active program state is Pass 7. Passes 0 through 6 below remain shipped history and guardrails, not the next execution queue.
+- There is no active UI/UX implementation pass right now. Pass 7 closed on `2026-06-11`; Passes 0 through 6 remain shipped history and guardrails, and future UI/UX work should start as maintenance unless a new reviewed pass is opened.
 - Every UX pass must update all three surfaces:
   - roadmap status row
   - `PROJECT_STATE` summary bullet
@@ -32,6 +32,18 @@ Pass 7 reopens the roadmap for active work on:
 
 Earlier outcomes can stay marked `done` without implying the UI is finished. Pass 7 exists because clarity, diagnostics staging, and final proof still need active work across docs, tests, shell, and route surfaces.
 
+## Pass 7 closeout note
+
+Pass 7 is now closed.
+
+Closeout basis:
+
+- docs, setup, tests, shared-rule, shell, route, visual-system, accessibility, motion, and evidence gates are complete
+- the final audit packet exists under `apps/web/test-results/pass-7/final-audit/`
+- the final rubric in `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md` passed on `2026-06-11`
+
+This does not mean UI/UX work is finished forever. It means there is no open recovery pass right now. Treat follow-on changes as maintenance until a new reviewed pass is explicitly opened in this roadmap.
+
 ## Duplicate-plan guardrail
 
 - If the work is still live, amend this roadmap instead of creating a second active UI/UX plan.
@@ -46,9 +58,10 @@ Every fresh UI/UX run should begin with:
 1. `AGENTS.md`
 2. `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context ui`
 3. `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
-4. `docs/PROJECT_STATE.md`
-5. the latest linked implementation note for the active roadmap pass
-6. the proof surfaces named in that roadmap pass
+4. `docs/agent/UI_AGENT_GUIDE.md`
+5. the touched route source and focused tests for the current issue
+6. `docs/PROJECT_STATE.md` only when shipped truth, blockers, or the next recommended task actually matter
+7. the latest linked implementation note for the active roadmap pass only when the roadmap or guide points to it
 
 ## Frontend system guardrail
 
@@ -101,14 +114,14 @@ Use this as a review checklist, not as permission to skip browser proof. Counts 
 
 | Route    | Editorial identity        | Primary CTA count at rest | Disclosure count at rest | Read-only or mutating | 390px first-screen scan | Closure feedback explicit | Distinct identity now | Main remaining gap                                                                                                                                            |
 | -------- | ------------------------- | ------------------------- | ------------------------ | --------------------- | ----------------------- | ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home     | Instrument panel          | `1`                       | `3`                      | `read-only`           | `acceptable`            | `n/a`                     | `strong`              | Pass 7 must keep Home as a launchpad, calm degraded states down, and reduce support clutter without breaking read-only truth.                                   |
-| Capture  | Raw-first intake          | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep raw input and the primary save action dominant while pushing metrics, history, and diagnostics later.                                          |
-| Triage   | One decision at a time    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep one current decision visually primary and demote support context, system detail, and queue noise further.                                      |
-| Planning | Local-first scheduling    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must separate local planning flow, external approval staging, and deeper diagnostics more cleanly.                                                       |
-| Execute  | Mission room              | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep one mission, one visible state, and one next move dominant while staging support detail later.                                                 |
-| Review   | Carry-forward desk        | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep carry-forward decisions ahead of metrics, historical detail, and lower-value support copy.                                                     |
-| Health   | Trust-and-repair desk     | `1`                       | `1`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must make Health the clear diagnostic home so the other workflow routes can stay calmer.                                                                 |
-| Areas    | Quiet ownership registry  | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Pass 7 must keep Areas clearly secondary and admin-oriented in the overall workflow hierarchy.                                                                   |
+| Home     | Instrument panel          | `1`                       | `2`                      | `read-only`           | `acceptable`            | `n/a`                     | `strong`              | Keep Home read-only and keep the flagship launchpad dominant; do not reintroduce dashboard clutter or shell mutation. |
+| Capture  | Raw-first intake          | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Preserve raw-save-first truth and keep support metrics below the writing surface. |
+| Triage   | One decision at a time    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Keep the current item dominant and do not let queue summary or shell support outrank it again. |
+| Planning | Local-first scheduling    | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Keep local planning first and Google approval messaging explicit but secondary. |
+| Execute  | Mission room              | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Keep one mission dominant and keep route-local execution ahead of shell support. |
+| Review   | Carry-forward desk        | `1`                       | `3`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Protect closure-first hierarchy; desktop density is acceptable now but should not drift upward. |
+| Health   | Trust-and-repair desk     | `1`                       | `1`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Keep diagnostics honest without letting celebratory or developer detail outrank the trust answer. |
+| Areas    | Quiet ownership registry  | `1`                       | `4`                      | `mutating`            | `acceptable`            | `yes`                     | `strong`              | Keep Areas visibly secondary to the main workflow loop and preserve quiet admin framing. |
 
 ## Ordered pass queue
 
@@ -121,7 +134,7 @@ Use this as a review checklist, not as permission to skip browser proof. Counts 
 | `4. Make the shell feel invisible`               | `done`    | Reduce shell burden so route-local action clearly outranks chrome on every primary screen.                  | 390px shell height drops again, keyboard flow stays intact, and shell surfaces never outrank route-local action on Capture, Planning, Execute, or Review.                                                                        | Full repo bar plus `p0-ux-regression`, `workflow-hierarchy`, focused shell/browser checks      |
 | `5. Add interaction feel and closure`            | `done`    | Tighten motion, feedback cadence, and action-near confirmation so the app stops feeling merely correct.     | Every primary action has local closure feedback, no action leaves state change ambiguous, and feedback rhythm reads as one system.                                                                                               | Full repo bar plus `interaction-feedback` and focused route tests                              |
 | `6. Give each route a memorable identity`        | `done`    | Make the routes feel like one product without flattening them into one generic template.                    | Screens are distinguishable at a glance, route purpose is legible without reading every label, and the product feels composed rather than templated.                                                                             | Full repo bar plus screenshot/browser review, `workflow-card-accent`, `execute-focus-flagship` |
-| `7. Recover clarity and diagnostic staging`      | `active`  | Reassert one active roadmap, tighten first-scan discipline, stage diagnostics after action, and require proof-based final audit before closeout. | Pass 7 docs, setup, tests, and shared-rule gates finish before route implementation, older plan docs are explicitly historical, the information hierarchy doctrine routes user/safety/diagnostic/developer truth intentionally, the severity vocabulary distinguishes calm degradation from blocked failure, UI review expectations require behavior/tests/screenshot proof before completion claims, and final route audit uses the canonical Pass 7 rubric rather than ad hoc review notes. | `docs/agent/UI_UX_DOC_INVENTORY.md`, `docs/agent/UI_PASS_7_EXECUTION_MAP.md`, `docs/agent/UI_INFORMATION_HIERARCHY_DOCTRINE.md`, `docs/agent/UI_SEVERITY_VOCABULARY.md`, `docs/agent/UI_AGENT_GUIDE.md`, `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`, plus later route-proof gates |
+| `7. Recover clarity and diagnostic staging`      | `done`    | Reassert one active roadmap, tighten first-scan discipline, stage diagnostics after action, and require proof-based final audit before closeout. | Completed. Docs/setup/tests/shared rules were finished before route work, route hierarchy and shell work landed sequentially, and the final audit rubric passed with real screenshot, test, and rendered-behavior proof on `2026-06-11`. | `docs/agent/UI_UX_DOC_INVENTORY.md`, `docs/agent/UI_PASS_7_EXECUTION_MAP.md`, `docs/agent/UI_INFORMATION_HIERARCHY_DOCTRINE.md`, `docs/agent/UI_SEVERITY_VOCABULARY.md`, `docs/agent/UI_AGENT_GUIDE.md`, `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`, `docs/implementation-notes/2026-06-11-pass-7-final-audit.md`, and `apps/web/test-results/pass-7/final-audit/` |
 
 ## Pass notes
 
@@ -217,6 +230,12 @@ Add these when area-accent behavior itself changes:
 - `docs/implementation-notes/2026-06-06-pass-4a-execute-review-shell-quieting.md`
 - `docs/implementation-notes/2026-06-06-pass-6a-health-areas-route-identity.md`
 - `docs/implementation-notes/2026-06-06-pass-6b-execute-review-route-identity.md`
+- `docs/implementation-notes/2026-06-11-capture-hierarchy-recovery.md`
+- `docs/implementation-notes/2026-06-11-home-launchpad-recovery.md`
+- `docs/implementation-notes/2026-06-11-triage-planning-workflow-hierarchy-recovery.md`
+- `docs/implementation-notes/2026-06-11-execute-review-health-areas-recovery.md`
+- `docs/implementation-notes/2026-06-11-visual-system-restraint-pass.md`
+- `docs/implementation-notes/2026-06-11-accessibility-motion-performance-evidence.md`
 - `docs/implementation-notes/2026-06-06-home-cockpit-flagship-taxonomy-maintenance.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-home-execute.md`
 - `docs/implementation-notes/2026-06-05-visual-authorship-taxonomy-review-health-areas.md`
@@ -241,18 +260,18 @@ Historical inputs only, not active program state:
 
 ## Next recommended pass
 
-### Active implementation pass: 7
+### Active implementation pass: none
 
-The current UX roadmap is not maintenance-only anymore. Pass 7 is the active UI/UX program.
+The current UX roadmap is back in maintenance posture. Pass 7 is closed, and there is no open replacement pass.
 
 What a fresh agent should do next:
 
-- finish docs hygiene first so the roadmap is unquestionably singular
-- complete the review/setup and tests/shared-rules gates before route implementation
-- treat Passes 0 through 6 as shipped history and maintenance guardrails, not the active queue
-- do not start route work until issues `#147` through `#168` and `#200` through `#202` are complete
+- treat this roadmap as the sole UI/UX authority unless a reviewed replacement pass is explicitly opened here
+- keep future UI/UX work narrow, issue-scoped, and maintenance-oriented by default
+- preserve the Pass 7 route contracts, mobile clutter limits, and proof expectations before attempting fresh visual churn
+- reopen a new named pass only if maintenance work uncovers a real cross-route program, not because one route wants polish
 
-Default proof while Pass 7 is active:
+Default proof for future maintenance UI work:
 
 - `pnpm lint`
 - `pnpm type-check`
