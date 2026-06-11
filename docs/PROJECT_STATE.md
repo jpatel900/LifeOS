@@ -46,7 +46,7 @@ Superseded by: n/a
 1. Finish Pass 7 sequentially from docs hygiene through audit using `docs/UI_UX_WORLD_CLASS_ROADMAP.md` and `docs/agent/UI_PASS_7_EXECUTION_MAP.md`; do not start route implementation before the docs, review, and test gates are complete.
 2. Restore GitHub write auth or manually backfill the prepared Pass 7 issue comments and labels from `docs/agent/UI_PASS_7_GITHUB_UPDATES.md` and `docs/agent/UI_PASS_7_LABEL_PLAN.md`.
 3. Re-run authenticated production smoke for issue `#93` without weakening Vercel deployment protection.
-4. Keep `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts tests/e2e/workflow-hierarchy.spec.ts` in the validation path for UX-affecting hierarchy or shell changes.
+4. Keep `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts` in the validation path for UX-affecting changes.
 5. Treat any future Google Calendar expansion as explicit follow-on scope only: all-day conflict handling first, then app-created event update or cancel after human approval.
 
 ## Important implementation notes
@@ -70,7 +70,7 @@ Superseded by: n/a
 - Planning stays local-first. Google Calendar remains secondary, explicitly approval-gated, and server-only.
 - `/execute` should emphasize one active mission and must not fake persisted timing truth.
 - `/health` is the diagnostic home. Primary workflow routes may stage deeper system detail behind disclosures, but Health owns the repair-first diagnostic surface.
-- `AppShell` intentionally suppresses the extra shell-context band on `/`, `/capture`, `/calendar`, `/execute`, and `/review`; `/capture` also suppresses the shell quick-note composer so the route's own raw-input workflow stays primary.
+- `AppShell` intentionally suppresses the extra shell-context band on `/capture`, `/calendar`, `/execute`, and `/review`.
 - Frontend split: shared shadcn-compatible primitives live in `apps/web/src/components/ui`, while shell identity and route composition stay custom.
 - `WorkflowProvider` must keep SSR and first client render structurally identical; persisted session state restores after mount.
 - Browser code must not import parser helpers, Google token or OAuth helpers, or service-role helpers. Use route handlers and server-only modules.
