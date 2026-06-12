@@ -11,6 +11,10 @@ import {
   type ParseCaptureTelemetry,
 } from "./parseCapture";
 import { PARSE_CAPTURE_SCHEMA_VERSION } from "./contracts/parseCapture";
+import {
+  DEFAULT_AI_PROVIDER_ID,
+  resolveStructuredOutputProvider,
+} from "./provider";
 import { PARSE_CAPTURE_PROMPT_VERSION } from "./prompts/parseCapturePrompt";
 import type { ParseCaptureAreaContext } from "./prompts/parseCapturePrompt";
 
@@ -278,10 +282,20 @@ export async function parseCaptureWithFallback(
       ? ("mock" as const)
       : ("ai" as const);
 
+  let providerId = DEFAULT_AI_PROVIDER_ID;
+  if (parser === "ai") {
+    try {
+      providerId = resolveStructuredOutputProvider(env).id;
+    } catch {
+      // Unknown AI_PROVIDER values fail loudly inside the traced call below;
+      // keep the default id here so the trace itself still records.
+    }
+  }
+
   return (options.traceParseCaptureImpl ?? traceParseCapture)(
     {
       parser,
-      provider: parser === "ai" ? "openai" : "mock",
+      provider: parser === "ai" ? providerId : "mock",
       metadata: {
         fallback_used: parser === "mock",
         model_name: parser === "ai" ? modelConfig?.model : undefined,
@@ -356,6 +370,7 @@ export async function parseCaptureWithFallback(
         {
           apiKey,
           model: modelConfig.model,
+          provider: resolveStructuredOutputProvider(env),
         },
       );
 

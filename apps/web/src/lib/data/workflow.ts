@@ -158,6 +158,10 @@ export interface ReviewEntryCreateResult {
 
 export interface MinimalSupabaseClient {
   from: (table: string) => unknown;
+  rpc?: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{ data: unknown; error: unknown }>;
   auth?: {
     getSession?: () => Promise<{
       data: {
@@ -1131,83 +1135,27 @@ export async function acceptTimeBlockProposal(
     );
   }
 
-  const user = await requireSupabaseUser(
+  await requireSupabaseUser(
     client,
     "Sign in before accepting planning proposals.",
   );
 
-  const proposalReadQuery = client.from("time_block_proposals") as {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        single: () => Promise<{ data: unknown; error: unknown }>;
-      };
-    };
-  };
-  const { data: proposalData, error: proposalReadError } =
-    await proposalReadQuery
-      .select(timeBlockProposalColumns)
-      .eq("id", proposalId)
-      .single();
-  if (proposalReadError) {
-    throw new Error(getSupabaseMessage(proposalReadError));
-  }
-  const proposal = parseTimeBlockProposal(proposalData);
-  if (proposal.status !== "proposed" && proposal.status !== "edited") {
-    throw new Error("Only proposed or edited proposals can be accepted.");
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
   }
 
-  const proposalUpdateQuery = client.from("time_block_proposals") as {
-    update: (row: Record<string, unknown>) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        select: (columns: string) => {
-          single: () => Promise<{ data: unknown; error: unknown }>;
-        };
-      };
-    };
-  };
-  const { data: acceptedData, error: acceptError } = await proposalUpdateQuery
-    .update({ status: "accepted" })
-    .eq("id", proposalId)
-    .select(timeBlockProposalColumns)
-    .single();
-  if (acceptError) {
-    throw new Error(getSupabaseMessage(acceptError));
+  const { data, error } = await client.rpc("accept_time_block_proposal", {
+    p_proposal_id: proposalId,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
   }
 
-  const blockQuery = client.from("calendar_blocks") as {
-    insert: (row: Record<string, unknown>) => {
-      select: (columns: string) => {
-        single: () => Promise<{ data: unknown; error: unknown }>;
-      };
-    };
-  };
-  const { data: blockData, error: blockError } = await blockQuery
-    .insert({
-      user_id: user.id,
-      area_id: proposal.area_id,
-      proposal_id: proposal.id,
-      task_id: proposal.task_id,
-      google_event_id: null,
-      start_at: proposal.proposed_start,
-      end_at: proposal.proposed_end,
-      status: "scheduled",
-    })
-    .select(calendarBlockColumns)
-    .single();
-  if (blockError) {
-    throw new Error(getSupabaseMessage(blockError));
-  }
-
+  const result = (data ?? {}) as Record<string, unknown>;
   return {
     provider: "supabase",
-    proposal: parseTimeBlockProposal(acceptedData),
-    block: parseCalendarBlock(blockData),
+    proposal: parseTimeBlockProposal(result.proposal),
+    block: parseCalendarBlock(result.block),
   };
 }
 
@@ -1644,92 +1592,30 @@ export async function markExecutionSession(
   const currentSession = parseExecutionSession(sessionData);
 
   const patch = executionMarkPatch(currentSession, parsedInput);
-  const sessionUpdateQuery = client.from("execution_sessions") as {
-    update: (row: Record<string, unknown>) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        select: (columns: string) => {
-          single: () => Promise<{ data: unknown; error: unknown }>;
-        };
-      };
-    };
-  };
-  const { data: updatedSessionData, error: sessionUpdateError } =
-    await sessionUpdateQuery
-      .update(patch)
-      .eq("id", sessionId)
-      .select(executionSessionColumns)
-      .single();
-  if (sessionUpdateError)
-    throw new Error(getSupabaseMessage(sessionUpdateError));
 
-  const updatedSession = parseExecutionSession(updatedSessionData);
-
-  let updatedBlock: CalendarBlock | null = null;
-  if (
-    currentSession.calendar_block_id &&
-    (updatedSession.outcome === "completed" ||
-      updatedSession.outcome === "skipped")
-  ) {
-    const blockStatus =
-      updatedSession.outcome === "completed" ? "completed" : "missed";
-    const blockUpdateQuery = client.from("calendar_blocks") as {
-      update: (row: Record<string, unknown>) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => {
-          select: (columns: string) => {
-            single: () => Promise<{ data: unknown; error: unknown }>;
-          };
-        };
-      };
-    };
-    const { data: blockData, error: blockError } = await blockUpdateQuery
-      .update({ status: blockStatus })
-      .eq("id", currentSession.calendar_block_id)
-      .select(calendarBlockColumns)
-      .single();
-    if (blockError) throw new Error(getSupabaseMessage(blockError));
-    updatedBlock = parseCalendarBlock(blockData);
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
   }
 
-  let updatedTask: Task | null = null;
-  if (
-    currentSession.task_id &&
-    (updatedSession.outcome === "completed" ||
-      updatedSession.outcome === "blocked")
-  ) {
-    const taskStatus =
-      updatedSession.outcome === "completed" ? "done" : "blocked";
-    const taskUpdateQuery = client.from("tasks") as {
-      update: (row: Record<string, unknown>) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => {
-          select: (columns: string) => {
-            single: () => Promise<{ data: unknown; error: unknown }>;
-          };
-        };
-      };
-    };
-    const { data: taskData, error: taskError } = await taskUpdateQuery
-      .update({ status: taskStatus })
-      .eq("id", currentSession.task_id)
-      .select(taskColumns)
-      .single();
-    if (taskError) throw new Error(getSupabaseMessage(taskError));
-    updatedTask = parseTask(taskData);
+  const { data, error } = await client.rpc("apply_execution_session_outcome", {
+    p_session_id: sessionId,
+    p_outcome: patch.outcome,
+    p_actual_minutes: patch.actual_minutes,
+    p_paused_minutes: patch.paused_minutes,
+    p_distraction_minutes: patch.distraction_minutes,
+    p_productivity_rating: patch.productivity_rating,
+    p_notes: patch.notes,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
   }
 
+  const result = (data ?? {}) as Record<string, unknown>;
   return {
     provider: "supabase",
-    session: updatedSession,
-    block: updatedBlock,
-    task: updatedTask,
+    session: parseExecutionSession(result.session),
+    block: result.block ? parseCalendarBlock(result.block) : null,
+    task: result.task ? parseTask(result.task) : null,
   };
 }
 

@@ -798,55 +798,43 @@ describe("workflow data provider", () => {
     expect(result.proposal.status).toBe("rejected");
   });
 
-  it("accepts a local proposal and creates a calendar_block without Google fields", async () => {
-    const proposalSingle = vi
-      .fn()
-      .mockResolvedValue({ data: proposalRow, error: null });
-    const proposalEq = vi.fn().mockReturnValue({ single: proposalSingle });
-    const proposalSelect = vi.fn().mockReturnValue({ eq: proposalEq });
-
+  it("accepts a local proposal and creates a calendar_block atomically via rpc", async () => {
     const accepted = { ...proposalRow, status: "accepted" };
-    const acceptedSingle = vi
-      .fn()
-      .mockResolvedValue({ data: accepted, error: null });
-    const acceptedSelect = vi.fn().mockReturnValue({ single: acceptedSingle });
-    const acceptedEq = vi.fn().mockReturnValue({ select: acceptedSelect });
-    const proposalUpdate = vi.fn().mockReturnValue({ eq: acceptedEq });
-
-    const blockSingle = vi
-      .fn()
-      .mockResolvedValue({ data: blockRow, error: null });
-    const blockSelect = vi.fn().mockReturnValue({ single: blockSingle });
-    const blockInsert = vi.fn().mockReturnValue({ select: blockSelect });
-
-    const from = vi.fn((table: string) => {
-      if (table === "time_block_proposals") {
-        return { select: proposalSelect, update: proposalUpdate };
-      }
-      if (table === "calendar_blocks") return { insert: blockInsert };
-      throw new Error(`Unexpected table ${table}`);
+    const rpc = vi.fn().mockResolvedValue({
+      data: { proposal: accepted, block: blockRow },
+      error: null,
     });
+    const from = vi.fn(() => {
+      throw new Error("Acceptance must use the transactional rpc.");
+    });
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as MinimalSupabaseClient;
 
-    const result = await acceptTimeBlockProposal(
-      authenticatedClient(from),
-      proposalId,
-    );
+    const result = await acceptTimeBlockProposal(client, proposalId);
 
-    expect(proposalEq).toHaveBeenCalledWith("id", proposalId);
-    expect(proposalUpdate).toHaveBeenCalledWith({ status: "accepted" });
-    expect(blockInsert).toHaveBeenCalledWith({
-      user_id: userId,
-      area_id: areaId,
-      proposal_id: proposalId,
-      task_id: taskId,
-      google_event_id: null,
-      start_at: start,
-      end_at: end,
-      status: "scheduled",
+    expect(rpc).toHaveBeenCalledWith("accept_time_block_proposal", {
+      p_proposal_id: proposalId,
     });
     expect(result.proposal.status).toBe("accepted");
     expect(result.block.google_event_id).toBeNull();
     expect(result.block.status).toBe("scheduled");
+  });
+
+  it("surfaces rpc errors when proposal acceptance fails", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "Only proposed or edited proposals can be accepted." },
+    });
+    const client = {
+      ...authenticatedClient(vi.fn()),
+      rpc,
+    } as MinimalSupabaseClient;
+
+    await expect(
+      acceptTimeBlockProposal(client, proposalId),
+    ).rejects.toThrow("Only proposed or edited proposals can be accepted.");
   });
 
   it("starts an execution_session for a persisted task and block", async () => {
@@ -991,71 +979,44 @@ describe("workflow data provider", () => {
     const sessionEq = vi.fn().mockReturnValue({ single: sessionSingle });
     const sessionSelect = vi.fn().mockReturnValue({ eq: sessionEq });
 
-    const sessionUpdateSingle = vi.fn().mockResolvedValue({
-      data: completedSession,
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        session: completedSession,
+        block: completedBlock,
+        task: completedTask,
+      },
       error: null,
     });
-    const sessionUpdateSelect = vi.fn().mockReturnValue({
-      single: sessionUpdateSingle,
-    });
-    const sessionUpdateEq = vi.fn().mockReturnValue({
-      select: sessionUpdateSelect,
-    });
-    const sessionUpdate = vi.fn().mockReturnValue({ eq: sessionUpdateEq });
-
-    const blockUpdateSingle = vi.fn().mockResolvedValue({
-      data: completedBlock,
-      error: null,
-    });
-    const blockUpdateSelect = vi
-      .fn()
-      .mockReturnValue({ single: blockUpdateSingle });
-    const blockUpdateEq = vi
-      .fn()
-      .mockReturnValue({ select: blockUpdateSelect });
-    const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
-
-    const taskUpdateSingle = vi.fn().mockResolvedValue({
-      data: completedTask,
-      error: null,
-    });
-    const taskUpdateSelect = vi
-      .fn()
-      .mockReturnValue({ single: taskUpdateSingle });
-    const taskUpdateEq = vi.fn().mockReturnValue({ select: taskUpdateSelect });
-    const taskUpdate = vi.fn().mockReturnValue({ eq: taskUpdateEq });
 
     const from = vi.fn((table: string) => {
       if (table === "execution_sessions") {
-        return { select: sessionSelect, update: sessionUpdate };
+        return { select: sessionSelect };
       }
-      if (table === "calendar_blocks") return { update: blockUpdate };
-      if (table === "tasks") return { update: taskUpdate };
       throw new Error(`Unexpected table ${table}`);
     });
 
-    const result = await markExecutionSession(
-      authenticatedClient(from),
-      sessionId,
-      {
-        status: "completed",
-        outcome: "completed",
-        actual_minutes: 53,
-        productivity_rating: 5,
-        notes: "Finished with minor context switching.",
-      },
-    );
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as MinimalSupabaseClient;
 
-    expect(sessionUpdate).toHaveBeenCalledWith({
+    const result = await markExecutionSession(client, sessionId, {
+      status: "completed",
       outcome: "completed",
       actual_minutes: 53,
-      paused_minutes: 0,
-      distraction_minutes: 0,
       productivity_rating: 5,
       notes: "Finished with minor context switching.",
     });
-    expect(blockUpdate).toHaveBeenCalledWith({ status: "completed" });
-    expect(taskUpdate).toHaveBeenCalledWith({ status: "done" });
+
+    expect(rpc).toHaveBeenCalledWith("apply_execution_session_outcome", {
+      p_session_id: sessionId,
+      p_outcome: "completed",
+      p_actual_minutes: 53,
+      p_paused_minutes: 0,
+      p_distraction_minutes: 0,
+      p_productivity_rating: 5,
+      p_notes: "Finished with minor context switching.",
+    });
     expect(result.session.outcome).toBe("completed");
     expect(result.block?.status).toBe("completed");
     expect(result.task?.status).toBe("done");
@@ -1078,64 +1039,43 @@ describe("workflow data provider", () => {
     const sessionEq = vi.fn().mockReturnValue({ single: sessionSingle });
     const sessionSelect = vi.fn().mockReturnValue({ eq: sessionEq });
 
-    const sessionUpdateSingle = vi.fn().mockResolvedValue({
-      data: missedSession,
+    const rpc = vi.fn().mockResolvedValue({
+      data: { session: missedSession, block: missedBlock, task: null },
       error: null,
     });
-    const sessionUpdateSelect = vi.fn().mockReturnValue({
-      single: sessionUpdateSingle,
-    });
-    const sessionUpdateEq = vi.fn().mockReturnValue({
-      select: sessionUpdateSelect,
-    });
-    const sessionUpdate = vi.fn().mockReturnValue({ eq: sessionUpdateEq });
-
-    const blockUpdateSingle = vi.fn().mockResolvedValue({
-      data: missedBlock,
-      error: null,
-    });
-    const blockUpdateSelect = vi
-      .fn()
-      .mockReturnValue({ single: blockUpdateSingle });
-    const blockUpdateEq = vi
-      .fn()
-      .mockReturnValue({ select: blockUpdateSelect });
-    const blockUpdate = vi.fn().mockReturnValue({ eq: blockUpdateEq });
-    const taskUpdate = vi.fn();
 
     const from = vi.fn((table: string) => {
       if (table === "execution_sessions") {
-        return { select: sessionSelect, update: sessionUpdate };
+        return { select: sessionSelect };
       }
-      if (table === "calendar_blocks") return { update: blockUpdate };
-      if (table === "tasks") return { update: taskUpdate };
       throw new Error(`Unexpected table ${table}`);
     });
 
-    const result = await markExecutionSession(
-      authenticatedClient(from),
-      sessionId,
-      {
-        status: "missed",
-        outcome: "skipped",
-        actual_minutes: 8,
-        productivity_rating: 2,
-        notes: "Short attempt before interruption.",
-      },
-    );
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as MinimalSupabaseClient;
 
-    expect(sessionUpdate).toHaveBeenCalledWith({
+    const result = await markExecutionSession(client, sessionId, {
+      status: "missed",
       outcome: "skipped",
       actual_minutes: 8,
-      paused_minutes: 0,
-      distraction_minutes: 0,
       productivity_rating: 2,
       notes: "Short attempt before interruption.",
     });
-    expect(blockUpdate).toHaveBeenCalledWith({ status: "missed" });
-    expect(taskUpdate).not.toHaveBeenCalled();
+
+    expect(rpc).toHaveBeenCalledWith("apply_execution_session_outcome", {
+      p_session_id: sessionId,
+      p_outcome: "skipped",
+      p_actual_minutes: 8,
+      p_paused_minutes: 0,
+      p_distraction_minutes: 0,
+      p_productivity_rating: 2,
+      p_notes: "Short attempt before interruption.",
+    });
     expect(result.session.outcome).toBe("skipped");
     expect(result.block?.status).toBe("missed");
+    expect(result.task).toBeNull();
   });
 
   it("lists persisted tasks, blocks, sessions, and review entries for review", async () => {

@@ -16,6 +16,7 @@ Superseded by: n/a
 
 ## Recently completed
 
+- Landed a robustness hardening batch (see `docs/implementation-notes/2026-06-12-robustness-hardening-batch.md`): atomic RPC-backed transitions for proposal acceptance and execution-session outcomes (migration pending live-database verification and human review), an AI provider boundary in `apps/web/src/lib/ai/provider/` (OpenAI remains the configured provider), user data export per new FR-016 (`GET /api/export` plus a `/settings/areas` admin disclosure, Google tokens excluded), and extraction of pure planning presentation helpers into `apps/web/src/lib/planning/presentation.ts`.
 - Established the Pass 7 control-plane docs under `docs/agent/UI_PASS_7_EXECUTION_MAP.md`, `docs/agent/UI_PASS_7_LABEL_PLAN.md`, and `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`, with matching implementation notes for the hardening gate.
 - Completed the UI/UX doc inventory and roadmap consolidation so `docs/UI_UX_WORLD_CLASS_ROADMAP.md` now names Pass 7 as the active implementation pass and older UX plans are treated as historical inputs, not the live queue.
 - Reopened the active roadmap explicitly as a clarity-and-diagnostic-staging program instead of a maintenance-only UX posture, while keeping prior passes recorded as shipped history.
@@ -48,6 +49,8 @@ Superseded by: n/a
 
 ## Known issues
 
+- `tests/e2e/areas-color-edit.spec.ts` has 2 failing tests that reproduce on a clean `main` checkout (area-card color preset buttons time out); pre-existing and needs separate triage.
+- The `20260612120000_add_workflow_transition_functions.sql` migration has not yet been run against a live database (Docker was unavailable); run `supabase db reset` plus the opt-in RLS suite and exercise accept-proposal and mark-session flows before merging or deploying.
 - Production acceptance proof for issue `#93` is still incomplete because authenticated Vercel smoke has not yet been rerun from an allowed session.
 - Google Calendar all-day conflict handling and app-created event update or cancel remain future work and are not yet proven.
 - Some persisted multi-step workflow transitions still happen as separate client-driven operations rather than one transactional server boundary.

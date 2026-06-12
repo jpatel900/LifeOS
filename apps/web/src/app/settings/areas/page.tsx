@@ -26,6 +26,7 @@ import { saveModeLabel } from "../../../lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { DataExportPanel } from "./DataExportPanel";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
 import { buildAreaAccentStyle } from "@/lib/areaAccent";
 
@@ -868,6 +869,10 @@ export default function AreasSettingsPage() {
         contentClassName="mt-4"
       >
         <GoogleCalendarConnectionPanel />
+      </DiagnosticsDisclosure>
+
+      <DiagnosticsDisclosure title="Data export" contentClassName="mt-4">
+        <DataExportPanel />
       </DiagnosticsDisclosure>
 
       <DiagnosticsDisclosure title="Local reset" contentClassName="mt-4">

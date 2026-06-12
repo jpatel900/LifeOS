@@ -77,7 +77,8 @@ export interface TraceAiOperationInput {
 
 export interface TraceParseCaptureInput {
   parser: "ai" | "mock";
-  provider?: "openai" | "mock";
+  /** Resolved AI provider id (for example "openai"), or "mock" for the fallback parser. */
+  provider?: string;
   metadata?: Record<string, unknown>;
   finalizeMetadata?: (
     outcome: TraceAiOperationOutcome,

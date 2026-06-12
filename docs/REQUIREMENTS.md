@@ -308,6 +308,22 @@ Acceptance criteria:
 
 ---
 
+### FR-016 — User Data Export
+
+**Priority:** SHOULD
+
+The user can download a complete JSON copy of their account data on demand.
+
+Acceptance criteria:
+
+- Export is available only to the signed-in user and covers only that user's rows (RLS-bounded).
+- Export includes all user-owned workflow tables: areas, captures, tasks, projects, time-block proposals, calendar blocks, execution sessions, review entries, external-write audit events, suggestion records, override records, and health history.
+- Export never includes secrets or OAuth token material (the Google Calendar connection table is excluded).
+- Export is read-only: it must not mutate or delete any data.
+- A failed export reports a plain-language, recoverable error and exports nothing partial.
+
+---
+
 ## 3. Non-Functional Requirements
 
 ### NFR-001 — Low Cost
