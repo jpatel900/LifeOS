@@ -1,15 +1,27 @@
 # UI Pass 7 GitHub Updates
 
-Status: Pending application
-Purpose: Store the exact GitHub comments or body updates blocked by invalid authentication in this environment
-Read when: GitHub write auth is restored or manual issue backfill is needed
+Status: Partially applied reference
+Purpose: Record the Pass 7 GitHub writeback content, what was applied through the GitHub connector, and what still remains blocked
+Read when: Reconciling GitHub metadata, checking what comments were posted, or finishing the remaining label and milestone backfill
 Do not use for: Runtime truth or shipped UX status
-Superseded by: Authenticated GitHub comments and metadata once the backfill is applied
-Reason not applied: `gh` is installed, but `gh auth status` reports the default token is invalid in this environment
+Superseded by: Live GitHub issue state once label and milestone reconciliation is complete
+Reason partially blocked: local `gh` auth is still invalid, and this environment still has no milestone-creation path
 
 Latest verification:
 
 - `2026-06-11`: `gh auth status` still reports `The token in default is invalid.`
+- `2026-06-12`: Pass 7 issue comments for `#171-#199`, closeout comments for `#146`, `#198`, and `#199`, and issue closures for `#146-#202` were applied through the GitHub connector.
+
+## Applied on GitHub
+
+- issue comments are now posted for the Pass 7 queue, including the route batches, final audit, closeout, and parent-epic closeout update
+- issues `#146-#202` are now closed with state reason `completed`
+
+## Still not fully reconciled
+
+- local `gh auth` is still broken, so CLI-driven verification and bulk metadata edits are still unavailable
+- milestone assignment is still missing on the Pass 7 issues because this environment has no milestone creation or lookup path
+- label coverage is partial: some Pass 7 labels were applied earlier, but the full label matrix in `docs/agent/UI_PASS_7_LABEL_PLAN.md` was not reconciled issue-by-issue on GitHub
 
 ## Issue #146 comment
 
