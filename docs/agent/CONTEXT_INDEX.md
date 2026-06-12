@@ -6,6 +6,7 @@ Use the smallest relevant context first.
 - Use `pnpm agent:context <area>` for bounded repo orientation.
 - Escalate to broader authority docs only when the task risk requires it.
 - `AGENTS.md` remains the highest authority for agent behavior.
+- For multi-step writes, new tables, vendor calls, or module size, check `docs/ENGINEERING_INVARIANTS.md` (binding, with guard tests).
 - This index is a routing aid, not an authority document.
 - Quick checks are iteration aids only; final validation still follows `AGENTS.md`.
 

@@ -39,6 +39,8 @@ These must never break:
 8. Health scores are deterministic.
 9. Core policies are not changed without approval.
 10. Calendar tokens/secrets never reach frontend logs.
+11. Multi-table workflow transitions commit atomically or not at all (see `docs/ENGINEERING_INVARIANTS.md` INV-1).
+12. Every user-owned table is export-covered or on the documented secrets exclusion list (INV-2).
 
 ## 4. Unit Tests
 
@@ -224,6 +226,8 @@ Test:
 - User A cannot access User B health rows
 - service-role usage limited to server-side functions only
 - frontend never receives service-role key
+- transactional RPCs (`accept_time_block_proposal`, `apply_execution_session_outcome`) deny cross-user calls and enforce status guards
+- any new transactional RPC ships a two-user denial test and an invalid-state test in the same PR
 
 Acceptance criteria:
 

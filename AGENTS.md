@@ -8,7 +8,7 @@ This file is for AI coding agents and future maintainers.
 
 This file has the highest authority for Cursor/Codex agent behavior.
 
-See **README.md** for the canonical documentation order (implementation and product truth). The implementation authority docs are **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, and **TEST_PLAN.md**. **Architecture Decision Records** in `docs/adr/` amend or clarify **ARCHITECTURE.md** where they conflict. **LIFE_OS_WIKI.md** and **EXTRA_INFO_AND_RULES.md** are **background reference only**, not implementation authority.
+See **README.md** for the canonical documentation order (implementation and product truth). The implementation authority docs are **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **ENGINEERING_INVARIANTS.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, and **TEST_PLAN.md**. **Architecture Decision Records** in `docs/adr/` amend or clarify **ARCHITECTURE.md** where they conflict. **LIFE_OS_WIKI.md** and **EXTRA_INFO_AND_RULES.md** are **background reference only**, not implementation authority.
 
 ## 1. Project Mission
 
@@ -143,6 +143,9 @@ For medium/high-risk or non-obvious governance, workflow, or phase work, add an 
 - Read `docs/PROJECT_STATE.md` only as needed for current status and implementation notes.
 - Do not read all docs by default.
 - Do not paste full logs or full files into handoffs unless necessary.
+- Token economy is a first-class constraint: read targeted line ranges instead of whole large files, grep before reading, do not re-read files you have not changed, and do not re-derive facts already established earlier in the run.
+- Keep handoffs, implementation notes, and new docs compact: findings and decisions, not transcripts. A doc nobody can afford to load into context governs nothing.
+- When adding guidance, prefer one line in an existing doc over a new doc; new docs require a clear reason an existing one cannot absorb the content.
 - `docs/agent/CONTEXT_INDEX.md` and `docs/agent/REPO_MAP.json` are orientation aids, not authority documents.
 - For UI/UX planning, `docs/UI_UX_WORLD_CLASS_ROADMAP.md` is the single active plan. Amend or explicitly retire it before creating any new competing UI/UX plan document.
 - Existing validation, security, RLS, schema, and calendar approval rules still apply.
@@ -262,6 +265,21 @@ Do not claim completion with "code compiles" alone. Test evidence is required.
 - Errors must be sanitized, plain-language, and recovery-oriented.
 - Apply that standard to parser, calendar, health, observability, and auth-facing states.
 
+## 12B. Robustness Requirements
+
+`docs/ENGINEERING_INVARIANTS.md` is binding. The high-traffic rules:
+
+- A persisted transition writing more than one table goes through one transactional server boundary (SECURITY INVOKER RPC), never sequenced client writes (INV-1).
+- A new user-owned table ships in the same PR with RLS policies, export coverage in `USER_DATA_EXPORT_TABLES`, and passing invariant guard tests (INV-2).
+- Vendor specifics stay inside adapter modules; call sites depend on the adapter interface (INV-3).
+- Pure logic belongs in `lib/` with tests; route pages stay within their line budgets, and shrinking an over-budget module you are already touching is in scope (INV-4).
+- If a doc claims a validation, CI must run it; wire new doc-claimed checks into `.github/workflows/` in the same change (INV-6).
+
+## 12C. Issue Aging and System Review
+
+- `docs/KNOWN_ISSUES.md` is the issue registry. Any run that updates `PROJECT_STATE.md` must triage the oldest undecided row there: fix, schedule, or accept with a reason.
+- Every ~20 merged PRs or monthly (whichever first), run `docs/agent/SYSTEM_REVIEW_CHECKLIST.md` and file findings as registry rows. Per-ticket discipline does not catch cross-cutting decay; this review is the step that does.
+
 ## 13. Forbidden Changes Without Human Review
 
 Do not change these without explicit review:
@@ -361,7 +379,7 @@ These rules convert common coding-agent failure modes into LifeOS-specific execu
 
 1. Read before writing: read `AGENTS.md`, start with the smallest relevant context (`docs/agent/CONTEXT_INDEX.md`, `pnpm agent:context <area>` when applicable), read `docs/PROJECT_STATE.md` as needed, and then the smallest set of authority docs needed for the task before editing; do not guess about phase, scope, or existing boundaries.
 2. Think before coding: confirm the task maps to current requirements, define acceptance criteria, identify impacted files/tests/risky surfaces, and stop if those are unclear.
-3. Make surgical changes only: prefer the smallest edit that fixes the stated problem; do not bundle refactors, doc rewrites, new tools, new dependencies, hooks, or adjacent feature work.
+3. Make surgical changes only: prefer the smallest edit that fixes the stated problem; do not bundle unrelated refactors, doc rewrites, new tools, new dependencies, hooks, or adjacent feature work. Two sanctioned exceptions so debt cannot accumulate by default: extracting pure logic from an over-budget module you are already touching is in scope (INV-4), and standalone hardening passes are legitimate work when driven by a `docs/KNOWN_ISSUES.md` entry.
 4. Simplicity and convention beat novelty: prefer existing repo patterns, typed Next.js server boundaries, shared schemas, and current docs over clever new abstractions.
 5. Deterministic product logic stays in code and config: do not move health scoring, approval gates, scope rules, validation, or other deterministic product decisions into prompts or AI judgment.
 6. Surface conflicts instead of averaging them away: if user instructions, `AGENTS.md`, other authority docs, or repo state disagree, call out the conflict plainly and resolve it before coding.

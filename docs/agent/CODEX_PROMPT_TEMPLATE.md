@@ -74,6 +74,7 @@ Every medium/high-risk, local-debugging, governance, or otherwise ambiguous impl
 - UI/browser/manual proof when the task affects UX or operator-facing behavior
 - exact acceptance criteria and the research/spec checkpoint it must satisfy
 - what must not change
+- which `docs/ENGINEERING_INVARIANTS.md` invariants the change touches (multi-step write, new table, vendor call, module budget) and how each is satisfied
 - the evidence required in the final report
 
 If the Oracle is missing, the prompt is underspecified.

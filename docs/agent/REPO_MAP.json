@@ -56,6 +56,7 @@
     "schemas": {
       "purpose": "Shared Zod contracts and exported types used across app and tests.",
       "readFirst": [
+        "docs/ENGINEERING_INVARIANTS.md",
         "packages/schemas/package.json",
         "packages/schemas/src/index.ts",
         "packages/schemas/src/entities.ts"
@@ -80,6 +81,7 @@
     "supabase-rls": {
       "purpose": "Supabase-backed persistence, grants, and user-ownership boundaries for Data API access.",
       "readFirst": [
+        "docs/ENGINEERING_INVARIANTS.md",
         "supabase/migrations/20260506213000_create_v1_core_tables.sql",
         "apps/web/src/lib/data/workflow.ts",
         "apps/web/src/__tests__/phase4aRls.local.test.ts"
@@ -91,7 +93,8 @@
         "supabase/migrations/20260508202145_grant_authenticated_health_check_access.sql",
         "supabase/migrations/20260509231500_harden_google_calendar_security.sql",
         "apps/web/src/lib/data/health.ts",
-        "apps/web/src/lib/data/workflow.test.ts"
+        "apps/web/src/lib/data/workflow.test.ts",
+        "supabase/migrations/20260612120000_add_workflow_transition_functions.sql"
       ],
       "risks": [
         "Grants and RLS are separate controls.",
@@ -106,6 +109,7 @@
     "calendar": {
       "purpose": "Local planning plus approval-gated Google Calendar connect, freebusy, and create-event flows.",
       "readFirst": [
+        "docs/ENGINEERING_INVARIANTS.md",
         "apps/web/src/app/calendar/page.tsx",
         "apps/web/src/app/api/google-calendar/freebusy/route.ts",
         "apps/web/src/app/api/google-calendar/create-event/route.ts"
@@ -199,7 +203,12 @@
     },
     "docs": {
       "purpose": "Authority docs, handoff state, and agent-maintenance guidance.",
-      "readFirst": ["AGENTS.md", "README.md", "docs/PROJECT_STATE.md"],
+      "readFirst": [
+        "docs/ENGINEERING_INVARIANTS.md",
+        "AGENTS.md",
+        "README.md",
+        "docs/PROJECT_STATE.md"
+      ],
       "likelyFiles": [
         "docs/REQUIREMENTS.md",
         "docs/ARCHITECTURE.md",
@@ -207,7 +216,9 @@
         "docs/skills/next-phase-gate-review.md",
         "docs/agent/CONTEXT_INDEX.md",
         "docs/agent/VALIDATION_MATRIX.md",
-        "docs/agent/HANDOFF_TEMPLATE.md"
+        "docs/agent/HANDOFF_TEMPLATE.md",
+        "docs/KNOWN_ISSUES.md",
+        "docs/agent/SYSTEM_REVIEW_CHECKLIST.md"
       ],
       "risks": [
         "Do not fork or dilute authority hierarchy.",
@@ -222,6 +233,7 @@
     "tests": {
       "purpose": "Fast entry point for source-of-truth guards, targeted route tests, and opt-in RLS proof.",
       "readFirst": [
+        "docs/ENGINEERING_INVARIANTS.md",
         "docs/TEST_PLAN.md",
         "apps/web/src/__tests__/sourceOfTruth.test.ts",
         "apps/web/src/__tests__/phase4aRls.local.test.ts"
@@ -234,7 +246,8 @@
         "apps/web/src/app/api/google-calendar/create-event/route.test.ts",
         "apps/web/src/lib/data/workflow.test.ts",
         "apps/web/src/lib/data/health.test.ts",
-        "packages/schemas/src/parse-capture.regression.test.ts"
+        "packages/schemas/src/parse-capture.regression.test.ts",
+        "apps/web/src/__tests__/engineeringInvariants.test.ts"
       ],
       "risks": [
         "Green narrow tests do not replace final validation.",

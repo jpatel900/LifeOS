@@ -19,4 +19,5 @@ These are minimum local iteration checks. They do not replace final validation r
 | `UI-only`                       | `pnpm --filter @lifeos/web test -- WorkflowContext.test.tsx sourceOfTruth.test.ts`                           |
 | `UI-only` (browser walkthrough) | Run the scoped journeys in `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md` and report required handoff output.     |
 | `health / observability`        | `pnpm --filter @lifeos/web test -- health.test.ts` · `pnpm --filter @lifeos/web test -- observability`       |
+| `cross-cutting triggers`         | Multi-step persisted write → transactional RPC (INV-1) · new table → export + RLS (INV-2) · new vendor call → adapter (INV-3) · touched page over budget → extract (INV-4). Run `pnpm --filter @lifeos/web test -- engineeringInvariants`. |
 | `tests-only`                    | Run the changed test files first, then the nearest package-level test/type-check command.                    |
