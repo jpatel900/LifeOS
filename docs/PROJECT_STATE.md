@@ -53,7 +53,7 @@ Superseded by: n/a
 
 ## Known issues
 
-- The issue registry now lives in `docs/KNOWN_ISSUES.md` (with the aging rule from `AGENTS.md` 12C). Headlines: Google Calendar update/cancel and all-day conflicts unbuilt, provider degradation not yet surfaced in Health (INV-5), issue `#93` production smoke incomplete, and an untracked `supabase/migrations/20260612231853_remote_schema.sql` drift dump that breaks local `supabase db reset` and needs a human decision.
+- The issue registry now lives in `docs/KNOWN_ISSUES.md` (with the aging rule from `AGENTS.md` 12C). Headlines: Google Calendar update/cancel and all-day conflicts unbuilt, provider degradation not yet surfaced in Health (INV-5), issue `#93` production smoke incomplete, and the meta-learning loop logged-but-unused. The accidental remote-schema drift dump that broke local `supabase db reset` was deleted 2026-06-13 (registry #7 resolved).
 
 ## Next recommended tasks
 
