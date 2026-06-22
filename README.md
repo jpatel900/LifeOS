@@ -12,12 +12,13 @@ Authority decreases down the list. Higher entries override lower ones when they 
 2. **REQUIREMENTS.md** — Product requirements and V1 scope.
 3. **ARCHITECTURE.md** — Technical architecture and boundaries.
 4. **DATA_MODEL.md** — Canonical domain and data model.
-5. **UX_FLOWS.md** — User journeys and screen behavior.
-6. **SECURITY_PRIVACY.md** — Security, privacy, auth, and external-write rules.
-7. **TEST_PLAN.md** — Acceptance tests and validation requirements.
-8. **PROJECT_BRIEF.md** — Product context and thesis.
+5. **ENGINEERING_INVARIANTS.md** — System-level engineering guarantees and their enforcement.
+6. **UX_FLOWS.md** — User journeys and screen behavior.
+7. **SECURITY_PRIVACY.md** — Security, privacy, auth, and external-write rules.
+8. **TEST_PLAN.md** — Acceptance tests and validation requirements.
+9. **PROJECT_BRIEF.md** — Product context and thesis.
 
-The implementation authority docs are `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `UX_FLOWS.md`, `SECURITY_PRIVACY.md`, and `TEST_PLAN.md`. `AGENTS.md` governs agent behavior above all of them.
+The implementation authority docs are `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `ENGINEERING_INVARIANTS.md`, `UX_FLOWS.md`, `SECURITY_PRIVACY.md`, and `TEST_PLAN.md`. `AGENTS.md` governs agent behavior above all of them.
 
 Architecture Decision Records in `docs/adr/` clarify or amend `ARCHITECTURE.md` for the decisions they record.
 

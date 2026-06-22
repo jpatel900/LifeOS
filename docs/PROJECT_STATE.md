@@ -16,6 +16,10 @@ Superseded by: n/a
 
 ## Recently completed
 
+- Landed the agent-governance hardening batch (2026-06-12): new authority doc `docs/ENGINEERING_INVARIANTS.md` with guard tests in `apps/web/src/__tests__/engineeringInvariants.test.ts` (export coverage, vendor seams, module budgets), CI gained Playwright e2e and migrations+RLS jobs, `docs/KNOWN_ISSUES.md` registry plus `docs/agent/SYSTEM_REVIEW_CHECKLIST.md` cadence, and AGENTS.md sections 12B/12C plus the sanctioned debt-paydown amendment to section 17 rule 3.
+- Verified the transactional-transition migration live: `supabase db reset` applies cleanly and the RLS suite passes 17/17 including new two-user denial tests for `accept_time_block_proposal` and `apply_execution_session_outcome`.
+- Fixed the two pre-existing `areas-color-edit.spec.ts` failures (specs now open the Pass 7 registry disclosure before using color presets); the full spec passes 3/3.
+
 - Landed a robustness hardening batch (see `docs/implementation-notes/2026-06-12-robustness-hardening-batch.md`): atomic RPC-backed transitions for proposal acceptance and execution-session outcomes (migration pending live-database verification and human review), an AI provider boundary in `apps/web/src/lib/ai/provider/` (OpenAI remains the configured provider), user data export per new FR-016 (`GET /api/export` plus a `/settings/areas` admin disclosure, Google tokens excluded), and extraction of pure planning presentation helpers into `apps/web/src/lib/planning/presentation.ts`.
 - Established the Pass 7 control-plane docs under `docs/agent/UI_PASS_7_EXECUTION_MAP.md`, `docs/agent/UI_PASS_7_LABEL_PLAN.md`, and `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`, with matching implementation notes for the hardening gate.
 - Completed the UI/UX doc inventory and roadmap consolidation so `docs/UI_UX_WORLD_CLASS_ROADMAP.md` now names Pass 7 as the active implementation pass and older UX plans are treated as historical inputs, not the live queue.
@@ -49,11 +53,7 @@ Superseded by: n/a
 
 ## Known issues
 
-- `tests/e2e/areas-color-edit.spec.ts` has 2 failing tests that reproduce on a clean `main` checkout (area-card color preset buttons time out); pre-existing and needs separate triage.
-- The `20260612120000_add_workflow_transition_functions.sql` migration has not yet been run against a live database (Docker was unavailable); run `supabase db reset` plus the opt-in RLS suite and exercise accept-proposal and mark-session flows before merging or deploying.
-- Production acceptance proof for issue `#93` is still incomplete because authenticated Vercel smoke has not yet been rerun from an allowed session.
-- Google Calendar all-day conflict handling and app-created event update or cancel remain future work and are not yet proven.
-- Some persisted multi-step workflow transitions still happen as separate client-driven operations rather than one transactional server boundary.
+- The issue registry now lives in `docs/KNOWN_ISSUES.md` (with the aging rule from `AGENTS.md` 12C). Headlines: Google Calendar update/cancel and all-day conflicts unbuilt, provider degradation not yet surfaced in Health (INV-5), issue `#93` production smoke incomplete, and the meta-learning loop logged-but-unused. The accidental remote-schema drift dump that broke local `supabase db reset` was deleted 2026-06-13 (registry #7 resolved).
 
 ## Next recommended tasks
 

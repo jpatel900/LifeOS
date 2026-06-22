@@ -25,6 +25,7 @@ Inspect only the smallest relevant set needed to review the current phase bounda
 - `docs/REQUIREMENTS.md`
 - `docs/ARCHITECTURE.md`
 - `docs/DATA_MODEL.md`
+- `docs/ENGINEERING_INVARIANTS.md`
 - `docs/SECURITY_PRIVACY.md`
 - `docs/TEST_PLAN.md`
 - affected routes, server actions, adapters, schemas, migrations, or tests
@@ -37,6 +38,7 @@ Prefer implementation authority docs and source files over background docs.
 Answer these directly:
 
 - What is fragile here?
+- Does any change add a multi-step persisted write, a new table, a new vendor call, or push a module over budget? Check the matching invariant in `docs/ENGINEERING_INVARIANTS.md`.
 - What did we duplicate?
 - What could break in production?
 - What could break silently?

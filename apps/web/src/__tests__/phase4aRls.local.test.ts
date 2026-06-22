@@ -552,6 +552,147 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     );
   });
 
+  it("accepts proposals atomically via rpc and hides cross-user proposals", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-rpc-accept-task-${suffix}`;
+    let taskId = "";
+
+    try {
+      const { data: task, error: taskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: taskTitle,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      expect(taskError).toBeNull();
+      taskId = task!.id;
+
+      const { data: proposal, error: proposalError } = await userAClient
+        .from("time_block_proposals")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          proposed_start: "2026-06-12T16:00:00.000Z",
+          proposed_end: "2026-06-12T17:00:00.000Z",
+          rationale_json: { note: "RLS rpc accept" },
+          conflict_flag: false,
+          status: "proposed",
+        })
+        .select("id")
+        .single();
+      expect(proposalError).toBeNull();
+
+      const { error: crossUserError } = await userBClient.rpc(
+        "accept_time_block_proposal",
+        { p_proposal_id: proposal!.id },
+      );
+      expect(crossUserError?.message).toMatch(/was not found/i);
+
+      const { data: accepted, error: acceptError } = await userAClient.rpc(
+        "accept_time_block_proposal",
+        { p_proposal_id: proposal!.id },
+      );
+      expect(acceptError).toBeNull();
+      expect(accepted.proposal.status).toBe("accepted");
+      expect(accepted.block.proposal_id).toBe(proposal!.id);
+      expect(accepted.block.user_id).toBe(userA.id);
+      expect(accepted.block.status).toBe("scheduled");
+
+      const { error: repeatError } = await userAClient.rpc(
+        "accept_time_block_proposal",
+        { p_proposal_id: proposal!.id },
+      );
+      expect(repeatError?.message).toMatch(
+        /only proposed or edited proposals/i,
+      );
+    } finally {
+      if (taskId) {
+        await deleteBlockByTaskId(userAClient, taskId);
+        await deleteProposalByTaskId(userAClient, taskId);
+      }
+      await deleteTaskByTitle(userAClient, taskTitle);
+    }
+  });
+
+  it("applies execution outcomes atomically via rpc with cross-user denial", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-rpc-outcome-task-${suffix}`;
+    let taskId = "";
+
+    try {
+      const { data: task, error: taskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: taskTitle,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      expect(taskError).toBeNull();
+      taskId = task!.id;
+
+      const { data: session, error: sessionError } = await userAClient
+        .from("execution_sessions")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          outcome: "partial",
+        })
+        .select("id")
+        .single();
+      expect(sessionError).toBeNull();
+
+      const { error: crossUserError } = await userBClient.rpc(
+        "apply_execution_session_outcome",
+        {
+          p_session_id: session!.id,
+          p_outcome: "completed",
+          p_actual_minutes: 30,
+          p_paused_minutes: 0,
+          p_distraction_minutes: 0,
+          p_productivity_rating: 4,
+          p_notes: "cross-user attempt",
+        },
+      );
+      expect(crossUserError?.message).toMatch(/was not found/i);
+
+      const { data: applied, error: applyError } = await userAClient.rpc(
+        "apply_execution_session_outcome",
+        {
+          p_session_id: session!.id,
+          p_outcome: "completed",
+          p_actual_minutes: 30,
+          p_paused_minutes: 0,
+          p_distraction_minutes: 0,
+          p_productivity_rating: 4,
+          p_notes: "RLS rpc outcome",
+        },
+      );
+      expect(applyError).toBeNull();
+      expect(applied.session.outcome).toBe("completed");
+      expect(applied.session.actual_minutes).toBe(30);
+      expect(applied.task.status).toBe("done");
+      expect(applied.block).toBeNull();
+    } finally {
+      if (taskId) {
+        await deleteSessionByTaskId(userAClient, taskId);
+      }
+      await deleteTaskByTitle(userAClient, taskTitle);
+    }
+  });
+
   it("lets user A access own execution sessions and review entries but not user B rows", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);

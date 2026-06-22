@@ -11,6 +11,13 @@ async function gotoAreas(page: Page) {
   await expect(heading).toBeVisible();
 }
 
+async function openRegistryActions(card: ReturnType<Page["getByTestId"]>) {
+  // Color controls live behind the per-card "Registry actions and settings"
+  // disclosure (a native <details>), closed at rest by the Pass 7 hierarchy.
+  await card.getByText("Registry actions and settings").click();
+  await expect(card.getByTestId("areas-color-panel")).toBeVisible();
+}
+
 async function expectNoHorizontalOverflow(page: Page) {
   const layout = await page.evaluate(() => {
     const html = document.documentElement;
@@ -39,6 +46,9 @@ test("Areas supports color changes, reset, and shell accent updates", async ({
   const secondCard = page.getByTestId("areas-area-card").nth(1);
   await expect(firstCard).toBeVisible();
   await expect(secondCard).toBeVisible();
+
+  await openRegistryActions(firstCard);
+  await openRegistryActions(secondCard);
 
   await firstCard.getByRole("button", { name: "Teal" }).click();
   await expect(firstCard).toHaveCSS("--area-accent", "#0f766e");
@@ -75,6 +85,7 @@ test("dark-mode area accent presets keep current-area text readable and focus-vi
   const otherButton = secondCard.getByRole("button", { name: "Use this area" });
 
   await selectedButton.click();
+  await openRegistryActions(firstCard);
 
   for (const preset of presets) {
     const presetButton = firstCard.getByRole("button", { name: preset });
@@ -124,7 +135,9 @@ test("dark-mode area accent presets keep current-area text readable and focus-vi
     );
   }
 
-  await expect(firstCard.getByText("Main Job")).toBeVisible();
+  await expect(
+    firstCard.getByRole("heading", { name: "Main Job" }),
+  ).toBeVisible();
   await expect(selectedButton).toBeVisible();
 
   const selectedBackground = await selectedButton.evaluate(
