@@ -10,6 +10,34 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect change scope
+    runs-on: ubuntu-latest
+    outputs:
+      heavy: ${{ steps.detect.outputs.heavy }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Detect heavy-relevant changes
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "heavy=true" >> "$GITHUB_OUTPUT"
+            echo "Event ${{ github.event_name }}: running full suite."
+            exit 0
+          fi
+          changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)"
+          echo "Changed files:"; echo "$changed"
+          if echo "$changed" | grep -qE '^(apps/|packages/|supabase/|scripts/|\.github/workflows/|package\.json|pnpm-lock\.yaml|turbo\.json)'; then
+            echo "heavy=true" >> "$GITHUB_OUTPUT"
+            echo "Code/migration/workflow paths changed: e2e + migrations-rls will run."
+          else
+            echo "heavy=false" >> "$GITHUB_OUTPUT"
+            echo "Docs-only change: e2e + migrations-rls will be skipped."
+          fi
+
   validate-monorepo:
     name: Monorepo Validation
     runs-on: ubuntu-latest
@@ -53,6 +81,8 @@ jobs:
 
   e2e:
     name: Playwright E2E
+    needs: changes
+    if: needs.changes.outputs.heavy == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -90,6 +120,8 @@ jobs:
 
   migrations-rls:
     name: Migrations + RLS Verification
+    needs: changes
+    if: needs.changes.outputs.heavy == 'true'
     runs-on: ubuntu-latest
 
     steps:
