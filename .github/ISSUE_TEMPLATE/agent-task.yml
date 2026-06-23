@@ -27,9 +27,11 @@ body:
     id: task_type
     attributes:
       label: Task type
-      description: Pick the main surface. If the task spans multiple areas, the issue is probably too broad.
+      description: Pick the main surface. Use `workflow` for GitHub workflows, automation scripts, or automation-routing changes. Use `agent-governance` for prompt templates, routing docs, issue templates, or policy/control-plane guidance. If the task spans multiple areas, the issue is probably too broad.
       options:
         - docs
+        - workflow
+        - agent-governance
         - tests
         - ui
         - capture
@@ -154,7 +156,7 @@ body:
     id: validation_commands
     attributes:
       label: Validation commands
-      description: List the exact commands the agent must run before claiming completion. Choose commands based on the touched surface, not generic docs-only defaults.
+      description: List the exact commands the agent must run before claiming completion. Choose commands from the touched surface plus `docs/agent/VALIDATION_MATRIX.md` and the highest applicable T0-T4 tier in `.github/AGENT_AUTOMATION_POLICY.md` instead of defaulting every docs-only task to full repo validation.
       value: |
         pnpm format:check
         git diff --check
@@ -165,7 +167,7 @@ body:
     id: ui_proof_requirements
     attributes:
       label: UI proof requirements
-      description: Required for route-level UI, shell, capture, home, planning, execute, review, health, areas, or visual work. State the required mobile proof, desktop proof, tests run, what should become simpler, and what must stay intentionally unchanged. For non-UI tasks, say `Not required` and why.
+      description: Required for route-level UI, shell, capture, home, planning, execute, review, health, areas, or visual work. State the required mobile proof, desktop proof, tests run, what should become simpler, and what must stay intentionally unchanged. For non-UI tasks, leave this blank; GitHub issue forms cannot make it conditionally required.
       placeholder: |
         - Mobile proof: `390px` first viewport on `/capture` after the change
         - Desktop proof: `/capture` at rest after the change
@@ -177,7 +179,7 @@ body:
         - What became simpler: textarea and `Save thought` appear before metrics and support content
         - Intentionally unchanged: raw-save-first safety, local fallback truth, parser contract, and external-write behavior
     validations:
-      required: true
+      required: false
   - type: markdown
     attributes:
       value: |
@@ -220,7 +222,7 @@ body:
         - `tests`
           - exact touched test suites
           - prove assertions were strengthened or preserved, not weakened
-        - workflow / automation / prompt control-plane changes
+        - `workflow` / `agent-governance` / automation / prompt control-plane changes
           - relevant script self-tests if available
           - repo validation as required by the touched surface
           - human review required before merge

@@ -16,6 +16,7 @@ Superseded by: n/a
 
 ## Recently completed
 
+- Tightened the agent control-plane docs for issue intake and validation planning (2026-06-23): `.github/ISSUE_TEMPLATE/agent-task.yml` now includes `workflow` and `agent-governance` task types, no longer forces meaningless UI-proof boilerplate onto non-UI work, and points validation selection at the canonical change-type crosswalk. `docs/agent/VALIDATION_MATRIX.md` is now the single change-type ↔ T0-T4 validation crosswalk, and `docs/agent/CODEX_PROMPT_TEMPLATE.md` now points prompts to that crosswalk instead of implying full repo validation for every docs-only task.
 - Landed the agent-governance hardening batch (2026-06-12): new authority doc `docs/ENGINEERING_INVARIANTS.md` with guard tests in `apps/web/src/__tests__/engineeringInvariants.test.ts` (export coverage, vendor seams, module budgets), CI gained Playwright e2e and migrations+RLS jobs, `docs/KNOWN_ISSUES.md` registry plus `docs/agent/SYSTEM_REVIEW_CHECKLIST.md` cadence, and AGENTS.md sections 12B/12C plus the sanctioned debt-paydown amendment to section 17 rule 3.
 - Verified the transactional-transition migration live: `supabase db reset` applies cleanly and the RLS suite passes 17/17 including new two-user denial tests for `accept_time_block_proposal` and `apply_execution_session_outcome`.
 - Fixed the two pre-existing `areas-color-edit.spec.ts` failures (specs now open the Pass 7 registry disclosure before using color presets); the full spec passes 3/3.

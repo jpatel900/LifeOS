@@ -14,6 +14,7 @@ Delivery defaults:
 - GitHub-first is the default for repo delivery: issues, PRs, labels, review workflows, and branch-scoped automation.
 - Local Codex CLI is allowed for medium/high-risk, local debugging, or governance hardening when direct repo work is safer or faster under active human supervision.
 - For medium/high-risk or cross-flow work, use the role-separated checkpoints in `docs/agent/ROLE_SEPARATED_DELIVERY.md` so research/spec/build/test/validation are explicit.
+- Use `docs/agent/VALIDATION_MATRIX.md` to choose focused iteration checks by change type and T0-T4 tier; do not default T0 docs or template work to full repo validation when no code changed.
 - For T2 workflow behavior, cross-flow UX, health meaning changes, parser UI, observability display, or workflow data behavior, attach or define a scenario pack before implementation.
 - Do not copy all repo law into the prompt. Point back to `AGENTS.md` and the smallest relevant doc set.
 

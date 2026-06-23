@@ -6,7 +6,7 @@ Rule: Any run that updates `PROJECT_STATE.md` must also triage the **oldest unde
 
 | # | Issue | Severity | First seen | Decision |
 | - | ----- | -------- | ---------- | -------- |
-| 1 | Google Calendar update/cancel of app-created events not built; missed-block recovery (FR-012) blocked on it | high | 2026-06-12 | pending — recommended next major scope after governance hardening |
+| 1 | Google Calendar update/cancel of app-created events not built; missed-block recovery (FR-012) blocked on it | high | 2026-06-12 | accepted for now — explicit post-governance follow-on scope only; do not expand external-write surfaces until a dedicated reviewed issue/spec is opened |
 | 2 | Google Calendar all-day event conflict handling unproven | medium | 2026-06-12 | pending — bundle with #1 |
 | 3 | Provider degradation not surfaced as Health incidents (INV-5 open) | medium | 2026-06-12 | pending |
 | 4 | Route pages over the 800-line budget (grandfather list in `engineeringInvariants.test.ts`: execute 1667, calendar 1554, capture 1096, review 1029, areas 943, triage 922, home 877) | low | 2026-06-12 | accepted with paydown rule — shrink opportunistically when touching a page (INV-4); never raise ceilings |

@@ -1,23 +1,23 @@
 # Validation Matrix
 
-These are minimum local iteration checks. They do not replace final validation requirements in `AGENTS.md`.
+This is the canonical change-type to automation-tier crosswalk for local validation planning. It does not replace final validation requirements in `AGENTS.md`, task-specific issue commands, or stricter gates from `.github/AGENT_AUTOMATION_POLICY.md`.
 
 - Use narrower checks during iteration.
-- Before final completion, follow `AGENTS.md` and the task’s risk surface.
+- Before final completion, follow the stricter of `AGENTS.md`, the task’s highest T0-T4 tier, and the issue’s required validation.
 - Opt-in local Supabase RLS tests remain opt-in because they require local Supabase/Docker and env setup.
 - Do not use this file to justify skipping required final checks.
 - For UI/browser verification scope and safety, use `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md`.
 
-| Change type                     | Useful iteration checks                                                                                      |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `docs-only`                     | Manual path/command check for changed docs. Re-open the changed doc sections and confirm linked paths exist. |
-| `agent-orientation docs/helper` | `pnpm agent:context capture` · `pnpm agent:context schemas` · `pnpm agent:context unknown-area`              |
-| `schema-only`                   | `pnpm --filter @lifeos/schemas type-check` · `pnpm --filter @lifeos/schemas test`                            |
-| `capture / parse-capture`       | `pnpm --filter @lifeos/web test -- capture` · `pnpm --filter @lifeos/web test -- parseCapture`               |
-| `Supabase / RLS`                | `pnpm --filter @lifeos/web test -- workflow.test.ts health.test.ts` · opt-in `phase4aRls.local.test.ts`      |
-| `calendar / external writes`    | `pnpm --filter @lifeos/web test -- google-calendar` · `pnpm --filter @lifeos/web test -- calendar`           |
-| `UI-only`                       | `pnpm --filter @lifeos/web test -- WorkflowContext.test.tsx sourceOfTruth.test.ts`                           |
-| `UI-only` (browser walkthrough) | Run the scoped journeys in `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md` and report required handoff output.     |
-| `health / observability`        | `pnpm --filter @lifeos/web test -- health.test.ts` · `pnpm --filter @lifeos/web test -- observability`       |
-| `cross-cutting triggers`         | Multi-step persisted write → transactional RPC (INV-1) · new table → export + RLS (INV-2) · new vendor call → adapter (INV-3) · touched page over budget → extract (INV-4). Run `pnpm --filter @lifeos/web test -- engineeringInvariants`. |
-| `tests-only`                    | Run the changed test files first, then the nearest package-level test/type-check command.                    |
+| Change type                     | Typical tier                           | Useful iteration checks                                                                                      | Final completion expectation                                                                                                    |
+| ------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `docs-only`                     | `T0`                                   | Manual path/command check for changed docs. Re-open the changed doc sections and confirm linked paths exist. | Re-open changed sections, run doc-format or diff sanity checks when relevant, and state plainly when full build/test was not needed because no code changed. |
+| `agent-orientation docs/helper` | `T0` for docs, `T2` for scripted help  | `pnpm agent:context capture` · `pnpm agent:context schemas` · `pnpm agent:context unknown-area`              | Re-run every touched `pnpm agent:context <area>` entry and any helper-path proof, plus diff sanity checks.                    |
+| `schema-only`                   | `T3`                                   | `pnpm --filter @lifeos/schemas type-check` · `pnpm --filter @lifeos/schemas test`                            | Full high-risk validation applies before completion; do not stop at package-local checks.                                      |
+| `capture / parse-capture`       | `T1` for narrow UI, `T3` for parser    | `pnpm --filter @lifeos/web test -- capture` · `pnpm --filter @lifeos/web test -- parseCapture`               | Match the stricter surface: UI proof for route work, full high-risk validation for parser-contract or server-boundary work.    |
+| `Supabase / RLS`                | `T3`                                   | `pnpm --filter @lifeos/web test -- workflow.test.ts health.test.ts` · opt-in `phase4aRls.local.test.ts`      | Full high-risk validation plus two-user isolation proof when a table, grant, or policy changed.                               |
+| `calendar / external writes`    | `T3`                                   | `pnpm --filter @lifeos/web test -- google-calendar` · `pnpm --filter @lifeos/web test -- calendar`           | Full high-risk validation, approval-gate proof, and no real external write unless explicitly approved.                         |
+| `UI-only`                       | `T1` for narrow copy, `T2` for cross-flow | `pnpm --filter @lifeos/web test -- WorkflowContext.test.tsx sourceOfTruth.test.ts`                         | Run the focused route and browser proof required by the issue; escalate to repo-wide validation when the change is broader than copy or smoke scope. |
+| `UI-only` (browser walkthrough) | `T1` to `T2`                           | Run the scoped journeys in `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md` and report required handoff output.     | Required when user-facing behavior changed; do not substitute static screenshots for behavior proof.                           |
+| `health / observability`        | `T2` to `T3`                           | `pnpm --filter @lifeos/web test -- health.test.ts` · `pnpm --filter @lifeos/web test -- observability`       | Use the stricter tier when state meaning, privacy, or connector behavior changed.                                              |
+| `cross-cutting triggers`        | Follow touched surface                 | Multi-step persisted write → transactional RPC (INV-1) · new table → export + RLS (INV-2) · new vendor call → adapter (INV-3) · touched page over budget → extract (INV-4). Run `pnpm --filter @lifeos/web test -- engineeringInvariants`. | These triggers add required proof on top of the base row; they are not optional cleanup.                                       |
+| `tests-only`                    | `T1` to `T2`                           | Run the changed test files first, then the nearest package-level test/type-check command.                    | Prove assertions were preserved or strengthened, not weakened, and escalate to broader validation when behavior meaning changed. |
