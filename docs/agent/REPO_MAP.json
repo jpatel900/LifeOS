@@ -201,6 +201,32 @@
         "pnpm --filter @lifeos/web test -- sourceOfTruth.test.ts"
       ]
     },
+    "projects-tasks": {
+      "purpose": "Project/task operating-layer planning, current task-project model boundaries, and pre-schema scope guardrails.",
+      "readFirst": [
+        "docs/REQUIREMENTS.md",
+        "docs/DATA_MODEL.md",
+        "docs/UX_FLOWS.md",
+        "docs/ENGINEERING_INVARIANTS.md"
+      ],
+      "likelyFiles": [
+        "docs/PROJECT_STATE.md",
+        "docs/KNOWN_ISSUES.md",
+        "docs/SECURITY_PRIVACY.md",
+        "docs/agent/CONTEXT_INDEX.md",
+        "docs/agent/CODEX_PROMPT_TEMPLATE.md"
+      ],
+      "risks": [
+        "Do not expand beyond current V1 scope without approved requirements updates.",
+        "Navigation containment must preserve the six primary workflow screens.",
+        "Future state-taxonomy work must not bypass transactional, export, or RLS invariants."
+      ],
+      "quickChecks": [
+        "pnpm agent:context projects-tasks",
+        "Re-check REQUIREMENTS.md NFR-005 and explicit non-goals before proposing new views or surfaces.",
+        "Re-check KNOWN_ISSUES.md and ENGINEERING_INVARIANTS.md before proposing schema or workflow-state changes."
+      ]
+    },
     "docs": {
       "purpose": "Authority docs, handoff state, and agent-maintenance guidance.",
       "readFirst": [

@@ -1,6 +1,14 @@
 # Codex Skill Routing
 
+Status: Canonical LifeOS skill/plugin routing reference
+
 Use the smallest relevant trusted skill/plugin set for LifeOS work.
+Route tool selection through this file instead of pasting long plugin lists into prompts, issue templates, or handoff docs.
+
+Default implementation route:
+
+- GitHub Issues/Actions are the default routing layer for LifeOS implementation work.
+- Local Codex CLI is the manual fallback only when automation is unsuitable, the task is medium/high risk, local debugging or visual validation is needed, workflow automation failed, or a human explicitly wants local execution.
 
 Default allowed for LifeOS development:
 
@@ -9,40 +17,30 @@ Default allowed for LifeOS development:
 - `GitHub` only for PRs, branches, CI, reviews, and issues
 - `codex-security` only for security-sensitive surfaces
 - `Supabase` only for database, auth, RLS, migrations, and Supabase client/server work
-- `build-web-apps` only for React, Next.js, frontend, and browser verification work
+- frontend/browser skills only for React, Next.js, app-local UI primitives, and bounded browser verification work
 - `playwright` MCP for bounded browser validation only (see `docs/agent/PLAYWRIGHT_MCP_VALIDATION.md`)
 - `Vercel` only for deployment, build, env, and runtime diagnostics
-- `openai-docs` / `openai-developers` only for OpenAI API, Responses API, Structured Outputs, models, prompts, and schema contracts
-- `Sentry` only during Sentry-related observability work
+- `openai-docs` only for OpenAI API, Responses API, Structured Outputs, models, prompts, and schema contracts
+- observability vendor tooling only during observability-specific work
 
 ## Frontend Routing Rule
 
 When the task touches `apps/web/components.json`, `apps/web/src/components/ui/**`, shared interaction patterns, or token-level styling in `apps/web/src/app/globals.css`:
 
-- prefer `frontend-ui-engineering`
-- use a shadcn skill when the work is specifically about primitives, component installation, composition, or shadcn conventions
+- first load `docs/agent/UI_AGENT_GUIDE.md` as the repo-local frontend routing guide
+- then use a frontend/browser skill only when implementation or bounded browser proof actually needs it
+- use a shadcn-oriented skill only when the work is specifically about primitives, component installation, composition, or shadcn conventions
 - prefer app-local shadcn-compatible primitives over route-local one-off controls
 - do not use shadcn as an excuse to turn shell/layout/route identity into generic stock components
 
 Avoid by default unless explicitly requested:
 
-- Slack
-- Gmail
-- Outlook
-- Teams
-- Twilio
-- Stripe
-- Figma
-- Canva
-- Expo
-- iOS/macOS
-- game development tools
-- life-science tools
-- CRM tools
-- Jira/Confluence
-- Netlify
-- Cloudflare
-- Render
+- communication-suite tools
+- design-marketplace tools
+- mobile/native stacks
+- unrelated hosting vendors
+- CRM and project-management suites
+- domain-specific tools unrelated to the current task
 
 Repo-local skills override relevant global or user-level skills.
 

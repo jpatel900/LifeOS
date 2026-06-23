@@ -1,6 +1,6 @@
 # EXTRA_INFO_AND_RULES.md
 
-**Background reference only.** This file does not override **README.md** documentation authority, **AGENTS.md**, **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, **TEST_PLAN.md**, or **PROJECT_BRIEF.md**. For the V1 server boundary (Next.js Route Handlers / Server Actions vs Supabase Edge Functions), see **`docs/adr/0001-v1-server-boundary.md`** and **ARCHITECTURE.md**.
+**Background reference only.** This file does not override **README.md** documentation authority, **AGENTS.md**, **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **ENGINEERING_INVARIANTS.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, **TEST_PLAN.md**, or **PROJECT_BRIEF.md**. Use it for planning context only, not direct implementation scope. For the V1 server boundary (Next.js Route Handlers / Server Actions vs Supabase Edge Functions), see **`docs/adr/0001-v1-server-boundary.md`** and **ARCHITECTURE.md**.
 
 ---
 

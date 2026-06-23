@@ -7,6 +7,7 @@ Use the smallest relevant context first.
 - Escalate to broader authority docs only when the task risk requires it.
 - `AGENTS.md` remains the highest authority for agent behavior.
 - For multi-step writes, new tables, vendor calls, or module size, check `docs/ENGINEERING_INVARIANTS.md` (binding, with guard tests).
+- `docs/LIFE_OS_WIKI.md` and `EXTRA_INFO_AND_RULES.md` are background references for planning only; do not load them into normal implementation context.
 - This index is a routing aid, not an authority document.
 - Quick checks are iteration aids only; final validation still follows `AGENTS.md`.
 
@@ -21,6 +22,7 @@ Use the smallest relevant context first.
 | `calendar`             | `pnpm agent:context calendar`             |
 | `ui`                   | `pnpm agent:context ui`                   |
 | `health-observability` | `pnpm agent:context health-observability` |
+| `projects-tasks`       | `pnpm agent:context projects-tasks`       |
 | `docs`                 | `pnpm agent:context docs`                 |
 | `tests`                | `pnpm agent:context tests`                |
 
