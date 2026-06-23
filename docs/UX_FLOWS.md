@@ -53,6 +53,18 @@ Suggested route map:
 /settings/areas
 ```
 
+### Future Operating-View Containment
+
+Future project/task operating views should usually live inside existing Planning, Review, or Health surfaces, or as secondary detail routes that support those workflows.
+
+Use these defaults unless a reviewed product decision says otherwise:
+
+- project cockpit -> project detail route, not a new primary nav item
+- by-project, by-area, stuck/waiting, people follow-up, archive, and priority/urgency views -> tabs, filters, disclosures, or detail routes inside the relevant workflow surface
+- top-level navigation expansion beyond the six primary workflow screens -> explicit product approval plus requirements update first
+
+The goal is to add operating clarity without turning LifeOS into a cluttered multi-dashboard app.
+
 ## 3. Flow 1 — First-Time Setup
 
 ### Goal

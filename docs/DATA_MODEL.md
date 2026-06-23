@@ -676,7 +676,22 @@ V1 can avoid hard deletes in the UI and rely on archive/status fields.
 12. add RLS policies
 13. seed default areas and global defaults
 
-## 10. Open Questions
+## 10. Future project/task state guardrails
+
+Use the smallest state machine that supports action.
+
+Guardrails for the future operating-layer upgrade:
+
+- status controls workflow
+- metadata explains nuance
+- project status and task status stay conceptually separate
+- prefer fields such as `stuck_reason`, `waiting_on_person_id`, `paused_reason`, `completed_at`, `cancelled_at`, and `archived_at` before adding many new statuses
+- avoid state explosion and fake precision; if a new status does not clearly change behavior, it probably belongs in metadata instead
+- any task/project status expansion requires a separate approved T3 issue or spec that covers migration, UI, parser, tests, and review behavior
+- if a future transition writes more than one table, it must use one transactional `SECURITY INVOKER` RPC per `docs/ENGINEERING_INVARIANTS.md` INV-1
+- any new user-owned table or state-adjacent table remains subject to export coverage (INV-2), RLS, and two-user isolation tests
+
+## 11. Open Questions
 
 - Should `area_id` be nullable on `capture_items` only, or also on ambiguous assessments?
 - Should deleted tasks be hard-deletable for privacy, or only archived in V1?

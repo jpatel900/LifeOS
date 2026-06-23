@@ -386,6 +386,18 @@ Acceptance criteria:
 - No autonomous external actions.
 - No generalized plugin system.
 
+### Operating-Layer Guardrails
+
+The next approved planning focus after the current governance cleanup is the project/task/stakeholder/dependency/context operating layer.
+
+Use that focus to improve how accepted work is structured, related, reviewed, and surfaced inside the existing LifeOS workflow.
+
+Do not read that as approval for new ingestion channels, browser/computer-use automation, realtime voice, vector search, plugin marketplaces, multi-agent runtime, team collaboration, public SaaS billing, advanced analytics warehouses, self-healing automation, broad web browsing, or new vendors/integrations. The canonical "do not build" and change-control lists remain `AGENTS.md` section 4 and section 20.
+
+Background-reference docs may inform planning, but they cannot expand implementation scope on their own.
+
+If an issue, prompt, or plan for operating-layer work asks for behavior outside this guardrail, stop and report the gap before coding.
+
 ## 4. Explicit Non-Goals
 
 V1 will not include:
