@@ -30,12 +30,12 @@ jobs:
           fi
           changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)"
           echo "Changed files:"; echo "$changed"
-          if echo "$changed" | grep -qE '^(apps/|packages/|supabase/|scripts/|\.github/workflows/|package\.json|pnpm-lock\.yaml|turbo\.json)'; then
+          if echo "$changed" | grep -qE '^(apps/web/|supabase/)'; then
             echo "heavy=true" >> "$GITHUB_OUTPUT"
-            echo "Code/migration/workflow paths changed: e2e + migrations-rls will run."
+            echo "apps/web or supabase changed: e2e + migrations-rls will run."
           else
             echo "heavy=false" >> "$GITHUB_OUTPUT"
-            echo "Docs-only change: e2e + migrations-rls will be skipped."
+            echo "No apps/web or supabase changes: e2e + migrations-rls will be skipped for this PR."
           fi
 
   validate-monorepo:
