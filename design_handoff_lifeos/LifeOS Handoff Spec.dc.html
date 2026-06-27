@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#54514a;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#1c1b16;-webkit-font-smoothing:antialiased}
+  code,.m{font-family:'IBM Plex Mono',monospace}
+  h2{font-size:23px;font-weight:700;letter-spacing:-0.02em;margin:0}
+  h3{font-size:16px;font-weight:700;margin:0 0 4px;letter-spacing:-0.01em}
+  p{margin:0;line-height:1.6}
+  th,td{text-align:left;padding:8px 12px;font-size:13px;vertical-align:top;border-bottom:1px solid #ece9e1}
+  th{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8a887e;font-weight:600;border-bottom:1px solid #ddd9cf}
+  table{border-collapse:collapse;width:100%}
+  .sw{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:7px;border:1px solid rgba(0,0,0,.12)}
+  .tok{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#4b57c4;font-weight:600}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:11px;background:#eceefb;color:#4b57c4;padding:2px 7px;border-radius:5px;font-weight:600}
+  @media print{body{background:#fff}.page{box-shadow:none;margin:0}}
+</style>
+</helmet>
+
+<div style="padding:34px 16px 80px;display:flex;justify-content:center">
+ <div class="page" style="width:820px;max-width:100%;background:#fdfcf9;border-radius:6px;box-shadow:0 30px 70px -40px rgba(0,0,0,.6);padding:64px 70px">
+
+  <!-- title -->
+  <div style="display:flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8a887e">
+    <span style="width:8px;height:8px;border-radius:50%;background:#4b57c4"></span>Engineering handoff · v1
+  </div>
+  <h1 style="font-size:40px;font-weight:800;letter-spacing:-0.03em;margin:14px 0 0">LifeOS — UI build spec</h1>
+  <p style="font-size:16px;color:#56544d;margin-top:14px;max-width:64ch">A precise brief for implementing the redesigned cockpit. The reference prototype is <code>LifeOS Prototype.dc.html</code>. Build it <b>token-driven</b>: dark is the default theme, light is a toggle, and a per-area accent recolors the whole surface from a single variable. One screen component, eight views.</p>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+    <span class="pill">dark-default + light toggle</span>
+    <span class="pill">per-area accent token</span>
+    <span class="pill">responsive web / mobile</span>
+    <span class="pill">add + customize areas</span>
+  </div>
+
+  <!-- 1 ARCHITECTURE -->
+  <div style="margin-top:48px;padding-top:26px;border-top:2px solid #1c1b16">
+    <div class="m" style="font-size:12px;color:#8a887e;letter-spacing:.12em">01</div>
+    <h2 style="margin-top:6px">Architecture</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:18px">
+      <div><h3>Theming model</h3><p style="font-size:14px;color:#56544d">Every color is a semantic CSS custom property set on the app root. Theme switch swaps the <b>base ramp</b>; area switch swaps the <b>accent</b>. Nothing downstream hardcodes a hex. Components read tokens only.</p></div>
+      <div><h3>Single component, view router</h3><p style="font-size:14px;color:#56544d">One container renders the active view via a <code>stage</code> enum. The pipeline spine is both nav and a live workload gauge. No per-page layout duplication — that was the core defect being fixed.</p></div>
+      <div><h3>Accent is derived, not stored</h3><p style="font-size:14px;color:#56544d">Each area stores one base hex. All accent variants (hover, tint, ring, on-accent text) are <b>computed</b> at render so any custom color stays legible in both themes. Formulas in §05.</p></div>
+      <div><h3>Glanceability is the bar</h3><p style="font-size:14px;color:#56544d">State must read pre-cognitively: size-by-load bars, color-by-area cards, count-bearing nodes, progress rings. Avoid reintroducing text-first cards, duplicate state, or multiple equal CTAs.</p></div>
+    </div>
+  </div>
+
+  <!-- 2 TOKENS -->
+  <div style="margin-top:44px;padding-top:26px;border-top:2px solid #1c1b16">
+    <div class="m" style="font-size:12px;color:#8a887e;letter-spacing:.12em">02</div>
+    <h2 style="margin-top:6px">Design tokens</h2>
+    <p style="font-size:14px;color:#56544d;margin-top:8px">Set all on the root element. <b>Dark is the default.</b> Light values apply when the user toggles.</p>
+
+    <h3 style="margin-top:22px;font-size:13px;color:#8a887e;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Base ramp (theme-dependent)</h3>
+    <table style="margin-top:8px">
+      <thead><tr><th>Token</th><th>Role</th><th>Dark</th><th>Light</th></tr></thead>
+      <tbody>
+        <tr><td class="tok">--bd</td><td>app backdrop</td><td><span class="sw" style="background:#0c0d10"></span><span class="m">#0c0d10</span></td><td><span class="sw" style="background:#e7e4db"></span><span class="m">#e7e4db</span></td></tr>
+        <tr><td class="tok">--sf</td><td>surface (card shell)</td><td><span class="sw" style="background:#15171c"></span><span class="m">#15171c</span></td><td><span class="sw" style="background:#fbfaf7"></span><span class="m">#fbfaf7</span></td></tr>
+        <tr><td class="tok">--sf2</td><td>raised surface</td><td><span class="sw" style="background:#1b1e25"></span><span class="m">#1b1e25</span></td><td><span class="sw" style="background:#ffffff"></span><span class="m">#ffffff</span></td></tr>
+        <tr><td class="tok">--sf3</td><td>inset / chip</td><td><span class="sw" style="background:#21252d"></span><span class="m">#21252d</span></td><td><span class="sw" style="background:#f4f1ea"></span><span class="m">#f4f1ea</span></td></tr>
+        <tr><td class="tok">--ink</td><td>primary text</td><td><span class="sw" style="background:#f2f1ec"></span><span class="m">#f2f1ec</span></td><td><span class="sw" style="background:#18170f"></span><span class="m">#18170f</span></td></tr>
+        <tr><td class="tok">--mut</td><td>secondary text</td><td><span class="sw" style="background:#9b9ca4"></span><span class="m">#9b9ca4</span></td><td><span class="sw" style="background:#6f6d64"></span><span class="m">#6f6d64</span></td></tr>
+        <tr><td class="tok">--fnt</td><td>faint / meta text</td><td><span class="sw" style="background:#686a73"></span><span class="m">#686a73</span></td><td><span class="sw" style="background:#a8a69d"></span><span class="m">#a8a69d</span></td></tr>
+        <tr><td class="tok">--ln</td><td>hairline border</td><td><span class="sw" style="background:#23262e"></span><span class="m">#23262e</span></td><td><span class="sw" style="background:#efece5"></span><span class="m">#efece5</span></td></tr>
+        <tr><td class="tok">--ln2</td><td>stronger border</td><td><span class="sw" style="background:#2c303a"></span><span class="m">#2c303a</span></td><td><span class="sw" style="background:#e2dfd6"></span><span class="m">#e2dfd6</span></td></tr>
+        <tr><td class="tok">--btn / --btn-fg</td><td>neutral primary button</td><td><span class="m">#f2f1ec / #15171c</span></td><td><span class="m">#18170f / #fff</span></td></tr>
+        <tr><td class="tok">--track</td><td>progress-ring track</td><td><span class="sw" style="background:#262a33"></span><span class="m">#262a33</span></td><td><span class="sw" style="background:#ece9e1"></span><span class="m">#ece9e1</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:26px;font-size:13px;color:#8a887e;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Stage status colors (fixed semantic, theme-dependent)</h3>
+    <table style="margin-top:8px">
+      <thead><tr><th>Tokens</th><th>Meaning</th><th>Dark (fg / sf / ring)</th><th>Light (fg / sf / ring)</th></tr></thead>
+      <tbody>
+        <tr><td class="tok">--amb-*</td><td>Triage / needs decision</td><td class="m"><span class="sw" style="background:#e3ad52"></span>#e3ad52 / #2c2615 / #51441f</td><td class="m"><span class="sw" style="background:#b5791f"></span>#b5791f / #f6ecd6 / #ecdcbb</td></tr>
+        <tr><td class="tok">--blu-*</td><td>Plan / someday</td><td class="m"><span class="sw" style="background:#7aa2dd"></span>#7aa2dd / #172838 / #2e486a</td><td class="m"><span class="sw" style="background:#3f6fb8"></span>#3f6fb8 / #e7eefa / #d4e0f2</td></tr>
+        <tr><td class="tok">--grn-*</td><td>Done / healthy</td><td class="m"><span class="sw" style="background:#6fb98c"></span>#6fb98c / #14301f / #295036</td><td class="m"><span class="sw" style="background:#4a8c63"></span>#4a8c63 / #e4efe8 / #d2e6da</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:26px;font-size:13px;color:#8a887e;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Accent (per-area, derived — see §05)</h3>
+    <table style="margin-top:8px">
+      <thead><tr><th>Token</th><th>Derivation</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td class="tok">--acc</td><td>area's stored base hex</td><td>spine halo, primary affordance, ring fill, links</td></tr>
+        <tr><td class="tok">--acc2</td><td>mix(acc, theme-extreme, 16%)</td><td>inner accent circle, planned bar fill</td></tr>
+        <tr><td class="tok">--acc-sf</td><td>mix(acc, --sf2, 80% dk / 86% lt)</td><td>accent tint background, active chip</td></tr>
+        <tr><td class="tok">--acc-rng</td><td>mix(acc, --sf2, 50% dk / 66% lt)</td><td>accent borders on tinted blocks</td></tr>
+        <tr><td class="tok">--on-acc</td><td>luminance(acc) &gt; 0.55 ? #1a1a14 : #fff</td><td>text/icon on a solid accent fill</td></tr>
+      </tbody>
+    </table>
+
+    <h3 style="margin-top:26px;font-size:13px;color:#8a887e;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Area palette (defaults for new areas)</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#6b78e8"></span>#6b78e8</span>
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#3f8fd6"></span>#3f8fd6</span>
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#3fae8f"></span>#3fae8f</span>
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#5aa84a"></span>#5aa84a</span>
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#d9a23f"></span>#d9a23f</span>
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#d9624a"></span>#d9624a</span>
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#c44d80"></span>#c44d80</span>
+      <span class="m" style="font-size:12px"><span class="sw" style="background:#b066d9"></span>#b066d9</span>
+    </div>
+
+    <h3 style="margin-top:26px;font-size:13px;color:#8a887e;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Type & layout</h3>
+    <table style="margin-top:8px">
+      <tbody>
+        <tr><td style="width:200px"><b style="font-size:14px">Display / UI</b></td><td style="font-size:14px;color:#56544d">Hanken Grotesk — 400/500/600/700/800</td></tr>
+        <tr><td><b style="font-size:14px">Mono (numbers, time, labels)</b></td><td style="font-size:14px;color:#56544d">IBM Plex Mono — clocks, counts, kicker labels, est/when</td></tr>
+        <tr><td><b style="font-size:14px">Container width</b></td><td style="font-size:14px;color:#56544d"><code>--max</code> 1000px web · 412px mobile · radius 22px · shadow on shell</td></tr>
+        <tr><td><b style="font-size:14px">Responsive grids</b></td><td style="font-size:14px;color:#56544d">Plan / Review / All-areas collapse to one column on mobile (<code>--planG --revG --colG --g2</code>)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 3 DATA MODEL -->
+  <div style="margin-top:44px;padding-top:26px;border-top:2px solid #1c1b16">
+    <div class="m" style="font-size:12px;color:#8a887e;letter-spacing:.12em">03</div>
+    <h2 style="margin-top:6px">Data model</h2>
+    <div style="background:#1c1f26;color:#dfe2e8;border-radius:12px;padding:22px 24px;margin-top:16px;font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.65;overflow-x:auto">
+<span style="color:#8a93a6">// one base hex per area; every accent variant is derived</span>
+Area    { name: string, color: hex }
+<span style="color:#8a93a6">// area is an index into areas[]; est in minutes; when is hour 8–18</span>
+Item    { id, text, area, status: <span style="color:#e3ad52">'inbox'|'today'|'planned'|'done'</span>, est?, when? }
+Session { id, text, outcome: <span style="color:#e3ad52">'complete'|'stuck'|'missed'</span>, planned, actual }
+
+App {
+  stage: <span style="color:#7aa2dd">'today'|'capture'|'triage'|'plan'|'execute'|'review'|'health'|'overview'</span>,
+  dark: bool,            view: <span style="color:#7aa2dd">'web'|'mobile'</span>,
+  areas: Area[],         areaIndex: int,
+  items: Item[],         sessions: Session[],
+  selecting: id|null,    <span style="color:#8a93a6">// task awaiting a time slot in Plan</span>
+  activeId, running, remaining, total, ending,   <span style="color:#8a93a6">// focus session (seconds)</span>
+}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:20px">
+      <div>
+        <h3>Status lifecycle</h3>
+        <p style="font-size:14px;color:#56544d;margin-top:4px"><span class="m" style="font-size:12px">inbox</span> → triage decides → <span class="m" style="font-size:12px">today</span> (do), <span class="m" style="font-size:12px">later</span> (someday), or <b>removed</b> (drop). <span class="m" style="font-size:12px">today</span> → assign <span class="m" style="font-size:12px">when</span> → <span class="m" style="font-size:12px">planned</span>. <span class="m" style="font-size:12px">planned</span> → run session → <span class="m" style="font-size:12px">done</span> on complete; stuck/missed log a session but leave status.</p>
+      </div>
+      <div>
+        <h3>Scoping</h3>
+        <p style="font-size:14px;color:#56544d;margin-top:4px">All six pipeline screens show <b>only the active area's</b> items (<code>item.area === areaIndex</code>). New captures inherit <code>areaIndex</code>. The <b>All areas</b> view ignores the filter and reads everything; the spine counts stay area-scoped.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 SCREENS -->
+  <div style="margin-top:44px;padding-top:26px;border-top:2px solid #1c1b16">
+    <div class="m" style="font-size:12px;color:#8a887e;letter-spacing:.12em">04</div>
+    <h2 style="margin-top:6px">Screens &amp; interactions</h2>
+
+    <h3 style="margin-top:20px;font-size:13px;color:#8a887e;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase">Persistent chrome</h3>
+    <p style="font-size:14px;color:#56544d;margin-top:6px"><b>Header:</b> logo · <span class="pill">All areas</span> chip + area chips (each with its color dot; active uses <code>--acc-sf</code>/<code>--acc</code>) + <code>＋</code> add-area · accent swatch · Web/Mobile segmented · theme toggle. <b>Spine:</b> 6 nodes (Today, Capture, Triage, Plan, Execute, Review) on a hairline rail. Node circle shows the stage's live count and tone; active node is inverted with an <code>--acc-sf</code> halo. Tapping navigates.</p>
+
+    <div style="display:flex;flex-direction:column;gap:0;margin-top:18px">
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid #ece9e1">
+        <div><h3>Today</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: today</span></div>
+        <p style="font-size:14px;color:#56544d">Two elements only. <b>One move now</b> — a single card whose content depends on the heaviest unmet stage (inbox→Triage, else today→Plan, else planned→Focus first block, else caught-up). <b>At a glance</b> — a 4-band bar (to triage / to plan / scheduled / done); each band's width = <code>max(1,count)+0.6</code>, colored by stage tone. Bands and card CTA navigate.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid #ece9e1">
+        <div><h3>Capture</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: capture</span></div>
+        <p style="font-size:14px;color:#56544d">Centered borderless textarea (caret = <code>--acc</code>), one <b>Save thought</b> button, <span class="m" style="font-size:12px">⌘↵</span> shortcut. On save: push <span class="m" style="font-size:12px">inbox</span> item in active area, clear field, flash a green "waiting in Triage" toast (~1.4s). Area picker / save-mode / drafts deliberately hidden behind <span class="m" style="font-size:12px">/</span>.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid #ece9e1">
+        <div><h3>Triage</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: triage</span></div>
+        <p style="font-size:14px;color:#56544d">One card at a time (first inbox item) + a dot row showing how many remain. Three directional targets: <b>Drop</b> (remove), <b>Someday</b> (→later), <b>Do today</b> (→today, accent-filled). Next card slides up. Empty → "Inbox clear" with a Plan CTA.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid #ece9e1">
+        <div><h3>Plan</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: plan</span></div>
+        <p style="font-size:14px;color:#56544d">Two-pane: hour rail (8am–6pm) + "To place" list. Tap a task → <code>selecting</code> set, empty hours show "drop here" with an <code>--acc</code> tint; tap an hour → item becomes <span class="m" style="font-size:12px">planned</span> with that <code>when</code>. Tap a placed block to unplan. All placed → "Start focusing" CTA. Mobile: panes stack.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid #ece9e1">
+        <div><h3>Execute</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: execute</span></div>
+        <p style="font-size:14px;color:#56544d">Picker lists planned blocks (time chip + est). Choosing one starts a session: <code>total = est×60</code>. Countdown <b>ring</b> (r=104) depletes; one Start/Pause/Resume + End session. At zero or End → outcome step (Complete→done, Stuck, Missed); all log a Session with planned vs actual minutes.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid #ece9e1">
+        <div><h3>Review</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: review</span></div>
+        <p style="font-size:14px;color:#56544d">Verdict-first: completion <b>ring</b> (done / total) + headline ("day closed clean" vs "N carry over"). Below: planned-vs-actual focus bars (from sessions) and outcome pills. Lead with the answer; counts are support, not the headline.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid #ece9e1">
+        <div><h3>Health</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: health</span></div>
+        <p style="font-size:14px;color:#56544d">Single green status ring + "All systems healthy · 11/11". Three grouped summary tiles (Storage, Integrations, Telemetry-off) instead of 11 cards. "Run system check" pulses the ring ~1.4s. Full breakdown is one tap away, not shown by default.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:18px;padding:15px 0">
+        <div><h3>All areas</h3><span class="m" style="font-size:11px;color:#a8a69d">stage: overview</span></div>
+        <p style="font-size:14px;color:#56544d">Cross-area mission control. <b>Workload spectrum</b> — one bar split by area color, each segment = that area's open count / total. <b>Legend</b> with per-area open counts. <b>Pipeline board</b> — 4 columns (To triage / To plan / Scheduled / Done) holding every item from every area; each card is tinted <code>mix(areaColor,--sf2)</code> with a 3px area-color left edge and a labeled area dot. Mobile: columns stack.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 FORMULAS -->
+  <div style="margin-top:44px;padding-top:26px;border-top:2px solid #1c1b16">
+    <div class="m" style="font-size:12px;color:#8a887e;letter-spacing:.12em">05</div>
+    <h2 style="margin-top:6px">Derived-value formulas</h2>
+    <div style="background:#1c1f26;color:#dfe2e8;border-radius:12px;padding:22px 24px;margin-top:16px;font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;overflow-x:auto">
+mix(a,b,t)   <span style="color:#8a93a6">// per-channel linear blend of two hex colors</span>
+lum(hex)     <span style="color:#8a93a6">// WCAG relative luminance (sRGB→linear, 0.2126/0.7152/0.0722)</span>
+
+acc2    = mix(acc, dark ? '#fff' : '#000', 0.16)
+acc-sf  = mix(acc, sf2, dark ? 0.80 : 0.86)
+acc-rng = mix(acc, sf2, dark ? 0.50 : 0.66)
+on-acc  = lum(acc) > 0.55 ? '#1a1a14' : '#ffffff'
+cardBg  = mix(areaColor, sf2, dark ? 0.83 : 0.88)   <span style="color:#8a93a6">// overview cards</span>
+
+ring     r=104 (focus), r=86 (review)
+dash     = 2·π·r
+offset   = dash · (1 − value/total)   <span style="color:#8a93a6">// value=remaining or done</span>
+band.flex = max(1, count) + 0.6       <span style="color:#8a93a6">// Today glance + spectrum weighting</span>
+    </div>
+    <p style="font-size:13px;color:#8a887e;margin-top:14px">Notes for the agent: keep accent derivation in one util so a custom area color can never produce illegible text — <code>on-acc</code> guards contrast on solid fills. Persist <code>areas</code>, <code>items</code>, <code>sessions</code>, <code>dark</code>, and <code>areaIndex</code>. Session timer is the only wall-clock dependency. The prototype keeps state in memory; swap for your store without touching the view layer.</p>
+  </div>
+
+  <div style="margin-top:40px;padding-top:18px;border-top:1px solid #ddd9cf;display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a8a69d">
+    <span>LifeOS · UI build spec</span><span>Reference: LifeOS Prototype.dc.html</span>
+  </div>
+
+ </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:960,&quot;height&quot;:900}}"></script>
+</body>
+</html>

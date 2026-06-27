@@ -36,6 +36,11 @@ const optionalNullableTrimmedText = z
 export const CreateAreaInputSchema = z.object({
   name: z.string().trim().min(1),
   description: optionalNullableTrimmedText,
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .optional(),
 });
 
 export type CreateAreaInput = z.input<typeof CreateAreaInputSchema>;

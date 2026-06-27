@@ -30,8 +30,8 @@ For world-class UI/UX work, `ui` context must then route through:
 
 1. `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
 2. `docs/agent/UI_AGENT_GUIDE.md`
-3. `docs/agent/UI_PASS_7_EXECUTION_MAP.md` while Pass 7 is active
-4. the touched route source and focused tests
+3. `design_handoff_lifeos/README.md` while the handoff cockpit pass is active
+4. the touched cockpit source and focused tests
 5. `docs/PROJECT_STATE.md` only when current shipped truth or blockers matter
 6. the latest roadmap-linked implementation note only if the roadmap or guide points to it
 

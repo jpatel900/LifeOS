@@ -167,9 +167,7 @@ describe("WorkflowProvider storage fallback", () => {
       </WorkflowProvider>,
     );
 
-    expect(
-      await screen.findByText("Nothing to triage right now."),
-    ).toBeDefined();
+    expect(await screen.findByText("Inbox clear")).toBeDefined();
   });
 
   it("keeps the workflow usable when sessionStorage cannot be written", () => {

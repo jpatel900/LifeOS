@@ -9,13 +9,14 @@ Superseded by: n/a
 ## Current status
 
 - LifeOS MVP supports areas, capture, optional AI or mock parse capture, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, and deterministic health checks.
-- The current shipped workflow posture is stable: Home is read-only and action-forward, Capture is raw-input-first, Triage focuses one current decision, Planning keeps local proposals primary and Google actions secondary, Execute is mission-focused, Review is carry-forward-first, Health is the diagnostic home, and Areas reads as a quieter admin registry.
-- Persistence remains truthful and mixed by design: local or mock fallback still exists, while authenticated Supabase-backed areas, captures, accepted tasks and projects, time-block proposals, calendar blocks, execution sessions, review entries, and health snapshots are available when configured.
+- The current shipped workflow UI has moved to the handoff cockpit model: existing workflow URLs are thin aliases into one stage router for Today, Capture, Triage, Plan, Execute, Review, and Health, with All areas as a global overview inside the cockpit.
+- Persistence remains truthful and mixed by design: cockpit workflow state uses the existing `WorkflowProvider` local/session path, authenticated areas still sync when configured, settings/admin persistence remains outside the cockpit, and a new `backlog` task status supports Someday/later triage.
 - Safety boundaries remain unchanged: no silent external writes, no autonomous rescheduling, no Google Calendar update or delete path, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
-- UI/UX Pass 7 is closed and back in maintenance posture. `docs/UI_UX_WORLD_CLASS_ROADMAP.md` remains the sole UI/UX roadmap, `docs/agent/UI_PASS_7_EXECUTION_MAP.md` remains historical control-plane proof, and `docs/implementation-notes/*.md` remain dated evidence.
+- The active UI/UX roadmap is now the LifeOS handoff cockpit pass. Old Pass 7 visual-contract docs are archived under `docs/archive/ui-ux/pass-7/`; they are historical proof, not current route UI authority.
 
 ## Recently completed
 
+- Implemented the LifeOS handoff cockpit pass (2026-06-26): the app now uses handoff tokens, exact accent derivation, `data-theme="light"` on the cockpit root, one stage router, thin workflow route aliases, count-bearing spine navigation, a borderless Capture surface, directional Triage choices, local hour-rail Planning with secondary Google approval disclosure, timer-style Execute, verdict-first Review, grouped Health, and a global All areas overview. Added `backlog` as the persisted Someday/later task status, replaced stale Pass 7 route E2E specs with focused handoff cockpit specs, and captured desktop/mobile screenshot evidence under `apps/web/test-results/handoff-cockpit/`.
 - Ran the periodic system review (2026-06-23, per `docs/agent/SYSTEM_REVIEW_CHECKLIST.md`) covering the #221 governance merge and the 2026-06-23 docs batches: guard tests green (324 passed), main CI green, all dangling-ref fixes verified, the #218 product/safety vs engineering-invariants split handled correctly, and a cross-reference sweep of all 24 changed docs found zero broken file references. Operating-layer guardrails confirmed wired to INV-1 / AGENTS §4·§20 / NFR-005. Only finding — CI ran the heavy e2e + migrations jobs on docs-only PRs — was fixed in the same change: a `changes` detection job now gates `e2e`/`migrations-rls` on `if: needs.changes.outputs.heavy == 'true'` for `pull_request` when changed paths hit `apps/web/**` or `supabase/**`, while `validate-monorepo` stays unconditional and `push` to `main` still runs the full suite, so docs-only PRs skip ~9 CI min (`KNOWN_ISSUES.md` #9, resolved).
 - Added operating-layer guardrails to the authority docs (2026-06-23): `docs/REQUIREMENTS.md` now scopes the next approved planning wave to the project/task/stakeholder/dependency/context operating layer without reopening forbidden platform features, `docs/UX_FLOWS.md` now contains explicit containment rules for future operating views, and `docs/DATA_MODEL.md` now defines task/project state-taxonomy guardrails tied back to `docs/ENGINEERING_INVARIANTS.md`.
 - Landed the context-diet routing/fallback cleanup batch (2026-06-23): `docs/CODEX_SKILL_ROUTING.md` is now the single canonical skill/plugin routing file, the dangling `frontend-ui-engineering` reference was replaced with the real repo-local `docs/agent/UI_AGENT_GUIDE.md` path, `docs/agent/CODEX_PROMPT_TEMPLATE.md` now starts with a manual-fallback status block plus a compact product/safety invariants block, background-reference docs now carry normalized non-authority banners, and `pnpm agent:context projects-tasks` now exists for bounded operating-layer planning.
@@ -63,27 +64,21 @@ Superseded by: n/a
 
 1. Restore GitHub CLI auth or finish the remaining Pass 7 metadata backfill manually; issue comments are largely applied, but label and milestone work is still incomplete.
 2. Re-run authenticated production smoke for issue `#93` without weakening Vercel deployment protection.
-3. Keep `pnpm --filter @lifeos/web test:e2e -- tests/e2e/p0-ux-regression.spec.ts`, `tests/e2e/workflow-hierarchy.spec.ts`, `tests/e2e/workflow-card-accent.spec.ts`, `tests/e2e/accessibility-baseline.spec.ts`, `tests/e2e/motion-performance.spec.ts`, and `tests/e2e/final-audit-packet.spec.ts` in the validation path for UX-affecting changes.
+3. Revisit Supabase-backed persisted task/proposal/session flows in the cockpit after visual stabilization; current cockpit runtime remains on the existing local/session workflow path.
 4. Treat any future Google Calendar expansion as explicit follow-on scope only: all-day conflict handling first, then app-created event update or cancel after human approval.
 5. Treat future cross-route UI changes as maintenance unless a new reviewed roadmap pass is explicitly opened.
 
 ## Important implementation notes
 
 - Read `AGENTS.md`, `docs/agent/CONTEXT_INDEX.md`, and the smallest relevant context before broad repo search.
-- `docs/UI_UX_WORLD_CLASS_ROADMAP.md` is the sole active UI/UX plan. `docs/agent/UI_PASS_7_EXECUTION_MAP.md` is a control-plane supplement, not shipped product truth. `docs/implementation-notes/*.md` are proof and history.
+- `docs/UI_UX_WORLD_CLASS_ROADMAP.md` is the sole active UI/UX plan. It now routes through `design_handoff_lifeos/` and `docs/agent/UI_AGENT_GUIDE.md`; archived Pass 7 docs are proof/history only.
 - UI work is not done on lint, docs, or code review alone. When route hierarchy, shell, or degraded states change, require behavior checks, focused tests, and mobile plus desktop proof before claiming completion.
 - Primary workflow routes should foreground user action truth, keep safety truth near the relevant action, route diagnostic truth into details or Health unless the route is blocked, and keep developer truth out of primary workflow copy.
-- Use `docs/agent/UI_SEVERITY_VOCABULARY.md` when deciding whether a route state is `info`, `warning`, or `danger`; recoverable degraded states should not read like hard failures.
-- Use `docs/agent/UI_DEGRADED_STATE_COPY.md` when degraded or blocked copy changes. Default to: what happened, what still works, and what the user should do next.
-- Use `docs/agent/UI_DETAILS_BOUNDARY.md` when exposing route detail. `System details` may support recovery on workflow routes; `Developer details` belong in explicit lower-level disclosures or Health.
+- Use the active handoff cockpit guide for UI proof. Older severity, degraded-state, detail-boundary, and mobile-budget docs now live under `docs/archive/ui-ux/pass-7/` and should not override the handoff UI.
+- Current handoff browser proof lives in `apps/web/tests/e2e/handoff-cockpit.spec.ts`, `apps/web/tests/e2e/handoff-admin.spec.ts`, and `apps/web/test-results/handoff-cockpit/`. Treat older Pass 7 E2E spec names and screenshot packet paths as historical only.
 - Home account-data degradation is intentionally `warning`, not `danger`, because local workflow remains usable. Reserve destructive severity for blocked trust or real failures.
-- `AppShell` intentionally suppresses the extra shell-context band on `/`, `/capture`, `/calendar`, `/execute`, and `/review`; Home should not have shell-level support content above its own flagship next-action surface.
-- On non-quiet routes, keep shell quick-note capture closed by default so route-local work wins the first viewport unless the user explicitly opens shell capture.
-- Keep area visibility anchored in the persistent shell area control. Do not reintroduce a second shell-level area spotlight above the route just because route cards also show area context.
-- `Areas` should not read as part of the primary workflow loop in shell navigation. Keep it reachable, but visibly secondary and admin-oriented.
-- On mobile, the primary workflow nav should stay a single horizontal lane. Preserve route access with scroll before letting the nav wrap into stacked chip rows.
-- Use `docs/agent/UI_MOBILE_SURFACE_BUDGET.md` when reviewing shell or first-viewport changes. If a route needs multiple support surfaces above the fold at `390px`, the structure is probably wrong.
-- Keep `apps/web/tests/e2e/shell-clutter.spec.ts` in the validation path for AppShell, nav, or route-shell hierarchy changes.
+- `AppShell` is now a provider/admin boundary. Workflow chrome belongs to `LifeOSCockpit`, and workflow route pages should stay thin aliases into `CockpitRoute`.
+- Area visibility, theme, add-area, recolor, and the spine live in the cockpit header. Settings/admin remains outside the cockpit.
 - Home must remain read-only and action-forward. It routes users to workflow screens but does not mutate workflow state directly.
 - Capture must preserve raw-save-first behavior. Raw captures are persisted before parsing, and AI or mock fallback behavior must stay intact.
 - Capture hierarchy now assumes this order at rest: main raw-input card first, support summary second, `Capture details` after that, and device-only draft history behind disclosure. Keep future styling or copy work inside that contract.

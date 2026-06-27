@@ -685,6 +685,7 @@ Guardrails for the future operating-layer upgrade:
 - status controls workflow
 - metadata explains nuance
 - project status and task status stay conceptually separate
+- `backlog` is the approved deferred task status for Someday/later cockpit triage; it changes workflow behavior by keeping an accepted task out of today's planning queue until the user promotes it
 - prefer fields such as `stuck_reason`, `waiting_on_person_id`, `paused_reason`, `completed_at`, `cancelled_at`, and `archived_at` before adding many new statuses
 - avoid state explosion and fake precision; if a new status does not clearly change behavior, it probably belongs in metadata instead
 - any task/project status expansion requires a separate approved T3 issue or spec that covers migration, UI, parser, tests, and review behavior

@@ -293,6 +293,7 @@ describe("workflow data provider", () => {
     const result = await createArea(authenticatedClient(from), {
       name: "  Main Job  ",
       description: "  Focus-heavy work  ",
+      color: "#3f8fd6",
     });
 
     expect(from).toHaveBeenNthCalledWith(1, "areas");
@@ -302,7 +303,7 @@ describe("workflow data provider", () => {
       name: "Main Job",
       slug: "main-job-3",
       description: "Focus-heavy work",
-      color: null,
+      color: "#3f8fd6",
       icon: null,
       sort_order: 6,
       is_active: true,
