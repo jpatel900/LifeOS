@@ -24,16 +24,22 @@ import {
   acceptProjectDraft,
   appendParsedWorkflowResult,
   acceptProposal,
+  addWorkflowArea,
+  backlogDraft,
   createLocalProposalFromTask,
   createInitialWorkflowState,
   editDraft,
   markCurrentSession,
+  planTaskAtHour,
+  promoteBacklogTask,
   rejectDraft,
   rejectProjectDraft,
   rejectProposal,
   startExecutionSession,
   submitCapture,
   syncWorkflowIdCounterFromState,
+  unplanTask,
+  updateWorkflowAreaColor,
   updateProposal,
   type WorkflowState,
 } from "./workflow";
@@ -55,6 +61,16 @@ type WorkflowAction =
       areas: WorkflowState["areas"];
     }
   | {
+      type: "addArea";
+      name: string;
+      color: string;
+    }
+  | {
+      type: "updateAreaColor";
+      areaId: string;
+      color: string;
+    }
+  | {
       type: "submitCapture";
       rawText: string;
       areaId: string | null;
@@ -66,6 +82,14 @@ type WorkflowAction =
   | {
       type: "acceptDraft";
       draftId: string;
+    }
+  | {
+      type: "backlogDraft";
+      draftId: string;
+    }
+  | {
+      type: "promoteBacklogTask";
+      taskId: string;
     }
   | {
       type: "acceptProjectDraft";
@@ -108,6 +132,15 @@ type WorkflowAction =
       rationale: string;
     }
   | {
+      type: "planTaskAtHour";
+      taskId: string;
+      hour: number;
+    }
+  | {
+      type: "unplanTask";
+      blockId: string;
+    }
+  | {
       type: "startSession";
       taskId: string;
     }
@@ -124,9 +157,13 @@ interface WorkflowContextValue {
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
   syncPersistedAreas: (areas: Area[]) => void;
+  addArea: (name: string, color: string) => void;
+  updateAreaColor: (areaId: string, color: string) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
   acceptTaskDraft: (draftId: string) => void;
+  backlogTaskDraft: (draftId: string) => void;
+  promoteBacklogTask: (taskId: string) => void;
   acceptProjectDraft: (draftId: string) => void;
   rejectTaskDraft: (draftId: string) => void;
   rejectProjectDraft: (draftId: string) => void;
@@ -149,6 +186,8 @@ interface WorkflowContextValue {
     proposedEnd: string;
     rationale: string;
   }) => void;
+  planTaskAtHour: (taskId: string, hour: number) => void;
+  unplanTask: (blockId: string) => void;
   startTaskSession: (taskId: string) => void;
   markSession: (status: Phase2MockExecutionSession["status"]) => void;
   resetWorkflow: () => void;
@@ -165,6 +204,7 @@ function createSyncedInitialState() {
 const TASK_STATUSES = new Set([
   "draft",
   "active",
+  "backlog",
   "scheduled",
   "blocked",
   "done",
@@ -427,6 +467,10 @@ function workflowReducer(
         ...state,
         areas: action.areas,
       };
+    case "addArea":
+      return addWorkflowArea(state, { name: action.name, color: action.color });
+    case "updateAreaColor":
+      return updateWorkflowAreaColor(state, action.areaId, action.color);
     case "submitCapture":
       return submitCapture(state, {
         rawText: action.rawText,
@@ -436,6 +480,10 @@ function workflowReducer(
       return appendParsedWorkflowResult(state, action.parsed);
     case "acceptDraft":
       return acceptDraft(state, action.draftId);
+    case "backlogDraft":
+      return backlogDraft(state, action.draftId);
+    case "promoteBacklogTask":
+      return promoteBacklogTask(state, action.taskId);
     case "acceptProjectDraft":
       return acceptProjectDraft(state, action.draftId);
     case "rejectDraft":
@@ -456,6 +504,10 @@ function workflowReducer(
         proposed_end: action.proposedEnd,
         rationale: action.rationale,
       });
+    case "planTaskAtHour":
+      return planTaskAtHour(state, action.taskId, action.hour);
+    case "unplanTask":
+      return unplanTask(state, action.blockId);
     case "startSession":
       return startExecutionSession(state, action.taskId);
     case "markSession":
@@ -576,11 +628,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     selectedAreaId,
     setSelectedAreaId,
     syncPersistedAreas: applyPersistedAreas,
+    addArea: (name, color) => dispatch({ type: "addArea", name, color }),
+    updateAreaColor: (areaId, color) =>
+      dispatch({ type: "updateAreaColor", areaId, color }),
     submitCaptureText: (rawText, areaId) =>
       dispatch({ type: "submitCapture", rawText, areaId }),
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),
     acceptTaskDraft: (draftId) => dispatch({ type: "acceptDraft", draftId }),
+    backlogTaskDraft: (draftId) =>
+      dispatch({ type: "backlogDraft", draftId }),
+    promoteBacklogTask: (taskId) =>
+      dispatch({ type: "promoteBacklogTask", taskId }),
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => dispatch({ type: "rejectDraft", draftId }),
@@ -607,6 +666,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         proposedEnd,
         rationale,
       }),
+    planTaskAtHour: (taskId, hour) =>
+      dispatch({ type: "planTaskAtHour", taskId, hour }),
+    unplanTask: (blockId) => dispatch({ type: "unplanTask", blockId }),
     startTaskSession: (taskId) => dispatch({ type: "startSession", taskId }),
     markSession: (status) => dispatch({ type: "markSession", status }),
     resetWorkflow: () => dispatch({ type: "reset" }),

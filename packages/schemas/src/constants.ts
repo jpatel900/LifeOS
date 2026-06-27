@@ -21,6 +21,7 @@ export const PROJECT_STATUSES = [
 export const TASK_STATUSES = [
   "draft",
   "active",
+  "backlog",
   "scheduled",
   "blocked",
   "done",

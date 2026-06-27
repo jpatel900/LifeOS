@@ -3,9 +3,13 @@ import { MOCK_USER_ID } from "@/lib/mockData";
 import {
   acceptProjectDraft,
   acceptDraft,
+  backlogDraft,
   createInitialWorkflowState,
+  planTaskAtHour,
+  promoteBacklogTask,
   mockParseCapture,
   submitCapture,
+  unplanTask,
 } from "@/lib/workflow";
 
 describe("local mock workflow", () => {
@@ -43,6 +47,41 @@ describe("local mock workflow", () => {
     expect(state.timeBlockProposals).toHaveLength(1);
     expect(state.timeBlockProposals[0].task_id).toBe(state.tasks[0].id);
     expect(state.timeBlockProposals[0].status).toBe("proposed");
+  });
+
+  it("moves a triage draft into backlog and can promote it later", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Someday review old notes.",
+      areaId: "area-main-job",
+    });
+    state = backlogDraft(state, state.taskDrafts[0].id);
+
+    expect(state.tasks[0].status).toBe("backlog");
+    expect(state.timeBlockProposals).toHaveLength(0);
+
+    state = promoteBacklogTask(state, state.tasks[0].id);
+    expect(state.tasks[0].status).toBe("active");
+  });
+
+  it("plans and unplans an active task on the local hour rail", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Draft agenda for tomorrow's project check-in.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    state = planTaskAtHour(state, state.tasks[0].id, 10);
+
+    expect(state.tasks[0].status).toBe("scheduled");
+    expect(state.calendarBlocks[0].status).toBe("scheduled");
+    expect(new Date(state.calendarBlocks[0].start_at).getHours()).toBe(10);
+
+    state = unplanTask(state, state.calendarBlocks[0].id);
+    expect(state.tasks[0].status).toBe("active");
+    expect(state.calendarBlocks[0].status).toBe("cancelled");
   });
 
   it("moves a project-like capture through triage into an accepted project", () => {

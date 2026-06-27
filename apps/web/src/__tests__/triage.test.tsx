@@ -1,174 +1,41 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import CapturePage from "../app/capture/page";
 import TriagePage from "../app/triage/page";
-import { WorkflowProvider } from "@/lib/WorkflowContext";
-import { createInitialWorkflowState } from "@/lib/workflow";
-import type { Area } from "@lifeos/schemas";
+import { AppShell } from "../app/components/AppShell";
 
-const STORAGE_KEY = "lifeos.phase2.workflow";
+const mockPathname = vi.fn(() => "/triage");
 
-const mocks = vi.hoisted(() => ({
-  createSupabaseBrowserClient: vi.fn(() => ({ client: "supabase-browser" })),
-  listAreas: vi.fn(),
-  createTask: vi.fn(),
-  createProject: vi.fn(),
+vi.mock("next/navigation", () => ({
+  usePathname: () => mockPathname(),
 }));
 
-vi.mock("@/lib/supabase/browser", () => ({
-  createSupabaseBrowserClient: mocks.createSupabaseBrowserClient,
-}));
+describe("Triage cockpit", () => {
+  it("shows the empty verdict-first triage state", async () => {
+    render(
+      <AppShell>
+        <TriagePage />
+      </AppShell>,
+    );
 
-vi.mock("@/lib/data/workflow", () => ({
-  listAreas: mocks.listAreas,
-  createTask: mocks.createTask,
-  createProject: mocks.createProject,
-}));
+    expect(await screen.findByText("Inbox clear")).toBeDefined();
+    expect(screen.getByRole("button", { name: "Plan the day" })).toBeDefined();
+  });
 
-const persistedArea: Area = {
-  id: "550e8400-e29b-41d4-a716-446655440101",
-  user_id: "550e8400-e29b-41d4-a716-446655440001",
-  name: "Main Job",
-  slug: "main-job",
-  description: "Work commitments and job-related projects.",
-  color: "#2563eb",
-  icon: "briefcase",
-  sort_order: 0,
-  is_active: true,
-  created_at: "2026-05-07T00:00:00.000Z",
-  updated_at: "2026-05-07T00:00:00.000Z",
-};
+  it("lets a captured item move to Someday", async () => {
+    mockPathname.mockReturnValue("/capture");
+    render(
+      <AppShell>
+        <CapturePage />
+      </AppShell>,
+    );
 
-function renderTriagePage(
-  storedState: ReturnType<typeof createInitialWorkflowState>,
-) {
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(storedState));
-  return render(
-    <WorkflowProvider>
-      <TriagePage />
-    </WorkflowProvider>,
-  );
-}
-
-function expectBefore(first: HTMLElement, second: HTMLElement) {
-  expect(
-    first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).not.toBe(0);
-}
-
-describe("TriagePage", () => {
-  beforeEach(() => {
-    window.sessionStorage.clear();
-    vi.clearAllMocks();
-    mocks.listAreas.mockResolvedValue({
-      provider: "mock",
-      areas: [persistedArea],
+    fireEvent.change(await screen.findByPlaceholderText("Drop the thought here."), {
+      target: { value: "Review old someday notes" },
     });
-  });
+    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Someday" }));
 
-  afterEach(() => {
-    window.sessionStorage.clear();
-  });
-
-  it("shows one current item and lets the user switch the queue", async () => {
-    const storedState = createInitialWorkflowState();
-    storedState.taskDrafts = [
-      {
-        id: "task-draft-1",
-        user_id: "user-1",
-        capture_item_id: "capture-1",
-        area_id: "area-personal",
-        title: "Call dentist tomorrow",
-        description: "Confirm the next available appointment.",
-        confidence: 0.82,
-        estimated_minutes_low: 10,
-        estimated_minutes_high: 15,
-        first_tiny_step: "Look up the clinic number.",
-        status: "pending",
-        created_at: "2026-05-27T12:00:00.000Z",
-      },
-    ];
-    storedState.projectDrafts = [
-      {
-        id: "project-draft-1",
-        user_id: "user-1",
-        capture_item_id: "capture-2",
-        area_id: "area-main-job",
-        title: "Plan annual review rollout",
-        description: "Project scope notes",
-        confidence: 0.61,
-        status: "pending",
-        created_at: "2026-05-27T12:05:00.000Z",
-      },
-    ];
-    storedState.ambiguityAssessments = [
-      {
-        id: "ambiguity-1",
-        user_id: "user-1",
-        area_id: "area-personal",
-        source_capture_item_id: "capture-1",
-        likely_objective: "Book a dentist appointment",
-        possible_workstreams: ["Book the appointment"],
-        knowns: ["Need a checkup"],
-        recommended_first_move: "Check office hours",
-        assumptions: ["The clinic still accepts appointments"],
-        constraints: ["Need a weekday slot"],
-        risks: ["Waiting too long"],
-        unknowns: ["Preferred day"],
-        confidence_score: 0.82,
-        review_trigger: "Needs a quick human decision",
-        what_not_to_do_yet: ["Do not rearrange the whole week yet"],
-        created_at: "2026-05-27T12:00:00.000Z",
-        dependencies: ["Clinic phone line"],
-      },
-    ];
-
-    renderTriagePage(storedState);
-
-    const currentItem = await screen.findByTestId("triage-current-item-card");
-    const queueSummary = screen.getByTestId("triage-queue-summary-card");
-    const triageDetails = screen.getByText("Triage details", { exact: true });
-
-    expect(screen.getByText("Ready now")).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Triage" })).toBeDefined();
-    expect(screen.getAllByText("Needs decision").length).toBeGreaterThan(0);
-    expect(queueSummary).toHaveClass(
-      "workflow-support-card",
-    );
-    expect(currentItem).toHaveClass(
-      "workflow-flagship-card",
-    );
-    expectBefore(currentItem, queueSummary);
-    expectBefore(queueSummary, triageDetails);
-    expect(screen.getByText("Call dentist tomorrow")).toBeDefined();
-    expect(
-      screen.getByText("First useful move: Check office hours"),
-    ).toBeDefined();
-    expect(screen.getByText("Plan annual review rollout")).toBeDefined();
-    expect(screen.queryByText("Project scope notes")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Review this next" }));
-
-    await waitFor(() =>
-      expect(screen.getByText("Project scope notes")).toBeDefined(),
-    );
-    expect(
-      screen.queryByText("First useful move: Check office hours"),
-    ).toBeNull();
-  });
-
-  it("shows a plain-language empty state when no drafts are waiting", async () => {
-    renderTriagePage(createInitialWorkflowState());
-
-    expect(
-      await screen.findByText("Nothing to triage right now."),
-    ).toBeDefined();
-    expect(
-      screen.getByText(
-        "No pending suggestions here. Save a thought in Capture, then come back.",
-      ),
-    ).toBeDefined();
-    expect(
-      screen.getAllByRole("link", { name: "Go to Capture" }).length,
-    ).toBeGreaterThan(0);
+    expect(await screen.findByText("Inbox clear")).toBeDefined();
   });
 });

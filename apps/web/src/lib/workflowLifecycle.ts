@@ -79,6 +79,8 @@ export function planningTaskLifecycleDisplay(
   switch (status) {
     case "active":
       return { label: "Accepted", variant: "secondary" };
+    case "backlog":
+      return { label: "Someday", variant: "outline" };
     case "scheduled":
       return { label: "Planned", variant: "outline" };
     case "done":

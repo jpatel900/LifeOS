@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -185,6 +186,93 @@ body {
       transparent 28%
     ),
     var(--background);
+}
+
+.lifeos-cockpit {
+  --bd: #0c0d10;
+  --sf: #15171c;
+  --sf2: #1b1e25;
+  --sf3: #21252d;
+  --ink: #f2f1ec;
+  --mut: #9b9ca4;
+  --fnt: #686a73;
+  --ln: #23262e;
+  --ln2: #2c303a;
+  --btn: #f2f1ec;
+  --btn-fg: #15171c;
+  --track: #262a33;
+  --amb-fg: #e3ad52;
+  --amb-sf: #2c2615;
+  --amb-rng: #51441f;
+  --blu-fg: #7aa2dd;
+  --blu-sf: #172838;
+  --blu-rng: #2e486a;
+  --grn-fg: #6fb98c;
+  --grn-sf: #14301f;
+  --grn-rng: #295036;
+  --max: 1000px;
+  --cockpit-radius: 22px;
+  --acc: #6b78e8;
+  --acc2: #7f8aeb;
+  --acc-sf: #20232e;
+  --acc-rng: #414a7a;
+  --on-acc: #ffffff;
+  min-height: 100vh;
+  background: var(--bd);
+  color: var(--ink);
+  font-family:
+    "Hanken Grotesk",
+    Inter,
+    system-ui,
+    sans-serif;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease;
+}
+
+.lifeos-cockpit[data-theme="light"] {
+  --bd: #e7e4db;
+  --sf: #fbfaf7;
+  --sf2: #ffffff;
+  --sf3: #f4f1ea;
+  --ink: #18170f;
+  --mut: #6f6d64;
+  --fnt: #a8a69d;
+  --ln: #efece5;
+  --ln2: #e2dfd6;
+  --btn: #18170f;
+  --btn-fg: #ffffff;
+  --track: #ece9e1;
+  --amb-fg: #b5791f;
+  --amb-sf: #f6ecd6;
+  --amb-rng: #ecdcbb;
+  --blu-fg: #3f6fb8;
+  --blu-sf: #e7eefa;
+  --blu-rng: #d4e0f2;
+  --grn-fg: #4a8c63;
+  --grn-sf: #e4efe8;
+  --grn-rng: #d2e6da;
+}
+
+.lifeos-cockpit button,
+.lifeos-cockpit textarea,
+.lifeos-cockpit input {
+  font: inherit;
+}
+
+.lifeos-cockpit .mono {
+  font-family:
+    "IBM Plex Mono",
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+@media (max-width: 640px) {
+  .lifeos-cockpit {
+    --max: 412px;
+  }
 }
 
 a,

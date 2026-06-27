@@ -192,12 +192,12 @@ describe("source-of-truth boundaries", () => {
     expect(route).not.toMatch(/from ["']@sentry\/nextjs["']/);
   });
 
-  it("keeps primary-route assertions user-facing while preserving technical truth in disclosures and Health", () => {
-    const appShell = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/components/AppShell.tsx"),
+  it("keeps workflow routes as thin handoff cockpit aliases", () => {
+    const cockpit = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/LifeOSCockpit.tsx"),
     );
-    const diagnosticsDisclosure = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/components/DiagnosticsDisclosure.tsx"),
+    const cockpitRoute = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/CockpitRoute.tsx"),
     );
     const home = normalizeWhitespace(readRepoFile("apps/web/src/app/page.tsx"));
     const capture = normalizeWhitespace(
@@ -209,17 +209,14 @@ describe("source-of-truth boundaries", () => {
     const execute = normalizeWhitespace(
       readRepoFile("apps/web/src/app/execute/page.tsx"),
     );
+    const review = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/review/page.tsx"),
+    );
     const calendar = normalizeWhitespace(
       readRepoFile("apps/web/src/app/calendar/page.tsx"),
     );
     const health = normalizeWhitespace(
       readRepoFile("apps/web/src/app/health/page.tsx"),
-    );
-    const settings = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/settings/areas/page.tsx"),
-    );
-    const statusVocabulary = normalizeWhitespace(
-      readRepoFile("apps/web/src/lib/statusVocabulary.ts"),
     );
     const globalsCss = normalizeWhitespace(
       readRepoFile("apps/web/src/app/globals.css"),
@@ -227,66 +224,83 @@ describe("source-of-truth boundaries", () => {
     const uiGuide = normalizeWhitespace(
       readRepoFile("docs/agent/UI_AGENT_GUIDE.md"),
     );
-    const degradedStateCopy = normalizeWhitespace(
-      readRepoFile("docs/agent/UI_DEGRADED_STATE_COPY.md"),
-    );
-    const detailsBoundary = normalizeWhitespace(
-      readRepoFile("docs/agent/UI_DETAILS_BOUNDARY.md"),
-    );
-    const mobileSurfaceBudget = normalizeWhitespace(
-      readRepoFile("docs/agent/UI_MOBILE_SURFACE_BUDGET.md"),
-    );
-    const issueTemplate = normalizeWhitespace(
-      readRepoFile(".github/ISSUE_TEMPLATE/agent-task.yml"),
+    const roadmap = normalizeWhitespace(
+      readRepoFile("docs/UI_UX_WORLD_CLASS_ROADMAP.md"),
     );
 
-    expect(appShell).toContain(
-      "Quick capture saves on this device and sends notes to Triage.",
+    expect(cockpitRoute).toContain("LifeOSCockpit");
+    for (const [source, stage] of [
+      [home, "today"],
+      [capture, "capture"],
+      [triage, "triage"],
+      [calendar, "plan"],
+      [execute, "execute"],
+      [review, "review"],
+      [health, "health"],
+    ] as const) {
+      expect(source).toContain("CockpitRoute");
+      expect(source).toContain(`stage="${stage}"`);
+      expect(source).not.toContain("WorkflowPageHeader");
+      expect(source).not.toContain("DiagnosticsDisclosure");
+    }
+
+    expect(cockpit).toContain("data-testid=\"lifeos-cockpit\"");
+    expect(cockpit).toContain("Save thought");
+    expect(cockpit).toContain("Google writes are separate");
+    expect(cockpit).toContain("All areas overview");
+    expect(globalsCss).toContain(".lifeos-cockpit");
+    expect(uiGuide).toContain("design_handoff_lifeos/README.md");
+    expect(roadmap).toContain("Handoff Cockpit Pass");
+    expect(roadmap).toContain("one screen component plus a stage router");
+  });
+
+  it("keeps the handoff token and accent rules explicit", () => {
+    const cockpit = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/LifeOSCockpit.tsx"),
     );
-    expect(diagnosticsDisclosure).toContain("System details");
-    expect(diagnosticsDisclosure).toContain("Developer details");
-    expect(diagnosticsDisclosure).toContain('data-detail-level={detailLevel}');
-    expect(appShell).toContain("Current area");
-    expect(appShell).not.toContain("Session workflow area");
-    expect(home).toContain("Home stays read-only.");
-    expect(capture).toContain("on this device");
-    expect(statusVocabulary).toContain("AI sorting unavailable");
-    expect(statusVocabulary).toContain("Saved on this device only");
-    expect(statusVocabulary).toContain("Saved to account");
-    expect(triage).toContain("Current item");
-    expect(triage).toContain("Decide this before looking at anything else.");
-    expect(triage).toContain("Waiting after this");
-    expect(triage).toContain("Queue snapshot");
-    expect(triage).toContain("Review this next");
-    expect(calendar).toContain("Check calendar availability");
-    expect(calendar).toContain("Create Google Calendar event");
-    expect(calendar).toContain("Adjust time");
-    expect(calendar).toContain("Google write approval");
-    expect(calendar).toContain(
-      "Google write only happens after you approve it.",
+    const accent = normalizeWhitespace(
+      readRepoFile("apps/web/src/lib/cockpit/accent.ts"),
     );
-    expect(execute).toContain("Stop (device-only sessions)");
-    expect(execute).toContain("Stop on this device");
-    expect(health).toContain("Can I rely on LifeOS today?");
-    expect(health).toContain('detailLevel="developer"');
-    expect(health).toContain("Technical save mode id:");
-    expect(settings).toContain("planned time blocks");
-    expect(globalsCss).toContain(".workflow-flagship-card");
-    expect(globalsCss).toContain(".workflow-support-card");
-    expect(globalsCss).toContain(".workflow-admin-card");
-    expect(uiGuide).toContain("UI_MOBILE_SURFACE_BUDGET.md");
-    expect(uiGuide).toContain("UI_DEGRADED_STATE_COPY.md");
-    expect(uiGuide).toContain("UI_DETAILS_BOUNDARY.md");
-    expect(degradedStateCopy).toContain("What happened?");
-    expect(degradedStateCopy).toContain("What still works?");
-    expect(degradedStateCopy).toContain("What should the user do next?");
-    expect(detailsBoundary).toContain("detailLevel");
-    expect(detailsBoundary).toContain("Developer details");
-    expect(mobileSurfaceBudget).toContain("Use `390px` width");
-    expect(mobileSurfaceBudget).toContain(
-      "The route’s primary action or primary input must also start in the first viewport.",
+    const globalsCss = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/globals.css"),
     );
-    expect(issueTemplate).toContain("Surface budget:");
+
+    expect(cockpit).toContain("data-theme={dark ? undefined : \"light\"}");
+    expect(cockpit).toContain("buildCockpitAccentStyle");
+    expect(accent).toContain("mix(acc, dark ? \"#ffffff\" : \"#000000\", 0.16)");
+    expect(accent).toContain("lum(acc) > 0.55 ? \"#1a1a14\" : \"#ffffff\"");
+    expect(globalsCss).toContain("--bd: #0c0d10");
+    expect(globalsCss).toContain(".lifeos-cockpit[data-theme=\"light\"]");
+  });
+
+  it("keeps cockpit route components free of raw hex styling", () => {
+    const cockpitFiles = [
+      "apps/web/src/app/components/LifeOSCockpit.tsx",
+      "apps/web/src/app/components/CockpitRoute.tsx",
+      "apps/web/src/app/page.tsx",
+      "apps/web/src/app/capture/page.tsx",
+      "apps/web/src/app/triage/page.tsx",
+      "apps/web/src/app/calendar/page.tsx",
+      "apps/web/src/app/execute/page.tsx",
+      "apps/web/src/app/review/page.tsx",
+      "apps/web/src/app/health/page.tsx",
+    ];
+
+    for (const file of cockpitFiles) {
+      expect(readRepoFile(file)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    }
+  });
+
+  it("keeps cockpit header area edits on the persisted area path", () => {
+    const cockpit = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/LifeOSCockpit.tsx"),
+    );
+
+    expect(cockpit).toContain("const result = await createArea(client");
+    expect(cockpit).toContain("const areasResult = await listAreas(client)");
+    expect(cockpit).toContain("syncPersistedAreas(areasResult.areas)");
+    expect(cockpit).toContain("workflowAreaIdForPersistedArea(result.area)");
+    expect(cockpit).toContain("await updateAreaColor(createSupabaseBrowserClient()");
   });
 
   it("keeps Home as read-only workflow routing with no calendar/event write helpers", () => {
@@ -403,27 +417,9 @@ describe("source-of-truth boundaries", () => {
     ).not.toThrow();
   });
 
-  it("uses polite live regions for non-destructive workflow feedback", () => {
-    const appShell = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/components/AppShell.tsx"),
-    );
-    const capture = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/capture/page.tsx"),
-    );
-    const triage = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/triage/page.tsx"),
-    );
-    const calendar = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/calendar/page.tsx"),
-    );
-    const execute = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/execute/page.tsx"),
-    );
-    const review = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/review/page.tsx"),
-    );
-    const health = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/health/page.tsx"),
+  it("uses polite live regions for non-destructive cockpit feedback", () => {
+    const cockpit = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/LifeOSCockpit.tsx"),
     );
     const settings = normalizeWhitespace(
       readRepoFile("apps/web/src/app/settings/areas/page.tsx"),
@@ -432,16 +428,8 @@ describe("source-of-truth boundaries", () => {
       readRepoFile("apps/web/src/app/components/WorkflowLoadingState.tsx"),
     );
 
-    expect(appShell).toContain('role="status"');
-    expect(appShell).toContain('aria-live="polite"');
-    expect(capture).toContain(
-      'aria-live={captureFeedback.role === "status" ? "polite" : undefined}',
-    );
-    expect(triage).toContain('variant="success" role="status" aria-live="polite"');
-    expect(calendar).toContain('role="status" aria-live="polite"');
-    expect(execute).toContain('role="status" aria-live="polite"');
-    expect(review).toContain('role="status" aria-live="polite"');
-    expect(health).toContain('aria-live="polite"');
+    expect(cockpit).toContain('role="status"');
+    expect(cockpit).toContain('aria-live="polite"');
     expect(settings).toContain('createAreaFeedback.variant === "destructive" ? undefined : "polite"');
     expect(settings).toContain('colorFeedback.variant === "destructive" ? undefined : "polite"');
     expect(loadingState).toContain('role="status"');

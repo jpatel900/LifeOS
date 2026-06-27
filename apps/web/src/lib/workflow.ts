@@ -42,11 +42,16 @@ interface ParseCaptureInput {
 
 interface SubmitCaptureInput extends ParseCaptureInput {}
 
+interface AddAreaInput {
+  name: string;
+  color: string;
+}
+
 let idCounter = 0;
 
 /** IDs produced by `nextId` use these prefixes; used to resync the counter after hydration. */
 const WORKFLOW_GENERATED_ID =
-  /^(?:capture|task-draft|project-draft|proposal-draft|ambiguity|task|project|proposal|block|session)-(\d+)$/;
+  /^(?:area|capture|task-draft|project-draft|proposal-draft|ambiguity|task|project|proposal|block|session)-(\d+)$/;
 
 function maxWorkflowGeneratedIdSuffix(state: WorkflowState): number {
   let max = 0;
@@ -59,6 +64,7 @@ function maxWorkflowGeneratedIdSuffix(state: WorkflowState): number {
   };
 
   for (const item of state.captureItems) consider(item.id);
+  for (const item of state.areas) consider(item.id);
   for (const item of state.taskDrafts) consider(item.id);
   for (const item of state.projectDrafts) consider(item.id);
   for (const item of state.ambiguityAssessments) consider(item.id);
@@ -398,6 +404,62 @@ export function acceptDraft(
   state: WorkflowState,
   draftId: string,
 ): WorkflowState {
+  return acceptDraftWithStatus(state, draftId, "active");
+}
+
+export function addWorkflowArea(
+  state: WorkflowState,
+  input: AddAreaInput,
+): WorkflowState {
+  const name = input.name.trim();
+  if (!name) {
+    return state;
+  }
+  const createdAt = nowIso();
+  const area: Phase2MockArea = {
+    id: nextId("area"),
+    user_id: MOCK_USER_ID,
+    name,
+    color: input.color,
+    created_at: createdAt,
+  };
+
+  return {
+    ...state,
+    areas: [...state.areas, area],
+    reviewLog: [`Added area: ${area.name}`, ...state.reviewLog],
+  };
+}
+
+export function updateWorkflowAreaColor(
+  state: WorkflowState,
+  areaId: string,
+  color: string,
+): WorkflowState {
+  if (!state.areas.some((area) => area.id === areaId)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    areas: state.areas.map((area) =>
+      area.id === areaId ? { ...area, color } : area,
+    ),
+  };
+}
+
+export function backlogDraft(
+  state: WorkflowState,
+  draftId: string,
+): WorkflowState {
+  return acceptDraftWithStatus(state, draftId, "backlog");
+}
+
+function acceptDraftWithStatus(
+  state: WorkflowState,
+  draftId: string,
+  status: "active" | "backlog",
+): WorkflowState {
   const draft = state.taskDrafts.find((item) => item.id === draftId);
   if (!draft || draft.status !== "pending") {
     return state;
@@ -418,7 +480,7 @@ export function acceptDraft(
     source_capture_item_id: draft.capture_item_id,
     title: draft.title,
     description: draft.description,
-    status: "active",
+    status,
     priority_score: 2,
     priority_confidence: null,
     task_type: null,
@@ -432,9 +494,12 @@ export function acceptDraft(
     updated_at: nowIso(),
   };
 
-  const matchingProposalDraft = state.timeBlockProposalDrafts.find(
-    (proposal) => proposal.task_draft_id === draft.id,
-  );
+  const matchingProposalDraft =
+    status === "active"
+      ? state.timeBlockProposalDrafts.find(
+          (proposal) => proposal.task_draft_id === draft.id,
+        )
+      : null;
 
   const proposal = matchingProposalDraft
     ? Phase2TimeBlockProposalSchema.parse({
@@ -468,7 +533,121 @@ export function acceptDraft(
     timeBlockProposals: proposal
       ? [proposal, ...state.timeBlockProposals]
       : state.timeBlockProposals,
-    reviewLog: [`Accepted task: ${task.title}`, ...state.reviewLog],
+    reviewLog: [
+      status === "backlog"
+        ? `Backlogged task: ${task.title}`
+        : `Accepted task: ${task.title}`,
+      ...state.reviewLog,
+    ],
+  };
+}
+
+export function promoteBacklogTask(
+  state: WorkflowState,
+  taskId: string,
+): WorkflowState {
+  const task = state.tasks.find(
+    (item) => item.id === taskId && item.status === "backlog",
+  );
+  if (!task) {
+    return state;
+  }
+
+  return {
+    ...state,
+    tasks: state.tasks.map((item) =>
+      item.id === taskId
+        ? { ...item, status: "active", updated_at: nowIso() }
+        : item,
+    ),
+    reviewLog: [`Moved to today: ${task.title}`, ...state.reviewLog],
+  };
+}
+
+export function planTaskAtHour(
+  state: WorkflowState,
+  taskId: string,
+  hour: number,
+): WorkflowState {
+  const task = state.tasks.find(
+    (item) => item.id === taskId && item.status === "active",
+  );
+  if (!task || hour < 8 || hour > 18) {
+    return state;
+  }
+
+  const start = new Date();
+  start.setHours(hour, 0, 0, 0);
+  const minutes = task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
+  const end = new Date(start.getTime() + minutes * 60 * 1000);
+  const createdAt = nowIso();
+  const proposalId = nextId("proposal");
+  const proposal = Phase2TimeBlockProposalSchema.parse({
+    id: proposalId,
+    user_id: task.user_id,
+    area_id: task.area_id,
+    task_id: task.id,
+    proposed_start: start.toISOString(),
+    proposed_end: end.toISOString(),
+    rationale: `Placed on the local hour rail at ${hour}:00.`,
+    conflict_flag: false,
+    status: "accepted",
+    created_at: createdAt,
+  });
+  const block: Phase2MockCalendarBlock = {
+    id: nextId("block"),
+    user_id: task.user_id,
+    area_id: task.area_id,
+    task_id: task.id,
+    proposal_id: proposalId,
+    google_event_id: null,
+    start_at: start.toISOString(),
+    end_at: end.toISOString(),
+    status: "scheduled",
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+
+  return {
+    ...state,
+    tasks: state.tasks.map((item) =>
+      item.id === taskId
+        ? { ...item, status: "scheduled", updated_at: createdAt }
+        : item,
+    ),
+    timeBlockProposals: [proposal, ...state.timeBlockProposals],
+    calendarBlocks: [block, ...state.calendarBlocks],
+    reviewLog: [`Planned task: ${task.title}`, ...state.reviewLog],
+  };
+}
+
+export function unplanTask(
+  state: WorkflowState,
+  blockId: string,
+): WorkflowState {
+  const block = state.calendarBlocks.find(
+    (item) => item.id === blockId && item.status === "scheduled",
+  );
+  if (!block?.task_id) {
+    return state;
+  }
+
+  const task = state.tasks.find((item) => item.id === block.task_id);
+  return {
+    ...state,
+    calendarBlocks: state.calendarBlocks.map((item) =>
+      item.id === blockId
+        ? { ...item, status: "cancelled", updated_at: nowIso() }
+        : item,
+    ),
+    tasks: state.tasks.map((item) =>
+      item.id === block.task_id
+        ? { ...item, status: "active", updated_at: nowIso() }
+        : item,
+    ),
+    reviewLog: task
+      ? [`Unplanned task: ${task.title}`, ...state.reviewLog]
+      : state.reviewLog,
   };
 }
 

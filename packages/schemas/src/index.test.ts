@@ -82,6 +82,7 @@ describe("CreateAreaInputSchema", () => {
     const result = CreateAreaInputSchema.safeParse({
       name: "  Deep Work  ",
       description: "  Longer focus-heavy work.  ",
+      color: "#3f8fd6",
     });
 
     expect(result.success).toBe(true);
@@ -89,6 +90,17 @@ describe("CreateAreaInputSchema", () => {
     expect(result.success ? result.data.description : "").toBe(
       "Longer focus-heavy work.",
     );
+    expect(result.success ? result.data.color : "").toBe("#3f8fd6");
+  });
+
+  it("rejects invalid new area colors", () => {
+    const result = CreateAreaInputSchema.safeParse({
+      name: "Deep Work",
+      description: null,
+      color: "blue",
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 
@@ -366,28 +378,39 @@ describe("ProjectSchema", () => {
 
 describe("TaskSchema", () => {
   it("accepts task statuses from DATA_MODEL.md", () => {
-    const result = TaskSchema.safeParse({
-      id: uid,
-      user_id: uid2,
-      area_id: uid,
-      project_id: null,
-      source_capture_item_id: null,
-      title: "Draft sponsor email",
-      description: null,
-      status: "draft",
-      priority_score: null,
-      priority_confidence: null,
-      task_type: null,
-      energy_type: null,
-      estimated_minutes_low: 15,
-      estimated_minutes_high: 45,
-      due_at: null,
-      definition_of_done: null,
-      first_tiny_step: "Open notes",
-      created_at: "2024-01-01T12:00:00.000Z",
-      updated_at: "2024-01-01T12:00:00.000Z",
-    });
-    expect(result.success).toBe(true);
+    for (const status of [
+      "draft",
+      "active",
+      "backlog",
+      "scheduled",
+      "blocked",
+      "done",
+      "dropped",
+      "archived",
+    ] as const) {
+      const result = TaskSchema.safeParse({
+        id: uid,
+        user_id: uid2,
+        area_id: uid,
+        project_id: null,
+        source_capture_item_id: null,
+        title: "Draft sponsor email",
+        description: null,
+        status,
+        priority_score: null,
+        priority_confidence: null,
+        task_type: null,
+        energy_type: null,
+        estimated_minutes_low: 15,
+        estimated_minutes_high: 45,
+        due_at: null,
+        definition_of_done: null,
+        first_tiny_step: "Open notes",
+        created_at: "2024-01-01T12:00:00.000Z",
+        updated_at: "2024-01-01T12:00:00.000Z",
+      });
+      expect(result.success).toBe(true);
+    }
   });
 });
 

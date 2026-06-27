@@ -120,13 +120,7 @@ describe("INV-4 module budgets", () => {
   // Grandfathered ceilings, set to each file's size when this guard landed.
   // Ceilings may be lowered as logic is extracted; they must never be raised.
   const GRANDFATHERED_PAGE_BUDGETS: Record<string, number> = {
-    "apps/web/src/app/execute/page.tsx": 1667,
-    "apps/web/src/app/calendar/page.tsx": 1554,
-    "apps/web/src/app/capture/page.tsx": 1096,
-    "apps/web/src/app/review/page.tsx": 1029,
     "apps/web/src/app/settings/areas/page.tsx": 943,
-    "apps/web/src/app/triage/page.tsx": 922,
-    "apps/web/src/app/page.tsx": 877,
   };
 
   it("keeps route pages within their line budgets", () => {

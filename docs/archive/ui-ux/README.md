@@ -12,11 +12,12 @@ Superseded by: The live roadmap, UX authority, shipped-state handoff, and audit 
 - `LIFEOS_V1_UX_SCORECARD.md`
 - `2026-06-03-lifeos-ui-ux-modernization-design.md`
 - `2026-06-03-lifeos-ui-ux-modernization-implementation.md`
+- `pass-7/` historical Pass 7 control-plane, audit, severity, detail, mobile, and doc-inventory files
 
 ## Active replacements
 
 - Active UI/UX roadmap: `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
 - UI/UX authority: `docs/UX_FLOWS.md`
 - Shipped truth and handoff: `docs/PROJECT_STATE.md`
-- Pass 7 execution gating: `docs/agent/UI_PASS_7_EXECUTION_MAP.md`
-- Final audit gate: `docs/agent/UI_PASS_7_FINAL_AUDIT_RUBRIC.md`
+- Active UI guide: `docs/agent/UI_AGENT_GUIDE.md`
+- Handoff visual source: `design_handoff_lifeos/`
