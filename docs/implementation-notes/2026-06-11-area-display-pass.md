@@ -36,6 +36,7 @@ Reduce repeated area display in the first viewport while preserving area visibil
 - `apps/web/test-results/pass-7/172-area-display-pass/2026-06-11-172-triage-desktop-rest.png`
 
 Review note:
+
 - Route and state shown: `/triage` at rest on mobile and desktop.
 - Primary action stays route-local: the route heading and task surface remain the first-scanning destination.
 - Area stays visible through the persistent shell area control.

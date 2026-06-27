@@ -53,19 +53,26 @@ describe("handoff cockpit route provider wiring", () => {
     ["/execute", () => <ExecutePage />, "Focus queue"],
     ["/review", () => <ReviewPage />, /Day closed clean|carry over/],
     ["/health", () => <HealthPage />, "All systems healthy"],
-  ])("renders %s through the shared cockpit", async (pathname, createPage, text) => {
-    renderThroughAppShell(createPage(), pathname);
+  ])(
+    "renders %s through the shared cockpit",
+    async (pathname, createPage, text) => {
+      renderThroughAppShell(createPage(), pathname);
 
-    expect(await screen.findByTestId("lifeos-cockpit")).toBeDefined();
-    expect(screen.getByRole("navigation", { name: "Workflow stages" })).toBeDefined();
-    expect(screen.getByText(text)).toBeDefined();
-  });
+      expect(await screen.findByTestId("lifeos-cockpit")).toBeDefined();
+      expect(
+        screen.getByRole("navigation", { name: "Workflow stages" }),
+      ).toBeDefined();
+      expect(screen.getByText(text)).toBeDefined();
+    },
+  );
 
   it("keeps settings outside the cockpit but inside the provider", async () => {
     renderThroughAppShell(<AreasSettingsPage />, "/settings/areas");
 
     expect(screen.queryByTestId("lifeos-cockpit")).toBeNull();
-    expect(await screen.findByRole("heading", { level: 1, name: "Areas" })).toBeDefined();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Areas" }),
+    ).toBeDefined();
     expect(screen.getByRole("link", { name: "Cockpit" })).toHaveAttribute(
       "href",
       "/",

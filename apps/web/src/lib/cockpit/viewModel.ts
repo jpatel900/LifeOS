@@ -61,8 +61,7 @@ export function buildCockpitViewModel(
   selectedAreaId: string | null,
   dark: boolean,
 ): CockpitViewModel {
-  const activeArea =
-    state.areas.find((area) => area.id === selectedAreaId) ??
+  const activeArea = state.areas.find((area) => area.id === selectedAreaId) ??
     state.areas[0] ?? {
       id: "area-default",
       user_id: "local",

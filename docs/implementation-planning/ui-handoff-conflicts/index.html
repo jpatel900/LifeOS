@@ -1,1307 +1,1907 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LifeOS UI Handoff Conflict Workshop</title>
-  <style>
-    :root {
-      --bd: #0c0d10;
-      --sf: #15171c;
-      --sf2: #1b1e25;
-      --sf3: #21252d;
-      --ink: #f2f1ec;
-      --mut: #9b9ca4;
-      --fnt: #686a73;
-      --ln: #23262e;
-      --ln2: #2c303a;
-      --btn: #f2f1ec;
-      --btn-fg: #15171c;
-      --acc: #6b78e8;
-      --acc2: #7f8aeb;
-      --acc-sf: #20232e;
-      --acc-rng: #414a7a;
-      --on-acc: #ffffff;
-      --amber: #e3ad52;
-      --blue: #7aa2dd;
-      --green: #6fb98c;
-      --red: #d9624a;
-      --radius: 22px;
-      --max: 1180px;
-    }
-
-    [data-theme="light"] {
-      --bd: #e7e4db;
-      --sf: #fbfaf7;
-      --sf2: #ffffff;
-      --sf3: #f4f1ea;
-      --ink: #18170f;
-      --mut: #6f6d64;
-      --fnt: #8b887f;
-      --ln: #efece5;
-      --ln2: #e2dfd6;
-      --btn: #18170f;
-      --btn-fg: #ffffff;
-      --acc-sf: #edf0ff;
-      --acc-rng: #cdd2f4;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-    }
-
-    body {
-      margin: 0;
-      background: var(--bd);
-      color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.45;
-    }
-
-    button,
-    select,
-    textarea {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    .page {
-      min-height: 100vh;
-      padding: 28px 18px 60px;
-    }
-
-    .shell {
-      max-width: var(--max);
-      margin: 0 auto;
-      border: 1px solid var(--ln2);
-      border-radius: var(--radius);
-      background: var(--sf);
-      overflow: hidden;
-      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
-    }
-
-    .topbar {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-      justify-content: space-between;
-      padding: 18px 22px;
-      border-bottom: 1px solid var(--ln);
-    }
-
-    .brand {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      font-weight: 800;
-      letter-spacing: -0.01em;
-    }
-
-    .brand-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: var(--acc);
-      box-shadow: 0 0 0 5px var(--acc-sf);
-    }
-
-    .top-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: flex-end;
-    }
-
-    .button {
-      border: 1px solid var(--ln2);
-      border-radius: 12px;
-      background: var(--sf2);
-      color: var(--ink);
-      min-height: 40px;
-      padding: 9px 13px;
-      font-weight: 650;
-    }
-
-    .button.primary {
-      background: var(--acc);
-      color: var(--on-acc);
-      border-color: var(--acc);
-    }
-
-    .button.ghost {
-      background: transparent;
-      color: var(--mut);
-    }
-
-    .hero {
-      display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
-      gap: 24px;
-      padding: 30px 30px 24px;
-      border-bottom: 1px solid var(--ln);
-    }
-
-    .kicker {
-      color: var(--fnt);
-      font-size: 12px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      font-weight: 700;
-      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    }
-
-    h1 {
-      margin: 8px 0 12px;
-      max-width: 780px;
-      font-size: 42px;
-      line-height: 1.04;
-      letter-spacing: -0.025em;
-    }
-
-    h2 {
-      margin: 0;
-      font-size: 22px;
-      letter-spacing: -0.015em;
-    }
-
-    h3 {
-      margin: 0;
-      font-size: 17px;
-      letter-spacing: -0.01em;
-    }
-
-    p {
-      margin: 0;
-      color: var(--mut);
-    }
-
-    .summary {
-      display: grid;
-      gap: 12px;
-      align-content: start;
-    }
-
-    .meter-card,
-    .panel,
-    .conflict-card {
-      border: 1px solid var(--ln);
-      border-radius: 18px;
-      background: var(--sf2);
-    }
-
-    .meter-card {
-      padding: 18px;
-    }
-
-    .meter-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: baseline;
-      margin-bottom: 10px;
-    }
-
-    .big-number {
-      font-size: 38px;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      line-height: 1;
-    }
-
-    .progress-track {
-      height: 14px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: var(--sf3);
-      display: flex;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: var(--acc);
-      width: 0%;
-      transition: width 180ms ease;
-    }
-
-    .legend {
-      display: grid;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 13px;
-      color: var(--mut);
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 999px;
-      display: inline-block;
-      margin-right: 8px;
-      background: var(--acc);
-    }
-
-    .dot.red { background: var(--red); }
-    .dot.amber { background: var(--amber); }
-    .dot.blue { background: var(--blue); }
-    .dot.green { background: var(--green); }
-
-    .main {
-      display: grid;
-      grid-template-columns: 260px minmax(0, 1fr);
-      min-height: 780px;
-    }
-
-    .sidebar {
-      border-right: 1px solid var(--ln);
-      padding: 20px;
-      background: color-mix(in srgb, var(--sf) 82%, var(--bd));
-    }
-
-    .filter-list {
-      display: grid;
-      gap: 8px;
-      margin-top: 14px;
-      position: sticky;
-      top: 18px;
-    }
-
-    .filter {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      border: 1px solid transparent;
-      border-radius: 12px;
-      background: transparent;
-      color: var(--mut);
-      padding: 10px 11px;
-      text-align: left;
-      min-height: 42px;
-    }
-
-    .filter.active {
-      border-color: var(--acc-rng);
-      background: var(--acc-sf);
-      color: var(--ink);
-    }
-
-    .count {
-      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12px;
-      color: var(--fnt);
-    }
-
-    .content {
-      padding: 22px;
-    }
-
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-
-    .search {
-      min-height: 42px;
-      border: 1px solid var(--ln2);
-      border-radius: 12px;
-      background: var(--sf2);
-      color: var(--ink);
-      padding: 10px 12px;
-      min-width: min(100%, 340px);
-    }
-
-    .diagram {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    .diagram-box {
-      border: 1px solid var(--ln);
-      border-radius: 16px;
-      background: var(--sf2);
-      padding: 14px;
-      min-height: 118px;
-    }
-
-    .mini-pipeline {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 6px;
-      margin-top: 16px;
-    }
-
-    .node {
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      border: 1px solid var(--ln2);
-      background: var(--sf3);
-      color: var(--mut);
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    .node.active {
-      background: var(--acc);
-      color: var(--on-acc);
-      border-color: var(--acc);
-    }
-
-    .rail {
-      height: 2px;
-      flex: 1;
-      background: var(--ln2);
-    }
-
-    .conflict-grid {
-      display: grid;
-      gap: 14px;
-    }
-
-    .conflict-card {
-      overflow: hidden;
-    }
-
-    .conflict-head {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
-      padding: 16px;
-      border-bottom: 1px solid var(--ln);
-    }
-
-    .badges {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin-top: 10px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      border: 1px solid var(--ln2);
-      background: var(--sf3);
-      color: var(--mut);
-      border-radius: 999px;
-      padding: 4px 8px;
-      font-size: 12px;
-      font-weight: 650;
-    }
-
-    .badge.must { color: var(--red); }
-    .badge.high { color: var(--amber); }
-    .badge.medium { color: var(--blue); }
-    .badge.low { color: var(--green); }
-
-    .conflict-body {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
-      gap: 16px;
-      padding: 16px;
-    }
-
-    .plain-list {
-      display: grid;
-      gap: 8px;
-      margin: 12px 0 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .plain-list li {
-      border: 1px solid var(--ln);
-      background: color-mix(in srgb, var(--sf2) 72%, var(--sf3));
-      border-radius: 12px;
-      padding: 10px 11px;
-      color: var(--mut);
-      font-size: 14px;
-    }
-
-    .option-stack {
-      display: grid;
-      gap: 9px;
-    }
-
-    .option {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 10px;
-      align-items: start;
-      border: 1px solid var(--ln);
-      border-radius: 13px;
-      background: var(--sf);
-      color: var(--ink);
-      padding: 11px;
-      text-align: left;
-      min-height: 58px;
-    }
-
-    .option[data-selected="true"] {
-      border-color: var(--acc);
-      background: var(--acc-sf);
-    }
-
-    .radio {
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      border: 1px solid var(--ln2);
-      margin-top: 2px;
-      display: grid;
-      place-items: center;
-    }
-
-    .option[data-selected="true"] .radio {
-      border-color: var(--acc);
-      background: var(--acc);
-    }
-
-    .option[data-selected="true"] .radio::after {
-      content: "";
-      width: 6px;
-      height: 6px;
-      border-radius: 999px;
-      background: var(--on-acc);
-    }
-
-    .option-title {
-      font-weight: 750;
-      margin-bottom: 2px;
-    }
-
-    .option-copy {
-      color: var(--mut);
-      font-size: 13px;
-    }
-
-    .visual-strip {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 3px;
-      height: 28px;
-      border-radius: 999px;
-      overflow: hidden;
-      border: 1px solid var(--ln);
-      background: var(--sf3);
-      margin-top: 12px;
-    }
-
-    .visual-strip span:nth-child(1) { background: var(--amber); }
-    .visual-strip span:nth-child(2) { background: var(--blue); }
-    .visual-strip span:nth-child(3) { background: var(--acc); }
-    .visual-strip span:nth-child(4) { background: var(--green); }
-
-    .empty {
-      padding: 28px;
-      border: 1px dashed var(--ln2);
-      border-radius: 16px;
-      color: var(--mut);
-      text-align: center;
-    }
-
-    .footer-panel {
-      border-top: 1px solid var(--ln);
-      padding: 20px 22px 24px;
-      display: grid;
-      gap: 14px;
-      background: color-mix(in srgb, var(--sf) 84%, var(--bd));
-    }
-
-    .export-box {
-      width: 100%;
-      min-height: 180px;
-      border: 1px solid var(--ln2);
-      border-radius: 14px;
-      background: var(--sf2);
-      color: var(--ink);
-      padding: 14px;
-      resize: vertical;
-      font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    @media (max-width: 900px) {
-      .hero,
-      .main,
-      .diagram,
-      .conflict-body {
-        grid-template-columns: 1fr;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LifeOS UI Handoff Conflict Workshop</title>
+    <style>
+      :root {
+        --bd: #0c0d10;
+        --sf: #15171c;
+        --sf2: #1b1e25;
+        --sf3: #21252d;
+        --ink: #f2f1ec;
+        --mut: #9b9ca4;
+        --fnt: #686a73;
+        --ln: #23262e;
+        --ln2: #2c303a;
+        --btn: #f2f1ec;
+        --btn-fg: #15171c;
+        --acc: #6b78e8;
+        --acc2: #7f8aeb;
+        --acc-sf: #20232e;
+        --acc-rng: #414a7a;
+        --on-acc: #ffffff;
+        --amber: #e3ad52;
+        --blue: #7aa2dd;
+        --green: #6fb98c;
+        --red: #d9624a;
+        --radius: 22px;
+        --max: 1180px;
       }
 
-      .sidebar {
-        border-right: 0;
-        border-bottom: 1px solid var(--ln);
+      [data-theme="light"] {
+        --bd: #e7e4db;
+        --sf: #fbfaf7;
+        --sf2: #ffffff;
+        --sf3: #f4f1ea;
+        --ink: #18170f;
+        --mut: #6f6d64;
+        --fnt: #8b887f;
+        --ln: #efece5;
+        --ln2: #e2dfd6;
+        --btn: #18170f;
+        --btn-fg: #ffffff;
+        --acc-sf: #edf0ff;
+        --acc-rng: #cdd2f4;
       }
 
-      .filter-list {
-        position: static;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      * {
+        box-sizing: border-box;
       }
 
-      h1 {
-        font-size: 32px;
+      html {
+        scroll-behavior: smooth;
       }
-    }
 
-    @media (max-width: 560px) {
+      body {
+        margin: 0;
+        background: var(--bd);
+        color: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.45;
+      }
+
+      button,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
       .page {
-        padding: 0;
+        min-height: 100vh;
+        padding: 28px 18px 60px;
       }
 
       .shell {
-        border-radius: 0;
-        border-left: 0;
-        border-right: 0;
-      }
-
-      .topbar,
-      .hero,
-      .content,
-      .footer-panel {
-        padding-left: 16px;
-        padding-right: 16px;
+        max-width: var(--max);
+        margin: 0 auto;
+        border: 1px solid var(--ln2);
+        border-radius: var(--radius);
+        background: var(--sf);
+        overflow: hidden;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
       }
 
       .topbar {
-        align-items: flex-start;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--ln);
+      }
+
+      .brand {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+
+      .brand-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--acc);
+        box-shadow: 0 0 0 5px var(--acc-sf);
+      }
+
+      .top-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      .button {
+        border: 1px solid var(--ln2);
+        border-radius: 12px;
+        background: var(--sf2);
+        color: var(--ink);
+        min-height: 40px;
+        padding: 9px 13px;
+        font-weight: 650;
+      }
+
+      .button.primary {
+        background: var(--acc);
+        color: var(--on-acc);
+        border-color: var(--acc);
+      }
+
+      .button.ghost {
+        background: transparent;
+        color: var(--mut);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+        gap: 24px;
+        padding: 30px 30px 24px;
+        border-bottom: 1px solid var(--ln);
+      }
+
+      .kicker {
+        color: var(--fnt);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-weight: 700;
+        font-family:
+          "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+          monospace;
+      }
+
+      h1 {
+        margin: 8px 0 12px;
+        max-width: 780px;
+        font-size: 42px;
+        line-height: 1.04;
+        letter-spacing: -0.025em;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 22px;
+        letter-spacing: -0.015em;
+      }
+
+      h3 {
+        margin: 0;
+        font-size: 17px;
+        letter-spacing: -0.01em;
+      }
+
+      p {
+        margin: 0;
+        color: var(--mut);
+      }
+
+      .summary {
+        display: grid;
+        gap: 12px;
+        align-content: start;
+      }
+
+      .meter-card,
+      .panel,
+      .conflict-card {
+        border: 1px solid var(--ln);
+        border-radius: 18px;
+        background: var(--sf2);
+      }
+
+      .meter-card {
+        padding: 18px;
+      }
+
+      .meter-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: baseline;
+        margin-bottom: 10px;
+      }
+
+      .big-number {
+        font-size: 38px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1;
+      }
+
+      .progress-track {
+        height: 14px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: var(--sf3);
+        display: flex;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: var(--acc);
+        width: 0%;
+        transition: width 180ms ease;
+      }
+
+      .legend {
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .legend-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 13px;
+        color: var(--mut);
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 999px;
+        display: inline-block;
+        margin-right: 8px;
+        background: var(--acc);
+      }
+
+      .dot.red {
+        background: var(--red);
+      }
+      .dot.amber {
+        background: var(--amber);
+      }
+      .dot.blue {
+        background: var(--blue);
+      }
+      .dot.green {
+        background: var(--green);
+      }
+
+      .main {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        min-height: 780px;
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--ln);
+        padding: 20px;
+        background: color-mix(in srgb, var(--sf) 82%, var(--bd));
+      }
+
+      .filter-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 14px;
+        position: sticky;
+        top: 18px;
+      }
+
+      .filter {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--mut);
+        padding: 10px 11px;
+        text-align: left;
+        min-height: 42px;
+      }
+
+      .filter.active {
+        border-color: var(--acc-rng);
+        background: var(--acc-sf);
+        color: var(--ink);
+      }
+
+      .count {
+        font-family:
+          "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+          monospace;
+        font-size: 12px;
+        color: var(--fnt);
+      }
+
+      .content {
+        padding: 22px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+
+      .search {
+        min-height: 42px;
+        border: 1px solid var(--ln2);
+        border-radius: 12px;
+        background: var(--sf2);
+        color: var(--ink);
+        padding: 10px 12px;
+        min-width: min(100%, 340px);
+      }
+
+      .diagram {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .diagram-box {
+        border: 1px solid var(--ln);
+        border-radius: 16px;
+        background: var(--sf2);
+        padding: 14px;
+        min-height: 118px;
+      }
+
+      .mini-pipeline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-top: 16px;
+      }
+
+      .node {
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--ln2);
+        background: var(--sf3);
+        color: var(--mut);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .node.active {
+        background: var(--acc);
+        color: var(--on-acc);
+        border-color: var(--acc);
+      }
+
+      .rail {
+        height: 2px;
+        flex: 1;
+        background: var(--ln2);
+      }
+
+      .conflict-grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .conflict-card {
+        overflow: hidden;
       }
 
       .conflict-head {
-        grid-template-columns: 1fr;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        padding: 16px;
+        border-bottom: 1px solid var(--ln);
       }
-    }
-  </style>
-</head>
-<body>
-  <div class="page" id="appRoot">
-    <div class="shell">
-      <header class="topbar">
-        <div class="brand"><span class="brand-dot"></span><span>LifeOS UI Conflict Workshop</span></div>
-        <div class="top-actions">
-          <button class="button ghost" id="toggleTheme" type="button">Toggle light</button>
-          <button class="button" id="resetChoices" type="button">Reset choices</button>
-          <button class="button primary" id="copyExport" type="button">Copy decision note</button>
-        </div>
-      </header>
 
-      <section class="hero">
-        <div>
-          <div class="kicker">Pre-implementation conflict map</div>
-          <h1>Choose how to resolve every contradiction before the UI rewrite starts.</h1>
-          <p>This workshop lists the conflicts created by making LifeOS match the new design handoff exactly. Pick a resolution per conflict, then export the decision note as the implementation contract.</p>
-          <div class="visual-strip" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-        </div>
-        <aside class="summary">
-          <div class="meter-card">
-            <div class="meter-row">
-              <div>
-                <div class="kicker">Resolved</div>
-                <div class="big-number"><span id="resolvedCount">0</span>/<span id="totalCount">0</span></div>
-              </div>
-              <span class="badge must" id="blockerCount">0 blockers</span>
-            </div>
-            <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
-            <div class="legend">
-              <div class="legend-item"><span><span class="dot red"></span>Must resolve before code</span><span id="mustCount">0</span></div>
-              <div class="legend-item"><span><span class="dot amber"></span>High risk</span><span id="highCount">0</span></div>
-              <div class="legend-item"><span><span class="dot blue"></span>Medium risk</span><span id="mediumCount">0</span></div>
-              <div class="legend-item"><span><span class="dot green"></span>Low risk</span><span id="lowCount">0</span></div>
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 10px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--ln2);
+        background: var(--sf3);
+        color: var(--mut);
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .badge.must {
+        color: var(--red);
+      }
+      .badge.high {
+        color: var(--amber);
+      }
+      .badge.medium {
+        color: var(--blue);
+      }
+      .badge.low {
+        color: var(--green);
+      }
+
+      .conflict-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+        gap: 16px;
+        padding: 16px;
+      }
+
+      .plain-list {
+        display: grid;
+        gap: 8px;
+        margin: 12px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .plain-list li {
+        border: 1px solid var(--ln);
+        background: color-mix(in srgb, var(--sf2) 72%, var(--sf3));
+        border-radius: 12px;
+        padding: 10px 11px;
+        color: var(--mut);
+        font-size: 14px;
+      }
+
+      .option-stack {
+        display: grid;
+        gap: 9px;
+      }
+
+      .option {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        border: 1px solid var(--ln);
+        border-radius: 13px;
+        background: var(--sf);
+        color: var(--ink);
+        padding: 11px;
+        text-align: left;
+        min-height: 58px;
+      }
+
+      .option[data-selected="true"] {
+        border-color: var(--acc);
+        background: var(--acc-sf);
+      }
+
+      .radio {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid var(--ln2);
+        margin-top: 2px;
+        display: grid;
+        place-items: center;
+      }
+
+      .option[data-selected="true"] .radio {
+        border-color: var(--acc);
+        background: var(--acc);
+      }
+
+      .option[data-selected="true"] .radio::after {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--on-acc);
+      }
+
+      .option-title {
+        font-weight: 750;
+        margin-bottom: 2px;
+      }
+
+      .option-copy {
+        color: var(--mut);
+        font-size: 13px;
+      }
+
+      .visual-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 3px;
+        height: 28px;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid var(--ln);
+        background: var(--sf3);
+        margin-top: 12px;
+      }
+
+      .visual-strip span:nth-child(1) {
+        background: var(--amber);
+      }
+      .visual-strip span:nth-child(2) {
+        background: var(--blue);
+      }
+      .visual-strip span:nth-child(3) {
+        background: var(--acc);
+      }
+      .visual-strip span:nth-child(4) {
+        background: var(--green);
+      }
+
+      .empty {
+        padding: 28px;
+        border: 1px dashed var(--ln2);
+        border-radius: 16px;
+        color: var(--mut);
+        text-align: center;
+      }
+
+      .footer-panel {
+        border-top: 1px solid var(--ln);
+        padding: 20px 22px 24px;
+        display: grid;
+        gap: 14px;
+        background: color-mix(in srgb, var(--sf) 84%, var(--bd));
+      }
+
+      .export-box {
+        width: 100%;
+        min-height: 180px;
+        border: 1px solid var(--ln2);
+        border-radius: 14px;
+        background: var(--sf2);
+        color: var(--ink);
+        padding: 14px;
+        resize: vertical;
+        font-family:
+          "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+          monospace;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .main,
+        .diagram,
+        .conflict-body {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid var(--ln);
+        }
+
+        .filter-list {
+          position: static;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+
+        h1 {
+          font-size: 32px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .page {
+          padding: 0;
+        }
+
+        .shell {
+          border-radius: 0;
+          border-left: 0;
+          border-right: 0;
+        }
+
+        .topbar,
+        .hero,
+        .content,
+        .footer-panel {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+
+        .topbar {
+          align-items: flex-start;
+        }
+
+        .conflict-head {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page" id="appRoot">
+      <div class="shell">
+        <header class="topbar">
+          <div class="brand">
+            <span class="brand-dot"></span
+            ><span>LifeOS UI Conflict Workshop</span>
+          </div>
+          <div class="top-actions">
+            <button class="button ghost" id="toggleTheme" type="button">
+              Toggle light
+            </button>
+            <button class="button" id="resetChoices" type="button">
+              Reset choices
+            </button>
+            <button class="button primary" id="copyExport" type="button">
+              Copy decision note
+            </button>
+          </div>
+        </header>
+
+        <section class="hero">
+          <div>
+            <div class="kicker">Pre-implementation conflict map</div>
+            <h1>
+              Choose how to resolve every contradiction before the UI rewrite
+              starts.
+            </h1>
+            <p>
+              This workshop lists the conflicts created by making LifeOS match
+              the new design handoff exactly. Pick a resolution per conflict,
+              then export the decision note as the implementation contract.
+            </p>
+            <div class="visual-strip" aria-hidden="true">
+              <span></span><span></span><span></span><span></span>
             </div>
           </div>
-        </aside>
-      </section>
-
-      <main class="main">
-        <aside class="sidebar">
-          <div class="kicker">Conflict groups</div>
-          <div class="filter-list" id="filters"></div>
-        </aside>
-        <section class="content">
-          <div class="diagram" aria-label="Implementation shape comparison">
-            <div class="diagram-box">
-              <div class="kicker">Current app shape</div>
-              <h3>Route pages plus AppShell</h3>
-              <div class="mini-pipeline" aria-hidden="true">
-                <span class="node active">/</span><span class="rail"></span><span class="node">C</span><span class="rail"></span><span class="node">T</span><span class="rail"></span><span class="node">P</span>
+          <aside class="summary">
+            <div class="meter-card">
+              <div class="meter-row">
+                <div>
+                  <div class="kicker">Resolved</div>
+                  <div class="big-number">
+                    <span id="resolvedCount">0</span>/<span id="totalCount"
+                      >0</span
+                    >
+                  </div>
+                </div>
+                <span class="badge must" id="blockerCount">0 blockers</span>
               </div>
-              <p style="margin-top:12px">Several pages own their own layout and tests assert old labels.</p>
-            </div>
-            <div class="diagram-box">
-              <div class="kicker">Handoff target</div>
-              <h3>One cockpit with stage router</h3>
-              <div class="mini-pipeline" aria-hidden="true">
-                <span class="node active">1</span><span class="rail"></span><span class="node active">2</span><span class="rail"></span><span class="node active">3</span><span class="rail"></span><span class="node active">4</span>
+              <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
               </div>
-              <p style="margin-top:12px">One screen container renders Today through All areas from one state model.</p>
-            </div>
-            <div class="diagram-box">
-              <div class="kicker">Decision rule</div>
-              <h3>Safety stays stronger than styling</h3>
-              <div class="mini-pipeline" aria-hidden="true">
-                <span class="node active">S</span><span class="rail"></span><span class="node">UI</span><span class="rail"></span><span class="node">T</span><span class="rail"></span><span class="node">P</span>
+              <div class="legend">
+                <div class="legend-item">
+                  <span
+                    ><span class="dot red"></span>Must resolve before code</span
+                  ><span id="mustCount">0</span>
+                </div>
+                <div class="legend-item">
+                  <span><span class="dot amber"></span>High risk</span
+                  ><span id="highCount">0</span>
+                </div>
+                <div class="legend-item">
+                  <span><span class="dot blue"></span>Medium risk</span
+                  ><span id="mediumCount">0</span>
+                </div>
+                <div class="legend-item">
+                  <span><span class="dot green"></span>Low risk</span
+                  ><span id="lowCount">0</span>
+                </div>
               </div>
-              <p style="margin-top:12px">No schema, RLS, parser, auth, or calendar approval weakening just to match a prototype.</p>
             </div>
-          </div>
-
-          <div class="toolbar">
-            <input class="search" id="search" type="search" placeholder="Search conflicts">
-            <select class="search" id="decisionFilter" aria-label="Decision filter">
-              <option value="all">Show all</option>
-              <option value="open">Only unresolved</option>
-              <option value="done">Only resolved</option>
-            </select>
-          </div>
-
-          <div class="conflict-grid" id="conflictGrid"></div>
+          </aside>
         </section>
-      </main>
 
-      <section class="footer-panel">
-        <div>
-          <div class="kicker">Export</div>
-          <h2>Decision note</h2>
-          <p>This text updates as you choose options. Use it as the pre-build contract for the implementation pass.</p>
-        </div>
-        <textarea class="export-box" id="exportBox" readonly></textarea>
-      </section>
+        <main class="main">
+          <aside class="sidebar">
+            <div class="kicker">Conflict groups</div>
+            <div class="filter-list" id="filters"></div>
+          </aside>
+          <section class="content">
+            <div class="diagram" aria-label="Implementation shape comparison">
+              <div class="diagram-box">
+                <div class="kicker">Current app shape</div>
+                <h3>Route pages plus AppShell</h3>
+                <div class="mini-pipeline" aria-hidden="true">
+                  <span class="node active">/</span><span class="rail"></span
+                  ><span class="node">C</span><span class="rail"></span
+                  ><span class="node">T</span><span class="rail"></span
+                  ><span class="node">P</span>
+                </div>
+                <p style="margin-top: 12px">
+                  Several pages own their own layout and tests assert old
+                  labels.
+                </p>
+              </div>
+              <div class="diagram-box">
+                <div class="kicker">Handoff target</div>
+                <h3>One cockpit with stage router</h3>
+                <div class="mini-pipeline" aria-hidden="true">
+                  <span class="node active">1</span><span class="rail"></span
+                  ><span class="node active">2</span><span class="rail"></span
+                  ><span class="node active">3</span><span class="rail"></span
+                  ><span class="node active">4</span>
+                </div>
+                <p style="margin-top: 12px">
+                  One screen container renders Today through All areas from one
+                  state model.
+                </p>
+              </div>
+              <div class="diagram-box">
+                <div class="kicker">Decision rule</div>
+                <h3>Safety stays stronger than styling</h3>
+                <div class="mini-pipeline" aria-hidden="true">
+                  <span class="node active">S</span><span class="rail"></span
+                  ><span class="node">UI</span><span class="rail"></span
+                  ><span class="node">T</span><span class="rail"></span
+                  ><span class="node">P</span>
+                </div>
+                <p style="margin-top: 12px">
+                  No schema, RLS, parser, auth, or calendar approval weakening
+                  just to match a prototype.
+                </p>
+              </div>
+            </div>
+
+            <div class="toolbar">
+              <input
+                class="search"
+                id="search"
+                type="search"
+                placeholder="Search conflicts"
+              />
+              <select
+                class="search"
+                id="decisionFilter"
+                aria-label="Decision filter"
+              >
+                <option value="all">Show all</option>
+                <option value="open">Only unresolved</option>
+                <option value="done">Only resolved</option>
+              </select>
+            </div>
+
+            <div class="conflict-grid" id="conflictGrid"></div>
+          </section>
+        </main>
+
+        <section class="footer-panel">
+          <div>
+            <div class="kicker">Export</div>
+            <h2>Decision note</h2>
+            <p>
+              This text updates as you choose options. Use it as the pre-build
+              contract for the implementation pass.
+            </p>
+          </div>
+          <textarea class="export-box" id="exportBox" readonly></textarea>
+        </section>
+      </div>
     </div>
-  </div>
 
-  <script>
-    const conflicts = [
-      {
-        id: "roadmap-pass",
-        group: "Governance",
-        risk: "must",
-        title: "Roadmap says maintenance, handoff requires a new rewrite pass",
-        simple: "The repo says UI work is maintenance-only. The handoff asks for a full cockpit redesign.",
-        current: "Pass 7 is closed and docs say future UI work should be maintenance unless a new pass is opened.",
-        target: "The handoff becomes the active visual source for the cockpit.",
-        consequences: ["Without a new pass, docs and implementation will disagree.", "Future agents may revert the redesign as visual churn.", "Tests will be unclear about old versus new truth."],
-        options: [
-          ["Open Pass 8 before coding", "Recommended. Amend the roadmap, update project state, and add one implementation note before runtime edits."],
-          ["Treat as maintenance", "Fast but dishonest. This would conflict with the size of the requested change."],
-          ["Archive old UI docs first", "Cleanest long-term, but too much doc churn before we know final decisions."]
-        ]
-      },
-      {
-        id: "visual-authority",
-        group: "Governance",
-        risk: "must",
-        title: "Old shipped UI contracts conflict with the new visual source of truth",
-        simple: "Current docs protect flagship/support/admin cards. The handoff wants a quieter prototype-shaped cockpit.",
-        current: "Route scorecards and tests protect the Pass 7 card taxonomy.",
-        target: "Prototype visuals, tokens, spine, and stage views become the target.",
-        consequences: ["Old visual tests will fail by design.", "The implementation plan needs to name what is superseded.", "Reviewers need one source to judge screenshots."],
-        options: [
-          ["Handoff supersedes route visuals only", "Recommended. Keep product safety docs, replace visual hierarchy contracts."],
-          ["Handoff supersedes all UI docs", "Too broad. It risks deleting useful safety and proof rules."],
-          ["Blend both systems", "Likely creates a muddled UI with route cards inside the new shell."]
-        ]
-      },
-      {
-        id: "branch-state",
-        group: "Governance",
-        risk: "high",
-        title: "Current checkout is not a clean UI branch",
-        simple: "The repo is on a docs branch with untracked handoff and UI-check files.",
-        current: "Branch is docs/system-review-2026-06-23 with untracked design_handoff_lifeos and UI evidence files.",
-        target: "A narrow branch dedicated to the handoff implementation.",
-        consequences: ["Implementation commits could mix docs-review work with UI rewrite work.", "Rollback becomes messy.", "PR review scope gets harder."],
-        options: [
-          ["Create a narrow UI branch first", "Recommended. Start from the intended base and keep the pass isolated."],
-          ["Continue on current branch", "Only acceptable if this branch is explicitly the intended work branch."],
-          ["Do the workshop only here", "Safe for this artifact, but not for the actual implementation."]
-        ]
-      },
-      {
-        id: "route-vs-stage",
-        group: "Architecture",
-        risk: "must",
-        title: "Separate Next routes conflict with one stage router",
-        simple: "Today each screen is a page. The handoff says one screen component chooses the view from stage.",
-        current: "Home, Capture, Triage, Planning, Execute, Review, Health, and Areas are separate pages.",
-        target: "One cockpit component renders all stages from a stage enum.",
-        consequences: ["Keeping route layouts duplicates UI and violates the handoff.", "Tests must stop treating each page as the source of layout truth.", "URL behavior needs aliases into stage state."],
-        options: [
-          ["Make routes thin aliases into the stage router", "Recommended. Preserve URLs while honoring the one-screen architecture."],
-          ["Move all workflow to root only", "Pure handoff, but breaks deep links and existing tests more than needed."],
-          ["Keep pages and restyle them", "Fastest path, but directly violates the handoff."]
-        ]
-      },
-      {
-        id: "appshell",
-        group: "Architecture",
-        risk: "must",
-        title: "Current AppShell chrome conflicts with the handoff header",
-        simple: "The current shell has primary nav, supporting nav, quick note, area select, and extra context behavior. The handoff has a compact header plus pipeline spine.",
-        current: "AppShell owns nav links, supporting Areas admin, theme toggle, quick note, area selector, and route quieting.",
-        target: "Header has logo, All areas, area chips, add area, accent swatch, view segmented control, theme toggle, then a count-bearing pipeline spine.",
-        consequences: ["Leaving old chrome doubles navigation.", "Quick note competes with Capture.", "Area context is repeated too often."],
-        options: [
-          ["Replace cockpit chrome inside AppShell", "Recommended. Keep provider boundary, replace visible shell for workflow routes."],
-          ["Add handoff shell under current shell", "Bad. It creates two shells."],
-          ["Keep old shell for admin only", "Good follow-up if settings remain separate."]
-        ]
-      },
-      {
-        id: "url-names",
-        group: "Architecture",
-        risk: "high",
-        title: "URL names do not match handoff stage names",
-        simple: "The repo uses /calendar and /settings/areas. The handoff uses Plan and All areas.",
-        current: "/calendar means Planning. /settings/areas means Areas admin.",
-        target: "Stages are today, capture, triage, plan, execute, review, health, overview.",
-        consequences: ["Navigation labels and test URLs can drift.", "Browser reload needs to restore the correct stage.", "Overview and admin can be confused."],
-        options: [
-          ["Keep URLs, map them to stage names", "Recommended. No user-facing route break, clean internal stage enum."],
-          ["Rename routes to match stages", "Cleaner but higher migration cost."],
-          ["Use query params only", "Simple, but weaker deep-link semantics."]
-        ]
-      },
-      {
-        id: "overview-vs-areas",
-        group: "Architecture",
-        risk: "high",
-        title: "All areas overview conflicts with Areas admin",
-        simple: "The handoff's All areas is a work overview. The current Areas screen is administration.",
-        current: "Areas manages create, remove, color, export, Google connection, and registry details.",
-        target: "All areas shows workload spectrum, legend, and pipeline board across areas.",
-        consequences: ["Replacing Areas admin loses real management features.", "Keeping both needs clear navigation.", "The handoff does not cover export or Google settings."],
-        options: [
-          ["Make All areas the overview and keep admin in settings", "Recommended. Two different jobs, two different surfaces."],
-          ["Fold admin into All areas disclosure", "Possible but risks cluttering the handoff screen."],
-          ["Replace admin entirely", "Not acceptable unless losing those controls is explicitly approved."]
-        ]
-      },
-      {
-        id: "state-model",
-        group: "Data model",
-        risk: "must",
-        title: "Prototype item status lifecycle does not match current domain model",
-        simple: "The handoff uses simple item statuses. The repo has captures, drafts, tasks, proposals, blocks, sessions, and review entries.",
-        current: "WorkflowState stores several domain arrays with schema-backed statuses.",
-        target: "Item status is inbox, today, planned, done, plus later/someday behavior.",
-        consequences: ["A direct toy-model rewrite would throw away product truth.", "Mapping must define every status transition.", "Some handoff statuses do not exist in DB."],
-        options: [
-          ["Build a view-model adapter over current state", "Recommended. Handoff UI, real LifeOS data underneath."],
-          ["Replace WorkflowState with prototype state", "Fast but wrong. It loses existing safety and persistence work."],
-          ["Add new DB lifecycle first", "Too broad for a UI pass unless separately reviewed."]
-        ]
-      },
-      {
-        id: "later-status",
-        group: "Data model",
-        risk: "high",
-        title: "Someday/later has no clean current persistence target",
-        simple: "Triage needs a Someday action. Current task draft rejection and accepted tasks do not equal someday.",
-        current: "Drafts can be accepted or rejected. Tasks can be active, scheduled, blocked, done, dropped, archived.",
-        target: "Triage can set an item to later/someday without dropping it.",
-        consequences: ["Using rejected for Someday lies about user intent.", "Adding a DB status touches schemas and migrations.", "A local-only someday can diverge from account data."],
-        options: [
-          ["Use UI-local someday for this pass", "Recommended for UI smoothing. Track separately before schema work."],
-          ["Map Someday to task archived", "Questionable semantics."],
-          ["Add persisted someday status now", "More correct long-term, but requires schema, tests, and RLS review."]
-        ]
-      },
-      {
-        id: "area-index",
-        group: "Data model",
-        risk: "high",
-        title: "Handoff areaIndex conflicts with stable area ids",
-        simple: "The prototype points items at area array positions. The repo correctly uses area ids.",
-        current: "Areas, tasks, captures, blocks, and sessions use area_id.",
-        target: "Handoff App state says area is an index into areas.",
-        consequences: ["Indexes break if areas reorder or sync from Supabase.", "Persisted data should never depend on list order.", "UI can still use an index as a selected position."],
-        options: [
-          ["Use ids for data, derive areaIndex for UI", "Recommended. Stable data with handoff-compatible UI state."],
-          ["Store indexes everywhere", "Wrong for persisted data."],
-          ["Store both id and index", "Adds avoidable drift."]
-        ]
-      },
-      {
-        id: "area-colors",
-        group: "Data model",
-        risk: "high",
-        title: "Current areas may have null colors, handoff requires one base hex",
-        simple: "The handoff derives accent from one stored base color. Current persisted areas can store null color.",
-        current: "Create area stores color null and old mock colors differ from handoff palette.",
-        target: "Every area has a base hex, new areas cycle the handoff palette.",
-        consequences: ["Accent derivation needs a guaranteed base value.", "Changing createArea persistence changes data behavior.", "Null may still mean default in existing data."],
-        options: [
-          ["Keep nullable DB, resolve default base color in UI", "Recommended. No migration, exact derivation at render."],
-          ["Persist palette color on create", "Closer to handoff, but changes data write behavior."],
-          ["Migrate null colors", "Potentially useful later, but unnecessary for the first UI pass."]
-        ]
-      },
-      {
-        id: "theme-system",
-        group: "Visual system",
-        risk: "must",
-        title: "Class-based next-themes conflicts with data-theme exactness",
-        simple: "Current dark mode uses a class. The handoff requires dark by default and light via data-theme=\"light\".",
-        current: "ThemeProvider uses class and Tailwind dark variant.",
-        target: "Theme is an attribute on app root. Base ramp swaps only when data-theme is light.",
-        consequences: ["Old dark utilities may conflict with new token values.", "Hydration behavior must stay stable.", "Tests need new assertions."],
-        options: [
-          ["Use data-theme on cockpit root", "Recommended. Keep exact handoff behavior without changing unrelated pages first."],
-          ["Replace next-themes globally", "Cleaner eventually, more blast radius now."],
-          ["Keep class dark mode", "Violates a non-negotiable handoff rule."]
-        ]
-      },
-      {
-        id: "tokens",
-        group: "Visual system",
-        risk: "must",
-        title: "Existing OKLCH design tokens conflict with exact handoff tokens",
-        simple: "The repo has OKLCH Tailwind tokens. The handoff gives exact hex semantic variables.",
-        current: "globals.css defines --background, --foreground, --card, --area-accent, and many class-level visuals.",
-        target: "Root variables are --bd, --sf, --sf2, --sf3, --ink, --mut, --fnt, --ln, --ln2, --btn, --track, and status colors.",
-        consequences: ["Component styles must stop depending on old card taxonomy.", "Hardcoded old token names will need a compatibility layer.", "Exact screenshots require exact values."],
-        options: [
-          ["Add handoff tokens and map old tokens temporarily", "Recommended. Exact cockpit, safer migration."],
-          ["Replace all globals at once", "Cleaner but likely breaks unrelated routes and primitives."],
-          ["Approximate handoff with existing tokens", "Fails the fidelity requirement."]
-        ]
-      },
-      {
-        id: "accent-math",
-        group: "Visual system",
-        risk: "must",
-        title: "Current CSS color mixing conflicts with accent.js exact derivation",
-        simple: "The handoff says use accent.js exactly. Current area accents use CSS color-mix and different variable names.",
-        current: "--area-accent, --area-accent-soft, --area-accent-border, and OKLCH color-mix.",
-        target: "--acc, --acc2, --acc-sf, --acc-rng, --on-acc from sRGB mix and luminance.",
-        consequences: ["Custom area colors may have different contrast.", "Screenshots will not match the prototype.", "Tests must verify on-acc contrast rule."],
-        options: [
-          ["Port accent.js exactly and set CSS vars inline", "Recommended. Directly satisfies the handoff."],
-          ["Use CSS color-mix equivalent", "Close, but not exact."],
-          ["Keep current accent system", "Violates the handoff."]
-        ]
-      },
-      {
-        id: "fonts",
-        group: "Visual system",
-        risk: "medium",
-        title: "Handoff fonts conflict with current font stack",
-        simple: "The handoff uses Hanken Grotesk and IBM Plex Mono. The app currently uses IBM Plex Sans and Fraunces in several places.",
-        current: "Fraunces appears in route headings and IBM Plex Sans is the UI default.",
-        target: "Hanken Grotesk for UI and IBM Plex Mono for counts, clocks, estimates, and labels.",
-        consequences: ["Keeping Fraunces changes the product feel.", "Loading Google Fonts may be a network and privacy decision.", "Local fallback needs to preserve proportions."],
-        options: [
-          ["Use Hanken if available, system fallback otherwise", "Recommended for implementation unless font hosting is decided."],
-          ["Import Google Fonts in app", "Visual match improves, but external font loading should be deliberate."],
-          ["Keep existing fonts", "Less churn, but not exact."]
-        ]
-      },
-      {
-        id: "component-library",
-        group: "Visual system",
-        risk: "medium",
-        title: "shadcn-style primitives conflict with pixel-accurate prototype controls",
-        simple: "The repo has shared UI primitives. The handoff controls are custom and compact.",
-        current: "Buttons, inputs, cards, alerts, labels, skeletons are app-local primitives.",
-        target: "Prototype-shaped chips, spine nodes, compact buttons, cards, rings, and bands.",
-        consequences: ["Forcing shadcn everywhere may miss fidelity.", "Ignoring primitives can create a second design system.", "Accessibility states still need to be preserved."],
-        options: [
-          ["Compose primitives only where they help", "Recommended. Custom cockpit visuals, primitive behavior where useful."],
-          ["Rewrite all controls by hand", "High fidelity but more accessibility risk."],
-          ["Force existing primitives", "Consistent but likely not exact."]
-        ]
-      },
-      {
-        id: "header-controls",
-        group: "Interaction",
-        risk: "high",
-        title: "Handoff header controls conflict with current admin flows",
-        simple: "The handoff adds area creation and recolor directly in the header. Current area management is a full settings screen.",
-        current: "Area create, soft delete, color update, export, and Google panels live in settings.",
-        target: "Header plus button adds area inline. Swatch recolors active area instantly.",
-        consequences: ["Header mutations increase shell responsibility.", "Soft delete/export still need a home.", "Persisted color updates may need async feedback."],
-        options: [
-          ["Header handles add/recolor, settings keeps admin", "Recommended. Handoff behavior without losing admin controls."],
-          ["Move all area admin into header", "Too much chrome burden."],
-          ["Keep add/recolor only in settings", "Violates the handoff."]
-        ]
-      },
-      {
-        id: "capture-simplification",
-        group: "Interaction",
-        risk: "high",
-        title: "Borderless Capture conflicts with current raw-save plus organize flow",
-        simple: "The handoff has one Save thought button. Current Capture has richer save and parse behavior.",
-        current: "Capture supports raw save, save and organize, parse fallback, area choice, feedback, and history disclosures.",
-        target: "Centered textarea, one Save thought button, keyboard shortcut, short toast.",
-        consequences: ["AI parse entry point may be hidden or moved.", "Raw-save safety must remain visible enough.", "Tests around Save and organize must change."],
-        options: [
-          ["Make Save thought raw-save first, organize behind progressive action", "Recommended. Preserves safety and matches simple default."],
-          ["Remove organize path from UI", "Too much product regression."],
-          ["Keep two primary buttons", "Violates one primary action."]
-        ]
-      },
-      {
-        id: "triage-actions",
-        group: "Interaction",
-        risk: "high",
-        title: "Triage drop/someday/do-today conflicts with current accept/reject draft model",
-        simple: "The handoff wants directional decisions. The app currently accepts task drafts into tasks.",
-        current: "Triage accepts or rejects task/project drafts and shows supporting AI context.",
-        target: "One inbox card, three directional targets, next card slides up.",
-        consequences: ["Accept task draft wording disappears.", "Project drafts need a treatment.", "Someday needs semantics."],
-        options: [
-          ["Map Do today to accept task, Drop to reject, Someday to UI-local later", "Recommended for first pass."],
-          ["Create new triage lifecycle first", "More correct but larger."],
-          ["Keep accept/reject UI", "Not the handoff."]
-        ]
-      },
-      {
-        id: "planning-model",
-        group: "Interaction",
-        risk: "high",
-        title: "Drag-like hour rail conflicts with current proposal review and Google approval UI",
-        simple: "The handoff plans by tapping a task and an hour. Current Planning creates proposals and can check Google availability.",
-        current: "Planning has suggest, adjust, accept proposal, conflict check, and Google event creation.",
-        target: "Two-pane hour rail and To place list. Tap task, tap hour, unplan by tapping block.",
-        consequences: ["Proposal review gets less visible.", "Google write controls need secondary placement.", "Accepting local blocks must still use safe transactional boundaries where applicable."],
-        options: [
-          ["Use hour rail for local planning, keep Google approval secondary", "Recommended. Matches handoff and preserves safety."],
-          ["Hide Google path entirely", "Simpler but loses existing feature access."],
-          ["Keep proposal cards as the main UI", "Fails handoff fidelity."]
-        ]
-      },
-      {
-        id: "execute-timer",
-        group: "Interaction",
-        risk: "medium",
-        title: "Prototype timer state conflicts with existing execution session persistence",
-        simple: "The handoff timer has local remaining seconds. The app has session records and task/block state.",
-        current: "Execution sessions are started and marked through WorkflowContext and server data helpers.",
-        target: "Picker, countdown ring, start/pause/resume, end outcome, session log.",
-        consequences: ["Timer state should not corrupt persisted session state.", "Actual minutes must be derived honestly.", "Pause/resume behavior needs clear local versus persisted semantics."],
-        options: [
-          ["Keep timer local, persist only session outcomes", "Recommended. Low risk and matches handoff."],
-          ["Persist every timer tick", "Unnecessary and noisy."],
-          ["Use existing session UI only", "Not exact."]
-        ]
-      },
-      {
-        id: "review-verdict",
-        group: "Interaction",
-        risk: "medium",
-        title: "Review verdict-first view conflicts with current carry-forward workflow",
-        simple: "The handoff leads with completion ring and planned-vs-actual bars. Current Review emphasizes carry-forward decisions.",
-        current: "Review has closure, carry-forward, save review, board and history disclosures.",
-        target: "Completion ring, headline, planned-vs-actual focus bars, outcome pills.",
-        consequences: ["Some current review actions may move lower.", "The old route scorecard no longer applies.", "Review should still help recover unfinished work."],
-        options: [
-          ["Lead with verdict, keep carry-forward below", "Recommended. Handoff hierarchy plus real workflow utility."],
-          ["Remove carry-forward UI", "Too much regression."],
-          ["Keep current Review layout", "Not exact."]
-        ]
-      },
-      {
-        id: "health-detail",
-        group: "Interaction",
-        risk: "medium",
-        title: "Health grouped summary conflicts with current diagnostics detail doctrine",
-        simple: "The handoff shows one green ring and three grouped tiles. Current Health has broader diagnostic and developer details.",
-        current: "Health owns diagnostics, subsystem detail, and developer disclosure.",
-        target: "All systems healthy 11/11, three grouped tiles, run check pulse, full breakdown one tap away.",
-        consequences: ["Detailed Health content must be behind disclosure.", "Existing degraded-state copy tests may need rewriting.", "Health remains the diagnostic home."],
-        options: [
-          ["Keep ring and three tiles first, full detail behind one disclosure", "Recommended."],
-          ["Remove developer detail", "Not safe for debugging expectations."],
-          ["Keep current diagnostic page first", "Not exact."]
-        ]
-      },
-      {
-        id: "overview-board",
-        group: "Interaction",
-        risk: "medium",
-        title: "All areas board ignores active area filter by design",
-        simple: "Most screens filter to active area. Overview must show every area.",
-        current: "Shell area selector affects route behavior and many tests assume area-scoped workflow.",
-        target: "All areas ignores active area filter, but selecting an area drops into Today for that area.",
-        consequences: ["Counts in spine remain area-scoped while overview board is global.", "Users need clear signal that the filter is intentionally off.", "Tests must cover both modes."],
-        options: [
-          ["Make overview globally scoped and label it clearly", "Recommended. Exact handoff behavior."],
-          ["Filter overview by active area", "Defeats the point of overview."],
-          ["Show a global toggle everywhere", "More control, more complexity."]
-        ]
-      },
-      {
-        id: "test-suite",
-        group: "Testing",
-        risk: "must",
-        title: "Existing tests encode old UI copy and classes",
-        simple: "Many tests will fail because they assert the old Pass 7 UI.",
-        current: "Tests look for Raw first, Save and organize, Areas admin, flagship/support/admin classes, /calendar layout, and sessionStorage setup.",
-        target: "Tests should assert handoff rules: stage router, exact tokens, counts, bands, rings, and interactions.",
-        consequences: ["Leaving tests unchanged blocks implementation.", "Deleting tests loses safety proof.", "Test migration must distinguish stale assumptions from real regressions."],
-        options: [
-          ["Rewrite focused UI tests around handoff contracts", "Recommended. Preserve safety tests, replace visual assumptions."],
-          ["Delete old UI tests and add later", "Too risky."],
-          ["Keep old tests and adapt UI around them", "Prevents exact handoff."]
-        ]
-      },
-      {
-        id: "e2e-evidence",
-        group: "Testing",
-        risk: "high",
-        title: "Old screenshot evidence path conflicts with new pass proof",
-        simple: "Pass 7 screenshots prove the old UI. The new handoff needs its own proof packet.",
-        current: "Evidence writes into pass-7 and dated UI check folders.",
-        target: "New screenshots compare dark/light and web/mobile for every handoff stage.",
-        consequences: ["Overwriting old evidence would erase history.", "Reviewers need a new packet naming the handoff pass.", "Prototype comparison should be manual and explicit."],
-        options: [
-          ["Create a new handoff pass evidence folder", "Recommended. Preserve old proof and add new proof."],
-          ["Reuse pass-7 folders", "Bad audit trail."],
-          ["Skip screenshots until the end", "Too late for a visual rewrite."]
-        ]
-      },
-      {
-        id: "hardcoded-colors",
-        group: "Testing",
-        risk: "high",
-        title: "No-hardcoded-hex rule conflicts with current and future component habits",
-        simple: "The handoff forbids component hex colors. Current code and tests include many hex values in data, tokens, and mocks.",
-        current: "Hex appears in area data, tests, globals, and mock data.",
-        target: "Component styling uses semantic variables. Area base colors remain data.",
-        consequences: ["A naive grep will flag valid data colors.", "Guard tests need to distinguish CSS tokens/data from component styles.", "New components must use variables."],
-        options: [
-          ["Add a targeted component-style guard", "Recommended. Allow tokens and area data, block component style hex."],
-          ["Ban all hex everywhere", "Wrong. Area base colors and tokens need hex."],
-          ["Rely on code review only", "Weak for a non-negotiable."]
-        ]
-      },
-      {
-        id: "persistence-storage",
-        group: "Persistence",
-        risk: "medium",
-        title: "Handoff persistence list conflicts with current sessionStorage behavior",
-        simple: "The handoff says persist areas, items, sessions, dark, areaIndex. Current workflow state uses sessionStorage and Supabase sync.",
-        current: "WorkflowContext persists local mock workflow to sessionStorage and reads Supabase areas when available.",
-        target: "Cockpit preferences and stage state survive reload. Areas, items, sessions remain available.",
-        consequences: ["Switching all workflow state to localStorage changes behavior.", "Keeping sessionStorage loses handoff preference persistence.", "Supabase data must not be overwritten by local UI choices."],
-        options: [
-          ["Keep workflow storage, add localStorage for cockpit preferences", "Recommended. Low risk and meets user preference persistence."],
-          ["Move all workflow state to localStorage", "Bigger behavior change."],
-          ["Keep only sessionStorage", "Does not persist dark and areaIndex as requested."]
-        ]
-      },
-      {
-        id: "supabase-sync",
-        group: "Persistence",
-        risk: "high",
-        title: "Persisted Supabase areas conflict with prototype-only area edits",
-        simple: "Header area changes need to work with real persisted areas when signed in.",
-        current: "Settings calls createArea and updateAreaColor, then syncs persisted areas into WorkflowContext.",
-        target: "Header add and swatch recolor happen instantly everywhere.",
-        consequences: ["Optimistic UI needs rollback if Supabase fails.", "Mock and Supabase providers need consistent behavior.", "No silent default area auto-create."],
-        options: [
-          ["Use existing area data helpers from header actions", "Recommended. Same persistence path, new UI placement."],
-          ["Make header edits local-only", "Fast but inconsistent with settings."],
-          ["Disable header edits when signed in", "Violates handoff behavior."]
-        ]
-      },
-      {
-        id: "calendar-safety",
-        group: "Safety",
-        risk: "must",
-        title: "Simplified Plan screen can hide Google Calendar approval gates",
-        simple: "The handoff is local-first. The real app already has explicit external write approval rules.",
-        current: "Planning exposes conflict check and create Google Calendar event only with explicit approval.",
-        target: "Plan screen focuses on placing work locally.",
-        consequences: ["Calendar creation must never happen from tapping an hour.", "Approval copy still needs to exist before external write.", "Tests must prove no silent write path."],
-        options: [
-          ["Keep external writes behind a secondary approval disclosure", "Recommended. Handoff remains local-first, safety remains intact."],
-          ["Remove Google write UI from this pass", "Safe but loses current feature access."],
-          ["Treat planned block as calendar write", "Forbidden."]
-        ]
-      },
-      {
-        id: "raw-capture-safety",
-        group: "Safety",
-        risk: "must",
-        title: "Minimal Capture UI can obscure raw-capture recovery",
-        simple: "The handoff hides complexity, but LifeOS must not lose raw captures if AI fails.",
-        current: "Capture has raw-save-first and parse fallback proof.",
-        target: "One Save thought button and brief toast.",
-        consequences: ["The button must still save raw text before any parsing.", "Failure copy must not imply data loss.", "Tests must keep raw-save safety."],
-        options: [
-          ["Make Save thought the raw-save boundary", "Recommended. Parser help can run after, but raw save wins."],
-          ["Make Save thought parse-only", "Forbidden by product rules."],
-          ["Show all safety text at rest", "Safe but not handoff-calm."]
-        ]
-      },
-      {
-        id: "auth-degraded",
-        group: "Safety",
-        risk: "medium",
-        title: "Prototype has no auth or degraded account state",
-        simple: "The real app can run with missing Supabase or unauthenticated state. The prototype ignores that.",
-        current: "Routes degrade honestly to local or mock behavior.",
-        target: "Calm cockpit with no noisy diagnostics by default.",
-        consequences: ["Local-only truth still needs to be visible when it matters.", "Health should own deeper diagnostics.", "Primary workflow must not claim account persistence if unavailable."],
-        options: [
-          ["Show local/account truth near relevant actions only", "Recommended. Calm but honest."],
-          ["Hide degraded state entirely", "Unsafe."],
-          ["Keep current diagnostic banners", "Accurate but violates the calm handoff."]
-        ]
-      },
-      {
-        id: "admin-export",
-        group: "Scope",
-        risk: "medium",
-        title: "Handoff does not include export and admin panels",
-        simple: "The current app has settings functions the prototype does not show.",
-        current: "Areas settings includes export and integration/admin panels.",
-        target: "Primary cockpit has eight handoff screens.",
-        consequences: ["Removing admin panels is out of scope.", "Putting them in the cockpit creates clutter.", "Need a secondary route strategy."],
-        options: [
-          ["Keep admin panels outside the cockpit", "Recommended. Preserve features without contaminating the handoff UI."],
-          ["Add admin to All areas details", "Only if user accepts extra complexity."],
-          ["Drop admin panels", "Not acceptable without explicit scope change."]
-        ]
-      },
-      {
-        id: "mobile-view-toggle",
-        group: "Scope",
-        risk: "low",
-        title: "Prototype has Web/Mobile segmented control, real responsive app should not need it",
-        simple: "The handoff includes a view toggle because it is a prototype. The actual app responds to viewport size.",
-        current: "App layout is responsive through CSS and browser width.",
-        target: "Header has Web/Mobile segmented control per handoff.",
-        consequences: ["A real view toggle can fight responsive CSS.", "It may be useful as a preview control in demo mode.", "Persisting view choice may confuse real users."],
-        options: [
-          ["Implement view toggle as preview/demo width mode", "Recommended if exact handoff chrome matters."],
-          ["Hide it in production, keep responsive CSS", "Practical but not exact."],
-          ["Force layout from toggle only", "Bad for real responsive behavior."]
-        ]
-      },
-      {
-        id: "prototype-copy",
-        group: "Scope",
-        risk: "medium",
-        title: "Prototype copy can conflict with LifeOS truthfulness rules",
-        simple: "Some prototype phrases are simplified. The real app must not overclaim persistence, AI actions, or calendar behavior.",
-        current: "Docs require plain-language, recovery-oriented, truthful copy.",
-        target: "Short prototype copy with state said once.",
-        consequences: ["Copy needs to be short and truthful.", "We should not repeat old verbose explanations.", "Any external action claim must be exact."],
-        options: [
-          ["Use prototype-length copy with LifeOS safety wording", "Recommended."],
-          ["Copy prototype text verbatim", "May be inaccurate in real runtime states."],
-          ["Keep current longer copy", "Safe but fights the handoff."]
-        ]
+    <script>
+      const conflicts = [
+        {
+          id: "roadmap-pass",
+          group: "Governance",
+          risk: "must",
+          title:
+            "Roadmap says maintenance, handoff requires a new rewrite pass",
+          simple:
+            "The repo says UI work is maintenance-only. The handoff asks for a full cockpit redesign.",
+          current:
+            "Pass 7 is closed and docs say future UI work should be maintenance unless a new pass is opened.",
+          target:
+            "The handoff becomes the active visual source for the cockpit.",
+          consequences: [
+            "Without a new pass, docs and implementation will disagree.",
+            "Future agents may revert the redesign as visual churn.",
+            "Tests will be unclear about old versus new truth.",
+          ],
+          options: [
+            [
+              "Open Pass 8 before coding",
+              "Recommended. Amend the roadmap, update project state, and add one implementation note before runtime edits.",
+            ],
+            [
+              "Treat as maintenance",
+              "Fast but dishonest. This would conflict with the size of the requested change.",
+            ],
+            [
+              "Archive old UI docs first",
+              "Cleanest long-term, but too much doc churn before we know final decisions.",
+            ],
+          ],
+        },
+        {
+          id: "visual-authority",
+          group: "Governance",
+          risk: "must",
+          title:
+            "Old shipped UI contracts conflict with the new visual source of truth",
+          simple:
+            "Current docs protect flagship/support/admin cards. The handoff wants a quieter prototype-shaped cockpit.",
+          current:
+            "Route scorecards and tests protect the Pass 7 card taxonomy.",
+          target:
+            "Prototype visuals, tokens, spine, and stage views become the target.",
+          consequences: [
+            "Old visual tests will fail by design.",
+            "The implementation plan needs to name what is superseded.",
+            "Reviewers need one source to judge screenshots.",
+          ],
+          options: [
+            [
+              "Handoff supersedes route visuals only",
+              "Recommended. Keep product safety docs, replace visual hierarchy contracts.",
+            ],
+            [
+              "Handoff supersedes all UI docs",
+              "Too broad. It risks deleting useful safety and proof rules.",
+            ],
+            [
+              "Blend both systems",
+              "Likely creates a muddled UI with route cards inside the new shell.",
+            ],
+          ],
+        },
+        {
+          id: "branch-state",
+          group: "Governance",
+          risk: "high",
+          title: "Current checkout is not a clean UI branch",
+          simple:
+            "The repo is on a docs branch with untracked handoff and UI-check files.",
+          current:
+            "Branch is docs/system-review-2026-06-23 with untracked design_handoff_lifeos and UI evidence files.",
+          target: "A narrow branch dedicated to the handoff implementation.",
+          consequences: [
+            "Implementation commits could mix docs-review work with UI rewrite work.",
+            "Rollback becomes messy.",
+            "PR review scope gets harder.",
+          ],
+          options: [
+            [
+              "Create a narrow UI branch first",
+              "Recommended. Start from the intended base and keep the pass isolated.",
+            ],
+            [
+              "Continue on current branch",
+              "Only acceptable if this branch is explicitly the intended work branch.",
+            ],
+            [
+              "Do the workshop only here",
+              "Safe for this artifact, but not for the actual implementation.",
+            ],
+          ],
+        },
+        {
+          id: "route-vs-stage",
+          group: "Architecture",
+          risk: "must",
+          title: "Separate Next routes conflict with one stage router",
+          simple:
+            "Today each screen is a page. The handoff says one screen component chooses the view from stage.",
+          current:
+            "Home, Capture, Triage, Planning, Execute, Review, Health, and Areas are separate pages.",
+          target: "One cockpit component renders all stages from a stage enum.",
+          consequences: [
+            "Keeping route layouts duplicates UI and violates the handoff.",
+            "Tests must stop treating each page as the source of layout truth.",
+            "URL behavior needs aliases into stage state.",
+          ],
+          options: [
+            [
+              "Make routes thin aliases into the stage router",
+              "Recommended. Preserve URLs while honoring the one-screen architecture.",
+            ],
+            [
+              "Move all workflow to root only",
+              "Pure handoff, but breaks deep links and existing tests more than needed.",
+            ],
+            [
+              "Keep pages and restyle them",
+              "Fastest path, but directly violates the handoff.",
+            ],
+          ],
+        },
+        {
+          id: "appshell",
+          group: "Architecture",
+          risk: "must",
+          title: "Current AppShell chrome conflicts with the handoff header",
+          simple:
+            "The current shell has primary nav, supporting nav, quick note, area select, and extra context behavior. The handoff has a compact header plus pipeline spine.",
+          current:
+            "AppShell owns nav links, supporting Areas admin, theme toggle, quick note, area selector, and route quieting.",
+          target:
+            "Header has logo, All areas, area chips, add area, accent swatch, view segmented control, theme toggle, then a count-bearing pipeline spine.",
+          consequences: [
+            "Leaving old chrome doubles navigation.",
+            "Quick note competes with Capture.",
+            "Area context is repeated too often.",
+          ],
+          options: [
+            [
+              "Replace cockpit chrome inside AppShell",
+              "Recommended. Keep provider boundary, replace visible shell for workflow routes.",
+            ],
+            [
+              "Add handoff shell under current shell",
+              "Bad. It creates two shells.",
+            ],
+            [
+              "Keep old shell for admin only",
+              "Good follow-up if settings remain separate.",
+            ],
+          ],
+        },
+        {
+          id: "url-names",
+          group: "Architecture",
+          risk: "high",
+          title: "URL names do not match handoff stage names",
+          simple:
+            "The repo uses /calendar and /settings/areas. The handoff uses Plan and All areas.",
+          current:
+            "/calendar means Planning. /settings/areas means Areas admin.",
+          target:
+            "Stages are today, capture, triage, plan, execute, review, health, overview.",
+          consequences: [
+            "Navigation labels and test URLs can drift.",
+            "Browser reload needs to restore the correct stage.",
+            "Overview and admin can be confused.",
+          ],
+          options: [
+            [
+              "Keep URLs, map them to stage names",
+              "Recommended. No user-facing route break, clean internal stage enum.",
+            ],
+            [
+              "Rename routes to match stages",
+              "Cleaner but higher migration cost.",
+            ],
+            [
+              "Use query params only",
+              "Simple, but weaker deep-link semantics.",
+            ],
+          ],
+        },
+        {
+          id: "overview-vs-areas",
+          group: "Architecture",
+          risk: "high",
+          title: "All areas overview conflicts with Areas admin",
+          simple:
+            "The handoff's All areas is a work overview. The current Areas screen is administration.",
+          current:
+            "Areas manages create, remove, color, export, Google connection, and registry details.",
+          target:
+            "All areas shows workload spectrum, legend, and pipeline board across areas.",
+          consequences: [
+            "Replacing Areas admin loses real management features.",
+            "Keeping both needs clear navigation.",
+            "The handoff does not cover export or Google settings.",
+          ],
+          options: [
+            [
+              "Make All areas the overview and keep admin in settings",
+              "Recommended. Two different jobs, two different surfaces.",
+            ],
+            [
+              "Fold admin into All areas disclosure",
+              "Possible but risks cluttering the handoff screen.",
+            ],
+            [
+              "Replace admin entirely",
+              "Not acceptable unless losing those controls is explicitly approved.",
+            ],
+          ],
+        },
+        {
+          id: "state-model",
+          group: "Data model",
+          risk: "must",
+          title:
+            "Prototype item status lifecycle does not match current domain model",
+          simple:
+            "The handoff uses simple item statuses. The repo has captures, drafts, tasks, proposals, blocks, sessions, and review entries.",
+          current:
+            "WorkflowState stores several domain arrays with schema-backed statuses.",
+          target:
+            "Item status is inbox, today, planned, done, plus later/someday behavior.",
+          consequences: [
+            "A direct toy-model rewrite would throw away product truth.",
+            "Mapping must define every status transition.",
+            "Some handoff statuses do not exist in DB.",
+          ],
+          options: [
+            [
+              "Build a view-model adapter over current state",
+              "Recommended. Handoff UI, real LifeOS data underneath.",
+            ],
+            [
+              "Replace WorkflowState with prototype state",
+              "Fast but wrong. It loses existing safety and persistence work.",
+            ],
+            [
+              "Add new DB lifecycle first",
+              "Too broad for a UI pass unless separately reviewed.",
+            ],
+          ],
+        },
+        {
+          id: "later-status",
+          group: "Data model",
+          risk: "high",
+          title: "Someday/later has no clean current persistence target",
+          simple:
+            "Triage needs a Someday action. Current task draft rejection and accepted tasks do not equal someday.",
+          current:
+            "Drafts can be accepted or rejected. Tasks can be active, scheduled, blocked, done, dropped, archived.",
+          target:
+            "Triage can set an item to later/someday without dropping it.",
+          consequences: [
+            "Using rejected for Someday lies about user intent.",
+            "Adding a DB status touches schemas and migrations.",
+            "A local-only someday can diverge from account data.",
+          ],
+          options: [
+            [
+              "Use UI-local someday for this pass",
+              "Recommended for UI smoothing. Track separately before schema work.",
+            ],
+            ["Map Someday to task archived", "Questionable semantics."],
+            [
+              "Add persisted someday status now",
+              "More correct long-term, but requires schema, tests, and RLS review.",
+            ],
+          ],
+        },
+        {
+          id: "area-index",
+          group: "Data model",
+          risk: "high",
+          title: "Handoff areaIndex conflicts with stable area ids",
+          simple:
+            "The prototype points items at area array positions. The repo correctly uses area ids.",
+          current: "Areas, tasks, captures, blocks, and sessions use area_id.",
+          target: "Handoff App state says area is an index into areas.",
+          consequences: [
+            "Indexes break if areas reorder or sync from Supabase.",
+            "Persisted data should never depend on list order.",
+            "UI can still use an index as a selected position.",
+          ],
+          options: [
+            [
+              "Use ids for data, derive areaIndex for UI",
+              "Recommended. Stable data with handoff-compatible UI state.",
+            ],
+            ["Store indexes everywhere", "Wrong for persisted data."],
+            ["Store both id and index", "Adds avoidable drift."],
+          ],
+        },
+        {
+          id: "area-colors",
+          group: "Data model",
+          risk: "high",
+          title:
+            "Current areas may have null colors, handoff requires one base hex",
+          simple:
+            "The handoff derives accent from one stored base color. Current persisted areas can store null color.",
+          current:
+            "Create area stores color null and old mock colors differ from handoff palette.",
+          target:
+            "Every area has a base hex, new areas cycle the handoff palette.",
+          consequences: [
+            "Accent derivation needs a guaranteed base value.",
+            "Changing createArea persistence changes data behavior.",
+            "Null may still mean default in existing data.",
+          ],
+          options: [
+            [
+              "Keep nullable DB, resolve default base color in UI",
+              "Recommended. No migration, exact derivation at render.",
+            ],
+            [
+              "Persist palette color on create",
+              "Closer to handoff, but changes data write behavior.",
+            ],
+            [
+              "Migrate null colors",
+              "Potentially useful later, but unnecessary for the first UI pass.",
+            ],
+          ],
+        },
+        {
+          id: "theme-system",
+          group: "Visual system",
+          risk: "must",
+          title: "Class-based next-themes conflicts with data-theme exactness",
+          simple:
+            'Current dark mode uses a class. The handoff requires dark by default and light via data-theme="light".',
+          current: "ThemeProvider uses class and Tailwind dark variant.",
+          target:
+            "Theme is an attribute on app root. Base ramp swaps only when data-theme is light.",
+          consequences: [
+            "Old dark utilities may conflict with new token values.",
+            "Hydration behavior must stay stable.",
+            "Tests need new assertions.",
+          ],
+          options: [
+            [
+              "Use data-theme on cockpit root",
+              "Recommended. Keep exact handoff behavior without changing unrelated pages first.",
+            ],
+            [
+              "Replace next-themes globally",
+              "Cleaner eventually, more blast radius now.",
+            ],
+            ["Keep class dark mode", "Violates a non-negotiable handoff rule."],
+          ],
+        },
+        {
+          id: "tokens",
+          group: "Visual system",
+          risk: "must",
+          title:
+            "Existing OKLCH design tokens conflict with exact handoff tokens",
+          simple:
+            "The repo has OKLCH Tailwind tokens. The handoff gives exact hex semantic variables.",
+          current:
+            "globals.css defines --background, --foreground, --card, --area-accent, and many class-level visuals.",
+          target:
+            "Root variables are --bd, --sf, --sf2, --sf3, --ink, --mut, --fnt, --ln, --ln2, --btn, --track, and status colors.",
+          consequences: [
+            "Component styles must stop depending on old card taxonomy.",
+            "Hardcoded old token names will need a compatibility layer.",
+            "Exact screenshots require exact values.",
+          ],
+          options: [
+            [
+              "Add handoff tokens and map old tokens temporarily",
+              "Recommended. Exact cockpit, safer migration.",
+            ],
+            [
+              "Replace all globals at once",
+              "Cleaner but likely breaks unrelated routes and primitives.",
+            ],
+            [
+              "Approximate handoff with existing tokens",
+              "Fails the fidelity requirement.",
+            ],
+          ],
+        },
+        {
+          id: "accent-math",
+          group: "Visual system",
+          risk: "must",
+          title:
+            "Current CSS color mixing conflicts with accent.js exact derivation",
+          simple:
+            "The handoff says use accent.js exactly. Current area accents use CSS color-mix and different variable names.",
+          current:
+            "--area-accent, --area-accent-soft, --area-accent-border, and OKLCH color-mix.",
+          target:
+            "--acc, --acc2, --acc-sf, --acc-rng, --on-acc from sRGB mix and luminance.",
+          consequences: [
+            "Custom area colors may have different contrast.",
+            "Screenshots will not match the prototype.",
+            "Tests must verify on-acc contrast rule.",
+          ],
+          options: [
+            [
+              "Port accent.js exactly and set CSS vars inline",
+              "Recommended. Directly satisfies the handoff.",
+            ],
+            ["Use CSS color-mix equivalent", "Close, but not exact."],
+            ["Keep current accent system", "Violates the handoff."],
+          ],
+        },
+        {
+          id: "fonts",
+          group: "Visual system",
+          risk: "medium",
+          title: "Handoff fonts conflict with current font stack",
+          simple:
+            "The handoff uses Hanken Grotesk and IBM Plex Mono. The app currently uses IBM Plex Sans and Fraunces in several places.",
+          current:
+            "Fraunces appears in route headings and IBM Plex Sans is the UI default.",
+          target:
+            "Hanken Grotesk for UI and IBM Plex Mono for counts, clocks, estimates, and labels.",
+          consequences: [
+            "Keeping Fraunces changes the product feel.",
+            "Loading Google Fonts may be a network and privacy decision.",
+            "Local fallback needs to preserve proportions.",
+          ],
+          options: [
+            [
+              "Use Hanken if available, system fallback otherwise",
+              "Recommended for implementation unless font hosting is decided.",
+            ],
+            [
+              "Import Google Fonts in app",
+              "Visual match improves, but external font loading should be deliberate.",
+            ],
+            ["Keep existing fonts", "Less churn, but not exact."],
+          ],
+        },
+        {
+          id: "component-library",
+          group: "Visual system",
+          risk: "medium",
+          title:
+            "shadcn-style primitives conflict with pixel-accurate prototype controls",
+          simple:
+            "The repo has shared UI primitives. The handoff controls are custom and compact.",
+          current:
+            "Buttons, inputs, cards, alerts, labels, skeletons are app-local primitives.",
+          target:
+            "Prototype-shaped chips, spine nodes, compact buttons, cards, rings, and bands.",
+          consequences: [
+            "Forcing shadcn everywhere may miss fidelity.",
+            "Ignoring primitives can create a second design system.",
+            "Accessibility states still need to be preserved.",
+          ],
+          options: [
+            [
+              "Compose primitives only where they help",
+              "Recommended. Custom cockpit visuals, primitive behavior where useful.",
+            ],
+            [
+              "Rewrite all controls by hand",
+              "High fidelity but more accessibility risk.",
+            ],
+            ["Force existing primitives", "Consistent but likely not exact."],
+          ],
+        },
+        {
+          id: "header-controls",
+          group: "Interaction",
+          risk: "high",
+          title: "Handoff header controls conflict with current admin flows",
+          simple:
+            "The handoff adds area creation and recolor directly in the header. Current area management is a full settings screen.",
+          current:
+            "Area create, soft delete, color update, export, and Google panels live in settings.",
+          target:
+            "Header plus button adds area inline. Swatch recolors active area instantly.",
+          consequences: [
+            "Header mutations increase shell responsibility.",
+            "Soft delete/export still need a home.",
+            "Persisted color updates may need async feedback.",
+          ],
+          options: [
+            [
+              "Header handles add/recolor, settings keeps admin",
+              "Recommended. Handoff behavior without losing admin controls.",
+            ],
+            ["Move all area admin into header", "Too much chrome burden."],
+            ["Keep add/recolor only in settings", "Violates the handoff."],
+          ],
+        },
+        {
+          id: "capture-simplification",
+          group: "Interaction",
+          risk: "high",
+          title:
+            "Borderless Capture conflicts with current raw-save plus organize flow",
+          simple:
+            "The handoff has one Save thought button. Current Capture has richer save and parse behavior.",
+          current:
+            "Capture supports raw save, save and organize, parse fallback, area choice, feedback, and history disclosures.",
+          target:
+            "Centered textarea, one Save thought button, keyboard shortcut, short toast.",
+          consequences: [
+            "AI parse entry point may be hidden or moved.",
+            "Raw-save safety must remain visible enough.",
+            "Tests around Save and organize must change.",
+          ],
+          options: [
+            [
+              "Make Save thought raw-save first, organize behind progressive action",
+              "Recommended. Preserves safety and matches simple default.",
+            ],
+            ["Remove organize path from UI", "Too much product regression."],
+            ["Keep two primary buttons", "Violates one primary action."],
+          ],
+        },
+        {
+          id: "triage-actions",
+          group: "Interaction",
+          risk: "high",
+          title:
+            "Triage drop/someday/do-today conflicts with current accept/reject draft model",
+          simple:
+            "The handoff wants directional decisions. The app currently accepts task drafts into tasks.",
+          current:
+            "Triage accepts or rejects task/project drafts and shows supporting AI context.",
+          target:
+            "One inbox card, three directional targets, next card slides up.",
+          consequences: [
+            "Accept task draft wording disappears.",
+            "Project drafts need a treatment.",
+            "Someday needs semantics.",
+          ],
+          options: [
+            [
+              "Map Do today to accept task, Drop to reject, Someday to UI-local later",
+              "Recommended for first pass.",
+            ],
+            ["Create new triage lifecycle first", "More correct but larger."],
+            ["Keep accept/reject UI", "Not the handoff."],
+          ],
+        },
+        {
+          id: "planning-model",
+          group: "Interaction",
+          risk: "high",
+          title:
+            "Drag-like hour rail conflicts with current proposal review and Google approval UI",
+          simple:
+            "The handoff plans by tapping a task and an hour. Current Planning creates proposals and can check Google availability.",
+          current:
+            "Planning has suggest, adjust, accept proposal, conflict check, and Google event creation.",
+          target:
+            "Two-pane hour rail and To place list. Tap task, tap hour, unplan by tapping block.",
+          consequences: [
+            "Proposal review gets less visible.",
+            "Google write controls need secondary placement.",
+            "Accepting local blocks must still use safe transactional boundaries where applicable.",
+          ],
+          options: [
+            [
+              "Use hour rail for local planning, keep Google approval secondary",
+              "Recommended. Matches handoff and preserves safety.",
+            ],
+            [
+              "Hide Google path entirely",
+              "Simpler but loses existing feature access.",
+            ],
+            ["Keep proposal cards as the main UI", "Fails handoff fidelity."],
+          ],
+        },
+        {
+          id: "execute-timer",
+          group: "Interaction",
+          risk: "medium",
+          title:
+            "Prototype timer state conflicts with existing execution session persistence",
+          simple:
+            "The handoff timer has local remaining seconds. The app has session records and task/block state.",
+          current:
+            "Execution sessions are started and marked through WorkflowContext and server data helpers.",
+          target:
+            "Picker, countdown ring, start/pause/resume, end outcome, session log.",
+          consequences: [
+            "Timer state should not corrupt persisted session state.",
+            "Actual minutes must be derived honestly.",
+            "Pause/resume behavior needs clear local versus persisted semantics.",
+          ],
+          options: [
+            [
+              "Keep timer local, persist only session outcomes",
+              "Recommended. Low risk and matches handoff.",
+            ],
+            ["Persist every timer tick", "Unnecessary and noisy."],
+            ["Use existing session UI only", "Not exact."],
+          ],
+        },
+        {
+          id: "review-verdict",
+          group: "Interaction",
+          risk: "medium",
+          title:
+            "Review verdict-first view conflicts with current carry-forward workflow",
+          simple:
+            "The handoff leads with completion ring and planned-vs-actual bars. Current Review emphasizes carry-forward decisions.",
+          current:
+            "Review has closure, carry-forward, save review, board and history disclosures.",
+          target:
+            "Completion ring, headline, planned-vs-actual focus bars, outcome pills.",
+          consequences: [
+            "Some current review actions may move lower.",
+            "The old route scorecard no longer applies.",
+            "Review should still help recover unfinished work.",
+          ],
+          options: [
+            [
+              "Lead with verdict, keep carry-forward below",
+              "Recommended. Handoff hierarchy plus real workflow utility.",
+            ],
+            ["Remove carry-forward UI", "Too much regression."],
+            ["Keep current Review layout", "Not exact."],
+          ],
+        },
+        {
+          id: "health-detail",
+          group: "Interaction",
+          risk: "medium",
+          title:
+            "Health grouped summary conflicts with current diagnostics detail doctrine",
+          simple:
+            "The handoff shows one green ring and three grouped tiles. Current Health has broader diagnostic and developer details.",
+          current:
+            "Health owns diagnostics, subsystem detail, and developer disclosure.",
+          target:
+            "All systems healthy 11/11, three grouped tiles, run check pulse, full breakdown one tap away.",
+          consequences: [
+            "Detailed Health content must be behind disclosure.",
+            "Existing degraded-state copy tests may need rewriting.",
+            "Health remains the diagnostic home.",
+          ],
+          options: [
+            [
+              "Keep ring and three tiles first, full detail behind one disclosure",
+              "Recommended.",
+            ],
+            ["Remove developer detail", "Not safe for debugging expectations."],
+            ["Keep current diagnostic page first", "Not exact."],
+          ],
+        },
+        {
+          id: "overview-board",
+          group: "Interaction",
+          risk: "medium",
+          title: "All areas board ignores active area filter by design",
+          simple:
+            "Most screens filter to active area. Overview must show every area.",
+          current:
+            "Shell area selector affects route behavior and many tests assume area-scoped workflow.",
+          target:
+            "All areas ignores active area filter, but selecting an area drops into Today for that area.",
+          consequences: [
+            "Counts in spine remain area-scoped while overview board is global.",
+            "Users need clear signal that the filter is intentionally off.",
+            "Tests must cover both modes.",
+          ],
+          options: [
+            [
+              "Make overview globally scoped and label it clearly",
+              "Recommended. Exact handoff behavior.",
+            ],
+            [
+              "Filter overview by active area",
+              "Defeats the point of overview.",
+            ],
+            [
+              "Show a global toggle everywhere",
+              "More control, more complexity.",
+            ],
+          ],
+        },
+        {
+          id: "test-suite",
+          group: "Testing",
+          risk: "must",
+          title: "Existing tests encode old UI copy and classes",
+          simple: "Many tests will fail because they assert the old Pass 7 UI.",
+          current:
+            "Tests look for Raw first, Save and organize, Areas admin, flagship/support/admin classes, /calendar layout, and sessionStorage setup.",
+          target:
+            "Tests should assert handoff rules: stage router, exact tokens, counts, bands, rings, and interactions.",
+          consequences: [
+            "Leaving tests unchanged blocks implementation.",
+            "Deleting tests loses safety proof.",
+            "Test migration must distinguish stale assumptions from real regressions.",
+          ],
+          options: [
+            [
+              "Rewrite focused UI tests around handoff contracts",
+              "Recommended. Preserve safety tests, replace visual assumptions.",
+            ],
+            ["Delete old UI tests and add later", "Too risky."],
+            [
+              "Keep old tests and adapt UI around them",
+              "Prevents exact handoff.",
+            ],
+          ],
+        },
+        {
+          id: "e2e-evidence",
+          group: "Testing",
+          risk: "high",
+          title: "Old screenshot evidence path conflicts with new pass proof",
+          simple:
+            "Pass 7 screenshots prove the old UI. The new handoff needs its own proof packet.",
+          current: "Evidence writes into pass-7 and dated UI check folders.",
+          target:
+            "New screenshots compare dark/light and web/mobile for every handoff stage.",
+          consequences: [
+            "Overwriting old evidence would erase history.",
+            "Reviewers need a new packet naming the handoff pass.",
+            "Prototype comparison should be manual and explicit.",
+          ],
+          options: [
+            [
+              "Create a new handoff pass evidence folder",
+              "Recommended. Preserve old proof and add new proof.",
+            ],
+            ["Reuse pass-7 folders", "Bad audit trail."],
+            [
+              "Skip screenshots until the end",
+              "Too late for a visual rewrite.",
+            ],
+          ],
+        },
+        {
+          id: "hardcoded-colors",
+          group: "Testing",
+          risk: "high",
+          title:
+            "No-hardcoded-hex rule conflicts with current and future component habits",
+          simple:
+            "The handoff forbids component hex colors. Current code and tests include many hex values in data, tokens, and mocks.",
+          current: "Hex appears in area data, tests, globals, and mock data.",
+          target:
+            "Component styling uses semantic variables. Area base colors remain data.",
+          consequences: [
+            "A naive grep will flag valid data colors.",
+            "Guard tests need to distinguish CSS tokens/data from component styles.",
+            "New components must use variables.",
+          ],
+          options: [
+            [
+              "Add a targeted component-style guard",
+              "Recommended. Allow tokens and area data, block component style hex.",
+            ],
+            [
+              "Ban all hex everywhere",
+              "Wrong. Area base colors and tokens need hex.",
+            ],
+            ["Rely on code review only", "Weak for a non-negotiable."],
+          ],
+        },
+        {
+          id: "persistence-storage",
+          group: "Persistence",
+          risk: "medium",
+          title:
+            "Handoff persistence list conflicts with current sessionStorage behavior",
+          simple:
+            "The handoff says persist areas, items, sessions, dark, areaIndex. Current workflow state uses sessionStorage and Supabase sync.",
+          current:
+            "WorkflowContext persists local mock workflow to sessionStorage and reads Supabase areas when available.",
+          target:
+            "Cockpit preferences and stage state survive reload. Areas, items, sessions remain available.",
+          consequences: [
+            "Switching all workflow state to localStorage changes behavior.",
+            "Keeping sessionStorage loses handoff preference persistence.",
+            "Supabase data must not be overwritten by local UI choices.",
+          ],
+          options: [
+            [
+              "Keep workflow storage, add localStorage for cockpit preferences",
+              "Recommended. Low risk and meets user preference persistence.",
+            ],
+            [
+              "Move all workflow state to localStorage",
+              "Bigger behavior change.",
+            ],
+            [
+              "Keep only sessionStorage",
+              "Does not persist dark and areaIndex as requested.",
+            ],
+          ],
+        },
+        {
+          id: "supabase-sync",
+          group: "Persistence",
+          risk: "high",
+          title:
+            "Persisted Supabase areas conflict with prototype-only area edits",
+          simple:
+            "Header area changes need to work with real persisted areas when signed in.",
+          current:
+            "Settings calls createArea and updateAreaColor, then syncs persisted areas into WorkflowContext.",
+          target: "Header add and swatch recolor happen instantly everywhere.",
+          consequences: [
+            "Optimistic UI needs rollback if Supabase fails.",
+            "Mock and Supabase providers need consistent behavior.",
+            "No silent default area auto-create.",
+          ],
+          options: [
+            [
+              "Use existing area data helpers from header actions",
+              "Recommended. Same persistence path, new UI placement.",
+            ],
+            [
+              "Make header edits local-only",
+              "Fast but inconsistent with settings.",
+            ],
+            [
+              "Disable header edits when signed in",
+              "Violates handoff behavior.",
+            ],
+          ],
+        },
+        {
+          id: "calendar-safety",
+          group: "Safety",
+          risk: "must",
+          title:
+            "Simplified Plan screen can hide Google Calendar approval gates",
+          simple:
+            "The handoff is local-first. The real app already has explicit external write approval rules.",
+          current:
+            "Planning exposes conflict check and create Google Calendar event only with explicit approval.",
+          target: "Plan screen focuses on placing work locally.",
+          consequences: [
+            "Calendar creation must never happen from tapping an hour.",
+            "Approval copy still needs to exist before external write.",
+            "Tests must prove no silent write path.",
+          ],
+          options: [
+            [
+              "Keep external writes behind a secondary approval disclosure",
+              "Recommended. Handoff remains local-first, safety remains intact.",
+            ],
+            [
+              "Remove Google write UI from this pass",
+              "Safe but loses current feature access.",
+            ],
+            ["Treat planned block as calendar write", "Forbidden."],
+          ],
+        },
+        {
+          id: "raw-capture-safety",
+          group: "Safety",
+          risk: "must",
+          title: "Minimal Capture UI can obscure raw-capture recovery",
+          simple:
+            "The handoff hides complexity, but LifeOS must not lose raw captures if AI fails.",
+          current: "Capture has raw-save-first and parse fallback proof.",
+          target: "One Save thought button and brief toast.",
+          consequences: [
+            "The button must still save raw text before any parsing.",
+            "Failure copy must not imply data loss.",
+            "Tests must keep raw-save safety.",
+          ],
+          options: [
+            [
+              "Make Save thought the raw-save boundary",
+              "Recommended. Parser help can run after, but raw save wins.",
+            ],
+            ["Make Save thought parse-only", "Forbidden by product rules."],
+            ["Show all safety text at rest", "Safe but not handoff-calm."],
+          ],
+        },
+        {
+          id: "auth-degraded",
+          group: "Safety",
+          risk: "medium",
+          title: "Prototype has no auth or degraded account state",
+          simple:
+            "The real app can run with missing Supabase or unauthenticated state. The prototype ignores that.",
+          current: "Routes degrade honestly to local or mock behavior.",
+          target: "Calm cockpit with no noisy diagnostics by default.",
+          consequences: [
+            "Local-only truth still needs to be visible when it matters.",
+            "Health should own deeper diagnostics.",
+            "Primary workflow must not claim account persistence if unavailable.",
+          ],
+          options: [
+            [
+              "Show local/account truth near relevant actions only",
+              "Recommended. Calm but honest.",
+            ],
+            ["Hide degraded state entirely", "Unsafe."],
+            [
+              "Keep current diagnostic banners",
+              "Accurate but violates the calm handoff.",
+            ],
+          ],
+        },
+        {
+          id: "admin-export",
+          group: "Scope",
+          risk: "medium",
+          title: "Handoff does not include export and admin panels",
+          simple:
+            "The current app has settings functions the prototype does not show.",
+          current:
+            "Areas settings includes export and integration/admin panels.",
+          target: "Primary cockpit has eight handoff screens.",
+          consequences: [
+            "Removing admin panels is out of scope.",
+            "Putting them in the cockpit creates clutter.",
+            "Need a secondary route strategy.",
+          ],
+          options: [
+            [
+              "Keep admin panels outside the cockpit",
+              "Recommended. Preserve features without contaminating the handoff UI.",
+            ],
+            [
+              "Add admin to All areas details",
+              "Only if user accepts extra complexity.",
+            ],
+            [
+              "Drop admin panels",
+              "Not acceptable without explicit scope change.",
+            ],
+          ],
+        },
+        {
+          id: "mobile-view-toggle",
+          group: "Scope",
+          risk: "low",
+          title:
+            "Prototype has Web/Mobile segmented control, real responsive app should not need it",
+          simple:
+            "The handoff includes a view toggle because it is a prototype. The actual app responds to viewport size.",
+          current: "App layout is responsive through CSS and browser width.",
+          target: "Header has Web/Mobile segmented control per handoff.",
+          consequences: [
+            "A real view toggle can fight responsive CSS.",
+            "It may be useful as a preview control in demo mode.",
+            "Persisting view choice may confuse real users.",
+          ],
+          options: [
+            [
+              "Implement view toggle as preview/demo width mode",
+              "Recommended if exact handoff chrome matters.",
+            ],
+            [
+              "Hide it in production, keep responsive CSS",
+              "Practical but not exact.",
+            ],
+            [
+              "Force layout from toggle only",
+              "Bad for real responsive behavior.",
+            ],
+          ],
+        },
+        {
+          id: "prototype-copy",
+          group: "Scope",
+          risk: "medium",
+          title: "Prototype copy can conflict with LifeOS truthfulness rules",
+          simple:
+            "Some prototype phrases are simplified. The real app must not overclaim persistence, AI actions, or calendar behavior.",
+          current:
+            "Docs require plain-language, recovery-oriented, truthful copy.",
+          target: "Short prototype copy with state said once.",
+          consequences: [
+            "Copy needs to be short and truthful.",
+            "We should not repeat old verbose explanations.",
+            "Any external action claim must be exact.",
+          ],
+          options: [
+            [
+              "Use prototype-length copy with LifeOS safety wording",
+              "Recommended.",
+            ],
+            [
+              "Copy prototype text verbatim",
+              "May be inaccurate in real runtime states.",
+            ],
+            ["Keep current longer copy", "Safe but fights the handoff."],
+          ],
+        },
+      ];
+
+      const storageKey = "lifeos.uiHandoffConflictWorkshop.v1";
+      let choices = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      let activeGroup = "All";
+
+      const filtersEl = document.getElementById("filters");
+      const gridEl = document.getElementById("conflictGrid");
+      const searchEl = document.getElementById("search");
+      const decisionFilterEl = document.getElementById("decisionFilter");
+      const exportBox = document.getElementById("exportBox");
+      const appRoot = document.getElementById("appRoot");
+
+      function groups() {
+        const unique = Array.from(new Set(conflicts.map((item) => item.group)));
+        return ["All"].concat(unique);
       }
-    ];
 
-    const storageKey = "lifeos.uiHandoffConflictWorkshop.v1";
-    let choices = JSON.parse(localStorage.getItem(storageKey) || "{}");
-    let activeGroup = "All";
+      function riskLabel(risk) {
+        if (risk === "must") return "must resolve";
+        if (risk === "high") return "high risk";
+        if (risk === "medium") return "medium risk";
+        return "low risk";
+      }
 
-    const filtersEl = document.getElementById("filters");
-    const gridEl = document.getElementById("conflictGrid");
-    const searchEl = document.getElementById("search");
-    const decisionFilterEl = document.getElementById("decisionFilter");
-    const exportBox = document.getElementById("exportBox");
-    const appRoot = document.getElementById("appRoot");
+      function riskSort(risk) {
+        return { must: 0, high: 1, medium: 2, low: 3 }[risk] || 4;
+      }
 
-    function groups() {
-      const unique = Array.from(new Set(conflicts.map((item) => item.group)));
-      return ["All"].concat(unique);
-    }
+      function visibleConflicts() {
+        const query = searchEl.value.trim().toLowerCase();
+        const decision = decisionFilterEl.value;
+        return conflicts
+          .filter((item) => activeGroup === "All" || item.group === activeGroup)
+          .filter((item) => {
+            if (!query) return true;
+            return [
+              item.title,
+              item.simple,
+              item.current,
+              item.target,
+              item.group,
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(query);
+          })
+          .filter((item) => {
+            const resolved = Object.prototype.hasOwnProperty.call(
+              choices,
+              item.id,
+            );
+            if (decision === "open") return !resolved;
+            if (decision === "done") return resolved;
+            return true;
+          })
+          .sort((a, b) => riskSort(a.risk) - riskSort(b.risk));
+      }
 
-    function riskLabel(risk) {
-      if (risk === "must") return "must resolve";
-      if (risk === "high") return "high risk";
-      if (risk === "medium") return "medium risk";
-      return "low risk";
-    }
-
-    function riskSort(risk) {
-      return { must: 0, high: 1, medium: 2, low: 3 }[risk] || 4;
-    }
-
-    function visibleConflicts() {
-      const query = searchEl.value.trim().toLowerCase();
-      const decision = decisionFilterEl.value;
-      return conflicts
-        .filter((item) => activeGroup === "All" || item.group === activeGroup)
-        .filter((item) => {
-          if (!query) return true;
-          return [item.title, item.simple, item.current, item.target, item.group].join(" ").toLowerCase().includes(query);
-        })
-        .filter((item) => {
-          const resolved = Object.prototype.hasOwnProperty.call(choices, item.id);
-          if (decision === "open") return !resolved;
-          if (decision === "done") return resolved;
-          return true;
-        })
-        .sort((a, b) => riskSort(a.risk) - riskSort(b.risk));
-    }
-
-    function renderFilters() {
-      filtersEl.innerHTML = "";
-      groups().forEach((group) => {
-        const total = group === "All" ? conflicts.length : conflicts.filter((item) => item.group === group).length;
-        const resolved = group === "All"
-          ? conflicts.filter((item) => Object.prototype.hasOwnProperty.call(choices, item.id)).length
-          : conflicts.filter((item) => item.group === group && Object.prototype.hasOwnProperty.call(choices, item.id)).length;
-        const button = document.createElement("button");
-        button.className = "filter" + (activeGroup === group ? " active" : "");
-        button.type = "button";
-        button.innerHTML = `<span>${group}</span><span class="count">${resolved}/${total}</span>`;
-        button.addEventListener("click", () => {
-          activeGroup = group;
-          render();
+      function renderFilters() {
+        filtersEl.innerHTML = "";
+        groups().forEach((group) => {
+          const total =
+            group === "All"
+              ? conflicts.length
+              : conflicts.filter((item) => item.group === group).length;
+          const resolved =
+            group === "All"
+              ? conflicts.filter((item) =>
+                  Object.prototype.hasOwnProperty.call(choices, item.id),
+                ).length
+              : conflicts.filter(
+                  (item) =>
+                    item.group === group &&
+                    Object.prototype.hasOwnProperty.call(choices, item.id),
+                ).length;
+          const button = document.createElement("button");
+          button.className =
+            "filter" + (activeGroup === group ? " active" : "");
+          button.type = "button";
+          button.innerHTML = `<span>${group}</span><span class="count">${resolved}/${total}</span>`;
+          button.addEventListener("click", () => {
+            activeGroup = group;
+            render();
+          });
+          filtersEl.appendChild(button);
         });
-        filtersEl.appendChild(button);
-      });
-    }
-
-    function renderConflicts() {
-      const items = visibleConflicts();
-      gridEl.innerHTML = "";
-      if (!items.length) {
-        gridEl.innerHTML = `<div class="empty">No conflicts match this filter.</div>`;
-        return;
       }
-      items.forEach((item) => {
-        const selected = choices[item.id];
-        const card = document.createElement("article");
-        card.className = "conflict-card";
-        card.innerHTML = `
+
+      function renderConflicts() {
+        const items = visibleConflicts();
+        gridEl.innerHTML = "";
+        if (!items.length) {
+          gridEl.innerHTML = `<div class="empty">No conflicts match this filter.</div>`;
+          return;
+        }
+        items.forEach((item) => {
+          const selected = choices[item.id];
+          const card = document.createElement("article");
+          card.className = "conflict-card";
+          card.innerHTML = `
           <div class="conflict-head">
             <div>
               <div class="kicker">${item.group}</div>
@@ -1329,7 +1929,9 @@
             <div>
               <h3>Resolution choices</h3>
               <div class="option-stack" id="options-${item.id}">
-                ${item.options.map((option, index) => `
+                ${item.options
+                  .map(
+                    (option, index) => `
                   <button class="option" data-conflict="${item.id}" data-option="${index}" data-selected="${selected === index}">
                     <span class="radio"></span>
                     <span>
@@ -1337,106 +1939,138 @@
                       <span class="option-copy">${option[1]}</span>
                     </span>
                   </button>
-                `).join("")}
+                `,
+                  )
+                  .join("")}
               </div>
             </div>
           </div>
         `;
-        gridEl.appendChild(card);
-      });
-
-      gridEl.querySelectorAll(".option").forEach((button) => {
-        button.addEventListener("click", () => {
-          choices[button.dataset.conflict] = Number(button.dataset.option);
-          save();
-          render();
+          gridEl.appendChild(card);
         });
+
+        gridEl.querySelectorAll(".option").forEach((button) => {
+          button.addEventListener("click", () => {
+            choices[button.dataset.conflict] = Number(button.dataset.option);
+            save();
+            render();
+          });
+        });
+      }
+
+      function updateStats() {
+        const total = conflicts.length;
+        const resolved = conflicts.filter((item) =>
+          Object.prototype.hasOwnProperty.call(choices, item.id),
+        ).length;
+        const unresolvedMust = conflicts.filter(
+          (item) =>
+            item.risk === "must" &&
+            !Object.prototype.hasOwnProperty.call(choices, item.id),
+        ).length;
+        document.getElementById("resolvedCount").textContent = String(resolved);
+        document.getElementById("totalCount").textContent = String(total);
+        document.getElementById("blockerCount").textContent =
+          `${unresolvedMust} blockers`;
+        document.getElementById("progressFill").style.width =
+          `${Math.round((resolved / total) * 100)}%`;
+        document.getElementById("mustCount").textContent = String(
+          conflicts.filter((item) => item.risk === "must").length,
+        );
+        document.getElementById("highCount").textContent = String(
+          conflicts.filter((item) => item.risk === "high").length,
+        );
+        document.getElementById("mediumCount").textContent = String(
+          conflicts.filter((item) => item.risk === "medium").length,
+        );
+        document.getElementById("lowCount").textContent = String(
+          conflicts.filter((item) => item.risk === "low").length,
+        );
+      }
+
+      function decisionText(item) {
+        const index = choices[item.id];
+        if (index === undefined) return "UNRESOLVED";
+        return item.options[index][0];
+      }
+
+      function updateExport() {
+        const unresolved = conflicts.filter(
+          (item) => !Object.prototype.hasOwnProperty.call(choices, item.id),
+        );
+        const lines = [];
+        lines.push("# LifeOS UI Handoff Conflict Decisions");
+        lines.push("");
+        lines.push(
+          `Resolved: ${conflicts.length - unresolved.length}/${conflicts.length}`,
+        );
+        lines.push(
+          `Unresolved must-resolve blockers: ${unresolved.filter((item) => item.risk === "must").length}`,
+        );
+        lines.push("");
+        groups()
+          .filter((group) => group !== "All")
+          .forEach((group) => {
+            lines.push(`## ${group}`);
+            conflicts
+              .filter((item) => item.group === group)
+              .forEach((item) => {
+                lines.push(`- ${item.title}`);
+                lines.push(`  - Risk: ${riskLabel(item.risk)}`);
+                lines.push(`  - Decision: ${decisionText(item)}`);
+                if (choices[item.id] !== undefined) {
+                  lines.push(
+                    `  - Rationale: ${item.options[choices[item.id]][1]}`,
+                  );
+                }
+              });
+            lines.push("");
+          });
+        exportBox.value = lines.join("\n");
+      }
+
+      function save() {
+        localStorage.setItem(storageKey, JSON.stringify(choices));
+      }
+
+      function render() {
+        renderFilters();
+        renderConflicts();
+        updateStats();
+        updateExport();
+      }
+
+      document.getElementById("toggleTheme").addEventListener("click", () => {
+        if (appRoot.dataset.theme === "light") {
+          delete appRoot.dataset.theme;
+          document.getElementById("toggleTheme").textContent = "Toggle light";
+        } else {
+          appRoot.dataset.theme = "light";
+          document.getElementById("toggleTheme").textContent = "Toggle dark";
+        }
       });
-    }
 
-    function updateStats() {
-      const total = conflicts.length;
-      const resolved = conflicts.filter((item) => Object.prototype.hasOwnProperty.call(choices, item.id)).length;
-      const unresolvedMust = conflicts.filter((item) => item.risk === "must" && !Object.prototype.hasOwnProperty.call(choices, item.id)).length;
-      document.getElementById("resolvedCount").textContent = String(resolved);
-      document.getElementById("totalCount").textContent = String(total);
-      document.getElementById("blockerCount").textContent = `${unresolvedMust} blockers`;
-      document.getElementById("progressFill").style.width = `${Math.round((resolved / total) * 100)}%`;
-      document.getElementById("mustCount").textContent = String(conflicts.filter((item) => item.risk === "must").length);
-      document.getElementById("highCount").textContent = String(conflicts.filter((item) => item.risk === "high").length);
-      document.getElementById("mediumCount").textContent = String(conflicts.filter((item) => item.risk === "medium").length);
-      document.getElementById("lowCount").textContent = String(conflicts.filter((item) => item.risk === "low").length);
-    }
+      document.getElementById("resetChoices").addEventListener("click", () => {
+        choices = {};
+        save();
+        render();
+      });
 
-    function decisionText(item) {
-      const index = choices[item.id];
-      if (index === undefined) return "UNRESOLVED";
-      return item.options[index][0];
-    }
-
-    function updateExport() {
-      const unresolved = conflicts.filter((item) => !Object.prototype.hasOwnProperty.call(choices, item.id));
-      const lines = [];
-      lines.push("# LifeOS UI Handoff Conflict Decisions");
-      lines.push("");
-      lines.push(`Resolved: ${conflicts.length - unresolved.length}/${conflicts.length}`);
-      lines.push(`Unresolved must-resolve blockers: ${unresolved.filter((item) => item.risk === "must").length}`);
-      lines.push("");
-      groups().filter((group) => group !== "All").forEach((group) => {
-        lines.push(`## ${group}`);
-        conflicts.filter((item) => item.group === group).forEach((item) => {
-          lines.push(`- ${item.title}`);
-          lines.push(`  - Risk: ${riskLabel(item.risk)}`);
-          lines.push(`  - Decision: ${decisionText(item)}`);
-          if (choices[item.id] !== undefined) {
-            lines.push(`  - Rationale: ${item.options[choices[item.id]][1]}`);
+      document
+        .getElementById("copyExport")
+        .addEventListener("click", async () => {
+          exportBox.select();
+          try {
+            await navigator.clipboard.writeText(exportBox.value);
+          } catch {
+            document.execCommand("copy");
           }
         });
-        lines.push("");
-      });
-      exportBox.value = lines.join("\n");
-    }
 
-    function save() {
-      localStorage.setItem(storageKey, JSON.stringify(choices));
-    }
+      searchEl.addEventListener("input", render);
+      decisionFilterEl.addEventListener("change", render);
 
-    function render() {
-      renderFilters();
-      renderConflicts();
-      updateStats();
-      updateExport();
-    }
-
-    document.getElementById("toggleTheme").addEventListener("click", () => {
-      if (appRoot.dataset.theme === "light") {
-        delete appRoot.dataset.theme;
-        document.getElementById("toggleTheme").textContent = "Toggle light";
-      } else {
-        appRoot.dataset.theme = "light";
-        document.getElementById("toggleTheme").textContent = "Toggle dark";
-      }
-    });
-
-    document.getElementById("resetChoices").addEventListener("click", () => {
-      choices = {};
-      save();
       render();
-    });
-
-    document.getElementById("copyExport").addEventListener("click", async () => {
-      exportBox.select();
-      try {
-        await navigator.clipboard.writeText(exportBox.value);
-      } catch {
-        document.execCommand("copy");
-      }
-    });
-
-    searchEl.addEventListener("input", render);
-    decisionFilterEl.addEventListener("change", render);
-
-    render();
-  </script>
-</body>
+    </script>
+  </body>
 </html>

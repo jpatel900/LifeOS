@@ -636,8 +636,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),
     acceptTaskDraft: (draftId) => dispatch({ type: "acceptDraft", draftId }),
-    backlogTaskDraft: (draftId) =>
-      dispatch({ type: "backlogDraft", draftId }),
+    backlogTaskDraft: (draftId) => dispatch({ type: "backlogDraft", draftId }),
     promoteBacklogTask: (taskId) =>
       dispatch({ type: "promoteBacklogTask", taskId }),
     acceptProjectDraft: (draftId) =>

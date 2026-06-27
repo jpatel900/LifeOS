@@ -42,6 +42,7 @@ Keep Capture raw-input-first while demoting support surfaces and preserving raw-
 - `apps/web/test-results/pass-7/173-176-capture-hierarchy/2026-06-11-173-176-capture-desktop-rest.png`
 
 Review note:
+
 - Route and state shown: `/capture` at rest on mobile and desktop.
 - Primary action stays route-local: raw text entry and the save actions land before support summary and diagnostics.
 - Safety truth stayed visible: saved-first and parse-failure states remain covered by focused tests rather than being hidden or removed.

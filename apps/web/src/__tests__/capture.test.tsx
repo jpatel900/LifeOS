@@ -15,13 +15,18 @@ describe("Capture cockpit", () => {
       </AppShell>,
     );
 
-    fireEvent.change(await screen.findByPlaceholderText("Drop the thought here."), {
-      target: { value: "Draft agenda for the planning meeting" },
-    });
+    fireEvent.change(
+      await screen.findByPlaceholderText("Drop the thought here."),
+      {
+        target: { value: "Draft agenda for the planning meeting" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
     expect(await screen.findByText("Saved to Triage")).toBeDefined();
-    expect(await screen.findByText("Draft agenda for the planning meeting")).toBeDefined();
+    expect(
+      await screen.findByText("Draft agenda for the planning meeting"),
+    ).toBeDefined();
     expect(screen.getByRole("button", { name: "Do today" })).toBeDefined();
   });
 
@@ -32,7 +37,11 @@ describe("Capture cockpit", () => {
       </AppShell>,
     );
 
-    expect(await screen.findByRole("button", { name: "Organize after save" })).toBeDefined();
-    expect(screen.getAllByRole("button", { name: "Save thought" })).toHaveLength(1);
+    expect(
+      await screen.findByRole("button", { name: "Organize after save" }),
+    ).toBeDefined();
+    expect(
+      screen.getAllByRole("button", { name: "Save thought" }),
+    ).toHaveLength(1);
   });
 });

@@ -24,10 +24,7 @@ import {
   workflowAreaIdForPersistedArea,
 } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
-import {
-  ACCENT_PALETTE,
-  buildCockpitAccentStyle,
-} from "@/lib/cockpit/accent";
+import { ACCENT_PALETTE, buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import {
   buildCockpitViewModel,
   PIPELINE_STAGES,
@@ -430,9 +427,7 @@ export function LifeOSCockpit({
               value={captureText}
               onChange={setCaptureText}
               organizeAfterSave={organizeAfterSave}
-              onToggleOrganize={() =>
-                setOrganizeAfterSave((value) => !value)
-              }
+              onToggleOrganize={() => setOrganizeAfterSave((value) => !value)}
               onSave={handleSaveCapture}
             />
           ) : null}
@@ -715,7 +710,11 @@ function TriageView({
             <Circle
               key={item.id}
               size={10}
-              className={item.id === current.id ? "text-[var(--acc)]" : "text-[var(--ln2)]"}
+              className={
+                item.id === current.id
+                  ? "text-[var(--acc)]"
+                  : "text-[var(--ln2)]"
+              }
               fill="currentColor"
             />
           ))}
@@ -779,7 +778,9 @@ function PlanView({
               <button
                 key={hour}
                 type="button"
-                onClick={() => (placed ? onUnplan(placed.block.id) : onPlan(hour))}
+                onClick={() =>
+                  placed ? onUnplan(placed.block.id) : onPlan(hour)
+                }
                 className={cn(
                   "grid min-h-16 grid-cols-[58px_1fr] items-center rounded-2xl border p-3 text-left",
                   placed
@@ -795,7 +796,9 @@ function PlanView({
                 <span>
                   {placed ? (
                     <>
-                      <span className="block font-bold">{placed.task.title}</span>
+                      <span className="block font-bold">
+                        {placed.task.title}
+                      </span>
                       <span className="text-sm text-[var(--mut)]">
                         Tap to unplan
                       </span>
@@ -867,8 +870,8 @@ function PlanView({
               Google writes are separate
             </summary>
             <p className="mt-3">
-              This rail creates local blocks. External calendar writes still need
-              explicit approval.
+              This rail creates local blocks. External calendar writes still
+              need explicit approval.
             </p>
           </details>
           <button
@@ -933,7 +936,12 @@ function ExecuteView({
       </Panel>
       <Panel className="grid place-items-center text-center">
         <div>
-          <svg width="260" height="260" viewBox="0 0 260 260" className="mx-auto">
+          <svg
+            width="260"
+            height="260"
+            viewBox="0 0 260 260"
+            className="mx-auto"
+          >
             <circle
               cx="130"
               cy="130"
@@ -1011,7 +1019,12 @@ function ReviewView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <Panel className="grid place-items-center text-center">
         <div>
-          <svg width="220" height="220" viewBox="0 0 220 220" className="mx-auto">
+          <svg
+            width="220"
+            height="220"
+            viewBox="0 0 220 220"
+            className="mx-auto"
+          >
             <circle
               cx="110"
               cy="110"
@@ -1046,7 +1059,8 @@ function ReviewView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
                 <div className="mb-1 flex justify-between text-sm text-[var(--mut)]">
                   <span>{session.outcome}</span>
                   <span className="mono">
-                    {session.actual_minutes ?? 0}/{session.planned_minutes ?? 0}m
+                    {session.actual_minutes ?? 0}/{session.planned_minutes ?? 0}
+                    m
                   </span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-[var(--track)]">
@@ -1065,7 +1079,9 @@ function ReviewView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
               </div>
             ))
           ) : (
-            <p className="text-[var(--mut)]">Focus sessions will appear here.</p>
+            <p className="text-[var(--mut)]">
+              Focus sessions will appear here.
+            </p>
           )}
         </div>
         <details className="mt-6 text-[var(--mut)]">

@@ -42,12 +42,12 @@ Automatic audit failure:
 
 Use the same scale for every dimension:
 
-| Score | Meaning |
-| --- | --- |
-| `0` | Fails the critique. The route still violates the intended rule badly enough that Pass 7 cannot ship. |
-| `1` | Improved but still cluttered, confusing, or under-staged. Acceptable only as an intermediate state. |
-| `2` | Acceptable, consistent, and truthful. Not exceptional, but shippable if the full-route threshold passes. |
-| `3` | Excellent and product-grade. Clear, restrained, truthful, and polished without fake capability. |
+| Score | Meaning                                                                                                  |
+| ----- | -------------------------------------------------------------------------------------------------------- |
+| `0`   | Fails the critique. The route still violates the intended rule badly enough that Pass 7 cannot ship.     |
+| `1`   | Improved but still cluttered, confusing, or under-staged. Acceptable only as an intermediate state.      |
+| `2`   | Acceptable, consistent, and truthful. Not exceptional, but shippable if the full-route threshold passes. |
+| `3`   | Excellent and product-grade. Clear, restrained, truthful, and polished without fake capability.          |
 
 ## Dimensions
 
@@ -149,17 +149,17 @@ Program-level rule:
 
 Use one row per route.
 
-| Route | First action | Diagnostic staging | Copy maturity | Mobile viewport | Visual hierarchy | Surface restraint | Accessibility | Safety truthfulness | Route identity | Emotional feel | Average | Pass / fail | Evidence links |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| AppShell |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Home |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Capture |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Triage |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Planning |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Execute |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Review |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Health |  |  |  |  |  |  |  |  |  |  |  |  |  |
-| Areas |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| Route    | First action | Diagnostic staging | Copy maturity | Mobile viewport | Visual hierarchy | Surface restraint | Accessibility | Safety truthfulness | Route identity | Emotional feel | Average | Pass / fail | Evidence links |
+| -------- | ------------ | ------------------ | ------------- | --------------- | ---------------- | ----------------- | ------------- | ------------------- | -------------- | -------------- | ------- | ----------- | -------------- |
+| AppShell |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Home     |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Capture  |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Triage   |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Planning |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Execute  |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Review   |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Health   |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
+| Areas    |              |                    |               |                 |                  |                   |               |                     |                |                |         |             |                |
 
 ## Closeout rule
 

@@ -578,7 +578,8 @@ export function planTaskAtHour(
 
   const start = new Date();
   start.setHours(hour, 0, 0, 0);
-  const minutes = task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
+  const minutes =
+    task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
   const end = new Date(start.getTime() + minutes * 60 * 1000);
   const createdAt = nowIso();
   const proposalId = nextId("proposal");

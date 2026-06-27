@@ -2,11 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-const evidenceDir = path.join(
-  process.cwd(),
-  "test-results",
-  "handoff-cockpit",
-);
+const evidenceDir = path.join(process.cwd(), "test-results", "handoff-cockpit");
 
 const routes = [
   ["today", "/"],
@@ -99,9 +95,7 @@ test("capture saves raw thought and routes the item to triage", async ({
 }) => {
   await page.goto("/capture");
 
-  await page
-    .getByRole("textbox")
-    .fill("Browser handoff proof capture item");
+  await page.getByRole("textbox").fill("Browser handoff proof capture item");
   await page.getByRole("button", { name: "Save thought" }).click();
 
   await expect(page).toHaveURL(/\/triage$/);
@@ -123,17 +117,23 @@ test("triage someday and do-today choices feed the plan screen", async ({
   await page.getByRole("button", { name: "Save thought" }).click();
   await page.getByRole("button", { name: "Someday" }).click();
 
-  await expect(page.getByRole("heading", { name: "Inbox clear" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Inbox clear" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Plan the day" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
-  await expect(page.getByText("Move to today: Someday proof item")).toBeVisible();
+  await expect(
+    page.getByText("Move to today: Someday proof item"),
+  ).toBeVisible();
 
   await page.goto("/capture");
   await page.getByRole("textbox").fill("Do today proof item");
   await page.getByRole("button", { name: "Save thought" }).click();
   await page.getByRole("button", { name: "Do today" }).click();
 
-  await expect(page.getByRole("heading", { name: "Inbox clear" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Inbox clear" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Plan the day" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
   await expect(page.getByRole("heading", { name: "To place" })).toBeVisible();
@@ -148,7 +148,9 @@ test("plan hour rail creates local blocks and keeps Google writes secondary", as
   await page.getByRole("button", { name: "Save thought" }).click();
   await page.getByRole("button", { name: "Do today" }).click();
 
-  await expect(page.getByRole("heading", { name: "Inbox clear" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Inbox clear" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Plan the day" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
   await page.getByText("Plan rail proof item").click();
@@ -156,14 +158,18 @@ test("plan hour rail creates local blocks and keeps Google writes secondary", as
 
   await expect(page.getByText("Tap to unplan")).toBeVisible();
   await expect(page.getByText("Google writes are separate")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start focusing" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Start focusing" }),
+  ).toBeVisible();
 });
 
 test("execute, review, health, and all areas keep the handoff hierarchy", async ({
   page,
 }) => {
   await page.goto("/execute");
-  await expect(page.getByRole("heading", { name: "Focus queue" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Focus queue" }),
+  ).toBeVisible();
   await expect(page.getByText("Pick a block")).toBeVisible();
 
   await page.goto("/review");
@@ -176,7 +182,9 @@ test("execute, review, health, and all areas keep the handoff hierarchy", async 
   await expect(
     page.getByRole("heading", { name: "All systems healthy" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run system check" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Run system check" }),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: "All areas" }).click();
   await expect(

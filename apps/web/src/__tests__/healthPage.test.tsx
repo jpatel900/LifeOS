@@ -21,6 +21,8 @@ describe("Health cockpit", () => {
     expect(screen.getByText("Telemetry off")).toBeDefined();
     expect(screen.getByText("Full breakdown")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Run system check" }));
-    expect(screen.getByRole("button", { name: "Run system check" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Run system check" }),
+    ).toBeDefined();
   });
 });

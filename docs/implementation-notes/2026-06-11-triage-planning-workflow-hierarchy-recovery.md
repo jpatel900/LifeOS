@@ -48,6 +48,7 @@ Keep one dominant route-local task on Triage and Planning, stage support summary
 - `apps/web/test-results/pass-7/184-185-planning-flow/2026-06-11-184-185-planning-desktop-rest.png`
 
 Review note:
+
 - Routes and states shown: `/triage` and `/calendar` at rest on mobile and desktop.
 - Primary action stays route-local: the current triage decision and the local-first planning flow both land ahead of their support summaries and route details.
 - Safety truth stayed visible: Google Calendar still reads as an explicit approval-gated write, not an automatic consequence of planning.

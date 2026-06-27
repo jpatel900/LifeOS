@@ -58,6 +58,7 @@ Make `Areas` read as supporting/admin in shell navigation rather than as part of
 - `apps/web/test-results/pass-7/169-areas-nav-role/desktop-areas-shell.png`
 
 Review note:
+
 - The shell now treats `Areas` as reachable admin/support work instead of part of the main workflow loop.
 - What stayed unchanged: current-area selection remains visible, route access is preserved, quiet-shell rules are unchanged, and no workflow or persistence behavior changed.
 - What still remains noisy: mobile shell chrome still stacks too many elements before route content on non-quiet routes; that belongs to `#170`.

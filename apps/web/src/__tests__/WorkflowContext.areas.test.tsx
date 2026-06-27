@@ -2,10 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 
-const {
-  mockListAreas,
-  mockCreateSupabaseBrowserClient,
-} = vi.hoisted(() => ({
+const { mockListAreas, mockCreateSupabaseBrowserClient } = vi.hoisted(() => ({
   mockListAreas: vi.fn(),
   mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
 }));

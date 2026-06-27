@@ -17,7 +17,9 @@ describe("Today cockpit", () => {
 
     expect(await screen.findByText("One move now")).toBeDefined();
     expect(screen.getByText("At a glance")).toBeDefined();
-    expect(screen.getByRole("navigation", { name: "Workflow stages" })).toBeDefined();
+    expect(
+      screen.getByRole("navigation", { name: "Workflow stages" }),
+    ).toBeDefined();
     expect(screen.queryByRole("button", { name: "Save thought" })).toBeNull();
   });
 });

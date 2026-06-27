@@ -19,9 +19,7 @@ describe("handoff cockpit area accents", () => {
   });
 
   it("uses the exact handoff accent derivation", () => {
-    expect(
-      deriveAccent("#6b78e8", { dark: true, sf2: "#1b1e25" }),
-    ).toEqual({
+    expect(deriveAccent("#6b78e8", { dark: true, sf2: "#1b1e25" })).toEqual({
       acc: "#6b78e8",
       acc2: "#838eec",
       accSf: "#2b304c",
@@ -54,6 +52,8 @@ describe("handoff cockpit area accents", () => {
     );
 
     expect(screen.queryByTestId("lifeos-cockpit")).toBeNull();
-    expect(await screen.findByRole("heading", { level: 1, name: "Areas" })).toBeDefined();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Areas" }),
+    ).toBeDefined();
   });
 });

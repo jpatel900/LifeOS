@@ -1,8 +1,10 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-interface DiagnosticsDisclosureProps
-  extends Omit<ComponentPropsWithoutRef<"details">, "children" | "title"> {
+interface DiagnosticsDisclosureProps extends Omit<
+  ComponentPropsWithoutRef<"details">,
+  "children" | "title"
+> {
   children: ReactNode;
   className?: string;
   detailLevel?: "system" | "developer";
@@ -21,7 +23,8 @@ export function DiagnosticsDisclosure({
   ...props
 }: DiagnosticsDisclosureProps) {
   const resolvedTitle =
-    title ?? (detailLevel === "developer" ? "Developer details" : "System details");
+    title ??
+    (detailLevel === "developer" ? "Developer details" : "System details");
 
   return (
     <details

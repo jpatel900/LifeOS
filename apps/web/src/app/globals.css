@@ -220,11 +220,7 @@ body {
   min-height: 100vh;
   background: var(--bd);
   color: var(--ink);
-  font-family:
-    "Hanken Grotesk",
-    Inter,
-    system-ui,
-    sans-serif;
+  font-family: "Hanken Grotesk", Inter, system-ui, sans-serif;
   transition:
     background-color 0.25s ease,
     color 0.25s ease;
@@ -261,12 +257,7 @@ body {
 }
 
 .lifeos-cockpit .mono {
-  font-family:
-    "IBM Plex Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @media (max-width: 640px) {
@@ -623,7 +614,11 @@ summary {
 }
 
 .workflow-page-header--areas {
-  border-color: color-mix(in oklch, var(--area-accent-border) 66%, var(--border));
+  border-color: color-mix(
+    in oklch,
+    var(--area-accent-border) 66%,
+    var(--border)
+  );
   background:
     radial-gradient(
       circle at top left,
@@ -660,7 +655,11 @@ summary {
 }
 
 .workflow-page-header--review {
-  border-color: color-mix(in oklch, var(--area-accent-border) 62%, var(--border));
+  border-color: color-mix(
+    in oklch,
+    var(--area-accent-border) 62%,
+    var(--border)
+  );
   background:
     radial-gradient(
       circle at top right,
@@ -726,7 +725,11 @@ summary {
 }
 
 .home-featured-support-card {
-  border-color: color-mix(in oklch, var(--border) 74%, var(--area-accent-border));
+  border-color: color-mix(
+    in oklch,
+    var(--border) 74%,
+    var(--area-accent-border)
+  );
   background: linear-gradient(
     180deg,
     color-mix(in oklch, var(--card) 95%, var(--area-accent-soft)) 0%,
@@ -751,7 +754,11 @@ summary {
 }
 
 .execute-route-brief {
-  border-color: color-mix(in oklch, var(--area-accent-border) 64%, var(--border));
+  border-color: color-mix(
+    in oklch,
+    var(--area-accent-border) 64%,
+    var(--border)
+  );
   background:
     radial-gradient(
       circle at top right,

@@ -37,9 +37,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json(exportPayload, {
       headers: {
-        "Content-Disposition": `attachment; filename="lifeos-export-${
-          exportPayload.exported_at.slice(0, 10)
-        }.json"`,
+        "Content-Disposition": `attachment; filename="lifeos-export-${exportPayload.exported_at.slice(
+          0,
+          10,
+        )}.json"`,
         "Cache-Control": "no-store",
       },
     });

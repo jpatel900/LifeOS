@@ -833,9 +833,9 @@ describe("workflow data provider", () => {
       rpc,
     } as MinimalSupabaseClient;
 
-    await expect(
-      acceptTimeBlockProposal(client, proposalId),
-    ).rejects.toThrow("Only proposed or edited proposals can be accepted.");
+    await expect(acceptTimeBlockProposal(client, proposalId)).rejects.toThrow(
+      "Only proposed or edited proposals can be accepted.",
+    );
   });
 
   it("starts an execution_session for a persisted task and block", async () => {

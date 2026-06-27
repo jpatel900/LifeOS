@@ -141,8 +141,7 @@ describe("INV-4 module budgets", () => {
 
   it("removes grandfather entries when their pages reach the default budget", () => {
     const stale = Object.keys(GRANDFATHERED_PAGE_BUDGETS).filter(
-      (page) =>
-        countLines(readRepoFile(page)) <= DEFAULT_PAGE_BUDGET,
+      (page) => countLines(readRepoFile(page)) <= DEFAULT_PAGE_BUDGET,
     );
 
     expect(

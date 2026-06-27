@@ -89,17 +89,17 @@ Neither change reopens a forbidden surface and neither degraded its route's scor
 
 ## Worksheet (re-scored from 2026-06-24 evidence)
 
-| Route | First action | Diagnostic staging | Copy maturity | Mobile viewport | Visual hierarchy | Surface restraint | Accessibility | Safety truthfulness | Route identity | Emotional feel | Average | Pass / fail |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| AppShell | `2` | `2` | `3` | `2` | `3` | `2` | `3` | `2` | `3` | `2` | `2.4` | `pass` |
-| Home | `3` | `3` | `3` | `3` | `3` | `3` | `3` | `3` | `3` | `3` | `3.0` | `pass` |
-| Capture | `3` | `3` | `3` | `3` | `3` | `2` | `3` | `3` | `3` | `3` | `2.9` | `pass` |
-| Triage | `3` | `2` | `3` | `2` | `3` | `2` | `3` | `3` | `3` | `2` | `2.6` | `pass` |
-| Planning | `3` | `3` | `3` | `3` | `3` | `2` | `3` | `3` | `3` | `3` | `2.9` | `pass` |
-| Execute | `3` | `3` | `3` | `3` | `3` | `2` | `3` | `3` | `3` | `3` | `2.9` | `pass` |
-| Review | `2` | `3` | `3` | `2` | `2` | `2` | `3` | `3` | `3` | `2` | `2.5` | `pass` |
-| Health | `3` | `3` | `3` | `2` | `3` | `2` | `3` | `3` | `3` | `3` | `2.8` | `pass` |
-| Areas | `3` | `3` | `3` | `2` | `3` | `2` | `3` | `3` | `3` | `3` | `2.8` | `pass` |
+| Route    | First action | Diagnostic staging | Copy maturity | Mobile viewport | Visual hierarchy | Surface restraint | Accessibility | Safety truthfulness | Route identity | Emotional feel | Average | Pass / fail |
+| -------- | ------------ | ------------------ | ------------- | --------------- | ---------------- | ----------------- | ------------- | ------------------- | -------------- | -------------- | ------- | ----------- |
+| AppShell | `2`          | `2`                | `3`           | `2`             | `3`              | `2`               | `3`           | `2`                 | `3`            | `2`            | `2.4`   | `pass`      |
+| Home     | `3`          | `3`                | `3`           | `3`             | `3`              | `3`               | `3`           | `3`                 | `3`            | `3`            | `3.0`   | `pass`      |
+| Capture  | `3`          | `3`                | `3`           | `3`             | `3`              | `2`               | `3`           | `3`                 | `3`            | `3`            | `2.9`   | `pass`      |
+| Triage   | `3`          | `2`                | `3`           | `2`             | `3`              | `2`               | `3`           | `3`                 | `3`            | `2`            | `2.6`   | `pass`      |
+| Planning | `3`          | `3`                | `3`           | `3`             | `3`              | `2`               | `3`           | `3`                 | `3`            | `3`            | `2.9`   | `pass`      |
+| Execute  | `3`          | `3`                | `3`           | `3`             | `3`              | `2`               | `3`           | `3`                 | `3`            | `3`            | `2.9`   | `pass`      |
+| Review   | `2`          | `3`                | `3`           | `2`             | `2`              | `2`               | `3`           | `3`                 | `3`            | `2`            | `2.5`   | `pass`      |
+| Health   | `3`          | `3`                | `3`           | `2`             | `3`              | `2`               | `3`           | `3`                 | `3`            | `3`            | `2.8`   | `pass`      |
+| Areas    | `3`          | `3`                | `3`           | `2`             | `3`              | `2`               | `3`           | `3`                 | `3`            | `3`            | `2.8`   | `pass`      |
 
 App-wide observed average: 24.8 / 9 = **2.76 (~2.8)**. No route fails its threshold.
 

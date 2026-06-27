@@ -565,7 +565,10 @@ export async function softDeleteArea(
 
   const query = client.from("areas") as {
     update: (row: Record<string, unknown>) => {
-      eq: (column: string, value: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
         select: (columns: string) => {
           single: () => Promise<{ data: unknown; error: unknown }>;
         };
@@ -609,7 +612,9 @@ export async function updateAreaColor(
       color: parsedInput.color,
       updated_at: new Date().toISOString(),
     });
-    const index = mockAreas.findIndex((item) => item.id === parsedInput.area_id);
+    const index = mockAreas.findIndex(
+      (item) => item.id === parsedInput.area_id,
+    );
     mockAreas.splice(index, 1, updatedArea);
 
     return {
@@ -625,7 +630,10 @@ export async function updateAreaColor(
 
   const query = client.from("areas") as {
     update: (row: Record<string, unknown>) => {
-      eq: (column: string, value: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
         select: (columns: string) => {
           single: () => Promise<{ data: unknown; error: unknown }>;
         };
