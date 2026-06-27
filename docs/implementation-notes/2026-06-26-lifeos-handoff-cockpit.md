@@ -10,6 +10,7 @@ Purpose: Implement the `design_handoff_lifeos/` cockpit as the active workflow U
 - Added `backlog` task status for Someday/later and a migration updating the `tasks_status_check` constraint.
 - Area creation accepts an optional palette color so new areas can persist a base accent.
 - The cockpit now hydrates authenticated Supabase workflow rows into the `WorkflowProvider` state model and best-effort persists raw capture, Do today/Someday triage, hour-rail planning, session starts, and session outcomes through existing data helpers.
+- Added `docs/implementation-planning/lifeos-user-flow-edge-case-map.md` to map cockpit entry points, primary journeys, branch cases, edge cases, persistence parity, and proof expectations.
 - Old Pass 7 UI control-plane docs moved to `docs/archive/ui-ux/pass-7/`; `docs/UI_UX_WORLD_CLASS_ROADMAP.md` and `docs/agent/UI_AGENT_GUIDE.md` now point to the handoff pass.
 
 ## Safety boundaries preserved
