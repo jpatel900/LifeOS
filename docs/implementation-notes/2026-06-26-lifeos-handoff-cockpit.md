@@ -9,6 +9,7 @@ Purpose: Implement the `design_handoff_lifeos/` cockpit as the active workflow U
 - Handoff tokens and exact accent derivation are active in the cockpit root, with dark default and light through `data-theme="light"`.
 - Added `backlog` task status for Someday/later and a migration updating the `tasks_status_check` constraint.
 - Area creation accepts an optional palette color so new areas can persist a base accent.
+- The cockpit now hydrates authenticated Supabase workflow rows into the `WorkflowProvider` state model and best-effort persists raw capture, Do today/Someday triage, hour-rail planning, session starts, and session outcomes through existing data helpers.
 - Old Pass 7 UI control-plane docs moved to `docs/archive/ui-ux/pass-7/`; `docs/UI_UX_WORLD_CLASS_ROADMAP.md` and `docs/agent/UI_AGENT_GUIDE.md` now point to the handoff pass.
 
 ## Safety boundaries preserved
@@ -37,7 +38,8 @@ Purpose: Implement the `design_handoff_lifeos/` cockpit as the active workflow U
 - Old Pass 7 Playwright specs were replaced with focused handoff cockpit E2E specs.
 - `pnpm --filter @lifeos/web test:e2e` passed with 9 tests covering the cockpit route sweep, desktop/mobile screenshots, dark/light theme toggle, Capture, Triage, Plan, Execute, Review, Health, and Areas admin.
 - Browser evidence for the handoff pass now lives under `apps/web/test-results/handoff-cockpit/`.
+- Added persistence bridge proof: `pnpm --filter @lifeos/web test -- WorkflowContext.areas workflow.test phase4aPersistence`, `pnpm --filter @lifeos/schemas test`, `pnpm --filter @lifeos/web type-check`, `pnpm --filter @lifeos/web lint`, and local Supabase `RUN_SUPABASE_RLS_TESTS=1 pnpm --filter @lifeos/web test -- phase4aRls.local` all passed.
 
 ## Remaining follow-up
 
-- Revisit Supabase-backed persisted task/proposal/session flows in the cockpit after visual stabilization; current cockpit runtime uses the existing `WorkflowProvider` local/session path while settings/admin persistence remains intact.
+- Manual proposal create/edit/reject, unplanning, carry-forward review actions, and account-sync retry queues remain local/session-only unless a follow-up persistence slice is opened.

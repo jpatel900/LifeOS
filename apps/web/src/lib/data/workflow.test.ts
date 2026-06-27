@@ -537,6 +537,34 @@ describe("workflow data provider", () => {
     expect(result.task.status).toBe("active");
   });
 
+  it("persists Someday task drafts with backlog status", async () => {
+    const backlogTask = { ...taskRow, status: "backlog" };
+    const single = vi.fn().mockResolvedValue({
+      data: backlogTask,
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    const result = await createTask(authenticatedClient(from), {
+      area_id: areaId,
+      source_capture_item_id: "550e8400-e29b-41d4-a716-446655440201",
+      title: "Review long-term idea",
+      description: null,
+      status: "backlog",
+      priority_confidence: 0.72,
+      estimated_minutes_low: 20,
+      estimated_minutes_high: 40,
+      first_tiny_step: "Name the next decision",
+    });
+
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "backlog" }),
+    );
+    expect(result.task.status).toBe("backlog");
+  });
+
   it("persists accepted project drafts through Supabase after validating input", async () => {
     const single = vi.fn().mockResolvedValue({
       data: {

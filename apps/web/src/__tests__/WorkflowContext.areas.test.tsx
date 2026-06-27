@@ -1,9 +1,24 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 
-const { mockListAreas, mockCreateSupabaseBrowserClient } = vi.hoisted(() => ({
+const {
+  mockListAreas,
+  mockListCaptureItems,
+  mockListPlanningItems,
+  mockListExecutionReviewItems,
+  mockCreateCaptureItem,
+  mockCreateTask,
+  mockCreateTimeBlockProposal,
+  mockCreateSupabaseBrowserClient,
+} = vi.hoisted(() => ({
   mockListAreas: vi.fn(),
+  mockListCaptureItems: vi.fn(),
+  mockListPlanningItems: vi.fn(),
+  mockListExecutionReviewItems: vi.fn(),
+  mockCreateCaptureItem: vi.fn(),
+  mockCreateTask: vi.fn(),
+  mockCreateTimeBlockProposal: vi.fn(),
   mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
 }));
 
@@ -15,6 +30,12 @@ vi.mock("@/lib/data/workflow", async () => {
   return {
     ...actual,
     listAreas: mockListAreas,
+    listCaptureItems: mockListCaptureItems,
+    listPlanningItems: mockListPlanningItems,
+    listExecutionReviewItems: mockListExecutionReviewItems,
+    createCaptureItem: mockCreateCaptureItem,
+    createTask: mockCreateTask,
+    createTimeBlockProposal: mockCreateTimeBlockProposal,
   };
 });
 
@@ -34,6 +55,130 @@ function AreaProbe() {
   );
 }
 
+function WorkflowRowsProbe() {
+  const { state, selectedAreaId } = useWorkflow();
+  const firstTask = state.tasks[0];
+
+  return (
+    <div>
+      <span data-testid="selected-area-id">{selectedAreaId ?? ""}</span>
+      <span data-testid="task-count">{state.tasks.length}</span>
+      <span data-testid="first-task-area">{firstTask?.area_id ?? ""}</span>
+      <span data-testid="first-task-title">{firstTask?.title ?? ""}</span>
+    </div>
+  );
+}
+
+function TriageActionProbe() {
+  const { state, selectedAreaId, submitCaptureText, backlogTaskDraft } =
+    useWorkflow();
+  const draft = state.taskDrafts[0];
+
+  return (
+    <div>
+      <span data-testid="selected-area-id">{selectedAreaId ?? ""}</span>
+      <span data-testid="draft-count">{state.taskDrafts.length}</span>
+      <button
+        type="button"
+        onClick={() =>
+          submitCaptureText("Review the future idea", selectedAreaId)
+        }
+      >
+        Capture
+      </button>
+      <button
+        type="button"
+        disabled={!draft}
+        onClick={() => draft && backlogTaskDraft(draft.id)}
+      >
+        Someday
+      </button>
+    </div>
+  );
+}
+
+const persistedArea = {
+  id: "11111111-1111-4111-8111-111111111111",
+  user_id: "22222222-2222-4222-8222-222222222222",
+  name: "Main Job",
+  slug: "main-job",
+  description: "Persisted area",
+  color: "#2563eb",
+  icon: "briefcase",
+  sort_order: 0,
+  is_active: true,
+  created_at: "2026-05-27T00:00:00.000Z",
+  updated_at: "2026-05-27T00:00:00.000Z",
+};
+
+const persistedTask = {
+  id: "33333333-3333-4333-8333-333333333333",
+  user_id: persistedArea.user_id,
+  area_id: persistedArea.id,
+  project_id: null,
+  source_capture_item_id: null,
+  title: "Persisted task",
+  description: null,
+  status: "active",
+  priority_score: null,
+  priority_confidence: 0.7,
+  task_type: null,
+  energy_type: null,
+  estimated_minutes_low: 15,
+  estimated_minutes_high: 30,
+  due_at: null,
+  definition_of_done: "Complete the first useful move and note the outcome.",
+  first_tiny_step: "Open the task",
+  created_at: "2026-05-27T00:00:00.000Z",
+  updated_at: "2026-05-27T00:00:00.000Z",
+};
+
+beforeEach(() => {
+  mockListAreas.mockResolvedValue({
+    provider: "supabase",
+    areas: [persistedArea],
+  });
+  mockListCaptureItems.mockResolvedValue({
+    provider: "supabase",
+    captures: [],
+  });
+  mockListPlanningItems.mockResolvedValue({
+    provider: "supabase",
+    tasks: [],
+    proposals: [],
+    blocks: [],
+  });
+  mockListExecutionReviewItems.mockResolvedValue({
+    provider: "supabase",
+    tasks: [],
+    blocks: [],
+    sessions: [],
+    reviewEntries: [],
+  });
+  mockCreateCaptureItem.mockResolvedValue({
+    provider: "supabase",
+    capture: {
+      id: "44444444-4444-4444-8444-444444444444",
+      user_id: persistedArea.user_id,
+      area_id: persistedArea.id,
+      raw_text: "Review the future idea",
+      raw_audio_ref: null,
+      capture_mode: "text",
+      inferred_area_confidence: null,
+      status: "new",
+      created_at: "2026-05-27T00:00:00.000Z",
+    },
+  });
+  mockCreateTask.mockResolvedValue({
+    provider: "supabase",
+    task: { ...persistedTask, status: "backlog" },
+  });
+  mockCreateTimeBlockProposal.mockResolvedValue({
+    provider: "supabase",
+    proposal: null,
+  });
+});
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -42,21 +187,7 @@ describe("WorkflowProvider persisted area sync", () => {
   it("replaces the mock area list when persisted areas are available", async () => {
     mockListAreas.mockResolvedValue({
       provider: "supabase",
-      areas: [
-        {
-          id: "11111111-1111-4111-8111-111111111111",
-          user_id: "user-a",
-          name: "Main Job",
-          slug: "main-job",
-          description: "Persisted area",
-          color: "#2563eb",
-          icon: "briefcase",
-          sort_order: 0,
-          is_active: true,
-          created_at: "2026-05-27T00:00:00.000Z",
-          updated_at: "2026-05-27T00:00:00.000Z",
-        },
-      ],
+      areas: [persistedArea],
     });
 
     render(
@@ -132,5 +263,68 @@ describe("WorkflowProvider persisted area sync", () => {
         "33333333-3333-4333-8333-333333333333",
       );
     });
+  });
+
+  it("hydrates persisted workflow rows with cockpit area ids", async () => {
+    mockListExecutionReviewItems.mockResolvedValue({
+      provider: "supabase",
+      tasks: [persistedTask],
+      blocks: [],
+      sessions: [],
+      reviewEntries: [],
+    });
+
+    render(
+      <WorkflowProvider>
+        <WorkflowRowsProbe />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+        "area-main-job",
+      );
+      expect(screen.getByTestId("task-count")).toHaveTextContent("1");
+      expect(screen.getByTestId("first-task-area")).toHaveTextContent(
+        "area-main-job",
+      );
+      expect(screen.getByTestId("first-task-title")).toHaveTextContent(
+        "Persisted task",
+      );
+    });
+  });
+
+  it("persists Someday triage decisions as backlog tasks when signed in", async () => {
+    render(
+      <WorkflowProvider>
+        <TriageActionProbe />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+        "area-main-job",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("draft-count")).toHaveTextContent("1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Someday" }));
+
+    await waitFor(() => {
+      expect(mockCreateTask).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          area_id: persistedArea.id,
+          status: "backlog",
+          title: "Review the future idea",
+        }),
+      );
+    });
+    expect(mockCreateTimeBlockProposal).not.toHaveBeenCalled();
   });
 });
