@@ -40,6 +40,23 @@ test("empty plan routes to capture instead of execute", async ({ page }) => {
   await expect(page).toHaveURL(/\/capture$/);
 });
 
+test("single do-today task can be placed from the hour rail without extra selection", async ({
+  page,
+}) => {
+  await captureTask(page, "Default placement repair item");
+  await page.getByRole("button", { name: "Do today" }).click();
+  await goToStage(page, /Plan/);
+
+  await expect(
+    page.getByRole("button", { name: /8a\s+Drop here/ }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /8a\s+Drop here/ }).click();
+
+  await expect(
+    page.getByRole("button", { name: "Start focusing" }),
+  ).toBeVisible();
+});
+
 test("all areas pipeline board includes work from every area", async ({
   page,
 }) => {
