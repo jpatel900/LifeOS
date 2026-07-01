@@ -1,0 +1,21 @@
+{
+  "$comment": "Sequential execution manifest for the context-lean + one-way-door program (epic #243). pipeline-advance.yml reads this. kick: 'mention' posts @codex on the issue when its predecessor's PR merges; 'pause' notifies the repo owner on the epic and stops; 'none' is a manually-managed step. automerge: true requests the safe auto-merge labels on the closing PR (the deterministic path evaluator in scripts/agent/check-safe-automerge.mjs remains the actual gate).",
+  "epic": 243,
+  "owner": "jpatel900",
+  "pipeline": [
+    { "issue": 228, "kick": "none", "automerge": false, "note": "A0 in flight on PR #244; human merge starts the chain" },
+    { "issue": 229, "kick": "mention", "automerge": true, "note": "A1 implementation-notes deletion; docs-only" },
+    { "issue": 230, "kick": "mention", "automerge": false, "note": "A2 touches repo root + .gitignore; human merge" },
+    { "issue": 231, "kick": "mention", "automerge": true, "note": "A3 wiki fold; docs-only" },
+    { "issue": 232, "kick": "mention", "automerge": false, "note": "A4 governance rewrite; HUMAN PR REVIEW REQUIRED before merge" },
+    { "issue": 233, "kick": "mention", "automerge": false, "note": "A5 generated indexes; touches scripts/" },
+    { "issue": 234, "kick": "mention", "automerge": false, "note": "B1 reachability invariant; test guard changes, human merge per T2" },
+    { "issue": 235, "kick": "mention", "automerge": false, "note": "B2 learning capture; schema surface, human merge per T3" },
+    { "issue": 236, "kick": "mention", "automerge": false, "note": "B4 audit reconciliation + health incidents" },
+    { "issue": 237, "kick": "mention", "automerge": false, "note": "B5 all-day conflict semantics" },
+    { "issue": 238, "kick": "mention", "automerge": false, "note": "B7 AI capture end-to-end" },
+    { "issue": 239, "kick": "mention", "automerge": false, "note": "B6 cockpit approval bridge" },
+    { "issue": 240, "kick": "pause", "automerge": false, "note": "B3 update/cancel: requires human spike with a real Google account before implementation starts" },
+    { "issue": 241, "kick": "mention", "automerge": false, "note": "B8 production smoke" }
+  ]
+}
