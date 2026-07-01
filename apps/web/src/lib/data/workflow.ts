@@ -114,6 +114,7 @@ export interface TimeBlockProposalAcceptResult {
   provider: DataProvider;
   proposal: TimeBlockProposal;
   block: CalendarBlock;
+  task: Task | null;
 }
 
 export interface TimeBlockProposalConflictCheckResult {
@@ -154,6 +155,23 @@ export interface ExecutionSessionMarkResult {
 export interface ReviewEntryCreateResult {
   provider: DataProvider;
   reviewEntry: ReviewEntry;
+}
+
+export type ReviewTaskTargetStatus = Extract<
+  Task["status"],
+  "active" | "backlog" | "dropped"
+>;
+
+export interface CalendarBlockUnplanResult {
+  provider: DataProvider;
+  block: CalendarBlock;
+  task: Task | null;
+}
+
+export interface TaskReviewTransitionResult {
+  provider: DataProvider;
+  task: Task;
+  blocks: CalendarBlock[];
 }
 
 export interface MinimalSupabaseClient {
@@ -565,7 +583,10 @@ export async function softDeleteArea(
 
   const query = client.from("areas") as {
     update: (row: Record<string, unknown>) => {
-      eq: (column: string, value: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
         select: (columns: string) => {
           single: () => Promise<{ data: unknown; error: unknown }>;
         };
@@ -609,7 +630,9 @@ export async function updateAreaColor(
       color: parsedInput.color,
       updated_at: new Date().toISOString(),
     });
-    const index = mockAreas.findIndex((item) => item.id === parsedInput.area_id);
+    const index = mockAreas.findIndex(
+      (item) => item.id === parsedInput.area_id,
+    );
     mockAreas.splice(index, 1, updatedArea);
 
     return {
@@ -625,7 +648,10 @@ export async function updateAreaColor(
 
   const query = client.from("areas") as {
     update: (row: Record<string, unknown>) => {
-      eq: (column: string, value: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
         select: (columns: string) => {
           single: () => Promise<{ data: unknown; error: unknown }>;
         };
@@ -761,7 +787,7 @@ export async function createTask(
         source_capture_item_id: parsedInput.source_capture_item_id,
         title: parsedInput.title,
         description: parsedInput.description,
-        status: "active",
+        status: parsedInput.status,
         priority_score: parsedInput.priority_score,
         priority_confidence: parsedInput.priority_confidence,
         task_type: parsedInput.task_type,
@@ -798,7 +824,7 @@ export async function createTask(
       source_capture_item_id: parsedInput.source_capture_item_id,
       title: parsedInput.title,
       description: parsedInput.description,
-      status: "active",
+      status: parsedInput.status,
       priority_score: parsedInput.priority_score,
       priority_confidence: parsedInput.priority_confidence,
       task_type: parsedInput.task_type,
@@ -1156,6 +1182,7 @@ export async function acceptTimeBlockProposal(
     provider: "supabase",
     proposal: parseTimeBlockProposal(result.proposal),
     block: parseCalendarBlock(result.block),
+    task: result.task ? parseTask(result.task) : null,
   };
 }
 
@@ -1290,17 +1317,6 @@ export async function createGoogleCalendarEventFromProposal(
   };
 }
 
-function plannedMinutesFrom(task: Task, block: CalendarBlock | null) {
-  if (block) {
-    const startMs = new Date(block.start_at).getTime();
-    const endMs = new Date(block.end_at).getTime();
-    const minutes = Math.max(0, Math.round((endMs - startMs) / 60000));
-    return minutes;
-  }
-
-  return task.estimated_minutes_high ?? task.estimated_minutes_low ?? null;
-}
-
 function mockExecutionSession(input: CreateExecutionSessionInput) {
   return parseExecutionSession({
     id: crypto.randomUUID(),
@@ -1411,105 +1427,28 @@ export async function createExecutionSession(
     };
   }
 
-  const user = await requireSupabaseUser(
+  await requireSupabaseUser(
     client,
     "Sign in before starting execution sessions.",
   );
 
-  const taskQuery = client.from("tasks") as {
-    select: (columns: string) => {
-      eq: (
-        column: string,
-        value: string,
-      ) => {
-        single: () => Promise<{ data: unknown; error: unknown }>;
-      };
-    };
-  };
-  const { data: taskData, error: taskError } = await taskQuery
-    .select(taskColumns)
-    .eq("id", parsedInput.task_id)
-    .single();
-  if (taskError) throw new Error(getSupabaseMessage(taskError));
-  const task = parseTask(taskData);
-
-  let block: CalendarBlock | null = null;
-  if (parsedInput.calendar_block_id) {
-    const blockQuery = client.from("calendar_blocks") as {
-      select: (columns: string) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => {
-          single: () => Promise<{ data: unknown; error: unknown }>;
-        };
-      };
-    };
-    const { data: blockData, error: blockError } = await blockQuery
-      .select(calendarBlockColumns)
-      .eq("id", parsedInput.calendar_block_id)
-      .single();
-    if (blockError) throw new Error(getSupabaseMessage(blockError));
-    block = parseCalendarBlock(blockData);
-    if (block.task_id !== task.id || block.area_id !== task.area_id) {
-      throw new Error("Selected calendar block does not belong to this task.");
-    }
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
   }
 
-  const sessionQuery = client.from("execution_sessions") as {
-    insert: (row: Record<string, unknown>) => {
-      select: (columns: string) => {
-        single: () => Promise<{ data: unknown; error: unknown }>;
-      };
-    };
-  };
-  const { data: sessionData, error: sessionError } = await sessionQuery
-    .insert({
-      user_id: user.id,
-      area_id: task.area_id,
-      task_id: task.id,
-      calendar_block_id: block?.id ?? null,
-      planned_minutes: plannedMinutesFrom(task, block),
-      actual_minutes: null,
-      paused_minutes: 0,
-      distraction_minutes: 0,
-      productivity_rating: null,
-      energy_rating: null,
-      outcome: "partial",
-      notes: null,
-    })
-    .select(executionSessionColumns)
-    .single();
-  if (sessionError) throw new Error(getSupabaseMessage(sessionError));
-
-  let updatedBlock: CalendarBlock | null = null;
-  if (block) {
-    const blockUpdateQuery = client.from("calendar_blocks") as {
-      update: (row: Record<string, unknown>) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => {
-          select: (columns: string) => {
-            single: () => Promise<{ data: unknown; error: unknown }>;
-          };
-        };
-      };
-    };
-    const { data: blockUpdateData, error: blockUpdateError } =
-      await blockUpdateQuery
-        .update({ status: "running" })
-        .eq("id", block.id)
-        .select(calendarBlockColumns)
-        .single();
-    if (blockUpdateError) throw new Error(getSupabaseMessage(blockUpdateError));
-    updatedBlock = parseCalendarBlock(blockUpdateData);
+  const { data, error } = await client.rpc("start_execution_session", {
+    p_task_id: parsedInput.task_id,
+    p_calendar_block_id: parsedInput.calendar_block_id ?? null,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
   }
 
+  const result = (data ?? {}) as Record<string, unknown>;
   return {
     provider: "supabase",
-    session: parseExecutionSession(sessionData),
-    block: updatedBlock,
+    session: parseExecutionSession(result.session),
+    block: result.block ? parseCalendarBlock(result.block) : null,
   };
 }
 
@@ -1616,6 +1555,73 @@ export async function markExecutionSession(
     session: parseExecutionSession(result.session),
     block: result.block ? parseCalendarBlock(result.block) : null,
     task: result.task ? parseTask(result.task) : null,
+  };
+}
+
+export async function unplanCalendarBlock(
+  client: MinimalSupabaseClient | null,
+  blockId: string,
+): Promise<CalendarBlockUnplanResult> {
+  if (!client) {
+    throw new Error("Mock unplanning uses the local workflow context.");
+  }
+
+  await requireSupabaseUser(client, "Sign in before unplanning blocks.");
+
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
+  }
+
+  const { data, error } = await client.rpc("unplan_calendar_block", {
+    p_block_id: blockId,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const result = (data ?? {}) as Record<string, unknown>;
+  return {
+    provider: "supabase",
+    block: parseCalendarBlock(result.block),
+    task: result.task ? parseTask(result.task) : null,
+  };
+}
+
+export async function applyTaskReviewTransition(
+  client: MinimalSupabaseClient | null,
+  taskId: string,
+  targetStatus: ReviewTaskTargetStatus,
+): Promise<TaskReviewTransitionResult> {
+  if (!client) {
+    throw new Error("Mock review task transitions use local workflow state.");
+  }
+
+  if (!["active", "backlog", "dropped"].includes(targetStatus)) {
+    throw new Error("Review task target status is not supported.");
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before saving review task choices.",
+  );
+
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
+  }
+
+  const { data, error } = await client.rpc("apply_task_review_transition", {
+    p_task_id: taskId,
+    p_target_status: targetStatus,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const result = (data ?? {}) as Record<string, unknown>;
+  return {
+    provider: "supabase",
+    task: parseTask(result.task),
+    blocks: parseCalendarBlocks(result.blocks ?? []),
   };
 }
 

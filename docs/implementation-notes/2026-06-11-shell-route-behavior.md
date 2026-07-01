@@ -49,6 +49,7 @@ Keep global shell controls secondary to route-local work so primary workflow rou
 - `apps/web/test-results/pass-7/171-shell-route-behavior/2026-06-11-171-triage-desktop-rest.png`
 
 Review note:
+
 - Route and state shown: `/triage` at rest on mobile and desktop.
 - Primary action stays route-local: the triage heading and current work surface land ahead of any shell input.
 - Safety truth still visible: quick note remains device-local and secondary when opened.

@@ -17,6 +17,8 @@ describe("Execute cockpit", () => {
 
     expect(await screen.findByText("Focus queue")).toBeDefined();
     expect(screen.getByText("Pick a block")).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Stop on this device" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Stop on this device" }),
+    ).toBeNull();
   });
 });

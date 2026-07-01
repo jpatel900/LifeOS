@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## How this file relates to AGENTS.md
 
-`AGENTS.md` is the repo's agent governance doc, written primarily for Codex/Cursor agents. Its **product and safety invariants are binding for every agent, including Claude** — they protect a real person's calendar, data, and money. Its **process scaffolding** (Codex prompt templates, verification oracles, skill-router gating, mandatory context-budget rituals) exists to keep weaker or less-supervised agents on rails. For Claude, treat that scaffolding as advisory: apply it in proportion to risk, using your own judgment about how much process a task actually needs. When `AGENTS.md` and this file disagree on *process*, use judgment; when they disagree on *safety or scope invariants*, `AGENTS.md` wins.
+`AGENTS.md` is the repo's agent governance doc, written primarily for Codex/Cursor agents. Its **product and safety invariants are binding for every agent, including Claude** — they protect a real person's calendar, data, and money. Its **process scaffolding** (Codex prompt templates, verification oracles, skill-router gating, mandatory context-budget rituals) exists to keep weaker or less-supervised agents on rails. For Claude, treat that scaffolding as advisory: apply it in proportion to risk, using your own judgment about how much process a task actually needs. When `AGENTS.md` and this file disagree on _process_, use judgment; when they disagree on _safety or scope invariants_, `AGENTS.md` wins.
 
 Implementation truth lives in `docs/`: `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `ENGINEERING_INVARIANTS.md`, `UX_FLOWS.md`, `SECURITY_PRIVACY.md`, `TEST_PLAN.md`, with ADRs in `docs/adr/` amending architecture. `docs/ENGINEERING_INVARIANTS.md` is binding for Claude too — it covers the positive guarantees (atomic multi-table transitions via RPC, export coverage for new tables, vendor adapters, module budgets) enforced by `apps/web/src/__tests__/engineeringInvariants.test.ts`. `docs/KNOWN_ISSUES.md` is the issue registry with an aging rule. `docs/PROJECT_STATE.md` is the cross-agent handoff file — worth reading when you need current status, and worth updating after changes that alter shipped behavior or governance so Codex agents picking up later aren't misled.
 
@@ -14,14 +14,14 @@ Useful orientation shortcut: `pnpm agent:context <area>` (areas: capture, parse-
 
 Run from the repo root after `pnpm install`. Node 22 (`.nvmrc`), pnpm workspaces + Turborepo.
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm dev` | Next.js dev server at http://localhost:3000 |
-| `pnpm lint` | ESLint across workspaces |
-| `pnpm type-check` | `next typegen` + `tsc --noEmit` |
-| `pnpm test` | Vitest suites |
-| `pnpm build` | Build all workspaces |
-| `pnpm format` / `format:check` | Prettier |
+| Command                        | Purpose                                     |
+| ------------------------------ | ------------------------------------------- |
+| `pnpm dev`                     | Next.js dev server at http://localhost:3000 |
+| `pnpm lint`                    | ESLint across workspaces                    |
+| `pnpm type-check`              | `next typegen` + `tsc --noEmit`             |
+| `pnpm test`                    | Vitest suites                               |
+| `pnpm build`                   | Build all workspaces                        |
+| `pnpm format` / `format:check` | Prettier                                    |
 
 Routine validation order: `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build` — scale to what you touched; a docs-only change doesn't need a full build.
 

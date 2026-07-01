@@ -3,13 +3,22 @@ import { MOCK_USER_ID } from "@/lib/mockData";
 import {
   acceptProjectDraft,
   acceptDraft,
+  acceptProposal,
   backlogDraft,
+  createLocalProposalFromTask,
   createInitialWorkflowState,
+  editDraft,
   planTaskAtHour,
+  markCurrentSession,
+  mergeDrafts,
   promoteBacklogTask,
   mockParseCapture,
+  rejectProposal,
+  splitDraft,
+  startExecutionSession,
   submitCapture,
   unplanTask,
+  updateProposal,
 } from "@/lib/workflow";
 
 describe("local mock workflow", () => {
@@ -82,6 +91,107 @@ describe("local mock workflow", () => {
     state = unplanTask(state, state.calendarBlocks[0].id);
     expect(state.tasks[0].status).toBe("active");
     expect(state.calendarBlocks[0].status).toBe("cancelled");
+  });
+
+  it("edits and reassigns a pending triage draft", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Clean up the volunteer follow-up.",
+      areaId: "area-volunteer",
+    });
+    const draftId = state.taskDrafts[0].id;
+    state = editDraft(state, draftId, {
+      title: "Send the sponsor follow-up",
+      area_id: "area-main-job",
+      first_tiny_step: "Open the sponsor notes",
+    });
+
+    expect(state.taskDrafts[0]).toMatchObject({
+      title: "Send the sponsor follow-up",
+      area_id: "area-main-job",
+      first_tiny_step: "Open the sponsor notes",
+    });
+    expect(state.timeBlockProposalDrafts[0].area_id).toBe("area-main-job");
+  });
+
+  it("splits and merges pending triage drafts locally", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Plan travel and confirm tickets.",
+      areaId: "area-personal",
+    });
+    const originalDraftId = state.taskDrafts[0].id;
+    state = splitDraft(state, originalDraftId, [
+      "Plan travel",
+      "Confirm tickets",
+    ]);
+
+    expect(state.taskDrafts[0].title).toBe("Plan travel");
+    expect(state.taskDrafts[1].title).toBe("Confirm tickets");
+    expect(
+      state.taskDrafts.find((draft) => draft.id === originalDraftId)?.status,
+    ).toBe("rejected");
+
+    state = mergeDrafts(state, state.taskDrafts[0].id, state.taskDrafts[1].id);
+
+    expect(state.taskDrafts[0].title).toBe("Plan travel; Confirm tickets");
+    expect(state.taskDrafts[1].status).toBe("rejected");
+  });
+
+  it("creates, edits, accepts, and rejects local proposals without external writes", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Prepare the plan proposal parity proof.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    state = createLocalProposalFromTask(state, state.tasks[0].id, {
+      proposed_start: "2026-06-30T14:00:00.000Z",
+      proposed_end: "2026-06-30T14:45:00.000Z",
+      rationale: "Manual local proposal proof.",
+    });
+
+    const proposalId = state.timeBlockProposals[0].id;
+    state = updateProposal(state, proposalId, {
+      proposed_start: "2026-06-30T15:00:00.000Z",
+      proposed_end: "2026-06-30T15:45:00.000Z",
+      rationale: "Moved locally.",
+    });
+
+    expect(state.timeBlockProposals[0]).toMatchObject({
+      status: "edited",
+      rationale: "Moved locally.",
+    });
+
+    const editedState = state;
+    const acceptedState = acceptProposal(editedState, proposalId);
+    expect(acceptedState.tasks[0].status).toBe("scheduled");
+    expect(acceptedState.calendarBlocks[0].task_id).toBe(
+      acceptedState.tasks[0].id,
+    );
+
+    state = rejectProposal(editedState, proposalId);
+    expect(state.timeBlockProposals[0].status).toBe("rejected");
+  });
+
+  it("uses elapsed minutes when marking an execution session complete", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Finish actual duration proof.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    state = planTaskAtHour(state, state.tasks[0].id, 10);
+    state = startExecutionSession(state, state.tasks[0].id);
+    state = markCurrentSession(state, "completed", { actualMinutes: 7 });
+
+    expect(state.executionSessions[0].actual_minutes).toBe(7);
+    expect(state.tasks[0].status).toBe("done");
+    expect(state.calendarBlocks[0].status).toBe("completed");
   });
 
   it("moves a project-like capture through triage into an accepted project", () => {

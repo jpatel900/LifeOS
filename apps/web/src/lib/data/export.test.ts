@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  buildUserDataExport,
-  USER_DATA_EXPORT_TABLES,
-} from "./export";
+import { buildUserDataExport, USER_DATA_EXPORT_TABLES } from "./export";
 
 function clientWithRows(rowsByTable: Record<string, unknown[]>) {
   const queried: string[] = [];

@@ -1,9 +1,6 @@
 import type { DataProvider } from "./data/workflow";
 
-export type AiSortingAvailability =
-  | "ai_configured"
-  | "ai_unavailable"
-  | "mock";
+export type AiSortingAvailability = "ai_configured" | "ai_unavailable" | "mock";
 
 export type CalendarConnectionState =
   | "connected"

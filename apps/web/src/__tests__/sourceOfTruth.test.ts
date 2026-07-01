@@ -244,7 +244,7 @@ describe("source-of-truth boundaries", () => {
       expect(source).not.toContain("DiagnosticsDisclosure");
     }
 
-    expect(cockpit).toContain("data-testid=\"lifeos-cockpit\"");
+    expect(cockpit).toContain('data-testid="lifeos-cockpit"');
     expect(cockpit).toContain("Save thought");
     expect(cockpit).toContain("Google writes are separate");
     expect(cockpit).toContain("All areas overview");
@@ -265,12 +265,12 @@ describe("source-of-truth boundaries", () => {
       readRepoFile("apps/web/src/app/globals.css"),
     );
 
-    expect(cockpit).toContain("data-theme={dark ? undefined : \"light\"}");
+    expect(cockpit).toContain('data-theme={dark ? undefined : "light"}');
     expect(cockpit).toContain("buildCockpitAccentStyle");
-    expect(accent).toContain("mix(acc, dark ? \"#ffffff\" : \"#000000\", 0.16)");
-    expect(accent).toContain("lum(acc) > 0.55 ? \"#1a1a14\" : \"#ffffff\"");
+    expect(accent).toContain('mix(acc, dark ? "#ffffff" : "#000000", 0.16)');
+    expect(accent).toContain('lum(acc) > 0.55 ? "#1a1a14" : "#ffffff"');
     expect(globalsCss).toContain("--bd: #0c0d10");
-    expect(globalsCss).toContain(".lifeos-cockpit[data-theme=\"light\"]");
+    expect(globalsCss).toContain('.lifeos-cockpit[data-theme="light"]');
   });
 
   it("keeps cockpit route components free of raw hex styling", () => {
@@ -300,7 +300,9 @@ describe("source-of-truth boundaries", () => {
     expect(cockpit).toContain("const areasResult = await listAreas(client)");
     expect(cockpit).toContain("syncPersistedAreas(areasResult.areas)");
     expect(cockpit).toContain("workflowAreaIdForPersistedArea(result.area)");
-    expect(cockpit).toContain("await updateAreaColor(createSupabaseBrowserClient()");
+    expect(cockpit).toContain(
+      "await updateAreaColor(createSupabaseBrowserClient()",
+    );
   });
 
   it("keeps Home as read-only workflow routing with no calendar/event write helpers", () => {
@@ -430,8 +432,12 @@ describe("source-of-truth boundaries", () => {
 
     expect(cockpit).toContain('role="status"');
     expect(cockpit).toContain('aria-live="polite"');
-    expect(settings).toContain('createAreaFeedback.variant === "destructive" ? undefined : "polite"');
-    expect(settings).toContain('colorFeedback.variant === "destructive" ? undefined : "polite"');
+    expect(settings).toContain(
+      'createAreaFeedback.variant === "destructive" ? undefined : "polite"',
+    );
+    expect(settings).toContain(
+      'colorFeedback.variant === "destructive" ? undefined : "polite"',
+    );
     expect(loadingState).toContain('role="status"');
     expect(loadingState).toContain('aria-live="polite"');
   });

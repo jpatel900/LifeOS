@@ -24,7 +24,9 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
             {description}
           </CardDescription>
         ) : null}
-        {action ? <div className="mt-4 flex flex-wrap gap-2">{action}</div> : null}
+        {action ? (
+          <div className="mt-4 flex flex-wrap gap-2">{action}</div>
+        ) : null}
       </CardContent>
     </Card>
   );

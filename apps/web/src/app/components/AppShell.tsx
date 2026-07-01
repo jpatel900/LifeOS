@@ -15,7 +15,10 @@ function AdminShell({ children }: { children: ReactNode }) {
             LifeOS
           </Link>
           <nav className="flex items-center gap-3 text-sm">
-            <Link href="/" className="text-muted-foreground hover:text-foreground">
+            <Link
+              href="/"
+              className="text-muted-foreground hover:text-foreground"
+            >
               Cockpit
             </Link>
             <Link

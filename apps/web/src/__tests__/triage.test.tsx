@@ -30,9 +30,12 @@ describe("Triage cockpit", () => {
       </AppShell>,
     );
 
-    fireEvent.change(await screen.findByPlaceholderText("Drop the thought here."), {
-      target: { value: "Review old someday notes" },
-    });
+    fireEvent.change(
+      await screen.findByPlaceholderText("Drop the thought here."),
+      {
+        target: { value: "Review old someday notes" },
+      },
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
     fireEvent.click(await screen.findByRole("button", { name: "Someday" }));
 

@@ -42,6 +42,7 @@ Keep Home calm, read-only, and action-forward while reducing support-card clutte
 - `apps/web/test-results/pass-7/178-181-home-launchpad/2026-06-11-178-181-home-desktop-rest.png`
 
 Review note:
+
 - Route and state shown: `/` at rest on mobile and desktop.
 - Primary action stays route-local: the `Capture a thought` CTA remains the dominant launch move.
 - Safety truth stayed visible: Home still says it is read-only, and degraded account-data states still route users toward Health without pretending nothing happened.

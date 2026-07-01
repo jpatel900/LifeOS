@@ -309,13 +309,136 @@ export function appendParsedWorkflowResult(
 export function editDraft(
   state: WorkflowState,
   draftId: string,
-  changes: Pick<Phase2TaskDraft, "title" | "description">,
+  changes: Partial<
+    Pick<
+      Phase2TaskDraft,
+      "title" | "description" | "area_id" | "first_tiny_step"
+    >
+  >,
 ): WorkflowState {
+  const nextDraft = state.taskDrafts.find((draft) => draft.id === draftId);
+  if (!nextDraft) {
+    return state;
+  }
+
+  const nextAreaId = changes.area_id ?? nextDraft.area_id;
   return {
     ...state,
     taskDrafts: state.taskDrafts.map((draft) =>
       draft.id === draftId ? { ...draft, ...changes } : draft,
     ),
+    timeBlockProposalDrafts: state.timeBlockProposalDrafts.map((proposal) =>
+      proposal.task_draft_id === draftId
+        ? { ...proposal, area_id: nextAreaId }
+        : proposal,
+    ),
+    ambiguityAssessments: state.ambiguityAssessments.map((assessment) =>
+      assessment.source_capture_item_id === nextDraft.capture_item_id
+        ? { ...assessment, area_id: nextAreaId }
+        : assessment,
+    ),
+    reviewLog: [`Edited draft: ${nextDraft.title}`, ...state.reviewLog],
+  };
+}
+
+export function splitDraft(
+  state: WorkflowState,
+  draftId: string,
+  titles: [string, string],
+): WorkflowState {
+  const draft = state.taskDrafts.find(
+    (item) => item.id === draftId && item.status === "pending",
+  );
+  const [firstTitle, secondTitle] = titles.map((title) => title.trim());
+  if (!draft || !firstTitle || !secondTitle) {
+    return state;
+  }
+
+  const createdAt = nowIso();
+  const makeDraft = (title: string): Phase2TaskDraft => ({
+    ...draft,
+    id: nextId("task-draft"),
+    title,
+    description: draft.description
+      ? `${draft.description}\n\nSplit from: ${draft.title}`
+      : `Split from: ${draft.title}`,
+    confidence: Math.min(draft.confidence, 0.72),
+    first_tiny_step: `Clarify the first move for: ${title}`,
+    status: "pending",
+    created_at: createdAt,
+  });
+
+  return {
+    ...state,
+    taskDrafts: [
+      makeDraft(firstTitle),
+      makeDraft(secondTitle),
+      ...state.taskDrafts.map((item) =>
+        item.id === draftId ? { ...item, status: "rejected" as const } : item,
+      ),
+    ],
+    timeBlockProposalDrafts: state.timeBlockProposalDrafts.map((proposal) =>
+      proposal.task_draft_id === draftId
+        ? { ...proposal, status: "rejected" as const }
+        : proposal,
+    ),
+    reviewLog: [`Split draft: ${draft.title}`, ...state.reviewLog],
+  };
+}
+
+export function mergeDrafts(
+  state: WorkflowState,
+  primaryDraftId: string,
+  secondaryDraftId: string,
+): WorkflowState {
+  if (primaryDraftId === secondaryDraftId) {
+    return state;
+  }
+
+  const primary = state.taskDrafts.find(
+    (item) => item.id === primaryDraftId && item.status === "pending",
+  );
+  const secondary = state.taskDrafts.find(
+    (item) => item.id === secondaryDraftId && item.status === "pending",
+  );
+  if (!primary || !secondary) {
+    return state;
+  }
+
+  const mergedTitle = `${primary.title}; ${secondary.title}`;
+  const mergedDescription = [primary.description, secondary.description]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return {
+    ...state,
+    taskDrafts: state.taskDrafts.map((draft) => {
+      if (draft.id === primaryDraftId) {
+        return {
+          ...draft,
+          title: mergedTitle,
+          description: mergedDescription || null,
+          confidence: Math.min(primary.confidence, secondary.confidence),
+          first_tiny_step:
+            primary.first_tiny_step ??
+            secondary.first_tiny_step ??
+            `Clarify the first move for: ${mergedTitle}`,
+        };
+      }
+      if (draft.id === secondaryDraftId) {
+        return { ...draft, status: "rejected" as const };
+      }
+      return draft;
+    }),
+    timeBlockProposalDrafts: state.timeBlockProposalDrafts.map((proposal) =>
+      proposal.task_draft_id === secondaryDraftId
+        ? { ...proposal, status: "rejected" as const }
+        : proposal,
+    ),
+    reviewLog: [
+      `Merged drafts: ${primary.title} + ${secondary.title}`,
+      ...state.reviewLog,
+    ],
   };
 }
 
@@ -578,7 +701,8 @@ export function planTaskAtHour(
 
   const start = new Date();
   start.setHours(hour, 0, 0, 0);
-  const minutes = task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
+  const minutes =
+    task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
   const end = new Date(start.getTime() + minutes * 60 * 1000);
   const createdAt = nowIso();
   const proposalId = nextId("proposal");
@@ -761,6 +885,11 @@ export function acceptProposal(
     timeBlockProposals: state.timeBlockProposals.map((item) =>
       item.id === proposalId ? { ...item, status: "accepted" } : item,
     ),
+    tasks: state.tasks.map((task) =>
+      task.id === proposal.task_id
+        ? { ...task, status: "scheduled", updated_at: createdAt }
+        : task,
+    ),
     calendarBlocks: [block, ...state.calendarBlocks],
     reviewLog: [
       `Accepted local proposal for task ${proposal.task_id}`,
@@ -773,13 +902,19 @@ export function startExecutionSession(
   state: WorkflowState,
   taskId: string,
 ): WorkflowState {
-  const task = state.tasks.find((item) => item.id === taskId);
+  const task = state.tasks.find(
+    (item) => item.id === taskId && item.status === "scheduled",
+  );
   if (!task) {
     return state;
   }
 
   const block =
-    state.calendarBlocks.find((item) => item.task_id === taskId) ?? null;
+    state.calendarBlocks.find(
+      (item) =>
+        item.task_id === taskId &&
+        ["scheduled", "running"].includes(item.status),
+    ) ?? null;
   const session: Phase2MockExecutionSession = {
     id: nextId("session"),
     user_id: task.user_id,
@@ -809,6 +944,7 @@ export function startExecutionSession(
 export function markCurrentSession(
   state: WorkflowState,
   status: Phase2MockExecutionSession["status"],
+  options: { actualMinutes?: number } = {},
 ): WorkflowState {
   const current = state.executionSessions[0];
   if (!current) {
@@ -835,7 +971,15 @@ export function markCurrentSession(
             status,
             outcome,
             actual_minutes:
-              status === "completed" ? 45 : session.actual_minutes,
+              status === "paused"
+                ? session.actual_minutes
+                : status === "completed" ||
+                    status === "missed" ||
+                    status === "stuck" ||
+                    status === "stopped" ||
+                    status === "distracted"
+                  ? (options.actualMinutes ?? session.actual_minutes ?? 0)
+                  : session.actual_minutes,
             distraction_minutes:
               status === "distracted" ? 10 : session.distraction_minutes,
             paused_minutes: status === "paused" ? 5 : session.paused_minutes,
@@ -856,8 +1000,82 @@ export function markCurrentSession(
     tasks: state.tasks.map((task) =>
       task.id === current.task_id && status === "completed"
         ? { ...task, status: "done" }
-        : task,
+        : task.id === current.task_id && status === "stuck"
+          ? { ...task, status: "blocked" }
+          : task,
     ),
     reviewLog: [`Session marked ${status}`, ...state.reviewLog],
+  };
+}
+
+function cancelOpenBlocksForTask(state: WorkflowState, taskId: string) {
+  return state.calendarBlocks.map((block) =>
+    block.task_id === taskId && ["scheduled", "running"].includes(block.status)
+      ? { ...block, status: "cancelled" as const, updated_at: nowIso() }
+      : block,
+  );
+}
+
+export function carryForwardTask(
+  state: WorkflowState,
+  taskId: string,
+): WorkflowState {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) {
+    return state;
+  }
+
+  return {
+    ...state,
+    calendarBlocks: cancelOpenBlocksForTask(state, taskId),
+    tasks: state.tasks.map((item) =>
+      item.id === taskId
+        ? { ...item, status: "active", updated_at: nowIso() }
+        : item,
+    ),
+    reviewLog: [`Carried forward: ${task.title}`, ...state.reviewLog],
+  };
+}
+
+export function deferTask(state: WorkflowState, taskId: string): WorkflowState {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) {
+    return state;
+  }
+
+  return {
+    ...state,
+    calendarBlocks: cancelOpenBlocksForTask(state, taskId),
+    tasks: state.tasks.map((item) =>
+      item.id === taskId
+        ? { ...item, status: "backlog", updated_at: nowIso() }
+        : item,
+    ),
+    reviewLog: [`Deferred: ${task.title}`, ...state.reviewLog],
+  };
+}
+
+export function dropTask(state: WorkflowState, taskId: string): WorkflowState {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) {
+    return state;
+  }
+
+  return {
+    ...state,
+    calendarBlocks: cancelOpenBlocksForTask(state, taskId),
+    tasks: state.tasks.map((item) =>
+      item.id === taskId
+        ? { ...item, status: "dropped", updated_at: nowIso() }
+        : item,
+    ),
+    reviewLog: [`Dropped: ${task.title}`, ...state.reviewLog],
+  };
+}
+
+export function saveReview(state: WorkflowState): WorkflowState {
+  return {
+    ...state,
+    reviewLog: [`Review saved: ${nowIso()}`, ...state.reviewLog],
   };
 }

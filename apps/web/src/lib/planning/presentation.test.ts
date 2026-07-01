@@ -66,16 +66,18 @@ describe("proposal status presentation", () => {
 
   it("reads rationale from rationale_json note with a fallback", () => {
     expect(
-      proposalRationale(proposal({ rationale_json: { note: "Morning focus" } })),
+      proposalRationale(
+        proposal({ rationale_json: { note: "Morning focus" } }),
+      ),
     ).toBe("Morning focus");
     expect(proposalRationale(proposal())).toBe("Local planning proposal.");
     expect(proposalRationale({ rationale: "Direct" })).toBe("Direct");
   });
 
   it("summarizes conflict state by flag and checked_at", () => {
-    expect(proposalConflictSummary(proposal({ conflict_flag: true })).label).toBe(
-      "Calendar conflict found",
-    );
+    expect(
+      proposalConflictSummary(proposal({ conflict_flag: true })).label,
+    ).toBe("Calendar conflict found");
     const checked = proposal({
       conflict_details_json: { checked_at: "2026-06-12T14:30:00.000Z" },
     });

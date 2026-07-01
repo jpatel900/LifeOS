@@ -8,6 +8,7 @@ import ExecutePage from "../app/execute/page";
 import HealthPage from "../app/health/page";
 import ReviewPage from "../app/review/page";
 import AreasSettingsPage from "../app/settings/areas/page";
+import AreasOverviewPage from "../app/areas/page";
 import TriagePage from "../app/triage/page";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
@@ -52,20 +53,32 @@ describe("handoff cockpit route provider wiring", () => {
     ["/calendar", () => <CalendarPage />, "Hour rail"],
     ["/execute", () => <ExecutePage />, "Focus queue"],
     ["/review", () => <ReviewPage />, /Day closed clean|carry over/],
-    ["/health", () => <HealthPage />, "All systems healthy"],
-  ])("renders %s through the shared cockpit", async (pathname, createPage, text) => {
-    renderThroughAppShell(createPage(), pathname);
+    [
+      "/health",
+      () => <HealthPage />,
+      /All systems healthy|checks need attention/,
+    ],
+    ["/areas", () => <AreasOverviewPage />, "All areas overview"],
+  ])(
+    "renders %s through the shared cockpit",
+    async (pathname, createPage, text) => {
+      renderThroughAppShell(createPage(), pathname);
 
-    expect(await screen.findByTestId("lifeos-cockpit")).toBeDefined();
-    expect(screen.getByRole("navigation", { name: "Workflow stages" })).toBeDefined();
-    expect(screen.getByText(text)).toBeDefined();
-  });
+      expect(await screen.findByTestId("lifeos-cockpit")).toBeDefined();
+      expect(
+        screen.getByRole("navigation", { name: "Workflow stages" }),
+      ).toBeDefined();
+      expect(screen.getByText(text)).toBeDefined();
+    },
+  );
 
   it("keeps settings outside the cockpit but inside the provider", async () => {
     renderThroughAppShell(<AreasSettingsPage />, "/settings/areas");
 
     expect(screen.queryByTestId("lifeos-cockpit")).toBeNull();
-    expect(await screen.findByRole("heading", { level: 1, name: "Areas" })).toBeDefined();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Areas" }),
+    ).toBeDefined();
     expect(screen.getByRole("link", { name: "Cockpit" })).toHaveAttribute(
       "href",
       "/",

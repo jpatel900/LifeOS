@@ -1,4 +1,4 @@
-import type { Phase2TaskDraft } from "@lifeos/schemas";
+import type { Phase2TaskDraft, Phase2TimeBlockProposal } from "@lifeos/schemas";
 import type { WorkflowState } from "@/lib/workflow";
 import type {
   Phase2MockArea,
@@ -38,14 +38,39 @@ export interface CockpitViewModel {
     block: Phase2MockCalendarBlock;
     hour: number;
   }[];
+  proposals: {
+    proposal: Phase2TimeBlockProposal;
+    task: Phase2MockTask;
+    hour: number;
+  }[];
   done: Phase2MockTask[];
   sessions: Phase2MockExecutionSession[];
+  healthChecks: WorkflowState["healthChecks"];
+  reviewQueue: {
+    task: Phase2MockTask;
+    block: Phase2MockCalendarBlock | null;
+    session: Phase2MockExecutionSession | null;
+    reason: "open" | "backlog" | "stuck" | "missed";
+  }[];
+  global: {
+    inbox: PipelineCard[];
+    today: PipelineCard[];
+    planned: PipelineCard[];
+    done: PipelineCard[];
+  };
   counts: Record<(typeof PIPELINE_STAGES)[number], number>;
   overview: {
     area: Phase2MockArea;
     openCount: number;
     cardColor: string;
   }[];
+}
+
+export interface PipelineCard {
+  id: string;
+  title: string;
+  area: Phase2MockArea;
+  cardColor: string;
 }
 
 function taskAreaMatches(task: { area_id: string }, areaId: string) {
@@ -56,13 +81,49 @@ function blockHour(block: Phase2MockCalendarBlock) {
   return new Date(block.start_at).getHours();
 }
 
+function areaForId(areas: Phase2MockArea[], areaId: string) {
+  return areas.find((area) => area.id === areaId) ?? null;
+}
+
+function cardColorFor(area: Phase2MockArea, dark: boolean) {
+  return cardBg(area.color, {
+    dark,
+    sf2: dark ? "#1b1e25" : "#ffffff",
+  });
+}
+
+function makePipelineCard(
+  item: { id: string; title: string; area_id: string },
+  areas: Phase2MockArea[],
+  dark: boolean,
+): PipelineCard | null {
+  const area = areaForId(areas, item.area_id);
+  if (!area) return null;
+  return {
+    id: item.id,
+    title: item.title,
+    area,
+    cardColor: cardColorFor(area, dark),
+  };
+}
+
+function uniqueReviewItems(
+  items: CockpitViewModel["reviewQueue"],
+): CockpitViewModel["reviewQueue"] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.task.id)) return false;
+    seen.add(item.task.id);
+    return true;
+  });
+}
+
 export function buildCockpitViewModel(
   state: WorkflowState,
   selectedAreaId: string | null,
   dark: boolean,
 ): CockpitViewModel {
-  const activeArea =
-    state.areas.find((area) => area.id === selectedAreaId) ??
+  const activeArea = state.areas.find((area) => area.id === selectedAreaId) ??
     state.areas[0] ?? {
       id: "area-default",
       user_id: "local",
@@ -85,20 +146,136 @@ export function buildCockpitViewModel(
   );
   const plannedBlocks = state.calendarBlocks.filter(
     (block) =>
-      block.status === "scheduled" &&
+      ["scheduled", "running"].includes(block.status) &&
       block.area_id === areaId &&
       Boolean(block.task_id),
   );
   const planned = plannedBlocks
     .map((block) => {
-      const task = state.tasks.find((item) => item.id === block.task_id);
+      const task = state.tasks.find(
+        (item) => item.id === block.task_id && item.status === "scheduled",
+      );
       return task ? { task, block, hour: blockHour(block) } : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => a.hour - b.hour);
+  const proposals = state.timeBlockProposals
+    .filter(
+      (proposal) =>
+        proposal.area_id === areaId &&
+        ["proposed", "edited"].includes(proposal.status),
+    )
+    .map((proposal) => {
+      const task = state.tasks.find(
+        (item) =>
+          item.id === proposal.task_id &&
+          ["active", "scheduled"].includes(item.status),
+      );
+      return task
+        ? {
+            proposal,
+            task,
+            hour: new Date(proposal.proposed_start).getHours(),
+          }
+        : null;
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
     .sort((a, b) => a.hour - b.hour);
   const sessions = state.executionSessions.filter(
     (session) => session.area_id === areaId,
   );
+  const reviewQueue = uniqueReviewItems([
+    ...state.executionSessions
+      .filter(
+        (session) =>
+          session.area_id === areaId &&
+          ["stuck", "missed", "stopped", "distracted"].includes(session.status),
+      )
+      .map((session) => {
+        const task = state.tasks.find((item) => item.id === session.task_id);
+        const block =
+          state.calendarBlocks.find(
+            (item) => item.id === session.calendar_block_id,
+          ) ?? null;
+        if (!task) return null;
+        return {
+          task,
+          block,
+          session,
+          reason:
+            session.status === "missed"
+              ? ("missed" as const)
+              : ("stuck" as const),
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    ...state.calendarBlocks
+      .filter((block) => block.area_id === areaId && block.status === "missed")
+      .map((block) => {
+        const task = state.tasks.find((item) => item.id === block.task_id);
+        if (!task) return null;
+        return {
+          task,
+          block,
+          session:
+            state.executionSessions.find(
+              (session) => session.calendar_block_id === block.id,
+            ) ?? null,
+          reason: "missed" as const,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
+    ...state.tasks
+      .filter((task) => task.area_id === areaId && task.status === "blocked")
+      .map((task) => ({
+        task,
+        block:
+          state.calendarBlocks.find((block) => block.task_id === task.id) ??
+          null,
+        session:
+          state.executionSessions.find(
+            (session) => session.task_id === task.id,
+          ) ?? null,
+        reason: "stuck" as const,
+      })),
+    ...today.map((task) => ({
+      task,
+      block: null,
+      session: null,
+      reason: "open" as const,
+    })),
+    ...backlog.map((task) => ({
+      task,
+      block: null,
+      session: null,
+      reason: "backlog" as const,
+    })),
+  ]);
+  const globalPlannedBlocks = state.calendarBlocks.filter(
+    (block) => ["scheduled", "running"].includes(block.status) && block.task_id,
+  );
+  const global = {
+    inbox: state.taskDrafts
+      .filter((draft) => draft.status === "pending")
+      .map((draft) => makePipelineCard(draft, state.areas, dark))
+      .filter((item): item is PipelineCard => Boolean(item)),
+    today: state.tasks
+      .filter((task) => task.status === "active")
+      .map((task) => makePipelineCard(task, state.areas, dark))
+      .filter((item): item is PipelineCard => Boolean(item)),
+    planned: globalPlannedBlocks
+      .map((block) => {
+        const task = state.tasks.find(
+          (item) => item.id === block.task_id && item.status === "scheduled",
+        );
+        return task ? makePipelineCard(task, state.areas, dark) : null;
+      })
+      .filter((item): item is PipelineCard => Boolean(item)),
+    done: state.tasks
+      .filter((task) => task.status === "done")
+      .map((task) => makePipelineCard(task, state.areas, dark))
+      .filter((item): item is PipelineCard => Boolean(item)),
+  };
 
   return {
     activeArea,
@@ -107,8 +284,12 @@ export function buildCockpitViewModel(
     today,
     backlog,
     planned,
+    proposals,
     done,
     sessions,
+    healthChecks: state.healthChecks,
+    reviewQueue,
+    global,
     counts: {
       today: today.length,
       capture: state.captureItems.filter((item) => item.area_id === areaId)
@@ -116,7 +297,7 @@ export function buildCockpitViewModel(
       triage: inbox.length,
       plan: today.length,
       execute: planned.length,
-      review: sessions.length,
+      review: reviewQueue.length + sessions.length,
     },
     overview: state.areas.map((area) => {
       const areaTasks = state.tasks.filter((task) => task.area_id === area.id);
@@ -128,12 +309,9 @@ export function buildCockpitViewModel(
         openCount:
           areaInbox.length +
           areaTasks.filter((task) =>
-            ["active", "backlog", "scheduled"].includes(task.status),
+            ["active", "backlog", "scheduled", "blocked"].includes(task.status),
           ).length,
-        cardColor: cardBg(area.color, {
-          dark,
-          sf2: dark ? "#1b1e25" : "#ffffff",
-        }),
+        cardColor: cardColorFor(area, dark),
       };
     }),
   };
@@ -155,6 +333,8 @@ export function stageForPathname(pathname: string | null): CockpitStage | null {
       return "review";
     case "/health":
       return "health";
+    case "/areas":
+      return "overview";
     default:
       return null;
   }

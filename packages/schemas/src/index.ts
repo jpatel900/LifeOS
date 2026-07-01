@@ -76,6 +76,7 @@ export const CreateTaskInputSchema = z
     source_capture_item_id: z.string().uuid().nullable().optional(),
     title: z.string().trim().min(1),
     description: nullableTrimmedText,
+    status: z.enum(["active", "backlog"]).optional().default("active"),
     priority_score: z.number().nullable().optional(),
     priority_confidence: z.number().min(0).max(1).nullable(),
     task_type: optionalNullableTrimmedText.optional(),

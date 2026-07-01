@@ -53,6 +53,7 @@ Reduce mobile shell-nav crowding without removing route access or broadening int
 - `apps/web/test-results/pass-7/170-mobile-nav-calm/desktop-triage-shell.png`
 
 Review note:
+
 - The primary workflow nav now stays in one lane on mobile, which shortens the shell before route content.
 - What stayed unchanged: route destinations, active-state logic, supporting `Areas admin` role, quiet-shell rules, and quick-note behavior.
 - What still remains noisy: quick-note controls and supporting rows still consume too much height on non-quiet routes; that belongs to `#171`.

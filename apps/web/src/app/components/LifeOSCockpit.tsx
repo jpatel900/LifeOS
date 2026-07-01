@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type { Phase2TaskDraft } from "@lifeos/schemas";
 import {
   Check,
   ChevronRight,
@@ -23,11 +24,8 @@ import {
   persistedAreaIdForWorkflowAreaId,
   workflowAreaIdForPersistedArea,
 } from "@/lib/workflowAreaMapping";
-import { useWorkflow } from "@/lib/WorkflowContext";
-import {
-  ACCENT_PALETTE,
-  buildCockpitAccentStyle,
-} from "@/lib/cockpit/accent";
+import { useWorkflow, type WorkflowSyncStatus } from "@/lib/WorkflowContext";
+import { ACCENT_PALETTE, buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import {
   buildCockpitViewModel,
   PIPELINE_STAGES,
@@ -54,6 +52,7 @@ const STAGE_PATHS: Partial<Record<CockpitStage, string>> = {
   execute: "/execute",
   review: "/review",
   health: "/health",
+  overview: "/areas",
 };
 
 const HOURS = Array.from({ length: 11 }, (_, index) => index + 8);
@@ -85,23 +84,35 @@ export function LifeOSCockpit({
     state,
     selectedAreaId,
     setSelectedAreaId,
+    syncStatus,
     syncPersistedAreas,
     submitCaptureText,
     acceptTaskDraft,
     backlogTaskDraft,
     rejectTaskDraft,
+    editTaskDraft,
+    splitTaskDraft,
+    mergeTaskDrafts,
     addArea,
     updateAreaColor: updateLocalAreaColor,
     promoteBacklogTask,
+    acceptLocalProposal,
+    rejectLocalProposal,
+    editLocalProposal,
+    createLocalProposalForTask,
     planTaskAtHour,
     unplanTask,
     startTaskSession,
     markSession,
+    carryForwardTask,
+    deferTask,
+    dropTask,
+    saveReview,
   } = useWorkflow();
   const [stage, setStage] = useState<CockpitStage>(initialStage);
   const [dark, setDark] = useState(true);
   const [captureText, setCaptureText] = useState("");
-  const [organizeAfterSave, setOrganizeAfterSave] = useState(false);
+  const [isCaptureSaving, setIsCaptureSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [isAddingArea, setIsAddingArea] = useState(false);
   const [newAreaName, setNewAreaName] = useState("");
@@ -111,11 +122,15 @@ export function LifeOSCockpit({
   const [running, setRunning] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [total, setTotal] = useState(0);
+  const captureSavingRef = useRef(false);
   const vm = useMemo(
     () => buildCockpitViewModel(state, selectedAreaId, dark),
     [dark, selectedAreaId, state],
   );
   const activeArea = vm.activeArea;
+  const hasRealActiveArea = state.areas.some(
+    (area) => area.id === activeArea.id,
+  );
 
   useEffect(() => {
     setStage(initialStage);
@@ -128,12 +143,8 @@ export function LifeOSCockpit({
       const parsed = JSON.parse(stored) as {
         dark?: boolean;
         areaId?: string | null;
-        organizeAfterSave?: boolean;
       };
       if (typeof parsed.dark === "boolean") setDark(parsed.dark);
-      if (typeof parsed.organizeAfterSave === "boolean") {
-        setOrganizeAfterSave(parsed.organizeAfterSave);
-      }
       if (
         parsed.areaId &&
         state.areas.some((area) => area.id === parsed.areaId)
@@ -155,13 +166,12 @@ export function LifeOSCockpit({
           dark,
           areaId: selectedAreaId,
           stage,
-          organizeAfterSave,
         }),
       );
     } catch {
       // Workflow remains usable when localStorage is blocked.
     }
-  }, [dark, organizeAfterSave, selectedAreaId, stage]);
+  }, [dark, selectedAreaId, stage]);
 
   useEffect(() => {
     if (!running || remaining <= 0) return;
@@ -212,13 +222,19 @@ export function LifeOSCockpit({
           syncPersistedAreas(areasResult.areas);
           setSelectedAreaId(workflowAreaIdForPersistedArea(result.area));
         }
+      } else {
+        showToast(`${name} added locally`);
       }
     } catch {
-      // Local area already exists; persisted sync can recover later.
+      showToast(`${name} added locally`);
     }
   }
 
   async function handleRecolor(color: string) {
+    if (!hasRealActiveArea) {
+      showToast("Create an area before recoloring");
+      return;
+    }
     updateLocalAreaColor(activeArea.id, color);
     setIsPaletteOpen(false);
     try {
@@ -245,19 +261,27 @@ export function LifeOSCockpit({
         });
       }
     } catch {
-      // Local recolor should not fail just because account persistence is absent.
+      showToast("Recolor kept locally");
     }
   }
 
   function handleSaveCapture() {
     const text = captureText.trim();
-    if (!text) return;
+    if (!text || captureSavingRef.current) return;
+    if (!hasRealActiveArea) {
+      showToast("Create an area before capture");
+      return;
+    }
+    captureSavingRef.current = true;
+    setIsCaptureSaving(true);
     submitCaptureText(text, activeArea.id);
     setCaptureText("");
-    showToast(
-      organizeAfterSave ? "Saved and queued for Triage" : "Saved to Triage",
-    );
+    showToast("Saved; waiting in Triage");
     navigate("triage");
+    window.setTimeout(() => {
+      captureSavingRef.current = false;
+      setIsCaptureSaving(false);
+    }, 500);
   }
 
   function startFocus(taskId: string, minutes: number) {
@@ -269,11 +293,68 @@ export function LifeOSCockpit({
   }
 
   function finishSession(status: "completed" | "stuck" | "missed") {
-    markSession(status);
+    const actualMinutes = Math.max(0, Math.ceil((total - remaining) / 60));
+    markSession(status, actualMinutes);
     setRunning(false);
     setRemaining(0);
     setActiveTaskId(null);
     showToast(status === "completed" ? "Session complete" : "Session logged");
+    navigate("review");
+  }
+
+  function toggleFocus() {
+    if (running) {
+      const actualMinutes = Math.max(0, Math.ceil((total - remaining) / 60));
+      markSession("paused", actualMinutes);
+      setRunning(false);
+      return;
+    }
+
+    setRunning(true);
+  }
+
+  function saveSideCapture(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (!hasRealActiveArea) {
+      showToast("Create an area before capture");
+      return;
+    }
+    submitCaptureText(trimmed, activeArea.id);
+    showToast("Side thought saved");
+  }
+
+  function createProposalForSelectedTask(taskId: string, hour: number) {
+    const task = state.tasks.find((item) => item.id === taskId);
+    const minutes =
+      task?.estimated_minutes_high ?? task?.estimated_minutes_low ?? 45;
+    const start = new Date();
+    start.setHours(hour, 0, 0, 0);
+    const end = new Date(start.getTime() + minutes * 60 * 1000);
+    createLocalProposalForTask({
+      taskId,
+      proposedStart: start.toISOString(),
+      proposedEnd: end.toISOString(),
+      rationale: `Drafted local proposal for ${formatHour(hour)}.`,
+    });
+    showToast("Proposal drafted locally");
+  }
+
+  function nudgeProposalLater(proposalId: string) {
+    const proposal = state.timeBlockProposals.find(
+      (item) => item.id === proposalId,
+    );
+    if (!proposal) return;
+    const start = new Date(proposal.proposed_start);
+    const end = new Date(proposal.proposed_end);
+    start.setMinutes(start.getMinutes() + 30);
+    end.setMinutes(end.getMinutes() + 30);
+    editLocalProposal(proposalId, {
+      proposed_start: start.toISOString(),
+      proposed_end: end.toISOString(),
+      rationale: `${proposal.rationale} Shifted later locally.`,
+    });
+    showToast("Proposal moved later");
   }
 
   return (
@@ -297,7 +378,7 @@ export function LifeOSCockpit({
           </button>
           <button
             type="button"
-            onClick={() => setStage("overview")}
+            onClick={() => navigate("overview")}
             className={cn(
               "min-h-10 rounded-full px-2 text-sm font-semibold sm:min-h-11 sm:px-3",
               stage === "overview"
@@ -394,6 +475,8 @@ export function LifeOSCockpit({
           </button>
         </header>
 
+        <SyncNotice status={syncStatus} />
+
         <nav
           className="relative grid grid-cols-6 gap-2 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2"
           aria-label="Workflow stages"
@@ -429,10 +512,8 @@ export function LifeOSCockpit({
             <CaptureView
               value={captureText}
               onChange={setCaptureText}
-              organizeAfterSave={organizeAfterSave}
-              onToggleOrganize={() =>
-                setOrganizeAfterSave((value) => !value)
-              }
+              saving={isCaptureSaving}
+              hasArea={hasRealActiveArea}
               onSave={handleSaveCapture}
             />
           ) : null}
@@ -442,6 +523,9 @@ export function LifeOSCockpit({
               onDrop={rejectTaskDraft}
               onBacklog={backlogTaskDraft}
               onToday={acceptTaskDraft}
+              onEdit={editTaskDraft}
+              onSplit={splitTaskDraft}
+              onMerge={mergeTaskDrafts}
               onPlan={() => navigate("plan")}
             />
           ) : null}
@@ -457,7 +541,12 @@ export function LifeOSCockpit({
               }}
               onUnplan={unplanTask}
               onPromote={promoteBacklogTask}
+              onAcceptProposal={acceptLocalProposal}
+              onRejectProposal={rejectLocalProposal}
+              onNudgeProposal={nudgeProposalLater}
+              onCreateProposal={createProposalForSelectedTask}
               onExecute={() => navigate("execute")}
+              onCapture={() => navigate("capture")}
             />
           ) : null}
           {stage === "execute" ? (
@@ -468,12 +557,30 @@ export function LifeOSCockpit({
               remaining={remaining}
               total={total}
               onStart={startFocus}
-              onToggle={() => setRunning((value) => !value)}
+              onToggle={toggleFocus}
               onFinish={finishSession}
+              onPlan={() => navigate("plan")}
+              onCapture={() => navigate("capture")}
+              onSideCapture={saveSideCapture}
             />
           ) : null}
-          {stage === "review" ? <ReviewView vm={vm} /> : null}
-          {stage === "health" ? <HealthView /> : null}
+          {stage === "review" ? (
+            <ReviewView
+              vm={vm}
+              onCarryForward={(taskId) => {
+                carryForwardTask(taskId);
+                navigate("plan");
+              }}
+              onDefer={deferTask}
+              onDrop={dropTask}
+              onSave={() => {
+                saveReview();
+                showToast("Review saved");
+                navigate("today");
+              }}
+            />
+          ) : null}
+          {stage === "health" ? <HealthView vm={vm} /> : null}
           {stage === "overview" ? (
             <OverviewView
               vm={vm}
@@ -513,6 +620,35 @@ function Panel({
       )}
     >
       {children}
+    </div>
+  );
+}
+
+function SyncNotice({ status }: { status: WorkflowSyncStatus }) {
+  const messages = [
+    status.storage === "blocked"
+      ? "Browser storage is blocked; this session may not restore after reload."
+      : null,
+    status.account === "local-only"
+      ? (status.message ?? "Account sync is unavailable; changes stay local.")
+      : null,
+    status.account === "sync-error"
+      ? (status.message ?? "Account sync failed; changes stay local.")
+      : null,
+    status.account === "synced" && status.pendingLocalChanges
+      ? (status.message ?? "Some local changes still need account sync.")
+      : null,
+  ].filter(Boolean);
+
+  if (!messages.length) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-[var(--cockpit-radius)] border border-[var(--amb-rng)] bg-[var(--amb-sf)] px-4 py-3 text-sm font-semibold text-[var(--amb-fg)]"
+    >
+      {messages[0]}
     </div>
   );
 }
@@ -616,16 +752,18 @@ function TodayView({
 function CaptureView({
   value,
   onChange,
-  organizeAfterSave,
-  onToggleOrganize,
+  saving,
+  hasArea,
   onSave,
 }: {
   value: string;
   onChange: (value: string) => void;
-  organizeAfterSave: boolean;
-  onToggleOrganize: () => void;
+  saving: boolean;
+  hasArea: boolean;
   onSave: () => void;
 }) {
+  const canSave = value.trim().length > 0 && !saving && hasArea;
+
   return (
     <Panel className="grid min-h-[560px] place-items-center">
       <div className="w-full max-w-2xl">
@@ -642,26 +780,23 @@ function CaptureView({
           className="min-h-64 w-full resize-none border-0 bg-transparent text-3xl font-semibold leading-tight text-[var(--ink)] outline-none placeholder:text-[var(--fnt)] focus:caret-[var(--acc)]"
         />
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onToggleOrganize}
-            className={cn(
-              "min-h-11 rounded-full border px-4 text-sm font-semibold",
-              organizeAfterSave
-                ? "border-[var(--acc-rng)] bg-[var(--acc-sf)] text-[var(--ink)]"
-                : "border-[var(--ln2)] text-[var(--mut)]",
-            )}
-          >
-            Organize after save
-          </button>
+          <span className="text-sm font-semibold text-[var(--mut)]">
+            {hasArea ? "Saves raw text first" : "Create an area before capture"}
+          </span>
           <div className="flex items-center gap-3">
             <span className="mono text-sm text-[var(--fnt)]">⌘↵</span>
             <button
               type="button"
               onClick={onSave}
-              className="min-h-12 rounded-full bg-[var(--acc)] px-6 font-bold text-[var(--on-acc)]"
+              disabled={!canSave}
+              className={cn(
+                "min-h-12 rounded-full px-6 font-bold",
+                canSave
+                  ? "bg-[var(--acc)] text-[var(--on-acc)]"
+                  : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+              )}
             >
-              Save thought
+              {saving ? "Saving" : "Save thought"}
             </button>
           </div>
         </div>
@@ -675,15 +810,59 @@ function TriageView({
   onDrop,
   onBacklog,
   onToday,
+  onEdit,
+  onSplit,
+  onMerge,
   onPlan,
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
   onDrop: (draftId: string) => void;
   onBacklog: (draftId: string) => void;
   onToday: (draftId: string) => void;
+  onEdit: (
+    draftId: string,
+    changes: Partial<
+      Pick<
+        Phase2TaskDraft,
+        "title" | "description" | "area_id" | "first_tiny_step"
+      >
+    >,
+  ) => void;
+  onSplit: (draftId: string, titles: [string, string]) => void;
+  onMerge: (primaryDraftId: string, secondaryDraftId: string) => void;
   onPlan: () => void;
 }) {
   const current = vm.inbox[0];
+  const nextDraft = vm.inbox[1] ?? null;
+  const [editTitle, setEditTitle] = useState(current?.title ?? "");
+  const [editDescription, setEditDescription] = useState(
+    current?.description ?? "",
+  );
+  const [editFirstStep, setEditFirstStep] = useState(
+    current?.first_tiny_step ?? "",
+  );
+  const [editAreaId, setEditAreaId] = useState(
+    current?.area_id ?? vm.activeArea.id,
+  );
+  const [splitFirst, setSplitFirst] = useState("");
+  const [splitSecond, setSplitSecond] = useState("");
+
+  useEffect(() => {
+    setEditTitle(current?.title ?? "");
+    setEditDescription(current?.description ?? "");
+    setEditFirstStep(current?.first_tiny_step ?? "");
+    setEditAreaId(current?.area_id ?? vm.activeArea.id);
+    setSplitFirst("");
+    setSplitSecond("");
+  }, [
+    current?.id,
+    current?.area_id,
+    current?.description,
+    current?.first_tiny_step,
+    current?.title,
+    vm.activeArea.id,
+  ]);
+
   if (!current) {
     return (
       <Panel className="grid min-h-[520px] place-items-center text-center">
@@ -715,7 +894,11 @@ function TriageView({
             <Circle
               key={item.id}
               size={10}
-              className={item.id === current.id ? "text-[var(--acc)]" : "text-[var(--ln2)]"}
+              className={
+                item.id === current.id
+                  ? "text-[var(--acc)]"
+                  : "text-[var(--ln2)]"
+              }
               fill="currentColor"
             />
           ))}
@@ -743,6 +926,111 @@ function TriageView({
             Do today
           </button>
         </div>
+        <details className="mt-5 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4">
+          <summary className="cursor-pointer font-bold">Adjust draft</summary>
+          <div className="mt-4 grid gap-3">
+            <label className="grid gap-1 text-sm font-semibold text-[var(--mut)]">
+              Title
+              <input
+                value={editTitle}
+                onChange={(event) => setEditTitle(event.target.value)}
+                className="min-h-11 rounded-xl border border-[var(--ln2)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-semibold text-[var(--mut)]">
+              First move
+              <input
+                value={editFirstStep}
+                onChange={(event) => setEditFirstStep(event.target.value)}
+                className="min-h-11 rounded-xl border border-[var(--ln2)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-semibold text-[var(--mut)]">
+              Area
+              <select
+                value={editAreaId}
+                onChange={(event) => setEditAreaId(event.target.value)}
+                className="min-h-11 rounded-xl border border-[var(--ln2)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+              >
+                {vm.areas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-semibold text-[var(--mut)]">
+              Notes
+              <textarea
+                value={editDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
+                className="min-h-20 rounded-xl border border-[var(--ln2)] bg-[var(--sf)] px-3 py-2 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() =>
+                onEdit(current.id, {
+                  title: editTitle.trim() || current.title,
+                  description: editDescription.trim() || null,
+                  first_tiny_step:
+                    editFirstStep.trim() || current.first_tiny_step,
+                  area_id: editAreaId,
+                })
+              }
+              className="min-h-11 rounded-xl bg-[var(--btn)] font-bold text-[var(--btn-fg)]"
+            >
+              Save edits
+            </button>
+          </div>
+        </details>
+        <details className="mt-3 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4">
+          <summary className="cursor-pointer font-bold">Split or merge</summary>
+          <div className="mt-4 grid gap-3">
+            <input
+              value={splitFirst}
+              onChange={(event) => setSplitFirst(event.target.value)}
+              placeholder="First split task"
+              className="min-h-11 rounded-xl border border-[var(--ln2)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+            />
+            <input
+              value={splitSecond}
+              onChange={(event) => setSplitSecond(event.target.value)}
+              placeholder="Second split task"
+              className="min-h-11 rounded-xl border border-[var(--ln2)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+            />
+            <button
+              type="button"
+              disabled={!splitFirst.trim() || !splitSecond.trim()}
+              onClick={() =>
+                onSplit(current.id, [splitFirst.trim(), splitSecond.trim()])
+              }
+              className={cn(
+                "min-h-11 rounded-xl font-bold",
+                splitFirst.trim() && splitSecond.trim()
+                  ? "bg-[var(--acc)] text-[var(--on-acc)]"
+                  : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+              )}
+            >
+              Split draft
+            </button>
+            <button
+              type="button"
+              disabled={!nextDraft}
+              onClick={() => nextDraft && onMerge(current.id, nextDraft.id)}
+              className={cn(
+                "min-h-11 rounded-xl font-bold",
+                nextDraft
+                  ? "bg-[var(--blu-sf)] text-[var(--blu-fg)]"
+                  : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+              )}
+            >
+              {nextDraft
+                ? `Merge next: ${nextDraft.title}`
+                : "No draft to merge"}
+            </button>
+          </div>
+        </details>
       </div>
     </Panel>
   );
@@ -755,7 +1043,12 @@ function PlanView({
   onPlan,
   onUnplan,
   onPromote,
+  onAcceptProposal,
+  onRejectProposal,
+  onNudgeProposal,
+  onCreateProposal,
   onExecute,
+  onCapture,
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
   selectedTaskId: string | null;
@@ -763,8 +1056,18 @@ function PlanView({
   onPlan: (hour: number) => void;
   onUnplan: (blockId: string) => void;
   onPromote: (taskId: string) => void;
+  onAcceptProposal: (proposalId: string) => void;
+  onRejectProposal: (proposalId: string) => void;
+  onNudgeProposal: (proposalId: string) => void;
+  onCreateProposal: (taskId: string, hour: number) => void;
   onExecute: () => void;
+  onCapture: () => void;
 }) {
+  const hasReadyBlock = vm.planned.length > 0;
+  const hasTaskToPlace = vm.today.length > 0;
+  const firstOpenHour =
+    HOURS.find((hour) => !vm.planned.some((item) => item.hour === hour)) ?? 9;
+
   return (
     <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
       <Panel>
@@ -779,7 +1082,9 @@ function PlanView({
               <button
                 key={hour}
                 type="button"
-                onClick={() => (placed ? onUnplan(placed.block.id) : onPlan(hour))}
+                onClick={() =>
+                  placed ? onUnplan(placed.block.id) : onPlan(hour)
+                }
                 className={cn(
                   "grid min-h-16 grid-cols-[58px_1fr] items-center rounded-2xl border p-3 text-left",
                   placed
@@ -795,7 +1100,9 @@ function PlanView({
                 <span>
                   {placed ? (
                     <>
-                      <span className="block font-bold">{placed.task.title}</span>
+                      <span className="block font-bold">
+                        {placed.task.title}
+                      </span>
                       <span className="text-sm text-[var(--mut)]">
                         Tap to unplan
                       </span>
@@ -861,22 +1168,99 @@ function PlanView({
           </div>
         </Panel>
         <Panel>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-bold">Proposals</h2>
+            <button
+              type="button"
+              disabled={!selectedTaskId}
+              onClick={() =>
+                selectedTaskId &&
+                onCreateProposal(selectedTaskId, firstOpenHour)
+              }
+              className={cn(
+                "min-h-10 rounded-full px-4 text-sm font-bold",
+                selectedTaskId
+                  ? "bg-[var(--blu-sf)] text-[var(--blu-fg)]"
+                  : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+              )}
+            >
+              Draft block
+            </button>
+          </div>
+          <div className="mt-4 grid gap-2">
+            {vm.proposals.length ? (
+              vm.proposals.map(({ proposal, task, hour }) => (
+                <div
+                  key={proposal.id}
+                  className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold">{task.title}</p>
+                      <p className="mono mt-1 text-sm text-[var(--fnt)]">
+                        {formatHour(hour)} · {proposal.status}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onAcceptProposal(proposal.id)}
+                      className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                    >
+                      Accept
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onNudgeProposal(proposal.id)}
+                      className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-semibold text-[var(--ink)]"
+                    >
+                      Move later
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRejectProposal(proposal.id)}
+                      className="min-h-9 rounded-full border border-[var(--ln2)] px-3 text-sm font-semibold text-[var(--mut)]"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-[var(--mut)]">
+                Select a task, then draft a local proposal.
+              </p>
+            )}
+          </div>
+        </Panel>
+        <Panel>
           <h2 className="text-xl font-bold">Calendar approval</h2>
           <details className="mt-3 text-[var(--mut)]">
             <summary className="cursor-pointer font-semibold text-[var(--ink)]">
               Google writes are separate
             </summary>
             <p className="mt-3">
-              This rail creates local blocks. External calendar writes still need
-              explicit approval.
+              This rail creates local blocks. External calendar writes still
+              need explicit approval.
             </p>
           </details>
           <button
             type="button"
-            onClick={onExecute}
-            className="mt-5 min-h-12 w-full rounded-full bg-[var(--btn)] font-bold text-[var(--btn-fg)]"
+            onClick={hasReadyBlock ? onExecute : onCapture}
+            disabled={!hasReadyBlock && hasTaskToPlace}
+            className={cn(
+              "mt-5 min-h-12 w-full rounded-full font-bold",
+              hasReadyBlock || !hasTaskToPlace
+                ? "bg-[var(--btn)] text-[var(--btn-fg)]"
+                : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+            )}
           >
-            Start focusing
+            {hasReadyBlock
+              ? "Start focusing"
+              : hasTaskToPlace
+                ? "Place a block first"
+                : "Capture a thought"}
           </button>
         </Panel>
       </div>
@@ -893,6 +1277,9 @@ function ExecuteView({
   onStart,
   onToggle,
   onFinish,
+  onPlan,
+  onCapture,
+  onSideCapture,
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
   activeTaskId: string | null;
@@ -902,10 +1289,14 @@ function ExecuteView({
   onStart: (taskId: string, minutes: number) => void;
   onToggle: () => void;
   onFinish: (status: "completed" | "stuck" | "missed") => void;
+  onPlan: () => void;
+  onCapture: () => void;
+  onSideCapture: (text: string) => void;
 }) {
   const active = vm.planned.find((item) => item.task.id === activeTaskId);
   const minutes = Math.floor(remaining / 60);
   const seconds = `${remaining % 60}`.padStart(2, "0");
+  const [sideCapture, setSideCapture] = useState("");
 
   return (
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -927,13 +1318,34 @@ function ExecuteView({
               </button>
             ))
           ) : (
-            <p className="text-[var(--mut)]">No planned blocks yet.</p>
+            <div className="grid gap-3">
+              <p className="text-[var(--mut)]">No planned blocks yet.</p>
+              <button
+                type="button"
+                onClick={onPlan}
+                className="min-h-12 rounded-full bg-[var(--btn)] px-5 font-bold text-[var(--btn-fg)]"
+              >
+                Plan the day
+              </button>
+              <button
+                type="button"
+                onClick={onCapture}
+                className="min-h-12 rounded-full border border-[var(--ln2)] px-5 text-[var(--mut)]"
+              >
+                Capture thought
+              </button>
+            </div>
           )}
         </div>
       </Panel>
       <Panel className="grid place-items-center text-center">
         <div>
-          <svg width="260" height="260" viewBox="0 0 260 260" className="mx-auto">
+          <svg
+            width="260"
+            height="260"
+            viewBox="0 0 260 260"
+            className="mx-auto"
+          >
             <circle
               cx="130"
               cy="130"
@@ -997,21 +1409,68 @@ function ExecuteView({
               <Focus className="text-[var(--fnt)]" size={38} />
             )}
           </div>
+          {active ? (
+            <div className="mx-auto mt-7 grid max-w-md gap-2 text-left">
+              <input
+                value={sideCapture}
+                onChange={(event) => setSideCapture(event.target.value)}
+                placeholder="Capture without leaving focus."
+                className="min-h-12 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] px-4 text-[var(--ink)] outline-none placeholder:text-[var(--fnt)]"
+              />
+              <button
+                type="button"
+                disabled={!sideCapture.trim()}
+                onClick={() => {
+                  onSideCapture(sideCapture);
+                  setSideCapture("");
+                }}
+                className={cn(
+                  "min-h-11 rounded-full px-4 text-sm font-bold",
+                  sideCapture.trim()
+                    ? "bg-[var(--btn)] text-[var(--btn-fg)]"
+                    : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+                )}
+              >
+                Save side thought
+              </button>
+            </div>
+          ) : null}
         </div>
       </Panel>
     </div>
   );
 }
 
-function ReviewView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
-  const total = vm.done.length + vm.planned.length + vm.today.length;
+function ReviewView({
+  vm,
+  onCarryForward,
+  onDefer,
+  onDrop,
+  onSave,
+}: {
+  vm: ReturnType<typeof buildCockpitViewModel>;
+  onCarryForward: (taskId: string) => void;
+  onDefer: (taskId: string) => void;
+  onDrop: (taskId: string) => void;
+  onSave: () => void;
+}) {
+  const total =
+    vm.done.length +
+    vm.planned.length +
+    vm.today.length +
+    vm.reviewQueue.length;
   const done = vm.done.length;
   const carry = Math.max(total - done, 0);
   return (
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <Panel className="grid place-items-center text-center">
         <div>
-          <svg width="220" height="220" viewBox="0 0 220 220" className="mx-auto">
+          <svg
+            width="220"
+            height="220"
+            viewBox="0 0 220 220"
+            className="mx-auto"
+          >
             <circle
               cx="110"
               cy="110"
@@ -1036,6 +1495,13 @@ function ReviewView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
             {carry === 0 ? "Day closed clean" : `${carry} carry over`}
           </h1>
         </div>
+        <button
+          type="button"
+          onClick={onSave}
+          className="mt-7 min-h-12 rounded-full bg-[var(--btn)] px-5 font-bold text-[var(--btn-fg)]"
+        >
+          Save review
+        </button>
       </Panel>
       <Panel>
         <h2 className="text-xl font-bold">Planned vs actual</h2>
@@ -1046,7 +1512,8 @@ function ReviewView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
                 <div className="mb-1 flex justify-between text-sm text-[var(--mut)]">
                   <span>{session.outcome}</span>
                   <span className="mono">
-                    {session.actual_minutes ?? 0}/{session.planned_minutes ?? 0}m
+                    {session.actual_minutes ?? 0}/{session.planned_minutes ?? 0}
+                    m
                   </span>
                 </div>
                 <div className="h-3 overflow-hidden rounded-full bg-[var(--track)]">
@@ -1065,31 +1532,89 @@ function ReviewView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
               </div>
             ))
           ) : (
-            <p className="text-[var(--mut)]">Focus sessions will appear here.</p>
+            <p className="text-[var(--mut)]">
+              Focus sessions will appear here.
+            </p>
           )}
         </div>
+        {vm.reviewQueue.length ? (
+          <div className="mt-6 grid gap-3">
+            <h2 className="text-xl font-bold">Needs recovery</h2>
+            {vm.reviewQueue.map((item) => (
+              <div
+                key={`visible-${item.reason}-${item.task.id}`}
+                className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-[var(--ink)]">
+                      {item.task.title}
+                    </p>
+                    <p className="text-sm capitalize text-[var(--mut)]">
+                      {item.reason}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onCarryForward(item.task.id)}
+                      className="min-h-10 rounded-full bg-[var(--acc)] px-4 text-sm font-bold text-[var(--on-acc)]"
+                    >
+                      Carry forward
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDefer(item.task.id)}
+                      className="min-h-10 rounded-full bg-[var(--blu-sf)] px-4 text-sm font-semibold text-[var(--blu-fg)]"
+                    >
+                      Defer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDrop(item.task.id)}
+                      className="min-h-10 rounded-full border border-[var(--ln2)] px-4 text-sm text-[var(--mut)]"
+                    >
+                      Drop
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <details className="mt-6 text-[var(--mut)]">
           <summary className="cursor-pointer font-semibold text-[var(--ink)]">
             Carry-forward details
           </summary>
-          <div className="mt-3 grid gap-2">
-            {[...vm.today, ...vm.backlog].map((task) => (
-              <div
-                key={task.id}
-                className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-3"
-              >
-                {task.title}
-              </div>
-            ))}
-          </div>
+          <p className="mt-3">
+            {vm.reviewQueue.length
+              ? `${vm.reviewQueue.length} item${
+                  vm.reviewQueue.length === 1 ? "" : "s"
+                } staged above.`
+              : "Nothing needs recovery."}
+          </p>
         </details>
       </Panel>
     </div>
   );
 }
 
-function HealthView() {
+function HealthView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
   const [pulse, setPulse] = useState(false);
+  const checks = vm.healthChecks;
+  const critical = checks.filter((check) => check.status === "critical").length;
+  const watch = checks.filter((check) => check.status === "watch").length;
+  const healthy = checks.filter((check) => check.status === "healthy").length;
+  const attention = critical + watch;
+  const score = Math.round(
+    checks.reduce((sum, check) => sum + check.score, 0) /
+      Math.max(checks.length, 1),
+  );
+  const headline =
+    attention === 0
+      ? "All systems healthy"
+      : `${attention} checks need attention`;
+
   return (
     <Panel className="min-h-[560px]">
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -1107,22 +1632,29 @@ function HealthView() {
           >
             <HeartPulse size={64} />
           </button>
-          <h1 className="mt-6 text-4xl font-extrabold">All systems healthy</h1>
-          <p className="mono mt-2 text-[var(--grn-fg)]">11/11</p>
+          <h1 className="mt-6 text-4xl font-extrabold">{headline}</h1>
+          <p className="mono mt-2 text-[var(--grn-fg)]">
+            {score}/100 · {healthy}/{checks.length}
+          </p>
         </div>
         <div className="grid content-center gap-3">
-          {["Storage", "Integrations", "Telemetry off"].map((label) => (
+          {checks.slice(0, 3).map((check) => (
             <div
-              key={label}
+              key={check.id}
               className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
             >
               <div className="flex items-center justify-between">
-                <span className="font-bold">{label}</span>
-                <Check className="text-[var(--grn-fg)]" size={20} />
+                <span className="font-bold">{check.subsystem}</span>
+                <Check
+                  className={
+                    check.status === "healthy"
+                      ? "text-[var(--grn-fg)]"
+                      : "text-[var(--amb-fg)]"
+                  }
+                  size={20}
+                />
               </div>
-              <p className="mt-1 text-sm text-[var(--mut)]">
-                No action needed right now.
-              </p>
+              <p className="mt-1 text-sm text-[var(--mut)]">{check.summary}</p>
             </div>
           ))}
           <button
@@ -1140,10 +1672,16 @@ function HealthView() {
             <summary className="cursor-pointer font-semibold text-[var(--ink)]">
               Full breakdown
             </summary>
-            <p className="mt-3">
-              Auth, database, parser, scheduler, calendar connector, and review
-              logging are calm in this local cockpit view.
-            </p>
+            <div className="mt-3 grid gap-2">
+              {checks.map((check) => (
+                <p key={check.id}>
+                  <span className="font-semibold text-[var(--ink)]">
+                    {check.subsystem}:
+                  </span>{" "}
+                  {check.summary}
+                </p>
+              ))}
+            </div>
           </details>
         </div>
       </div>
@@ -1204,13 +1742,10 @@ function OverviewView({
       </Panel>
       <div className="grid gap-4 lg:grid-cols-4">
         {[
-          { title: "To triage", items: vm.inbox.map((item) => item.title) },
-          { title: "To plan", items: vm.today.map((item) => item.title) },
-          {
-            title: "Scheduled",
-            items: vm.planned.map((item) => item.task.title),
-          },
-          { title: "Done", items: vm.done.map((item) => item.title) },
+          { title: "To triage", items: vm.global.inbox },
+          { title: "To plan", items: vm.global.today },
+          { title: "Scheduled", items: vm.global.planned },
+          { title: "Done", items: vm.global.done },
         ].map((column) => (
           <Panel key={column.title}>
             <h2 className="font-bold">{column.title}</h2>
@@ -1218,10 +1753,21 @@ function OverviewView({
               {column.items.length ? (
                 column.items.map((item) => (
                   <div
-                    key={item}
-                    className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-3 text-sm"
+                    key={item.id}
+                    className="rounded-2xl border border-[var(--ln)] p-3 text-sm"
+                    style={{
+                      background: item.cardColor,
+                      borderLeft: `3px solid ${item.area.color}`,
+                    }}
                   >
-                    {item}
+                    <span className="block font-semibold">{item.title}</span>
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--mut)]">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ background: item.area.color }}
+                      />
+                      {item.area.name}
+                    </span>
                   </div>
                 ))
               ) : (
