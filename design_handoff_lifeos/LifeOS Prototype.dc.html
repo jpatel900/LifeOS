@@ -1,2251 +1,679 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="./support.js"></script>
-  </head>
-  <body>
-    <x-dc>
-      <helmet>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
-        <style>
-          * {
-            box-sizing: border-box;
-          }
-          html,
-          body {
-            margin: 0;
-          }
-          body {
-            background: #0c0d10;
-            font-family: "Hanken Grotesk", system-ui, sans-serif;
-            -webkit-font-smoothing: antialiased;
-          }
-          @keyframes blink {
-            0%,
-            49% {
-              opacity: 1;
-            }
-            50%,
-            100% {
-              opacity: 0;
-            }
-          }
-          @keyframes pop {
-            0% {
-              transform: scale(0.6);
-              opacity: 0;
-            }
-            60% {
-              transform: scale(1.12);
-            }
-            100% {
-              transform: scale(1);
-              opacity: 1;
-            }
-          }
-          @keyframes slideup {
-            0% {
-              transform: translateY(14px);
-              opacity: 0;
-            }
-            100% {
-              transform: translateY(0);
-              opacity: 1;
-            }
-          }
-          @keyframes pulse {
-            0%,
-            100% {
-              transform: scale(1);
-              opacity: 1;
-            }
-            50% {
-              transform: scale(1.06);
-              opacity: 0.7;
-            }
-          }
-          textarea,
-          input,
-          button {
-            font-family: inherit;
-          }
-          textarea::placeholder {
-            color: var(--fnt);
-          }
-        </style>
-      </helmet>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#0c0d10;font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+  @keyframes pop{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+  @keyframes slideup{0%{transform:translateY(14px);opacity:0}100%{transform:translateY(0);opacity:1}}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.06);opacity:.7}}
+  textarea,input,button{font-family:inherit}
+  textarea::placeholder{color:var(--fnt)}
+</style>
+</helmet>
 
-      <div
-        style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:clamp(0px,3vw,34px) clamp(0px,3vw,20px) 60px;{{ themeVars }};background:var(--bd);transition:background .25s"
-      >
-        <div
-          style="
-            width: 100%;
-            max-width: var(--max);
-            background: var(--sf);
-            border: 1px solid var(--ln2);
-            border-radius: 22px;
-            box-shadow: var(--shadow);
-            overflow: hidden;
-            min-height: 716px;
-            display: flex;
-            flex-direction: column;
-            color: var(--ink);
-            transition:
-              background 0.25s,
-              border-color 0.25s;
-          "
-        >
-          <!-- HEADER -->
-          <div
-            style="
-              position: relative;
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              padding: 16px 22px;
-              border-bottom: 1px solid var(--ln);
-            "
-          >
-            <div
-              style="
-                display: flex;
-                align-items: center;
-                gap: 9px;
-                font-weight: 800;
-                font-size: 17px;
-                letter-spacing: -0.01em;
-                flex: 0 0 auto;
-              "
-            >
-              <span
-                style="
-                  width: 9px;
-                  height: 9px;
-                  border-radius: 50%;
-                  background: var(--acc);
-                "
-              ></span
-              >LifeOS
-            </div>
-            <div
-              style="
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                flex: 1 1 auto;
-                min-width: 0;
-                overflow-x: auto;
-              "
-            >
-              <button onClick="{{ goOverview }}" style="{{ allChipStyle }}">
-                <span style="display: flex; gap: 2px">
-                  <sc-for
-                    list="{{ allDots }}"
-                    as="dot"
-                    hint-placeholder-count="3"
-                    ><span
-                      style="width:6px;height:6px;border-radius:50%;background:{{ dot }}"
-                    ></span
-                  ></sc-for>
-                </span>
-                All areas
-              </button>
-              <span
-                style="
-                  width: 1px;
-                  height: 18px;
-                  background: var(--ln2);
-                  flex: 0 0 auto;
-                  margin: 0 2px;
-                "
-              ></span>
-              <sc-for list="{{ areas }}" as="a" hint-placeholder-count="4">
-                <button onClick="{{ a.pick }}" style="{{ a.style }}">
-                  <span
-                    style="width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:{{ a.dot }}"
-                  ></span
-                  >{{ a.label }}
-                </button>
-              </sc-for>
-              <sc-if
-                value="{{ addingArea }}"
-                hint-placeholder-val="{{ false }}"
-              >
-                <input
-                  value="{{ areaDraft }}"
-                  onInput="{{ onAreaInput }}"
-                  onKeyDown="{{ onAreaKey }}"
-                  placeholder="Area name"
-                  style="
-                    border: 1px solid var(--acc);
-                    background: var(--sf2);
-                    color: var(--ink);
-                    border-radius: 20px;
-                    padding: 6px 12px;
-                    font-size: 13px;
-                    outline: none;
-                    width: 120px;
-                  "
-                />
-              </sc-if>
-              <sc-if value="{{ notAdding }}" hint-placeholder-val="{{ true }}">
-                <button
-                  onClick="{{ startAddArea }}"
-                  title="Add area"
-                  style="
-                    flex: 0 0 auto;
-                    border: 1px dashed var(--ln2);
-                    background: transparent;
-                    color: var(--mut);
-                    border-radius: 30px;
-                    width: 26px;
-                    height: 26px;
-                    cursor: pointer;
-                    font-size: 15px;
-                    line-height: 1;
-                  "
-                >
-                  +
-                </button>
-              </sc-if>
-            </div>
-            <div
-              style="
-                display: flex;
-                align-items: center;
-                gap: 9px;
-                flex: 0 0 auto;
-              "
-            >
-              <button
-                onClick="{{ toggleColor }}"
-                title="Accent colour"
-                style="
-                  width: 27px;
-                  height: 27px;
-                  border-radius: 8px;
-                  border: 1px solid var(--ln2);
-                  background: var(--acc);
-                  cursor: pointer;
-                "
-              ></button>
-              <div
-                style="
-                  display: flex;
-                  background: var(--sf3);
-                  border-radius: 9px;
-                  padding: 2px;
-                  gap: 2px;
-                "
-              >
-                <button onClick="{{ setWeb }}" style="{{ webStyle }}">
-                  Web
-                </button>
-                <button onClick="{{ setMobile }}" style="{{ mobStyle }}">
-                  Mobile
-                </button>
-              </div>
-              <button
-                onClick="{{ toggleTheme }}"
-                title="Toggle theme"
-                style="
-                  width: 30px;
-                  height: 30px;
-                  border-radius: 8px;
-                  border: 1px solid var(--ln2);
-                  background: var(--sf2);
-                  color: var(--ink);
-                  cursor: pointer;
-                  font-size: 14px;
-                "
-              >
-                {{ themeGlyph }}
-              </button>
-            </div>
+<div style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:clamp(0px,3vw,34px) clamp(0px,3vw,20px) 60px;{{ themeVars }};background:var(--bd);transition:background .25s">
+ <div style="width:100%;max-width:var(--max);background:var(--sf);border:1px solid var(--ln2);border-radius:22px;box-shadow:var(--shadow);overflow:hidden;min-height:716px;display:flex;flex-direction:column;color:var(--ink);transition:background .25s,border-color .25s">
 
-            <sc-if
-              value="{{ editingColor }}"
-              hint-placeholder-val="{{ false }}"
-            >
-              <div
-                style="
-                  position: absolute;
-                  top: 60px;
-                  right: 18px;
-                  z-index: 30;
-                  background: var(--sf2);
-                  border: 1px solid var(--ln2);
-                  border-radius: 15px;
-                  box-shadow: var(--shadow);
-                  padding: 15px 17px;
-                  width: 238px;
-                "
-              >
-                <div
-                  style="
-                    font-size: 12px;
-                    color: var(--mut);
-                    margin-bottom: 12px;
-                  "
-                >
-                  Accent for <b style="color: var(--ink)">{{ areaName }}</b>
-                </div>
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: repeat(4, 1fr);
-                    gap: 11px;
-                  "
-                >
-                  <sc-for
-                    list="{{ swatches }}"
-                    as="w"
-                    hint-placeholder-count="8"
-                  >
-                    <button
-                      onClick="{{ w.pick }}"
-                      style="{{ w.style }}"
-                    ></button>
-                  </sc-for>
-                </div>
-              </div>
-            </sc-if>
-          </div>
+  <!-- HEADER -->
+  <div style="position:relative;display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--ln)">
+    <div style="display:flex;align-items:center;gap:9px;font-weight:800;font-size:17px;letter-spacing:-0.01em;flex:0 0 auto"><span style="width:9px;height:9px;border-radius:50%;background:var(--acc)"></span>LifeOS</div>
+    <div style="display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;overflow-x:auto">
+      <button onClick="{{ goOverview }}" style="{{ allChipStyle }}">
+        <span style="display:flex;gap:2px">
+          <sc-for list="{{ allDots }}" as="dot" hint-placeholder-count="3"><span style="width:6px;height:6px;border-radius:50%;background:{{ dot }}"></span></sc-for>
+        </span>
+        All areas
+      </button>
+      <span style="width:1px;height:18px;background:var(--ln2);flex:0 0 auto;margin:0 2px"></span>
+      <sc-for list="{{ areas }}" as="a" hint-placeholder-count="4">
+        <button onClick="{{ a.pick }}" style="{{ a.style }}"><span style="width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:{{ a.dot }}"></span>{{ a.label }}</button>
+      </sc-for>
+      <sc-if value="{{ addingArea }}" hint-placeholder-val="{{ false }}">
+        <input value="{{ areaDraft }}" onInput="{{ onAreaInput }}" onKeyDown="{{ onAreaKey }}" placeholder="Area name" style="border:1px solid var(--acc);background:var(--sf2);color:var(--ink);border-radius:20px;padding:6px 12px;font-size:13px;outline:none;width:120px">
+      </sc-if>
+      <sc-if value="{{ notAdding }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ startAddArea }}" title="Add area" style="flex:0 0 auto;border:1px dashed var(--ln2);background:transparent;color:var(--mut);border-radius:30px;width:26px;height:26px;cursor:pointer;font-size:15px;line-height:1">+</button>
+      </sc-if>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;flex:0 0 auto">
+      <button onClick="{{ toggleColor }}" title="Accent colour" style="width:27px;height:27px;border-radius:8px;border:1px solid var(--ln2);background:var(--acc);cursor:pointer"></button>
+      <div style="display:flex;background:var(--sf3);border-radius:9px;padding:2px;gap:2px">
+        <button onClick="{{ setWeb }}" style="{{ webStyle }}">Web</button>
+        <button onClick="{{ setMobile }}" style="{{ mobStyle }}">Mobile</button>
+      </div>
+      <button onClick="{{ toggleTheme }}" title="Toggle theme" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--ln2);background:var(--sf2);color:var(--ink);cursor:pointer;font-size:14px">{{ themeGlyph }}</button>
+    </div>
 
-          <!-- PIPELINE SPINE -->
-          <div
-            style="
-              position: relative;
-              padding: 22px 30px 18px;
-              border-bottom: 1px solid var(--ln);
-            "
-          >
-            <div
-              style="
-                position: absolute;
-                left: 64px;
-                right: 64px;
-                top: 46px;
-                height: 2px;
-                background: var(--ln);
-                z-index: 0;
-              "
-            ></div>
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                position: relative;
-                z-index: 1;
-              "
-            >
-              <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="6">
-                <button
-                  onClick="{{ n.go }}"
-                  style="
-                    background: none;
-                    border: none;
-                    cursor: pointer;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: 9px;
-                    padding: 0;
-                    flex: 1;
-                  "
-                >
-                  <span style="{{ n.circle }}">{{ n.glyph }}</span>
-                  <span style="{{ n.label }}">{{ n.name }}</span>
-                </button>
-              </sc-for>
-            </div>
-          </div>
-
-          <!-- STAGE VIEWS -->
-          <div style="flex: 1; padding: 34px clamp(20px, 4vw, 38px) 40px">
-            <!-- TODAY -->
-            <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
-              <div
-                data-screen-label="Today"
-                style="display: flex; flex-direction: column; gap: 30px"
-              >
-                <div>
-                  <div
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      letter-spacing: 0.14em;
-                      text-transform: uppercase;
-                      color: var(--fnt);
-                    "
-                  >
-                    Your one move now
-                  </div>
-                  <div
-                    style="display:flex;align-items:center;gap:22px;margin-top:16px;background:{{ next.bg }};border:1px solid {{ next.border }};border-radius:18px;padding:24px 26px;flex-wrap:wrap"
-                  >
-                    <span style="{{ next.badge }}">{{ next.glyph }}</span>
-                    <div style="flex: 1; min-width: 180px">
-                      <div
-                        style="
-                          font-size: 25px;
-                          font-weight: 700;
-                          letter-spacing: -0.02em;
-                        "
-                      >
-                        {{ next.title }}
-                      </div>
-                      <div
-                        style="
-                          font-size: 16px;
-                          color: var(--mut);
-                          margin-top: 3px;
-                        "
-                      >
-                        {{ next.sub }}
-                      </div>
-                    </div>
-                    <button
-                      onClick="{{ next.go }}"
-                      style="
-                        background: var(--btn);
-                        color: var(--btn-fg);
-                        border: none;
-                        border-radius: 12px;
-                        padding: 14px 26px;
-                        font-size: 15px;
-                        font-weight: 600;
-                        cursor: pointer;
-                      "
-                    >
-                      {{ next.cta }} ›
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <div
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      letter-spacing: 0.14em;
-                      text-transform: uppercase;
-                      color: var(--fnt);
-                      margin-bottom: 12px;
-                    "
-                  >
-                    Today at a glance
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      height: 74px;
-                      border-radius: 14px;
-                      overflow: hidden;
-                      border: 1px solid var(--ln);
-                      background: var(--sf2);
-                    "
-                  >
-                    <sc-for
-                      list="{{ glance }}"
-                      as="g"
-                      hint-placeholder-count="4"
-                    >
-                      <div
-                        onClick="{{ g.go }}"
-                        style="flex:{{ g.flex }};background:{{ g.bg }};display:flex;flex-direction:column;justify-content:center;padding:0 18px;cursor:pointer;border-right:1px solid var(--sf);min-width:78px"
-                      >
-                        <div
-                          style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:{{ g.fg }};line-height:1"
-                        >
-                          {{ g.count }}
-                        </div>
-                        <div
-                          style="font-size:12px;color:{{ g.fg }};margin-top:5px;font-weight:500"
-                        >
-                          {{ g.label }}
-                        </div>
-                      </div>
-                    </sc-for>
-                  </div>
-                  <div
-                    style="font-size: 13px; color: var(--fnt); margin-top: 10px"
-                  >
-                    Each band is sized by how much is sitting there — workload
-                    you can feel before you read a number.
-                  </div>
-                </div>
-              </div>
-            </sc-if>
-
-            <!-- CAPTURE -->
-            <sc-if value="{{ isCapture }}" hint-placeholder-val="{{ true }}">
-              <div
-                data-screen-label="Capture"
-                style="
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  justify-content: center;
-                  min-height: 460px;
-                  text-align: center;
-                "
-              >
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 12px;
-                    letter-spacing: 0.14em;
-                    text-transform: uppercase;
-                    color: var(--fnt);
-                  "
-                >
-                  Capture · {{ areaName }}
-                </div>
-                <textarea
-                  value="{{ draft }}"
-                  onInput="{{ onDraft }}"
-                  onKeyDown="{{ onDraftKey }}"
-                  placeholder="What's on your mind?"
-                  style="
-                    margin-top: 22px;
-                    width: 100%;
-                    max-width: 620px;
-                    min-height: 130px;
-                    border: none;
-                    outline: none;
-                    resize: none;
-                    background: transparent;
-                    text-align: center;
-                    font-size: 30px;
-                    font-weight: 500;
-                    color: var(--ink);
-                    line-height: 1.35;
-                    caret-color: var(--acc);
-                  "
-                ></textarea>
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 16px;
-                    margin-top: 18px;
-                  "
-                >
-                  <button
-                    onClick="{{ capture }}"
-                    style="
-                      background: var(--acc);
-                      color: var(--on-acc);
-                      border: none;
-                      border-radius: 13px;
-                      padding: 14px 32px;
-                      font-size: 16px;
-                      font-weight: 600;
-                      cursor: pointer;
-                    "
-                  >
-                    Save thought
-                  </button>
-                  <span
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 14px;
-                      color: var(--fnt);
-                    "
-                    >⌘↵</span
-                  >
-                </div>
-                <div
-                  style="
-                    height: 40px;
-                    margin-top: 24px;
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                  "
-                >
-                  <sc-if
-                    value="{{ justCaptured }}"
-                    hint-placeholder-val="{{ false }}"
-                  >
-                    <span
-                      style="
-                        display: flex;
-                        align-items: center;
-                        gap: 9px;
-                        background: var(--grn-sf);
-                        color: var(--grn-fg);
-                        border-radius: 30px;
-                        padding: 8px 16px;
-                        font-size: 14px;
-                        font-weight: 600;
-                        animation: pop 0.4s ease;
-                      "
-                      >✓ Saved — now waiting in Triage</span
-                    >
-                  </sc-if>
-                </div>
-                <div
-                  style="
-                    font-size: 13px;
-                    color: var(--fnt);
-                    max-width: 46ch;
-                    line-height: 1.5;
-                  "
-                >
-                  Type, save, gone. No area picker, no save-mode toggle, no
-                  draft panel — those live behind
-                  <span
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      background: var(--sf3);
-                      padding: 1px 6px;
-                      border-radius: 5px;
-                    "
-                    >/</span
-                  >
-                  for the rare moment you need them.
-                </div>
-              </div>
-            </sc-if>
-
-            <!-- TRIAGE -->
-            <sc-if value="{{ isTriage }}" hint-placeholder-val="{{ true }}">
-              <sc-if value="{{ triageCard }}" hint-placeholder-val="{{ true }}">
-                <div
-                  data-screen-label="Triage"
-                  style="
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                  "
-                >
-                  <div
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 10px;
-                      margin-bottom: 22px;
-                    "
-                  >
-                    <sc-for
-                      list="{{ triageDots }}"
-                      as="d"
-                      hint-placeholder-count="3"
-                    >
-                      <span
-                        style="width:9px;height:9px;border-radius:50%;background:{{ d.c }}"
-                      ></span>
-                    </sc-for>
-                    <span
-                      style="
-                        font-size: 13px;
-                        color: var(--fnt);
-                        margin-left: 6px;
-                      "
-                      >{{ triageLeft }} left to sort</span
-                    >
-                  </div>
-                  <div
-                    style="
-                      width: 100%;
-                      max-width: 560px;
-                      background: var(--sf2);
-                      border: 1px solid var(--ln);
-                      border-radius: 20px;
-                      box-shadow: var(--shadow);
-                      padding: 42px 36px;
-                      text-align: center;
-                      animation: slideup 0.35s ease;
-                    "
-                  >
-                    <div
-                      style="
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                        font-size: 11px;
-                        letter-spacing: 0.14em;
-                        text-transform: uppercase;
-                        color: var(--amb-fg);
-                        background: var(--amb-sf);
-                        display: inline-block;
-                        padding: 5px 11px;
-                        border-radius: 20px;
-                      "
-                    >
-                      Needs a decision
-                    </div>
-                    <div
-                      style="
-                        font-size: 27px;
-                        font-weight: 600;
-                        letter-spacing: -0.015em;
-                        margin-top: 18px;
-                        line-height: 1.3;
-                      "
-                    >
-                      {{ triageCard.text }}
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      display: grid;
-                      grid-template-columns: repeat(3, 1fr);
-                      gap: 14px;
-                      width: 100%;
-                      max-width: 560px;
-                      margin-top: 20px;
-                    "
-                  >
-                    <button
-                      onClick="{{ triageDrop }}"
-                      style="
-                        background: var(--sf3);
-                        border: 1px solid var(--ln2);
-                        border-radius: 16px;
-                        padding: 20px 0;
-                        cursor: pointer;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        gap: 9px;
-                      "
-                    >
-                      <span
-                        style="
-                          width: 42px;
-                          height: 42px;
-                          border-radius: 50%;
-                          background: var(--ln2);
-                          color: var(--fnt);
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          font-size: 20px;
-                        "
-                        >✕</span
-                      >
-                      <span
-                        style="
-                          font-size: 14px;
-                          font-weight: 600;
-                          color: var(--mut);
-                        "
-                        >Drop it</span
-                      >
-                    </button>
-                    <button
-                      onClick="{{ triageLater }}"
-                      style="
-                        background: var(--blu-sf);
-                        border: 1px solid var(--blu-rng);
-                        border-radius: 16px;
-                        padding: 20px 0;
-                        cursor: pointer;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        gap: 9px;
-                      "
-                    >
-                      <span
-                        style="
-                          width: 42px;
-                          height: 42px;
-                          border-radius: 50%;
-                          background: var(--blu-rng);
-                          color: var(--blu-fg);
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          font-size: 20px;
-                        "
-                        >◷</span
-                      >
-                      <span
-                        style="
-                          font-size: 14px;
-                          font-weight: 600;
-                          color: var(--blu-fg);
-                        "
-                        >Someday</span
-                      >
-                    </button>
-                    <button
-                      onClick="{{ triageToday }}"
-                      style="
-                        background: var(--acc);
-                        border: none;
-                        border-radius: 16px;
-                        padding: 20px 0;
-                        cursor: pointer;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        gap: 9px;
-                      "
-                    >
-                      <span
-                        style="
-                          width: 42px;
-                          height: 42px;
-                          border-radius: 50%;
-                          background: var(--acc2);
-                          color: var(--on-acc);
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          font-size: 22px;
-                        "
-                        >→</span
-                      >
-                      <span
-                        style="
-                          font-size: 14px;
-                          font-weight: 600;
-                          color: var(--on-acc);
-                        "
-                        >Do today</span
-                      >
-                    </button>
-                  </div>
-                  <div
-                    style="font-size: 13px; color: var(--fnt); margin-top: 18px"
-                  >
-                    One thought at a time. Pick a direction — the next one
-                    slides up.
-                  </div>
-                </div>
-              </sc-if>
-              <sc-if
-                value="{{ triageEmpty }}"
-                hint-placeholder-val="{{ false }}"
-              >
-                <div
-                  style="
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 420px;
-                    text-align: center;
-                  "
-                >
-                  <span
-                    style="
-                      width: 72px;
-                      height: 72px;
-                      border-radius: 50%;
-                      background: var(--grn-sf);
-                      color: var(--grn-fg);
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      font-size: 34px;
-                    "
-                    >✓</span
-                  >
-                  <div
-                    style="font-size: 24px; font-weight: 700; margin-top: 20px"
-                  >
-                    Inbox clear
-                  </div>
-                  <div
-                    style="
-                      font-size: 16px;
-                      color: var(--mut);
-                      margin-top: 6px;
-                      max-width: 40ch;
-                    "
-                  >
-                    Nothing left to decide. Time to give today's work a shape.
-                  </div>
-                  <button
-                    onClick="{{ goPlan }}"
-                    style="
-                      margin-top: 22px;
-                      background: var(--btn);
-                      color: var(--btn-fg);
-                      border: none;
-                      border-radius: 12px;
-                      padding: 13px 26px;
-                      font-size: 15px;
-                      font-weight: 600;
-                      cursor: pointer;
-                    "
-                  >
-                    Plan your day ›
-                  </button>
-                </div>
-              </sc-if>
-            </sc-if>
-
-            <!-- PLAN -->
-            <sc-if value="{{ isPlan }}" hint-placeholder-val="{{ true }}">
-              <div
-                data-screen-label="Plan"
-                style="
-                  display: grid;
-                  grid-template-columns: var(--planG);
-                  gap: 30px;
-                "
-              >
-                <div>
-                  <div
-                    style="
-                      display: flex;
-                      align-items: baseline;
-                      justify-content: space-between;
-                      margin-bottom: 14px;
-                    "
-                  >
-                    <div
-                      style="
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                        font-size: 12px;
-                        letter-spacing: 0.14em;
-                        text-transform: uppercase;
-                        color: var(--fnt);
-                      "
-                    >
-                      Today's shape
-                    </div>
-                    <sc-if
-                      value="{{ selecting }}"
-                      hint-placeholder-val="{{ false }}"
-                    >
-                      <div
-                        style="
-                          font-size: 13px;
-                          color: var(--acc);
-                          font-weight: 600;
-                          animation: pulse 1.4s infinite;
-                        "
-                      >
-                        Pick a time slot ↓
-                      </div>
-                    </sc-if>
-                  </div>
-                  <div
-                    style="
-                      border: 1px solid var(--ln);
-                      border-radius: 14px;
-                      overflow: hidden;
-                      background: var(--sf2);
-                    "
-                  >
-                    <sc-for
-                      list="{{ hours }}"
-                      as="h"
-                      hint-placeholder-count="10"
-                    >
-                      <div onClick="{{ h.place }}" style="{{ h.row }}">
-                        <span
-                          style="
-                            width: 52px;
-                            font-family: &quot;IBM Plex Mono&quot;, monospace;
-                            font-size: 12px;
-                            color: var(--fnt);
-                          "
-                          >{{ h.label }}</span
-                        >
-                        <div
-                          style="
-                            flex: 1;
-                            min-height: 34px;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                          "
-                        >
-                          <sc-for
-                            list="{{ h.blocks }}"
-                            as="b"
-                            hint-placeholder-count="1"
-                          >
-                            <span
-                              onClick="{{ b.unplan }}"
-                              style="
-                                background: var(--acc-sf);
-                                color: var(--acc);
-                                border: 1px solid var(--acc-rng);
-                                border-radius: 9px;
-                                padding: 7px 13px;
-                                font-size: 14px;
-                                font-weight: 600;
-                                cursor: pointer;
-                              "
-                              >{{ b.text }} · {{ b.est }}m</span
-                            >
-                          </sc-for>
-                          <sc-if
-                            value="{{ h.hint }}"
-                            hint-placeholder-val="{{ false }}"
-                          >
-                            <span
-                              style="
-                                font-size: 13px;
-                                color: var(--acc);
-                                opacity: 0.75;
-                              "
-                              >drop here</span
-                            >
-                          </sc-if>
-                        </div>
-                      </div>
-                    </sc-for>
-                  </div>
-                </div>
-                <div>
-                  <div
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      letter-spacing: 0.14em;
-                      text-transform: uppercase;
-                      color: var(--fnt);
-                      margin-bottom: 14px;
-                    "
-                  >
-                    To place ({{ unplacedCount }})
-                  </div>
-                  <div style="display: flex; flex-direction: column; gap: 10px">
-                    <sc-for
-                      list="{{ unplaced }}"
-                      as="u"
-                      hint-placeholder-count="2"
-                    >
-                      <button onClick="{{ u.select }}" style="{{ u.style }}">
-                        <span
-                          style="
-                            font-size: 15px;
-                            font-weight: 600;
-                            text-align: left;
-                          "
-                          >{{ u.text }}</span
-                        >
-                        <span
-                          style="font-size:12px;color:{{ u.subColor }};margin-top:4px;display:block;text-align:left"
-                          >{{ u.est }} min · tap, then pick a time</span
-                        >
-                      </button>
-                    </sc-for>
-                    <sc-if
-                      value="{{ allPlaced }}"
-                      hint-placeholder-val="{{ false }}"
-                    >
-                      <div
-                        style="
-                          border: 1px dashed var(--ln2);
-                          border-radius: 14px;
-                          padding: 24px;
-                          text-align: center;
-                          color: var(--fnt);
-                          font-size: 14px;
-                        "
-                      >
-                        Everything's placed.<br /><button
-                          onClick="{{ goExec }}"
-                          style="
-                            margin-top: 12px;
-                            background: var(--btn);
-                            color: var(--btn-fg);
-                            border: none;
-                            border-radius: 11px;
-                            padding: 11px 20px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                          "
-                        >
-                          Start focusing ›
-                        </button>
-                      </div>
-                    </sc-if>
-                  </div>
-                </div>
-              </div>
-            </sc-if>
-
-            <!-- EXECUTE -->
-            <sc-if value="{{ isExec }}" hint-placeholder-val="{{ true }}">
-              <sc-if value="{{ exec }}" hint-placeholder-val="{{ false }}">
-                <div
-                  data-screen-label="Execute"
-                  style="
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    min-height: 440px;
-                    justify-content: center;
-                  "
-                >
-                  <div
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      letter-spacing: 0.14em;
-                      text-transform: uppercase;
-                      color: var(--fnt);
-                    "
-                  >
-                    Focus session · {{ areaName }}
-                  </div>
-                  <div
-                    style="
-                      font-size: 23px;
-                      font-weight: 700;
-                      margin-top: 10px;
-                      text-align: center;
-                      max-width: 30ch;
-                    "
-                  >
-                    {{ exec.text }}
-                  </div>
-                  <div
-                    style="
-                      position: relative;
-                      width: 236px;
-                      height: 236px;
-                      margin-top: 24px;
-                    "
-                  >
-                    <svg
-                      width="236"
-                      height="236"
-                      viewBox="0 0 236 236"
-                      style="position: absolute; inset: 0"
-                    >
-                      <circle
-                        cx="118"
-                        cy="118"
-                        r="104"
-                        fill="none"
-                        stroke="{{ ringTrack }}"
-                        stroke-width="15"
-                      ></circle>
-                      <circle
-                        cx="118"
-                        cy="118"
-                        r="104"
-                        fill="none"
-                        stroke="{{ ringColor }}"
-                        stroke-width="15"
-                        stroke-linecap="round"
-                        stroke-dasharray="{{ ringDash }}"
-                        stroke-dashoffset="{{ ringOffset }}"
-                        transform="rotate(-90 118 118)"
-                      ></circle>
-                    </svg>
-                    <div
-                      style="
-                        position: absolute;
-                        inset: 0;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                      "
-                    >
-                      <div
-                        style="
-                          font-family: &quot;IBM Plex Mono&quot;, monospace;
-                          font-size: 46px;
-                          font-weight: 600;
-                          letter-spacing: -0.02em;
-                        "
-                      >
-                        {{ exec.time }}
-                      </div>
-                      <div
-                        style="
-                          font-size: 13px;
-                          color: var(--fnt);
-                          margin-top: 2px;
-                        "
-                      >
-                        {{ exec.statusLabel }}
-                      </div>
-                    </div>
-                  </div>
-                  <sc-if
-                    value="{{ exec.ending }}"
-                    hint-placeholder-val="{{ false }}"
-                  >
-                    <div
-                      style="
-                        margin-top: 26px;
-                        text-align: center;
-                        animation: slideup 0.3s ease;
-                      "
-                    >
-                      <div
-                        style="
-                          font-size: 14px;
-                          color: var(--mut);
-                          margin-bottom: 12px;
-                        "
-                      >
-                        How did it end?
-                      </div>
-                      <div
-                        style="
-                          display: flex;
-                          gap: 10px;
-                          flex-wrap: wrap;
-                          justify-content: center;
-                        "
-                      >
-                        <button
-                          onClick="{{ endComplete }}"
-                          style="
-                            background: var(--grn-fg);
-                            color: #fff;
-                            border: none;
-                            border-radius: 11px;
-                            padding: 11px 20px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                          "
-                        >
-                          ✓ Complete
-                        </button>
-                        <button
-                          onClick="{{ endStuck }}"
-                          style="
-                            background: var(--sf3);
-                            border: 1px solid var(--ln2);
-                            color: var(--mut);
-                            border-radius: 11px;
-                            padding: 11px 18px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                          "
-                        >
-                          Stuck
-                        </button>
-                        <button
-                          onClick="{{ endMissed }}"
-                          style="
-                            background: var(--sf3);
-                            border: 1px solid var(--ln2);
-                            color: var(--mut);
-                            border-radius: 11px;
-                            padding: 11px 18px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                          "
-                        >
-                          Missed
-                        </button>
-                      </div>
-                    </div>
-                  </sc-if>
-                  <sc-if
-                    value="{{ exec.live }}"
-                    hint-placeholder-val="{{ true }}"
-                  >
-                    <div style="display: flex; gap: 12px; margin-top: 28px">
-                      <button
-                        onClick="{{ toggleRun }}"
-                        style="
-                          background: var(--btn);
-                          color: var(--btn-fg);
-                          border: none;
-                          border-radius: 12px;
-                          padding: 13px 32px;
-                          font-size: 15px;
-                          font-weight: 600;
-                          cursor: pointer;
-                        "
-                      >
-                        {{ exec.runLabel }}
-                      </button>
-                      <button
-                        onClick="{{ askEnd }}"
-                        style="
-                          background: none;
-                          border: 1px solid var(--ln2);
-                          color: var(--mut);
-                          border-radius: 12px;
-                          padding: 13px 22px;
-                          font-size: 15px;
-                          font-weight: 600;
-                          cursor: pointer;
-                        "
-                      >
-                        End session
-                      </button>
-                    </div>
-                  </sc-if>
-                </div>
-              </sc-if>
-              <sc-if value="{{ execPick }}" hint-placeholder-val="{{ true }}">
-                <div>
-                  <div
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      letter-spacing: 0.14em;
-                      text-transform: uppercase;
-                      color: var(--fnt);
-                      margin-bottom: 6px;
-                    "
-                  >
-                    Ready to run · pick one block
-                  </div>
-                  <div
-                    style="
-                      font-size: 15px;
-                      color: var(--mut);
-                      margin-bottom: 20px;
-                    "
-                  >
-                    One session at a time. Everything else stays out of the way.
-                  </div>
-                  <div style="display: flex; flex-direction: column; gap: 12px">
-                    <sc-for
-                      list="{{ readyBlocks }}"
-                      as="r"
-                      hint-placeholder-count="2"
-                    >
-                      <button
-                        onClick="{{ r.choose }}"
-                        style="
-                          display: flex;
-                          align-items: center;
-                          gap: 18px;
-                          background: var(--sf2);
-                          border: 1px solid var(--ln);
-                          border-radius: 15px;
-                          padding: 18px 22px;
-                          cursor: pointer;
-                          text-align: left;
-                          color: var(--ink);
-                        "
-                      >
-                        <span
-                          style="
-                            font-family: &quot;IBM Plex Mono&quot;, monospace;
-                            font-size: 13px;
-                            color: var(--acc);
-                            background: var(--acc-sf);
-                            border-radius: 8px;
-                            padding: 6px 10px;
-                          "
-                          >{{ r.at }}</span
-                        >
-                        <span style="flex: 1; font-size: 17px; font-weight: 600"
-                          >{{ r.text }}</span
-                        >
-                        <span style="font-size: 14px; color: var(--fnt)"
-                          >{{ r.est }} min</span
-                        >
-                        <span style="color: var(--acc); font-size: 20px"
-                          >▶</span
-                        >
-                      </button>
-                    </sc-for>
-                    <sc-if
-                      value="{{ noBlocks }}"
-                      hint-placeholder-val="{{ false }}"
-                    >
-                      <div
-                        style="
-                          border: 1px dashed var(--ln2);
-                          border-radius: 15px;
-                          padding: 30px;
-                          text-align: center;
-                          color: var(--fnt);
-                          font-size: 15px;
-                        "
-                      >
-                        No blocks planned yet.<br /><button
-                          onClick="{{ goPlan }}"
-                          style="
-                            margin-top: 12px;
-                            background: var(--btn);
-                            color: var(--btn-fg);
-                            border: none;
-                            border-radius: 11px;
-                            padding: 11px 20px;
-                            font-size: 14px;
-                            font-weight: 600;
-                            cursor: pointer;
-                          "
-                        >
-                          Go plan ›
-                        </button>
-                      </div>
-                    </sc-if>
-                  </div>
-                </div>
-              </sc-if>
-            </sc-if>
-
-            <!-- REVIEW -->
-            <sc-if value="{{ isReview }}" hint-placeholder-val="{{ true }}">
-              <div
-                data-screen-label="Review"
-                style="display: flex; flex-direction: column; gap: 28px"
-              >
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: var(--revG);
-                    gap: 28px;
-                    align-items: center;
-                  "
-                >
-                  <div
-                    style="
-                      position: relative;
-                      width: 200px;
-                      height: 200px;
-                      margin: 0 auto;
-                    "
-                  >
-                    <svg width="200" height="200" viewBox="0 0 200 200">
-                      <circle
-                        cx="100"
-                        cy="100"
-                        r="86"
-                        fill="none"
-                        stroke="{{ revTrack }}"
-                        stroke-width="16"
-                      ></circle>
-                      <circle
-                        cx="100"
-                        cy="100"
-                        r="86"
-                        fill="none"
-                        stroke="{{ revColor }}"
-                        stroke-width="16"
-                        stroke-linecap="round"
-                        stroke-dasharray="{{ revDash }}"
-                        stroke-dashoffset="{{ revOffset }}"
-                        transform="rotate(-90 100 100)"
-                      ></circle>
-                    </svg>
-                    <div
-                      style="
-                        position: absolute;
-                        inset: 0;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                      "
-                    >
-                      <div style="font-size: 40px; font-weight: 700">
-                        {{ revPct }}%
-                      </div>
-                      <div style="font-size: 13px; color: var(--fnt)">
-                        {{ revDone }} of {{ revTotal }} done
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div
-                      style="
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                        font-size: 12px;
-                        letter-spacing: 0.14em;
-                        text-transform: uppercase;
-                        color: var(--fnt);
-                      "
-                    >
-                      End of day · {{ areaName }}
-                    </div>
-                    <div
-                      style="
-                        font-size: 30px;
-                        font-weight: 700;
-                        letter-spacing: -0.02em;
-                        margin-top: 10px;
-                        max-width: 18ch;
-                      "
-                    >
-                      {{ revVerdict }}
-                    </div>
-                    <div
-                      style="
-                        font-size: 16px;
-                        color: var(--mut);
-                        margin-top: 6px;
-                        max-width: 34ch;
-                      "
-                    >
-                      {{ revVerdictSub }}
-                    </div>
-                    <div
-                      style="
-                        display: flex;
-                        gap: 10px;
-                        margin-top: 18px;
-                        flex-wrap: wrap;
-                      "
-                    >
-                      <button
-                        onClick="{{ goToday }}"
-                        style="
-                          background: var(--btn);
-                          color: var(--btn-fg);
-                          border: none;
-                          border-radius: 12px;
-                          padding: 12px 22px;
-                          font-size: 15px;
-                          font-weight: 600;
-                          cursor: pointer;
-                        "
-                      >
-                        Close the day
-                      </button>
-                      <button
-                        onClick="{{ goCapture }}"
-                        style="
-                          background: none;
-                          border: 1px solid var(--ln2);
-                          color: var(--mut);
-                          border-radius: 12px;
-                          padding: 12px 20px;
-                          font-size: 15px;
-                          font-weight: 600;
-                          cursor: pointer;
-                        "
-                      >
-                        Add a follow-up
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: var(--g2);
-                    gap: 20px;
-                  "
-                >
-                  <div
-                    style="
-                      background: var(--sf2);
-                      border: 1px solid var(--ln);
-                      border-radius: 16px;
-                      padding: 22px;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 14px;
-                        font-weight: 600;
-                        margin-bottom: 16px;
-                      "
-                    >
-                      Planned vs actual focus
-                    </div>
-                    <div
-                      style="
-                        display: flex;
-                        align-items: center;
-                        gap: 12px;
-                        margin-bottom: 12px;
-                      "
-                    >
-                      <span
-                        style="width: 54px; font-size: 13px; color: var(--fnt)"
-                        >Planned</span
-                      >
-                      <div
-                        style="
-                          flex: 1;
-                          height: 16px;
-                          background: var(--acc-sf);
-                          border-radius: 9px;
-                          overflow: hidden;
-                        "
-                      >
-                        <div
-                          style="width:{{ plannedW }};height:100%;background:var(--acc2)"
-                        ></div>
-                      </div>
-                      <span
-                        style="
-                          font-family: &quot;IBM Plex Mono&quot;, monospace;
-                          font-size: 13px;
-                          width: 46px;
-                          text-align: right;
-                        "
-                        >{{ plannedMin }}m</span
-                      >
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 12px">
-                      <span
-                        style="width: 54px; font-size: 13px; color: var(--fnt)"
-                        >Actual</span
-                      >
-                      <div
-                        style="
-                          flex: 1;
-                          height: 16px;
-                          background: var(--grn-sf);
-                          border-radius: 9px;
-                          overflow: hidden;
-                        "
-                      >
-                        <div
-                          style="width:{{ actualW }};height:100%;background:var(--grn-fg)"
-                        ></div>
-                      </div>
-                      <span
-                        style="
-                          font-family: &quot;IBM Plex Mono&quot;, monospace;
-                          font-size: 13px;
-                          width: 46px;
-                          text-align: right;
-                        "
-                        >{{ actualMin }}m</span
-                      >
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      background: var(--sf2);
-                      border: 1px solid var(--ln);
-                      border-radius: 16px;
-                      padding: 22px;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 14px;
-                        font-weight: 600;
-                        margin-bottom: 16px;
-                      "
-                    >
-                      Sessions today
-                    </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 9px">
-                      <sc-for
-                        list="{{ sessionDots }}"
-                        as="s"
-                        hint-placeholder-count="3"
-                      >
-                        <span
-                          style="display:flex;align-items:center;gap:7px;background:{{ s.bg }};color:{{ s.fg }};border-radius:30px;padding:6px 13px;font-size:13px;font-weight:600"
-                          >{{ s.glyph }} {{ s.label }}</span
-                        >
-                      </sc-for>
-                    </div>
-                    <div
-                      style="
-                        font-size: 13px;
-                        color: var(--fnt);
-                        margin-top: 16px;
-                        line-height: 1.5;
-                      "
-                    >
-                      {{ carryLine }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </sc-if>
-
-            <!-- HEALTH -->
-            <sc-if value="{{ isHealth }}" hint-placeholder-val="{{ true }}">
-              <div
-                data-screen-label="Health"
-                style="
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  min-height: 440px;
-                  justify-content: center;
-                "
-              >
-                <div style="position: relative; width: 150px; height: 150px">
-                  <span style="{{ healthRing }}"></span>
-                  <div
-                    style="
-                      position: absolute;
-                      inset: 0;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                      font-size: 54px;
-                      color: var(--grn-fg);
-                    "
-                  >
-                    {{ healthGlyph }}
-                  </div>
-                </div>
-                <div
-                  style="font-size: 27px; font-weight: 700; margin-top: 22px"
-                >
-                  {{ healthTitle }}
-                </div>
-                <div
-                  style="font-size: 16px; color: var(--mut); margin-top: 5px"
-                >
-                  {{ healthSub }}
-                </div>
-                <div
-                  style="
-                    display: flex;
-                    gap: 12px;
-                    margin-top: 24px;
-                    flex-wrap: wrap;
-                    justify-content: center;
-                  "
-                >
-                  <sc-for
-                    list="{{ healthCats }}"
-                    as="c"
-                    hint-placeholder-count="3"
-                  >
-                    <div
-                      style="
-                        background: var(--sf2);
-                        border: 1px solid var(--ln);
-                        border-radius: 14px;
-                        padding: 16px 22px;
-                        text-align: center;
-                        min-width: 128px;
-                      "
-                    >
-                      <div
-                        style="display:flex;align-items:center;justify-content:center;gap:7px;font-size:15px;font-weight:700;color:{{ c.fg }}"
-                      >
-                        <span
-                          style="width:8px;height:8px;border-radius:50%;background:{{ c.dot }}"
-                        ></span
-                        >{{ c.score }}
-                      </div>
-                      <div
-                        style="
-                          font-size: 13px;
-                          color: var(--mut);
-                          margin-top: 6px;
-                        "
-                      >
-                        {{ c.label }}
-                      </div>
-                    </div>
-                  </sc-for>
-                </div>
-                <button
-                  onClick="{{ runCheck }}"
-                  style="
-                    margin-top: 26px;
-                    background: none;
-                    border: 1px solid var(--ln2);
-                    color: var(--mut);
-                    border-radius: 12px;
-                    padding: 12px 24px;
-                    font-size: 15px;
-                    font-weight: 600;
-                    cursor: pointer;
-                  "
-                >
-                  {{ checkLabel }}
-                </button>
-                <div
-                  style="
-                    font-size: 13px;
-                    color: var(--fnt);
-                    margin-top: 16px;
-                    max-width: 42ch;
-                    text-align: center;
-                    line-height: 1.5;
-                  "
-                >
-                  Green is the silent default. The full 11-check breakdown is
-                  one tap away — but a healthy system shouldn't cost any
-                  attention.
-                </div>
-              </div>
-            </sc-if>
-
-            <!-- ALL AREAS -->
-            <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ false }}">
-              <div
-                data-screen-label="All areas"
-                style="display: flex; flex-direction: column; gap: 26px"
-              >
-                <div>
-                  <div
-                    style="
-                      display: flex;
-                      align-items: baseline;
-                      justify-content: space-between;
-                      flex-wrap: wrap;
-                      gap: 8px;
-                    "
-                  >
-                    <div
-                      style="
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                        font-size: 12px;
-                        letter-spacing: 0.14em;
-                        text-transform: uppercase;
-                        color: var(--fnt);
-                      "
-                    >
-                      All areas · everything in one place
-                    </div>
-                    <div style="font-size: 13px; color: var(--mut)">
-                      {{ openSummary }}
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      height: 18px;
-                      border-radius: 9px;
-                      overflow: hidden;
-                      margin-top: 14px;
-                      background: var(--sf3);
-                      gap: 2px;
-                    "
-                  >
-                    <sc-for
-                      list="{{ spectrum }}"
-                      as="s"
-                      hint-placeholder-count="4"
-                    >
-                      <div
-                        style="width:{{ s.w }};background:{{ s.color }}"
-                      ></div>
-                    </sc-for>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      flex-wrap: wrap;
-                      gap: 18px;
-                      margin-top: 13px;
-                    "
-                  >
-                    <sc-for
-                      list="{{ legend }}"
-                      as="l"
-                      hint-placeholder-count="4"
-                    >
-                      <div style="display: flex; align-items: center; gap: 7px">
-                        <span
-                          style="width:9px;height:9px;border-radius:50%;background:{{ l.color }}"
-                        ></span>
-                        <span
-                          style="
-                            font-size: 13px;
-                            font-weight: 600;
-                            color: var(--ink);
-                          "
-                          >{{ l.name }}</span
-                        >
-                        <span
-                          style="
-                            font-family: &quot;IBM Plex Mono&quot;, monospace;
-                            font-size: 13px;
-                            color: var(--fnt);
-                          "
-                          >{{ l.open }}</span
-                        >
-                      </div>
-                    </sc-for>
-                  </div>
-                </div>
-
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: var(--colG);
-                    gap: 16px;
-                  "
-                >
-                  <sc-for
-                    list="{{ overviewCols }}"
-                    as="c"
-                    hint-placeholder-count="4"
-                  >
-                    <div
-                      style="
-                        background: var(--sf);
-                        border: 1px solid var(--ln);
-                        border-radius: 14px;
-                        padding: 14px 14px 16px;
-                        min-height: 130px;
-                      "
-                    >
-                      <div
-                        style="
-                          display: flex;
-                          align-items: center;
-                          justify-content: space-between;
-                          margin-bottom: 13px;
-                        "
-                      >
-                        <span style="{{ c.head }}">{{ c.label }}</span>
-                        <span
-                          style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:{{ c.dotc }}"
-                          >{{ c.count }}</span
-                        >
-                      </div>
-                      <div
-                        style="display: flex; flex-direction: column; gap: 9px"
-                      >
-                        <sc-for
-                          list="{{ c.cards }}"
-                          as="k"
-                          hint-placeholder-count="2"
-                        >
-                          <div style="{{ k.box }}">
-                            <div
-                              style="
-                                font-size: 14px;
-                                font-weight: 600;
-                                color: var(--ink);
-                                line-height: 1.3;
-                              "
-                            >
-                              {{ k.text }}
-                            </div>
-                            <div
-                              style="
-                                display: flex;
-                                align-items: center;
-                                gap: 6px;
-                                margin-top: 7px;
-                              "
-                            >
-                              <span
-                                style="width:7px;height:7px;border-radius:50%;background:{{ k.color }}"
-                              ></span>
-                              <span
-                                style="font-size:11px;font-weight:600;color:{{ k.color }}"
-                                >{{ k.area }}</span
-                              >
-                              <span style="font-size: 11px; color: var(--fnt)"
-                                >{{ k.detail }}</span
-                              >
-                            </div>
-                          </div>
-                        </sc-for>
-                        <sc-if
-                          value="{{ c.empty }}"
-                          hint-placeholder-val="{{ false }}"
-                        >
-                          <div
-                            style="
-                              font-size: 13px;
-                              color: var(--fnt);
-                              padding: 4px 2px;
-                            "
-                          >
-                            Nothing here.
-                          </div>
-                        </sc-if>
-                      </div>
-                    </div>
-                  </sc-for>
-                </div>
-              </div>
-            </sc-if>
-          </div>
+    <sc-if value="{{ editingColor }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;top:60px;right:18px;z-index:30;background:var(--sf2);border:1px solid var(--ln2);border-radius:15px;box-shadow:var(--shadow);padding:15px 17px;width:238px">
+        <div style="font-size:12px;color:var(--mut);margin-bottom:12px">Accent for <b style="color:var(--ink)">{{ areaName }}</b></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px">
+          <sc-for list="{{ swatches }}" as="w" hint-placeholder-count="8">
+            <button onClick="{{ w.pick }}" style="{{ w.style }}"></button>
+          </sc-for>
         </div>
       </div>
-    </x-dc>
-    <script
-      type="text/x-dc"
-      data-dc-script
-      data-props='{"$preview":{"width":1040,"height":800}}'
-    >
-      class Component extends DCLogic {
-        PAL = ['#6b78e8', '#3f8fd6', '#3fae8f', '#5aa84a', '#d9a23f', '#d9624a', '#c44d80', '#b066d9'];
+    </sc-if>
+  </div>
 
-        state = {
-          stage: 'today', dark: true, view: 'web',
-          areas: [
-            { name: 'Main Job', color: '#6b78e8' },
-            { name: 'Personal', color: '#3fae8f' },
-            { name: 'Volunteer', color: '#d9a23f' },
-            { name: 'Side Project', color: '#b066d9' }
-          ],
-          areaIndex: 0, addingArea: false, areaDraft: '', editingColor: false,
-          draft: '',
-          items: [
-            { id: 1, text: 'Draft the Q3 retro agenda', status: 'inbox', area: 0 },
-            { id: 2, text: 'Reply to the budget thread', status: 'inbox', area: 0 },
-            { id: 3, text: 'Book a dentist appointment', status: 'inbox', area: 1 },
-            { id: 4, text: 'Outline the onboarding revamp', status: 'today', est: 45, area: 0 },
-            { id: 5, text: 'Plan the weekend hike', status: 'today', est: 30, area: 1 },
-            { id: 6, text: 'Review PR #214', status: 'planned', when: 11, est: 30, area: 3 },
-            { id: 7, text: 'Prep the food-bank rota', status: 'planned', when: 14, est: 45, area: 2 },
-            { id: 8, text: 'Weekly review ritual notes', status: 'done', est: 25, area: 1 },
-            { id: 9, text: 'Ship the pricing page copy', status: 'done', est: 40, area: 3 }
-          ],
-          nextId: 10, selecting: null,
-          activeId: null, running: false, remaining: 0, total: 0, ending: false,
-          sessions: [{ id: 's1', text: 'Weekly review ritual notes', outcome: 'complete', planned: 25, actual: 22 }],
-          justCaptured: false, checking: false
-        };
+  <!-- PIPELINE SPINE -->
+  <div style="position:relative;padding:22px 30px 18px;border-bottom:1px solid var(--ln)">
+    <div style="position:absolute;left:64px;right:64px;top:46px;height:2px;background:var(--ln);z-index:0"></div>
+    <div style="display:flex;justify-content:space-between;position:relative;z-index:1">
+      <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="6">
+        <button onClick="{{ n.go }}" style="background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;padding:0;flex:1">
+          <span style="{{ n.circle }}">{{ n.glyph }}</span>
+          <span style="{{ n.label }}">{{ n.name }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
 
-        componentWillUnmount() { clearInterval(this._t); }
+  <!-- STAGE VIEWS -->
+  <div style="flex:1;padding:34px clamp(20px,4vw,38px) 40px">
 
-        _hx(h) { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); }
-        _mix(a, b, t) { const A = this._hx(a), B = this._hx(b); return '#' + A.map((x, i) => { const v = Math.round(x + (B[i] - x) * t); return ('0' + v.toString(16)).slice(-2); }).join(''); }
-        _lum(h) { const c = this._hx(h).map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+   <!-- TODAY -->
+   <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Today" style="display:flex;flex-direction:column;gap:30px">
+     <div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt)">Your one move now</div>
+      <div style="display:flex;align-items:center;gap:22px;margin-top:16px;background:{{ next.bg }};border:1px solid {{ next.border }};border-radius:18px;padding:24px 26px;flex-wrap:wrap">
+        <span style="{{ next.badge }}">{{ next.glyph }}</span>
+        <div style="flex:1;min-width:180px">
+          <div style="font-size:25px;font-weight:700;letter-spacing:-0.02em">{{ next.title }}</div>
+          <div style="font-size:16px;color:var(--mut);margin-top:3px">{{ next.sub }}</div>
+        </div>
+        <button onClick="{{ next.go }}" style="background:var(--btn);color:var(--btn-fg);border:none;border-radius:12px;padding:14px 26px;font-size:15px;font-weight:600;cursor:pointer">{{ next.cta }} ›</button>
+      </div>
+     </div>
+     <div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt);margin-bottom:12px">Today at a glance</div>
+      <div style="display:flex;height:74px;border-radius:14px;overflow:hidden;border:1px solid var(--ln);background:var(--sf2)">
+        <sc-for list="{{ glance }}" as="g" hint-placeholder-count="4">
+          <div onClick="{{ g.go }}" style="flex:{{ g.flex }};background:{{ g.bg }};display:flex;flex-direction:column;justify-content:center;padding:0 18px;cursor:pointer;border-right:1px solid var(--sf);min-width:78px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;color:{{ g.fg }};line-height:1">{{ g.count }}</div>
+            <div style="font-size:12px;color:{{ g.fg }};margin-top:5px;font-weight:500">{{ g.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="font-size:13px;color:var(--fnt);margin-top:10px">Each band is sized by how much is sitting there — workload you can feel before you read a number.</div>
+     </div>
+    </div>
+   </sc-if>
 
-        go(s) { return () => { clearInterval(this._t); this.setState({ stage: s, selecting: null, editingColor: false }); }; }
-        toggleTheme() { this.setState(s => ({ dark: !s.dark })); }
-        setView(v) { return () => this.setState({ view: v }); }
-        pickArea(i) { return () => this.setState(s => ({ areaIndex: i, editingColor: false, stage: s.stage === 'overview' ? 'today' : s.stage })); }
-        toggleColor() { this.setState(s => ({ editingColor: !s.editingColor })); }
-        setColor(hex) { return () => this.setState(s => ({ areas: s.areas.map((a, i) => i === s.areaIndex ? { ...a, color: hex } : a), editingColor: false })); }
-        startAddArea() { this.setState({ addingArea: true, areaDraft: '' }); }
-        onAreaInput(e) { this.setState({ areaDraft: e.target.value }); }
-        onAreaKey(e) { if (e.key === 'Enter') this.commitArea(); else if (e.key === 'Escape') this.setState({ addingArea: false }); }
-        commitArea() {
-          const n = (this.state.areaDraft || '').trim();
-          if (!n) { this.setState({ addingArea: false }); return; }
-          this.setState(s => { const color = this.PAL[s.areas.length % this.PAL.length]; const areas = [...s.areas, { name: n, color }]; return { areas, areaIndex: areas.length - 1, addingArea: false, areaDraft: '' }; });
-        }
+   <!-- CAPTURE -->
+   <sc-if value="{{ isCapture }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Capture" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:460px;text-align:center">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt)">Capture · {{ areaName }}</div>
+      <textarea value="{{ draft }}" onInput="{{ onDraft }}" onKeyDown="{{ onDraftKey }}" placeholder="What's on your mind?" style="margin-top:22px;width:100%;max-width:620px;min-height:130px;border:none;outline:none;resize:none;background:transparent;text-align:center;font-size:30px;font-weight:500;color:var(--ink);line-height:1.35;caret-color:var(--acc)"></textarea>
+      <div style="display:flex;align-items:center;gap:16px;margin-top:18px">
+        <button onClick="{{ capture }}" style="background:var(--acc);color:var(--on-acc);border:none;border-radius:13px;padding:14px 32px;font-size:16px;font-weight:600;cursor:pointer">Save thought</button>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:var(--fnt)">⌘↵</span>
+      </div>
+      <div style="height:40px;margin-top:24px;display:flex;align-items:center;gap:10px">
+        <sc-if value="{{ justCaptured }}" hint-placeholder-val="{{ false }}">
+          <span style="display:flex;align-items:center;gap:9px;background:var(--grn-sf);color:var(--grn-fg);border-radius:30px;padding:8px 16px;font-size:14px;font-weight:600;animation:pop .4s ease">✓ Saved — now waiting in Triage</span>
+        </sc-if>
+      </div>
+      <div style="font-size:13px;color:var(--fnt);max-width:46ch;line-height:1.5">Type, save, gone. No area picker, no save-mode toggle, no draft panel — those live behind <span style="font-family:'IBM Plex Mono',monospace;background:var(--sf3);padding:1px 6px;border-radius:5px">/</span> for the rare moment you need them.</div>
+    </div>
+   </sc-if>
 
-        onDraft(e) { this.setState({ draft: e.target.value }); }
-        onDraftKey(e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); this.capture(); } }
-        capture() {
-          const t = (this.state.draft || '').trim(); if (!t) return;
-          const id = this.state.nextId;
-          this.setState(s => ({ items: [...s.items, { id, text: t, status: 'inbox', area: s.areaIndex }], nextId: s.nextId + 1, draft: '', justCaptured: true }));
-          clearTimeout(this._cap); this._cap = setTimeout(() => this.setState({ justCaptured: false }), 1400);
-        }
-        triage(dest) {
-          const card = this.state.items.find(i => i.status === 'inbox'); if (!card) return;
-          this.setState(s => ({ items: dest === 'drop' ? s.items.filter(i => i.id !== card.id) : s.items.map(i => i.id === card.id ? { ...i, status: dest, est: i.est || 30 } : i) }));
-        }
-        pick(id) { return () => this.setState(s => ({ selecting: s.selecting === id ? null : id })); }
-        place(hour) { return () => { const id = this.state.selecting; if (!id) return; this.setState(s => ({ items: s.items.map(i => i.id === id ? { ...i, status: 'planned', when: hour } : i), selecting: null })); }; }
-        unplan(id) { return (e) => { if (e) e.stopPropagation(); this.setState(s => ({ items: s.items.map(i => i.id === id ? { ...i, status: 'today', when: null } : i) })); }; }
-        choose(id) { return () => { const it = this.state.items.find(i => i.id === id); const total = (it.est || 30) * 60; clearInterval(this._t); this.setState({ activeId: id, total, remaining: total, running: false, ending: false }); }; }
-        toggleRun() {
-          if (this.state.running) { clearInterval(this._t); this.setState({ running: false }); return; }
-          this.setState({ running: true });
-          clearInterval(this._t);
-          this._t = setInterval(() => this.setState(s => { if (s.remaining <= 1) { clearInterval(this._t); return { remaining: 0, running: false, ending: true }; } return { remaining: s.remaining - 1 }; }), 1000);
-        }
-        askEnd() { clearInterval(this._t); this.setState({ running: false, ending: true }); }
-        end(outcome) {
-          const id = this.state.activeId; const it = this.state.items.find(i => i.id === id); if (!it) return;
-          const planned = it.est || 30; const actual = Math.max(1, Math.round((this.state.total - this.state.remaining) / 60));
-          clearInterval(this._t);
-          this.setState(s => ({
-            items: outcome === 'complete' ? s.items.map(i => i.id === id ? { ...i, status: 'done' } : i) : s.items,
-            sessions: [...s.sessions, { id: 'ss' + id + Date.now(), text: it.text, outcome, planned, actual }],
-            activeId: null, running: false, remaining: 0, total: 0, ending: false
-          }));
-        }
-        runCheck() { this.setState({ checking: true }); clearTimeout(this._chk); this._chk = setTimeout(() => this.setState({ checking: false }), 1400); }
-        fmt(sec) { const m = Math.floor(sec / 60), s = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
-        hourLabel(h) { const ap = h < 12 ? 'am' : 'pm'; const hr = h > 12 ? h - 12 : h; return hr + ' ' + ap; }
+   <!-- TRIAGE -->
+   <sc-if value="{{ isTriage }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ triageCard }}" hint-placeholder-val="{{ true }}">
+     <div data-screen-label="Triage" style="display:flex;flex-direction:column;align-items:center">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px">
+        <sc-for list="{{ triageDots }}" as="d" hint-placeholder-count="3">
+          <span style="width:9px;height:9px;border-radius:50%;background:{{ d.c }}"></span>
+        </sc-for>
+        <span style="font-size:13px;color:var(--fnt);margin-left:6px">{{ triageLeft }} left to sort</span>
+      </div>
+      <div style="width:100%;max-width:560px;background:var(--sf2);border:1px solid var(--ln);border-radius:20px;box-shadow:var(--shadow);padding:42px 36px;text-align:center;animation:slideup .35s ease">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amb-fg);background:var(--amb-sf);display:inline-block;padding:5px 11px;border-radius:20px">Needs a decision</div>
+        <div style="font-size:27px;font-weight:600;letter-spacing:-0.015em;margin-top:18px;line-height:1.3">{{ triageCard.text }}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;width:100%;max-width:560px;margin-top:20px">
+        <button onClick="{{ triageDrop }}" style="background:var(--sf3);border:1px solid var(--ln2);border-radius:16px;padding:20px 0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px">
+          <span style="width:42px;height:42px;border-radius:50%;background:var(--ln2);color:var(--fnt);display:flex;align-items:center;justify-content:center;font-size:20px">✕</span>
+          <span style="font-size:14px;font-weight:600;color:var(--mut)">Drop it</span></button>
+        <button onClick="{{ triageLater }}" style="background:var(--blu-sf);border:1px solid var(--blu-rng);border-radius:16px;padding:20px 0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px">
+          <span style="width:42px;height:42px;border-radius:50%;background:var(--blu-rng);color:var(--blu-fg);display:flex;align-items:center;justify-content:center;font-size:20px">◷</span>
+          <span style="font-size:14px;font-weight:600;color:var(--blu-fg)">Someday</span></button>
+        <button onClick="{{ triageToday }}" style="background:var(--acc);border:none;border-radius:16px;padding:20px 0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px">
+          <span style="width:42px;height:42px;border-radius:50%;background:var(--acc2);color:var(--on-acc);display:flex;align-items:center;justify-content:center;font-size:22px">→</span>
+          <span style="font-size:14px;font-weight:600;color:var(--on-acc)">Do today</span></button>
+      </div>
+      <div style="font-size:13px;color:var(--fnt);margin-top:18px">One thought at a time. Pick a direction — the next one slides up.</div>
+     </div>
+    </sc-if>
+    <sc-if value="{{ triageEmpty }}" hint-placeholder-val="{{ false }}">
+     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:420px;text-align:center">
+       <span style="width:72px;height:72px;border-radius:50%;background:var(--grn-sf);color:var(--grn-fg);display:flex;align-items:center;justify-content:center;font-size:34px">✓</span>
+       <div style="font-size:24px;font-weight:700;margin-top:20px">Inbox clear</div>
+       <div style="font-size:16px;color:var(--mut);margin-top:6px;max-width:40ch">Nothing left to decide. Time to give today's work a shape.</div>
+       <button onClick="{{ goPlan }}" style="margin-top:22px;background:var(--btn);color:var(--btn-fg);border:none;border-radius:12px;padding:13px 26px;font-size:15px;font-weight:600;cursor:pointer">Plan your day ›</button>
+     </div>
+    </sc-if>
+   </sc-if>
 
-        renderVals() {
-          const S = this.state, I = S.items;
-          const dark = S.dark, mob = S.view === 'mobile';
-          const area = S.areas[S.areaIndex] || S.areas[0];
-          const acc = area.color;
+   <!-- PLAN -->
+   <sc-if value="{{ isPlan }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Plan" style="display:grid;grid-template-columns:var(--planG);gap:30px">
+     <div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt)">Today's shape</div>
+        <sc-if value="{{ selecting }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:13px;color:var(--acc);font-weight:600;animation:pulse 1.4s infinite">Pick a time slot ↓</div>
+        </sc-if>
+      </div>
+      <div style="border:1px solid var(--ln);border-radius:14px;overflow:hidden;background:var(--sf2)">
+        <sc-for list="{{ hours }}" as="h" hint-placeholder-count="10">
+          <div onClick="{{ h.place }}" style="{{ h.row }}">
+            <span style="width:52px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--fnt)">{{ h.label }}</span>
+            <div style="flex:1;min-height:34px;display:flex;align-items:center;gap:8px">
+              <sc-for list="{{ h.blocks }}" as="b" hint-placeholder-count="1">
+                <span onClick="{{ b.unplan }}" style="background:var(--acc-sf);color:var(--acc);border:1px solid var(--acc-rng);border-radius:9px;padding:7px 13px;font-size:14px;font-weight:600;cursor:pointer">{{ b.text }} · {{ b.est }}m</span>
+              </sc-for>
+              <sc-if value="{{ h.hint }}" hint-placeholder-val="{{ false }}">
+                <span style="font-size:13px;color:var(--acc);opacity:.75">drop here</span>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+     </div>
+     <div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt);margin-bottom:14px">To place ({{ unplacedCount }})</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ unplaced }}" as="u" hint-placeholder-count="2">
+          <button onClick="{{ u.select }}" style="{{ u.style }}">
+            <span style="font-size:15px;font-weight:600;text-align:left">{{ u.text }}</span>
+            <span style="font-size:12px;color:{{ u.subColor }};margin-top:4px;display:block;text-align:left">{{ u.est }} min · tap, then pick a time</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{ allPlaced }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px dashed var(--ln2);border-radius:14px;padding:24px;text-align:center;color:var(--fnt);font-size:14px">Everything's placed.<br><button onClick="{{ goExec }}" style="margin-top:12px;background:var(--btn);color:var(--btn-fg);border:none;border-radius:11px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">Start focusing ›</button></div>
+        </sc-if>
+      </div>
+     </div>
+    </div>
+   </sc-if>
 
-          const base = dark ? {
-            bd: '#0c0d10', sf: '#15171c', sf2: '#1b1e25', sf3: '#21252d', ink: '#f2f1ec', mut: '#9b9ca4', fnt: '#686a73', ln: '#23262e', ln2: '#2c303a',
-            btn: '#f2f1ec', btnFg: '#15171c', track: '#262a33', shadow: '0 40px 90px -50px rgba(0,0,0,.7)',
-            ambFg: '#e3ad52', ambSf: '#2c2615', ambRng: '#51441f', bluFg: '#7aa2dd', bluSf: '#172838', bluRng: '#2e486a', grnFg: '#6fb98c', grnSf: '#14301f', grnRng: '#295036'
-          } : {
-            bd: '#e7e4db', sf: '#fbfaf7', sf2: '#ffffff', sf3: '#f4f1ea', ink: '#18170f', mut: '#6f6d64', fnt: '#a8a69d', ln: '#efece5', ln2: '#e2dfd6',
-            btn: '#18170f', btnFg: '#ffffff', track: '#ece9e1', shadow: '0 40px 90px -50px rgba(20,18,10,.5)',
-            ambFg: '#b5791f', ambSf: '#f6ecd6', ambRng: '#ecdcbb', bluFg: '#3f6fb8', bluSf: '#e7eefa', bluRng: '#d4e0f2', grnFg: '#4a8c63', grnSf: '#e4efe8', grnRng: '#d2e6da'
-          };
-          const acc2 = this._mix(acc, dark ? '#ffffff' : '#000000', 0.16);
-          const accSf = this._mix(acc, base.sf2, dark ? 0.80 : 0.86);
-          const accRng = this._mix(acc, base.sf2, dark ? 0.50 : 0.66);
-          const onAcc = this._lum(acc) > 0.55 ? '#1a1a14' : '#ffffff';
+   <!-- EXECUTE -->
+   <sc-if value="{{ isExec }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ exec }}" hint-placeholder-val="{{ false }}">
+     <div data-screen-label="Execute" style="display:flex;flex-direction:column;align-items:center;min-height:440px;justify-content:center">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt)">Focus session · {{ areaName }}</div>
+      <div style="font-size:23px;font-weight:700;margin-top:10px;text-align:center;max-width:30ch">{{ exec.text }}</div>
+      <div style="position:relative;width:236px;height:236px;margin-top:24px">
+        <svg width="236" height="236" viewBox="0 0 236 236" style="position:absolute;inset:0">
+          <circle cx="118" cy="118" r="104" fill="none" stroke="{{ ringTrack }}" stroke-width="15"></circle>
+          <circle cx="118" cy="118" r="104" fill="none" stroke="{{ ringColor }}" stroke-width="15" stroke-linecap="round" stroke-dasharray="{{ ringDash }}" stroke-dashoffset="{{ ringOffset }}" transform="rotate(-90 118 118)"></circle>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:46px;font-weight:600;letter-spacing:-0.02em">{{ exec.time }}</div>
+          <div style="font-size:13px;color:var(--fnt);margin-top:2px">{{ exec.statusLabel }}</div>
+        </div>
+      </div>
+      <sc-if value="{{ exec.ending }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:26px;text-align:center;animation:slideup .3s ease">
+          <div style="font-size:14px;color:var(--mut);margin-bottom:12px">How did it end?</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+            <button onClick="{{ endComplete }}" style="background:var(--grn-fg);color:#fff;border:none;border-radius:11px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">✓ Complete</button>
+            <button onClick="{{ endStuck }}" style="background:var(--sf3);border:1px solid var(--ln2);color:var(--mut);border-radius:11px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer">Stuck</button>
+            <button onClick="{{ endMissed }}" style="background:var(--sf3);border:1px solid var(--ln2);color:var(--mut);border-radius:11px;padding:11px 18px;font-size:14px;font-weight:600;cursor:pointer">Missed</button>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ exec.live }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:12px;margin-top:28px">
+          <button onClick="{{ toggleRun }}" style="background:var(--btn);color:var(--btn-fg);border:none;border-radius:12px;padding:13px 32px;font-size:15px;font-weight:600;cursor:pointer">{{ exec.runLabel }}</button>
+          <button onClick="{{ askEnd }}" style="background:none;border:1px solid var(--ln2);color:var(--mut);border-radius:12px;padding:13px 22px;font-size:15px;font-weight:600;cursor:pointer">End session</button>
+        </div>
+      </sc-if>
+     </div>
+    </sc-if>
+    <sc-if value="{{ execPick }}" hint-placeholder-val="{{ true }}">
+     <div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt);margin-bottom:6px">Ready to run · pick one block</div>
+      <div style="font-size:15px;color:var(--mut);margin-bottom:20px">One session at a time. Everything else stays out of the way.</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <sc-for list="{{ readyBlocks }}" as="r" hint-placeholder-count="2">
+          <button onClick="{{ r.choose }}" style="display:flex;align-items:center;gap:18px;background:var(--sf2);border:1px solid var(--ln);border-radius:15px;padding:18px 22px;cursor:pointer;text-align:left;color:var(--ink)">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--acc);background:var(--acc-sf);border-radius:8px;padding:6px 10px">{{ r.at }}</span>
+            <span style="flex:1;font-size:17px;font-weight:600">{{ r.text }}</span>
+            <span style="font-size:14px;color:var(--fnt)">{{ r.est }} min</span>
+            <span style="color:var(--acc);font-size:20px">▶</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{ noBlocks }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px dashed var(--ln2);border-radius:15px;padding:30px;text-align:center;color:var(--fnt);font-size:15px">No blocks planned yet.<br><button onClick="{{ goPlan }}" style="margin-top:12px;background:var(--btn);color:var(--btn-fg);border:none;border-radius:11px;padding:11px 20px;font-size:14px;font-weight:600;cursor:pointer">Go plan ›</button></div>
+        </sc-if>
+      </div>
+     </div>
+    </sc-if>
+   </sc-if>
 
-          const themeVars = [
-            ['--bd', base.bd], ['--sf', base.sf], ['--sf2', base.sf2], ['--sf3', base.sf3], ['--ink', base.ink], ['--mut', base.mut], ['--fnt', base.fnt], ['--ln', base.ln], ['--ln2', base.ln2],
-            ['--btn', base.btn], ['--btn-fg', base.btnFg], ['--shadow', base.shadow],
-            ['--acc', acc], ['--acc2', acc2], ['--acc-sf', accSf], ['--acc-rng', accRng], ['--on-acc', onAcc],
-            ['--amb-fg', base.ambFg], ['--amb-sf', base.ambSf], ['--amb-rng', base.ambRng], ['--blu-fg', base.bluFg], ['--blu-sf', base.bluSf], ['--blu-rng', base.bluRng], ['--grn-fg', base.grnFg], ['--grn-sf', base.grnSf], ['--grn-rng', base.grnRng],
-            ['--max', (mob ? 412 : 1000) + 'px'], ['--g2', mob ? '1fr' : '1fr 1fr'], ['--planG', mob ? '1fr' : '1fr 320px'], ['--revG', mob ? '1fr' : '230px 1fr'], ['--colG', mob ? '1fr' : 'repeat(4,1fr)']
-          ].map(p => p[0] + ':' + p[1]).join(';');
+   <!-- REVIEW -->
+   <sc-if value="{{ isReview }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Review" style="display:flex;flex-direction:column;gap:28px">
+     <div style="display:grid;grid-template-columns:var(--revG);gap:28px;align-items:center">
+       <div style="position:relative;width:200px;height:200px;margin:0 auto">
+         <svg width="200" height="200" viewBox="0 0 200 200">
+           <circle cx="100" cy="100" r="86" fill="none" stroke="{{ revTrack }}" stroke-width="16"></circle>
+           <circle cx="100" cy="100" r="86" fill="none" stroke="{{ revColor }}" stroke-width="16" stroke-linecap="round" stroke-dasharray="{{ revDash }}" stroke-dashoffset="{{ revOffset }}" transform="rotate(-90 100 100)"></circle>
+         </svg>
+         <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+           <div style="font-size:40px;font-weight:700">{{ revPct }}%</div>
+           <div style="font-size:13px;color:var(--fnt)">{{ revDone }} of {{ revTotal }} done</div>
+         </div>
+       </div>
+       <div>
+         <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt)">End of day · {{ areaName }}</div>
+         <div style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin-top:10px;max-width:18ch">{{ revVerdict }}</div>
+         <div style="font-size:16px;color:var(--mut);margin-top:6px;max-width:34ch">{{ revVerdictSub }}</div>
+         <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+           <button onClick="{{ goToday }}" style="background:var(--btn);color:var(--btn-fg);border:none;border-radius:12px;padding:12px 22px;font-size:15px;font-weight:600;cursor:pointer">Close the day</button>
+           <button onClick="{{ goCapture }}" style="background:none;border:1px solid var(--ln2);color:var(--mut);border-radius:12px;padding:12px 20px;font-size:15px;font-weight:600;cursor:pointer">Add a follow-up</button>
+         </div>
+       </div>
+     </div>
+     <div style="display:grid;grid-template-columns:var(--g2);gap:20px">
+       <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:16px;padding:22px">
+         <div style="font-size:14px;font-weight:600;margin-bottom:16px">Planned vs actual focus</div>
+         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+           <span style="width:54px;font-size:13px;color:var(--fnt)">Planned</span>
+           <div style="flex:1;height:16px;background:var(--acc-sf);border-radius:9px;overflow:hidden"><div style="width:{{ plannedW }};height:100%;background:var(--acc2)"></div></div>
+           <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;width:46px;text-align:right">{{ plannedMin }}m</span>
+         </div>
+         <div style="display:flex;align-items:center;gap:12px">
+           <span style="width:54px;font-size:13px;color:var(--fnt)">Actual</span>
+           <div style="flex:1;height:16px;background:var(--grn-sf);border-radius:9px;overflow:hidden"><div style="width:{{ actualW }};height:100%;background:var(--grn-fg)"></div></div>
+           <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;width:46px;text-align:right">{{ actualMin }}m</span>
+         </div>
+       </div>
+       <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:16px;padding:22px">
+         <div style="font-size:14px;font-weight:600;margin-bottom:16px">Sessions today</div>
+         <div style="display:flex;flex-wrap:wrap;gap:9px">
+           <sc-for list="{{ sessionDots }}" as="s" hint-placeholder-count="3">
+             <span style="display:flex;align-items:center;gap:7px;background:{{ s.bg }};color:{{ s.fg }};border-radius:30px;padding:6px 13px;font-size:13px;font-weight:600">{{ s.glyph }} {{ s.label }}</span>
+           </sc-for>
+         </div>
+         <div style="font-size:13px;color:var(--fnt);margin-top:16px;line-height:1.5">{{ carryLine }}</div>
+       </div>
+     </div>
+    </div>
+   </sc-if>
 
-          const T = {
-            amber: { fg: base.ambFg, bg: base.ambSf, ring: base.ambRng },
-            blue: { fg: base.bluFg, bg: base.bluSf, ring: base.bluRng },
-            indigo: { fg: acc, bg: accSf, ring: accRng },
-            green: { fg: base.grnFg, bg: base.grnSf, ring: base.grnRng },
-            none: { fg: base.fnt, bg: base.sf3, ring: base.ln2 }
-          };
+   <!-- HEALTH -->
+   <sc-if value="{{ isHealth }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Health" style="display:flex;flex-direction:column;align-items:center;min-height:440px;justify-content:center">
+      <div style="position:relative;width:150px;height:150px">
+        <span style="{{ healthRing }}"></span>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:54px;color:var(--grn-fg)">{{ healthGlyph }}</div>
+      </div>
+      <div style="font-size:27px;font-weight:700;margin-top:22px">{{ healthTitle }}</div>
+      <div style="font-size:16px;color:var(--mut);margin-top:5px">{{ healthSub }}</div>
+      <div style="display:flex;gap:12px;margin-top:24px;flex-wrap:wrap;justify-content:center">
+        <sc-for list="{{ healthCats }}" as="c" hint-placeholder-count="3">
+          <div style="background:var(--sf2);border:1px solid var(--ln);border-radius:14px;padding:16px 22px;text-align:center;min-width:128px">
+            <div style="display:flex;align-items:center;justify-content:center;gap:7px;font-size:15px;font-weight:700;color:{{ c.fg }}"><span style="width:8px;height:8px;border-radius:50%;background:{{ c.dot }}"></span>{{ c.score }}</div>
+            <div style="font-size:13px;color:var(--mut);margin-top:6px">{{ c.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <button onClick="{{ runCheck }}" style="margin-top:26px;background:none;border:1px solid var(--ln2);color:var(--mut);border-radius:12px;padding:12px 24px;font-size:15px;font-weight:600;cursor:pointer">{{ checkLabel }}</button>
+      <div style="font-size:13px;color:var(--fnt);margin-top:16px;max-width:42ch;text-align:center;line-height:1.5">Green is the silent default. The full 11-check breakdown is one tap away — but a healthy system shouldn't cost any attention.</div>
+    </div>
+   </sc-if>
 
-          const A = I.filter(i => i.area === S.areaIndex);
-          const inbox = A.filter(i => i.status === 'inbox');
-          const today = A.filter(i => i.status === 'today');
-          const planned = A.filter(i => i.status === 'planned').sort((a, b) => a.when - b.when);
-          const done = A.filter(i => i.status === 'done');
+   <!-- ALL AREAS -->
+   <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="All areas" style="display:flex;flex-direction:column;gap:26px">
+     <div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fnt)">All areas · everything in one place</div>
+        <div style="font-size:13px;color:var(--mut)">{{ openSummary }}</div>
+      </div>
+      <div style="display:flex;height:18px;border-radius:9px;overflow:hidden;margin-top:14px;background:var(--sf3);gap:2px">
+        <sc-for list="{{ spectrum }}" as="s" hint-placeholder-count="4">
+          <div style="width:{{ s.w }};background:{{ s.color }}"></div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:13px">
+        <sc-for list="{{ legend }}" as="l" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:7px">
+            <span style="width:9px;height:9px;border-radius:50%;background:{{ l.color }}"></span>
+            <span style="font-size:13px;font-weight:600;color:var(--ink)">{{ l.name }}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--fnt)">{{ l.open }}</span>
+          </div>
+        </sc-for>
+      </div>
+     </div>
 
-          // ===== aggregate · all areas =====
-          const mono = "font-family:'IBM Plex Mono',monospace;";
-          const colorOf = idx => (S.areas[idx] || S.areas[0]).color;
-          const nameOf = idx => (S.areas[idx] || S.areas[0]).name;
-          const mkCard = (it, detail) => { const col = colorOf(it.area); return { text: it.text, color: col, area: nameOf(it.area), detail, box: 'background:' + this._mix(col, base.sf2, dark ? 0.83 : 0.88) + ';border:1px solid ' + base.ln + ';border-left:3px solid ' + col + ';border-radius:10px;padding:11px 13px' }; };
-          const gInbox = I.filter(i => i.status === 'inbox');
-          const gToday = I.filter(i => i.status === 'today');
-          const gPlanned = I.filter(i => i.status === 'planned').sort((a, b) => a.when - b.when);
-          const gDone = I.filter(i => i.status === 'done');
-          const overviewCols = [
-            { label: 'To triage', tone: T.amber, cards: gInbox.map(it => mkCard(it, '')) },
-            { label: 'To plan', tone: T.blue, cards: gToday.map(it => mkCard(it, (it.est || 30) + ' min')) },
-            { label: 'Scheduled', tone: T.indigo, cards: gPlanned.map(it => mkCard(it, this.hourLabel(it.when))) },
-            { label: 'Done', tone: T.green, cards: gDone.map(it => mkCard(it, '✓')) }
-          ].map(c => ({ label: c.label, cards: c.cards, count: c.cards.length, empty: c.cards.length === 0, dotc: c.tone.fg, head: mono + 'font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:' + c.tone.fg }));
-          const areaTotals = S.areas.map((a, idx) => ({ name: a.name, color: a.color, open: I.filter(i => i.area === idx && i.status !== 'done').length }));
-          const realOpen = areaTotals.reduce((s, a) => s + a.open, 0);
-          const totalOpen = realOpen || 1;
-          const spectrum = areaTotals.filter(a => a.open > 0).map(a => ({ name: a.name, color: a.color, w: (a.open / totalOpen * 100) + '%' }));
-          const legend = areaTotals.map(a => ({ name: a.name, color: a.color, open: a.open }));
-          const allDots = S.areas.slice(0, 3).map(a => a.color);
-          const overviewOn = S.stage === 'overview';
-          const allChipStyle = 'display:flex;align-items:center;gap:7px;white-space:nowrap;border:none;cursor:pointer;border-radius:30px;padding:6px 12px;font-size:13px;font-weight:600;transition:all .15s;' + (overviewOn ? 'background:' + base.sf3 + ';color:' + base.ink : 'background:transparent;color:' + base.mut);
-          const openSummary = realOpen + ' open · ' + S.areas.length + ' areas';
+     <div style="display:grid;grid-template-columns:var(--colG);gap:16px">
+       <sc-for list="{{ overviewCols }}" as="c" hint-placeholder-count="4">
+         <div style="background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:14px 14px 16px;min-height:130px">
+           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
+             <span style="{{ c.head }}">{{ c.label }}</span>
+             <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:{{ c.dotc }}">{{ c.count }}</span>
+           </div>
+           <div style="display:flex;flex-direction:column;gap:9px">
+             <sc-for list="{{ c.cards }}" as="k" hint-placeholder-count="2">
+               <div style="{{ k.box }}">
+                 <div style="font-size:14px;font-weight:600;color:var(--ink);line-height:1.3">{{ k.text }}</div>
+                 <div style="display:flex;align-items:center;gap:6px;margin-top:7px">
+                   <span style="width:7px;height:7px;border-radius:50%;background:{{ k.color }}"></span>
+                   <span style="font-size:11px;font-weight:600;color:{{ k.color }}">{{ k.area }}</span>
+                   <span style="font-size:11px;color:var(--fnt)">{{ k.detail }}</span>
+                 </div>
+               </div>
+             </sc-for>
+             <sc-if value="{{ c.empty }}" hint-placeholder-val="{{ false }}">
+               <div style="font-size:13px;color:var(--fnt);padding:4px 2px">Nothing here.</div>
+             </sc-if>
+           </div>
+         </div>
+       </sc-for>
+     </div>
+    </div>
+   </sc-if>
 
-          // nodes
-          const ndef = [
-            { key: 'today', name: 'Today', glyph: '◆', count: 0, tone: 'none' },
-            { key: 'capture', name: 'Capture', glyph: '+', count: 0, tone: 'none' },
-            { key: 'triage', name: 'Triage', glyph: inbox.length || '·', count: inbox.length, tone: 'amber' },
-            { key: 'plan', name: 'Plan', glyph: today.length || '·', count: today.length, tone: 'blue' },
-            { key: 'execute', name: 'Execute', glyph: planned.length || '·', count: planned.length, tone: 'indigo' },
-            { key: 'review', name: 'Review', glyph: done.length || '·', count: done.length, tone: 'green' }
-          ];
-          const cb = 'width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:\'IBM Plex Mono\',monospace;font-weight:600;transition:all .2s;';
-          const nodes = ndef.map(n => {
-            const active = S.stage === n.key;
-            const t = T[n.tone];
-            let circle;
-            if (active) circle = cb + 'font-size:17px;background:' + base.btn + ';color:' + base.btnFg + ';border:2px solid ' + acc + ';box-shadow:0 0 0 4px ' + accSf;
-            else if (n.count > 0) circle = cb + 'font-size:17px;background:' + t.bg + ';color:' + t.fg + ';border:2px solid ' + t.ring;
-            else circle = cb + 'font-size:16px;background:' + base.sf + ';color:' + base.fnt + ';border:2px solid ' + base.ln;
-            const label = 'font-size:12px;font-weight:' + (active ? '700' : '500') + ';color:' + (active ? base.ink : base.fnt);
-            return { name: n.name, glyph: n.glyph, circle, label, go: this.go(n.key) };
-          });
+  </div>
+ </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1040,&quot;height&quot;:800}}">
+class Component extends DCLogic {
+  PAL = ['#6b78e8', '#3f8fd6', '#3fae8f', '#5aa84a', '#d9a23f', '#d9624a', '#c44d80', '#b066d9'];
 
-          // areas
-          const areas = S.areas.map((a, i) => {
-            const on = i === S.areaIndex;
-            return { label: a.name, dot: a.color, pick: this.pickArea(i), style: 'display:flex;align-items:center;gap:7px;white-space:nowrap;border:none;cursor:pointer;border-radius:30px;padding:6px 12px;font-size:13px;font-weight:600;transition:all .15s;' + (on ? 'background:' + accSf + ';color:' + acc : 'background:transparent;color:' + base.mut) };
-          });
-          const swatches = this.PAL.map(c => ({ pick: this.setColor(c), style: 'width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c + ';' + (c.toLowerCase() === acc.toLowerCase() ? 'border:3px solid ' + base.ink + ';box-shadow:0 0 0 2px ' + base.sf2 + ' inset' : 'border:2px solid ' + base.ln2) }));
+  state = {
+    stage: 'today', dark: true, view: 'web',
+    areas: [
+      { name: 'Main Job', color: '#6b78e8' },
+      { name: 'Personal', color: '#3fae8f' },
+      { name: 'Volunteer', color: '#d9a23f' },
+      { name: 'Side Project', color: '#b066d9' }
+    ],
+    areaIndex: 0, addingArea: false, areaDraft: '', editingColor: false,
+    draft: '',
+    items: [
+      { id: 1, text: 'Draft the Q3 retro agenda', status: 'inbox', area: 0 },
+      { id: 2, text: 'Reply to the budget thread', status: 'inbox', area: 0 },
+      { id: 3, text: 'Book a dentist appointment', status: 'inbox', area: 1 },
+      { id: 4, text: 'Outline the onboarding revamp', status: 'today', est: 45, area: 0 },
+      { id: 5, text: 'Plan the weekend hike', status: 'today', est: 30, area: 1 },
+      { id: 6, text: 'Review PR #214', status: 'planned', when: 11, est: 30, area: 3 },
+      { id: 7, text: 'Prep the food-bank rota', status: 'planned', when: 14, est: 45, area: 2 },
+      { id: 8, text: 'Weekly review ritual notes', status: 'done', est: 25, area: 1 },
+      { id: 9, text: 'Ship the pricing page copy', status: 'done', est: 40, area: 3 }
+    ],
+    nextId: 10, selecting: null,
+    activeId: null, running: false, remaining: 0, total: 0, ending: false,
+    sessions: [{ id: 's1', text: 'Weekly review ritual notes', outcome: 'complete', planned: 25, actual: 22 }],
+    justCaptured: false, checking: false
+  };
 
-          // next move
-          const mkNext = (toneKey, glyph, title, sub, cta, goKey) => { const t = T[toneKey]; return { glyph, title, sub, cta, go: this.go(goKey), bg: base.sf2, border: base.ln, badge: 'width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;background:' + t.bg + ';color:' + t.fg }; };
-          let next;
-          if (inbox.length) next = mkNext('amber', '↘', 'Sort ' + inbox.length + ' new thought' + (inbox.length > 1 ? 's' : ''), 'Waiting in Triage for a quick decision.', 'Triage', 'triage');
-          else if (today.length) next = mkNext('blue', '◷', 'Give ' + today.length + ' task' + (today.length > 1 ? 's' : '') + ' a time', 'Place them on today\u2019s timeline.', 'Plan', 'plan');
-          else if (planned.length) next = mkNext('indigo', '▶', 'Start: ' + planned[0].text, planned[0].est + ' minutes \u00b7 first block of the day.', 'Focus', 'execute');
-          else next = mkNext('green', '✓', 'You\u2019re all caught up', 'Capture the next thing whenever it lands.', 'Capture', 'capture');
+  componentWillUnmount() { clearInterval(this._t); }
 
-          // glance
-          const gdata = [
-            { count: inbox.length, label: 'to triage', tone: 'amber', key: 'triage' },
-            { count: today.length, label: 'to plan', tone: 'blue', key: 'plan' },
-            { count: planned.length, label: 'scheduled', tone: 'indigo', key: 'execute' },
-            { count: done.length, label: 'done', tone: 'green', key: 'review' }
-          ];
-          const glance = gdata.map(g => { const t = T[g.tone]; return { count: g.count, label: g.label, fg: t.fg, bg: t.bg, flex: Math.max(1, g.count) + 0.6, go: this.go(g.key) }; });
+  _hx(h) { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); }
+  _mix(a, b, t) { const A = this._hx(a), B = this._hx(b); return '#' + A.map((x, i) => { const v = Math.round(x + (B[i] - x) * t); return ('0' + v.toString(16)).slice(-2); }).join(''); }
+  _lum(h) { const c = this._hx(h).map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
 
-          const triageCard = inbox[0] || null;
-          const triageDots = inbox.slice(0, 5).map((x, i) => ({ c: i === 0 ? base.ambFg : base.ln2 }));
+  go(s) { return () => { clearInterval(this._t); this.setState({ stage: s, selecting: null, editingColor: false }); }; }
+  toggleTheme() { this.setState(s => ({ dark: !s.dark })); }
+  setView(v) { return () => this.setState({ view: v }); }
+  pickArea(i) { return () => this.setState(s => ({ areaIndex: i, editingColor: false, stage: s.stage === 'overview' ? 'today' : s.stage })); }
+  toggleColor() { this.setState(s => ({ editingColor: !s.editingColor })); }
+  setColor(hex) { return () => this.setState(s => ({ areas: s.areas.map((a, i) => i === s.areaIndex ? { ...a, color: hex } : a), editingColor: false })); }
+  startAddArea() { this.setState({ addingArea: true, areaDraft: '' }); }
+  onAreaInput(e) { this.setState({ areaDraft: e.target.value }); }
+  onAreaKey(e) { if (e.key === 'Enter') this.commitArea(); else if (e.key === 'Escape') this.setState({ addingArea: false }); }
+  commitArea() {
+    const n = (this.state.areaDraft || '').trim();
+    if (!n) { this.setState({ addingArea: false }); return; }
+    this.setState(s => { const color = this.PAL[s.areas.length % this.PAL.length]; const areas = [...s.areas, { name: n, color }]; return { areas, areaIndex: areas.length - 1, addingArea: false, areaDraft: '' }; });
+  }
 
-          // plan
-          const hintBg = this._mix(acc, base.sf2, 0.9);
-          const hoursArr = [];
-          for (let h = 8; h <= 18; h++) {
-            const blocks = planned.filter(p => p.when === h).map(p => ({ text: p.text, est: p.est, unplan: this.unplan(p.id) }));
-            const isHint = !!S.selecting && blocks.length === 0;
-            hoursArr.push({ label: this.hourLabel(h), blocks, place: this.place(h), hint: isHint, row: 'display:flex;align-items:center;gap:12px;padding:7px 16px;border-bottom:1px solid ' + base.sf3 + ';cursor:' + (S.selecting ? 'pointer' : 'default') + ';background:' + (isHint ? hintBg : 'transparent') });
-          }
-          const unplaced = today.map(u => { const sel = S.selecting === u.id; return { text: u.text, est: u.est || 30, select: this.pick(u.id), subColor: sel ? onAcc : base.fnt, style: 'cursor:pointer;text-align:left;border-radius:14px;padding:15px 17px;display:block;width:100%;transition:all .15s;' + (sel ? 'background:' + acc + ';border:1px solid ' + acc + ';color:' + onAcc : 'background:' + base.sf2 + ';border:1px solid ' + base.ln + ';color:' + base.ink) }; });
+  onDraft(e) { this.setState({ draft: e.target.value }); }
+  onDraftKey(e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); this.capture(); } }
+  capture() {
+    const t = (this.state.draft || '').trim(); if (!t) return;
+    const id = this.state.nextId;
+    this.setState(s => ({ items: [...s.items, { id, text: t, status: 'inbox', area: s.areaIndex }], nextId: s.nextId + 1, draft: '', justCaptured: true }));
+    clearTimeout(this._cap); this._cap = setTimeout(() => this.setState({ justCaptured: false }), 1400);
+  }
+  triage(dest) {
+    const card = this.state.items.find(i => i.status === 'inbox'); if (!card) return;
+    this.setState(s => ({ items: dest === 'drop' ? s.items.filter(i => i.id !== card.id) : s.items.map(i => i.id === card.id ? { ...i, status: dest, est: i.est || 30 } : i) }));
+  }
+  pick(id) { return () => this.setState(s => ({ selecting: s.selecting === id ? null : id })); }
+  place(hour) { return () => { const id = this.state.selecting; if (!id) return; this.setState(s => ({ items: s.items.map(i => i.id === id ? { ...i, status: 'planned', when: hour } : i), selecting: null })); }; }
+  unplan(id) { return (e) => { if (e) e.stopPropagation(); this.setState(s => ({ items: s.items.map(i => i.id === id ? { ...i, status: 'today', when: null } : i) })); }; }
+  choose(id) { return () => { const it = this.state.items.find(i => i.id === id); const total = (it.est || 30) * 60; clearInterval(this._t); this.setState({ activeId: id, total, remaining: total, running: false, ending: false }); }; }
+  toggleRun() {
+    if (this.state.running) { clearInterval(this._t); this.setState({ running: false }); return; }
+    this.setState({ running: true });
+    clearInterval(this._t);
+    this._t = setInterval(() => this.setState(s => { if (s.remaining <= 1) { clearInterval(this._t); return { remaining: 0, running: false, ending: true }; } return { remaining: s.remaining - 1 }; }), 1000);
+  }
+  askEnd() { clearInterval(this._t); this.setState({ running: false, ending: true }); }
+  end(outcome) {
+    const id = this.state.activeId; const it = this.state.items.find(i => i.id === id); if (!it) return;
+    const planned = it.est || 30; const actual = Math.max(1, Math.round((this.state.total - this.state.remaining) / 60));
+    clearInterval(this._t);
+    this.setState(s => ({
+      items: outcome === 'complete' ? s.items.map(i => i.id === id ? { ...i, status: 'done' } : i) : s.items,
+      sessions: [...s.sessions, { id: 'ss' + id + Date.now(), text: it.text, outcome, planned, actual }],
+      activeId: null, running: false, remaining: 0, total: 0, ending: false
+    }));
+  }
+  runCheck() { this.setState({ checking: true }); clearTimeout(this._chk); this._chk = setTimeout(() => this.setState({ checking: false }), 1400); }
+  fmt(sec) { const m = Math.floor(sec / 60), s = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+  hourLabel(h) { const ap = h < 12 ? 'am' : 'pm'; const hr = h > 12 ? h - 12 : h; return hr + ' ' + ap; }
 
-          // execute
-          const readyBlocks = planned.map(p => ({ text: p.text, est: p.est, at: this.hourLabel(p.when), choose: this.choose(p.id) }));
-          let exec = null;
-          if (S.activeId) {
-            const it = I.find(i => i.id === S.activeId);
-            exec = { text: it ? it.text : '', time: this.fmt(S.remaining), statusLabel: S.ending ? 'session ended' : (S.running ? 'running' : 'paused'), running: S.running, runLabel: S.running ? 'Pause' : (S.remaining === S.total ? 'Start' : 'Resume'), ending: S.ending, live: !S.ending };
-          }
-          const ringDash = 2 * Math.PI * 104;
-          const ringOffset = S.total ? ringDash * (1 - S.remaining / S.total) : 0;
+  renderVals() {
+    const S = this.state, I = S.items;
+    const dark = S.dark, mob = S.view === 'mobile';
+    const area = S.areas[S.areaIndex] || S.areas[0];
+    const acc = area.color;
 
-          // review
-          const revTotal = today.length + planned.length + done.length || 1;
-          const revDone = done.length;
-          const revPct = Math.round((revDone / revTotal) * 100);
-          const revDash = 2 * Math.PI * 86;
-          const revOffset = revDash * (1 - revDone / revTotal);
-          const carryN = today.length + planned.length;
-          const totalPlanned = S.sessions.reduce((a, s) => a + s.planned, 0) || 1;
-          const totalActual = S.sessions.reduce((a, s) => a + s.actual, 0);
-          const maxMin = Math.max(totalPlanned, totalActual, 1);
-          const oc = { complete: { bg: base.grnSf, fg: base.grnFg, glyph: '✓', label: 'Complete' }, stuck: { bg: base.ambSf, fg: base.ambFg, glyph: '◐', label: 'Stuck' }, missed: { bg: base.sf3, fg: base.mut, glyph: '○', label: 'Missed' } };
-          const sessionDots = S.sessions.map(s => ({ ...oc[s.outcome] }));
+    const base = dark ? {
+      bd: '#0c0d10', sf: '#15171c', sf2: '#1b1e25', sf3: '#21252d', ink: '#f2f1ec', mut: '#9b9ca4', fnt: '#686a73', ln: '#23262e', ln2: '#2c303a',
+      btn: '#f2f1ec', btnFg: '#15171c', track: '#262a33', shadow: '0 40px 90px -50px rgba(0,0,0,.7)',
+      ambFg: '#e3ad52', ambSf: '#2c2615', ambRng: '#51441f', bluFg: '#7aa2dd', bluSf: '#172838', bluRng: '#2e486a', grnFg: '#6fb98c', grnSf: '#14301f', grnRng: '#295036'
+    } : {
+      bd: '#e7e4db', sf: '#fbfaf7', sf2: '#ffffff', sf3: '#f4f1ea', ink: '#18170f', mut: '#6f6d64', fnt: '#a8a69d', ln: '#efece5', ln2: '#e2dfd6',
+      btn: '#18170f', btnFg: '#ffffff', track: '#ece9e1', shadow: '0 40px 90px -50px rgba(20,18,10,.5)',
+      ambFg: '#b5791f', ambSf: '#f6ecd6', ambRng: '#ecdcbb', bluFg: '#3f6fb8', bluSf: '#e7eefa', bluRng: '#d4e0f2', grnFg: '#4a8c63', grnSf: '#e4efe8', grnRng: '#d2e6da'
+    };
+    const acc2 = this._mix(acc, dark ? '#ffffff' : '#000000', 0.16);
+    const accSf = this._mix(acc, base.sf2, dark ? 0.80 : 0.86);
+    const accRng = this._mix(acc, base.sf2, dark ? 0.50 : 0.66);
+    const onAcc = this._lum(acc) > 0.55 ? '#1a1a14' : '#ffffff';
 
-          const checking = S.checking;
-          const healthRing = 'position:absolute;inset:0;border-radius:50%;border:10px solid ' + base.grnSf + ';border-top-color:' + base.grnFg + ';' + (checking ? 'animation:pulse 1s infinite' : '');
-          const healthCats = [
-            { score: '3 / 3', label: 'Storage & data', fg: base.grnFg, dot: base.grnFg },
-            { score: '2 / 2', label: 'Integrations', fg: base.grnFg, dot: base.grnFg },
-            { score: '4 / 4', label: 'Telemetry · off', fg: base.fnt, dot: base.ln2 }
-          ];
+    const themeVars = [
+      ['--bd', base.bd], ['--sf', base.sf], ['--sf2', base.sf2], ['--sf3', base.sf3], ['--ink', base.ink], ['--mut', base.mut], ['--fnt', base.fnt], ['--ln', base.ln], ['--ln2', base.ln2],
+      ['--btn', base.btn], ['--btn-fg', base.btnFg], ['--shadow', base.shadow],
+      ['--acc', acc], ['--acc2', acc2], ['--acc-sf', accSf], ['--acc-rng', accRng], ['--on-acc', onAcc],
+      ['--amb-fg', base.ambFg], ['--amb-sf', base.ambSf], ['--amb-rng', base.ambRng], ['--blu-fg', base.bluFg], ['--blu-sf', base.bluSf], ['--blu-rng', base.bluRng], ['--grn-fg', base.grnFg], ['--grn-sf', base.grnSf], ['--grn-rng', base.grnRng],
+      ['--max', (mob ? 412 : 1000) + 'px'], ['--g2', mob ? '1fr' : '1fr 1fr'], ['--planG', mob ? '1fr' : '1fr 320px'], ['--revG', mob ? '1fr' : '230px 1fr'], ['--colG', mob ? '1fr' : 'repeat(4,1fr)']
+    ].map(p => p[0] + ':' + p[1]).join(';');
 
-          const segBase = 'border:none;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;';
+    const T = {
+      amber: { fg: base.ambFg, bg: base.ambSf, ring: base.ambRng },
+      blue: { fg: base.bluFg, bg: base.bluSf, ring: base.bluRng },
+      indigo: { fg: acc, bg: accSf, ring: accRng },
+      green: { fg: base.grnFg, bg: base.grnSf, ring: base.grnRng },
+      none: { fg: base.fnt, bg: base.sf3, ring: base.ln2 }
+    };
 
-          return {
-            themeVars, areaName: area.name, draft: S.draft, justCaptured: S.justCaptured,
-            isToday: S.stage === 'today', isCapture: S.stage === 'capture', isTriage: S.stage === 'triage',
-            isPlan: S.stage === 'plan', isExec: S.stage === 'execute', isReview: S.stage === 'review', isHealth: S.stage === 'health',
-            isOverview: overviewOn, goOverview: this.go('overview'), allChipStyle, allDots, overviewCols, spectrum, legend, openSummary,
-            nodes, areas, swatches, next, glance,
-            addingArea: S.addingArea, notAdding: !S.addingArea, areaDraft: S.areaDraft, editingColor: S.editingColor,
-            startAddArea: () => this.startAddArea(), onAreaInput: e => this.onAreaInput(e), onAreaKey: e => this.onAreaKey(e), toggleColor: () => this.toggleColor(),
-            toggleTheme: () => this.toggleTheme(), themeGlyph: dark ? '☀' : '☾',
-            setWeb: this.setView('web'), setMobile: this.setView('mobile'),
-            webStyle: segBase + (mob ? 'background:transparent;color:' + base.mut : 'background:' + base.sf2 + ';color:' + base.ink),
-            mobStyle: segBase + (mob ? 'background:' + base.sf2 + ';color:' + base.ink : 'background:transparent;color:' + base.mut),
-            onDraft: e => this.onDraft(e), onDraftKey: e => this.onDraftKey(e), capture: () => this.capture(),
-            triageCard, triageEmpty: !triageCard, triageDots, triageLeft: inbox.length,
-            triageToday: () => this.triage('today'), triageLater: () => this.triage('later'), triageDrop: () => this.triage('drop'),
-            goPlan: this.go('plan'), goExec: this.go('execute'), goToday: this.go('today'), goCapture: this.go('capture'),
-            hours: hoursArr, selecting: !!S.selecting, unplaced, unplacedCount: today.length, allPlaced: today.length === 0,
-            exec, execPick: !S.activeId, readyBlocks, noBlocks: planned.length === 0,
-            ringDash, ringOffset, ringTrack: base.track, ringColor: acc, toggleRun: () => this.toggleRun(), askEnd: () => this.askEnd(),
-            endComplete: () => this.end('complete'), endStuck: () => this.end('stuck'), endMissed: () => this.end('missed'),
-            revPct, revDone, revTotal, revDash, revOffset, revTrack: base.track, revColor: base.grnFg,
-            revVerdict: carryN === 0 ? 'The day closed clean.' : carryN + ' thing' + (carryN > 1 ? 's' : '') + ' carry over.',
-            revVerdictSub: carryN === 0 ? 'Nothing open, nothing lost.' : 'Still open — decide tomorrow or let it go.',
-            plannedMin: totalPlanned, actualMin: totalActual, plannedW: Math.round(totalPlanned / maxMin * 100) + '%', actualW: Math.round(totalActual / maxMin * 100) + '%',
-            sessionDots, carryLine: carryN === 0 ? 'Nothing is carrying forward.' : carryN + ' task' + (carryN > 1 ? 's' : '') + ' will roll into tomorrow.',
-            healthRing, healthGlyph: checking ? '◴' : '✓', healthTitle: checking ? 'Running checks\u2026' : 'All systems healthy', healthSub: checking ? 'Reading local subsystem status.' : '11 of 11 checks passing · last run 2m ago',
-            healthCats, runCheck: () => this.runCheck(), checkLabel: checking ? 'Checking\u2026' : 'Run system check'
-          };
-        }
-      }
-    </script>
-  </body>
+    const A = I.filter(i => i.area === S.areaIndex);
+    const inbox = A.filter(i => i.status === 'inbox');
+    const today = A.filter(i => i.status === 'today');
+    const planned = A.filter(i => i.status === 'planned').sort((a, b) => a.when - b.when);
+    const done = A.filter(i => i.status === 'done');
+
+    // ===== aggregate · all areas =====
+    const mono = "font-family:'IBM Plex Mono',monospace;";
+    const colorOf = idx => (S.areas[idx] || S.areas[0]).color;
+    const nameOf = idx => (S.areas[idx] || S.areas[0]).name;
+    const mkCard = (it, detail) => { const col = colorOf(it.area); return { text: it.text, color: col, area: nameOf(it.area), detail, box: 'background:' + this._mix(col, base.sf2, dark ? 0.83 : 0.88) + ';border:1px solid ' + base.ln + ';border-left:3px solid ' + col + ';border-radius:10px;padding:11px 13px' }; };
+    const gInbox = I.filter(i => i.status === 'inbox');
+    const gToday = I.filter(i => i.status === 'today');
+    const gPlanned = I.filter(i => i.status === 'planned').sort((a, b) => a.when - b.when);
+    const gDone = I.filter(i => i.status === 'done');
+    const overviewCols = [
+      { label: 'To triage', tone: T.amber, cards: gInbox.map(it => mkCard(it, '')) },
+      { label: 'To plan', tone: T.blue, cards: gToday.map(it => mkCard(it, (it.est || 30) + ' min')) },
+      { label: 'Scheduled', tone: T.indigo, cards: gPlanned.map(it => mkCard(it, this.hourLabel(it.when))) },
+      { label: 'Done', tone: T.green, cards: gDone.map(it => mkCard(it, '✓')) }
+    ].map(c => ({ label: c.label, cards: c.cards, count: c.cards.length, empty: c.cards.length === 0, dotc: c.tone.fg, head: mono + 'font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:' + c.tone.fg }));
+    const areaTotals = S.areas.map((a, idx) => ({ name: a.name, color: a.color, open: I.filter(i => i.area === idx && i.status !== 'done').length }));
+    const realOpen = areaTotals.reduce((s, a) => s + a.open, 0);
+    const totalOpen = realOpen || 1;
+    const spectrum = areaTotals.filter(a => a.open > 0).map(a => ({ name: a.name, color: a.color, w: (a.open / totalOpen * 100) + '%' }));
+    const legend = areaTotals.map(a => ({ name: a.name, color: a.color, open: a.open }));
+    const allDots = S.areas.slice(0, 3).map(a => a.color);
+    const overviewOn = S.stage === 'overview';
+    const allChipStyle = 'display:flex;align-items:center;gap:7px;white-space:nowrap;border:none;cursor:pointer;border-radius:30px;padding:6px 12px;font-size:13px;font-weight:600;transition:all .15s;' + (overviewOn ? 'background:' + base.sf3 + ';color:' + base.ink : 'background:transparent;color:' + base.mut);
+    const openSummary = realOpen + ' open · ' + S.areas.length + ' areas';
+
+    // nodes
+    const ndef = [
+      { key: 'today', name: 'Today', glyph: '◆', count: 0, tone: 'none' },
+      { key: 'capture', name: 'Capture', glyph: '+', count: 0, tone: 'none' },
+      { key: 'triage', name: 'Triage', glyph: inbox.length || '·', count: inbox.length, tone: 'amber' },
+      { key: 'plan', name: 'Plan', glyph: today.length || '·', count: today.length, tone: 'blue' },
+      { key: 'execute', name: 'Execute', glyph: planned.length || '·', count: planned.length, tone: 'indigo' },
+      { key: 'review', name: 'Review', glyph: done.length || '·', count: done.length, tone: 'green' }
+    ];
+    const cb = 'width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:\'IBM Plex Mono\',monospace;font-weight:600;transition:all .2s;';
+    const nodes = ndef.map(n => {
+      const active = S.stage === n.key;
+      const t = T[n.tone];
+      let circle;
+      if (active) circle = cb + 'font-size:17px;background:' + base.btn + ';color:' + base.btnFg + ';border:2px solid ' + acc + ';box-shadow:0 0 0 4px ' + accSf;
+      else if (n.count > 0) circle = cb + 'font-size:17px;background:' + t.bg + ';color:' + t.fg + ';border:2px solid ' + t.ring;
+      else circle = cb + 'font-size:16px;background:' + base.sf + ';color:' + base.fnt + ';border:2px solid ' + base.ln;
+      const label = 'font-size:12px;font-weight:' + (active ? '700' : '500') + ';color:' + (active ? base.ink : base.fnt);
+      return { name: n.name, glyph: n.glyph, circle, label, go: this.go(n.key) };
+    });
+
+    // areas
+    const areas = S.areas.map((a, i) => {
+      const on = i === S.areaIndex;
+      return { label: a.name, dot: a.color, pick: this.pickArea(i), style: 'display:flex;align-items:center;gap:7px;white-space:nowrap;border:none;cursor:pointer;border-radius:30px;padding:6px 12px;font-size:13px;font-weight:600;transition:all .15s;' + (on ? 'background:' + accSf + ';color:' + acc : 'background:transparent;color:' + base.mut) };
+    });
+    const swatches = this.PAL.map(c => ({ pick: this.setColor(c), style: 'width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c + ';' + (c.toLowerCase() === acc.toLowerCase() ? 'border:3px solid ' + base.ink + ';box-shadow:0 0 0 2px ' + base.sf2 + ' inset' : 'border:2px solid ' + base.ln2) }));
+
+    // next move
+    const mkNext = (toneKey, glyph, title, sub, cta, goKey) => { const t = T[toneKey]; return { glyph, title, sub, cta, go: this.go(goKey), bg: base.sf2, border: base.ln, badge: 'width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;background:' + t.bg + ';color:' + t.fg }; };
+    let next;
+    if (inbox.length) next = mkNext('amber', '↘', 'Sort ' + inbox.length + ' new thought' + (inbox.length > 1 ? 's' : ''), 'Waiting in Triage for a quick decision.', 'Triage', 'triage');
+    else if (today.length) next = mkNext('blue', '◷', 'Give ' + today.length + ' task' + (today.length > 1 ? 's' : '') + ' a time', 'Place them on today\u2019s timeline.', 'Plan', 'plan');
+    else if (planned.length) next = mkNext('indigo', '▶', 'Start: ' + planned[0].text, planned[0].est + ' minutes \u00b7 first block of the day.', 'Focus', 'execute');
+    else next = mkNext('green', '✓', 'You\u2019re all caught up', 'Capture the next thing whenever it lands.', 'Capture', 'capture');
+
+    // glance
+    const gdata = [
+      { count: inbox.length, label: 'to triage', tone: 'amber', key: 'triage' },
+      { count: today.length, label: 'to plan', tone: 'blue', key: 'plan' },
+      { count: planned.length, label: 'scheduled', tone: 'indigo', key: 'execute' },
+      { count: done.length, label: 'done', tone: 'green', key: 'review' }
+    ];
+    const glance = gdata.map(g => { const t = T[g.tone]; return { count: g.count, label: g.label, fg: t.fg, bg: t.bg, flex: Math.max(1, g.count) + 0.6, go: this.go(g.key) }; });
+
+    const triageCard = inbox[0] || null;
+    const triageDots = inbox.slice(0, 5).map((x, i) => ({ c: i === 0 ? base.ambFg : base.ln2 }));
+
+    // plan
+    const hintBg = this._mix(acc, base.sf2, 0.9);
+    const hoursArr = [];
+    for (let h = 8; h <= 18; h++) {
+      const blocks = planned.filter(p => p.when === h).map(p => ({ text: p.text, est: p.est, unplan: this.unplan(p.id) }));
+      const isHint = !!S.selecting && blocks.length === 0;
+      hoursArr.push({ label: this.hourLabel(h), blocks, place: this.place(h), hint: isHint, row: 'display:flex;align-items:center;gap:12px;padding:7px 16px;border-bottom:1px solid ' + base.sf3 + ';cursor:' + (S.selecting ? 'pointer' : 'default') + ';background:' + (isHint ? hintBg : 'transparent') });
+    }
+    const unplaced = today.map(u => { const sel = S.selecting === u.id; return { text: u.text, est: u.est || 30, select: this.pick(u.id), subColor: sel ? onAcc : base.fnt, style: 'cursor:pointer;text-align:left;border-radius:14px;padding:15px 17px;display:block;width:100%;transition:all .15s;' + (sel ? 'background:' + acc + ';border:1px solid ' + acc + ';color:' + onAcc : 'background:' + base.sf2 + ';border:1px solid ' + base.ln + ';color:' + base.ink) }; });
+
+    // execute
+    const readyBlocks = planned.map(p => ({ text: p.text, est: p.est, at: this.hourLabel(p.when), choose: this.choose(p.id) }));
+    let exec = null;
+    if (S.activeId) {
+      const it = I.find(i => i.id === S.activeId);
+      exec = { text: it ? it.text : '', time: this.fmt(S.remaining), statusLabel: S.ending ? 'session ended' : (S.running ? 'running' : 'paused'), running: S.running, runLabel: S.running ? 'Pause' : (S.remaining === S.total ? 'Start' : 'Resume'), ending: S.ending, live: !S.ending };
+    }
+    const ringDash = 2 * Math.PI * 104;
+    const ringOffset = S.total ? ringDash * (1 - S.remaining / S.total) : 0;
+
+    // review
+    const revTotal = today.length + planned.length + done.length || 1;
+    const revDone = done.length;
+    const revPct = Math.round((revDone / revTotal) * 100);
+    const revDash = 2 * Math.PI * 86;
+    const revOffset = revDash * (1 - revDone / revTotal);
+    const carryN = today.length + planned.length;
+    const totalPlanned = S.sessions.reduce((a, s) => a + s.planned, 0) || 1;
+    const totalActual = S.sessions.reduce((a, s) => a + s.actual, 0);
+    const maxMin = Math.max(totalPlanned, totalActual, 1);
+    const oc = { complete: { bg: base.grnSf, fg: base.grnFg, glyph: '✓', label: 'Complete' }, stuck: { bg: base.ambSf, fg: base.ambFg, glyph: '◐', label: 'Stuck' }, missed: { bg: base.sf3, fg: base.mut, glyph: '○', label: 'Missed' } };
+    const sessionDots = S.sessions.map(s => ({ ...oc[s.outcome] }));
+
+    const checking = S.checking;
+    const healthRing = 'position:absolute;inset:0;border-radius:50%;border:10px solid ' + base.grnSf + ';border-top-color:' + base.grnFg + ';' + (checking ? 'animation:pulse 1s infinite' : '');
+    const healthCats = [
+      { score: '3 / 3', label: 'Storage & data', fg: base.grnFg, dot: base.grnFg },
+      { score: '2 / 2', label: 'Integrations', fg: base.grnFg, dot: base.grnFg },
+      { score: '4 / 4', label: 'Telemetry · off', fg: base.fnt, dot: base.ln2 }
+    ];
+
+    const segBase = 'border:none;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;';
+
+    return {
+      themeVars, areaName: area.name, draft: S.draft, justCaptured: S.justCaptured,
+      isToday: S.stage === 'today', isCapture: S.stage === 'capture', isTriage: S.stage === 'triage',
+      isPlan: S.stage === 'plan', isExec: S.stage === 'execute', isReview: S.stage === 'review', isHealth: S.stage === 'health',
+      isOverview: overviewOn, goOverview: this.go('overview'), allChipStyle, allDots, overviewCols, spectrum, legend, openSummary,
+      nodes, areas, swatches, next, glance,
+      addingArea: S.addingArea, notAdding: !S.addingArea, areaDraft: S.areaDraft, editingColor: S.editingColor,
+      startAddArea: () => this.startAddArea(), onAreaInput: e => this.onAreaInput(e), onAreaKey: e => this.onAreaKey(e), toggleColor: () => this.toggleColor(),
+      toggleTheme: () => this.toggleTheme(), themeGlyph: dark ? '☀' : '☾',
+      setWeb: this.setView('web'), setMobile: this.setView('mobile'),
+      webStyle: segBase + (mob ? 'background:transparent;color:' + base.mut : 'background:' + base.sf2 + ';color:' + base.ink),
+      mobStyle: segBase + (mob ? 'background:' + base.sf2 + ';color:' + base.ink : 'background:transparent;color:' + base.mut),
+      onDraft: e => this.onDraft(e), onDraftKey: e => this.onDraftKey(e), capture: () => this.capture(),
+      triageCard, triageEmpty: !triageCard, triageDots, triageLeft: inbox.length,
+      triageToday: () => this.triage('today'), triageLater: () => this.triage('later'), triageDrop: () => this.triage('drop'),
+      goPlan: this.go('plan'), goExec: this.go('execute'), goToday: this.go('today'), goCapture: this.go('capture'),
+      hours: hoursArr, selecting: !!S.selecting, unplaced, unplacedCount: today.length, allPlaced: today.length === 0,
+      exec, execPick: !S.activeId, readyBlocks, noBlocks: planned.length === 0,
+      ringDash, ringOffset, ringTrack: base.track, ringColor: acc, toggleRun: () => this.toggleRun(), askEnd: () => this.askEnd(),
+      endComplete: () => this.end('complete'), endStuck: () => this.end('stuck'), endMissed: () => this.end('missed'),
+      revPct, revDone, revTotal, revDash, revOffset, revTrack: base.track, revColor: base.grnFg,
+      revVerdict: carryN === 0 ? 'The day closed clean.' : carryN + ' thing' + (carryN > 1 ? 's' : '') + ' carry over.',
+      revVerdictSub: carryN === 0 ? 'Nothing open, nothing lost.' : 'Still open — decide tomorrow or let it go.',
+      plannedMin: totalPlanned, actualMin: totalActual, plannedW: Math.round(totalPlanned / maxMin * 100) + '%', actualW: Math.round(totalActual / maxMin * 100) + '%',
+      sessionDots, carryLine: carryN === 0 ? 'Nothing is carrying forward.' : carryN + ' task' + (carryN > 1 ? 's' : '') + ' will roll into tomorrow.',
+      healthRing, healthGlyph: checking ? '◴' : '✓', healthTitle: checking ? 'Running checks\u2026' : 'All systems healthy', healthSub: checking ? 'Reading local subsystem status.' : '11 of 11 checks passing · last run 2m ago',
+      healthCats, runCheck: () => this.runCheck(), checkLabel: checking ? 'Checking\u2026' : 'Run system check'
+    };
+  }
+}
+</script>
+</body>
 </html>

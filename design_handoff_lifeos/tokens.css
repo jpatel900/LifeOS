@@ -5,63 +5,51 @@
 
 :root {
   /* base ramp — DARK (default) */
-  --bd: #0c0d10; /* app backdrop */
-  --sf: #15171c; /* surface / card shell */
-  --sf2: #1b1e25; /* raised surface */
-  --sf3: #21252d; /* inset / chip */
-  --ink: #f2f1ec; /* primary text */
-  --mut: #9b9ca4; /* secondary text */
-  --fnt: #686a73; /* faint / meta text */
-  --ln: #23262e; /* hairline border */
-  --ln2: #2c303a; /* stronger border */
-  --btn: #f2f1ec; /* neutral primary button bg */
-  --btn-fg: #15171c; /* neutral primary button fg */
-  --track: #262a33; /* progress-ring track */
+  --bd:    #0c0d10;  /* app backdrop */
+  --sf:    #15171c;  /* surface / card shell */
+  --sf2:   #1b1e25;  /* raised surface */
+  --sf3:   #21252d;  /* inset / chip */
+  --ink:   #f2f1ec;  /* primary text */
+  --mut:   #9b9ca4;  /* secondary text */
+  --fnt:   #686a73;  /* faint / meta text */
+  --ln:    #23262e;  /* hairline border */
+  --ln2:   #2c303a;  /* stronger border */
+  --btn:   #f2f1ec;  /* neutral primary button bg */
+  --btn-fg:#15171c;  /* neutral primary button fg */
+  --track: #262a33;  /* progress-ring track */
 
   /* fixed semantic status — DARK */
-  --amb-fg: #e3ad52;
-  --amb-sf: #2c2615;
-  --amb-rng: #51441f; /* triage / needs decision */
-  --blu-fg: #7aa2dd;
-  --blu-sf: #172838;
-  --blu-rng: #2e486a; /* plan / someday */
-  --grn-fg: #6fb98c;
-  --grn-sf: #14301f;
-  --grn-rng: #295036; /* done / healthy */
+  --amb-fg:#e3ad52; --amb-sf:#2c2615; --amb-rng:#51441f;  /* triage / needs decision */
+  --blu-fg:#7aa2dd; --blu-sf:#172838; --blu-rng:#2e486a;  /* plan / someday */
+  --grn-fg:#6fb98c; --grn-sf:#14301f; --grn-rng:#295036;  /* done / healthy */
 
   /* layout */
-  --max: 1000px; /* 412px on mobile */
+  --max: 1000px;            /* 412px on mobile */
   --radius: 22px;
 
   /* accent — seeded; overwritten by accent.js per active area */
-  --acc: #6b78e8;
-  --acc2: #7f8aeb;
+  --acc:    #6b78e8;
+  --acc2:   #7f8aeb;
   --acc-sf: #20232e;
-  --acc-rng: #414a7a;
+  --acc-rng:#414a7a;
   --on-acc: #ffffff;
 }
 
 [data-theme="light"] {
-  --bd: #e7e4db;
-  --sf: #fbfaf7;
-  --sf2: #ffffff;
-  --sf3: #f4f1ea;
-  --ink: #18170f;
-  --mut: #6f6d64;
-  --fnt: #a8a69d;
-  --ln: #efece5;
-  --ln2: #e2dfd6;
-  --btn: #18170f;
-  --btn-fg: #ffffff;
+  --bd:    #e7e4db;
+  --sf:    #fbfaf7;
+  --sf2:   #ffffff;
+  --sf3:   #f4f1ea;
+  --ink:   #18170f;
+  --mut:   #6f6d64;
+  --fnt:   #a8a69d;
+  --ln:    #efece5;
+  --ln2:   #e2dfd6;
+  --btn:   #18170f;
+  --btn-fg:#ffffff;
   --track: #ece9e1;
 
-  --amb-fg: #b5791f;
-  --amb-sf: #f6ecd6;
-  --amb-rng: #ecdcbb;
-  --blu-fg: #3f6fb8;
-  --blu-sf: #e7eefa;
-  --blu-rng: #d4e0f2;
-  --grn-fg: #4a8c63;
-  --grn-sf: #e4efe8;
-  --grn-rng: #d2e6da;
+  --amb-fg:#b5791f; --amb-sf:#f6ecd6; --amb-rng:#ecdcbb;
+  --blu-fg:#3f6fb8; --blu-sf:#e7eefa; --blu-rng:#d4e0f2;
+  --grn-fg:#4a8c63; --grn-sf:#e4efe8; --grn-rng:#d2e6da;
 }

@@ -1,3079 +1,500 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="./support.js"></script>
-  </head>
-  <body>
-    <x-dc>
-      <helmet>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
-          rel="stylesheet"
-        />
-        <style>
-          * {
-            box-sizing: border-box;
-          }
-          html,
-          body {
-            margin: 0;
-          }
-          body {
-            background: #f4f3ef;
-            font-family: "Hanken Grotesk", system-ui, sans-serif;
-            color: #1a1a17;
-            -webkit-font-smoothing: antialiased;
-            text-rendering: optimizeLegibility;
-          }
-          @keyframes blink {
-            0%,
-            49% {
-              opacity: 1;
-            }
-            50%,
-            100% {
-              opacity: 0;
-            }
-          }
-          ::selection {
-            background: #d7defa;
-          }
-        </style>
-      </helmet>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#f4f3ef;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#1a1a17;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+  ::selection{background:#d7defa}
+</style>
+</helmet>
 
-      <div style="max-width: 1120px; margin: 0 auto; padding: 0 28px 120px">
-        <!-- ===== MASTHEAD ===== -->
-        <header style="padding: 72px 0 56px; border-bottom: 1px solid #e7e5de">
-          <div
-            style="
-              display: flex;
-              align-items: center;
-              gap: 10px;
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 12px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #8a8880;
-            "
-          >
-            <span
-              style="
-                width: 7px;
-                height: 7px;
-                border-radius: 50%;
-                background: #4659c0;
-                display: inline-block;
-              "
-            ></span>
-            Design review · LifeOS Capture
-          </div>
-          <h1
-            style="
-              font-size: 60px;
-              line-height: 1.02;
-              letter-spacing: -0.025em;
-              font-weight: 800;
-              margin: 22px 0 0;
-              max-width: 15ch;
-              text-wrap: balance;
-            "
-          >
-            Less surface, more focus.
-          </h1>
-          <p
-            style="
-              font-size: 20px;
-              line-height: 1.5;
-              color: #56544d;
-              margin: 22px 0 0;
-              max-width: 60ch;
-              text-wrap: pretty;
-            "
-          >
-            The cockpit works — but every screen asks the eye to choose between
-            eight things at once. This review keeps the full workflow intact
-            while cutting the noise around it, so the one thing you came to do
-            stays the one thing you see. Three directions follow.
-          </p>
-          <div
-            style="display: flex; flex-wrap: wrap; gap: 28px; margin-top: 40px"
-          >
-            <div style="min-width: 140px">
-              <div
-                style="
-                  font-family: &quot;IBM Plex Mono&quot;, monospace;
-                  font-size: 34px;
-                  font-weight: 600;
-                  color: #1a1a17;
-                "
-              >
-                8
-              </div>
-              <div style="font-size: 14px; color: #8a8880; margin-top: 2px">
-                competing cards on Capture
-              </div>
-            </div>
-            <div style="min-width: 140px">
-              <div
-                style="
-                  font-family: &quot;IBM Plex Mono&quot;, monospace;
-                  font-size: 34px;
-                  font-weight: 600;
-                  color: #1a1a17;
-                "
-              >
-                3
-              </div>
-              <div style="font-size: 14px; color: #8a8880; margin-top: 2px">
-                different ways to save
-              </div>
-            </div>
-            <div style="min-width: 140px">
-              <div
-                style="
-                  font-family: &quot;IBM Plex Mono&quot;, monospace;
-                  font-size: 34px;
-                  font-weight: 600;
-                  color: #1a1a17;
-                "
-              >
-                ~12%
-              </div>
-              <div style="font-size: 14px; color: #8a8880; margin-top: 2px">
-                of the page is the input
-              </div>
-            </div>
-            <div style="min-width: 140px">
-              <div
-                style="
-                  font-family: &quot;IBM Plex Mono&quot;, monospace;
-                  font-size: 34px;
-                  font-weight: 600;
-                  color: #4659c0;
-                "
-              >
-                0
-              </div>
-              <div style="font-size: 14px; color: #8a8880; margin-top: 2px">
-                features removed
-              </div>
-            </div>
-          </div>
-        </header>
+<div style="max-width:1120px;margin:0 auto;padding:0 28px 120px">
 
-        <!-- ===== DIAGNOSIS ===== -->
-        <section style="padding: 88px 0 0">
-          <div
-            style="
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 12px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #b06a45;
-            "
-          >
-            01 — The diagnosis
-          </div>
-          <h2
-            style="
-              font-size: 34px;
-              font-weight: 700;
-              letter-spacing: -0.02em;
-              margin: 14px 0 0;
-            "
-          >
-            Everything shouts at the same volume
-          </h2>
-          <p
-            style="
-              font-size: 18px;
-              line-height: 1.55;
-              color: #56544d;
-              margin: 16px 0 0;
-              max-width: 62ch;
-            "
-          >
-            No hierarchy means no entry point. The user has to read the whole
-            screen to find the text box — then choose between three save buttons
-            before they've typed a word.
-          </p>
+  <!-- ===== MASTHEAD ===== -->
+  <header style="padding:72px 0 56px;border-bottom:1px solid #e7e5de">
+    <div style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8a8880">
+      <span style="width:7px;height:7px;border-radius:50%;background:#4659c0;display:inline-block"></span>
+      Design review · LifeOS Capture
+    </div>
+    <h1 style="font-size:60px;line-height:1.02;letter-spacing:-0.025em;font-weight:800;margin:22px 0 0;max-width:15ch;text-wrap:balance">Less surface, more focus.</h1>
+    <p style="font-size:20px;line-height:1.5;color:#56544d;margin:22px 0 0;max-width:60ch;text-wrap:pretty">The cockpit works — but every screen asks the eye to choose between eight things at once. This review keeps the full workflow intact while cutting the noise around it, so the one thing you came to do stays the one thing you see. Three directions follow.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:28px;margin-top:40px">
+      <div style="min-width:140px"><div style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:600;color:#1a1a17">8</div><div style="font-size:14px;color:#8a8880;margin-top:2px">competing cards on Capture</div></div>
+      <div style="min-width:140px"><div style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:600;color:#1a1a17">3</div><div style="font-size:14px;color:#8a8880;margin-top:2px">different ways to save</div></div>
+      <div style="min-width:140px"><div style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:600;color:#1a1a17">~12%</div><div style="font-size:14px;color:#8a8880;margin-top:2px">of the page is the input</div></div>
+      <div style="min-width:140px"><div style="font-family:'IBM Plex Mono',monospace;font-size:34px;font-weight:600;color:#4659c0">0</div><div style="font-size:14px;color:#8a8880;margin-top:2px">features removed</div></div>
+    </div>
+  </header>
 
-          <div
-            style="
-              display: grid;
-              grid-template-columns: 1.15fr 1fr;
-              gap: 44px;
-              align-items: start;
-              margin-top: 44px;
-            "
-          >
-            <!-- recreated current (dark) screen with pins -->
-            <div
-              style="
-                position: relative;
-                border-radius: 16px;
-                overflow: hidden;
-                border: 1px solid #d9d7d0;
-                box-shadow: 0 24px 60px -28px rgba(20, 20, 30, 0.45);
-              "
-            >
-              <div
-                style="
-                  background: #0c1117;
-                  padding: 16px;
-                  font-size: 11px;
-                  color: #cdd2da;
-                "
-              >
-                <!-- nav -->
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    margin-bottom: 14px;
-                  "
-                >
-                  <div
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 7px;
-                      font-weight: 700;
-                      color: #eef1f6;
-                    "
-                  >
-                    <span
-                      style="
-                        width: 6px;
-                        height: 6px;
-                        border-radius: 50%;
-                        background: #3f8efc;
-                      "
-                    ></span
-                    >LifeOS
-                    <span
-                      style="
-                        font-weight: 500;
-                        color: #7f8794;
-                        background: #1a212b;
-                        padding: 2px 7px;
-                        border-radius: 20px;
-                        font-size: 9px;
-                      "
-                      >Personal workflow cockpit</span
-                    >
+  <!-- ===== DIAGNOSIS ===== -->
+  <section style="padding:88px 0 0">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#b06a45">01 — The diagnosis</div>
+    <h2 style="font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:14px 0 0">Everything shouts at the same volume</h2>
+    <p style="font-size:18px;line-height:1.55;color:#56544d;margin:16px 0 0;max-width:62ch">No hierarchy means no entry point. The user has to read the whole screen to find the text box — then choose between three save buttons before they've typed a word.</p>
+
+    <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:44px;align-items:start;margin-top:44px">
+
+      <!-- recreated current (dark) screen with pins -->
+      <div style="position:relative;border-radius:16px;overflow:hidden;border:1px solid #d9d7d0;box-shadow:0 24px 60px -28px rgba(20,20,30,.45)">
+        <div style="background:#0c1117;padding:16px;font-size:11px;color:#cdd2da">
+          <!-- nav -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:7px;font-weight:700;color:#eef1f6"><span style="width:6px;height:6px;border-radius:50%;background:#3f8efc"></span>LifeOS <span style="font-weight:500;color:#7f8794;background:#1a212b;padding:2px 7px;border-radius:20px;font-size:9px">Personal workflow cockpit</span></div>
+            <span style="color:#5d6470">☀</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+            <span style="background:#172230;color:#cfe1ff;border:1px solid #25344a;padding:4px 10px;border-radius:20px;font-size:10px">● Capture</span>
+            <span style="border:1px solid #222b36;padding:4px 10px;border-radius:20px;color:#8b929d;font-size:10px">Triage</span>
+            <span style="border:1px solid #222b36;padding:4px 10px;border-radius:20px;color:#8b929d;font-size:10px">Planning</span>
+            <span style="border:1px solid #222b36;padding:4px 10px;border-radius:20px;color:#8b929d;font-size:10px">Execute</span>
+            <span style="border:1px solid #222b36;padding:4px 10px;border-radius:20px;color:#8b929d;font-size:10px">Review</span>
+            <span style="border:1px solid #222b36;padding:4px 10px;border-radius:20px;color:#8b929d;font-size:10px">Health</span>
+            <span style="margin-left:auto;border:1px solid #222b36;padding:4px 9px;border-radius:7px;color:#9aa1ab;font-size:10px">Areas admin</span>
+            <span style="border:1px solid #222b36;padding:4px 9px;border-radius:7px;color:#cdd2da;font-size:10px">Main Job ▾</span>
+          </div>
+          <!-- capture card -->
+          <div style="border:1px solid #1d2630;border-radius:12px;padding:14px;background:#0e141b;margin-bottom:12px">
+            <div style="font-size:9px;letter-spacing:.12em;color:#5d6470">RAW FIRST</div>
+            <div style="font-size:22px;font-weight:800;color:#fff;margin:3px 0 2px">Capture</div>
+            <div style="color:#727a86;font-size:10px;margin-bottom:10px">Write first. Decide what it is second.</div>
+            <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:10px">
+              <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;background:#0c1117">
+                <div style="color:#aab1bc;font-weight:600;font-size:10px;margin-bottom:6px">What are you thinking about?</div>
+                <div style="height:46px;border:1px solid #1d2630;border-radius:6px;background:#0a0f15;color:#4b525d;font-size:10px;padding:6px">What's on your mind?…</div>
+                <div style="border:1px solid #1d2630;border-radius:8px;padding:9px;margin-top:9px">
+                  <div style="font-size:8px;letter-spacing:.1em;color:#5d6470">CHOOSE WHAT HAPPENS NEXT</div>
+                  <div style="display:flex;gap:7px;margin-top:8px">
+                    <div style="flex:1;background:#3f8efc;color:#04101f;text-align:center;border-radius:6px;padding:7px 0;font-size:10px;font-weight:600">Save thought</div>
+                    <div style="flex:1;border:1px solid #2a3543;color:#cdd2da;text-align:center;border-radius:6px;padding:7px 0;font-size:10px">Save and organize</div>
                   </div>
-                  <span style="color: #5d6470">☀</span>
-                </div>
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                    margin-bottom: 16px;
-                    flex-wrap: wrap;
-                  "
-                >
-                  <span
-                    style="
-                      background: #172230;
-                      color: #cfe1ff;
-                      border: 1px solid #25344a;
-                      padding: 4px 10px;
-                      border-radius: 20px;
-                      font-size: 10px;
-                    "
-                    >● Capture</span
-                  >
-                  <span
-                    style="
-                      border: 1px solid #222b36;
-                      padding: 4px 10px;
-                      border-radius: 20px;
-                      color: #8b929d;
-                      font-size: 10px;
-                    "
-                    >Triage</span
-                  >
-                  <span
-                    style="
-                      border: 1px solid #222b36;
-                      padding: 4px 10px;
-                      border-radius: 20px;
-                      color: #8b929d;
-                      font-size: 10px;
-                    "
-                    >Planning</span
-                  >
-                  <span
-                    style="
-                      border: 1px solid #222b36;
-                      padding: 4px 10px;
-                      border-radius: 20px;
-                      color: #8b929d;
-                      font-size: 10px;
-                    "
-                    >Execute</span
-                  >
-                  <span
-                    style="
-                      border: 1px solid #222b36;
-                      padding: 4px 10px;
-                      border-radius: 20px;
-                      color: #8b929d;
-                      font-size: 10px;
-                    "
-                    >Review</span
-                  >
-                  <span
-                    style="
-                      border: 1px solid #222b36;
-                      padding: 4px 10px;
-                      border-radius: 20px;
-                      color: #8b929d;
-                      font-size: 10px;
-                    "
-                    >Health</span
-                  >
-                  <span
-                    style="
-                      margin-left: auto;
-                      border: 1px solid #222b36;
-                      padding: 4px 9px;
-                      border-radius: 7px;
-                      color: #9aa1ab;
-                      font-size: 10px;
-                    "
-                    >Areas admin</span
-                  >
-                  <span
-                    style="
-                      border: 1px solid #222b36;
-                      padding: 4px 9px;
-                      border-radius: 7px;
-                      color: #cdd2da;
-                      font-size: 10px;
-                    "
-                    >Main Job ▾</span
-                  >
-                </div>
-                <!-- capture card -->
-                <div
-                  style="
-                    border: 1px solid #1d2630;
-                    border-radius: 12px;
-                    padding: 14px;
-                    background: #0e141b;
-                    margin-bottom: 12px;
-                  "
-                >
-                  <div
-                    style="
-                      font-size: 9px;
-                      letter-spacing: 0.12em;
-                      color: #5d6470;
-                    "
-                  >
-                    RAW FIRST
-                  </div>
-                  <div
-                    style="
-                      font-size: 22px;
-                      font-weight: 800;
-                      color: #fff;
-                      margin: 3px 0 2px;
-                    "
-                  >
-                    Capture
-                  </div>
-                  <div
-                    style="color: #727a86; font-size: 10px; margin-bottom: 10px"
-                  >
-                    Write first. Decide what it is second.
-                  </div>
-                  <div
-                    style="
-                      display: grid;
-                      grid-template-columns: 1.5fr 1fr;
-                      gap: 10px;
-                    "
-                  >
-                    <div
-                      style="
-                        border: 1px solid #1d2630;
-                        border-radius: 9px;
-                        padding: 10px;
-                        background: #0c1117;
-                      "
-                    >
-                      <div
-                        style="
-                          color: #aab1bc;
-                          font-weight: 600;
-                          font-size: 10px;
-                          margin-bottom: 6px;
-                        "
-                      >
-                        What are you thinking about?
-                      </div>
-                      <div
-                        style="
-                          height: 46px;
-                          border: 1px solid #1d2630;
-                          border-radius: 6px;
-                          background: #0a0f15;
-                          color: #4b525d;
-                          font-size: 10px;
-                          padding: 6px;
-                        "
-                      >
-                        What's on your mind?…
-                      </div>
-                      <div
-                        style="
-                          border: 1px solid #1d2630;
-                          border-radius: 8px;
-                          padding: 9px;
-                          margin-top: 9px;
-                        "
-                      >
-                        <div
-                          style="
-                            font-size: 8px;
-                            letter-spacing: 0.1em;
-                            color: #5d6470;
-                          "
-                        >
-                          CHOOSE WHAT HAPPENS NEXT
-                        </div>
-                        <div style="display: flex; gap: 7px; margin-top: 8px">
-                          <div
-                            style="
-                              flex: 1;
-                              background: #3f8efc;
-                              color: #04101f;
-                              text-align: center;
-                              border-radius: 6px;
-                              padding: 7px 0;
-                              font-size: 10px;
-                              font-weight: 600;
-                            "
-                          >
-                            Save thought
-                          </div>
-                          <div
-                            style="
-                              flex: 1;
-                              border: 1px solid #2a3543;
-                              color: #cdd2da;
-                              text-align: center;
-                              border-radius: 6px;
-                              padding: 7px 0;
-                              font-size: 10px;
-                            "
-                          >
-                            Save and organize
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      style="
-                        border: 1px solid #1d2630;
-                        border-radius: 9px;
-                        padding: 10px;
-                        background: #0c1117;
-                      "
-                    >
-                      <div
-                        style="
-                          color: #aab1bc;
-                          font-weight: 600;
-                          font-size: 10px;
-                          margin-bottom: 6px;
-                        "
-                      >
-                        Optional area
-                      </div>
-                      <div
-                        style="
-                          background: #172230;
-                          color: #cfe1ff;
-                          border-radius: 20px;
-                          padding: 3px 8px;
-                          font-size: 9px;
-                          display: inline-block;
-                          margin-bottom: 8px;
-                        "
-                      >
-                        ● Current area: Main Job
-                      </div>
-                      <div
-                        style="
-                          color: #aab1bc;
-                          font-size: 9px;
-                          margin-bottom: 5px;
-                        "
-                      >
-                        Area for this saved thought
-                      </div>
-                      <div
-                        style="
-                          border: 1px solid #1d2630;
-                          border-radius: 6px;
-                          background: #0a0f15;
-                          color: #727a86;
-                          font-size: 9px;
-                          padding: 6px;
-                        "
-                      >
-                        No area yet ▾
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      border: 1px solid #1d2630;
-                      border-radius: 9px;
-                      padding: 10px;
-                      margin-top: 10px;
-                      background: #0c1117;
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                    "
-                  >
-                    <span
-                      style="color: #aab1bc; font-size: 10px; font-weight: 600"
-                      >Organize on this device</span
-                    >
-                    <span
-                      style="color: #cdd2da; font-size: 10px; font-weight: 600"
-                      >Organize on this device</span
-                    >
-                  </div>
-                </div>
-                <!-- stat tiles -->
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 9px;
-                    margin-bottom: 12px;
-                  "
-                >
-                  <div
-                    style="
-                      border: 1px solid #1d2630;
-                      border-radius: 9px;
-                      padding: 10px;
-                      background: #0e141b;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 8px;
-                        letter-spacing: 0.1em;
-                        color: #5d6470;
-                      "
-                    >
-                      SAVE MODE
-                    </div>
-                    <div style="font-size: 17px; font-weight: 700; color: #fff">
-                      Checking
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      border: 1px solid #1d2630;
-                      border-radius: 9px;
-                      padding: 10px;
-                      background: #0e141b;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 8px;
-                        letter-spacing: 0.1em;
-                        color: #5d6470;
-                      "
-                    >
-                      SORTING HELP
-                    </div>
-                    <div style="font-size: 17px; font-weight: 700; color: #fff">
-                      AI sorting on
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      border: 1px solid #1d2630;
-                      border-radius: 9px;
-                      padding: 10px;
-                      background: #0e141b;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 8px;
-                        letter-spacing: 0.1em;
-                        color: #5d6470;
-                      "
-                    >
-                      CURRENT AREA
-                    </div>
-                    <div style="font-size: 17px; font-weight: 700; color: #fff">
-                      Main Job
-                    </div>
-                  </div>
-                </div>
-                <div
-                  style="
-                    border: 1px solid #1d2630;
-                    border-radius: 9px;
-                    padding: 10px;
-                    background: #0e141b;
-                    display: flex;
-                    justify-content: space-between;
-                    color: #aab1bc;
-                    font-size: 10px;
-                    margin-bottom: 9px;
-                  "
-                >
-                  Capture details <span style="color: #5d6470">▴</span>
-                </div>
-                <div
-                  style="
-                    border: 1px solid #1d2630;
-                    border-radius: 9px;
-                    padding: 10px;
-                    background: #0e141b;
-                    display: flex;
-                    justify-content: space-between;
-                    color: #aab1bc;
-                    font-size: 10px;
-                  "
-                >
-                  Device-only drafts <span style="color: #5d6470">▴</span>
                 </div>
               </div>
-
-              <!-- pins -->
-              <span
-                style="
-                  position: absolute;
-                  left: 8px;
-                  top: 108px;
-                  width: 20px;
-                  height: 20px;
-                  border-radius: 50%;
-                  background: #c75f37;
-                  color: #fff;
-                  font-size: 11px;
-                  font-weight: 700;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  box-shadow: 0 0 0 3px rgba(199, 95, 55, 0.25);
-                "
-                >1</span
-              >
-              <span
-                style="
-                  position: absolute;
-                  left: 140px;
-                  top: 300px;
-                  width: 20px;
-                  height: 20px;
-                  border-radius: 50%;
-                  background: #c75f37;
-                  color: #fff;
-                  font-size: 11px;
-                  font-weight: 700;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  box-shadow: 0 0 0 3px rgba(199, 95, 55, 0.25);
-                "
-                >2</span
-              >
-              <span
-                style="
-                  position: absolute;
-                  right: 14px;
-                  top: 250px;
-                  width: 20px;
-                  height: 20px;
-                  border-radius: 50%;
-                  background: #c75f37;
-                  color: #fff;
-                  font-size: 11px;
-                  font-weight: 700;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  box-shadow: 0 0 0 3px rgba(199, 95, 55, 0.25);
-                "
-                >3</span
-              >
-              <span
-                style="
-                  position: absolute;
-                  left: 8px;
-                  bottom: 14px;
-                  width: 20px;
-                  height: 20px;
-                  border-radius: 50%;
-                  background: #c75f37;
-                  color: #fff;
-                  font-size: 11px;
-                  font-weight: 700;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  box-shadow: 0 0 0 3px rgba(199, 95, 55, 0.25);
-                "
-                >4</span
-              >
-            </div>
-
-            <!-- problem list -->
-            <div style="display: flex; flex-direction: column; gap: 6px">
-              <sc-for list="{{ problems }}" as="p" hint-placeholder-count="5">
-                <div
-                  style="
-                    display: flex;
-                    gap: 16px;
-                    padding: 18px 0;
-                    border-bottom: 1px solid #e7e5de;
-                  "
-                >
-                  <span
-                    style="
-                      flex: 0 0 auto;
-                      width: 24px;
-                      height: 24px;
-                      border-radius: 50%;
-                      background: #f3e6de;
-                      color: #b0572f;
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      font-weight: 600;
-                      display: flex;
-                      align-items: center;
-                      justify-content: center;
-                    "
-                    >{{ p.n }}</span
-                  >
-                  <div>
-                    <div
-                      style="
-                        font-size: 17px;
-                        font-weight: 600;
-                        letter-spacing: -0.01em;
-                      "
-                    >
-                      {{ p.title }}
-                    </div>
-                    <div
-                      style="
-                        font-size: 15px;
-                        line-height: 1.5;
-                        color: #6b6960;
-                        margin-top: 4px;
-                      "
-                    >
-                      {{ p.detail }}
-                    </div>
-                  </div>
-                </div>
-              </sc-for>
-            </div>
-          </div>
-        </section>
-
-        <!-- ===== PRINCIPLES ===== -->
-        <section style="padding: 96px 0 0">
-          <div
-            style="
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 12px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #4659c0;
-            "
-          >
-            02 — The fix, in four rules
-          </div>
-          <h2
-            style="
-              font-size: 34px;
-              font-weight: 700;
-              letter-spacing: -0.02em;
-              margin: 14px 0 0;
-              max-width: 20ch;
-            "
-          >
-            Same engine. Calmer cockpit.
-          </h2>
-          <div
-            style="
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              gap: 1px;
-              background: #e7e5de;
-              border: 1px solid #e7e5de;
-              border-radius: 16px;
-              overflow: hidden;
-              margin-top: 40px;
-            "
-          >
-            <sc-for list="{{ principles }}" as="r" hint-placeholder-count="4">
-              <div style="background: #fbfaf7; padding: 34px 32px">
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 13px;
-                    color: #a9a79e;
-                  "
-                >
-                  {{ r.tag }}
-                </div>
-                <div
-                  style="
-                    font-size: 23px;
-                    font-weight: 700;
-                    letter-spacing: -0.015em;
-                    margin: 12px 0 8px;
-                  "
-                >
-                  {{ r.title }}
-                </div>
-                <div style="font-size: 16px; line-height: 1.55; color: #6b6960">
-                  {{ r.detail }}
-                </div>
-              </div>
-            </sc-for>
-          </div>
-        </section>
-
-        <!-- ===== DIRECTIONS ===== -->
-        <section style="padding: 104px 0 0">
-          <div
-            style="
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 12px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #4659c0;
-            "
-          >
-            03 — Three directions
-          </div>
-          <h2
-            style="
-              font-size: 34px;
-              font-weight: 700;
-              letter-spacing: -0.02em;
-              margin: 14px 0 0;
-            "
-          >
-            Pick how far to go
-          </h2>
-          <p
-            style="
-              font-size: 18px;
-              line-height: 1.55;
-              color: #56544d;
-              margin: 16px 0 0;
-              max-width: 60ch;
-            "
-          >
-            Each keeps capture, areas, AI sorting, drafts and history. They
-            differ in how much they reveal at rest.
-          </p>
-
-          <!-- Direction 1 -->
-          <div
-            style="
-              display: grid;
-              grid-template-columns: 0.82fr 1.18fr;
-              gap: 48px;
-              align-items: center;
-              margin-top: 56px;
-            "
-          >
-            <div>
-              <div
-                style="
-                  font-family: &quot;IBM Plex Mono&quot;, monospace;
-                  font-size: 12px;
-                  color: #a9a79e;
-                  letter-spacing: 0.08em;
-                "
-              >
-                OPTION 01 · RADICAL REDUCTION
-              </div>
-              <h3
-                style="
-                  font-size: 28px;
-                  font-weight: 700;
-                  letter-spacing: -0.02em;
-                  margin: 10px 0 0;
-                "
-              >
-                Just capture
-              </h3>
-              <p
-                style="
-                  font-size: 16px;
-                  line-height: 1.6;
-                  color: #56544d;
-                  margin: 14px 0 0;
-                "
-              >
-                The screen is a blank page and a caret. Type, hit ⌘↵, it's
-                saved. Area, drafts and recent history live one keystroke away
-                behind
-                <code
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    background: #efece6;
-                    padding: 1px 6px;
-                    border-radius: 5px;
-                    font-size: 13px;
-                  "
-                  >/</code
-                >
-                and the bottom drawer — never shown until you reach for them.
-              </p>
-              <div
-                style="
-                  margin-top: 18px;
-                  display: flex;
-                  flex-direction: column;
-                  gap: 9px;
-                "
-              >
-                <div style="font-size: 14px; color: #3a7a52">
-                  <span style="font-weight: 700">Keeps</span> — full save /
-                  save&amp;organize, area tagging, drafts, history.
-                </div>
-                <div style="font-size: 14px; color: #a06a3f">
-                  <span style="font-weight: 700">Trade-off</span> — best for
-                  people who already trust the flow; less self-explanatory for
-                  newcomers.
-                </div>
+              <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;background:#0c1117">
+                <div style="color:#aab1bc;font-weight:600;font-size:10px;margin-bottom:6px">Optional area</div>
+                <div style="background:#172230;color:#cfe1ff;border-radius:20px;padding:3px 8px;font-size:9px;display:inline-block;margin-bottom:8px">● Current area: Main Job</div>
+                <div style="color:#aab1bc;font-size:9px;margin-bottom:5px">Area for this saved thought</div>
+                <div style="border:1px solid #1d2630;border-radius:6px;background:#0a0f15;color:#727a86;font-size:9px;padding:6px">No area yet ▾</div>
               </div>
             </div>
-            <div
-              style="
-                border-radius: 16px;
-                border: 1px solid #e3e1da;
-                background: #fcfbf9;
-                box-shadow: 0 26px 60px -34px rgba(20, 20, 30, 0.4);
-                overflow: hidden;
-              "
-            >
-              <div
-                style="
-                  display: flex;
-                  align-items: center;
-                  justify-content: space-between;
-                  padding: 14px 18px;
-                  border-bottom: 1px solid #efece6;
-                "
-              >
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-weight: 700;
-                    font-size: 14px;
-                  "
-                >
-                  <span
-                    style="
-                      width: 7px;
-                      height: 7px;
-                      border-radius: 50%;
-                      background: #4659c0;
-                    "
-                  ></span
-                  >LifeOS
-                </div>
-                <div
-                  style="
-                    font-size: 13px;
-                    color: #a9a79e;
-                    display: flex;
-                    gap: 14px;
-                    align-items: center;
-                  "
-                >
-                  <span
-                    style="
-                      border: 1px solid #e3e1da;
-                      border-radius: 7px;
-                      padding: 3px 10px;
-                      color: #56544d;
-                    "
-                    >Main Job ▾</span
-                  ><span
-                    style="font-family: &quot;IBM Plex Mono&quot;, monospace"
-                    >23:31</span
-                  >
-                </div>
-              </div>
-              <div
-                style="
-                  padding: 74px 56px 60px;
-                  min-height: 300px;
-                  display: flex;
-                  flex-direction: column;
-                  justify-content: center;
-                "
-              >
-                <div
-                  style="
-                    font-size: 13px;
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    letter-spacing: 0.1em;
-                    color: #bdbbb1;
-                    text-transform: uppercase;
-                  "
-                >
-                  Capture
-                </div>
-                <div
-                  style="
-                    font-size: 32px;
-                    font-weight: 500;
-                    color: #16150f;
-                    margin-top: 14px;
-                    display: flex;
-                    align-items: center;
-                  "
-                >
-                  What's on your mind?<span
-                    style="
-                      width: 2px;
-                      height: 34px;
-                      background: #4659c0;
-                      margin-left: 3px;
-                      animation: blink 1.1s steps(1) infinite;
-                    "
-                  ></span>
-                </div>
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 14px;
-                    color: #a9a79e;
-                    margin-top: 30px;
-                    display: flex;
-                    gap: 22px;
-                  "
-                >
-                  <span><b style="color: #56544d">⌘↵</b> save</span
-                  ><span
-                    ><b style="color: #56544d">⇧⌘↵</b> save &amp; organize</span
-                  ><span><b style="color: #56544d">/</b> commands</span>
-                </div>
-              </div>
-              <div
-                style="
-                  border-top: 1px solid #efece6;
-                  padding: 13px 18px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  gap: 8px;
-                  color: #a9a79e;
-                  font-size: 13px;
-                "
-              >
-                Recent · 0 on this device <span style="font-size: 11px">▴</span>
-              </div>
+            <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;margin-top:10px;background:#0c1117;display:flex;justify-content:space-between;align-items:center">
+              <span style="color:#aab1bc;font-size:10px;font-weight:600">Organize on this device</span>
+              <span style="color:#cdd2da;font-size:10px;font-weight:600">Organize on this device</span>
             </div>
           </div>
+          <!-- stat tiles -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px">
+            <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;background:#0e141b"><div style="font-size:8px;letter-spacing:.1em;color:#5d6470">SAVE MODE</div><div style="font-size:17px;font-weight:700;color:#fff">Checking</div></div>
+            <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;background:#0e141b"><div style="font-size:8px;letter-spacing:.1em;color:#5d6470">SORTING HELP</div><div style="font-size:17px;font-weight:700;color:#fff">AI sorting on</div></div>
+            <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;background:#0e141b"><div style="font-size:8px;letter-spacing:.1em;color:#5d6470">CURRENT AREA</div><div style="font-size:17px;font-weight:700;color:#fff">Main Job</div></div>
+          </div>
+          <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;background:#0e141b;display:flex;justify-content:space-between;color:#aab1bc;font-size:10px;margin-bottom:9px">Capture details <span style="color:#5d6470">▴</span></div>
+          <div style="border:1px solid #1d2630;border-radius:9px;padding:10px;background:#0e141b;display:flex;justify-content:space-between;color:#aab1bc;font-size:10px">Device-only drafts <span style="color:#5d6470">▴</span></div>
+        </div>
 
-          <!-- Direction 2 -->
-          <div
-            style="
-              display: grid;
-              grid-template-columns: 0.82fr 1.18fr;
-              gap: 48px;
-              align-items: center;
-              margin-top: 72px;
-            "
-          >
-            <div>
-              <div
-                style="
-                  font-family: &quot;IBM Plex Mono&quot;, monospace;
-                  font-size: 12px;
-                  color: #a9a79e;
-                  letter-spacing: 0.08em;
-                "
-              >
-                OPTION 02 · BALANCED
-              </div>
-              <h3
-                style="
-                  font-size: 28px;
-                  font-weight: 700;
-                  letter-spacing: -0.02em;
-                  margin: 10px 0 0;
-                "
-              >
-                Capture &amp; quiet context
-              </h3>
-              <p
-                style="
-                  font-size: 16px;
-                  line-height: 1.6;
-                  color: #56544d;
-                  margin: 14px 0 0;
-                "
-              >
-                One composer, one primary <b>Save</b> with the alternate folded
-                into a split menu. A single slim rail on the right replaces the
-                eight cards: area, a live count of what's waiting, and the last
-                three captures. Two zones instead of eight.
-              </p>
-              <div
-                style="
-                  margin-top: 18px;
-                  display: flex;
-                  flex-direction: column;
-                  gap: 9px;
-                "
-              >
-                <div style="font-size: 14px; color: #3a7a52">
-                  <span style="font-weight: 700">Keeps</span> — every control
-                  visible, just grouped and de-ranked.
-                </div>
-                <div style="font-size: 14px; color: #a06a3f">
-                  <span style="font-weight: 700">Trade-off</span> — the safest
-                  move; least surprising for current users.
-                </div>
-              </div>
-            </div>
-            <div
-              style="
-                border-radius: 16px;
-                border: 1px solid #e3e1da;
-                background: #fcfbf9;
-                box-shadow: 0 26px 60px -34px rgba(20, 20, 30, 0.4);
-                overflow: hidden;
-              "
-            >
-              <div
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 20px;
-                  padding: 13px 18px;
-                  border-bottom: 1px solid #efece6;
-                "
-              >
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-weight: 700;
-                    font-size: 14px;
-                  "
-                >
-                  <span
-                    style="
-                      width: 7px;
-                      height: 7px;
-                      border-radius: 50%;
-                      background: #4659c0;
-                    "
-                  ></span
-                  >LifeOS
-                </div>
-                <div
-                  style="
-                    display: flex;
-                    gap: 18px;
-                    font-size: 13px;
-                    color: #a3a199;
-                  "
-                >
-                  <span
-                    style="
-                      color: #16150f;
-                      font-weight: 600;
-                      border-bottom: 2px solid #4659c0;
-                      padding-bottom: 11px;
-                      margin-bottom: -13px;
-                    "
-                    >Capture</span
-                  ><span>Triage</span><span>Planning</span><span>Execute</span
-                  ><span>Review</span><span>Health</span>
-                </div>
-                <span
-                  style="
-                    margin-left: auto;
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 13px;
-                    color: #bdbbb1;
-                  "
-                  >23:31</span
-                >
-              </div>
-              <div
-                style="display: grid; grid-template-columns: 1.7fr 1fr; gap: 0"
-              >
-                <div style="padding: 30px 28px">
-                  <div
-                    style="
-                      font-size: 13px;
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      letter-spacing: 0.1em;
-                      color: #bdbbb1;
-                      text-transform: uppercase;
-                    "
-                  >
-                    Capture · write first
-                  </div>
-                  <div
-                    style="
-                      border: 1px solid #e3e1da;
-                      border-radius: 11px;
-                      background: #fff;
-                      padding: 16px;
-                      margin-top: 14px;
-                      min-height: 120px;
-                      color: #bdbbb1;
-                      font-size: 16px;
-                    "
-                  >
-                    What's on your mind? Type anything…<span
-                      style="
-                        display: inline-block;
-                        width: 2px;
-                        height: 18px;
-                        background: #4659c0;
-                        vertical-align: -3px;
-                        margin-left: 1px;
-                        animation: blink 1.1s steps(1) infinite;
-                      "
-                    ></span>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 12px;
-                      margin-top: 16px;
-                    "
-                  >
-                    <div
-                      style="
-                        display: flex;
-                        border-radius: 9px;
-                        overflow: hidden;
-                      "
-                    >
-                      <div
-                        style="
-                          background: #4659c0;
-                          color: #fff;
-                          font-weight: 600;
-                          font-size: 14px;
-                          padding: 10px 20px;
-                        "
-                      >
-                        Save
-                      </div>
-                      <div
-                        style="
-                          background: #3a4aa8;
-                          color: #cfd6f6;
-                          padding: 10px 12px;
-                          font-size: 12px;
-                        "
-                      >
-                        ▾
-                      </div>
-                    </div>
-                    <span
-                      style="
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                        font-size: 13px;
-                        color: #bdbbb1;
-                      "
-                      >⌘↵</span
-                    >
-                  </div>
-                </div>
-                <div
-                  style="
-                    padding: 30px 24px 30px 0;
-                    border-left: 1px solid #efece6;
-                    margin-left: 8px;
-                  "
-                >
-                  <div style="padding-left: 20px">
-                    <div
-                      style="
-                        font-size: 12px;
-                        color: #a3a199;
-                        text-transform: uppercase;
-                        letter-spacing: 0.1em;
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      "
-                    >
-                      Area
-                    </div>
-                    <div
-                      style="
-                        font-size: 16px;
-                        font-weight: 600;
-                        margin-top: 6px;
-                        display: flex;
-                        align-items: center;
-                        gap: 6px;
-                      "
-                    >
-                      Main Job
-                      <span style="color: #bdbbb1; font-size: 12px">▾</span>
-                    </div>
-                    <div
-                      style="height: 1px; background: #efece6; margin: 20px 0"
-                    ></div>
-                    <div
-                      style="
-                        font-size: 12px;
-                        color: #a3a199;
-                        text-transform: uppercase;
-                        letter-spacing: 0.1em;
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      "
-                    >
-                      Waiting
-                    </div>
-                    <div
-                      style="
-                        display: flex;
-                        gap: 16px;
-                        margin-top: 8px;
-                        font-size: 14px;
-                        color: #56544d;
-                      "
-                    >
-                      <span><b style="color: #16150f">3</b> Triage</span
-                      ><span><b style="color: #16150f">1</b> Today</span>
-                    </div>
-                    <div
-                      style="height: 1px; background: #efece6; margin: 20px 0"
-                    ></div>
-                    <div
-                      style="
-                        font-size: 12px;
-                        color: #a3a199;
-                        text-transform: uppercase;
-                        letter-spacing: 0.1em;
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      "
-                    >
-                      Recent
-                    </div>
-                    <div
-                      style="
-                        margin-top: 8px;
-                        font-size: 13px;
-                        color: #8d8b82;
-                        line-height: 1.7;
-                      "
-                    >
-                      Call dentist back<br />Idea: weekly review ritual
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Direction 3 -->
-          <div
-            style="
-              display: grid;
-              grid-template-columns: 0.82fr 1.18fr;
-              gap: 48px;
-              align-items: center;
-              margin-top: 72px;
-            "
-          >
-            <div>
-              <div
-                style="
-                  font-family: &quot;IBM Plex Mono&quot;, monospace;
-                  font-size: 12px;
-                  color: #a9a79e;
-                  letter-spacing: 0.08em;
-                "
-              >
-                OPTION 03 · KEYBOARD COCKPIT
-              </div>
-              <h3
-                style="
-                  font-size: 28px;
-                  font-weight: 700;
-                  letter-spacing: -0.02em;
-                  margin: 10px 0 0;
-                "
-              >
-                Flow as a command line
-              </h3>
-              <p
-                style="
-                  font-size: 16px;
-                  line-height: 1.6;
-                  color: #56544d;
-                  margin: 14px 0 0;
-                "
-              >
-                The six stages become a thin progress rail you move along.
-                Capture is a calm composer over a single mono command bar —
-                every action is a key, every key is shown. Powerful without
-                looking busy: low contrast does the quieting.
-              </p>
-              <div
-                style="
-                  margin-top: 18px;
-                  display: flex;
-                  flex-direction: column;
-                  gap: 9px;
-                "
-              >
-                <div style="font-size: 14px; color: #3a7a52">
-                  <span style="font-weight: 700">Keeps</span> — the whole
-                  pipeline, surfaced as one legible spine.
-                </div>
-                <div style="font-size: 14px; color: #a06a3f">
-                  <span style="font-weight: 700">Trade-off</span> — most
-                  opinionated; rewards repeat use over first impression.
-                </div>
-              </div>
-            </div>
-            <div
-              style="
-                border-radius: 16px;
-                border: 1px solid #e3e1da;
-                background: #faf9f6;
-                box-shadow: 0 26px 60px -34px rgba(20, 20, 30, 0.4);
-                overflow: hidden;
-              "
-            >
-              <div
-                style="
-                  padding: 18px 22px;
-                  border-bottom: 1px solid #efece6;
-                  display: flex;
-                  align-items: center;
-                  gap: 0;
-                "
-              >
-                <sc-for list="{{ stages }}" as="s" hint-placeholder-count="6">
-                  <div
-                    style="display: flex; align-items: center; gap: 0; flex: 1"
-                  >
-                    <span
-                      style="
-                        display: flex;
-                        align-items: center;
-                        gap: 7px;
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                        font-size: 12px;
-                        color: #b3b1a8;
-                      "
-                      ><span
-                        style="
-                          width: 9px;
-                          height: 9px;
-                          border-radius: 50%;
-                          border: 1.5px solid #cfcdc4;
-                          display: inline-block;
-                        "
-                      ></span
-                      >{{ s }}</span
-                    >
-                  </div>
-                </sc-for>
-              </div>
-              <div style="padding: 54px 40px 30px">
-                <div
-                  style="
-                    font-size: 13px;
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    color: #b3b1a8;
-                    letter-spacing: 0.1em;
-                  "
-                >
-                  /capture · Main Job
-                </div>
-                <div
-                  style="
-                    font-size: 28px;
-                    font-weight: 500;
-                    color: #16150f;
-                    margin-top: 16px;
-                    min-height: 64px;
-                  "
-                >
-                  Draft the Q3 retro agenda<span
-                    style="
-                      display: inline-block;
-                      width: 2px;
-                      height: 28px;
-                      background: #4659c0;
-                      vertical-align: -4px;
-                      margin-left: 2px;
-                      animation: blink 1.1s steps(1) infinite;
-                    "
-                  ></span>
-                </div>
-              </div>
-              <div
-                style="
-                  margin: 0 18px 18px;
-                  border: 1px solid #e6e4dd;
-                  border-radius: 11px;
-                  background: #fff;
-                  overflow: hidden;
-                "
-              >
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 13px 16px;
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 14px;
-                    color: #56544d;
-                    border-bottom: 1px solid #f0ede7;
-                  "
-                >
-                  <span style="color: #4659c0">›</span> ready to save
-                </div>
-                <div
-                  style="
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                    padding: 12px 16px;
-                  "
-                >
-                  <span
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      background: #f1eee8;
-                      border-radius: 6px;
-                      padding: 5px 10px;
-                      color: #56544d;
-                    "
-                    ><b style="color: #16150f">↵</b> save</span
-                  >
-                  <span
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      background: #f1eee8;
-                      border-radius: 6px;
-                      padding: 5px 10px;
-                      color: #56544d;
-                    "
-                    ><b style="color: #16150f">⇧↵</b> save &amp; organize</span
-                  >
-                  <span
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      background: #f1eee8;
-                      border-radius: 6px;
-                      padding: 5px 10px;
-                      color: #56544d;
-                    "
-                    ><b style="color: #16150f">⌥a</b> area</span
-                  >
-                  <span
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      background: #f1eee8;
-                      border-radius: 6px;
-                      padding: 5px 10px;
-                      color: #56544d;
-                    "
-                    ><b style="color: #16150f">/</b> commands</span
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ===== SYSTEM REWORK ===== -->
-        <section style="padding: 104px 0 0">
-          <div
-            style="
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 12px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #4659c0;
-            "
-          >
-            04 — Across the cockpit
-          </div>
-          <h2
-            style="
-              font-size: 34px;
-              font-weight: 700;
-              letter-spacing: -0.02em;
-              margin: 14px 0 0;
-              max-width: 22ch;
-            "
-          >
-            The same restraint, applied to the whole flow
-          </h2>
-          <p
-            style="
-              font-size: 18px;
-              line-height: 1.55;
-              color: #56544d;
-              margin: 16px 0 0;
-              max-width: 60ch;
-            "
-          >
-            The header carries the same load problem — pills, a badge, a clock
-            and two selectors all at full contrast. Quiet it once and every
-            screen benefits.
-          </p>
-
-          <!-- nav before -->
-          <div
-            style="
-              margin-top: 40px;
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 11px;
-              letter-spacing: 0.12em;
-              color: #b06a45;
-              text-transform: uppercase;
-              margin-bottom: 12px;
-            "
-          >
-            Before
-          </div>
-          <div
-            style="
-              background: #0c1117;
-              border-radius: 12px;
-              padding: 14px 18px;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              flex-wrap: wrap;
-              border: 1px solid #d9d7d0;
-            "
-          >
-            <span
-              style="
-                display: flex;
-                align-items: center;
-                gap: 7px;
-                font-weight: 700;
-                color: #eef1f6;
-                font-size: 14px;
-              "
-              ><span
-                style="
-                  width: 6px;
-                  height: 6px;
-                  border-radius: 50%;
-                  background: #3f8efc;
-                "
-              ></span
-              >LifeOS</span
-            >
-            <span
-              style="
-                font-size: 10px;
-                color: #7f8794;
-                background: #1a212b;
-                padding: 3px 9px;
-                border-radius: 20px;
-              "
-              >Personal workflow cockpit</span
-            >
-            <span
-              style="
-                background: #172230;
-                color: #cfe1ff;
-                border: 1px solid #25344a;
-                padding: 5px 12px;
-                border-radius: 20px;
-                font-size: 12px;
-                margin-left: 8px;
-              "
-              >● Capture</span
-            >
-            <span
-              style="
-                border: 1px solid #222b36;
-                padding: 5px 12px;
-                border-radius: 20px;
-                color: #8b929d;
-                font-size: 12px;
-              "
-              >Triage</span
-            >
-            <span
-              style="
-                border: 1px solid #222b36;
-                padding: 5px 12px;
-                border-radius: 20px;
-                color: #8b929d;
-                font-size: 12px;
-              "
-              >Planning</span
-            >
-            <span
-              style="
-                border: 1px solid #222b36;
-                padding: 5px 12px;
-                border-radius: 20px;
-                color: #8b929d;
-                font-size: 12px;
-              "
-              >Execute</span
-            >
-            <span
-              style="
-                border: 1px solid #222b36;
-                padding: 5px 12px;
-                border-radius: 20px;
-                color: #8b929d;
-                font-size: 12px;
-              "
-              >Review</span
-            >
-            <span
-              style="
-                border: 1px solid #222b36;
-                padding: 5px 12px;
-                border-radius: 20px;
-                color: #8b929d;
-                font-size: 12px;
-              "
-              >Health</span
-            >
-            <span
-              style="
-                margin-left: auto;
-                border: 1px solid #222b36;
-                padding: 5px 11px;
-                border-radius: 7px;
-                color: #9aa1ab;
-                font-size: 12px;
-              "
-              >Areas admin</span
-            >
-            <span
-              style="
-                border: 1px solid #222b36;
-                padding: 5px 11px;
-                border-radius: 7px;
-                color: #cdd2da;
-                font-size: 12px;
-              "
-              >Main Job ▾</span
-            >
-            <span
-              style="
-                border: 1px solid #222b36;
-                padding: 5px 9px;
-                border-radius: 7px;
-                color: #cdd2da;
-                font-size: 12px;
-                font-family: &quot;IBM Plex Mono&quot;, monospace;
-              "
-              >23:31</span
-            >
-          </div>
-
-          <!-- nav after -->
-          <div
-            style="
-              margin-top: 28px;
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 11px;
-              letter-spacing: 0.12em;
-              color: #4659c0;
-              text-transform: uppercase;
-              margin-bottom: 12px;
-            "
-          >
-            After
-          </div>
-          <div
-            style="
-              background: #fff;
-              border-radius: 12px;
-              padding: 16px 22px;
-              display: flex;
-              align-items: center;
-              gap: 26px;
-              border: 1px solid #e3e1da;
-              box-shadow: 0 10px 30px -22px rgba(20, 20, 30, 0.4);
-            "
-          >
-            <span
-              style="
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-weight: 700;
-                font-size: 15px;
-              "
-              ><span
-                style="
-                  width: 7px;
-                  height: 7px;
-                  border-radius: 50%;
-                  background: #4659c0;
-                "
-              ></span
-              >LifeOS</span
-            >
-            <div
-              style="display: flex; gap: 22px; font-size: 14px; color: #9b9990"
-            >
-              <span
-                style="
-                  color: #16150f;
-                  font-weight: 600;
-                  border-bottom: 2px solid #4659c0;
-                  padding-bottom: 15px;
-                  margin-bottom: -16px;
-                "
-                >Capture</span
-              ><span>Triage</span><span>Planning</span><span>Execute</span
-              ><span>Review</span><span>Health</span>
-            </div>
-            <div
-              style="
-                margin-left: auto;
-                display: flex;
-                align-items: center;
-                gap: 16px;
-              "
-            >
-              <span
-                style="
-                  font-size: 14px;
-                  color: #56544d;
-                  border: 1px solid #e3e1da;
-                  border-radius: 8px;
-                  padding: 6px 12px;
-                "
-                >Main Job ▾</span
-              >
-              <span style="color: #bdbbb1; font-size: 16px">⚙</span>
-            </div>
-          </div>
-          <p
-            style="
-              font-size: 14px;
-              color: #8d8b82;
-              margin-top: 14px;
-              max-width: 64ch;
-              line-height: 1.55;
-            "
-          >
-            Tabs become quiet text with one underline for position. The badge,
-            the duplicate clock and the second admin button drop into a single
-            settings cog. Six destinations, one selector — nothing else
-            competing for the eye.
-          </p>
-
-          <!-- the flow preserved -->
-          <div
-            style="
-              margin-top: 56px;
-              border-top: 1px solid #e7e5de;
-              padding-top: 40px;
-            "
-          >
-            <div style="font-size: 15px; color: #8d8b82; margin-bottom: 22px">
-              Nothing leaves the model — the pipeline is intact, just legible:
-            </div>
-            <div
-              style="
-                display: grid;
-                grid-template-columns: repeat(6, 1fr);
-                gap: 14px;
-              "
-            >
-              <sc-for list="{{ flow }}" as="f" hint-placeholder-count="6">
-                <div
-                  style="
-                    border: 1px solid #e7e5de;
-                    border-radius: 12px;
-                    padding: 18px 16px;
-                    background: #fbfaf7;
-                  "
-                >
-                  <div
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 12px;
-                      color: #4659c0;
-                    "
-                  >
-                    {{ f.k }}
-                  </div>
-                  <div
-                    style="font-size: 16px; font-weight: 600; margin-top: 8px"
-                  >
-                    {{ f.name }}
-                  </div>
-                  <div
-                    style="
-                      font-size: 13px;
-                      color: #8d8b82;
-                      margin-top: 4px;
-                      line-height: 1.45;
-                    "
-                  >
-                    {{ f.note }}
-                  </div>
-                </div>
-              </sc-for>
-            </div>
-          </div>
-        </section>
-
-        <!-- ===== FIVE LEAKS ===== -->
-        <section style="padding: 108px 0 0">
-          <div
-            style="
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 12px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #b06a45;
-            "
-          >
-            05 — Not a Capture problem, a template problem
-          </div>
-          <h2
-            style="
-              font-size: 34px;
-              font-weight: 700;
-              letter-spacing: -0.02em;
-              margin: 14px 0 0;
-              max-width: 24ch;
-            "
-          >
-            The same five leaks repeat on every screen
-          </h2>
-          <p
-            style="
-              font-size: 18px;
-              line-height: 1.55;
-              color: #56544d;
-              margin: 16px 0 0;
-              max-width: 62ch;
-            "
-          >
-            Today, Triage, Planning, Execute, Review and Health are built from
-            one layout — so each carries the same five pieces of dead weight
-            before its real content. Fix the template once and all six pages get
-            lighter together.
-          </p>
-
-          <div
-            style="
-              margin-top: 42px;
-              display: flex;
-              flex-direction: column;
-              gap: 1px;
-              background: #e7e5de;
-              border: 1px solid #e7e5de;
-              border-radius: 16px;
-              overflow: hidden;
-            "
-          >
-            <sc-for list="{{ leaks }}" as="l" hint-placeholder-count="5">
-              <div
-                style="
-                  background: #fbfaf7;
-                  display: grid;
-                  grid-template-columns: 64px 1.25fr 1fr;
-                  gap: 24px;
-                  padding: 24px 28px;
-                  align-items: start;
-                "
-              >
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 15px;
-                    font-weight: 600;
-                    color: #b0572f;
-                    background: #f3e6de;
-                    border-radius: 8px;
-                    padding: 7px 0;
-                    text-align: center;
-                  "
-                >
-                  {{ l.count }}
-                </div>
-                <div>
-                  <div
-                    style="
-                      font-size: 18px;
-                      font-weight: 600;
-                      letter-spacing: -0.01em;
-                    "
-                  >
-                    {{ l.title }}
-                  </div>
-                  <div
-                    style="
-                      font-size: 15px;
-                      line-height: 1.5;
-                      color: #6b6960;
-                      margin-top: 5px;
-                    "
-                  >
-                    {{ l.detail }}
-                  </div>
-                </div>
-                <div
-                  style="
-                    font-size: 15px;
-                    line-height: 1.5;
-                    color: #3a5a48;
-                    border-left: 2px solid #cfe0d4;
-                    padding-left: 16px;
-                  "
-                >
-                  <span
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 11px;
-                      letter-spacing: 0.1em;
-                      text-transform: uppercase;
-                      color: #7fa98f;
-                      display: block;
-                      margin-bottom: 4px;
-                    "
-                    >Fix</span
-                  >{{ l.fix }}
-                </div>
-              </div>
-            </sc-for>
-          </div>
-        </section>
-
-        <!-- ===== HEAVIEST SCREENS ===== -->
-        <section style="padding: 108px 0 0">
-          <div
-            style="
-              font-family: &quot;IBM Plex Mono&quot;, monospace;
-              font-size: 12px;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              color: #4659c0;
-            "
-          >
-            06 — The three heaviest screens
-          </div>
-          <h2
-            style="
-              font-size: 34px;
-              font-weight: 700;
-              letter-spacing: -0.02em;
-              margin: 14px 0 0;
-            "
-          >
-            Where the load is worst
-          </h2>
-          <p
-            style="
-              font-size: 18px;
-              line-height: 1.55;
-              color: #56544d;
-              margin: 16px 0 0;
-              max-width: 62ch;
-            "
-          >
-            Three pages go past clutter into genuine decision-paralysis. Each
-            before keeps every function; each after keeps every function too —
-            it just stops showing them all at once.
-          </p>
-
-          <!-- 6a EXECUTE -->
-          <div style="margin-top: 54px">
-            <div
-              style="
-                display: flex;
-                align-items: baseline;
-                gap: 14px;
-                margin-bottom: 6px;
-              "
-            >
-              <h3
-                style="
-                  font-size: 24px;
-                  font-weight: 700;
-                  letter-spacing: -0.015em;
-                  margin: 0;
-                "
-              >
-                Execute · session controls
-              </h3>
-              <span style="font-size: 15px; color: #8d8b82"
-                >13 buttons, 4 disabled-state paragraphs, one actual
-                session.</span
-              >
-            </div>
-            <div
-              style="
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 24px;
-                margin-top: 20px;
-                align-items: start;
-              "
-            >
-              <!-- before -->
-              <div>
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 11px;
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
-                    color: #b06a45;
-                    margin-bottom: 10px;
-                  "
-                >
-                  Before
-                </div>
-                <div
-                  style="
-                    background: #0c1117;
-                    border: 1px solid #d9d7d0;
-                    border-radius: 14px;
-                    padding: 18px;
-                    color: #cdd2da;
-                  "
-                >
-                  <div
-                    style="
-                      font-weight: 700;
-                      color: #fff;
-                      font-size: 15px;
-                      margin-bottom: 14px;
-                    "
-                  >
-                    Session controls
-                  </div>
-                  <div
-                    style="
-                      font-size: 9px;
-                      letter-spacing: 0.1em;
-                      color: #5d6470;
-                      margin-bottom: 7px;
-                    "
-                  >
-                    PRIMARY SESSION CONTROL
-                  </div>
-                  <div style="display: flex; gap: 8px; margin-bottom: 8px">
-                    <span
-                      style="
-                        background: #3f8efc;
-                        color: #04101f;
-                        border-radius: 7px;
-                        padding: 8px 16px;
-                        font-size: 12px;
-                        font-weight: 600;
-                      "
-                      >Start</span
-                    ><span
-                      style="
-                        background: #161d27;
-                        color: #6c7480;
-                        border-radius: 7px;
-                        padding: 8px 16px;
-                        font-size: 12px;
-                      "
-                      >Pause</span
-                    ><span
-                      style="
-                        background: #161d27;
-                        color: #6c7480;
-                        border-radius: 7px;
-                        padding: 8px 16px;
-                        font-size: 12px;
-                      "
-                      >Resume</span
-                    >
-                  </div>
-                  <div
-                    style="font-size: 10px; color: #6c7480; margin-bottom: 14px"
-                  >
-                    Pause disabled: Session already ended. Start another session
-                    to pause again.
-                  </div>
-                  <div
-                    style="
-                      height: 1px;
-                      background: #1d2630;
-                      margin-bottom: 12px;
-                    "
-                  ></div>
-                  <div
-                    style="
-                      font-size: 9px;
-                      letter-spacing: 0.1em;
-                      color: #5d6470;
-                      margin-bottom: 7px;
-                    "
-                  >
-                    END SESSION OUTCOMES
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      gap: 7px;
-                      flex-wrap: wrap;
-                      margin-bottom: 8px;
-                    "
-                  >
-                    <span
-                      style="
-                        background: #16242f;
-                        color: #7fa9c9;
-                        border-radius: 7px;
-                        padding: 7px 13px;
-                        font-size: 12px;
-                      "
-                      >Complete</span
-                    ><span
-                      style="
-                        background: #161d27;
-                        color: #6c7480;
-                        border-radius: 7px;
-                        padding: 7px 13px;
-                        font-size: 12px;
-                      "
-                      >Stuck</span
-                    ><span
-                      style="
-                        background: #161d27;
-                        color: #6c7480;
-                        border-radius: 7px;
-                        padding: 7px 13px;
-                        font-size: 12px;
-                      "
-                      >Distracted</span
-                    ><span
-                      style="
-                        background: #161d27;
-                        color: #6c7480;
-                        border-radius: 7px;
-                        padding: 7px 13px;
-                        font-size: 12px;
-                      "
-                      >Missed</span
-                    ><span
-                      style="
-                        color: #6c7480;
-                        border-radius: 7px;
-                        padding: 7px 13px;
-                        font-size: 12px;
-                      "
-                      >Stop (this browser)</span
-                    >
-                  </div>
-                  <div
-                    style="font-size: 10px; color: #6c7480; margin-bottom: 14px"
-                  >
-                    End outcomes disabled: Session already ended. Start another
-                    session for new outcomes.
-                  </div>
-                  <div
-                    style="
-                      height: 1px;
-                      background: #1d2630;
-                      margin-bottom: 12px;
-                    "
-                  ></div>
-                  <div
-                    style="
-                      font-size: 9px;
-                      letter-spacing: 0.1em;
-                      color: #5d6470;
-                      margin-bottom: 7px;
-                    "
-                  >
-                    RECOVERY / NEXT-STEP ACTIONS
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      gap: 7px;
-                      flex-wrap: wrap;
-                      margin-bottom: 9px;
-                    "
-                  >
-                    <span
-                      style="
-                        border: 1px solid #2a3543;
-                        border-radius: 7px;
-                        padding: 7px 12px;
-                        font-size: 12px;
-                        color: #cdd2da;
-                      "
-                      >Plan another block</span
-                    ><span
-                      style="
-                        border: 1px solid #2a3543;
-                        border-radius: 7px;
-                        padding: 7px 12px;
-                        font-size: 12px;
-                        color: #cdd2da;
-                      "
-                      >Capture what got in the way</span
-                    ><span
-                      style="
-                        border: 1px solid #2a3543;
-                        border-radius: 7px;
-                        padding: 7px 12px;
-                        font-size: 12px;
-                        color: #cdd2da;
-                      "
-                      >Review this later</span
-                    ><span
-                      style="
-                        border: 1px solid #2a3543;
-                        border-radius: 7px;
-                        padding: 7px 12px;
-                        font-size: 12px;
-                        color: #cdd2da;
-                      "
-                      >Back to Planning</span
-                    >
-                  </div>
-                  <span
-                    style="
-                      background: #3f8efc;
-                      color: #04101f;
-                      border-radius: 7px;
-                      padding: 8px 16px;
-                      font-size: 12px;
-                      font-weight: 600;
-                      display: inline-block;
-                    "
-                    >Start another session</span
-                  >
-                </div>
-              </div>
-              <!-- after -->
-              <div>
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 11px;
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
-                    color: #4659c0;
-                    margin-bottom: 10px;
-                  "
-                >
-                  After
-                </div>
-                <div
-                  style="
-                    background: #fcfbf9;
-                    border: 1px solid #e3e1da;
-                    border-radius: 14px;
-                    padding: 26px 24px;
-                    box-shadow: 0 18px 44px -30px rgba(20, 20, 30, 0.4);
-                  "
-                >
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                    "
-                  >
-                    <div style="font-size: 14px; color: #8d8b82">
-                      Focus session · Test Note
-                    </div>
-                    <div
-                      style="
-                        font-size: 13px;
-                        font-family: &quot;IBM Plex Mono&quot;, monospace;
-                        color: #bdbbb1;
-                      "
-                    >
-                      Main Job
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      font-size: 52px;
-                      font-weight: 600;
-                      letter-spacing: -0.02em;
-                      margin: 18px 0 4px;
-                      color: #16150f;
-                    "
-                  >
-                    24:18
-                  </div>
-                  <div
-                    style="font-size: 14px; color: #8d8b82; margin-bottom: 22px"
-                  >
-                    of a 45-minute block · running
-                  </div>
-                  <div style="display: flex; gap: 12px; align-items: center">
-                    <span
-                      style="
-                        background: #16150f;
-                        color: #fff;
-                        border-radius: 10px;
-                        padding: 12px 26px;
-                        font-size: 15px;
-                        font-weight: 600;
-                      "
-                      >Pause</span
-                    >
-                    <span
-                      style="
-                        border: 1px solid #e3e1da;
-                        border-radius: 10px;
-                        padding: 12px 20px;
-                        font-size: 15px;
-                        color: #56544d;
-                        display: flex;
-                        align-items: center;
-                        gap: 7px;
-                      "
-                      >End session
-                      <span style="font-size: 11px; color: #bdbbb1"
-                        >▾</span
-                      ></span
-                    >
-                  </div>
-                  <div
-                    style="
-                      margin-top: 18px;
-                      font-size: 13px;
-                      color: #a9a79e;
-                      line-height: 1.5;
-                    "
-                  >
-                    One state, one obvious next move. Outcomes (complete / stuck
-                    / missed) and recovery actions live in the
-                    <b style="color: #56544d">End session</b> menu — and only
-                    appear once the session is actually over.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 6b HEALTH -->
-          <div style="margin-top: 64px">
-            <div
-              style="
-                display: flex;
-                align-items: baseline;
-                gap: 14px;
-                margin-bottom: 6px;
-              "
-            >
-              <h3
-                style="
-                  font-size: 24px;
-                  font-weight: 700;
-                  letter-spacing: -0.015em;
-                  margin: 0;
-                "
-              >
-                Health · subsystems
-              </h3>
-              <span style="font-size: 15px; color: #8d8b82"
-                >11 cards, every one reading “Score 100”.</span
-              >
-            </div>
-            <div
-              style="
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 24px;
-                margin-top: 20px;
-                align-items: start;
-              "
-            >
-              <!-- before -->
-              <div>
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 11px;
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
-                    color: #b06a45;
-                    margin-bottom: 10px;
-                  "
-                >
-                  Before
-                </div>
-                <div
-                  style="
-                    background: #0c1117;
-                    border: 1px solid #d9d7d0;
-                    border-radius: 14px;
-                    padding: 16px;
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 8px;
-                  "
-                >
-                  <sc-for
-                    list="{{ subsystems }}"
-                    as="x"
-                    hint-placeholder-count="9"
-                  >
-                    <div
-                      style="
-                        border: 1px solid #1d2630;
-                        border-radius: 8px;
-                        padding: 9px;
-                        background: #0e141b;
-                      "
-                    >
-                      <div
-                        style="
-                          font-size: 10px;
-                          font-weight: 700;
-                          color: #eef1f6;
-                        "
-                      >
-                        {{ x.name }}
-                      </div>
-                      <div
-                        style="font-size: 8px; color: #3a7a52; margin-top: 3px"
-                      >
-                        ● {{ x.state }}
-                      </div>
-                      <div
-                        style="font-size: 8px; color: #5d6470; margin-top: 3px"
-                      >
-                        Score: 100
-                      </div>
-                    </div>
-                  </sc-for>
-                </div>
-              </div>
-              <!-- after -->
-              <div>
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 11px;
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
-                    color: #4659c0;
-                    margin-bottom: 10px;
-                  "
-                >
-                  After
-                </div>
-                <div
-                  style="
-                    background: #fcfbf9;
-                    border: 1px solid #e3e1da;
-                    border-radius: 14px;
-                    padding: 24px;
-                    box-shadow: 0 18px 44px -30px rgba(20, 20, 30, 0.4);
-                  "
-                >
-                  <div style="display: flex; align-items: center; gap: 12px">
-                    <span
-                      style="
-                        width: 36px;
-                        height: 36px;
-                        border-radius: 50%;
-                        background: #e8f0ea;
-                        color: #3a7a52;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        font-size: 18px;
-                      "
-                      >✓</span
-                    >
-                    <div>
-                      <div style="font-size: 19px; font-weight: 700">
-                        All systems healthy
-                      </div>
-                      <div style="font-size: 14px; color: #8d8b82">
-                        11 of 11 checks passing · last run 2m ago
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    style="height: 1px; background: #efece6; margin: 20px 0"
-                  ></div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                      font-size: 14px;
-                      color: #56544d;
-                      padding: 6px 0;
-                    "
-                  >
-                    <span>Storage &amp; data</span
-                    ><span style="color: #3a7a52">3 / 3 ✓</span>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                      font-size: 14px;
-                      color: #56544d;
-                      padding: 6px 0;
-                    "
-                  >
-                    <span>Integrations</span
-                    ><span style="color: #3a7a52">2 / 2 ✓</span>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                      font-size: 14px;
-                      color: #56544d;
-                      padding: 6px 0;
-                    "
-                  >
-                    <span>Telemetry · off by choice</span
-                    ><span style="color: #a9a79e">4 / 4</span>
-                  </div>
-                  <div style="margin-top: 18px">
-                    <span
-                      style="font-size: 14px; color: #4659c0; font-weight: 600"
-                      >Show all 11 checks ▾</span
-                    >
-                  </div>
-                  <div
-                    style="
-                      margin-top: 16px;
-                      font-size: 13px;
-                      color: #a9a79e;
-                      line-height: 1.5;
-                    "
-                  >
-                    Green is the silent default. The grid only expands when
-                    something actually needs you — a passing system shouldn't
-                    cost 11 cards of attention.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 6c REVIEW -->
-          <div style="margin-top: 64px">
-            <div
-              style="
-                display: flex;
-                align-items: baseline;
-                gap: 14px;
-                margin-bottom: 6px;
-              "
-            >
-              <h3
-                style="
-                  font-size: 24px;
-                  font-weight: 700;
-                  letter-spacing: -0.015em;
-                  margin: 0;
-                "
-              >
-                Review · carry-forward
-              </h3>
-              <span style="font-size: 15px; color: #8d8b82"
-                >3 nested accordions, 5 status boards, mostly reading “0”.</span
-              >
-            </div>
-            <div
-              style="
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 24px;
-                margin-top: 20px;
-                align-items: start;
-              "
-            >
-              <!-- before -->
-              <div>
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 11px;
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
-                    color: #b06a45;
-                    margin-bottom: 10px;
-                  "
-                >
-                  Before
-                </div>
-                <div
-                  style="
-                    background: #0c1117;
-                    border: 1px solid #d9d7d0;
-                    border-radius: 14px;
-                    padding: 16px;
-                    color: #cdd2da;
-                  "
-                >
-                  <div
-                    style="
-                      border: 1px solid #1d2630;
-                      border-radius: 8px;
-                      padding: 10px;
-                      background: #0e141b;
-                      display: flex;
-                      justify-content: space-between;
-                      font-size: 11px;
-                      margin-bottom: 8px;
-                    "
-                  >
-                    Save details <span style="color: #5d6470">▴</span>
-                  </div>
-                  <div
-                    style="
-                      border: 1px solid #1d2630;
-                      border-radius: 8px;
-                      padding: 10px;
-                      background: #0e141b;
-                      display: flex;
-                      justify-content: space-between;
-                      font-size: 11px;
-                      margin-bottom: 8px;
-                    "
-                  >
-                    Review details and history
-                    <span style="color: #5d6470">▴</span>
-                  </div>
-                  <div
-                    style="
-                      font-size: 10px;
-                      font-weight: 700;
-                      color: #fff;
-                      margin: 4px 0 7px;
-                    "
-                  >
-                    Carry-forward board
-                  </div>
-                  <div
-                    style="
-                      display: grid;
-                      grid-template-columns: repeat(3, 1fr);
-                      gap: 6px;
-                      margin-bottom: 7px;
-                    "
-                  >
-                    <div
-                      style="
-                        border: 1px solid #1d2630;
-                        border-radius: 7px;
-                        padding: 8px;
-                        background: #0e141b;
-                      "
-                    >
-                      <div style="font-size: 9px; color: #eef1f6">Captured</div>
-                      <div
-                        style="font-size: 14px; font-weight: 700; color: #fff"
-                      >
-                        0
-                      </div>
-                    </div>
-                    <div
-                      style="
-                        border: 1px solid #1d2630;
-                        border-radius: 7px;
-                        padding: 8px;
-                        background: #0e141b;
-                      "
-                    >
-                      <div style="font-size: 9px; color: #eef1f6">Planned</div>
-                      <div
-                        style="font-size: 14px; font-weight: 700; color: #fff"
-                      >
-                        0
-                      </div>
-                    </div>
-                    <div
-                      style="
-                        border: 1px solid #1d2630;
-                        border-radius: 7px;
-                        padding: 8px;
-                        background: #0e141b;
-                      "
-                    >
-                      <div style="font-size: 9px; color: #eef1f6">
-                        Completed
-                      </div>
-                      <div
-                        style="font-size: 14px; font-weight: 700; color: #fff"
-                      >
-                        0
-                      </div>
-                    </div>
-                    <div
-                      style="
-                        border: 1px solid #1d2630;
-                        border-radius: 7px;
-                        padding: 8px;
-                        background: #0e141b;
-                      "
-                    >
-                      <div style="font-size: 9px; color: #eef1f6">
-                        Needs follow-up
-                      </div>
-                      <div
-                        style="font-size: 14px; font-weight: 700; color: #fff"
-                      >
-                        0
-                      </div>
-                    </div>
-                    <div
-                      style="
-                        border: 1px solid #294056;
-                        border-radius: 7px;
-                        padding: 8px;
-                        background: #0e141b;
-                      "
-                    >
-                      <div style="font-size: 9px; color: #eef1f6">
-                        Carry forward
-                      </div>
-                      <div
-                        style="font-size: 14px; font-weight: 700; color: #fff"
-                      >
-                        0
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    style="
-                      border: 1px solid #1d2630;
-                      border-radius: 8px;
-                      padding: 10px;
-                      background: #0e141b;
-                      display: flex;
-                      justify-content: space-between;
-                      font-size: 11px;
-                    "
-                  >
-                    Past reviews and notes <span style="color: #5d6470">▴</span>
-                  </div>
-                </div>
-              </div>
-              <!-- after -->
-              <div>
-                <div
-                  style="
-                    font-family: &quot;IBM Plex Mono&quot;, monospace;
-                    font-size: 11px;
-                    letter-spacing: 0.12em;
-                    text-transform: uppercase;
-                    color: #4659c0;
-                    margin-bottom: 10px;
-                  "
-                >
-                  After
-                </div>
-                <div
-                  style="
-                    background: #fcfbf9;
-                    border: 1px solid #e3e1da;
-                    border-radius: 14px;
-                    padding: 26px 24px;
-                    box-shadow: 0 18px 44px -30px rgba(20, 20, 30, 0.4);
-                  "
-                >
-                  <div
-                    style="
-                      font-size: 13px;
-                      font-family: &quot;IBM Plex Mono&quot;, monospace;
-                      letter-spacing: 0.1em;
-                      color: #bdbbb1;
-                      text-transform: uppercase;
-                    "
-                  >
-                    End of day · Main Job
-                  </div>
-                  <div
-                    style="
-                      font-size: 22px;
-                      font-weight: 700;
-                      letter-spacing: -0.015em;
-                      margin: 12px 0 4px;
-                    "
-                  >
-                    Nothing is carrying over.
-                  </div>
-                  <div
-                    style="font-size: 15px; color: #6b6960; line-height: 1.5"
-                  >
-                    1 task completed, 0 still open. The day closed clean.
-                  </div>
-                  <div style="display: flex; gap: 10px; margin-top: 22px">
-                    <span
-                      style="
-                        background: #16150f;
-                        color: #fff;
-                        border-radius: 10px;
-                        padding: 11px 22px;
-                        font-size: 14px;
-                        font-weight: 600;
-                      "
-                      >Close the day</span
-                    >
-                    <span
-                      style="
-                        border: 1px solid #e3e1da;
-                        border-radius: 10px;
-                        padding: 11px 20px;
-                        font-size: 14px;
-                        color: #56544d;
-                      "
-                      >Add a follow-up</span
-                    >
-                  </div>
-                  <div
-                    style="
-                      margin-top: 20px;
-                      font-size: 13px;
-                      color: #4659c0;
-                      font-weight: 600;
-                    "
-                  >
-                    View the full board (5) ▾
-                  </div>
-                  <div
-                    style="
-                      margin-top: 16px;
-                      font-size: 13px;
-                      color: #a9a79e;
-                      line-height: 1.5;
-                    "
-                  >
-                    Lead with the verdict — “nothing carries over” is the answer
-                    the board was hiding. The five status counts and saved-notes
-                    history stay one tap below, for the days they matter.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <footer
-          style="
-            margin-top: 100px;
-            padding-top: 28px;
-            border-top: 1px solid #e7e5de;
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-            color: #a9a79e;
-            font-size: 13px;
-            font-family: &quot;IBM Plex Mono&quot;, monospace;
-          "
-        >
-          <span>LifeOS · UI/UX review</span>
-          <span
-            >Recommendation — ship Option 02, borrow Option 01's empty-state for
-            first capture.</span
-          >
-        </footer>
+        <!-- pins -->
+        <span style="position:absolute;left:8px;top:108px;width:20px;height:20px;border-radius:50%;background:#c75f37;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(199,95,55,.25)">1</span>
+        <span style="position:absolute;left:140px;top:300px;width:20px;height:20px;border-radius:50%;background:#c75f37;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(199,95,55,.25)">2</span>
+        <span style="position:absolute;right:14px;top:250px;width:20px;height:20px;border-radius:50%;background:#c75f37;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(199,95,55,.25)">3</span>
+        <span style="position:absolute;left:8px;bottom:14px;width:20px;height:20px;border-radius:50%;background:#c75f37;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(199,95,55,.25)">4</span>
       </div>
-    </x-dc>
-    <script type="text/x-dc" data-dc-script>
-      class Component extends DCLogic {
-        renderVals() {
-          return {
-            problems: [
-              { n: '1', title: 'Eight cards, equal weight', detail: 'The composer, two help boxes, three stat tiles, a details drawer and a drafts panel all sit in identical containers. Nothing tells the eye where to begin.' },
-              { n: '2', title: 'Three ways to save', detail: '“Save thought”, “Save and organize” and “Organize on this device” all compete in view. Two would be a choice; three is a puzzle.' },
-              { n: '3', title: 'State repeated three times', detail: '“Main Job” shows in the header, in the composer’s optional-area box, and again as a stat tile. Say it once and reuse it.' },
-              { n: '4', title: 'Housekeeping shown first', detail: '“Recent saved captures”, “Device-only drafts” and “Capture details” are all expanded before the user has typed a single word.' },
-              { n: '5', title: 'The task is ~12% of the page', detail: 'The text field this screen exists for is smaller than the explanatory copy wrapped around it.' }
-            ],
-            principles: [
-              { tag: '01', title: 'One primary action per screen', detail: 'Capture means type, then save. Everything else is secondary by definition — so it should look secondary.' },
-              { tag: '02', title: 'Disclose progressively', detail: 'History, drafts and settings appear when asked for, never before the first keystroke.' },
-              { tag: '03', title: 'Say state once', detail: 'The current area lives in a single place and is reused — never restated in three components.' },
-              { tag: '04', title: 'Quiet the chrome', detail: 'Lower the contrast of navigation and labels so content gets to spend the contrast budget.' }
-            ],
-            leaks: [
-              { count: '×6', title: '“Checking saved…” loading card', detail: 'A full-width skeleton card greets every page — even though local data already works without it. It teaches users to wait for nothing.', fix: 'Drop the card. If a fetch is genuinely in flight, a 2px top shimmer is enough.' },
-              { count: '×6', title: 'The “[Page] details” accordion', detail: 'Capture details, Triage details, Planning details, Execute details, Save details… a meta drawer bolted to the bottom of every screen.', fix: 'Fold all of them into one global “How this works” behind a single ? in the header.' },
-              { count: '×7', title: '“Current area: Main Job” pill', detail: 'The header already names the area. It is then repeated inside the hero, in stat tiles, and on carry-forward boards.', fix: 'Show it once, in the header selector. Remove every in-body copy.' },
-              { count: '×6', title: 'Kicker + title + subtitle hero', detail: 'Each page spends ~180px on “LOCAL-FIRST PLANNING / Planning / Start local, shape one suggestion…” before anything you can act on.', fix: 'One line: the page name as a quiet tab is enough; lead with the work.' },
-              { count: '×5', title: 'Mode tiles as headlines', detail: '“Checking”, “AI sorting on”, “Explicit only” are rendered at 34px — settings shouting louder than tasks.', fix: 'Demote to a single muted status line at the foot of the page.' }
-            ],
-            subsystems: [
-              { name: 'Demo Mode', state: 'Demo' }, { name: 'Supabase Config', state: 'Demo' }, { name: 'Auth Session', state: 'Ready' },
-              { name: 'Areas', state: 'Ready' }, { name: 'Capture Persist', state: 'Ready' }, { name: 'AI Sorting', state: 'Ready' },
-              { name: 'Google Calendar', state: 'Ready' }, { name: 'Observability', state: 'Off' }, { name: 'Sentry', state: 'Off' },
-              { name: 'PostHog', state: 'Off' }, { name: 'Langfuse', state: 'Off' }
-            ],
-            stages: ['Capture', 'Triage', 'Planning', 'Execute', 'Review', 'Health'],
-            flow: [
-              { k: '01', name: 'Capture', note: 'Get it out of your head.' },
-              { k: '02', name: 'Triage', note: 'Decide what it is.' },
-              { k: '03', name: 'Planning', note: 'Place it in time.' },
-              { k: '04', name: 'Execute', note: 'Do the next block.' },
-              { k: '05', name: 'Review', note: 'Close the loop.' },
-              { k: '06', name: 'Health', note: 'Check the system.' }
-            ]
-          };
-        }
-      }
-    </script>
-  </body>
+
+      <!-- problem list -->
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <sc-for list="{{ problems }}" as="p" hint-placeholder-count="5">
+          <div style="display:flex;gap:16px;padding:18px 0;border-bottom:1px solid #e7e5de">
+            <span style="flex:0 0 auto;width:24px;height:24px;border-radius:50%;background:#f3e6de;color:#b0572f;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center">{{ p.n }}</span>
+            <div>
+              <div style="font-size:17px;font-weight:600;letter-spacing:-0.01em">{{ p.title }}</div>
+              <div style="font-size:15px;line-height:1.5;color:#6b6960;margin-top:4px">{{ p.detail }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PRINCIPLES ===== -->
+  <section style="padding:96px 0 0">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4659c0">02 — The fix, in four rules</div>
+    <h2 style="font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:14px 0 0;max-width:20ch">Same engine. Calmer cockpit.</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:#e7e5de;border:1px solid #e7e5de;border-radius:16px;overflow:hidden;margin-top:40px">
+      <sc-for list="{{ principles }}" as="r" hint-placeholder-count="4">
+        <div style="background:#fbfaf7;padding:34px 32px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#a9a79e">{{ r.tag }}</div>
+          <div style="font-size:23px;font-weight:700;letter-spacing:-0.015em;margin:12px 0 8px">{{ r.title }}</div>
+          <div style="font-size:16px;line-height:1.55;color:#6b6960">{{ r.detail }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ===== DIRECTIONS ===== -->
+  <section style="padding:104px 0 0">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4659c0">03 — Three directions</div>
+    <h2 style="font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:14px 0 0">Pick how far to go</h2>
+    <p style="font-size:18px;line-height:1.55;color:#56544d;margin:16px 0 0;max-width:60ch">Each keeps capture, areas, AI sorting, drafts and history. They differ in how much they reveal at rest.</p>
+
+    <!-- Direction 1 -->
+    <div style="display:grid;grid-template-columns:0.82fr 1.18fr;gap:48px;align-items:center;margin-top:56px">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a9a79e;letter-spacing:.08em">OPTION 01 · RADICAL REDUCTION</div>
+        <h3 style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:10px 0 0">Just capture</h3>
+        <p style="font-size:16px;line-height:1.6;color:#56544d;margin:14px 0 0">The screen is a blank page and a caret. Type, hit ⌘↵, it's saved. Area, drafts and recent history live one keystroke away behind <code style="font-family:'IBM Plex Mono',monospace;background:#efece6;padding:1px 6px;border-radius:5px;font-size:13px">/</code> and the bottom drawer — never shown until you reach for them.</p>
+        <div style="margin-top:18px;display:flex;flex-direction:column;gap:9px">
+          <div style="font-size:14px;color:#3a7a52"><span style="font-weight:700">Keeps</span> — full save / save&amp;organize, area tagging, drafts, history.</div>
+          <div style="font-size:14px;color:#a06a3f"><span style="font-weight:700">Trade-off</span> — best for people who already trust the flow; less self-explanatory for newcomers.</div>
+        </div>
+      </div>
+      <div style="border-radius:16px;border:1px solid #e3e1da;background:#fcfbf9;box-shadow:0 26px 60px -34px rgba(20,20,30,.4);overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #efece6">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px"><span style="width:7px;height:7px;border-radius:50%;background:#4659c0"></span>LifeOS</div>
+          <div style="font-size:13px;color:#a9a79e;display:flex;gap:14px;align-items:center"><span style="border:1px solid #e3e1da;border-radius:7px;padding:3px 10px;color:#56544d">Main Job ▾</span><span style="font-family:'IBM Plex Mono',monospace">23:31</span></div>
+        </div>
+        <div style="padding:74px 56px 60px;min-height:300px;display:flex;flex-direction:column;justify-content:center">
+          <div style="font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#bdbbb1;text-transform:uppercase">Capture</div>
+          <div style="font-size:32px;font-weight:500;color:#16150f;margin-top:14px;display:flex;align-items:center">What's on your mind?<span style="width:2px;height:34px;background:#4659c0;margin-left:3px;animation:blink 1.1s steps(1) infinite"></span></div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#a9a79e;margin-top:30px;display:flex;gap:22px"><span><b style="color:#56544d">⌘↵</b> save</span><span><b style="color:#56544d">⇧⌘↵</b> save &amp; organize</span><span><b style="color:#56544d">/</b> commands</span></div>
+        </div>
+        <div style="border-top:1px solid #efece6;padding:13px 18px;display:flex;align-items:center;justify-content:center;gap:8px;color:#a9a79e;font-size:13px">Recent · 0 on this device <span style="font-size:11px">▴</span></div>
+      </div>
+    </div>
+
+    <!-- Direction 2 -->
+    <div style="display:grid;grid-template-columns:0.82fr 1.18fr;gap:48px;align-items:center;margin-top:72px">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a9a79e;letter-spacing:.08em">OPTION 02 · BALANCED</div>
+        <h3 style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:10px 0 0">Capture &amp; quiet context</h3>
+        <p style="font-size:16px;line-height:1.6;color:#56544d;margin:14px 0 0">One composer, one primary <b>Save</b> with the alternate folded into a split menu. A single slim rail on the right replaces the eight cards: area, a live count of what's waiting, and the last three captures. Two zones instead of eight.</p>
+        <div style="margin-top:18px;display:flex;flex-direction:column;gap:9px">
+          <div style="font-size:14px;color:#3a7a52"><span style="font-weight:700">Keeps</span> — every control visible, just grouped and de-ranked.</div>
+          <div style="font-size:14px;color:#a06a3f"><span style="font-weight:700">Trade-off</span> — the safest move; least surprising for current users.</div>
+        </div>
+      </div>
+      <div style="border-radius:16px;border:1px solid #e3e1da;background:#fcfbf9;box-shadow:0 26px 60px -34px rgba(20,20,30,.4);overflow:hidden">
+        <div style="display:flex;align-items:center;gap:20px;padding:13px 18px;border-bottom:1px solid #efece6">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px"><span style="width:7px;height:7px;border-radius:50%;background:#4659c0"></span>LifeOS</div>
+          <div style="display:flex;gap:18px;font-size:13px;color:#a3a199">
+            <span style="color:#16150f;font-weight:600;border-bottom:2px solid #4659c0;padding-bottom:11px;margin-bottom:-13px">Capture</span><span>Triage</span><span>Planning</span><span>Execute</span><span>Review</span><span>Health</span>
+          </div>
+          <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#bdbbb1">23:31</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:0">
+          <div style="padding:30px 28px">
+            <div style="font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#bdbbb1;text-transform:uppercase">Capture · write first</div>
+            <div style="border:1px solid #e3e1da;border-radius:11px;background:#fff;padding:16px;margin-top:14px;min-height:120px;color:#bdbbb1;font-size:16px">What's on your mind? Type anything…<span style="display:inline-block;width:2px;height:18px;background:#4659c0;vertical-align:-3px;margin-left:1px;animation:blink 1.1s steps(1) infinite"></span></div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:16px">
+              <div style="display:flex;border-radius:9px;overflow:hidden">
+                <div style="background:#4659c0;color:#fff;font-weight:600;font-size:14px;padding:10px 20px">Save</div>
+                <div style="background:#3a4aa8;color:#cfd6f6;padding:10px 12px;font-size:12px">▾</div>
+              </div>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#bdbbb1">⌘↵</span>
+            </div>
+          </div>
+          <div style="padding:30px 24px 30px 0;border-left:1px solid #efece6;margin-left:8px">
+            <div style="padding-left:20px">
+              <div style="font-size:12px;color:#a3a199;text-transform:uppercase;letter-spacing:.1em;font-family:'IBM Plex Mono',monospace">Area</div>
+              <div style="font-size:16px;font-weight:600;margin-top:6px;display:flex;align-items:center;gap:6px">Main Job <span style="color:#bdbbb1;font-size:12px">▾</span></div>
+              <div style="height:1px;background:#efece6;margin:20px 0"></div>
+              <div style="font-size:12px;color:#a3a199;text-transform:uppercase;letter-spacing:.1em;font-family:'IBM Plex Mono',monospace">Waiting</div>
+              <div style="display:flex;gap:16px;margin-top:8px;font-size:14px;color:#56544d"><span><b style="color:#16150f">3</b> Triage</span><span><b style="color:#16150f">1</b> Today</span></div>
+              <div style="height:1px;background:#efece6;margin:20px 0"></div>
+              <div style="font-size:12px;color:#a3a199;text-transform:uppercase;letter-spacing:.1em;font-family:'IBM Plex Mono',monospace">Recent</div>
+              <div style="margin-top:8px;font-size:13px;color:#8d8b82;line-height:1.7">Call dentist back<br>Idea: weekly review ritual</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Direction 3 -->
+    <div style="display:grid;grid-template-columns:0.82fr 1.18fr;gap:48px;align-items:center;margin-top:72px">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a9a79e;letter-spacing:.08em">OPTION 03 · KEYBOARD COCKPIT</div>
+        <h3 style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:10px 0 0">Flow as a command line</h3>
+        <p style="font-size:16px;line-height:1.6;color:#56544d;margin:14px 0 0">The six stages become a thin progress rail you move along. Capture is a calm composer over a single mono command bar — every action is a key, every key is shown. Powerful without looking busy: low contrast does the quieting.</p>
+        <div style="margin-top:18px;display:flex;flex-direction:column;gap:9px">
+          <div style="font-size:14px;color:#3a7a52"><span style="font-weight:700">Keeps</span> — the whole pipeline, surfaced as one legible spine.</div>
+          <div style="font-size:14px;color:#a06a3f"><span style="font-weight:700">Trade-off</span> — most opinionated; rewards repeat use over first impression.</div>
+        </div>
+      </div>
+      <div style="border-radius:16px;border:1px solid #e3e1da;background:#faf9f6;box-shadow:0 26px 60px -34px rgba(20,20,30,.4);overflow:hidden">
+        <div style="padding:18px 22px;border-bottom:1px solid #efece6;display:flex;align-items:center;gap:0">
+          <sc-for list="{{ stages }}" as="s" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:0;flex:1">
+              <span style="display:flex;align-items:center;gap:7px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#b3b1a8"><span style="width:9px;height:9px;border-radius:50%;border:1.5px solid #cfcdc4;display:inline-block"></span>{{ s }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:54px 40px 30px">
+          <div style="font-size:13px;font-family:'IBM Plex Mono',monospace;color:#b3b1a8;letter-spacing:.1em">/capture · Main Job</div>
+          <div style="font-size:28px;font-weight:500;color:#16150f;margin-top:16px;min-height:64px">Draft the Q3 retro agenda<span style="display:inline-block;width:2px;height:28px;background:#4659c0;vertical-align:-4px;margin-left:2px;animation:blink 1.1s steps(1) infinite"></span></div>
+        </div>
+        <div style="margin:0 18px 18px;border:1px solid #e6e4dd;border-radius:11px;background:#fff;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:13px 16px;font-family:'IBM Plex Mono',monospace;font-size:14px;color:#56544d;border-bottom:1px solid #f0ede7"><span style="color:#4659c0">›</span> ready to save</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;background:#f1eee8;border-radius:6px;padding:5px 10px;color:#56544d"><b style="color:#16150f">↵</b> save</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;background:#f1eee8;border-radius:6px;padding:5px 10px;color:#56544d"><b style="color:#16150f">⇧↵</b> save &amp; organize</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;background:#f1eee8;border-radius:6px;padding:5px 10px;color:#56544d"><b style="color:#16150f">⌥a</b> area</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;background:#f1eee8;border-radius:6px;padding:5px 10px;color:#56544d"><b style="color:#16150f">/</b> commands</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SYSTEM REWORK ===== -->
+  <section style="padding:104px 0 0">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4659c0">04 — Across the cockpit</div>
+    <h2 style="font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:14px 0 0;max-width:22ch">The same restraint, applied to the whole flow</h2>
+    <p style="font-size:18px;line-height:1.55;color:#56544d;margin:16px 0 0;max-width:60ch">The header carries the same load problem — pills, a badge, a clock and two selectors all at full contrast. Quiet it once and every screen benefits.</p>
+
+    <!-- nav before -->
+    <div style="margin-top:40px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#b06a45;text-transform:uppercase;margin-bottom:12px">Before</div>
+    <div style="background:#0c1117;border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid #d9d7d0">
+      <span style="display:flex;align-items:center;gap:7px;font-weight:700;color:#eef1f6;font-size:14px"><span style="width:6px;height:6px;border-radius:50%;background:#3f8efc"></span>LifeOS</span>
+      <span style="font-size:10px;color:#7f8794;background:#1a212b;padding:3px 9px;border-radius:20px">Personal workflow cockpit</span>
+      <span style="background:#172230;color:#cfe1ff;border:1px solid #25344a;padding:5px 12px;border-radius:20px;font-size:12px;margin-left:8px">● Capture</span>
+      <span style="border:1px solid #222b36;padding:5px 12px;border-radius:20px;color:#8b929d;font-size:12px">Triage</span>
+      <span style="border:1px solid #222b36;padding:5px 12px;border-radius:20px;color:#8b929d;font-size:12px">Planning</span>
+      <span style="border:1px solid #222b36;padding:5px 12px;border-radius:20px;color:#8b929d;font-size:12px">Execute</span>
+      <span style="border:1px solid #222b36;padding:5px 12px;border-radius:20px;color:#8b929d;font-size:12px">Review</span>
+      <span style="border:1px solid #222b36;padding:5px 12px;border-radius:20px;color:#8b929d;font-size:12px">Health</span>
+      <span style="margin-left:auto;border:1px solid #222b36;padding:5px 11px;border-radius:7px;color:#9aa1ab;font-size:12px">Areas admin</span>
+      <span style="border:1px solid #222b36;padding:5px 11px;border-radius:7px;color:#cdd2da;font-size:12px">Main Job ▾</span>
+      <span style="border:1px solid #222b36;padding:5px 9px;border-radius:7px;color:#cdd2da;font-size:12px;font-family:'IBM Plex Mono',monospace">23:31</span>
+    </div>
+
+    <!-- nav after -->
+    <div style="margin-top:28px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#4659c0;text-transform:uppercase;margin-bottom:12px">After</div>
+    <div style="background:#fff;border-radius:12px;padding:16px 22px;display:flex;align-items:center;gap:26px;border:1px solid #e3e1da;box-shadow:0 10px 30px -22px rgba(20,20,30,.4)">
+      <span style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px"><span style="width:7px;height:7px;border-radius:50%;background:#4659c0"></span>LifeOS</span>
+      <div style="display:flex;gap:22px;font-size:14px;color:#9b9990">
+        <span style="color:#16150f;font-weight:600;border-bottom:2px solid #4659c0;padding-bottom:15px;margin-bottom:-16px">Capture</span><span>Triage</span><span>Planning</span><span>Execute</span><span>Review</span><span>Health</span>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
+        <span style="font-size:14px;color:#56544d;border:1px solid #e3e1da;border-radius:8px;padding:6px 12px">Main Job ▾</span>
+        <span style="color:#bdbbb1;font-size:16px">⚙</span>
+      </div>
+    </div>
+    <p style="font-size:14px;color:#8d8b82;margin-top:14px;max-width:64ch;line-height:1.55">Tabs become quiet text with one underline for position. The badge, the duplicate clock and the second admin button drop into a single settings cog. Six destinations, one selector — nothing else competing for the eye.</p>
+
+    <!-- the flow preserved -->
+    <div style="margin-top:56px;border-top:1px solid #e7e5de;padding-top:40px">
+      <div style="font-size:15px;color:#8d8b82;margin-bottom:22px">Nothing leaves the model — the pipeline is intact, just legible:</div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:14px">
+        <sc-for list="{{ flow }}" as="f" hint-placeholder-count="6">
+          <div style="border:1px solid #e7e5de;border-radius:12px;padding:18px 16px;background:#fbfaf7">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#4659c0">{{ f.k }}</div>
+            <div style="font-size:16px;font-weight:600;margin-top:8px">{{ f.name }}</div>
+            <div style="font-size:13px;color:#8d8b82;margin-top:4px;line-height:1.45">{{ f.note }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FIVE LEAKS ===== -->
+  <section style="padding:108px 0 0">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#b06a45">05 — Not a Capture problem, a template problem</div>
+    <h2 style="font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:14px 0 0;max-width:24ch">The same five leaks repeat on every screen</h2>
+    <p style="font-size:18px;line-height:1.55;color:#56544d;margin:16px 0 0;max-width:62ch">Today, Triage, Planning, Execute, Review and Health are built from one layout — so each carries the same five pieces of dead weight before its real content. Fix the template once and all six pages get lighter together.</p>
+
+    <div style="margin-top:42px;display:flex;flex-direction:column;gap:1px;background:#e7e5de;border:1px solid #e7e5de;border-radius:16px;overflow:hidden">
+      <sc-for list="{{ leaks }}" as="l" hint-placeholder-count="5">
+        <div style="background:#fbfaf7;display:grid;grid-template-columns:64px 1.25fr 1fr;gap:24px;padding:24px 28px;align-items:start">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:#b0572f;background:#f3e6de;border-radius:8px;padding:7px 0;text-align:center">{{ l.count }}</div>
+          <div>
+            <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em">{{ l.title }}</div>
+            <div style="font-size:15px;line-height:1.5;color:#6b6960;margin-top:5px">{{ l.detail }}</div>
+          </div>
+          <div style="font-size:15px;line-height:1.5;color:#3a5a48;border-left:2px solid #cfe0d4;padding-left:16px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#7fa98f;display:block;margin-bottom:4px">Fix</span>{{ l.fix }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ===== HEAVIEST SCREENS ===== -->
+  <section style="padding:108px 0 0">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#4659c0">06 — The three heaviest screens</div>
+    <h2 style="font-size:34px;font-weight:700;letter-spacing:-0.02em;margin:14px 0 0">Where the load is worst</h2>
+    <p style="font-size:18px;line-height:1.55;color:#56544d;margin:16px 0 0;max-width:62ch">Three pages go past clutter into genuine decision-paralysis. Each before keeps every function; each after keeps every function too — it just stops showing them all at once.</p>
+
+    <!-- 6a EXECUTE -->
+    <div style="margin-top:54px">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px"><h3 style="font-size:24px;font-weight:700;letter-spacing:-0.015em;margin:0">Execute · session controls</h3><span style="font-size:15px;color:#8d8b82">13 buttons, 4 disabled-state paragraphs, one actual session.</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px;align-items:start">
+        <!-- before -->
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#b06a45;margin-bottom:10px">Before</div>
+          <div style="background:#0c1117;border:1px solid #d9d7d0;border-radius:14px;padding:18px;color:#cdd2da">
+            <div style="font-weight:700;color:#fff;font-size:15px;margin-bottom:14px">Session controls</div>
+            <div style="font-size:9px;letter-spacing:.1em;color:#5d6470;margin-bottom:7px">PRIMARY SESSION CONTROL</div>
+            <div style="display:flex;gap:8px;margin-bottom:8px"><span style="background:#3f8efc;color:#04101f;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:600">Start</span><span style="background:#161d27;color:#6c7480;border-radius:7px;padding:8px 16px;font-size:12px">Pause</span><span style="background:#161d27;color:#6c7480;border-radius:7px;padding:8px 16px;font-size:12px">Resume</span></div>
+            <div style="font-size:10px;color:#6c7480;margin-bottom:14px">Pause disabled: Session already ended. Start another session to pause again.</div>
+            <div style="height:1px;background:#1d2630;margin-bottom:12px"></div>
+            <div style="font-size:9px;letter-spacing:.1em;color:#5d6470;margin-bottom:7px">END SESSION OUTCOMES</div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px"><span style="background:#16242f;color:#7fa9c9;border-radius:7px;padding:7px 13px;font-size:12px">Complete</span><span style="background:#161d27;color:#6c7480;border-radius:7px;padding:7px 13px;font-size:12px">Stuck</span><span style="background:#161d27;color:#6c7480;border-radius:7px;padding:7px 13px;font-size:12px">Distracted</span><span style="background:#161d27;color:#6c7480;border-radius:7px;padding:7px 13px;font-size:12px">Missed</span><span style="color:#6c7480;border-radius:7px;padding:7px 13px;font-size:12px">Stop (this browser)</span></div>
+            <div style="font-size:10px;color:#6c7480;margin-bottom:14px">End outcomes disabled: Session already ended. Start another session for new outcomes.</div>
+            <div style="height:1px;background:#1d2630;margin-bottom:12px"></div>
+            <div style="font-size:9px;letter-spacing:.1em;color:#5d6470;margin-bottom:7px">RECOVERY / NEXT-STEP ACTIONS</div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px"><span style="border:1px solid #2a3543;border-radius:7px;padding:7px 12px;font-size:12px;color:#cdd2da">Plan another block</span><span style="border:1px solid #2a3543;border-radius:7px;padding:7px 12px;font-size:12px;color:#cdd2da">Capture what got in the way</span><span style="border:1px solid #2a3543;border-radius:7px;padding:7px 12px;font-size:12px;color:#cdd2da">Review this later</span><span style="border:1px solid #2a3543;border-radius:7px;padding:7px 12px;font-size:12px;color:#cdd2da">Back to Planning</span></div>
+            <span style="background:#3f8efc;color:#04101f;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:600;display:inline-block">Start another session</span>
+          </div>
+        </div>
+        <!-- after -->
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#4659c0;margin-bottom:10px">After</div>
+          <div style="background:#fcfbf9;border:1px solid #e3e1da;border-radius:14px;padding:26px 24px;box-shadow:0 18px 44px -30px rgba(20,20,30,.4)">
+            <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:14px;color:#8d8b82">Focus session · Test Note</div><div style="font-size:13px;font-family:'IBM Plex Mono',monospace;color:#bdbbb1">Main Job</div></div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:52px;font-weight:600;letter-spacing:-0.02em;margin:18px 0 4px;color:#16150f">24:18</div>
+            <div style="font-size:14px;color:#8d8b82;margin-bottom:22px">of a 45-minute block · running</div>
+            <div style="display:flex;gap:12px;align-items:center">
+              <span style="background:#16150f;color:#fff;border-radius:10px;padding:12px 26px;font-size:15px;font-weight:600">Pause</span>
+              <span style="border:1px solid #e3e1da;border-radius:10px;padding:12px 20px;font-size:15px;color:#56544d;display:flex;align-items:center;gap:7px">End session <span style="font-size:11px;color:#bdbbb1">▾</span></span>
+            </div>
+            <div style="margin-top:18px;font-size:13px;color:#a9a79e;line-height:1.5">One state, one obvious next move. Outcomes (complete / stuck / missed) and recovery actions live in the <b style="color:#56544d">End session</b> menu — and only appear once the session is actually over.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6b HEALTH -->
+    <div style="margin-top:64px">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px"><h3 style="font-size:24px;font-weight:700;letter-spacing:-0.015em;margin:0">Health · subsystems</h3><span style="font-size:15px;color:#8d8b82">11 cards, every one reading “Score 100”.</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px;align-items:start">
+        <!-- before -->
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#b06a45;margin-bottom:10px">Before</div>
+          <div style="background:#0c1117;border:1px solid #d9d7d0;border-radius:14px;padding:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <sc-for list="{{ subsystems }}" as="x" hint-placeholder-count="9">
+              <div style="border:1px solid #1d2630;border-radius:8px;padding:9px;background:#0e141b">
+                <div style="font-size:10px;font-weight:700;color:#eef1f6">{{ x.name }}</div>
+                <div style="font-size:8px;color:#3a7a52;margin-top:3px">● {{ x.state }}</div>
+                <div style="font-size:8px;color:#5d6470;margin-top:3px">Score: 100</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <!-- after -->
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#4659c0;margin-bottom:10px">After</div>
+          <div style="background:#fcfbf9;border:1px solid #e3e1da;border-radius:14px;padding:24px;box-shadow:0 18px 44px -30px rgba(20,20,30,.4)">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="width:36px;height:36px;border-radius:50%;background:#e8f0ea;color:#3a7a52;display:flex;align-items:center;justify-content:center;font-size:18px">✓</span>
+              <div><div style="font-size:19px;font-weight:700">All systems healthy</div><div style="font-size:14px;color:#8d8b82">11 of 11 checks passing · last run 2m ago</div></div>
+            </div>
+            <div style="height:1px;background:#efece6;margin:20px 0"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#56544d;padding:6px 0"><span>Storage &amp; data</span><span style="color:#3a7a52">3 / 3 ✓</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#56544d;padding:6px 0"><span>Integrations</span><span style="color:#3a7a52">2 / 2 ✓</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;color:#56544d;padding:6px 0"><span>Telemetry · off by choice</span><span style="color:#a9a79e">4 / 4</span></div>
+            <div style="margin-top:18px"><span style="font-size:14px;color:#4659c0;font-weight:600">Show all 11 checks ▾</span></div>
+            <div style="margin-top:16px;font-size:13px;color:#a9a79e;line-height:1.5">Green is the silent default. The grid only expands when something actually needs you — a passing system shouldn't cost 11 cards of attention.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6c REVIEW -->
+    <div style="margin-top:64px">
+      <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px"><h3 style="font-size:24px;font-weight:700;letter-spacing:-0.015em;margin:0">Review · carry-forward</h3><span style="font-size:15px;color:#8d8b82">3 nested accordions, 5 status boards, mostly reading “0”.</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px;align-items:start">
+        <!-- before -->
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#b06a45;margin-bottom:10px">Before</div>
+          <div style="background:#0c1117;border:1px solid #d9d7d0;border-radius:14px;padding:16px;color:#cdd2da">
+            <div style="border:1px solid #1d2630;border-radius:8px;padding:10px;background:#0e141b;display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">Save details <span style="color:#5d6470">▴</span></div>
+            <div style="border:1px solid #1d2630;border-radius:8px;padding:10px;background:#0e141b;display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">Review details and history <span style="color:#5d6470">▴</span></div>
+            <div style="font-size:10px;font-weight:700;color:#fff;margin:4px 0 7px">Carry-forward board</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:7px">
+              <div style="border:1px solid #1d2630;border-radius:7px;padding:8px;background:#0e141b"><div style="font-size:9px;color:#eef1f6">Captured</div><div style="font-size:14px;font-weight:700;color:#fff">0</div></div>
+              <div style="border:1px solid #1d2630;border-radius:7px;padding:8px;background:#0e141b"><div style="font-size:9px;color:#eef1f6">Planned</div><div style="font-size:14px;font-weight:700;color:#fff">0</div></div>
+              <div style="border:1px solid #1d2630;border-radius:7px;padding:8px;background:#0e141b"><div style="font-size:9px;color:#eef1f6">Completed</div><div style="font-size:14px;font-weight:700;color:#fff">0</div></div>
+              <div style="border:1px solid #1d2630;border-radius:7px;padding:8px;background:#0e141b"><div style="font-size:9px;color:#eef1f6">Needs follow-up</div><div style="font-size:14px;font-weight:700;color:#fff">0</div></div>
+              <div style="border:1px solid #294056;border-radius:7px;padding:8px;background:#0e141b"><div style="font-size:9px;color:#eef1f6">Carry forward</div><div style="font-size:14px;font-weight:700;color:#fff">0</div></div>
+            </div>
+            <div style="border:1px solid #1d2630;border-radius:8px;padding:10px;background:#0e141b;display:flex;justify-content:space-between;font-size:11px">Past reviews and notes <span style="color:#5d6470">▴</span></div>
+          </div>
+        </div>
+        <!-- after -->
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#4659c0;margin-bottom:10px">After</div>
+          <div style="background:#fcfbf9;border:1px solid #e3e1da;border-radius:14px;padding:26px 24px;box-shadow:0 18px 44px -30px rgba(20,20,30,.4)">
+            <div style="font-size:13px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#bdbbb1;text-transform:uppercase">End of day · Main Job</div>
+            <div style="font-size:22px;font-weight:700;letter-spacing:-0.015em;margin:12px 0 4px">Nothing is carrying over.</div>
+            <div style="font-size:15px;color:#6b6960;line-height:1.5">1 task completed, 0 still open. The day closed clean.</div>
+            <div style="display:flex;gap:10px;margin-top:22px">
+              <span style="background:#16150f;color:#fff;border-radius:10px;padding:11px 22px;font-size:14px;font-weight:600">Close the day</span>
+              <span style="border:1px solid #e3e1da;border-radius:10px;padding:11px 20px;font-size:14px;color:#56544d">Add a follow-up</span>
+            </div>
+            <div style="margin-top:20px;font-size:13px;color:#4659c0;font-weight:600">View the full board (5) ▾</div>
+            <div style="margin-top:16px;font-size:13px;color:#a9a79e;line-height:1.5">Lead with the verdict — “nothing carries over” is the answer the board was hiding. The five status counts and saved-notes history stay one tap below, for the days they matter.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer style="margin-top:100px;padding-top:28px;border-top:1px solid #e7e5de;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;color:#a9a79e;font-size:13px;font-family:'IBM Plex Mono',monospace">
+    <span>LifeOS · UI/UX review</span>
+    <span>Recommendation — ship Option 02, borrow Option 01's empty-state for first capture.</span>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      problems: [
+        { n: '1', title: 'Eight cards, equal weight', detail: 'The composer, two help boxes, three stat tiles, a details drawer and a drafts panel all sit in identical containers. Nothing tells the eye where to begin.' },
+        { n: '2', title: 'Three ways to save', detail: '“Save thought”, “Save and organize” and “Organize on this device” all compete in view. Two would be a choice; three is a puzzle.' },
+        { n: '3', title: 'State repeated three times', detail: '“Main Job” shows in the header, in the composer’s optional-area box, and again as a stat tile. Say it once and reuse it.' },
+        { n: '4', title: 'Housekeeping shown first', detail: '“Recent saved captures”, “Device-only drafts” and “Capture details” are all expanded before the user has typed a single word.' },
+        { n: '5', title: 'The task is ~12% of the page', detail: 'The text field this screen exists for is smaller than the explanatory copy wrapped around it.' }
+      ],
+      principles: [
+        { tag: '01', title: 'One primary action per screen', detail: 'Capture means type, then save. Everything else is secondary by definition — so it should look secondary.' },
+        { tag: '02', title: 'Disclose progressively', detail: 'History, drafts and settings appear when asked for, never before the first keystroke.' },
+        { tag: '03', title: 'Say state once', detail: 'The current area lives in a single place and is reused — never restated in three components.' },
+        { tag: '04', title: 'Quiet the chrome', detail: 'Lower the contrast of navigation and labels so content gets to spend the contrast budget.' }
+      ],
+      leaks: [
+        { count: '×6', title: '“Checking saved…” loading card', detail: 'A full-width skeleton card greets every page — even though local data already works without it. It teaches users to wait for nothing.', fix: 'Drop the card. If a fetch is genuinely in flight, a 2px top shimmer is enough.' },
+        { count: '×6', title: 'The “[Page] details” accordion', detail: 'Capture details, Triage details, Planning details, Execute details, Save details… a meta drawer bolted to the bottom of every screen.', fix: 'Fold all of them into one global “How this works” behind a single ? in the header.' },
+        { count: '×7', title: '“Current area: Main Job” pill', detail: 'The header already names the area. It is then repeated inside the hero, in stat tiles, and on carry-forward boards.', fix: 'Show it once, in the header selector. Remove every in-body copy.' },
+        { count: '×6', title: 'Kicker + title + subtitle hero', detail: 'Each page spends ~180px on “LOCAL-FIRST PLANNING / Planning / Start local, shape one suggestion…” before anything you can act on.', fix: 'One line: the page name as a quiet tab is enough; lead with the work.' },
+        { count: '×5', title: 'Mode tiles as headlines', detail: '“Checking”, “AI sorting on”, “Explicit only” are rendered at 34px — settings shouting louder than tasks.', fix: 'Demote to a single muted status line at the foot of the page.' }
+      ],
+      subsystems: [
+        { name: 'Demo Mode', state: 'Demo' }, { name: 'Supabase Config', state: 'Demo' }, { name: 'Auth Session', state: 'Ready' },
+        { name: 'Areas', state: 'Ready' }, { name: 'Capture Persist', state: 'Ready' }, { name: 'AI Sorting', state: 'Ready' },
+        { name: 'Google Calendar', state: 'Ready' }, { name: 'Observability', state: 'Off' }, { name: 'Sentry', state: 'Off' },
+        { name: 'PostHog', state: 'Off' }, { name: 'Langfuse', state: 'Off' }
+      ],
+      stages: ['Capture', 'Triage', 'Planning', 'Execute', 'Review', 'Health'],
+      flow: [
+        { k: '01', name: 'Capture', note: 'Get it out of your head.' },
+        { k: '02', name: 'Triage', note: 'Decide what it is.' },
+        { k: '03', name: 'Planning', note: 'Place it in time.' },
+        { k: '04', name: 'Execute', note: 'Do the next block.' },
+        { k: '05', name: 'Review', note: 'Close the loop.' },
+        { k: '06', name: 'Health', note: 'Check the system.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
 </html>
