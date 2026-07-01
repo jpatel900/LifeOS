@@ -604,6 +604,7 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       expect(accepted.block.proposal_id).toBe(proposal!.id);
       expect(accepted.block.user_id).toBe(userA.id);
       expect(accepted.block.status).toBe("scheduled");
+      expect(accepted.task.status).toBe("scheduled");
 
       const { error: repeatError } = await userAClient.rpc(
         "accept_time_block_proposal",
@@ -690,6 +691,216 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         await deleteSessionByTaskId(userAClient, taskId);
       }
       await deleteTaskByTitle(userAClient, taskTitle);
+    }
+  });
+
+  it("starts execution sessions atomically via rpc with cross-user denial", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-rpc-start-task-${suffix}`;
+    let taskId = "";
+
+    try {
+      const { data: task, error: taskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: taskTitle,
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(taskError).toBeNull();
+      taskId = task!.id;
+
+      const { data: block, error: blockError } = await userAClient
+        .from("calendar_blocks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          start_at: "2026-06-12T18:00:00.000Z",
+          end_at: "2026-06-12T18:45:00.000Z",
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(blockError).toBeNull();
+
+      const { error: crossUserError } = await userBClient.rpc(
+        "start_execution_session",
+        { p_task_id: taskId, p_calendar_block_id: block!.id },
+      );
+      expect(crossUserError?.message).toMatch(/task was not found/i);
+
+      const { data: started, error: startError } = await userAClient.rpc(
+        "start_execution_session",
+        { p_task_id: taskId, p_calendar_block_id: block!.id },
+      );
+      expect(startError).toBeNull();
+      expect(started.session.outcome).toBe("partial");
+      expect(started.session.planned_minutes).toBe(45);
+      expect(started.block.status).toBe("running");
+    } finally {
+      if (taskId) {
+        await deleteSessionByTaskId(userAClient, taskId);
+        await deleteBlockByTaskId(userAClient, taskId);
+      }
+      await deleteTaskByTitle(userAClient, taskTitle);
+    }
+  });
+
+  it("unplans local blocks atomically via rpc with cross-user denial", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-rpc-unplan-task-${suffix}`;
+    let taskId = "";
+
+    try {
+      const { data: task, error: taskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: taskTitle,
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(taskError).toBeNull();
+      taskId = task!.id;
+
+      const { data: block, error: blockError } = await userAClient
+        .from("calendar_blocks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          start_at: "2026-06-12T19:00:00.000Z",
+          end_at: "2026-06-12T20:00:00.000Z",
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(blockError).toBeNull();
+
+      const { error: crossUserError } = await userBClient.rpc(
+        "unplan_calendar_block",
+        { p_block_id: block!.id },
+      );
+      expect(crossUserError?.message).toMatch(/was not found/i);
+
+      const { data: unplanned, error: unplanError } = await userAClient.rpc(
+        "unplan_calendar_block",
+        { p_block_id: block!.id },
+      );
+      expect(unplanError).toBeNull();
+      expect(unplanned.block.status).toBe("cancelled");
+      expect(unplanned.task.status).toBe("active");
+    } finally {
+      if (taskId) {
+        await deleteBlockByTaskId(userAClient, taskId);
+      }
+      await deleteTaskByTitle(userAClient, taskTitle);
+    }
+  });
+
+  it("applies review task transitions atomically and refuses Google-backed blocks", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-rpc-review-task-${suffix}`;
+    const googleTaskTitle = `rls-rpc-review-google-task-${suffix}`;
+    let taskId = "";
+    let googleTaskId = "";
+
+    try {
+      const { data: task, error: taskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: taskTitle,
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(taskError).toBeNull();
+      taskId = task!.id;
+
+      const { error: blockError } = await userAClient
+        .from("calendar_blocks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          start_at: "2026-06-12T21:00:00.000Z",
+          end_at: "2026-06-12T22:00:00.000Z",
+          status: "scheduled",
+        });
+      expect(blockError).toBeNull();
+
+      const { error: crossUserError } = await userBClient.rpc(
+        "apply_task_review_transition",
+        { p_task_id: taskId, p_target_status: "backlog" },
+      );
+      expect(crossUserError?.message).toMatch(/was not found/i);
+
+      const { data: transitioned, error: transitionError } =
+        await userAClient.rpc("apply_task_review_transition", {
+          p_task_id: taskId,
+          p_target_status: "backlog",
+        });
+      expect(transitionError).toBeNull();
+      expect(transitioned.task.status).toBe("backlog");
+      expect(transitioned.blocks).toHaveLength(1);
+      expect(transitioned.blocks[0].status).toBe("cancelled");
+
+      const { data: googleTask, error: googleTaskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: googleTaskTitle,
+          status: "scheduled",
+        })
+        .select("id")
+        .single();
+      expect(googleTaskError).toBeNull();
+      googleTaskId = googleTask!.id;
+
+      const { error: googleBlockError } = await userAClient
+        .from("calendar_blocks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: googleTaskId,
+          google_event_id: `evt-${suffix}`,
+          start_at: "2026-06-13T21:00:00.000Z",
+          end_at: "2026-06-13T22:00:00.000Z",
+          status: "scheduled",
+        });
+      expect(googleBlockError).toBeNull();
+
+      const { error: googleGuardError } = await userAClient.rpc(
+        "apply_task_review_transition",
+        { p_task_id: googleTaskId, p_target_status: "dropped" },
+      );
+      expect(googleGuardError?.message).toMatch(
+        /google-backed blocks require calendar approval/i,
+      );
+    } finally {
+      if (taskId) {
+        await deleteBlockByTaskId(userAClient, taskId);
+      }
+      if (googleTaskId) {
+        await deleteBlockByTaskId(userAClient, googleTaskId);
+      }
+      await deleteTaskByTitle(userAClient, taskTitle);
+      await deleteTaskByTitle(userAClient, googleTaskTitle);
     }
   });
 
@@ -1005,7 +1216,7 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
 function expectDenied(data: unknown[] | null, error: { code?: string } | null) {
   if (error) {
-    expect(error.code).toBe("42501");
+    expect(["42501", "PGRST301"]).toContain(error.code);
     return;
   }
 

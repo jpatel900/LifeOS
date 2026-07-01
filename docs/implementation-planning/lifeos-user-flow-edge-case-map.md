@@ -91,13 +91,13 @@ Settings / Areas admin
 | ------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Fast task capture        | Capture -> Triage -> Do today -> Plan                         | Supported in cockpit; account persistence is best-effort when signed in.                                            |
 | Future idea              | Capture -> Triage -> Someday -> All areas/backlog             | Supported; persists as `backlog` when signed in.                                                                    |
-| Not useful               | Capture -> Triage -> Drop                                     | Supported locally; persistence parity should be reviewed before treating as audit-grade history.                    |
+| Not useful               | Capture -> Triage -> Drop                                     | Supported locally; durable rejected-draft audit remains a product decision.                                         |
 | Already planned work     | Today or Plan -> Execute -> Review                            | Supported locally and partially persisted through sessions.                                                         |
 | Local-only planning      | Plan -> hour rail -> local block -> Execute                   | Supported; does not require Google.                                                                                 |
 | Calendar-backed planning | Plan -> approval disclosure -> final confirm -> Google write  | Approval-gated path exists outside the simplified hour rail; keep secondary.                                        |
 | Missed block recovery    | Execute/Plan -> mark missed -> reschedule/drop/defer          | Product-required; current cockpit needs a dedicated follow-up for full persistence and Google update/cancel parity. |
 | Ambiguous capture        | Capture -> sense-making -> selected first move -> Triage/Plan | Required by docs; should stay draft-first and avoid fake roadmaps.                                                  |
-| Daily closeout           | Review -> carry forward/drop/defer/save -> Today              | Partially supported; carry-forward persistence parity remains follow-up.                                            |
+| Daily closeout           | Review -> carry forward/drop/defer/save -> Today              | Supported with scoped account persistence for task choices and daily review save when signed in.                    |
 | Weekly calibration       | Review -> area patterns -> approve/reject suggestions         | Required, but policy changes must stay approval-gated and area-scoped.                                              |
 | System repair            | Health -> incident detail -> repair action -> workflow        | Health is the diagnostic home; route-level copy should stay calm unless blocked.                                    |
 | Area administration      | Settings/Areas -> create/recolor/archive -> cockpit           | Supported outside cockpit; header add/recolor supports common cockpit actions.                                      |
@@ -257,12 +257,12 @@ Settings / Areas admin
 | Edit draft                                               | Local/session            | Persist only after commit unless product changes.                   |
 | Split/merge draft                                        | Not complete             | Needs UI, state, persistence, and tests.                            |
 | Hour rail local plan                                     | Implemented best-effort  | Keep Google writes secondary.                                       |
-| Manual proposal create/edit/reject                       | Local/session            | Add scoped persistence slice.                                       |
-| Unplan block                                             | Local/session            | Add scoped persistence slice.                                       |
-| Start session                                            | Implemented best-effort  | Prove reload behavior.                                              |
+| Manual proposal create/edit/reject                       | Implemented best-effort  | Rationale edit persistence remains outside the current edit schema. |
+| Unplan block                                             | Implemented best-effort  | Google-backed blocks require future approval-gated cancel/update.   |
+| Start session                                            | Implemented best-effort  | Atomic RPC path and local RLS proof added.                          |
 | Mark session outcome                                     | Implemented best-effort  | Keep transactional server boundary.                                 |
 | Missed block recovery                                    | Partial/local            | Needs dedicated recovery slice and calendar update/cancel decision. |
-| Daily review carry-forward                               | Partial/local            | Add persistence parity.                                             |
+| Daily review carry-forward                               | Implemented best-effort  | Add retry queue only if account-sync loss becomes common.           |
 | Weekly policy suggestion                                 | Logged/unused            | Meta-learning follow-up remains scheduled.                          |
 
 ## 8. Test Coverage Map
@@ -276,7 +276,7 @@ Settings / Areas admin
 | Planning local-first | E2E hour rail proof plus no Google-write assertion.                |
 | Google write         | Route tests with mocked provider and manual real-provider smoke.   |
 | Execute outcomes     | Unit/component tests plus persistence tests.                       |
-| Review carry-forward | Component tests once persistence parity is added.                  |
+| Review carry-forward | Component tests plus persistence/RLS tests for task transitions.   |
 | Health incidents     | Deterministic health tests by subsystem.                           |
 | RLS                  | Local Supabase two-user tests when tables or policies are touched. |
 | Mobile               | Playwright 390px route sweep.                                      |
@@ -286,8 +286,8 @@ Settings / Areas admin
 
 1. Keep the current cockpit visual system stable.
 2. Add targeted tests for any branch before changing behavior.
-3. Finish persistence parity for manual proposal actions and unplan before expanding planning UI.
+3. Keep persistence parity stable before expanding planning UI.
 4. Build missed-block recovery as its own slice because it touches scheduling, review, and future Google update/cancel scope.
-5. Add daily review carry-forward persistence after missed-block behavior is clear.
+5. Add retry queues only if observed account-sync loss justifies the complexity.
 6. Revisit split/merge and sense-making only after the simple triage lifecycle is reliable.
 7. Treat Google Calendar update/cancel, all-day conflicts, and real production smoke as explicit reviewed follow-up work.

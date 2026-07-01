@@ -59,16 +59,22 @@ import {
 } from "./workflow";
 import {
   acceptTimeBlockProposal,
+  applyTaskReviewTransition,
   createCaptureItem,
   createExecutionSession,
+  createReviewEntry,
   createTask,
   createTimeBlockProposal,
+  editTimeBlockProposal,
   listAreas,
   listCaptureItems,
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  rejectTimeBlockProposal,
+  unplanCalendarBlock,
   type MinimalSupabaseClient,
+  type ReviewTaskTargetStatus,
 } from "./data/workflow";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import type {
@@ -1157,6 +1163,210 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     await syncPersistedWorkflowRows(client);
   }
 
+  async function persistCreatedLocalProposal(
+    localProposal: Phase2TimeBlockProposal,
+  ) {
+    const client = createSupabaseBrowserClient();
+    const persistedTaskId = persistedIdForLocalId(
+      localProposal.task_id,
+      persistedTaskIdByLocalIdRef.current,
+    );
+
+    if (!client || !persistedTaskId) {
+      markLocalOnly("Proposal created locally; account sync is pending.");
+      return;
+    }
+
+    const proposalResult = await createTimeBlockProposal(client, {
+      task_id: persistedTaskId,
+      proposed_start: localProposal.proposed_start,
+      proposed_end: localProposal.proposed_end,
+      rationale_note: localProposal.rationale,
+    });
+    if (proposalResult.provider !== "supabase") {
+      return;
+    }
+
+    persistedProposalIdByLocalIdRef.current.set(
+      localProposal.id,
+      proposalResult.proposal.id,
+    );
+
+    await syncPersistedWorkflowRows(client);
+  }
+
+  async function persistEditedLocalProposal(
+    localProposal: Phase2TimeBlockProposal,
+  ) {
+    const client = createSupabaseBrowserClient();
+    const persistedProposalId = persistedIdForLocalId(
+      localProposal.id,
+      persistedProposalIdByLocalIdRef.current,
+    );
+
+    if (!client || !persistedProposalId) {
+      markLocalOnly("Proposal edit saved locally; account sync is pending.");
+      return;
+    }
+
+    await editTimeBlockProposal(client, persistedProposalId, {
+      proposed_start: localProposal.proposed_start,
+      proposed_end: localProposal.proposed_end,
+    });
+
+    await syncPersistedWorkflowRows(client);
+  }
+
+  async function persistRejectedLocalProposal(
+    localProposal: Phase2TimeBlockProposal,
+  ) {
+    const client = createSupabaseBrowserClient();
+    const persistedProposalId = persistedIdForLocalId(
+      localProposal.id,
+      persistedProposalIdByLocalIdRef.current,
+    );
+
+    if (!client || !persistedProposalId) {
+      markLocalOnly("Proposal rejected locally; account sync is pending.");
+      return;
+    }
+
+    await rejectTimeBlockProposal(client, persistedProposalId);
+    await syncPersistedWorkflowRows(client);
+  }
+
+  async function persistAcceptedLocalProposal(
+    localProposal: Phase2TimeBlockProposal,
+    localBlock: Phase2MockCalendarBlock | null,
+  ) {
+    const client = createSupabaseBrowserClient();
+    let persistedProposalId = persistedIdForLocalId(
+      localProposal.id,
+      persistedProposalIdByLocalIdRef.current,
+    );
+
+    if (!client) {
+      markLocalOnly("Proposal accepted locally; account sync is pending.");
+      return;
+    }
+
+    if (!persistedProposalId) {
+      const persistedTaskId = persistedIdForLocalId(
+        localProposal.task_id,
+        persistedTaskIdByLocalIdRef.current,
+      );
+
+      if (!persistedTaskId) {
+        markLocalOnly("Proposal accepted locally; account sync is pending.");
+        return;
+      }
+
+      const proposalResult = await createTimeBlockProposal(client, {
+        task_id: persistedTaskId,
+        proposed_start: localProposal.proposed_start,
+        proposed_end: localProposal.proposed_end,
+        rationale_note: localProposal.rationale,
+      });
+      if (proposalResult.provider !== "supabase") {
+        return;
+      }
+      persistedProposalId = proposalResult.proposal.id;
+      persistedProposalIdByLocalIdRef.current.set(
+        localProposal.id,
+        proposalResult.proposal.id,
+      );
+    }
+
+    const acceptResult = await acceptTimeBlockProposal(
+      client,
+      persistedProposalId,
+    );
+    if (acceptResult.provider === "supabase" && localBlock) {
+      persistedBlockIdByLocalIdRef.current.set(
+        localBlock.id,
+        acceptResult.block.id,
+      );
+    }
+
+    await syncPersistedWorkflowRows(client);
+  }
+
+  async function persistUnplannedBlock(localBlockId: string) {
+    const client = createSupabaseBrowserClient();
+    const persistedBlockId = persistedIdForLocalId(
+      localBlockId,
+      persistedBlockIdByLocalIdRef.current,
+    );
+
+    if (!client || !persistedBlockId) {
+      markLocalOnly("Unplanned locally; account sync is pending.");
+      return;
+    }
+
+    await unplanCalendarBlock(client, persistedBlockId);
+    await syncPersistedWorkflowRows(client);
+  }
+
+  async function persistTaskReviewTransition(
+    localTaskId: string,
+    targetStatus: ReviewTaskTargetStatus,
+  ) {
+    const client = createSupabaseBrowserClient();
+    const persistedTaskId = persistedIdForLocalId(
+      localTaskId,
+      persistedTaskIdByLocalIdRef.current,
+    );
+
+    if (!client || !persistedTaskId) {
+      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+      return;
+    }
+
+    await applyTaskReviewTransition(client, persistedTaskId, targetStatus);
+    await syncPersistedWorkflowRows(client);
+  }
+
+  async function persistReviewEntry(next: WorkflowState) {
+    const client = createSupabaseBrowserClient();
+    const persistedAreaId = selectedAreaId
+      ? persistedAreaIdForWorkflowId(selectedAreaId, persistedAreasRef.current)
+      : null;
+
+    if (!client || (selectedAreaId && !persistedAreaId)) {
+      markLocalOnly("Review saved locally; account sync is pending.");
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    await createReviewEntry(client, {
+      review_type: "daily",
+      period_start: today,
+      period_end: today,
+      area_id: persistedAreaId,
+      summary_json: {
+        verdict: "saved",
+        completed_sessions: next.executionSessions.filter(
+          (session) => session.status === "completed",
+        ).length,
+        missed_sessions: next.executionSessions.filter(
+          (session) => session.status === "missed",
+        ).length,
+        distracted_sessions: next.executionSessions.filter(
+          (session) => session.status === "distracted",
+        ).length,
+        open_tasks: next.tasks.filter((task) =>
+          ["active", "backlog", "scheduled", "blocked"].includes(task.status),
+        ).length,
+        scheduled_blocks: next.calendarBlocks.filter((block) =>
+          ["scheduled", "running"].includes(block.status),
+        ).length,
+        recent_log: next.reviewLog.slice(0, 8),
+      },
+    });
+
+    await syncPersistedWorkflowRows(client);
+  }
+
   async function persistStartedSession(
     localSession: Phase2MockExecutionSession,
   ) {
@@ -1481,8 +1691,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     backlogTaskDraft: (draftId) =>
       acceptTaskDraftWithPersistence(draftId, "backlog"),
     promoteBacklogTask: (taskId) => {
-      dispatch({ type: "promoteBacklogTask", taskId });
-      markLocalOnly("Moved to today locally; account sync is pending.");
+      const previous = stateRef.current;
+      const next = promoteBacklogTask(previous, taskId);
+      applyWorkflowState(next);
+
+      if (next !== previous) {
+        void persistTaskReviewTransition(taskId, "active").catch(() => {
+          markAccountSyncError("Moved to today locally; account sync failed.");
+        });
+      }
     },
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
@@ -1505,16 +1722,56 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       markLocalOnly("Draft merge saved locally; account sync is pending.");
     },
     acceptLocalProposal: (proposalId) => {
-      dispatch({ type: "acceptProposal", proposalId });
-      markLocalOnly("Proposal accepted locally; account sync is pending.");
+      const previous = stateRef.current;
+      const proposal =
+        previous.timeBlockProposals.find((item) => item.id === proposalId) ??
+        null;
+      const next = acceptProposal(previous, proposalId);
+      const localBlock =
+        next.calendarBlocks.find(
+          (block) =>
+            !previous.calendarBlocks.some((item) => item.id === block.id),
+        ) ?? null;
+      applyWorkflowState(next);
+
+      if (proposal && next !== previous) {
+        void persistAcceptedLocalProposal(proposal, localBlock).catch(() => {
+          markAccountSyncError(
+            "Proposal accepted locally; account sync failed.",
+          );
+        });
+      }
     },
     rejectLocalProposal: (proposalId) => {
-      dispatch({ type: "rejectProposal", proposalId });
-      markLocalOnly("Proposal rejected locally; account sync is pending.");
+      const previous = stateRef.current;
+      const proposal =
+        previous.timeBlockProposals.find((item) => item.id === proposalId) ??
+        null;
+      const next = rejectProposal(previous, proposalId);
+      applyWorkflowState(next);
+
+      if (proposal && next !== previous) {
+        void persistRejectedLocalProposal(proposal).catch(() => {
+          markAccountSyncError(
+            "Proposal rejected locally; account sync failed.",
+          );
+        });
+      }
     },
     editLocalProposal: (proposalId, changes) => {
-      dispatch({ type: "updateProposal", proposalId, changes });
-      markLocalOnly("Proposal edit saved locally; account sync is pending.");
+      const previous = stateRef.current;
+      const next = updateProposal(previous, proposalId, changes);
+      const proposal =
+        next.timeBlockProposals.find((item) => item.id === proposalId) ?? null;
+      applyWorkflowState(next);
+
+      if (proposal && next !== previous) {
+        void persistEditedLocalProposal(proposal).catch(() => {
+          markAccountSyncError(
+            "Proposal edit saved locally; account sync failed.",
+          );
+        });
+      }
     },
     createLocalProposalForTask: ({
       taskId,
@@ -1522,37 +1779,90 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       proposedEnd,
       rationale,
     }) => {
-      dispatch({
-        type: "createProposalFromTask",
-        taskId,
-        proposedStart,
-        proposedEnd,
+      const previous = stateRef.current;
+      const next = createLocalProposalFromTask(previous, taskId, {
+        proposed_start: proposedStart,
+        proposed_end: proposedEnd,
         rationale,
       });
-      markLocalOnly("Proposal created locally; account sync is pending.");
+      const localProposal =
+        next.timeBlockProposals.find(
+          (proposal) =>
+            !previous.timeBlockProposals.some(
+              (item) => item.id === proposal.id,
+            ),
+        ) ?? null;
+      applyWorkflowState(next);
+
+      if (localProposal) {
+        void persistCreatedLocalProposal(localProposal).catch(() => {
+          markAccountSyncError(
+            "Proposal created locally; account sync failed.",
+          );
+        });
+      }
     },
     planTaskAtHour: planTaskAtHourWithPersistence,
     unplanTask: (blockId) => {
-      dispatch({ type: "unplanTask", blockId });
-      markLocalOnly("Unplanned locally; account sync is pending.");
+      const previous = stateRef.current;
+      const next = unplanTask(previous, blockId);
+      applyWorkflowState(next);
+
+      if (next !== previous) {
+        void persistUnplannedBlock(blockId).catch(() => {
+          markAccountSyncError("Unplanned locally; account sync failed.");
+        });
+      }
     },
     startTaskSession: startTaskSessionWithPersistence,
     markSession: markSessionWithPersistence,
     carryForwardTask: (taskId) => {
-      dispatch({ type: "carryForwardTask", taskId });
-      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+      const previous = stateRef.current;
+      const next = carryForwardTask(previous, taskId);
+      applyWorkflowState(next);
+
+      if (next !== previous) {
+        void persistTaskReviewTransition(taskId, "active").catch(() => {
+          markAccountSyncError(
+            "Recovery choice saved locally; account sync failed.",
+          );
+        });
+      }
     },
     deferTask: (taskId) => {
-      dispatch({ type: "deferTask", taskId });
-      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+      const previous = stateRef.current;
+      const next = deferTask(previous, taskId);
+      applyWorkflowState(next);
+
+      if (next !== previous) {
+        void persistTaskReviewTransition(taskId, "backlog").catch(() => {
+          markAccountSyncError(
+            "Recovery choice saved locally; account sync failed.",
+          );
+        });
+      }
     },
     dropTask: (taskId) => {
-      dispatch({ type: "dropTask", taskId });
-      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+      const previous = stateRef.current;
+      const next = dropTask(previous, taskId);
+      applyWorkflowState(next);
+
+      if (next !== previous) {
+        void persistTaskReviewTransition(taskId, "dropped").catch(() => {
+          markAccountSyncError(
+            "Recovery choice saved locally; account sync failed.",
+          );
+        });
+      }
     },
     saveReview: () => {
-      dispatch({ type: "saveReview" });
-      markLocalOnly("Review saved locally; account sync is pending.");
+      const previous = stateRef.current;
+      const next = saveReview(previous);
+      applyWorkflowState(next);
+
+      void persistReviewEntry(next).catch(() => {
+        markAccountSyncError("Review saved locally; account sync failed.");
+      });
     },
     resetWorkflow: () => dispatch({ type: "reset" }),
   };

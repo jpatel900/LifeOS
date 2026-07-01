@@ -35,6 +35,12 @@ Third non-env repair batch applied 2026-06-30:
 - Added browser journey proof for admin create, recolor/reset, archive confirmation, and export failure recovery while keeping Google connect/disconnect explicitly out of this non-Google scope (F32).
 - Area color preset values now live in the shared accent module rather than inside the Settings route component.
 
+Fourth non-env persistence batch applied 2026-06-30:
+
+- Added transactional `SECURITY INVOKER` RPCs for session start, unplanning, and review task transitions; proposal acceptance now also schedules the persisted task (F19/F20/F22 and the reload part of F18).
+- Wired cockpit manual proposal create/edit/reject/accept, backlog promotion, unplan, carry-forward/defer/drop, and daily review save through Supabase-backed helpers with local-first fallback.
+- Live local RLS verification passed 20/20 after `supabase db reset`; Google-backed block cancellation remains blocked pending a future approval-gated Google update/cancel path.
+
 ## Severity key
 
 - P0: A normal user can get stuck, lose the next step, or see a false system truth.
@@ -102,12 +108,12 @@ Third non-env repair batch applied 2026-06-30:
 
 1. Keep Google Calendar approval bridging deferred until env-backed provider work is in scope again (F17).
 2. Keep AI/env-dependent capture failure/manual-routing, audio transcription, and weekly calibration deferred until parser/provider work is in scope again (F13/F30/F31 where relevant).
-3. Decide whether promotion/unplan/review/drop local-only choices should become persisted account transitions; unplan remains a multi-table transition and should use an RPC if implemented (F16/F19/F20/F22).
+3. Keep durable draft-decision audit, retry queues, and broader reload-proof fixture coverage as product follow-up decisions; the scoped account persistence for manual proposals, unplan, review task transitions, session start, and daily review save is implemented.
 
 ## Test strategy changes needed
 
 - Keep the current handoff E2E specs as visual smoke tests.
 - Add journey specs that assert the next intended place, not just visible hierarchy.
 - Add reducer/view-model tests for global overview lists, running blocks, missed blocks, stuck sessions, and review recovery buckets.
-- Add storage/account degradation tests that assert visible local-only/sync-failed copy near the affected action.
+- Add storage/account degradation tests that assert visible local-only/sync-failed copy near the affected action and retry behavior if a retry queue is introduced.
 - Add a Google approval bridge test that proves local planning never writes externally until the final explicit confirmation.
