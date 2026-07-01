@@ -26,11 +26,13 @@ function replaceSessionStorage(overrides: Partial<Storage>) {
 }
 
 function WorkflowProbe() {
-  const { state, submitCaptureText } = useWorkflow();
+  const { state, submitCaptureText, syncStatus } = useWorkflow();
 
   return (
     <div>
       <span data-testid="capture-count">{state.captureItems.length}</span>
+      <span data-testid="storage-status">{syncStatus.storage}</span>
+      <span data-testid="account-status">{syncStatus.account}</span>
       <button
         type="button"
         onClick={() =>
@@ -73,7 +75,7 @@ afterEach(() => {
 });
 
 describe("WorkflowProvider storage fallback", () => {
-  it("falls back to initial state when sessionStorage cannot be read", () => {
+  it("falls back to initial state when sessionStorage cannot be read", async () => {
     replaceSessionStorage({
       getItem: vi.fn(() => {
         throw new DOMException("Storage is blocked.", "SecurityError");
@@ -87,6 +89,9 @@ describe("WorkflowProvider storage fallback", () => {
     );
 
     expect(screen.getByTestId("capture-count")).toHaveTextContent("0");
+    await waitFor(() => {
+      expect(screen.getByTestId("storage-status")).toHaveTextContent("blocked");
+    });
   });
 
   it("falls back to initial state when stored workflow state has an invalid shape", () => {
@@ -170,7 +175,7 @@ describe("WorkflowProvider storage fallback", () => {
     expect(await screen.findByText("Inbox clear")).toBeDefined();
   });
 
-  it("keeps the workflow usable when sessionStorage cannot be written", () => {
+  it("keeps the workflow usable when sessionStorage cannot be written", async () => {
     replaceSessionStorage({
       setItem: vi.fn(() => {
         throw new DOMException("Storage quota exceeded.", "QuotaExceededError");
@@ -186,6 +191,9 @@ describe("WorkflowProvider storage fallback", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add capture" }));
 
     expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+    await waitFor(() => {
+      expect(screen.getByTestId("storage-status")).toHaveTextContent("blocked");
+    });
   });
 
   it("hydrates persisted workflow state after the first render", async () => {

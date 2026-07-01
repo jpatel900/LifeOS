@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 
 const {
@@ -226,6 +227,30 @@ describe("WorkflowProvider persisted area sync", () => {
       expect(screen.getByTestId("first-area-id")).toHaveTextContent("");
       expect(screen.getByTestId("selected-area-id")).toHaveTextContent("");
     });
+  });
+
+  it("does not save capture text against the display fallback when no areas exist", async () => {
+    mockListAreas.mockResolvedValue({
+      provider: "supabase",
+      areas: [],
+    });
+
+    render(
+      <WorkflowProvider>
+        <CapturePage />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Create an area before capture")).toBeDefined();
+    });
+
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "Capture should wait for a real area" },
+    });
+
+    expect(screen.getByRole("button", { name: "Save thought" })).toBeDisabled();
+    expect(mockCreateCaptureItem).not.toHaveBeenCalled();
   });
 
   it("keeps direct persisted ids for custom areas without canonical slug mappings", async () => {

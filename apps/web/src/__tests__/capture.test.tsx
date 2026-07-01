@@ -23,23 +23,25 @@ describe("Capture cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
-    expect(await screen.findByText("Saved to Triage")).toBeDefined();
+    expect(await screen.findByText("Saved; waiting in Triage")).toBeDefined();
     expect(
       await screen.findByText("Draft agenda for the planning meeting"),
     ).toBeDefined();
     expect(screen.getByRole("button", { name: "Do today" })).toBeDefined();
   });
 
-  it("keeps organize as an accessory toggle, not a second primary action", async () => {
+  it("blocks empty saves and keeps one primary capture action", async () => {
     render(
       <AppShell>
         <CapturePage />
       </AppShell>,
     );
 
+    expect(await screen.findByText("Saves raw text first")).toBeDefined();
     expect(
-      await screen.findByRole("button", { name: "Organize after save" }),
-    ).toBeDefined();
+      screen.queryByRole("button", { name: "Organize after save" }),
+    ).toBeNull();
+    expect(screen.getByRole("button", { name: "Save thought" })).toBeDisabled();
     expect(
       screen.getAllByRole("button", { name: "Save thought" }),
     ).toHaveLength(1);

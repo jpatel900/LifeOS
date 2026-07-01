@@ -34,21 +34,27 @@ import {
   acceptProposal,
   addWorkflowArea,
   backlogDraft,
+  carryForwardTask,
   createLocalProposalFromTask,
   createInitialWorkflowState,
+  deferTask,
+  dropTask,
   editDraft,
   markCurrentSession,
+  mergeDrafts,
   planTaskAtHour,
   promoteBacklogTask,
   rejectDraft,
   rejectProjectDraft,
   rejectProposal,
+  splitDraft,
   startExecutionSession,
   submitCapture,
   syncWorkflowIdCounterFromState,
   unplanTask,
   updateWorkflowAreaColor,
   updateProposal,
+  saveReview,
   type WorkflowState,
 } from "./workflow";
 import {
@@ -137,7 +143,22 @@ type WorkflowAction =
   | {
       type: "editDraft";
       draftId: string;
-      changes: Pick<Phase2TaskDraft, "title" | "description">;
+      changes: Partial<
+        Pick<
+          Phase2TaskDraft,
+          "title" | "description" | "area_id" | "first_tiny_step"
+        >
+      >;
+    }
+  | {
+      type: "splitDraft";
+      draftId: string;
+      titles: [string, string];
+    }
+  | {
+      type: "mergeDrafts";
+      primaryDraftId: string;
+      secondaryDraftId: string;
     }
   | {
       type: "acceptProposal";
@@ -178,6 +199,22 @@ type WorkflowAction =
   | {
       type: "markSession";
       status: Phase2MockExecutionSession["status"];
+      actualMinutes?: number;
+    }
+  | {
+      type: "carryForwardTask";
+      taskId: string;
+    }
+  | {
+      type: "deferTask";
+      taskId: string;
+    }
+  | {
+      type: "dropTask";
+      taskId: string;
+    }
+  | {
+      type: "saveReview";
     }
   | {
       type: "reset";
@@ -187,6 +224,7 @@ interface WorkflowContextValue {
   state: WorkflowState;
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
+  syncStatus: WorkflowSyncStatus;
   syncPersistedAreas: (areas: Area[]) => void;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
@@ -200,8 +238,15 @@ interface WorkflowContextValue {
   rejectProjectDraft: (draftId: string) => void;
   editTaskDraft: (
     draftId: string,
-    changes: Pick<Phase2TaskDraft, "title" | "description">,
+    changes: Partial<
+      Pick<
+        Phase2TaskDraft,
+        "title" | "description" | "area_id" | "first_tiny_step"
+      >
+    >,
   ) => void;
+  splitTaskDraft: (draftId: string, titles: [string, string]) => void;
+  mergeTaskDrafts: (primaryDraftId: string, secondaryDraftId: string) => void;
   acceptLocalProposal: (proposalId: string) => void;
   rejectLocalProposal: (proposalId: string) => void;
   editLocalProposal: (
@@ -220,11 +265,32 @@ interface WorkflowContextValue {
   planTaskAtHour: (taskId: string, hour: number) => void;
   unplanTask: (blockId: string) => void;
   startTaskSession: (taskId: string) => void;
-  markSession: (status: Phase2MockExecutionSession["status"]) => void;
+  markSession: (
+    status: Phase2MockExecutionSession["status"],
+    actualMinutes?: number,
+  ) => void;
+  carryForwardTask: (taskId: string) => void;
+  deferTask: (taskId: string) => void;
+  dropTask: (taskId: string) => void;
+  saveReview: () => void;
   resetWorkflow: () => void;
 }
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
+
+export interface WorkflowSyncStatus {
+  storage: "available" | "blocked";
+  account: "checking" | "synced" | "local-only" | "sync-error";
+  message: string | null;
+  pendingLocalChanges: boolean;
+}
+
+const initialSyncStatus: WorkflowSyncStatus = {
+  storage: "available",
+  account: "checking",
+  message: null,
+  pendingLocalChanges: false,
+};
 
 interface PersistedWorkflowPayload {
   captures: WorkflowState["captureItems"];
@@ -749,6 +815,10 @@ function workflowReducer(
       return rejectProjectDraft(state, action.draftId);
     case "editDraft":
       return editDraft(state, action.draftId, action.changes);
+    case "splitDraft":
+      return splitDraft(state, action.draftId, action.titles);
+    case "mergeDrafts":
+      return mergeDrafts(state, action.primaryDraftId, action.secondaryDraftId);
     case "acceptProposal":
       return acceptProposal(state, action.proposalId);
     case "rejectProposal":
@@ -768,7 +838,17 @@ function workflowReducer(
     case "startSession":
       return startExecutionSession(state, action.taskId);
     case "markSession":
-      return markCurrentSession(state, action.status);
+      return markCurrentSession(state, action.status, {
+        actualMinutes: action.actualMinutes,
+      });
+    case "carryForwardTask":
+      return carryForwardTask(state, action.taskId);
+    case "deferTask":
+      return deferTask(state, action.taskId);
+    case "dropTask":
+      return dropTask(state, action.taskId);
+    case "saveReview":
+      return saveReview(state);
     case "reset":
       return createSyncedInitialState();
     default:
@@ -776,26 +856,29 @@ function workflowReducer(
   }
 }
 
-function loadStoredStateFromSession(): WorkflowState | null {
+function loadStoredStateFromSession(): {
+  state: WorkflowState | null;
+  storageBlocked: boolean;
+} {
   if (typeof window === "undefined") {
-    return null;
+    return { state: null, storageBlocked: false };
   }
 
   try {
     const stored = window.sessionStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      return null;
+      return { state: null, storageBlocked: false };
     }
 
     const parsed = normalizeStoredWorkflowState(JSON.parse(stored));
     if (!isStoredWorkflowState(parsed)) {
-      return null;
+      return { state: null, storageBlocked: false };
     }
 
     syncWorkflowIdCounterFromState(parsed);
-    return parsed;
+    return { state: parsed, storageBlocked: false };
   } catch {
-    return null;
+    return { state: null, storageBlocked: true };
   }
 }
 
@@ -809,6 +892,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     state.areas[0]?.id ?? null,
   );
   const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
+  const [syncStatus, setSyncStatus] =
+    useState<WorkflowSyncStatus>(initialSyncStatus);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
@@ -816,6 +901,35 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const persistedProposalIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedBlockIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedSessionIdByLocalIdRef = useRef(new Map<string, string>());
+
+  const markLocalOnly = useCallback((message: string) => {
+    setSyncStatus((current) => ({
+      ...current,
+      account:
+        current.account === "sync-error" ? current.account : "local-only",
+      message,
+      pendingLocalChanges: true,
+    }));
+  }, []);
+
+  const markAccountSynced = useCallback(() => {
+    setSyncStatus((current) => ({
+      ...current,
+      account: "synced",
+      message: current.pendingLocalChanges
+        ? "Some local changes still need account sync."
+        : null,
+    }));
+  }, []);
+
+  const markAccountSyncError = useCallback((message: string) => {
+    setSyncStatus((current) => ({
+      ...current,
+      account: "sync-error",
+      message,
+      pendingLocalChanges: true,
+    }));
+  }, []);
 
   useEffect(() => {
     stateRef.current = state;
@@ -856,7 +970,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       client: MinimalSupabaseClient | null,
       areas = persistedAreasRef.current,
     ) => {
-      if (!client || !areas.length) {
+      if (!client) {
+        markLocalOnly("Account sync is unavailable; work is staying local.");
+        return;
+      }
+      if (!areas.length) {
         return;
       }
 
@@ -872,6 +990,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         planningResult.provider !== "supabase" ||
         executionResult.provider !== "supabase"
       ) {
+        markLocalOnly("Account sync is unavailable; work is staying local.");
         return;
       }
 
@@ -900,8 +1019,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           dropLocalIds: buildDropLocalIds(),
         },
       });
+      markAccountSynced();
     },
-    [buildDropLocalIds],
+    [buildDropLocalIds, markAccountSynced, markLocalOnly],
   );
 
   async function persistCapture(
@@ -916,6 +1036,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       : null;
 
     if (!client || (localCapture.area_id && !persistedAreaId)) {
+      markLocalOnly("Capture saved locally; account sync is not available.");
       return;
     }
 
@@ -947,6 +1068,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
 
     if (!client || !persistedAreaId) {
+      markLocalOnly("Triage decision saved locally; account sync is pending.");
       return;
     }
 
@@ -1002,6 +1124,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
 
     if (!client || !persistedTaskId) {
+      markLocalOnly("Plan saved locally; account sync is pending.");
       return;
     }
 
@@ -1054,6 +1177,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       : null;
 
     if (!client || !persistedTaskId) {
+      markLocalOnly(
+        "Execution session saved locally; account sync is pending.",
+      );
       return;
     }
 
@@ -1082,6 +1208,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   async function persistMarkedSession(
     localSession: Phase2MockExecutionSession,
     status: Phase2MockExecutionSession["status"],
+    actualMinutes?: number,
   ) {
     const client = createSupabaseBrowserClient();
     const persistedSessionId = persistedIdForLocalId(
@@ -1090,6 +1217,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
 
     if (!client || !persistedSessionId) {
+      markLocalOnly("Session outcome saved locally; account sync is pending.");
       return;
     }
 
@@ -1117,9 +1245,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       actual_minutes:
         status === "paused"
           ? null
-          : status === "completed"
-            ? (localSession.planned_minutes ?? 45)
-            : 0,
+          : (actualMinutes ?? localSession.actual_minutes ?? 0),
       productivity_rating:
         status === "paused" ? null : status === "completed" ? 4 : 1,
       notes: status === "stuck" ? "Need a smaller next step." : null,
@@ -1129,7 +1255,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    const restoredState = loadStoredStateFromSession();
+    const restored = loadStoredStateFromSession();
+    const restoredState = restored.state;
+    if (restored.storageBlocked) {
+      setSyncStatus((current) => ({
+        ...current,
+        storage: "blocked",
+        message:
+          "Browser storage is blocked; this session will not reliably restore after reload.",
+        pendingLocalChanges: true,
+      }));
+    }
     if (restoredState) {
       dispatch({ type: "hydrate", state: restoredState });
       setSelectedAreaId((current) => {
@@ -1149,18 +1285,25 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function syncPersistedAreas() {
+      const client = createSupabaseBrowserClient();
+      if (!client) {
+        markLocalOnly("Account sync is unavailable; work is staying local.");
+        return;
+      }
+
       try {
-        const result = await listAreas(createSupabaseBrowserClient());
+        const result = await listAreas(client);
         if (cancelled || result.provider !== "supabase") {
+          markLocalOnly("Account sync is unavailable; work is staying local.");
           return;
         }
         applyPersistedAreas(result.areas);
-        await syncPersistedWorkflowRows(
-          createSupabaseBrowserClient(),
-          result.areas,
-        );
+        await syncPersistedWorkflowRows(client, result.areas);
+        markAccountSynced();
       } catch {
-        // Keep the session/mock area list when persisted areas cannot load.
+        markAccountSyncError(
+          "Account sync failed; local workflow remains usable.",
+        );
       }
     }
 
@@ -1169,7 +1312,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [applyPersistedAreas, syncPersistedWorkflowRows]);
+  }, [
+    applyPersistedAreas,
+    markAccountSynced,
+    markAccountSyncError,
+    markLocalOnly,
+    syncPersistedWorkflowRows,
+  ]);
 
   useEffect(() => {
     if (!hasHydratedFromStorage) {
@@ -1180,7 +1329,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     try {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      // Workflow state must remain usable when browser storage is blocked.
+      setSyncStatus((current) => ({
+        ...current,
+        storage: "blocked",
+        message:
+          "Browser storage is blocked; this session will not reliably restore after reload.",
+        pendingLocalChanges: true,
+      }));
     }
   }, [hasHydratedFromStorage, state]);
 
@@ -1202,7 +1357,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     if (localCapture) {
       void persistCapture(localCapture).catch(() => {
-        // Raw capture already exists locally; account sync can recover later.
+        markAccountSyncError(
+          "Capture saved locally; account sync failed and can recover later.",
+        );
       });
     }
   }
@@ -1240,7 +1397,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         localProposal,
         status,
       ).catch(() => {
-        // Local triage decision remains the source of recovery.
+        markAccountSyncError(
+          "Triage decision saved locally; account sync failed.",
+        );
       });
     }
   }
@@ -1260,7 +1419,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     if (localProposal && localBlock) {
       void persistPlannedTask(taskId, localProposal, localBlock).catch(() => {
-        // Local plan remains available; persisted sync can retry later.
+        markAccountSyncError("Plan saved locally; account sync failed.");
       });
     }
   }
@@ -1277,24 +1436,31 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     if (localSession) {
       void persistStartedSession(localSession).catch(() => {
-        // The local timer is already running.
+        markAccountSyncError(
+          "Execution session saved locally; account sync failed.",
+        );
       });
     }
   }
 
   function markSessionWithPersistence(
     status: Phase2MockExecutionSession["status"],
+    actualMinutes?: number,
   ) {
     const previous = stateRef.current;
     const localSession = previous.executionSessions[0];
-    const next = markCurrentSession(previous, status);
+    const next = markCurrentSession(previous, status, { actualMinutes });
 
     applyWorkflowState(next);
 
     if (localSession) {
-      void persistMarkedSession(localSession, status).catch(() => {
-        // Local session outcome stays visible even if account sync fails.
-      });
+      void persistMarkedSession(localSession, status, actualMinutes).catch(
+        () => {
+          markAccountSyncError(
+            "Session outcome saved locally; account sync failed.",
+          );
+        },
+      );
     }
   }
 
@@ -1302,6 +1468,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     state,
     selectedAreaId,
     setSelectedAreaId,
+    syncStatus,
     syncPersistedAreas: applyPersistedAreas,
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
@@ -1313,38 +1480,80 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       acceptTaskDraftWithPersistence(draftId, "active"),
     backlogTaskDraft: (draftId) =>
       acceptTaskDraftWithPersistence(draftId, "backlog"),
-    promoteBacklogTask: (taskId) =>
-      dispatch({ type: "promoteBacklogTask", taskId }),
+    promoteBacklogTask: (taskId) => {
+      dispatch({ type: "promoteBacklogTask", taskId });
+      markLocalOnly("Moved to today locally; account sync is pending.");
+    },
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
-    rejectTaskDraft: (draftId) => dispatch({ type: "rejectDraft", draftId }),
+    rejectTaskDraft: (draftId) => {
+      dispatch({ type: "rejectDraft", draftId });
+      markLocalOnly("Dropped draft locally; account sync is pending.");
+    },
     rejectProjectDraft: (draftId) =>
       dispatch({ type: "rejectProjectDraft", draftId }),
-    editTaskDraft: (draftId, changes) =>
-      dispatch({ type: "editDraft", draftId, changes }),
-    acceptLocalProposal: (proposalId) =>
-      dispatch({ type: "acceptProposal", proposalId }),
-    rejectLocalProposal: (proposalId) =>
-      dispatch({ type: "rejectProposal", proposalId }),
-    editLocalProposal: (proposalId, changes) =>
-      dispatch({ type: "updateProposal", proposalId, changes }),
+    editTaskDraft: (draftId, changes) => {
+      dispatch({ type: "editDraft", draftId, changes });
+      markLocalOnly("Draft edit saved locally; account sync is pending.");
+    },
+    splitTaskDraft: (draftId, titles) => {
+      dispatch({ type: "splitDraft", draftId, titles });
+      markLocalOnly("Draft split saved locally; account sync is pending.");
+    },
+    mergeTaskDrafts: (primaryDraftId, secondaryDraftId) => {
+      dispatch({ type: "mergeDrafts", primaryDraftId, secondaryDraftId });
+      markLocalOnly("Draft merge saved locally; account sync is pending.");
+    },
+    acceptLocalProposal: (proposalId) => {
+      dispatch({ type: "acceptProposal", proposalId });
+      markLocalOnly("Proposal accepted locally; account sync is pending.");
+    },
+    rejectLocalProposal: (proposalId) => {
+      dispatch({ type: "rejectProposal", proposalId });
+      markLocalOnly("Proposal rejected locally; account sync is pending.");
+    },
+    editLocalProposal: (proposalId, changes) => {
+      dispatch({ type: "updateProposal", proposalId, changes });
+      markLocalOnly("Proposal edit saved locally; account sync is pending.");
+    },
     createLocalProposalForTask: ({
       taskId,
       proposedStart,
       proposedEnd,
       rationale,
-    }) =>
+    }) => {
       dispatch({
         type: "createProposalFromTask",
         taskId,
         proposedStart,
         proposedEnd,
         rationale,
-      }),
+      });
+      markLocalOnly("Proposal created locally; account sync is pending.");
+    },
     planTaskAtHour: planTaskAtHourWithPersistence,
-    unplanTask: (blockId) => dispatch({ type: "unplanTask", blockId }),
+    unplanTask: (blockId) => {
+      dispatch({ type: "unplanTask", blockId });
+      markLocalOnly("Unplanned locally; account sync is pending.");
+    },
     startTaskSession: startTaskSessionWithPersistence,
     markSession: markSessionWithPersistence,
+    carryForwardTask: (taskId) => {
+      dispatch({ type: "carryForwardTask", taskId });
+      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+    },
+    deferTask: (taskId) => {
+      dispatch({ type: "deferTask", taskId });
+      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+    },
+    dropTask: (taskId) => {
+      dispatch({ type: "dropTask", taskId });
+      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+    },
+    saveReview: () => {
+      dispatch({ type: "saveReview" });
+      markLocalOnly("Review saved locally; account sync is pending.");
+    },
     resetWorkflow: () => dispatch({ type: "reset" }),
   };
 

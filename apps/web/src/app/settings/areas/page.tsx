@@ -28,7 +28,8 @@ import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { DataExportPanel } from "./DataExportPanel";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
-import { buildAreaAccentStyle } from "@/lib/areaAccent";
+import { AREA_COLOR_PRESETS, buildAreaAccentStyle } from "@/lib/areaAccent";
+import { AreaAccentPicker } from "./AreaAccentPicker";
 
 type LoadState =
   | { status: "loading" }
@@ -49,15 +50,6 @@ function formatReviewDate(value: string) {
     year: "numeric",
   });
 }
-
-const AREA_COLOR_PRESETS = [
-  { label: "Ocean", value: "#2563eb" },
-  { label: "Forest", value: "#16a34a" },
-  { label: "Sunrise", value: "#f59e0b" },
-  { label: "Clay", value: "#f97316" },
-  { label: "Violet", value: "#9333ea" },
-  { label: "Teal", value: "#0f766e" },
-] as const;
 
 function createFeedback(
   createState:
@@ -111,6 +103,9 @@ export default function AreasSettingsPage() {
   >("idle");
   const [newAreaName, setNewAreaName] = useState("");
   const [newAreaDescription, setNewAreaDescription] = useState("");
+  const [newAreaColor, setNewAreaColor] = useState<string>(
+    AREA_COLOR_PRESETS[0].value,
+  );
   const [createState, setCreateState] = useState<
     | { status: "idle" }
     | { status: "saving" }
@@ -190,6 +185,7 @@ export default function AreasSettingsPage() {
       const result = await createArea(createSupabaseBrowserClient(), {
         name: newAreaName,
         description: newAreaDescription,
+        color: newAreaColor,
       });
 
       const nextAreas =
@@ -200,6 +196,7 @@ export default function AreasSettingsPage() {
       setSelectedAreaId(workflowAreaIdForPersistedArea(result.area));
       setNewAreaName("");
       setNewAreaDescription("");
+      setNewAreaColor(AREA_COLOR_PRESETS[0].value);
       setCreateState({ status: "saved", areaName: result.area.name });
     } catch (error) {
       setCreateState({
@@ -362,6 +359,19 @@ export default function AreasSettingsPage() {
                 placeholder="What belongs in this area?"
                 rows={3}
                 disabled={createState.status === "saving"}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Starting accent</Label>
+              <AreaAccentPicker
+                selectedColor={newAreaColor}
+                disabled={createState.status === "saving"}
+                onSelect={(color) => {
+                  setNewAreaColor(color);
+                  if (createState.status !== "idle") {
+                    setCreateState({ status: "idle" });
+                  }
+                }}
               />
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -705,44 +715,18 @@ export default function AreasSettingsPage() {
                           </Badge>
                         </div>
 
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {AREA_COLOR_PRESETS.map((preset) => (
-                            <Button
-                              key={preset.value}
-                              type="button"
-                              size="sm"
-                              variant={
-                                area.color === preset.value
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                              className="gap-2"
-                              onClick={() =>
-                                void handleUpdateAreaColor(area, preset.value)
-                              }
-                              disabled={isUpdatingColor}
-                            >
-                              <span
-                                aria-hidden="true"
-                                className="size-3 rounded-full border border-black/10"
-                                style={{ backgroundColor: preset.value }}
-                              />
-                              {preset.label}
-                            </Button>
-                          ))}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant={
-                              area.color === null ? "secondary" : "ghost"
+                        <div className="mt-3">
+                          <AreaAccentPicker
+                            selectedColor={area.color}
+                            disabled={isUpdatingColor}
+                            includeDefault
+                            onSelect={(color) =>
+                              void handleUpdateAreaColor(area, color)
                             }
-                            onClick={() =>
+                            onDefault={() =>
                               void handleUpdateAreaColor(area, null)
                             }
-                            disabled={isUpdatingColor}
-                          >
-                            Default
-                          </Button>
+                          />
                         </div>
 
                         <p className="mt-3 text-xs text-muted-foreground">

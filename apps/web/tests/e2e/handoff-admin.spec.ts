@@ -42,3 +42,95 @@ test("settings areas stays usable at 390px", async ({ page }) => {
   await expect(page.getByTestId("areas-create-card")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
+
+test("settings areas creates a usable area with a persisted starting accent", async ({
+  page,
+}) => {
+  await page.goto("/settings/areas");
+
+  const createCard = page.getByTestId("areas-create-card");
+  await createCard.getByLabel("Area name").fill("Deep Work");
+  await createCard
+    .getByLabel("Description")
+    .fill("Work that needs focused attention.");
+  await createCard.getByRole("button", { name: "Teal" }).click();
+  await createCard.getByRole("button", { name: "Create area" }).click();
+
+  await expect(page.getByText("Area created.")).toBeVisible();
+  await expect(page.getByText("Current area: Deep Work")).toBeVisible();
+
+  const newAreaCard = page
+    .getByTestId("areas-area-card")
+    .filter({ hasText: "Deep Work" });
+  await expect(newAreaCard).toBeVisible();
+  await newAreaCard.getByText("Registry actions and settings").click();
+  await expect(
+    newAreaCard
+      .locator(".area-accent-chip")
+      .filter({ hasText: "Custom accent" }),
+  ).toBeVisible();
+});
+
+test("settings areas can recolor and reset an existing area accent", async ({
+  page,
+}) => {
+  await page.goto("/settings/areas");
+
+  const areaCard = page
+    .getByTestId("areas-area-card")
+    .filter({ hasText: "Main Job" });
+  await areaCard.getByText("Registry actions and settings").click();
+
+  const colorPanel = areaCard.getByTestId("areas-color-panel");
+  await colorPanel.getByRole("button", { name: "Teal" }).click();
+  await expect(areaCard.getByText("Accent updated.")).toBeVisible();
+  await expect(colorPanel.getByText("Custom accent")).toBeVisible();
+
+  await colorPanel.getByRole("button", { name: "Default" }).click();
+  await expect(
+    areaCard.getByText("Main Job now uses the default accent."),
+  ).toBeVisible();
+  await expect(
+    colorPanel
+      .locator(".area-accent-chip")
+      .filter({ hasText: "Default accent" }),
+  ).toBeVisible();
+});
+
+test("settings areas archives only after explicit confirmation", async ({
+  page,
+}) => {
+  await page.goto("/settings/areas");
+
+  const areaCard = page
+    .getByTestId("areas-area-card")
+    .filter({ hasText: "Personal" });
+  await areaCard.getByText("Registry actions and settings").click();
+  await areaCard.getByRole("button", { name: "Remove area" }).click();
+  await expect(
+    areaCard.getByRole("button", { name: "Confirm remove" }),
+  ).toBeVisible();
+
+  await areaCard.getByRole("button", { name: "Confirm remove" }).click();
+
+  await expect(page.getByText("Area removed from active use.")).toBeVisible();
+  await expect(
+    page.getByTestId("areas-area-card").filter({ hasText: "Personal" }),
+  ).toHaveCount(0);
+});
+
+test("settings export reports local or unauthenticated export limits plainly", async ({
+  page,
+}) => {
+  await page.goto("/settings/areas");
+
+  await page.getByText("Data export").click();
+  await page.getByRole("button", { name: "Download my data" }).click();
+
+  await expect(page.getByText("Export did not finish.")).toBeVisible();
+  await expect(
+    page.getByText(
+      /Data export needs a signed-in account|Sign in before exporting your data/i,
+    ),
+  ).toBeVisible();
+});

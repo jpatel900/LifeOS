@@ -8,6 +8,7 @@ import ExecutePage from "../app/execute/page";
 import HealthPage from "../app/health/page";
 import ReviewPage from "../app/review/page";
 import AreasSettingsPage from "../app/settings/areas/page";
+import AreasOverviewPage from "../app/areas/page";
 import TriagePage from "../app/triage/page";
 import { AppShell } from "../app/components/AppShell";
 import RootLayout from "../app/layout";
@@ -52,7 +53,12 @@ describe("handoff cockpit route provider wiring", () => {
     ["/calendar", () => <CalendarPage />, "Hour rail"],
     ["/execute", () => <ExecutePage />, "Focus queue"],
     ["/review", () => <ReviewPage />, /Day closed clean|carry over/],
-    ["/health", () => <HealthPage />, "All systems healthy"],
+    [
+      "/health",
+      () => <HealthPage />,
+      /All systems healthy|checks need attention/,
+    ],
+    ["/areas", () => <AreasOverviewPage />, "All areas overview"],
   ])(
     "renders %s through the shared cockpit",
     async (pathname, createPage, text) => {

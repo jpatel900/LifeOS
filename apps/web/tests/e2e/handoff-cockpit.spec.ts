@@ -137,7 +137,9 @@ test("triage someday and do-today choices feed the plan screen", async ({
   await page.getByRole("button", { name: "Plan the day" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
   await expect(page.getByRole("heading", { name: "To place" })).toBeVisible();
-  await expect(page.getByText("Do today proof item")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Do today proof item.*60m/ }),
+  ).toBeVisible();
 });
 
 test("plan hour rail creates local blocks and keeps Google writes secondary", async ({
@@ -153,7 +155,7 @@ test("plan hour rail creates local blocks and keeps Google writes secondary", as
   ).toBeVisible();
   await page.getByRole("button", { name: "Plan the day" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
-  await page.getByText("Plan rail proof item").click();
+  await page.getByRole("button", { name: /Plan rail proof item.*60m/ }).click();
   await page.getByRole("button", { name: /8a.*Drop here/i }).click();
 
   await expect(page.getByText("Tap to unplan")).toBeVisible();
@@ -180,7 +182,9 @@ test("execute, review, health, and all areas keep the handoff hierarchy", async 
 
   await page.goto("/health");
   await expect(
-    page.getByRole("heading", { name: "All systems healthy" }),
+    page.getByRole("heading", {
+      name: /All systems healthy|checks need attention/,
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Run system check" }),

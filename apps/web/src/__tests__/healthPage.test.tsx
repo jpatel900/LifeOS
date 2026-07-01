@@ -15,10 +15,10 @@ describe("Health cockpit", () => {
       </AppShell>,
     );
 
-    expect(await screen.findByText("All systems healthy")).toBeDefined();
-    expect(screen.getByText("Storage")).toBeDefined();
-    expect(screen.getByText("Integrations")).toBeDefined();
-    expect(screen.getByText("Telemetry off")).toBeDefined();
+    expect(await screen.findByText("3 checks need attention")).toBeDefined();
+    expect(screen.getByText("auth")).toBeDefined();
+    expect(screen.getByText("database")).toBeDefined();
+    expect(screen.getByText("ai_parsing")).toBeDefined();
     expect(screen.getByText("Full breakdown")).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Run system check" }));
     expect(
