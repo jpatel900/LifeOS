@@ -3,7 +3,8 @@ packages:
   - "packages/*"
 overrides:
   postcss: ^8.5.15
-  protobufjs: ^8.0.2
+  protobufjs: ^8.6.0
+  vite: ^7.3.5
 allowBuilds:
   "@sentry/cli": false
   core-js: false
