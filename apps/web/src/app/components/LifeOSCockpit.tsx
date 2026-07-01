@@ -535,8 +535,11 @@ export function LifeOSCockpit({
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
               onPlan={(hour) => {
-                if (!selectedTaskId) return;
-                planTaskAtHour(selectedTaskId, hour);
+                const taskIdToPlan =
+                  selectedTaskId ??
+                  (vm.today.length === 1 ? vm.today[0]?.id : null);
+                if (!taskIdToPlan) return;
+                planTaskAtHour(taskIdToPlan, hour);
                 setSelectedTaskId(null);
               }}
               onUnplan={unplanTask}
@@ -1065,6 +1068,8 @@ function PlanView({
 }) {
   const hasReadyBlock = vm.planned.length > 0;
   const hasTaskToPlace = vm.today.length > 0;
+  const defaultTaskId =
+    selectedTaskId ?? (vm.today.length === 1 ? vm.today[0]?.id : null);
   const firstOpenHour =
     HOURS.find((hour) => !vm.planned.some((item) => item.hour === hour)) ?? 9;
 
@@ -1089,7 +1094,7 @@ function PlanView({
                   "grid min-h-16 grid-cols-[58px_1fr] items-center rounded-2xl border p-3 text-left",
                   placed
                     ? "border-[var(--acc-rng)] bg-[var(--acc-sf)]"
-                    : selectedTaskId
+                    : defaultTaskId
                       ? "border-[var(--acc-rng)] bg-[var(--sf2)]"
                       : "border-[var(--ln)] bg-[var(--sf2)]",
                 )}
@@ -1109,7 +1114,7 @@ function PlanView({
                     </>
                   ) : (
                     <span className="text-[var(--mut)]">
-                      {selectedTaskId ? "Drop here" : "Open hour"}
+                      {defaultTaskId ? "Drop here" : "Select a task first"}
                     </span>
                   )}
                 </span>
@@ -1132,7 +1137,7 @@ function PlanView({
                   }
                   className={cn(
                     "rounded-2xl border p-4 text-left",
-                    selectedTaskId === task.id
+                    (selectedTaskId ?? defaultTaskId) === task.id
                       ? "border-[var(--acc-rng)] bg-[var(--acc-sf)]"
                       : "border-[var(--ln)] bg-[var(--sf2)]",
                   )}
