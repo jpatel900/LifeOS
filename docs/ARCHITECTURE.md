@@ -93,7 +93,6 @@ Adding another backend beyond Next + Supabase data would increase cost, deployme
   REQUIREMENTS.md
   ARCHITECTURE.md
   DATA_MODEL.md
-  LIFE_OS_WIKI.md
   UX_FLOWS.md
   TEST_PLAN.md
   SECURITY_PRIVACY.md

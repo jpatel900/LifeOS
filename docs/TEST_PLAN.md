@@ -324,6 +324,7 @@ Assertions:
 - "what not to do yet" appears for ambiguous work
 - first move exists for ambiguous work
 - no unsupported external action is suggested as already done
+- ambiguous planning output includes a review trigger and what-not-to-do-yet guidance
 
 ## 9. Manual Test Checklist
 
