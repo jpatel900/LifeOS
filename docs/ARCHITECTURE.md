@@ -89,7 +89,7 @@ Adding another backend beyond Next + Supabase data would increase cost, deployme
   /adr
     0001-v1-server-boundary.md
   PROJECT_STATE.md
-  PROJECT_BRIEF.md
+  PRODUCT.md
   REQUIREMENTS.md
   ARCHITECTURE.md
   DATA_MODEL.md

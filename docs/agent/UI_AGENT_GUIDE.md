@@ -10,12 +10,11 @@ Superseded by: n/a
 
 1. `AGENTS.md`
 2. `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context ui`
-3. `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
-4. `design_handoff_lifeos/README.md`
-5. `design_handoff_lifeos/tokens.css`
-6. `design_handoff_lifeos/accent.js`
-7. the touched cockpit source and focused tests
-8. `docs/PROJECT_STATE.md` only when shipped truth, blockers, or next tasks matter
+3. `design_handoff_lifeos/README.md`
+4. `design_handoff_lifeos/tokens.css`
+5. `design_handoff_lifeos/accent.js`
+6. the touched cockpit source and focused tests
+7. `docs/PROJECT_STATE.md` only when shipped truth, blockers, or next tasks matter
 
 Open `design_handoff_lifeos/LifeOS Prototype.dc.html` with `support.js` when visual behavior is unclear. Treat `.dc.html` files as references, not production code to copy.
 
@@ -53,4 +52,4 @@ For every cockpit change, verify:
 
 ## Historical Docs
 
-Old Pass 7 UI docs live under `docs/archive/ui-ux/pass-7/`. Read them only for historical rationale, never as active handoff implementation rules.
+Old Pass 7 UI docs were removed from the repo as archived duplicates. Use git history only for historical rationale; never treat them as active handoff implementation rules.

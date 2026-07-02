@@ -135,11 +135,9 @@
       ]
     },
     "ui": {
-      "purpose": "App shell, route composition, workflow-provider-backed UI surfaces, and the active Pass 7 UI context plus review route.",
+      "purpose": "App shell, route composition, workflow-provider-backed UI surfaces, and the active handoff cockpit UI context plus review route.",
       "readFirst": [
-        "docs/UI_UX_WORLD_CLASS_ROADMAP.md",
         "docs/agent/UI_AGENT_GUIDE.md",
-        "docs/agent/UI_PASS_7_EXECUTION_MAP.md",
         "apps/web/src/app/components/AppShell.tsx",
         "apps/web/src/app/components/WorkflowPageHeader.tsx",
         "apps/web/src/lib/WorkflowContext.tsx"

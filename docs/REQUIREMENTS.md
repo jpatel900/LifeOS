@@ -324,6 +324,19 @@ Acceptance criteria:
 
 ---
 
+
+### Product Loop and Autonomy Boundary
+
+The V1 product loop is: capture messy input, diagnose ambiguity, bound the work, slice it into a reversible next move, discover missing information, act, and review the outcome. Requirements that support AI assistance must preserve this ambiguity-to-motion loop instead of turning LifeOS into a generic task list or autonomous agent.
+
+Autonomy is intentionally tiered:
+
+- AI may parse, classify, assess ambiguity, and suggest next moves.
+- Rule-based code may score, surface patterns, and produce learning signals from approved logs.
+- External calendar writes, core policy changes, and destructive archive/delete behavior require explicit user action.
+
+When work is uncertain, the system should help the user distinguish facts, assumptions, guesses, unknowns, constraints, and what not to do yet before encouraging commitment to a plan.
+
 ## 3. Non-Functional Requirements
 
 ### NFR-001 — Low Cost

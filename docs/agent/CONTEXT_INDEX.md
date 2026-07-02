@@ -28,9 +28,8 @@ Use the smallest relevant context first.
 
 For world-class UI/UX work, `ui` context must then route through:
 
-1. `docs/UI_UX_WORLD_CLASS_ROADMAP.md`
-2. `docs/agent/UI_AGENT_GUIDE.md`
-3. `design_handoff_lifeos/README.md` while the handoff cockpit pass is active
+1. `docs/agent/UI_AGENT_GUIDE.md`
+2. `design_handoff_lifeos/README.md` while the handoff cockpit pass is active
 4. the touched cockpit source and focused tests
 5. `docs/PROJECT_STATE.md` only when current shipped truth or blockers matter
 6. `docs/PROJECT_STATE.md` only if the roadmap, guide, or current blocker status points there
@@ -38,7 +37,7 @@ For world-class UI/UX work, `ui` context must then route through:
 ## Escalation Path
 
 1. Start here or with `pnpm agent:context <area>`.
-2. For active UI/UX program work, read `docs/UI_UX_WORLD_CLASS_ROADMAP.md` and `docs/agent/UI_AGENT_GUIDE.md` before implementation.
+2. For active UI/UX program work, read `docs/agent/UI_AGENT_GUIDE.md` and `design_handoff_lifeos/README.md` before implementation.
 3. Pull touched route source, focused tests, and proof surfaces before `docs/PROJECT_STATE.md` or older notes unless the task is blocked on shipped-truth status.
 4. Read `docs/PROJECT_STATE.md` only when you need current status, blockers, or the shortest proof-routing handoff.
 5. Pull the smallest relevant authority docs for the risk surface.

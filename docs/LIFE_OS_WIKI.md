@@ -1,6 +1,6 @@
 # Area-Scoped Personal Workflow Cockpit — Consolidated Wiki
 
-**Background reference only.** This consolidated wiki does not override **README.md** documentation authority, **AGENTS.md**, **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **ENGINEERING_INVARIANTS.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, **TEST_PLAN.md**, or **PROJECT_BRIEF.md**. It may inspire product thinking, but do not infer new architecture, integrations, runtime layers, multi-agent systems, background jobs, or platform behavior from this document unless **REQUIREMENTS.md** or an approved phase/spec explicitly authorizes it.
+**Background reference only.** This consolidated wiki does not override **README.md** documentation authority, **AGENTS.md**, **REQUIREMENTS.md**, **ARCHITECTURE.md**, **DATA_MODEL.md**, **ENGINEERING_INVARIANTS.md**, **UX_FLOWS.md**, **SECURITY_PRIVACY.md**, **TEST_PLAN.md**, or **PRODUCT.md**. It may inspire product thinking, but do not infer new architecture, integrations, runtime layers, multi-agent systems, background jobs, or platform behavior from this document unless **REQUIREMENTS.md** or an approved phase/spec explicitly authorizes it.
 
 ## 0\. One-line definition
 

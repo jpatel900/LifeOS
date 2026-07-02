@@ -38,3 +38,13 @@ supabase/.temp/
 *.log
 *.tsbuildinfo
 codex-*.json
+# Repo-root generated artifacts
+/package-lock.json
+/area_scoped_workflow_cockpit_docs.zip
+/desktop-capture.png
+/lifeos-*.png
+/mobile-*.png
+/.tmp-*.log
+/.codex-*.log
+/debug.log
+/web-build-error.log
