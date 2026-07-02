@@ -40,20 +40,20 @@ Every LifeOS repo-local skill should include:
 - Use `skill-router` before substantial work to choose the smallest relevant trusted skill set.
 - Use `docs/agent/ANTI_RATIONALIZATIONS.md` when a skill needs explicit shortcut traps and rebuttals.
 
-## Vendored general library: `agentic-*` (16 skills)
+<!-- vendored-skills:begin (managed by sync-skills-to-lifeos.ps1; do not edit inside markers) -->
 
-The `agentic-*` skills are vendored copies of the maintainer's general agentic-engineering
-library (authoring home: `~/.claude/skills` on the maintainer's machine; vendored 2026-07-02
-so cloud agents, which cannot see that machine, get the same discipline).
+## Vendored skills (synced 2026-07-02)
 
-- Anatomy differs deliberately from the LifeOS anatomy above: they use
-  purpose → when to use / when NOT to use → body → "Provenance and maintenance"
-  (treat the provenance section as their verification block).
-- Precedence: general method only, subordinate to `AGENTS.md` and to every `lifeos-*`
-  skill. When a `lifeos-*` skill covers the same ground (e.g. `lifeos-debugging` vs
-  `agentic-debugging-playbook`), load the `lifeos-*` skill first; use the `agentic-*`
-  skill for general method it does not cover. Nothing in them authorizes routing
-  around LifeOS gates — they defer to project change control by design.
-- Do not hand-edit `agentic-*` skills here; fix them in the authoring home and re-sync,
-  or the copies fork. Re-sync (maintainer machine only):
-  `Get-ChildItem "$HOME\.claude\skills" -Directory -Filter agentic-* | ForEach-Object { Copy-Item $_.FullName ".agents\skills\" -Recurse -Force }`
+Everything below is auto-vendored from the maintainer's curated hub so cloud agents get the
+same skills as local tools. Do not hand-edit vendored skills here - fix them at their source
+and let the daily sync PR carry the change. Ownership list: `.vendored-manifest.json`.
+Repo-native skills (`lifeos-*`, `skill-router`, etc.) always win on any overlap.
+Third-party skills remain under their upstream repos' licenses.
+
+- **addy-agent-skills**: api-and-interface-design, browser-testing-with-devtools, ci-cd-and-automation, code-review-and-quality, code-simplification, context-engineering, deprecation-and-migration, documentation-and-adrs, frontend-ui-engineering, idea-refine, incremental-implementation, performance-optimization, planning-and-task-breakdown, security-and-hardening, shipping-and-launch, spec-driven-development, test-driven-development, using-agent-skills
+- **claude-user-skills**: agentic-architecture-contract, agentic-change-control, agentic-config-and-environment, agentic-context-engineering-reference, agentic-debugging-playbook, agentic-diagnostics-and-tooling, agentic-docs-and-writing, agentic-external-positioning, agentic-failure-archaeology, agentic-long-horizon-campaign, agentic-project-onboarding, agentic-proof-and-analysis-toolkit, agentic-research-frontier, agentic-research-methodology, agentic-run-and-operate, agentic-validation-and-qa
+- **local-hub**: find-skills
+- **superpowers**: finishing-a-development-branch, receiving-code-review, requesting-code-review, systematic-debugging, verification-before-completion, writing-skills
+
+<!-- vendored-skills:end -->
+
