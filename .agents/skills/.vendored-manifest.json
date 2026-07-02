@@ -65,6 +65,9 @@
     "code-simplification": {
       "source": "addy-agent-skills"
     },
+    "codebase-design": {
+      "source": "mattpocock-skills"
+    },
     "context-engineering": {
       "source": "addy-agent-skills"
     },
@@ -74,6 +77,9 @@
     "documentation-and-adrs": {
       "source": "addy-agent-skills"
     },
+    "domain-modeling": {
+      "source": "mattpocock-skills"
+    },
     "find-skills": {
       "source": "local-hub"
     },
@@ -82,6 +88,15 @@
     },
     "frontend-ui-engineering": {
       "source": "addy-agent-skills"
+    },
+    "grill-me": {
+      "source": "mattpocock-skills"
+    },
+    "grilling": {
+      "source": "mattpocock-skills"
+    },
+    "handoff": {
+      "source": "mattpocock-skills"
     },
     "idea-refine": {
       "source": "addy-agent-skills"
@@ -94,6 +109,9 @@
     },
     "planning-and-task-breakdown": {
       "source": "addy-agent-skills"
+    },
+    "prototype": {
+      "source": "mattpocock-skills"
     },
     "receiving-code-review": {
       "source": "superpowers"
@@ -115,6 +133,9 @@
     },
     "test-driven-development": {
       "source": "addy-agent-skills"
+    },
+    "to-issues": {
+      "source": "mattpocock-skills"
     },
     "using-agent-skills": {
       "source": "addy-agent-skills"

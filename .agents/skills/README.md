@@ -53,7 +53,9 @@ Third-party skills remain under their upstream repos' licenses.
 - **addy-agent-skills**: api-and-interface-design, browser-testing-with-devtools, ci-cd-and-automation, code-review-and-quality, code-simplification, context-engineering, deprecation-and-migration, documentation-and-adrs, frontend-ui-engineering, idea-refine, incremental-implementation, performance-optimization, planning-and-task-breakdown, security-and-hardening, shipping-and-launch, spec-driven-development, test-driven-development, using-agent-skills
 - **claude-user-skills**: agentic-architecture-contract, agentic-change-control, agentic-config-and-environment, agentic-context-engineering-reference, agentic-debugging-playbook, agentic-diagnostics-and-tooling, agentic-docs-and-writing, agentic-external-positioning, agentic-failure-archaeology, agentic-long-horizon-campaign, agentic-project-onboarding, agentic-proof-and-analysis-toolkit, agentic-research-frontier, agentic-research-methodology, agentic-run-and-operate, agentic-validation-and-qa
 - **local-hub**: find-skills
+- **mattpocock-skills**: codebase-design, domain-modeling, grill-me, grilling, handoff, prototype, to-issues
 - **superpowers**: finishing-a-development-branch, receiving-code-review, requesting-code-review, systematic-debugging, verification-before-completion, writing-skills
 
 <!-- vendored-skills:end -->
+
 
