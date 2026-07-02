@@ -13,7 +13,39 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: codex-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
+  docs-scope:
+    name: Detect docs-only scope
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Detect docs-only diff
+        id: detect
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$PR_BASE_SHA" || true
+          changed="$(git diff --name-only "$PR_BASE_SHA" HEAD)"
+          echo "Changed files:"; echo "$changed"
+          # Mirrors the T0 safe auto-merge allowlist: docs-only PRs are gated by the
+          # deterministic path evaluator + full test suite; LLM review adds cost, not safety.
+          if [ -n "$changed" ] && ! echo "$changed" | grep -qvE '^(docs/|README\.md$|\.github/ISSUE_TEMPLATE/)'; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+            echo "Docs-only diff: skipping LLM review jobs."
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   classify-risk:
     name: Classify PR risk
     if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
@@ -54,8 +86,12 @@ jobs:
 
   baseline-review:
     name: Codex baseline review
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot' &&
+      needs.docs-scope.outputs.docs_only != 'true'
     needs:
+      - docs-scope
       - classify-risk
     runs-on: ubuntu-latest
     permissions:
