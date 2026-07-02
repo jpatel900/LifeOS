@@ -33,7 +33,7 @@ For world-class UI/UX work, `ui` context must then route through:
 3. `design_handoff_lifeos/README.md` while the handoff cockpit pass is active
 4. the touched cockpit source and focused tests
 5. `docs/PROJECT_STATE.md` only when current shipped truth or blockers matter
-6. the latest roadmap-linked implementation note only if the roadmap or guide points to it
+6. `docs/PROJECT_STATE.md` only if the roadmap, guide, or current blocker status points there
 
 ## Escalation Path
 

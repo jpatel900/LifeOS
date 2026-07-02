@@ -83,4 +83,4 @@ Evidence for this pass belongs under `apps/web/test-results/handoff-cockpit/`.
 
 Prior Pass 7 docs are historical proof only. They are archived under `docs/archive/ui-ux/pass-7/` and must not be treated as active visual contracts for the handoff cockpit.
 
-`docs/implementation-notes/*.md` remain dated evidence and should not be used as a competing active UI queue.
+Deleted implementation-note session logs are git history only and must not be recreated as a competing active UI queue.

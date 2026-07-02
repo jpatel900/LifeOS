@@ -27,7 +27,7 @@ Authority and routing:
 - Use `docs/CODEX_SKILL_ROUTING.md` for skill/plugin selection instead of pasting tool lists into the prompt.
 - Use `docs/agent/VALIDATION_MATRIX.md` to choose focused iteration checks by change type and T0-T4 tier.
 - Use `.github/AGENT_AUTOMATION_POLICY.md` for T0-T4 automation tiering and T3/T4 planning-first gates.
-- Use `docs/implementation-notes/README.md` when medium/high-risk work requires a durable note.
+- Durable decisions belong in `docs/adr/`; status/current-state changes belong in `docs/PROJECT_STATE.md`; everything else belongs in git history and PR descriptions.
 - `docs/LIFE_OS_WIKI.md` and `EXTRA_INFO_AND_RULES.md` are background-reference docs for planning only, not implementation authority.
 
 Hard invariants:
@@ -66,7 +66,7 @@ Context:
 - Tool routing: `docs/CODEX_SKILL_ROUTING.md`
 - Automation tier: <T0/T1/T2/T3/T4 from .github/AGENT_AUTOMATION_POLICY.md>
 - Validation baseline: `docs/agent/VALIDATION_MATRIX.md` plus stricter issue-specific or AGENTS-required checks
-- Implementation note required: <yes/no; if yes, use docs/implementation-notes/YYYY-MM-DD-<task-slug>.md>
+- Durable documentation required: <yes/no; if yes, use docs/adr/ for decisions or docs/PROJECT_STATE.md for status>
 
 Role-separated checkpoints:
 
