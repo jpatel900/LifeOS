@@ -150,6 +150,12 @@ For medium/high-risk or non-obvious governance, workflow, or phase work, add an 
 - For UI/UX planning, `docs/UI_UX_WORLD_CLASS_ROADMAP.md` is the single active plan. Amend or explicitly retire it before creating any new competing UI/UX plan document.
 - Existing validation, security, RLS, schema, and calendar approval rules still apply.
 
+## 6B. No Per-Session Note Files
+
+- Agents MUST NOT create per-session note files (implementation notes, handoff notes, session summaries, scratch plans) anywhere in the repo.
+- Durable decisions go to `docs/adr/`. Status changes go to `docs/PROJECT_STATE.md`. Everything else is git history (commit messages and PR descriptions).
+- Enforced by `apps/web/src/__tests__/docRegistry.test.ts`: any new `.md` file outside the canonical allowlist fails CI.
+
 ## 7. Schema and AI Rules
 
 All mutation-producing AI calls must have:
