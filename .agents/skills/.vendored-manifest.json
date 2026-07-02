@@ -1,0 +1,129 @@
+{
+  "managedBy": "sync-skills-to-lifeos.ps1 (maintainer machine); merge stays human per repo change control",
+  "note": "Dirs listed here are vendored from the maintainer hub and overwritten on sync. Repo-native skills are never listed or touched. Third-party sources keep their upstream licenses.",
+  "skills": {
+    "agentic-architecture-contract": {
+      "source": "claude-user-skills"
+    },
+    "agentic-change-control": {
+      "source": "claude-user-skills"
+    },
+    "agentic-config-and-environment": {
+      "source": "claude-user-skills"
+    },
+    "agentic-context-engineering-reference": {
+      "source": "claude-user-skills"
+    },
+    "agentic-debugging-playbook": {
+      "source": "claude-user-skills"
+    },
+    "agentic-diagnostics-and-tooling": {
+      "source": "claude-user-skills"
+    },
+    "agentic-docs-and-writing": {
+      "source": "claude-user-skills"
+    },
+    "agentic-external-positioning": {
+      "source": "claude-user-skills"
+    },
+    "agentic-failure-archaeology": {
+      "source": "claude-user-skills"
+    },
+    "agentic-long-horizon-campaign": {
+      "source": "claude-user-skills"
+    },
+    "agentic-project-onboarding": {
+      "source": "claude-user-skills"
+    },
+    "agentic-proof-and-analysis-toolkit": {
+      "source": "claude-user-skills"
+    },
+    "agentic-research-frontier": {
+      "source": "claude-user-skills"
+    },
+    "agentic-research-methodology": {
+      "source": "claude-user-skills"
+    },
+    "agentic-run-and-operate": {
+      "source": "claude-user-skills"
+    },
+    "agentic-validation-and-qa": {
+      "source": "claude-user-skills"
+    },
+    "api-and-interface-design": {
+      "source": "addy-agent-skills"
+    },
+    "browser-testing-with-devtools": {
+      "source": "addy-agent-skills"
+    },
+    "ci-cd-and-automation": {
+      "source": "addy-agent-skills"
+    },
+    "code-review-and-quality": {
+      "source": "addy-agent-skills"
+    },
+    "code-simplification": {
+      "source": "addy-agent-skills"
+    },
+    "context-engineering": {
+      "source": "addy-agent-skills"
+    },
+    "deprecation-and-migration": {
+      "source": "addy-agent-skills"
+    },
+    "documentation-and-adrs": {
+      "source": "addy-agent-skills"
+    },
+    "find-skills": {
+      "source": "local-hub"
+    },
+    "finishing-a-development-branch": {
+      "source": "superpowers"
+    },
+    "frontend-ui-engineering": {
+      "source": "addy-agent-skills"
+    },
+    "idea-refine": {
+      "source": "addy-agent-skills"
+    },
+    "incremental-implementation": {
+      "source": "addy-agent-skills"
+    },
+    "performance-optimization": {
+      "source": "addy-agent-skills"
+    },
+    "planning-and-task-breakdown": {
+      "source": "addy-agent-skills"
+    },
+    "receiving-code-review": {
+      "source": "superpowers"
+    },
+    "requesting-code-review": {
+      "source": "superpowers"
+    },
+    "security-and-hardening": {
+      "source": "addy-agent-skills"
+    },
+    "shipping-and-launch": {
+      "source": "addy-agent-skills"
+    },
+    "spec-driven-development": {
+      "source": "addy-agent-skills"
+    },
+    "systematic-debugging": {
+      "source": "superpowers"
+    },
+    "test-driven-development": {
+      "source": "addy-agent-skills"
+    },
+    "using-agent-skills": {
+      "source": "addy-agent-skills"
+    },
+    "verification-before-completion": {
+      "source": "superpowers"
+    },
+    "writing-skills": {
+      "source": "superpowers"
+    }
+  }
+}
