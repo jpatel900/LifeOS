@@ -114,7 +114,7 @@ Docs drift. Assume every doc is stale until re-verified.
 
 **Rule 1 - runbooks end with re-verification one-liners.** The last section of every runbook is a fenced block of cheap commands that confirm the runbook's core facts are still true (the tool exists, the path exists, the target responds). If those fail, the runbook is stale - fix it before executing it.
 
-**Rule 2 - CI is ground truth.** When a doc and CI disagree (doc says `make test`, CI runs something else), **CI wins**, and the doc gets fixed the same day, in the same PR if one is open. Discover what CI actually runs:
+**Rule 2 - CI is ground truth (this is the rule's one home; siblings reference it).** When sources disagree, trust in this precedence order: **CI config > lockfiles/build scripts > code comments > README > wiki** - the higher source wins because it executes. Fix the losing doc the same day, as its own commit (or its own PR): riding the fix into an unrelated open PR is silent scope widening (see `agentic-change-control`) unless the PR body explicitly declares the added doc fix. Discover what CI actually runs:
 
 ```bash
 ls .github/workflows/ .gitlab-ci.yml .circleci/ azure-pipelines.yml 2>/dev/null
@@ -197,14 +197,17 @@ Copy verbatim; delete sections that do not apply rather than leaving them empty.
 
 ### ADR-lite
 
+This is the template's ONLY home (`agentic-architecture-contract` owns when an ADR is mandatory; it links here for the format). Canonical path: `docs/adr/NNNN-<slug>.md`.
+
 ```markdown
 # ADR-NNNN: <decision as a verb phrase>
 **Date:** 2026-07-02 | **Status:** accepted | superseded-by ADR-MMMM
 
 **Context:** <the forces, in 2-4 sentences>
 **Decision:** <what was decided, one sentence, imperative>
+**Rationale:** <the one killer argument that beat the alternatives>
 **Alternatives rejected:** <name each + one-line reason - this is the valuable part>
-**Consequences:** <what gets harder/easier; what invariant this creates>
+**Consequences:** <what gets harder/easier; what invariant this creates; what would have to be true to revisit (the reversal trigger)>
 ```
 
 Append-only: never edit an accepted ADR's decision - supersede it with a new one. (What belongs in ADRs at all: **agentic-architecture-contract**.)
