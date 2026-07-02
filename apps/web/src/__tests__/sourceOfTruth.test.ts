@@ -221,9 +221,7 @@ describe("source-of-truth boundaries", () => {
     const globalsCss = normalizeWhitespace(
       readRepoFile("apps/web/src/app/globals.css"),
     );
-    const uiGuide = normalizeWhitespace(
-      readRepoFile("docs/agent/UI_AGENT_GUIDE.md"),
-    );
+    const agents = normalizeWhitespace(readRepoFile("AGENTS.md"));
     const handoffReadme = normalizeWhitespace(
       readRepoFile("design_handoff_lifeos/README.md"),
     );
@@ -249,7 +247,7 @@ describe("source-of-truth boundaries", () => {
     expect(cockpit).toContain("Google writes are separate");
     expect(cockpit).toContain("All areas overview");
     expect(globalsCss).toContain(".lifeos-cockpit");
-    expect(uiGuide).toContain("design_handoff_lifeos/README.md");
+    expect(agents).toContain("design_handoff_lifeos/README.md");
     expect(handoffReadme).toContain("One screen component");
     expect(handoffReadme).toContain("view router");
   });

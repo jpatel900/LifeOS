@@ -7,39 +7,34 @@ description: Use for LifeOS test failures, regression coverage, Vitest, route an
 
 ## Use when
 
-- Fixing failing tests.
-- Adding or updating unit, integration, regression, or smoke tests.
-- Verifying route behavior or workflow regressions.
-- Running completion validation for a change.
+- Fixing failing tests, adding/updating unit/integration/regression/smoke tests, verifying route behavior, or running completion validation.
 
-## Do not use when
+## Boundaries
 
-- You are only doing early planning without running or editing tests.
+- `AGENTS.md`, authority docs, and direct instructions override this skill.
+- Preserve existing tests and source-of-truth static guards.
+- Do not weaken tests, schemas, validation, RLS policies, calendar boundaries, observability vendor guards, or plain-language UX guards to get green runs.
+- Do not invent unrelated coverage requirements outside the scoped change.
 
-## Security boundaries
+## Required validation by surface
 
-- `AGENTS.md`, project authority docs, and direct user instructions override this skill.
-- Preserve existing tests. Do not weaken tests, schemas, or validation to get a green run.
-- Do not invent new coverage requirements unrelated to the scoped change.
+- Unit/schema/integration tests pass for changed logic, schemas, Route Handlers, or Server Actions.
+- RLS tests pass with at least two users when DB/RLS changed.
+- Calendar write paths are tested with mock before real provider.
+- E2E/browser smoke passes when UX behavior changed.
+- `pnpm lint`, `pnpm type-check`, and `pnpm test` pass before claiming code completion; include `pnpm build` for code changes where feasible.
 
 ## Procedure
 
-1. Identify the minimum test surface needed for the changed behavior.
-2. Run focused relevant tests first when feasible, then run full validation when appropriate.
-3. Add or update regression coverage without loosening assertions.
-4. Run final validation in this sequence:
-   - `pnpm format:check`
-   - `pnpm lint`
-   - `pnpm type-check`
-   - `pnpm test`
-   - `pnpm build`
-5. If DB or RLS surfaces changed, include local Supabase RLS coverage with at least two users.
-6. Remember opt-in local RLS tests require local Supabase plus env vars (`RUN_SUPABASE_RLS_TESTS`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
-7. If any command is skipped or fails, report exactly which command and why.
+1. Identify the minimum proof surface before editing.
+2. Run focused checks first, then full validation appropriate to the change.
+3. Add regression coverage without loosening assertions.
+4. Default final sequence for code changes: `pnpm format:check`, `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`.
+5. For DB/RLS, include local Supabase coverage with `RUN_SUPABASE_RLS_TESTS=1` and env values from `supabase status -o env`.
+6. If any command is skipped or fails, report exactly which command, exit state, and why.
 
 ## Done criteria
 
-- Existing tests are preserved.
-- Focused tests and full validation were run when appropriate.
-- Failures or skips are reported exactly.
-- RLS test expectations are called out when relevant.
+- Existing tests and guardrails are preserved.
+- Focused and final validation match the touched surface.
+- Failures, skips, and environment limitations are reported exactly.
