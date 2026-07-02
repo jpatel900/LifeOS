@@ -86,10 +86,13 @@ jobs:
 
   baseline-review:
     name: Codex baseline review
+    # Single-review policy: baseline (mini) runs only when the escalated review will NOT.
+    # One LLM review per PR, never two.
     if: >-
       github.event.pull_request.draft == false &&
       github.event.pull_request.user.type != 'Bot' &&
-      needs.docs-scope.outputs.docs_only != 'true'
+      needs.docs-scope.outputs.docs_only != 'true' &&
+      needs.classify-risk.outputs.escalation_required != 'true'
     needs:
       - docs-scope
       - classify-risk
@@ -178,14 +181,22 @@ jobs:
 
   escalated-review:
     name: Codex escalated review
+    # !cancelled() is required: baseline-review is skipped when escalation is already
+    # required (single-review policy), and a skipped dependency would otherwise skip
+    # this job too. Docs-only PRs never run LLM review; the docRegistry guard test and
+    # the deterministic safe-automerge path evaluator gate those.
     if: >-
+      !cancelled() &&
       github.event.pull_request.draft == false &&
       github.event.pull_request.user.type != 'Bot' &&
+      needs.classify-risk.result == 'success' &&
+      needs.docs-scope.outputs.docs_only != 'true' &&
       (
         needs.classify-risk.outputs.escalation_required == 'true' ||
         contains(needs.baseline-review.outputs.final_message, 'ESCALATE_RECOMMENDED: true')
       )
     needs:
+      - docs-scope
       - classify-risk
       - baseline-review
     runs-on: ubuntu-latest
@@ -232,9 +243,12 @@ jobs:
 
   post-escalated-review:
     name: Post escalated review
+    # !cancelled() mirrors escalated-review: baseline-review in `needs` may be skipped.
     if: >-
+      !cancelled() &&
       github.event.pull_request.draft == false &&
       github.event.pull_request.user.type != 'Bot' &&
+      needs.escalated-review.result == 'success' &&
       needs.escalated-review.outputs.final_message != ''
     needs:
       - classify-risk
