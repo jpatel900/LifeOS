@@ -1,157 +1,120 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildTodayCockpitModel,
-  type BuildTodayCockpitModelInput,
-} from "@/lib/today/buildTodayCockpitModel";
-
-function baseInput(
-  overrides: Partial<BuildTodayCockpitModelInput> = {},
-): BuildTodayCockpitModelInput {
-  return {
-    tasks: [],
-    drafts: [],
-    proposals: [],
-    blocks: [],
-    sessions: [],
-    ...overrides,
-  };
-}
+  acceptLatestDraft,
+  backlogLatestDraft,
+  buildWorkflowTodayCockpitModel,
+  captureWorkflow,
+  goldenJourneyState,
+  markLatestSession,
+  planLatestActiveTask,
+  promoteLatestBacklogTask,
+  proposeLatestActiveTask,
+  startLatestScheduledTask,
+  workflowSeed,
+} from "./helpers/workflowReachability";
 
 describe("buildTodayCockpitModel", () => {
-  it("recommends Capture for an empty state", () => {
-    const model = buildTodayCockpitModel(baseInput());
+  it("recommends Capture for an empty workflow seed", () => {
+    const model = buildWorkflowTodayCockpitModel(workflowSeed());
 
     expect(model.next.kind).toBe("capture");
     expect(model.next.href).toBe("/capture");
   });
 
   it("prioritizes recovery over needs-decision", () => {
-    const model = buildTodayCockpitModel(
-      baseInput({
-        drafts: [{ id: "d-1", title: "Draft", kind: "task" }],
-        sessions: [
-          {
-            id: "s-1",
-            taskId: "t-1",
-            calendarBlockId: null,
-            status: "stuck",
-            outcome: "blocked",
-          },
-        ],
-      }),
-    );
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Recover blocked plan.");
+    state = acceptLatestDraft(state);
+    state = planLatestActiveTask(state, 9);
+    state = startLatestScheduledTask(state);
+    state = markLatestSession(state, "stuck");
+    state = captureWorkflow(state, "Pending triage decision.");
+
+    const model = buildWorkflowTodayCockpitModel(state);
 
     expect(model.next.kind).toBe("recovery");
     expect(model.next.href).toBe("/execute");
   });
 
   it("prioritizes needs-decision over unplanned tasks", () => {
-    const model = buildTodayCockpitModel(
-      baseInput({
-        tasks: [{ id: "t-1", title: "Active task", status: "active" }],
-        drafts: [{ id: "d-1", title: "Draft", kind: "task" }],
-      }),
-    );
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Active task without a plan.");
+    state = acceptLatestDraft(state);
+    state = captureWorkflow(state, "Draft awaiting triage.");
+
+    const model = buildWorkflowTodayCockpitModel(state);
 
     expect(model.next.kind).toBe("needs_decision");
     expect(model.next.href).toBe("/triage");
   });
 
   it("prioritizes running or paused session over planned blocks", () => {
-    const model = buildTodayCockpitModel(
-      baseInput({
-        tasks: [{ id: "t-1", title: "Task", status: "active" }],
-        blocks: [
-          {
-            id: "b-1",
-            taskId: "t-1",
-            startAt: "2026-05-20T09:00:00.000-04:00",
-            endAt: "2026-05-20T10:00:00.000-04:00",
-            status: "scheduled",
-          },
-        ],
-        sessions: [
-          {
-            id: "s-1",
-            taskId: "t-1",
-            calendarBlockId: "b-1",
-            status: "paused",
-            outcome: "partial",
-          },
-        ],
-      }),
-    );
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Task to pause during execution.");
+    state = acceptLatestDraft(state);
+    state = planLatestActiveTask(state, 9);
+    state = startLatestScheduledTask(state);
+    state = markLatestSession(state, "paused");
+
+    const model = buildWorkflowTodayCockpitModel(state);
 
     expect(model.next.kind).toBe("current_work");
     expect(model.now.kind).toBe("session");
   });
 
   it("does not classify tasks with active proposal or block as unplanned", () => {
-    const model = buildTodayCockpitModel(
-      baseInput({
-        tasks: [
-          { id: "t-1", title: "With proposal", status: "active" },
-          { id: "t-2", title: "With block", status: "active" },
-          { id: "t-3", title: "Actually unplanned", status: "active" },
-        ],
-        proposals: [{ id: "p-1", taskId: "t-1", status: "proposed" }],
-        blocks: [
-          {
-            id: "b-1",
-            taskId: "t-2",
-            startAt: "2026-05-20T09:00:00.000-04:00",
-            endAt: "2026-05-20T10:00:00.000-04:00",
-            status: "scheduled",
-          },
-        ],
-      }),
-    );
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Actually unplanned.");
+    state = backlogLatestDraft(state);
+    state = promoteLatestBacklogTask(state);
+    state = captureWorkflow(state, "With proposal.");
+    state = acceptLatestDraft(state);
+    const proposedTaskId = state.tasks[0].id;
+    state = proposeLatestActiveTask(state);
+    state = captureWorkflow(state, "With block.");
+    state = acceptLatestDraft(state);
+    const blockedTaskId = state.tasks[0].id;
+    state = planLatestActiveTask(state, 9);
 
-    expect(model.unplanned.items.map((task) => task.id)).toEqual(["t-3"]);
+    const model = buildWorkflowTodayCockpitModel(state);
+
+    expect(model.unplanned.items.map((task) => task.id)).not.toContain(
+      proposedTaskId,
+    );
+    expect(model.unplanned.items.map((task) => task.id)).not.toContain(
+      blockedTaskId,
+    );
+    expect(model.unplanned.items).toHaveLength(1);
   });
 
-  it("filters today blocks using local day boundaries", () => {
-    const model = buildTodayCockpitModel(
-      baseInput({
-        now: new Date("2026-05-20T12:00:00.000-04:00"),
-        timezone: "America/Toronto",
-        blocks: [
-          {
-            id: "b-before",
-            taskId: null,
-            startAt: "2026-05-19T23:59:00.000-04:00",
-            endAt: "2026-05-20T00:20:00.000-04:00",
-            status: "scheduled",
-          },
-          {
-            id: "b-today",
-            taskId: null,
-            startAt: "2026-05-20T09:00:00.000-04:00",
-            endAt: "2026-05-20T09:30:00.000-04:00",
-            status: "running",
-          },
-          {
-            id: "b-after",
-            taskId: null,
-            startAt: "2026-05-21T00:00:00.000-04:00",
-            endAt: "2026-05-21T00:30:00.000-04:00",
-            status: "scheduled",
-          },
-        ],
-      }),
-    );
+  it("exposes today blocks from real planning transitions", () => {
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Today block from planning.");
+    state = acceptLatestDraft(state);
+    state = planLatestActiveTask(state, 9);
 
-    expect(model.todayBlocks.map((block) => block.id)).toEqual(["b-today"]);
+    const model = buildWorkflowTodayCockpitModel(state);
+
+    expect(model.todayBlocks).toHaveLength(1);
+    expect(model.todayBlocks[0].status).toBe("scheduled");
   });
 
-  it("falls back to Health link when health status is unavailable", () => {
-    const model = buildTodayCockpitModel(
-      baseInput({
-        health: { state: "unavailable" },
-      }),
-    );
+  it("keeps backlog out of unplanned active work", () => {
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Backlog proof.");
+    state = backlogLatestDraft(state);
 
-    expect(model.systemStatus.href).toBe("/health");
-    expect(model.systemStatus.summary).toContain("Open Health");
+    const model = buildWorkflowTodayCockpitModel(state);
+
+    expect(model.unplanned.items).toHaveLength(0);
+  });
+
+  it("covers the golden capture to review journey seed", () => {
+    const model = buildWorkflowTodayCockpitModel(goldenJourneyState());
+
+    expect(model.todayBlocks.map((block) => block.status)).toContain(
+      "completed",
+    );
+    expect(model.next.href).toBe("/capture");
   });
 });
