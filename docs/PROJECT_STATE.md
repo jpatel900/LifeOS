@@ -17,6 +17,7 @@ Superseded by: n/a
 
 ## Recently completed
 
+- Audited `docs/LIFE_OS_WIKI.md` against the canonical docs for issue #231, folded the remaining ambiguity/planning-theatre guardrails into `docs/REQUIREMENTS.md`, `docs/DATA_MODEL.md`, `docs/UX_FLOWS.md`, and `docs/TEST_PLAN.md`, removed stale wiki references, and deleted the wiki plus its doc-registry grandfather entry.
 - Deleted the legacy `docs/implementation-notes/` session-log directory after salvage review, removed those paths from the shrink-only doc registry, and preserved the only newly salvaged binding automation constraint in `docs/adr/0002-github-automation-control-plane.md`.
 - Completed issue #230 repo-root and archived-doc cleanup: removed archived/duplicate doc trees, the old UI roadmap, `PROJECT_BRIEF.md`, generated root artifacts, the stray npm lockfile, and stale doc-registry entries; folded the brief’s unique product-loop and autonomy-boundary constraints into `docs/REQUIREMENTS.md`. `design_handoff_lifeos/` remains because it is still the active handoff cockpit design reference.
 - Remediated all 21 open Dependabot alerts (2026-07-01): lockfile-level bumps for `@grpc/grpc-js`, `ws`, `form-data`, `js-yaml`, `@babel/core`, `esbuild`; workspace overrides for `vite` (`^7.3.5`, new) and `protobufjs` (floor raised to `^8.6.0`); direct-dep bumps `posthog-js` `^1.396.3` (drops its browser OTel stack, removing an unfixable exact-pinned `@opentelemetry/core@2.2.0`), `@sentry/nextjs` `^10.62.0`, and `@opentelemetry/sdk-node` `^0.219.0`. No alert deliberately left open; full validation green.

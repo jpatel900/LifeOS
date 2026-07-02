@@ -28,7 +28,7 @@ Authority and routing:
 - Use `docs/agent/VALIDATION_MATRIX.md` to choose focused iteration checks by change type and T0-T4 tier.
 - Use `.github/AGENT_AUTOMATION_POLICY.md` for T0-T4 automation tiering and T3/T4 planning-first gates.
 - Durable decisions belong in `docs/adr/`; status/current-state changes belong in `docs/PROJECT_STATE.md`; everything else belongs in git history and PR descriptions.
-- `docs/LIFE_OS_WIKI.md` and `EXTRA_INFO_AND_RULES.md` are background-reference docs for planning only, not implementation authority.
+- `EXTRA_INFO_AND_RULES.md` is background-reference material for planning only, not implementation authority.
 
 Hard invariants:
 

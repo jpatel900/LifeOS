@@ -7,7 +7,7 @@ Use the smallest relevant context first.
 - Escalate to broader authority docs only when the task risk requires it.
 - `AGENTS.md` remains the highest authority for agent behavior.
 - For multi-step writes, new tables, vendor calls, or module size, check `docs/ENGINEERING_INVARIANTS.md` (binding, with guard tests).
-- `docs/LIFE_OS_WIKI.md` and `EXTRA_INFO_AND_RULES.md` are background references for planning only; do not load them into normal implementation context.
+- `EXTRA_INFO_AND_RULES.md` is background reference material for planning only; do not load it into normal implementation context.
 - This index is a routing aid, not an authority document.
 - Quick checks are iteration aids only; final validation still follows `AGENTS.md`.
 
@@ -30,9 +30,9 @@ For world-class UI/UX work, `ui` context must then route through:
 
 1. `docs/agent/UI_AGENT_GUIDE.md`
 2. `design_handoff_lifeos/README.md` while the handoff cockpit pass is active
-4. the touched cockpit source and focused tests
-5. `docs/PROJECT_STATE.md` only when current shipped truth or blockers matter
-6. `docs/PROJECT_STATE.md` only if the roadmap, guide, or current blocker status points there
+3. the touched cockpit source and focused tests
+4. `docs/PROJECT_STATE.md` only when current shipped truth or blockers matter
+5. `docs/PROJECT_STATE.md` only if the roadmap, guide, or current blocker status points there
 
 ## Escalation Path
 
