@@ -71,7 +71,7 @@ jobs:
 
             const mentionBody = (issueNumber) =>
               [
-                '@codex please implement this issue exactly as specified in the issue body above.',
+                '@codex please implement this issue exactly as specified in the issue body above, then OPEN A PULL REQUEST on github.com/' + owner + '/' + repo + ' with your changes. Do not stop at a completed task: push the branch and create the pull request yourself using your GitHub access. Creating the PR is part of the task; the task is not done until the PR exists.',
                 `Follow epic #${epic} section "Standing agent rules for every issue in this epic":`,
                 '- Branch from origin/main; one issue per PR.',
                 `- PR body must state purpose, changes, tests run, risks, and include "Closes #${issueNumber}".`,
