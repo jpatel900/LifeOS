@@ -114,12 +114,17 @@ function classifyRisk({
   deletions,
 }) {
   const totalChanges = additions + deletions;
-  const reasons = [];
+  // Escalation (the expensive full-model review) is earned by RISK — sensitive
+  // paths or high-risk labels — never by bulk alone. Size still raises the risk
+  // label for visibility and keeps a PR out of the safe auto-merge lane, but a
+  // big-but-boring diff gets the baseline reviewer, not the escalated one.
+  const riskReasons = [];
+  const sizeReasons = [];
   const matchedPatterns = new Set();
 
   for (const label of labels) {
     if (HIGH_RISK_LABELS.has(label)) {
-      reasons.push(`label:${label}`);
+      riskReasons.push(`label:${label}`);
     }
   }
 
@@ -132,28 +137,30 @@ function classifyRisk({
   }
 
   for (const pattern of matchedPatterns) {
-    reasons.push(`path:${pattern}`);
+    riskReasons.push(`path:${pattern}`);
   }
 
   if (changedFileCount > HIGH_FILE_COUNT) {
-    reasons.push(`size:files>${HIGH_FILE_COUNT}`);
+    sizeReasons.push(`size:files>${HIGH_FILE_COUNT}`);
   }
 
   if (totalChanges > HIGH_TOTAL_CHANGES) {
-    reasons.push(`size:lines>${HIGH_TOTAL_CHANGES}`);
+    sizeReasons.push(`size:lines>${HIGH_TOTAL_CHANGES}`);
   }
 
-  const escalationRequired = reasons.length > 0;
+  const escalationRequired = riskReasons.length > 0;
   const riskLevel = escalationRequired
     ? "high"
-    : changedFileCount > MEDIUM_FILE_COUNT ||
+    : sizeReasons.length > 0 ||
+        changedFileCount > MEDIUM_FILE_COUNT ||
         totalChanges > MEDIUM_TOTAL_CHANGES
       ? "medium"
       : "low";
+  const allReasons = [...riskReasons, ...sizeReasons];
 
   return {
     escalationRequired,
-    escalationReasons: escalationRequired ? reasons.join(", ") : "none",
+    escalationReasons: allReasons.length > 0 ? allReasons.join(", ") : "none",
     riskLevel,
   };
 }
