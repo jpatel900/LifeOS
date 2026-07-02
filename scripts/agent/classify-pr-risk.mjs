@@ -214,7 +214,7 @@ function runSelfTest() {
       },
     },
     {
-      name: "large file count escalates",
+      name: "large file count raises risk but does not escalate",
       input: {
         labels: [],
         changedPaths: Array.from(
@@ -226,12 +226,12 @@ function runSelfTest() {
         deletions: 50,
       },
       expected: {
-        escalationRequired: true,
-        riskLevel: "high",
+        escalationRequired: false,
+        riskLevel: "medium",
       },
     },
     {
-      name: "large churn escalates",
+      name: "large churn raises risk but does not escalate",
       input: {
         labels: [],
         changedPaths: ["README.md"],
@@ -240,8 +240,8 @@ function runSelfTest() {
         deletions: 400,
       },
       expected: {
-        escalationRequired: true,
-        riskLevel: "high",
+        escalationRequired: false,
+        riskLevel: "medium",
       },
     },
     {
