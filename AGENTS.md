@@ -147,7 +147,7 @@ Do not create implementation-note/session-summary files; use the canonical desti
 - Keep handoffs, implementation notes, and new docs compact: findings and decisions, not transcripts. A doc nobody can afford to load into context governs nothing.
 - When adding guidance, prefer one line in an existing doc over a new doc; new docs require a clear reason an existing one cannot absorb the content.
 - `docs/agent/CONTEXT_INDEX.md` and `docs/agent/REPO_MAP.json` are orientation aids, not authority documents.
-- For UI/UX planning, `docs/UI_UX_WORLD_CLASS_ROADMAP.md` is the single active plan. Amend or explicitly retire it before creating any new competing UI/UX plan document.
+- For UI/UX planning, `docs/agent/UI_AGENT_GUIDE.md` and `design_handoff_lifeos/README.md` are the active handoff cockpit guidance. Do not create a competing UI/UX plan document without explicit review.
 - Existing validation, security, RLS, schema, and calendar approval rules still apply.
 
 ## 6B. No Per-Session Note Files

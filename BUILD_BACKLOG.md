@@ -4,7 +4,7 @@
 
 This backlog is derived from:
 
-- `PROJECT_BRIEF.md`
+- `PRODUCT.md`
 - `REQUIREMENTS.md`
 - `ARCHITECTURE.md`
 - `DATA_MODEL.md`

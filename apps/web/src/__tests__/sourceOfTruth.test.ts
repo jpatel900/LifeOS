@@ -224,8 +224,8 @@ describe("source-of-truth boundaries", () => {
     const uiGuide = normalizeWhitespace(
       readRepoFile("docs/agent/UI_AGENT_GUIDE.md"),
     );
-    const roadmap = normalizeWhitespace(
-      readRepoFile("docs/UI_UX_WORLD_CLASS_ROADMAP.md"),
+    const handoffReadme = normalizeWhitespace(
+      readRepoFile("design_handoff_lifeos/README.md"),
     );
 
     expect(cockpitRoute).toContain("LifeOSCockpit");
@@ -250,8 +250,8 @@ describe("source-of-truth boundaries", () => {
     expect(cockpit).toContain("All areas overview");
     expect(globalsCss).toContain(".lifeos-cockpit");
     expect(uiGuide).toContain("design_handoff_lifeos/README.md");
-    expect(roadmap).toContain("Handoff Cockpit Pass");
-    expect(roadmap).toContain("one screen component plus a stage router");
+    expect(handoffReadme).toContain("One screen component");
+    expect(handoffReadme).toContain("view router");
   });
 
   it("keeps the handoff token and accent rules explicit", () => {
