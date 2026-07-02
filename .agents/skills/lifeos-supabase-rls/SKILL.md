@@ -7,34 +7,32 @@ description: Use for LifeOS Supabase, migrations, RLS, tables, grants, indexes, 
 
 ## Use when
 
-- Adding or changing Supabase tables, migrations, grants, constraints, or indexes.
-- Touching RLS-sensitive persistence paths.
-- Auditing same-user ownership guarantees.
+- Adding or changing Supabase tables, migrations, grants, constraints, indexes, RLS-sensitive persistence paths, or same-user ownership guarantees.
 
-## Do not use when
+## Boundaries
 
-- Work is purely UI with no database or auth-bound persistence surface.
-
-## Security boundaries
-
-- `AGENTS.md`, project authority docs, and direct user instructions override this skill.
-- Never disable RLS.
-- Avoid schema changes unless they are explicitly scoped and approved.
+- `AGENTS.md`, authority docs, and direct instructions override this skill.
+- Never disable or weaken RLS to make behavior pass.
+- Avoid schema changes unless explicitly scoped and approved.
 - Do not leak service-role keys or broaden authenticated grants unnecessarily.
+- Do not use PostgreSQL enums for user-expandable values such as area names.
+
+## Table requirements
+
+Every user-owned table needs `id`, `user_id`, timestamps where appropriate, RLS enabled, select/insert/update/delete-or-archive policies, relevant indexes, and export coverage in `USER_DATA_EXPORT_TABLES`. Area-scoped tables include `area_id`.
 
 ## Procedure
 
-1. Enforce `user_id` ownership and RLS on every user-owned table.
-2. Never disable RLS to make behavior pass.
-3. Keep same-user constraints and ownership checks explicit.
-4. Use authenticated Data API grants narrowly to the minimum needed tables/actions.
-5. Avoid service-role leakage in browser/client paths.
-6. When DB or RLS surfaces change, run local RLS tests with at least two users.
-7. Report any grant or policy risk and keep changes minimal and reversible.
+1. Enforce `user_id` ownership and same-user constraints on every user-owned path.
+2. For multi-table persisted transitions, use one transactional `SECURITY INVOKER` server boundary/RPC instead of sequenced client writes.
+3. Use authenticated Data API grants narrowly to the minimum needed tables/actions.
+4. Keep service-role usage server-only and narrowly justified.
+5. When DB/RLS surfaces change, run local Supabase reset and two-user RLS tests.
+6. Report any grant/policy risk and keep changes minimal and reversible.
 
 ## Done criteria
 
-- User ownership and RLS requirements are preserved.
+- User ownership, RLS, policies, indexes, and export coverage are present.
 - Same-user isolation remains intact.
-- Grants are narrow.
-- Two-user RLS test expectations are covered when relevant.
+- Grants are narrow and service-role usage is not exposed to browser code.
+- Two-user RLS expectations are covered when relevant.
