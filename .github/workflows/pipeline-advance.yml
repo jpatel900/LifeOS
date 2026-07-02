@@ -46,7 +46,12 @@ jobs:
       - name: Advance pipeline state
         uses: actions/github-script@v8
         with:
-          github-token: ${{ github.token }}
+          # CODEX_KICK_TOKEN: fine-grained PAT (Issues read/write on this repo) belonging
+          # to the repo owner. @codex mentions posted by the default github-actions bot
+          # are ignored by the Codex connector (bot-loop prevention), so kicks must be
+          # authored by a human account. Falls back to the default token, which still
+          # posts the comment but will not trigger Codex.
+          github-token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
           script: |
             const fs = require('fs');
             const manifest = JSON.parse(
