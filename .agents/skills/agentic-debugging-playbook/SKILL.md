@@ -116,5 +116,5 @@ Authored 2026-07-02. The loop, triage table, traps, and escalation threshold are
 
 **Volatile facts, re-verify if this file is old:**
 - Lockfile filenames (`package-lock.json`, `pnpm-lock.yaml`, `uv.lock`, ...) track ecosystem churn — extend the list as ecosystems evolve.
-- `git bisect` / `git clean` / `git grep -S` flag semantics — re-verify: `git bisect -h; git clean -h; git log --help` (search `-S`).
+- `git bisect` / `git clean` / `git log -S` (pickaxe) flag semantics — re-verify: `git bisect -h; git clean -h; git log --help` (search `-S`).
 - Sibling skills referenced: `agentic-failure-archaeology`, `agentic-proof-and-analysis-toolkit`, `agentic-diagnostics-and-tooling`, `agentic-validation-and-qa`, `agentic-config-and-environment`, `agentic-run-and-operate`, `agentic-change-control`, `agentic-long-horizon-campaign`, `agentic-research-methodology` — re-verify against the library index (`README.md` in the skills root).
