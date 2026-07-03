@@ -8,7 +8,11 @@ vi.mock("./freebusy", () => ({
   resolveGoogleCalendarAccessToken: mocks.resolveGoogleCalendarAccessToken,
 }));
 
-import { insertGoogleCalendarEventForConnection } from "./events";
+import {
+  GoogleCalendarEventDriftError,
+  deleteGoogleCalendarEventForConnection,
+  insertGoogleCalendarEventForConnection,
+} from "./events";
 
 const connection = {
   id: "550e8400-e29b-41d4-a716-446655440901",
@@ -119,5 +123,108 @@ describe("Google Calendar event insert helper", () => {
     });
 
     expect(result.googleEventId).toBe("lifeos550e8400e29b41d4a716446655440501");
+    expect(result.googleEventEtag).toBeNull();
+    expect(result.eventSnapshot).toBeNull();
+  });
+
+  it("captures the event etag and snapshot for provenance auditing", async () => {
+    const proposalId = "550e8400-e29b-41d4-a716-446655440501";
+    const snapshot = {
+      id: "lifeos550e8400e29b41d4a716446655440501",
+      etag: '"etag-42"',
+      summary: "Call dentist tomorrow",
+      extendedProperties: { private: { lifeos_proposal_id: proposalId } },
+    };
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(snapshot), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await insertGoogleCalendarEventForConnection({
+      connection,
+      description: null,
+      proposalId,
+      proposedEnd: "2026-05-10T17:00:00.000Z",
+      proposedStart: "2026-05-10T16:00:00.000Z",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/Toronto",
+      title: "Call dentist tomorrow",
+    });
+
+    expect(result.googleEventEtag).toBe('"etag-42"');
+    expect(result.eventSnapshot).toMatchObject({ etag: '"etag-42"' });
+  });
+});
+
+describe("Google Calendar event delete helper", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn());
+    mocks.resolveGoogleCalendarAccessToken.mockResolvedValue(
+      "google-access-token",
+    );
+  });
+
+  it("deletes an owned event with an If-Match drift guard", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
+
+    const result = await deleteGoogleCalendarEventForConnection({
+      connection,
+      eventId: "lifeos550e8400e29b41d4a716446655440501",
+      expectedEtag: '"etag-42"',
+      supabaseAccessToken: "supabase-access-token",
+    });
+
+    expect(result.status).toBe("deleted");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events/lifeos550e8400e29b41d4a716446655440501",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({
+          Authorization: "Bearer google-access-token",
+          "If-Match": '"etag-42"',
+        }),
+      }),
+    );
+  });
+
+  it("refuses to delete events without the LifeOS-owned id shape", async () => {
+    await expect(
+      deleteGoogleCalendarEventForConnection({
+        connection,
+        eventId: "someone-elses-event",
+        expectedEtag: null,
+        supabaseAccessToken: "supabase-access-token",
+      }),
+    ).rejects.toThrow(/Only LifeOS-created/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("raises a drift error when the event changed since review", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 412 }));
+
+    await expect(
+      deleteGoogleCalendarEventForConnection({
+        connection,
+        eventId: "lifeos550e8400e29b41d4a716446655440501",
+        expectedEtag: '"stale-etag"',
+        supabaseAccessToken: "supabase-access-token",
+      }),
+    ).rejects.toThrow(GoogleCalendarEventDriftError);
+  });
+
+  it("treats an already-deleted event as already gone", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 404 }));
+
+    const result = await deleteGoogleCalendarEventForConnection({
+      connection,
+      eventId: "lifeos550e8400e29b41d4a716446655440501",
+      expectedEtag: null,
+      supabaseAccessToken: "supabase-access-token",
+    });
+
+    expect(result.status).toBe("already_gone");
   });
 });
