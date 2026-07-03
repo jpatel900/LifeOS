@@ -9,6 +9,14 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date.**
 
 ---
 
+## Env-blind validation: implementer's green ≠ CI's green (B7, PR #291)
+
+- **Symptom:** B7 PR (capture wired through parse route) opened with a truthful "all tests pass" report, then failed two required CI lanes — including the guard test for its OWN issue's binding constraint (raw capture stays visible when parsing fails).
+- **Root cause:** The Codex cloud environment deliberately has no Supabase stack, no provider env, and no browsers (no-secrets policy). Tests that exercise env-dependent paths pass vacuously there via mock fallbacks; the Migrations+RLS lane and Playwright E2E are unrunnable. The implementer's evidence was truthful but incomplete, and nothing required disclosing which lanes were unverifiable.
+- **Evidence:** PR #291 body reports `WorkflowContext.test.tsx` passing locally; the same file failed in the Migrations + RLS Verification lane. Playwright plan-flow spec timed out. Secondary noise: B2's meta-learning writes logged `query.insert is not a function` against the shared test mock, which was never extended with the new tables.
+- **Status:** Mitigated — kick template requires an "unverified lanes" disclosure and running the guard tests named in the issue; `lifeos-testing` skill documents the env-dependent lanes and the shared-mock rule; remaining pipeline issues name their guard tests. Required CI checks remain the real gate (they caught this). Do not give the agent environment secrets to "fix" this — the no-secrets boundary is deliberate.
+- **Date:** 2026-07-03
+
 ## Codex ignored the pipeline's @codex kicks
 
 - **Symptom:** Pipeline-advance workflow posted `@codex` mentions on the next issue; Codex cloud never picked them up. Pipeline stalled silently after each merge.
