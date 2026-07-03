@@ -736,6 +736,64 @@ describe("workflow data provider", () => {
     expect(result.blocks[0]?.updated_at).toBe("2026-05-08T15:05:00.000Z");
   });
 
+  it("preserves proposal creation when the meta-learning suggestion write fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const taskSingle = vi
+      .fn()
+      .mockResolvedValue({ data: taskRow, error: null });
+    const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
+    const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
+
+    const proposalSingle = vi.fn().mockResolvedValue({
+      data: proposalRow,
+      error: null,
+    });
+    const proposalSelect = vi.fn().mockReturnValue({ single: proposalSingle });
+    const proposalInsert = vi.fn().mockReturnValue({ select: proposalSelect });
+
+    const suggestionSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "learning table unavailable" },
+    });
+    const suggestionSelect = vi
+      .fn()
+      .mockReturnValue({ single: suggestionSingle });
+    const suggestionInsert = vi.fn().mockReturnValue({
+      select: suggestionSelect,
+    });
+
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: taskSelect };
+      if (table === "time_block_proposals") return { insert: proposalInsert };
+      if (table === "suggestion_records") return { insert: suggestionInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await createTimeBlockProposal(authenticatedClient(from), {
+      task_id: taskId,
+      proposed_start: start,
+      proposed_end: end,
+    });
+
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        "LifeOS meta-learning write failed; user action preserved.",
+        expect.objectContaining({
+          error: "learning table unavailable",
+          table: "suggestion_records",
+        }),
+      );
+    });
+    expect(result.proposal.id).toBe(proposalId);
+    expect(suggestionInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policy_identifier: "planning.default_time_block",
+        schema_version: "meta-learning-event-v1",
+      }),
+    );
+    warn.mockRestore();
+  });
+
   it("creates a local time_block_proposal from a persisted task", async () => {
     const taskSingle = vi
       .fn()
