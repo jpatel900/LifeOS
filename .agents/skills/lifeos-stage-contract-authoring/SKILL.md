@@ -12,6 +12,13 @@ description: Use when a north-star stage usage gate opens (ADR 0002) and the nex
 
 Do NOT use to file issues for stages beyond the next one (rolling-wave rule: full barrage for the active stage only, one non-binding stage card for the stage after, nothing beyond — see ADR 0002 D3/D5 and tracker issue #293).
 
+## Companion files (read the ones your step needs)
+
+- `TEMPLATES.md` — fill-in-the-blanks skeletons for the S0 contract, stage epic, and slice issues; canonical worked examples are live artifacts #252 / #251 / #253–#261.
+- `STAGE_BRIEFS.md` — durable design constraints, decision rules, acceptance shapes, and named anti-patterns for Stages 2–4. Every authored contract MUST satisfy its brief.
+- `CONTRACT_REVIEW_CHECKLIST.md` — deterministic merge-conformance rubric for pipeline PRs (used by the driver on every merge pass).
+- `MODEL_DEGRADATION_RUNBOOK.md` — what tightens when frontier-model capability is unavailable (cross-model contract review, S0 owner-gate reactivation, verification prerequisites). If you are not certain you are a frontier-tier model, read it first.
+
 ## Why this exists
 
 Issues written far from execution rot: PR #227 died against a drifted main; contract quality decays with distance from the code it constrains. Every stage's contract is therefore authored fresh, at the boundary, against current main — never in advance.
@@ -21,7 +28,7 @@ Issues written far from execution rot: PR #227 died against a drifted main; cont
 1. **Gate check.** Evaluate the usage-gate metrics from the stage card with SQL over the system's own tables (suggestion_records, override_records, user_decisions, usage surfaces). Paste the evidence into the stage card. If the gate is not met, STOP — that is a product signal, not an obstacle.
 2. **Boundary review.** Run `docs/skills/next-phase-gate-review.md` for the stage boundary. Resolve "Blocked" verdicts before proceeding.
 3. **Harvest.** Read: previous epic's decision log + wrong-paths comments; docs/FAILURES.md; override/suggestion pattern data; the stage card's open questions and inputs list. Answer every open question or escalate it to the owner.
-4. **Author the contract (S0 content).** Against current main, pre-draft: FR text (numbered, MUST/SHOULD, non-goals), column-level target schema shapes for the entire stage (NS-INV-2: later slices only add), pinned constants/thresholds, pinned module paths, UX flow notes. This becomes the S0 issue's binding appendix — S0 executes as integration work, never design work.
+4. **Author the contract (S0 content).** Against current main, using the TEMPLATES.md skeletons and within the stage's STAGE_BRIEFS.md constraints, pre-draft: FR text (numbered, MUST/SHOULD, non-goals), column-level target schema shapes for the entire stage (NS-INV-2: later slices only add), pinned constants/thresholds, pinned module paths, UX flow notes. This becomes the S0 issue's binding appendix — S0 executes as integration work, never design work. Under degraded model capability, apply MODEL_DEGRADATION_RUNBOOK.md (cross-model review + owner gate) before filing.
 5. **File the epic + slices.** Epic body = campaign file: frozen success criterion with check command, relay table with dependencies, a section titled exactly "Standing agent rules for every issue in this epic" (pipeline-advance.yml kick comments reference that heading verbatim), operating loop, manifest cutover JSON block. Slice issues carry binding touch manifests (NS-INV-5) and cite invariants by ID.
 6. **Wire the machinery.** Update the pipeline driver scheduled-task prompt to the new epic number; confirm the cutover block matches pipeline-manifest.json schema; file the next stage's stage card (non-binding) and update tracker #293.
 7. **Log.** Decision-log comment on the new epic: gate evidence, harvest summary, contract decisions that diverge from the stage card.
