@@ -534,9 +534,8 @@ export function LifeOSCockpit({
               vm={vm}
               selectedTaskId={selectedTaskId}
               onSelectTask={setSelectedTaskId}
-              onPlan={(hour) => {
-                if (!selectedTaskId) return;
-                planTaskAtHour(selectedTaskId, hour);
+              onPlan={(taskId, hour) => {
+                planTaskAtHour(taskId, hour);
                 setSelectedTaskId(null);
               }}
               onUnplan={unplanTask}
@@ -1053,7 +1052,7 @@ function PlanView({
   vm: ReturnType<typeof buildCockpitViewModel>;
   selectedTaskId: string | null;
   onSelectTask: (taskId: string | null) => void;
-  onPlan: (hour: number) => void;
+  onPlan: (taskId: string, hour: number) => void;
   onUnplan: (blockId: string) => void;
   onPromote: (taskId: string) => void;
   onAcceptProposal: (proposalId: string) => void;
@@ -1063,6 +1062,8 @@ function PlanView({
   onExecute: () => void;
   onCapture: () => void;
 }) {
+  const onlyReadyTaskId = vm.today.length === 1 ? vm.today[0].id : null;
+  const taskIdToPlace = selectedTaskId ?? onlyReadyTaskId;
   const hasReadyBlock = vm.planned.length > 0;
   const hasTaskToPlace = vm.today.length > 0;
   const firstOpenHour =
@@ -1083,13 +1084,17 @@ function PlanView({
                 key={hour}
                 type="button"
                 onClick={() =>
-                  placed ? onUnplan(placed.block.id) : onPlan(hour)
+                  placed
+                    ? onUnplan(placed.block.id)
+                    : taskIdToPlace
+                      ? onPlan(taskIdToPlace, hour)
+                      : undefined
                 }
                 className={cn(
                   "grid min-h-16 grid-cols-[58px_1fr] items-center rounded-2xl border p-3 text-left",
                   placed
                     ? "border-[var(--acc-rng)] bg-[var(--acc-sf)]"
-                    : selectedTaskId
+                    : taskIdToPlace
                       ? "border-[var(--acc-rng)] bg-[var(--sf2)]"
                       : "border-[var(--ln)] bg-[var(--sf2)]",
                 )}
@@ -1109,7 +1114,11 @@ function PlanView({
                     </>
                   ) : (
                     <span className="text-[var(--mut)]">
-                      {selectedTaskId ? "Drop here" : "Open hour"}
+                      {taskIdToPlace
+                        ? "Drop here"
+                        : vm.today.length > 1
+                          ? "Select a task first"
+                          : "Open hour"}
                     </span>
                   )}
                 </span>
@@ -1172,14 +1181,13 @@ function PlanView({
             <h2 className="text-xl font-bold">Proposals</h2>
             <button
               type="button"
-              disabled={!selectedTaskId}
+              disabled={!taskIdToPlace}
               onClick={() =>
-                selectedTaskId &&
-                onCreateProposal(selectedTaskId, firstOpenHour)
+                taskIdToPlace && onCreateProposal(taskIdToPlace, firstOpenHour)
               }
               className={cn(
                 "min-h-10 rounded-full px-4 text-sm font-bold",
-                selectedTaskId
+                taskIdToPlace
                   ? "bg-[var(--blu-sf)] text-[var(--blu-fg)]"
                   : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
               )}
@@ -1237,7 +1245,9 @@ function PlanView({
               ))
             ) : (
               <p className="text-[var(--mut)]">
-                Select a task, then draft a local proposal.
+                {vm.today.length > 1
+                  ? "Select a task first"
+                  : "Select a task, then draft a local proposal."}
               </p>
             )}
           </div>
