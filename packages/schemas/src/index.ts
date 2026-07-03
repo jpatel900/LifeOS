@@ -9,6 +9,7 @@ export * from "./entities";
 export * from "./parse-capture";
 export * from "./user";
 export * from "./model-tier";
+export * from "./meta-learning";
 export * from "./phase2-mock-workflow";
 
 export const CreateCaptureItemInputSchema = z.object({

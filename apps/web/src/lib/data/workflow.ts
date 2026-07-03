@@ -6,6 +6,8 @@ import {
   CreateAreaInputSchema,
   CreateExecutionSessionInputSchema,
   CreateGoogleCalendarEventInputSchema,
+  CreateOverrideRecordInputSchema,
+  CreateSuggestionRecordInputSchema,
   CreateTimeBlockProposalInputSchema,
   EditTimeBlockProposalInputSchema,
   CreateProjectInputSchema,
@@ -26,6 +28,8 @@ import {
   type CreateAreaInput,
   type CreateExecutionSessionInput,
   type CreateGoogleCalendarEventInput,
+  type CreateOverrideRecordInput,
+  type CreateSuggestionRecordInput,
   type CreateTimeBlockProposalInput,
   type EditTimeBlockProposalInput,
   type CreateProjectInput,
@@ -277,6 +281,12 @@ const executionSessionColumns =
 const reviewEntryColumns =
   "id,user_id,area_id,review_type,period_start,period_end,summary_json,created_at";
 
+const suggestionRecordColumns =
+  "id,user_id,area_id,policy_identifier,schema_version,suggestion_type,subject_type,subject_id,suggestion_json,confidence,status,created_at,resolved_at";
+
+const overrideRecordColumns =
+  "id,user_id,area_id,policy_identifier,schema_version,subject_type,subject_id,override_type,old_value_json,new_value_json,reason,created_at";
+
 function parseAreas(rows: unknown) {
   return AreaSchema.array().parse(normalizeSupabaseRows(rows));
 }
@@ -390,6 +400,125 @@ async function requireSupabaseUser(
   }
 
   return userData.user;
+}
+
+function logLearningWriteFailure(
+  error: unknown,
+  context: Record<string, unknown>,
+) {
+  console.warn("LifeOS meta-learning write failed; user action preserved.", {
+    error: getSupabaseMessage(error),
+    ...context,
+  });
+}
+
+export async function createSuggestionRecord(
+  client: MinimalSupabaseClient | null,
+  input: CreateSuggestionRecordInput,
+) {
+  const parsedInput = CreateSuggestionRecordInputSchema.parse(input);
+
+  if (!client) return { provider: "mock" as const, record: null };
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before recording learning suggestions.",
+  );
+
+  const query = client.from("suggestion_records") as {
+    insert: (row: Record<string, unknown>) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .insert({
+      user_id: user.id,
+      area_id: parsedInput.area_id,
+      policy_identifier: parsedInput.policy_identifier,
+      schema_version: "meta-learning-event-v1",
+      suggestion_type: parsedInput.suggestion_type,
+      subject_type: parsedInput.subject_type,
+      subject_id: parsedInput.subject_id ?? null,
+      suggestion_json: parsedInput.suggestion_json,
+      confidence: parsedInput.confidence ?? null,
+      status: parsedInput.status,
+      resolved_at: parsedInput.resolved_at ?? null,
+    })
+    .select(suggestionRecordColumns)
+    .single();
+
+  if (error) throw new Error(getSupabaseMessage(error));
+  return { provider: "supabase" as const, record: data };
+}
+
+export async function createOverrideRecord(
+  client: MinimalSupabaseClient | null,
+  input: CreateOverrideRecordInput,
+) {
+  const parsedInput = CreateOverrideRecordInputSchema.parse(input);
+
+  if (!client) return { provider: "mock" as const, record: null };
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before recording learning overrides.",
+  );
+
+  const query = client.from("override_records") as {
+    insert: (row: Record<string, unknown>) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .insert({
+      user_id: user.id,
+      area_id: parsedInput.area_id,
+      policy_identifier: parsedInput.policy_identifier,
+      schema_version: "meta-learning-event-v1",
+      subject_type: parsedInput.subject_type,
+      subject_id: parsedInput.subject_id,
+      override_type: parsedInput.override_type,
+      old_value_json: parsedInput.old_value_json,
+      new_value_json: parsedInput.new_value_json,
+      reason: parsedInput.reason ?? null,
+    })
+    .select(overrideRecordColumns)
+    .single();
+
+  if (error) throw new Error(getSupabaseMessage(error));
+  return { provider: "supabase" as const, record: data };
+}
+
+function recordSuggestionFireAndForget(
+  client: MinimalSupabaseClient,
+  input: CreateSuggestionRecordInput,
+) {
+  void createSuggestionRecord(client, input).catch((error) => {
+    logLearningWriteFailure(error, {
+      table: "suggestion_records",
+      policy_identifier: input.policy_identifier,
+      suggestion_type: input.suggestion_type,
+    });
+  });
+}
+
+function recordOverrideFireAndForget(
+  client: MinimalSupabaseClient,
+  input: CreateOverrideRecordInput,
+) {
+  void createOverrideRecord(client, input).catch((error) => {
+    logLearningWriteFailure(error, {
+      table: "override_records",
+      policy_identifier: input.policy_identifier,
+      override_type: input.override_type,
+    });
+  });
 }
 
 export async function listAreas(
@@ -842,9 +971,26 @@ export async function createTask(
     throw new Error(getSupabaseMessage(error));
   }
 
+  const task = parseTask(data);
+  recordSuggestionFireAndForget(client, {
+    area_id: task.area_id,
+    policy_identifier: "triage.default_accept_task",
+    suggestion_type: "triage_suggestion",
+    subject_type: "task",
+    subject_id: task.id,
+    suggestion_json: {
+      title: task.title,
+      status: task.status,
+      source_capture_item_id: task.source_capture_item_id,
+    },
+    confidence: task.priority_confidence,
+    status: "accepted",
+    resolved_at: new Date().toISOString(),
+  });
+
   return {
     provider: "supabase",
-    task: parseTask(data),
+    task,
   };
 }
 
@@ -1056,9 +1202,26 @@ export async function createTimeBlockProposal(
     throw new Error(getSupabaseMessage(error));
   }
 
+  const proposal = parseTimeBlockProposal(data);
+  recordSuggestionFireAndForget(client, {
+    area_id: proposal.area_id,
+    policy_identifier: "planning.default_time_block",
+    suggestion_type: "time_block_proposal",
+    subject_type: "time_block_proposal",
+    subject_id: proposal.id,
+    suggestion_json: {
+      task_id: proposal.task_id,
+      proposed_start: proposal.proposed_start,
+      proposed_end: proposal.proposed_end,
+      rationale_json: proposal.rationale_json,
+    },
+    confidence: null,
+    status: "pending",
+  });
+
   return {
     provider: "supabase",
-    proposal: parseTimeBlockProposal(data),
+    proposal,
   };
 }
 
@@ -1104,9 +1267,25 @@ export async function editTimeBlockProposal(
     throw new Error(getSupabaseMessage(error));
   }
 
+  const proposal = parseTimeBlockProposal(data);
+  recordOverrideFireAndForget(client, {
+    area_id: proposal.area_id,
+    policy_identifier: "planning.default_time_block",
+    subject_type: "time_block_proposal",
+    subject_id: proposal.id,
+    override_type: "edited",
+    old_value_json: {},
+    new_value_json: {
+      proposed_start: proposal.proposed_start,
+      proposed_end: proposal.proposed_end,
+      status: proposal.status,
+    },
+    reason: "User edited a local time-block proposal.",
+  });
+
   return {
     provider: "supabase",
-    proposal: parseTimeBlockProposal(data),
+    proposal,
   };
 }
 
@@ -1145,9 +1324,21 @@ export async function rejectTimeBlockProposal(
     throw new Error(getSupabaseMessage(error));
   }
 
+  const proposal = parseTimeBlockProposal(data);
+  recordOverrideFireAndForget(client, {
+    area_id: proposal.area_id,
+    policy_identifier: "planning.default_time_block",
+    subject_type: "time_block_proposal",
+    subject_id: proposal.id,
+    override_type: "rejected",
+    old_value_json: { status: "proposed" },
+    new_value_json: { status: proposal.status },
+    reason: "User rejected a local time-block proposal.",
+  });
+
   return {
     provider: "supabase",
-    proposal: parseTimeBlockProposal(data),
+    proposal,
   };
 }
 
@@ -1178,10 +1369,28 @@ export async function acceptTimeBlockProposal(
   }
 
   const result = (data ?? {}) as Record<string, unknown>;
+  const proposal = parseTimeBlockProposal(result.proposal);
+  const block = parseCalendarBlock(result.block);
+  recordOverrideFireAndForget(client, {
+    area_id: proposal.area_id,
+    policy_identifier: "planning.default_time_block",
+    subject_type: "time_block_proposal",
+    subject_id: proposal.id,
+    override_type: "accepted",
+    old_value_json: { status: "proposed" },
+    new_value_json: {
+      status: proposal.status,
+      calendar_block_id: block.id,
+      start_at: block.start_at,
+      end_at: block.end_at,
+    },
+    reason: "User accepted a local time-block proposal.",
+  });
+
   return {
     provider: "supabase",
-    proposal: parseTimeBlockProposal(result.proposal),
-    block: parseCalendarBlock(result.block),
+    proposal,
+    block,
     task: result.task ? parseTask(result.task) : null,
   };
 }
