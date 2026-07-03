@@ -9,6 +9,11 @@ export const SAFE_AUTOMERGE_ALLOWED_PATH_PATTERNS = [
   "docs/**",
   "README.md",
   ".github/ISSUE_TEMPLATE/**",
+  // Extended 2026-07-03 after the epic #243 pipeline proved the lane
+  // (owner approval; see AGENT_AUTOMATION_POLICY.md T0). Skills are
+  // agent-facing markdown synced from the owner's curated hub; CI and
+  // the docRegistry guard still gate.
+  ".agents/skills/**",
 ];
 
 export const LOW_RISK_FORBIDDEN_PATH_PATTERNS = [
