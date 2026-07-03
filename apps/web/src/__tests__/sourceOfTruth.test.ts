@@ -51,6 +51,22 @@ function walkRepoFiles(relativePath: string): string[] {
 }
 
 describe("source-of-truth boundaries", () => {
+  it("requires cockpit model tests to use transition-reachable workflow helpers", () => {
+    const testFiles = walkRepoFiles("apps/web/src/__tests__").filter(
+      (file) =>
+        /\.(?:test|spec)\.(?:ts|tsx)$/.test(file) ||
+        file.endsWith("helpers/workflowReachability.ts"),
+    );
+    const offenders = testFiles.filter((file) => {
+      if (file === "apps/web/src/__tests__/helpers/workflowReachability.ts") {
+        return false;
+      }
+      const source = readRepoFile(file);
+      return /\bbuild(?:CockpitViewModel|TodayCockpitModel)\s*\(/.test(source);
+    });
+
+    expect(offenders).toEqual([]);
+  });
   it("keeps AppShell singular and imported from the app shell boundary", () => {
     const layout = readRepoFile("apps/web/src/app/layout.tsx");
 
