@@ -1398,9 +1398,11 @@ export async function acceptTimeBlockProposal(
 export async function checkTimeBlockProposalConflict(
   client: MinimalSupabaseClient | null,
   proposalId: string,
+  timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
 ): Promise<TimeBlockProposalConflictCheckResult> {
   const parsedInput = CheckTimeBlockProposalConflictInputSchema.parse({
     proposal_id: proposalId,
+    timezone,
   });
 
   if (!client) {

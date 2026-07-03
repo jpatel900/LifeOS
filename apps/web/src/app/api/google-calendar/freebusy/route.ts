@@ -95,6 +95,7 @@ export async function POST(request: Request) {
       proposedEnd: proposal.proposed_end,
       proposedStart: proposal.proposed_start,
       supabaseAccessToken: accessToken,
+      timezone: input.timezone,
     });
     const updatedProposal = await updateTimeBlockProposalConflictForAccessToken(
       accessToken,
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
         has_conflict: result.hasConflict,
         provider: "google_calendar",
         status: "checked",
+        all_day_contexts: result.allDayContexts,
       },
       result.hasConflict,
     );
@@ -113,6 +115,7 @@ export async function POST(request: Request) {
       proposal: updatedProposal,
       checked_at: result.checkedAt,
       has_conflict: result.hasConflict,
+      all_day_contexts: result.allDayContexts,
     });
   } catch (error) {
     const message = getSafeErrorMessage(error);
