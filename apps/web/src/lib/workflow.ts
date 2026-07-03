@@ -361,6 +361,10 @@ export function appendParsedWorkflowResult(
     ambiguityAssessments: parsed.ambiguityAssessment
       ? [parsed.ambiguityAssessment, ...state.ambiguityAssessments]
       : state.ambiguityAssessments,
+    timeBlockProposalDrafts: [
+      ...parsed.timeBlockProposalDrafts,
+      ...state.timeBlockProposalDrafts,
+    ],
     reviewLog: [
       `Parsed capture: ${parsed.captureItem.raw_text}`,
       ...state.reviewLog,

@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useRef } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TriagePage from "../app/triage/page";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { createInitialWorkflowState } from "@/lib/workflow";
@@ -72,6 +72,7 @@ function HydrationProbe() {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   if (originalSessionStorageDescriptor) {
     Object.defineProperty(
       window,
@@ -82,6 +83,15 @@ afterEach(() => {
 });
 
 describe("WorkflowProvider storage fallback", () => {
+  // This suite exercises the UNCONFIGURED (local/storage) mode. Ambient
+  // Supabase env must not flip the provider into account mode: the
+  // Migrations + RLS CI lane exports a live local stack, which made these
+  // tests report sync-error instead of local-only while the default lane
+  // passed vacuously. See docs/FAILURES.md (env-blind validation).
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+  });
   it("falls back to initial state when sessionStorage cannot be read", async () => {
     replaceSessionStorage({
       getItem: vi.fn(() => {
