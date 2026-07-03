@@ -71,6 +71,7 @@ import {
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
@@ -1704,8 +1705,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => {
+      const draft = stateRef.current.taskDrafts.find(
+        (item) => item.id === draftId,
+      );
       dispatch({ type: "rejectDraft", draftId });
       markLocalOnly("Dropped draft locally; account sync is pending.");
+
+      if (draft) {
+        recordRejectedTaskDraft(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWorkflowId(
+            draft.area_id,
+            persistedAreasRef.current,
+          ),
+          draft_id: draft.id,
+          title: draft.title,
+          confidence: draft.confidence,
+        });
+      }
     },
     rejectProjectDraft: (draftId) =>
       dispatch({ type: "rejectProjectDraft", draftId }),
