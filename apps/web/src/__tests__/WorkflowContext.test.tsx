@@ -407,4 +407,68 @@ describe("WorkflowProvider storage fallback", () => {
       "Capture saved for manual triage",
     );
   });
+
+  it("uses the mock workflow path when the parse route reports AI is unavailable", async () => {
+    replaceSessionStorage({});
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: false,
+            json: async () => ({
+              ok: false,
+              error:
+                "AI parser is unavailable right now. You can retry with the mock parser.",
+              can_retry_with_mock: true,
+              status: "ai_unavailable",
+            }),
+          }) as Response,
+      ),
+    );
+
+    function MockFallbackProbe() {
+      const { state, submitCaptureText } = useWorkflow();
+      return (
+        <div>
+          <span data-testid="capture-count">{state.captureItems.length}</span>
+          <span data-testid="draft-count">{state.taskDrafts.length}</span>
+          <span data-testid="first-capture-status">
+            {state.captureItems[0]?.status ?? ""}
+          </span>
+          <span data-testid="first-draft-title">
+            {state.taskDrafts[0]?.title ?? ""}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              submitCaptureText("Proposal parity repair item", "area-main-job")
+            }
+          >
+            Add capture
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <WorkflowProvider>
+        <MockFallbackProbe />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add capture" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+      expect(screen.getByTestId("draft-count")).toHaveTextContent("1");
+    });
+    expect(screen.getByTestId("first-capture-status")).toHaveTextContent(
+      "triage_required",
+    );
+    expect(screen.getByTestId("first-draft-title")).toHaveTextContent(
+      "Proposal parity repair item",
+    );
+  });
 });

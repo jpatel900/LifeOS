@@ -1603,6 +1603,31 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         typeof payload !== "object" ||
         !("response" in payload)
       ) {
+        const fallbackStatus =
+          payload && typeof payload === "object" && "status" in payload
+            ? (payload as { status?: unknown }).status
+            : null;
+        const canRetryWithMock =
+          payload &&
+          typeof payload === "object" &&
+          "can_retry_with_mock" in payload &&
+          (payload as { can_retry_with_mock?: unknown }).can_retry_with_mock ===
+            true;
+
+        if (
+          canRetryWithMock &&
+          (fallbackStatus === "ai_unavailable" || fallbackStatus === "mock")
+        ) {
+          applyWorkflowState(
+            submitCapture(stateRef.current, {
+              rawText: localCapture.raw_text,
+              areaId,
+              existingCapture: localCapture,
+            }),
+          );
+          return;
+        }
+
         throw new Error("Parse capture route returned a safe failure.");
       }
 
