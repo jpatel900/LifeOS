@@ -32,6 +32,7 @@ import {
   type CockpitStage,
 } from "@/lib/cockpit/viewModel";
 import { cn } from "@/lib/utils";
+import { GoogleCalendarApprovalBridge } from "./GoogleCalendarApprovalBridge";
 
 const STAGE_LABELS: Record<CockpitStage, string> = {
   today: "Today",
@@ -1263,6 +1264,10 @@ function PlanView({
               need explicit approval.
             </p>
           </details>
+          <GoogleCalendarApprovalBridge
+            proposals={vm.proposals}
+            planned={vm.planned}
+          />
           <button
             type="button"
             onClick={hasReadyBlock ? onExecute : onCapture}
