@@ -12,6 +12,7 @@ Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing
 ## Decisions in effect
 
 - Safety boundaries are unchanged: no silent external writes, no autonomous rescheduling, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
+- Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification` (2026-07-03); GitHub auto-merge gates on these. The T0 safe auto-merge allowlist includes `.agents/skills/**` (owner-approved, 2026-07-03).
 - The app remains one deployable Next.js app for V1 server logic; Supabase Edge Functions are later/default-no unless a specific scheduled or integration constraint justifies them.
 - Persistence is intentionally mixed: authenticated Supabase paths are used where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
 - The handoff cockpit is the active UI model. `design_handoff_lifeos/README.md` remains the active design reference; old Pass 7 visual-contract docs are history only.
