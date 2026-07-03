@@ -135,6 +135,16 @@ export interface GoogleCalendarEventCreateResult {
   googleEventId: string;
 }
 
+export class GoogleCalendarEventCreateError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "GoogleCalendarEventCreateError";
+    this.status = status;
+  }
+}
+
 export interface ExecutionReviewItemsResult {
   provider: DataProvider;
   tasks: Task[];
@@ -1501,10 +1511,11 @@ export async function createGoogleCalendarEventFromProposal(
   > | null;
 
   if (!response.ok) {
-    throw new Error(
+    throw new GoogleCalendarEventCreateError(
       typeof payload?.error === "string"
         ? payload.error
         : "Google Calendar event could not be created.",
+      response.status,
     );
   }
 
