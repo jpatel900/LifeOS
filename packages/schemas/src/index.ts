@@ -177,6 +177,15 @@ export type CreateGoogleCalendarEventInput = z.input<
   typeof CreateGoogleCalendarEventInputSchema
 >;
 
+export const CancelGoogleCalendarEventInputSchema = z.object({
+  calendar_block_id: z.string().uuid(),
+  approved: z.literal(true),
+});
+
+export type CancelGoogleCalendarEventInput = z.input<
+  typeof CancelGoogleCalendarEventInputSchema
+>;
+
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected ISO date YYYY-MM-DD");

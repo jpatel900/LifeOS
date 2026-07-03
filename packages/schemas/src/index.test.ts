@@ -3,6 +3,7 @@ import {
   AmbiguityAssessmentSchema,
   AreaSchema,
   CalendarBlockSchema,
+  CancelGoogleCalendarEventInputSchema,
   CaptureItemSchema,
   CreateAreaInputSchema,
   CreateCaptureItemInputSchema,
@@ -261,6 +262,26 @@ describe("CreateGoogleCalendarEventInputSchema", () => {
   it("rejects event creation input without approval", () => {
     const result = CreateGoogleCalendarEventInputSchema.safeParse({
       proposal_id: uid,
+      approved: false,
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("CancelGoogleCalendarEventInputSchema", () => {
+  it("requires explicit approval before Google Calendar event cancellation", () => {
+    const result = CancelGoogleCalendarEventInputSchema.safeParse({
+      calendar_block_id: uid,
+      approved: true,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects event cancellation input without approval", () => {
+    const result = CancelGoogleCalendarEventInputSchema.safeParse({
+      calendar_block_id: uid,
       approved: false,
     });
 
