@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import TriagePage from "../app/triage/page";
@@ -65,6 +71,7 @@ function HydrationProbe() {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   if (originalSessionStorageDescriptor) {
     Object.defineProperty(
       window,
@@ -231,5 +238,173 @@ describe("WorkflowProvider storage fallback", () => {
     await waitFor(() => {
       expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
     });
+  });
+  it("parses a raw-saved capture through the route before adding triage drafts", async () => {
+    replaceSessionStorage({});
+
+    let resolveParse!: (response: Response) => void;
+    const parseResponse = new Promise<Response>((resolve) => {
+      resolveParse = resolve;
+    });
+    const fetchMock = vi.fn(() => parseResponse);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const successfulResponse = {
+      ok: true,
+      json: async () => ({
+        ok: true,
+        parser: "ai",
+        status: "ai_available",
+        response: {
+          schema_version: "1.0",
+          prompt_version: "parse-capture-v1",
+          parse_status: "parsed",
+          overall_confidence: 0.86,
+          triage_required: true,
+          triage_reasons: ["Review before committing."],
+          drafts: [
+            {
+              draft_type: "task_draft",
+              title: "Follow up with Alex",
+              description: "Send Alex the follow-up note.",
+              area_slug_suggestion: "main-job",
+              first_tiny_step: "Open the thread with Alex.",
+              estimated_minutes_low: 15,
+              estimated_minutes_high: 30,
+              due_at: null,
+              confidence: 0.82,
+            },
+          ],
+          clarification_questions: [],
+          ambiguity_assessment: null,
+        },
+      }),
+    } as Response;
+
+    function ParseProbe() {
+      const { state, submitCaptureText } = useWorkflow();
+      return (
+        <div>
+          <span data-testid="capture-count">{state.captureItems.length}</span>
+          <span data-testid="draft-count">{state.taskDrafts.length}</span>
+          <span data-testid="first-capture-status">
+            {state.captureItems[0]?.status ?? ""}
+          </span>
+          <span data-testid="first-draft-title">
+            {state.taskDrafts[0]?.title ?? ""}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              submitCaptureText("Follow up with Alex", "area-main-job")
+            }
+          >
+            Add capture
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <WorkflowProvider>
+        <ParseProbe />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add capture" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+      expect(screen.getByTestId("draft-count")).toHaveTextContent("0");
+    });
+
+    await act(async () => {
+      resolveParse(successfulResponse);
+      await parseResponse;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("draft-count")).toHaveTextContent("1");
+    });
+    expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("first-capture-status")).toHaveTextContent(
+      "triage_required",
+    );
+    expect(screen.getByTestId("first-draft-title")).toHaveTextContent(
+      "Follow up with Alex",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/parse-capture",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("keeps raw capture visible without drafts when parsing fails", async () => {
+    replaceSessionStorage({});
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: false,
+            json: async () => ({
+              ok: false,
+              error:
+                "Parsing failed safely. You can retry with the mock parser.",
+              can_retry_with_mock: true,
+              status: "ai_available",
+            }),
+          }) as Response,
+      ),
+    );
+
+    function FailureProbe() {
+      const { state, submitCaptureText, syncStatus } = useWorkflow();
+      return (
+        <div>
+          <span data-testid="capture-count">{state.captureItems.length}</span>
+          <span data-testid="draft-count">{state.taskDrafts.length}</span>
+          <span data-testid="account-status">{syncStatus.account}</span>
+          <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
+          <span data-testid="first-capture-status">
+            {state.captureItems[0]?.status ?? ""}
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              submitCaptureText("Follow up with Alex", "area-main-job")
+            }
+          >
+            Add capture
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <WorkflowProvider>
+        <FailureProbe />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add capture" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+      expect(screen.getByTestId("draft-count")).toHaveTextContent("0");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("account-status")).toHaveTextContent(
+        "local-only",
+      );
+    });
+    expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+    expect(screen.getByTestId("draft-count")).toHaveTextContent("0");
+    expect(screen.getByTestId("first-capture-status")).toHaveTextContent("new");
+    expect(screen.getByTestId("sync-message")).toHaveTextContent(
+      "Capture saved for manual triage",
+    );
   });
 });
