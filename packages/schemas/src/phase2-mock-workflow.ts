@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ParseCaptureBreakdownSchema } from "./parse-capture";
 
 /**
  * Phase 2 vertical-slice mock workflow types (local session state, non-UUID ids).
@@ -28,6 +29,9 @@ export const Phase2TaskDraftSchema = z.object({
   estimated_minutes_low: z.number().int().positive().nullable(),
   estimated_minutes_high: z.number().int().positive().nullable(),
   first_tiny_step: z.string().min(1).nullable(),
+  // Display-only staging copy of the parse-capture breakdown; never persisted
+  // to the tasks table (that schema change needs separate human review).
+  breakdown: ParseCaptureBreakdownSchema.nullable().default(null),
   status: z.enum(["pending", "accepted", "rejected"]),
   created_at: z.string().datetime(),
 });

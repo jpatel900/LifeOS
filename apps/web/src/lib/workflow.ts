@@ -202,6 +202,34 @@ export function mockParseCapture(
       estimated_minutes_low: 30,
       estimated_minutes_high: 60,
       first_tiny_step: firstMove,
+      breakdown: {
+        steps: [
+          {
+            order: 1,
+            title: firstMove,
+            estimated_minutes: 10,
+            depends_on_orders: [],
+            on_critical_path: true,
+          },
+          {
+            order: 2,
+            title: `Do the core work for: ${title}`,
+            estimated_minutes: 30,
+            depends_on_orders: [1],
+            on_critical_path: true,
+          },
+          {
+            order: 3,
+            title: `Confirm the outcome and capture follow-ups for: ${title}`,
+            estimated_minutes: 10,
+            depends_on_orders: [2],
+            on_critical_path: true,
+          },
+        ],
+        sequence_summary:
+          "Clarify the step, do the core work, then confirm the outcome.",
+        kickstart_step: `Open the capture and write one sentence defining done for: ${title}`,
+      },
       status: "pending",
       created_at: createdAt,
     },
@@ -364,6 +392,8 @@ export function splitDraft(
       : `Split from: ${draft.title}`,
     confidence: Math.min(draft.confidence, 0.72),
     first_tiny_step: `Clarify the first move for: ${title}`,
+    // The parsed breakdown described the original scope; a split changes it.
+    breakdown: null,
     status: "pending",
     created_at: createdAt,
   });
@@ -423,6 +453,8 @@ export function mergeDrafts(
             primary.first_tiny_step ??
             secondary.first_tiny_step ??
             `Clarify the first move for: ${mergedTitle}`,
+          // The parsed breakdown described one draft's scope; a merge changes it.
+          breakdown: null,
         };
       }
       if (draft.id === secondaryDraftId) {

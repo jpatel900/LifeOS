@@ -41,4 +41,69 @@ describe("Triage cockpit", () => {
 
     expect(await screen.findByText("Inbox clear")).toBeDefined();
   });
+
+  it("shows the anti-procrastination breakdown on a parsed task draft", async () => {
+    mockPathname.mockReturnValue("/capture");
+    render(
+      <AppShell>
+        <CapturePage />
+      </AppShell>,
+    );
+
+    fireEvent.change(
+      await screen.findByPlaceholderText("Drop the thought here."),
+      {
+        target: { value: "Prepare the sponsor update deck" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+
+    expect(await screen.findByText("Start here (under 10 min)")).toBeDefined();
+    expect(
+      screen.getByText(
+        "Open the capture and write one sentence defining done for: Prepare the sponsor update deck",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByText("Do the core work for: Prepare the sponsor update deck"),
+    ).toBeDefined();
+    expect(screen.getAllByText("critical path")).toHaveLength(3);
+    expect(screen.getByText("~30m")).toBeDefined();
+    expect(screen.getAllByText("~10m")).toHaveLength(2);
+    expect(
+      screen.getByText(
+        "Clarify the step, do the core work, then confirm the outcome.",
+      ),
+    ).toBeDefined();
+  });
+
+  it("renders split drafts without a breakdown section", async () => {
+    mockPathname.mockReturnValue("/capture");
+    render(
+      <AppShell>
+        <CapturePage />
+      </AppShell>,
+    );
+
+    fireEvent.change(
+      await screen.findByPlaceholderText("Drop the thought here."),
+      {
+        target: { value: "Tidy the garage shelves" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+
+    expect(await screen.findByText("Start here (under 10 min)")).toBeDefined();
+
+    fireEvent.change(screen.getByPlaceholderText("First split task"), {
+      target: { value: "Sort tools into bins" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Second split task"), {
+      target: { value: "Donate the spare shelf" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Split draft" }));
+
+    expect(await screen.findByText("Sort tools into bins")).toBeDefined();
+    expect(screen.queryByText("Start here (under 10 min)")).toBeNull();
+  });
 });
