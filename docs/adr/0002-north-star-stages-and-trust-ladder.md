@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (requires owner sign-off; this ADR is a one-way-door doctrine document)
+Accepted (owner sign-off 2026-07-02, merged via PR #250; this ADR is a one-way-door doctrine document)
 
 ## Context
 
