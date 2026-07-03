@@ -1189,7 +1189,7 @@ function PlanView({
           </div>
           <div className="mt-4 grid gap-2">
             {vm.proposals.length ? (
-              vm.proposals.map(({ proposal, task, hour }) => (
+              vm.proposals.map(({ allDayContexts, proposal, task, hour }) => (
                 <div
                   key={proposal.id}
                   className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
@@ -1210,6 +1210,14 @@ function PlanView({
                     </button>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
+                    {allDayContexts.map((context) => (
+                      <span
+                        key={`${proposal.id}:${context.id}`}
+                        className="rounded-full border border-[var(--ln2)] bg-[var(--sf3)] px-3 py-2 text-sm font-semibold text-[var(--mut)]"
+                      >
+                        All-day: {context.summary}
+                      </span>
+                    ))}
                     <button
                       type="button"
                       onClick={() => onNudgeProposal(proposal.id)}
