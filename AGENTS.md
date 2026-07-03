@@ -45,6 +45,7 @@ Do not change RLS policies, OAuth scopes, calendar write logic, service-role usa
 8. Every ~20 merged PRs or monthly, run a system review and file findings as `docs/KNOWN_ISSUES.md` rows.
 9. Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance guidance materially changes; keep it concise and replace-not-append.
 10. Do not create per-session note, handoff, implementation-summary, or scratch-plan `.md` files. Durable decisions go to ADRs; status goes to `PROJECT_STATE`; everything else goes to git history and PR text.
+11. Keep context lean: report command output as failures-only (failing tests, error lines, exit codes — never full logs), return diffs or changed sections instead of full files, and cap exploration at the files the task needs.
 
 ## Skill routing
 

@@ -9,6 +9,7 @@ Manual fallback template for medium/high-risk work, local debugging, visual vali
 - Routing: use the routing table in `AGENTS.md`; load the smallest relevant repo-local skill set.
 - Documentation: durable decisions go to `docs/adr/`; status/current-state changes go to `docs/PROJECT_STATE.md`; everything else belongs in git history and PR text.
 - Output budget: return changed sections or diffs, tests run, risks, and rollback notes; never paste full files unless asked.
+- Log budget: when reporting command or test output, include only failing tests, error lines, and exit codes — never full logs or passing-test noise.
 
 ## Required prompt skeleton
 
