@@ -16,7 +16,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  # contents: write is required by the enablePullRequestAutoMerge GraphQL
+  # mutation (auto-merge schedules a merge, which writes contents). Fork PRs
+  # receive a read-only token regardless, so external PRs cannot use this.
+  contents: write
   pull-requests: write
 
 jobs:
