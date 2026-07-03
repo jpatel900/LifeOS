@@ -7,7 +7,7 @@ Sections: Current objective / Decisions in effect / Constraints / Open questions
 
 ## Current objective
 
-Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing narrow, issue-driven follow-up work. Current shipped surface includes areas, capture, optional AI/mock parse capture, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and the handoff cockpit UI model.
+Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing narrow, issue-driven follow-up work. Current shipped surface includes areas, capture, optional AI/mock parse capture, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and the handoff cockpit UI model. The 2026-07-03 authenticated production smoke confirmed capture→triage→task and review save work end-to-end in persisted mode, but placed/scheduled blocks are not surfaced by Plan/Today/Execute — making the Google-write approval step and execution sessions currently unreachable in production — and `/health` shows stale mock copy (`docs/KNOWN_ISSUES.md` rows 11–14).
 
 ## Decisions in effect
 
@@ -31,7 +31,7 @@ Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing
 ## Open questions
 
 - Remaining cockpit Calendar/AI/env gaps from the 2026-06-30 flow audit need product decisions before implementation.
-- Production smoke for issue #93 still needs authenticated verification without weakening deployment protection.
+- The 2026-07-03 production smoke failures (blocks invisible to Plan/Today/Execute, `/health` stale mock copy — `docs/KNOWN_ISSUES.md` rows 11–14) need root-cause and an approved fix slice before the calendar/execute journeys can be re-verified.
 - Durable audit for draft rejection/edit/split/merge remains a product decision, not a persistence bug.
 - Meta-learning logs exist but are not yet used for a closed learning loop.
 
