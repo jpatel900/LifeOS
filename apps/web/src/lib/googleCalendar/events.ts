@@ -1,6 +1,12 @@
 import type { GoogleCalendarStoredConnection } from "./server";
 import { resolveGoogleCalendarAccessToken } from "./freebusy";
 
+interface GoogleCalendarEventReadParams {
+  connection: GoogleCalendarStoredConnection;
+  eventId: string;
+  supabaseAccessToken: string;
+}
+
 interface InsertGoogleCalendarEventParams {
   connection: GoogleCalendarStoredConnection;
   description: string | null;
@@ -13,6 +19,11 @@ interface InsertGoogleCalendarEventParams {
 }
 
 export interface InsertGoogleCalendarEventResult {
+  googleEventId: string;
+}
+
+export interface GoogleCalendarEventReadResult {
+  exists: boolean;
   googleEventId: string;
 }
 
@@ -41,6 +52,48 @@ function buildDeterministicGoogleEventId(proposalId: string) {
   }
 
   return `lifeos${compactId}`;
+}
+
+export async function getGoogleCalendarEventForConnection(
+  params: GoogleCalendarEventReadParams,
+): Promise<GoogleCalendarEventReadResult> {
+  assertServerRuntime();
+
+  const accessToken = await resolveGoogleCalendarAccessToken({
+    connection: params.connection,
+    supabaseAccessToken: params.supabaseAccessToken,
+  });
+  const calendarId = encodeURIComponent(params.connection.calendar_id);
+  const eventId = encodeURIComponent(params.eventId);
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    },
+  );
+
+  if (response.status === 404 || response.status === 410) {
+    return { exists: false, googleEventId: params.eventId };
+  }
+
+  const payload = (await response.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+
+  if (!response.ok) {
+    throw new Error("Google Calendar event read failed.");
+  }
+
+  return {
+    exists: true,
+    googleEventId: requireNonEmptyText(
+      payload?.id,
+      "Google Calendar event read returned no event id.",
+    ),
+  };
 }
 
 export async function insertGoogleCalendarEventForConnection(
