@@ -40,7 +40,9 @@ interface ParseCaptureInput {
   areaId?: string | null;
 }
 
-interface SubmitCaptureInput extends ParseCaptureInput {}
+interface SubmitCaptureInput extends ParseCaptureInput {
+  existingCapture?: Phase2CaptureItem;
+}
 
 interface AddAreaInput {
   name: string;
@@ -262,25 +264,82 @@ export function mockParseCapture(
   return MockParseCaptureResponseSchema.parse(response);
 }
 
+export function createRawCaptureItem(
+  input: ParseCaptureInput,
+): Phase2CaptureItem {
+  const rawText = input.rawText.trim();
+  if (!rawText) {
+    throw new Error("Capture text is required.");
+  }
+
+  return {
+    id: nextId("capture"),
+    user_id: MOCK_USER_ID,
+    area_id: input.areaId ?? null,
+    raw_text: rawText,
+    capture_mode: "text",
+    inferred_area_confidence: null,
+    status: "new",
+    created_at: nowIso(),
+  };
+}
+
+export function appendRawCapture(
+  state: WorkflowState,
+  capture: Phase2CaptureItem,
+): WorkflowState {
+  return {
+    ...state,
+    captureItems: [capture, ...state.captureItems],
+    reviewLog: [`Captured raw text: ${capture.raw_text}`, ...state.reviewLog],
+  };
+}
+
 export function submitCapture(
   state: WorkflowState,
   input: SubmitCaptureInput,
 ): WorkflowState {
   const parsed = mockParseCapture(input);
+  const captureItem = input.existingCapture
+    ? {
+        ...parsed.captureItem,
+        id: input.existingCapture.id,
+        created_at: input.existingCapture.created_at,
+      }
+    : parsed.captureItem;
+  const taskDraft = {
+    ...parsed.taskDraft,
+    capture_item_id: captureItem.id,
+  };
+  const projectDraft = parsed.projectDraft
+    ? {
+        ...parsed.projectDraft,
+        capture_item_id: captureItem.id,
+      }
+    : null;
+  const ambiguityAssessment = {
+    ...parsed.ambiguityAssessment,
+    source_capture_item_id: captureItem.id,
+  };
+  const timeBlockProposalDraft = {
+    ...parsed.timeBlockProposalDraft,
+    capture_item_id: captureItem.id,
+    task_draft_id: taskDraft.id,
+  };
 
   return {
     ...state,
-    captureItems: [parsed.captureItem, ...state.captureItems],
-    taskDrafts: [parsed.taskDraft, ...state.taskDrafts],
-    projectDrafts: parsed.projectDraft
-      ? [parsed.projectDraft, ...state.projectDrafts]
-      : state.projectDrafts,
-    ambiguityAssessments: [
-      parsed.ambiguityAssessment,
-      ...state.ambiguityAssessments,
+    captureItems: [
+      captureItem,
+      ...state.captureItems.filter((item) => item.id !== captureItem.id),
     ],
+    taskDrafts: [taskDraft, ...state.taskDrafts],
+    projectDrafts: projectDraft
+      ? [projectDraft, ...state.projectDrafts]
+      : state.projectDrafts,
+    ambiguityAssessments: [ambiguityAssessment, ...state.ambiguityAssessments],
     timeBlockProposalDrafts: [
-      parsed.timeBlockProposalDraft,
+      timeBlockProposalDraft,
       ...state.timeBlockProposalDrafts,
     ],
     reviewLog: [`Captured: ${parsed.taskDraft.title}`, ...state.reviewLog],
@@ -293,12 +352,19 @@ export function appendParsedWorkflowResult(
 ): WorkflowState {
   return {
     ...state,
-    captureItems: [parsed.captureItem, ...state.captureItems],
+    captureItems: [
+      parsed.captureItem,
+      ...state.captureItems.filter((item) => item.id !== parsed.captureItem.id),
+    ],
     taskDrafts: [...parsed.taskDrafts, ...state.taskDrafts],
     projectDrafts: [...parsed.projectDrafts, ...state.projectDrafts],
     ambiguityAssessments: parsed.ambiguityAssessment
       ? [parsed.ambiguityAssessment, ...state.ambiguityAssessments]
       : state.ambiguityAssessments,
+    timeBlockProposalDrafts: [
+      ...parsed.timeBlockProposalDrafts,
+      ...state.timeBlockProposalDrafts,
+    ],
     reviewLog: [
       `Parsed capture: ${parsed.captureItem.raw_text}`,
       ...state.reviewLog,
