@@ -52,6 +52,7 @@ const validPayload = {
       estimated_minutes_high: 20,
       due_at: null,
       confidence: 0.82,
+      breakdown: null,
     },
   ],
   clarification_questions: ["What deadline should this use?"],

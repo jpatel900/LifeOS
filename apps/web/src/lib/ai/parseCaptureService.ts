@@ -226,6 +226,34 @@ function buildMockResponse(rawText: string): ParseCaptureResponse {
         estimated_minutes_high: 60,
         due_at: null,
         confidence: 0.78,
+        breakdown: {
+          steps: [
+            {
+              order: 1,
+              title: `Clarify the next concrete step for: ${title}`,
+              estimated_minutes: 10,
+              depends_on_orders: [],
+              on_critical_path: true,
+            },
+            {
+              order: 2,
+              title: `Do the core work for: ${title}`,
+              estimated_minutes: 30,
+              depends_on_orders: [1],
+              on_critical_path: true,
+            },
+            {
+              order: 3,
+              title: `Confirm the outcome and capture follow-ups for: ${title}`,
+              estimated_minutes: 10,
+              depends_on_orders: [2],
+              on_critical_path: true,
+            },
+          ],
+          sequence_summary:
+            "Clarify the step, do the core work, then confirm the outcome.",
+          kickstart_step: `Open the capture and write one sentence defining done for: ${title}`,
+        },
       },
       ...(isProjectShaped
         ? [

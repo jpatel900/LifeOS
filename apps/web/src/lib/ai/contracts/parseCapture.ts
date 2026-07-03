@@ -7,6 +7,36 @@ export const PARSE_CAPTURE_SCHEMA_VERSION = "1.0" as const;
 
 type JsonSchema = Record<string, unknown>;
 
+const breakdownStepSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    order: { type: "integer" },
+    title: { type: "string" },
+    estimated_minutes: { type: ["integer", "null"] },
+    depends_on_orders: { type: "array", items: { type: "integer" } },
+    on_critical_path: { type: "boolean" },
+  },
+  required: [
+    "order",
+    "title",
+    "estimated_minutes",
+    "depends_on_orders",
+    "on_critical_path",
+  ],
+};
+
+const breakdownSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    steps: { type: "array", items: breakdownStepSchema },
+    sequence_summary: { type: ["string", "null"] },
+    kickstart_step: { type: "string" },
+  },
+  required: ["steps", "sequence_summary", "kickstart_step"],
+};
+
 const taskDraftSchema: JsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -20,6 +50,9 @@ const taskDraftSchema: JsonSchema = {
     estimated_minutes_high: { type: ["integer", "null"] },
     due_at: { type: ["string", "null"], format: "date-time" },
     confidence: { type: "number" },
+    breakdown: {
+      anyOf: [breakdownSchema, { type: "null" }],
+    },
   },
   required: [
     "draft_type",
@@ -31,6 +64,7 @@ const taskDraftSchema: JsonSchema = {
     "estimated_minutes_high",
     "due_at",
     "confidence",
+    "breakdown",
   ],
 };
 
