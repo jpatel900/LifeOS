@@ -242,6 +242,7 @@ interface WorkflowContextValue {
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
   syncPersistedAreas: (areas: Area[]) => void;
+  refreshPersistedWorkflow: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
@@ -1755,6 +1756,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSelectedAreaId,
     syncStatus,
     syncPersistedAreas: applyPersistedAreas,
+    refreshPersistedWorkflow: async () => {
+      await syncPersistedWorkflowRows(createSupabaseBrowserClient());
+    },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
