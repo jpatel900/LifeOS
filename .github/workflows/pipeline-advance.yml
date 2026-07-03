@@ -82,6 +82,7 @@ jobs:
                 `- PR body must state purpose, changes, tests run, risks, and include "Closes #${issueNumber}".`,
                 '- Smallest change that satisfies the issue; binding contracts and salvage rules in the issue body are not negotiable.',
                 '- Never weaken a schema, guard test, or RLS policy to make something pass. Doc deletions require matching removals from docs/doc-registry.json.',
+                '- Validation evidence (see .agents/skills/lifeos-testing/SKILL.md): run the full suite AND the specific tests guarding the constraints named in the issue. Your environment cannot run every lane (Supabase RLS, Playwright, provider-env paths) — list what you could NOT run in the PR body under "Unverified lanes". Unverified is acceptable; unreported is not.',
               ].join('\n');
 
             const comment = (issue_number, body) =>
