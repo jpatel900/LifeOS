@@ -359,6 +359,52 @@ const initialSyncStatus: WorkflowSyncStatus = {
   pendingLocalChanges: false,
 };
 
+const persistedLoadFailureMessage =
+  "Saved workspace data could not load; local workflow remains usable, but saved account data may be missing from view.";
+const persistedSaveFailureMessage =
+  "Change saved locally, but account sync failed; it will stay local until sync recovers.";
+const serverCapabilityMissingMessage =
+  "Account sync needs a server update; the app and database look out of step. Check Health for the next step.";
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function hasServerCapabilityMissingSignal(error: unknown): boolean {
+  if (!isRecordValue(error)) {
+    return false;
+  }
+
+  const code = error.code;
+  if (code === "PGRST202" || code === "42883" || code === "42703") {
+    return true;
+  }
+
+  const status = error.status;
+  if (status === 404) {
+    return true;
+  }
+
+  const message = error.message;
+  return (
+    typeof message === "string" &&
+    (message.includes("PGRST202") ||
+      message.includes("42883") ||
+      message.includes("42703") ||
+      message.includes("function") ||
+      message.includes("column"))
+  );
+}
+
+function persistedSyncFailureMessage(
+  error: unknown,
+  fallbackMessage: string,
+): string {
+  return hasServerCapabilityMissingSignal(error)
+    ? serverCapabilityMissingMessage
+    : fallbackMessage;
+}
+
 interface PersistedWorkflowPayload {
   captures: WorkflowState["captureItems"];
   tasks: WorkflowState["tasks"];
@@ -996,6 +1042,24 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       pendingLocalChanges: true,
     }));
   }, []);
+
+  const markPersistedLoadFailure = useCallback(
+    (error: unknown) => {
+      markAccountSyncError(
+        persistedSyncFailureMessage(error, persistedLoadFailureMessage),
+      );
+    },
+    [markAccountSyncError],
+  );
+
+  const markPersistedSaveFailure = useCallback(
+    (error: unknown) => {
+      markAccountSyncError(
+        persistedSyncFailureMessage(error, persistedSaveFailureMessage),
+      );
+    },
+    [markAccountSyncError],
+  );
 
   useEffect(() => {
     stateRef.current = state;
@@ -1686,11 +1750,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       persistedBlockIdByLocalIdRef.current.set(localBlock.id, payload.block.id);
     }
 
-    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(() => {
-      markAccountSyncError(
-        "Google event created; account resync failed and can recover later.",
-      );
-    });
+    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(
+      (error) => {
+        markPersistedLoadFailure(error);
+      },
+    );
 
     return {
       outcome: "created",
@@ -1755,11 +1819,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const next = applyGoogleCalendarCancelResult(stateRef.current, blockId);
     applyWorkflowState(next);
 
-    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(() => {
-      markAccountSyncError(
-        "Google event cancelled; account resync failed and can recover later.",
-      );
-    });
+    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(
+      (error) => {
+        markPersistedLoadFailure(error);
+      },
+    );
 
     return {
       outcome: "cancelled",
@@ -1815,10 +1879,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         applyPersistedAreas(result.areas);
         await syncPersistedWorkflowRows(client, result.areas);
         markAccountSynced();
-      } catch {
-        markAccountSyncError(
-          "Account sync failed; local workflow remains usable.",
-        );
+      } catch (error) {
+        markPersistedLoadFailure(error);
       }
     }
 
@@ -1830,7 +1892,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }, [
     applyPersistedAreas,
     markAccountSynced,
-    markAccountSyncError,
+    markPersistedLoadFailure,
     markLocalOnly,
     syncPersistedWorkflowRows,
   ]);
@@ -1937,10 +1999,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     applyWorkflowState(next);
 
     if (localCapture) {
-      void persistCapture(localCapture).catch(() => {
-        markAccountSyncError(
-          "Capture saved locally; account sync failed and can recover later.",
-        );
+      void persistCapture(localCapture).catch((error) => {
+        markPersistedSaveFailure(error);
       });
       void parseCaptureIntoDrafts(localCapture, "auto");
     }
@@ -1993,10 +2053,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         localTask,
         localProposal,
         status,
-      ).catch(() => {
-        markAccountSyncError(
-          "Triage decision saved locally; account sync failed.",
-        );
+      ).catch((error) => {
+        markPersistedSaveFailure(error);
       });
     }
   }
@@ -2015,9 +2073,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     applyWorkflowState(next);
 
     if (localProposal && localBlock) {
-      void persistPlannedTask(taskId, localProposal, localBlock).catch(() => {
-        markAccountSyncError("Plan saved locally; account sync failed.");
-      });
+      void persistPlannedTask(taskId, localProposal, localBlock).catch(
+        (error) => {
+          markPersistedSaveFailure(error);
+        },
+      );
     }
   }
 
@@ -2032,10 +2092,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     applyWorkflowState(next);
 
     if (localSession) {
-      void persistStartedSession(localSession).catch(() => {
-        markAccountSyncError(
-          "Execution session saved locally; account sync failed.",
-        );
+      void persistStartedSession(localSession).catch((error) => {
+        markPersistedSaveFailure(error);
       });
     }
   }
@@ -2052,10 +2110,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     if (localSession) {
       void persistMarkedSession(localSession, status, actualMinutes).catch(
-        () => {
-          markAccountSyncError(
-            "Session outcome saved locally; account sync failed.",
-          );
+        (error) => {
+          markPersistedSaveFailure(error);
         },
       );
     }
@@ -2088,8 +2144,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistTaskReviewTransition(taskId, "active").catch(() => {
-          markAccountSyncError("Moved to today locally; account sync failed.");
+        void persistTaskReviewTransition(taskId, "active").catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2142,11 +2198,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (proposal && next !== previous) {
-        void persistAcceptedLocalProposal(proposal, localBlock).catch(() => {
-          markAccountSyncError(
-            "Proposal accepted locally; account sync failed.",
-          );
-        });
+        void persistAcceptedLocalProposal(proposal, localBlock).catch(
+          (error) => {
+            markPersistedSaveFailure(error);
+          },
+        );
       }
     },
     rejectLocalProposal: (proposalId) => {
@@ -2158,10 +2214,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (proposal && next !== previous) {
-        void persistRejectedLocalProposal(proposal).catch(() => {
-          markAccountSyncError(
-            "Proposal rejected locally; account sync failed.",
-          );
+        void persistRejectedLocalProposal(proposal).catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2173,10 +2227,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (proposal && next !== previous) {
-        void persistEditedLocalProposal(proposal).catch(() => {
-          markAccountSyncError(
-            "Proposal edit saved locally; account sync failed.",
-          );
+        void persistEditedLocalProposal(proposal).catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2202,10 +2254,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (localProposal) {
-        void persistCreatedLocalProposal(localProposal).catch(() => {
-          markAccountSyncError(
-            "Proposal created locally; account sync failed.",
-          );
+        void persistCreatedLocalProposal(localProposal).catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2216,8 +2266,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistUnplannedBlock(blockId).catch(() => {
-          markAccountSyncError("Unplanned locally; account sync failed.");
+        void persistUnplannedBlock(blockId).catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2229,10 +2279,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistTaskReviewTransition(taskId, "active").catch(() => {
-          markAccountSyncError(
-            "Recovery choice saved locally; account sync failed.",
-          );
+        void persistTaskReviewTransition(taskId, "active").catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2242,10 +2290,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistTaskReviewTransition(taskId, "backlog").catch(() => {
-          markAccountSyncError(
-            "Recovery choice saved locally; account sync failed.",
-          );
+        void persistTaskReviewTransition(taskId, "backlog").catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2255,10 +2301,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistTaskReviewTransition(taskId, "dropped").catch(() => {
-          markAccountSyncError(
-            "Recovery choice saved locally; account sync failed.",
-          );
+        void persistTaskReviewTransition(taskId, "dropped").catch((error) => {
+          markPersistedSaveFailure(error);
         });
       }
     },
@@ -2267,8 +2311,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const next = saveReview(previous);
       applyWorkflowState(next);
 
-      void persistReviewEntry(next).catch(() => {
-        markAccountSyncError("Review saved locally; account sync failed.");
+      void persistReviewEntry(next).catch((error) => {
+        markPersistedSaveFailure(error);
       });
     },
     resetWorkflow: () => dispatch({ type: "reset" }),

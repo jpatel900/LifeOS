@@ -71,6 +71,17 @@ function WorkflowRowsProbe() {
   );
 }
 
+function SyncStatusProbe() {
+  const { syncStatus } = useWorkflow();
+
+  return (
+    <div>
+      <span data-testid="sync-account">{syncStatus.account}</span>
+      <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
+    </div>
+  );
+}
+
 function TriageActionProbe() {
   const { state, selectedAreaId, submitCaptureText, backlogTaskDraft } =
     useWorkflow();
@@ -356,5 +367,92 @@ describe("WorkflowProvider persisted area sync", () => {
       );
     });
     expect(mockCreateTimeBlockProposal).not.toHaveBeenCalled();
+  });
+
+  it("surfaces persisted load failures as saved data missing from view", async () => {
+    mockListAreas.mockRejectedValue(new Error("network unavailable"));
+
+    render(
+      <WorkflowProvider>
+        <SyncStatusProbe />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent(
+        "sync-error",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "Saved workspace data could not load",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "saved account data may be missing from view",
+      );
+    });
+  });
+
+  it("surfaces save failures as local-only pending retry", async () => {
+    mockCreateCaptureItem.mockRejectedValue(new Error("insert timeout"));
+
+    render(
+      <WorkflowProvider>
+        <TriageActionProbe />
+        <SyncStatusProbe />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+        "area-main-job",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent(
+        "sync-error",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "Change saved locally, but account sync failed",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "stay local until sync recovers",
+      );
+    });
+  });
+
+  it("surfaces missing server capabilities with Health guidance", async () => {
+    mockCreateCaptureItem.mockRejectedValue({
+      code: "PGRST202",
+      message: "Could not find the public.create_capture_item function",
+    });
+
+    render(
+      <WorkflowProvider>
+        <TriageActionProbe />
+        <SyncStatusProbe />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+        "area-main-job",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sync-account")).toHaveTextContent(
+        "sync-error",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "app and database look out of step",
+      );
+      expect(screen.getByTestId("sync-message")).toHaveTextContent(
+        "Check Health",
+      );
+    });
   });
 });
