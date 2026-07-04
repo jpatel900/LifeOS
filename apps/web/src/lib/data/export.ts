@@ -17,6 +17,7 @@ export const USER_DATA_EXPORT_TABLES = [
   "override_records",
   "health_checks",
   "health_incidents",
+  "ai_call_traces",
 ] as const;
 
 export type UserDataExportTable = (typeof USER_DATA_EXPORT_TABLES)[number];

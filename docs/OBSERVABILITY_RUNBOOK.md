@@ -190,6 +190,70 @@ Specific smoke checks:
 - Verify browser bundles contain no server-only observability secrets.
 - Verify disabling any provider returns the wrapper to no-op behavior.
 
+## Postgres AI Call Traces (issue #288)
+
+`ai_call_traces` records one metadata-only row per real AI call: `surface`,
+`prompt_version`, `model`, `input_tokens`, `output_tokens`, `latency_ms`,
+`validation_outcome`, and `created_at`. It never stores raw prompt or response
+bodies — raw content stays in the existing capture tables (privacy doctrine).
+The table is owner-scoped by RLS, so these queries run under the signed-in
+user's own rows (for example in the Supabase SQL editor).
+
+Use these snippets for Langfuse-class cost/latency/failure-rate visibility per
+surface per week without adding a new vendor.
+
+### Token volume per surface per week (cost proxy)
+
+```sql
+select
+  date_trunc('week', created_at) as week,
+  surface,
+  count(*) as calls,
+  sum(coalesce(input_tokens, 0)) as input_tokens,
+  sum(coalesce(output_tokens, 0)) as output_tokens
+from public.ai_call_traces
+where created_at >= now() - interval '8 weeks'
+group by 1, 2
+order by 1 desc, 2;
+```
+
+### Latency per surface per week (p50 / p95 / max)
+
+```sql
+select
+  date_trunc('week', created_at) as week,
+  surface,
+  count(*) as calls,
+  percentile_disc(0.5) within group (order by latency_ms) as p50_ms,
+  percentile_disc(0.95) within group (order by latency_ms) as p95_ms,
+  max(latency_ms) as max_ms
+from public.ai_call_traces
+where created_at >= now() - interval '8 weeks'
+group by 1, 2
+order by 1 desc, 2;
+```
+
+### Failure rate per surface per week
+
+`validation_outcome` is one of `passed`, `schema_failed`, `retried`, `failed`.
+Anything other than `passed` counts as a non-clean outcome here.
+
+```sql
+select
+  date_trunc('week', created_at) as week,
+  surface,
+  count(*) as calls,
+  count(*) filter (where validation_outcome <> 'passed') as failures,
+  round(
+    100.0 * count(*) filter (where validation_outcome <> 'passed') / count(*),
+    1
+  ) as failure_rate_pct
+from public.ai_call_traces
+where created_at >= now() - interval '8 weeks'
+group by 1, 2
+order by 1 desc, 2;
+```
+
 ## Troubleshooting
 
 - Provider shows `missing_config`:

@@ -1582,10 +1582,29 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     let routeResponded = false;
 
+    // Best-effort: attach the signed-in user's access token so the parse route
+    // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
+    // Parsing itself never requires this token, so any failure here is ignored.
+    const parseRequestHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    try {
+      const authClient = createSupabaseBrowserClient();
+      if (authClient) {
+        const { data } = await authClient.auth.getSession();
+        const accessToken = data.session?.access_token?.trim();
+        if (accessToken) {
+          parseRequestHeaders.Authorization = `Bearer ${accessToken}`;
+        }
+      }
+    } catch {
+      // Tracing is optional; a missing/failed session must never block parsing.
+    }
+
     try {
       const response = await fetch("/api/parse-capture", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: parseRequestHeaders,
         body: JSON.stringify({
           rawText: localCapture.raw_text,
           areaContext: stateRef.current.areas.map((area) => ({
