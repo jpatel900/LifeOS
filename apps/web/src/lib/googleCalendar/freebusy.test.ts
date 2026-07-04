@@ -33,7 +33,12 @@ vi.mock("./server", async () => {
   };
 });
 
-import { checkGoogleCalendarFreeBusyForConnection } from "./freebusy";
+import {
+  allDayContextOverlapsProposal,
+  checkGoogleCalendarFreeBusyForConnection,
+  extractAllDayContexts,
+  getCalendarDateKey,
+} from "./freebusy";
 
 const connection = {
   id: "550e8400-e29b-41d4-a716-446655440901",
@@ -57,6 +62,114 @@ const connection = {
 };
 
 describe("Google Calendar free/busy helper", () => {
+  it("detects same-day all-day overlaps with exclusive-end semantics in the user's timezone", () => {
+    const context = {
+      date: "2026-07-01",
+      endDate: "2026-07-02",
+      id: "same-day",
+      summary: "Same day",
+    };
+
+    expect(
+      allDayContextOverlapsProposal(
+        context,
+        "2026-07-01T16:00:00.000Z",
+        "2026-07-01T17:00:00.000Z",
+        "America/New_York",
+      ),
+    ).toBe(true);
+    expect(
+      allDayContextOverlapsProposal(
+        context,
+        "2026-07-02T16:00:00.000Z",
+        "2026-07-02T17:00:00.000Z",
+        "America/New_York",
+      ),
+    ).toBe(false);
+  });
+
+  it("detects a date-only all-day event spanning D through D+2 on an interior date", () => {
+    expect(
+      allDayContextOverlapsProposal(
+        {
+          date: "2026-07-01",
+          endDate: "2026-07-04",
+          id: "multi-day",
+          summary: "Multi day",
+        },
+        "2026-07-02T14:00:00.000Z",
+        "2026-07-02T15:00:00.000Z",
+        "America/New_York",
+      ),
+    ).toBe(true);
+  });
+
+  it("handles DST-transition all-day context overlap by the user's Toronto calendar date", () => {
+    const context = {
+      date: "2026-03-08",
+      endDate: "2026-03-09",
+      id: "dst-day",
+      summary: "DST day",
+    };
+
+    expect(
+      getCalendarDateKey("2026-03-08T06:30:00.000Z", "America/Toronto"),
+    ).toBe("2026-03-08");
+    expect(
+      allDayContextOverlapsProposal(
+        context,
+        "2026-03-08T06:30:00.000Z",
+        "2026-03-08T07:30:00.000Z",
+        "America/Toronto",
+      ),
+    ).toBe(true);
+    expect(
+      allDayContextOverlapsProposal(
+        context,
+        "2026-03-09T04:30:00.000Z",
+        "2026-03-09T05:30:00.000Z",
+        "America/Toronto",
+      ),
+    ).toBe(false);
+  });
+
+  it("uses the Pacific/Auckland local date for all-day context overlap instead of the UTC date", () => {
+    const payload = {
+      items: [
+        {
+          id: "utc-date",
+          summary: "UTC date",
+          start: { date: "2026-07-01" },
+          end: { date: "2026-07-02" },
+        },
+        {
+          id: "local-date",
+          summary: "Local date",
+          start: { date: "2026-07-02" },
+          end: { date: "2026-07-03" },
+        },
+      ],
+    };
+
+    expect(
+      getCalendarDateKey("2026-07-01T12:30:00.000Z", "Pacific/Auckland"),
+    ).toBe("2026-07-02");
+    expect(
+      extractAllDayContexts(
+        payload,
+        "2026-07-01T12:30:00.000Z",
+        "2026-07-01T13:30:00.000Z",
+        "Pacific/Auckland",
+      ),
+    ).toEqual([
+      {
+        date: "2026-07-02",
+        endDate: "2026-07-03",
+        id: "local-date",
+        summary: "Local date",
+      },
+    ]);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn());
@@ -219,7 +332,7 @@ describe("Google Calendar free/busy helper", () => {
     ]);
   });
 
-  it("does not report a conflict for a transparent all-day event absent from free/busy", async () => {
+  it("keeps all-day contexts informational so they never contribute to hasConflict", async () => {
     mocks.decryptGoogleCalendarToken.mockReturnValue("google-access-token");
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ calendars: { primary: { busy: [] } } }), {
