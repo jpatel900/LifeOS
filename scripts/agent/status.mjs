@@ -165,16 +165,17 @@ function printOwnerGates(manifest, pipelineEntries) {
 
   let epics = [];
   try {
-    epics = ghJson([
+    const openIssues = ghJson([
       "issue",
       "list",
-      "--search",
-      "EPIC: in:title",
       "--state",
       "open",
       "--json",
       "number,title,state",
+      "--limit",
+      "200",
     ]);
+    epics = openIssues.filter((issue) => issue.title.startsWith("EPIC:"));
   } catch (err) {
     console.log(`Could not list open epics: ${err.message.split("\n")[0]}`);
   }
