@@ -160,6 +160,7 @@ export type EditTimeBlockProposalInput = z.input<
 
 export const CheckTimeBlockProposalConflictInputSchema = z.object({
   proposal_id: z.string().uuid(),
+  timezone: z.string().trim().min(1).default("UTC"),
 });
 
 export type CheckTimeBlockProposalConflictInput = z.input<

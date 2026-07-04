@@ -175,6 +175,22 @@ async function deleteExternalWriteByMarker(
   }
 }
 
+async function deleteAiCallTraceBySurface(
+  client: SupabaseClient,
+  surface: string,
+) {
+  const { error } = await client
+    .from("ai_call_traces")
+    .delete()
+    .eq("surface", surface);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up ai_call_trace '${surface}': ${error.message}`,
+    );
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -1211,6 +1227,78 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
     expect(connectionError?.message).toMatch(/permission denied/i);
     expect(auditError?.message).toMatch(/permission denied/i);
+  });
+
+  it("lets user A access own ai_call_traces but not user B rows", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userASurface = `rls-trace-a-${suffix}`;
+    const userBSurface = `rls-trace-b-${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("ai_call_traces")
+        .insert({
+          user_id: userA.id,
+          surface: userASurface,
+          prompt_version: "parse_capture.v1",
+          model: "standard-model",
+          input_tokens: 12,
+          output_tokens: 18,
+          latency_ms: 42,
+          validation_outcome: "passed",
+        });
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("ai_call_traces")
+        .insert({
+          user_id: userB.id,
+          surface: userBSurface,
+          prompt_version: "parse_capture.v1",
+          model: "standard-model",
+          input_tokens: null,
+          output_tokens: null,
+          latency_ms: 100,
+          validation_outcome: "schema_failed",
+        });
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("ai_call_traces")
+        .select("user_id,surface,validation_outcome")
+        .in("surface", [userASurface, userBSurface])
+        .order("surface", { ascending: true });
+
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        {
+          user_id: userA.id,
+          surface: userASurface,
+          validation_outcome: "passed",
+        },
+      ]);
+    } finally {
+      await deleteAiCallTraceBySurface(userAClient, userASurface);
+      await deleteAiCallTraceBySurface(userBClient, userBSurface);
+    }
+  });
+
+  it("prevents user A from inserting ai_call_traces for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { error } = await userAClient.from("ai_call_traces").insert({
+      user_id: userB.id,
+      surface: `rls-cross-user-trace-${suffix}`,
+      prompt_version: "parse_capture.v1",
+      model: "standard-model",
+      latency_ms: 10,
+      validation_outcome: "passed",
+    });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
   });
 });
 

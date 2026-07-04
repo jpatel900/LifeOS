@@ -2,7 +2,11 @@ import {
   ParseCaptureResponseSchema,
   type ParseCaptureResponse,
 } from "@lifeos/schemas";
-import { traceParseCapture } from "@/lib/observability";
+import {
+  recordAiCallTrace,
+  traceParseCapture,
+  type AiCallTraceValidationOutcome,
+} from "@/lib/observability";
 import {
   parseCapture,
   parseCaptureDetailed,
@@ -31,6 +35,15 @@ export interface ParseCaptureServiceOptions {
     options: Pick<ParseCaptureOptions, "apiKey" | "model">,
   ) => Promise<ParseCaptureResponse>;
   traceParseCaptureImpl?: typeof traceParseCapture;
+  /**
+   * Caller context for Postgres AI call tracing (issue #288). When the
+   * caller's Supabase access token is provided, every real AI call writes
+   * one metadata-only row to `ai_call_traces`, fire-and-forget.
+   */
+  traceContext?: {
+    accessToken?: string | null;
+  };
+  recordAiCallTraceImpl?: typeof recordAiCallTrace;
 }
 
 export interface ParseCaptureServiceResult {
@@ -320,7 +333,62 @@ export async function parseCaptureWithFallback(
     }
   }
 
-  return (options.traceParseCaptureImpl ?? traceParseCapture)(
+  const startedAt = Date.now();
+
+  const warnTraceFailure = (error: unknown) => {
+    console.warn(
+      `ai_call_traces: trace recording failed and was ignored: ${
+        error instanceof Error ? error.message : "unknown error"
+      }`,
+    );
+  };
+
+  // Postgres AI call tracing (issue #288): one metadata-only row per real AI
+  // call, fire-and-forget. A tracing failure must never fail or slow parsing.
+  const recordTraceRow = (
+    outcome:
+      | { status: "passed"; result: ParseCaptureServiceResult }
+      | { status: Exclude<AiCallTraceValidationOutcome, "passed"> },
+  ) => {
+    if (parser !== "ai" || !modelConfig) {
+      return;
+    }
+
+    const recordImpl = options.recordAiCallTraceImpl ?? recordAiCallTrace;
+    const accessToken = options.traceContext?.accessToken ?? null;
+    const latencyMs = Date.now() - startedAt;
+    const traceInput =
+      outcome.status === "passed"
+        ? {
+            accessToken,
+            surface: "parse",
+            promptVersion: outcome.result.response.prompt_version,
+            model: outcome.result.telemetry?.modelName ?? modelConfig.model,
+            inputTokens: outcome.result.telemetry?.inputTokenCount ?? null,
+            outputTokens: outcome.result.telemetry?.outputTokenCount ?? null,
+            latencyMs,
+            validationOutcome: "passed" as const,
+          }
+        : {
+            accessToken,
+            surface: "parse",
+            promptVersion: PARSE_CAPTURE_PROMPT_VERSION,
+            model: modelConfig.model,
+            inputTokens: null,
+            outputTokens: null,
+            latencyMs,
+            validationOutcome: outcome.status,
+          };
+
+    try {
+      void Promise.resolve(recordImpl(traceInput)).catch(warnTraceFailure);
+    } catch (error) {
+      warnTraceFailure(error);
+    }
+  };
+
+  const runTraced = (): Promise<ParseCaptureServiceResult> =>
+    (options.traceParseCaptureImpl ?? traceParseCapture)<ParseCaptureServiceResult>(
     {
       parser,
       provider: parser === "ai" ? providerId : "mock",
@@ -409,4 +477,16 @@ export async function parseCaptureWithFallback(
       };
     },
   );
+
+  try {
+    const result = await runTraced();
+    recordTraceRow({ status: "passed", result });
+    return result;
+  } catch (error) {
+    recordTraceRow({
+      status:
+        getValidationStatus(error) === "failed" ? "schema_failed" : "failed",
+    });
+    throw error;
+  }
 }

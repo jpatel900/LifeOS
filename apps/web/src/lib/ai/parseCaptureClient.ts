@@ -47,6 +47,9 @@ export async function requestParseCapture(input: {
   rawText: string;
   areaContext?: ParseCaptureAreaContextEntry[];
   parserMode: ParseCaptureParserMode;
+  // Optional bearer token so the route can write a user-scoped AI call
+  // trace row (issue #288); parsing itself never requires it.
+  authorization?: string;
   fetchImpl?: typeof fetch;
 }): Promise<ParseCaptureRequestResult> {
   const fetchImpl = input.fetchImpl ?? fetch;
@@ -56,7 +59,10 @@ export async function requestParseCapture(input: {
   try {
     const httpResponse = await fetchImpl("/api/parse-capture", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(input.authorization ? { Authorization: input.authorization } : {}),
+      },
       body: JSON.stringify({
         rawText: input.rawText,
         areaContext: input.areaContext,

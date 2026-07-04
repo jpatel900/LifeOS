@@ -71,6 +71,7 @@ import {
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
@@ -260,6 +261,7 @@ interface WorkflowContextValue {
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
   syncPersistedAreas: (areas: Area[]) => void;
+  refreshPersistedWorkflow: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
@@ -1591,6 +1593,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     activeParseCaptureIdRef.current = capture.id;
     setCaptureParse({ phase: "parsing", captureId: capture.id, parserMode });
 
+    // Best-effort: attach the signed-in user's access token so the parse route
+    // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
+    // Parsing itself never requires this token, so any failure here is ignored.
+    let authorization: string | undefined;
+    try {
+      const authClient = createSupabaseBrowserClient();
+      if (authClient) {
+        const { data } = await authClient.auth.getSession();
+        const accessToken = data.session?.access_token?.trim();
+        if (accessToken) {
+          authorization = `Bearer ${accessToken}`;
+        }
+      }
+    } catch {
+      // Tracing is optional; a missing/failed session must never block parsing.
+    }
+
     const result = await requestParseCapture({
       rawText: capture.raw_text,
       areaContext: stateRef.current.areas.map((area) => ({
@@ -1598,6 +1617,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         name: area.name,
       })),
       parserMode,
+      authorization,
     });
 
     if (result.ok) {
@@ -1773,6 +1793,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSelectedAreaId,
     syncStatus,
     syncPersistedAreas: applyPersistedAreas,
+    refreshPersistedWorkflow: async () => {
+      await syncPersistedWorkflowRows(createSupabaseBrowserClient());
+    },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
@@ -1799,8 +1822,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => {
+      const draft = stateRef.current.taskDrafts.find(
+        (item) => item.id === draftId,
+      );
       dispatch({ type: "rejectDraft", draftId });
       markLocalOnly("Dropped draft locally; account sync is pending.");
+
+      if (draft) {
+        recordRejectedTaskDraft(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWorkflowId(
+            draft.area_id,
+            persistedAreasRef.current,
+          ),
+          draft_id: draft.id,
+          title: draft.title,
+          confidence: draft.confidence,
+        });
+      }
     },
     rejectProjectDraft: (draftId) =>
       dispatch({ type: "rejectProjectDraft", draftId }),

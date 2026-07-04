@@ -1,0 +1,51 @@
+# Detects the KNOWN_ISSUES row 11 failure mode: app deploys (Vercel, on merge)
+# outrunning the production database, which only changes via a manual
+# `supabase db push`. Detection only — it never applies DDL to production.
+#
+# Requires one repository secret to do real work, otherwise it skips with a
+# warning: SUPABASE_PROD_DB_URL — a Postgres connection string for the prod
+# project (Supabase dashboard -> Connect -> Session pooler). Prefer a
+# read-only role; the job only reads supabase_migrations.schema_migrations.
+name: Migration Drift
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Prod migration drift check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Compare repo migrations against production
+        env:
+          PROD_DB_URL: ${{ secrets.SUPABASE_PROD_DB_URL }}
+        run: |
+          if [ -z "$PROD_DB_URL" ]; then
+            echo "::warning::SUPABASE_PROD_DB_URL secret is not set; skipping the drift check."
+            exit 0
+          fi
+
+          local_versions=$(basename -s .sql supabase/migrations/*.sql | cut -d_ -f1 | sort)
+          remote_versions=$(psql "$PROD_DB_URL" -tAc \
+            "select version from supabase_migrations.schema_migrations order by version")
+
+          missing=$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))
+
+          if [ -n "$missing" ]; then
+            echo "::error::Production is missing these repo migrations (run 'supabase db push' after human review):"
+            printf '%s\n' "$missing"
+            exit 1
+          fi
+
+          echo "Production has all $(printf '%s\n' "$local_versions" | wc -l) repo migrations."
