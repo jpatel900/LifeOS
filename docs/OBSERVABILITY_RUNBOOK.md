@@ -284,3 +284,29 @@ Code rollback if needed:
 1. revert the Phase 8 observability files on the current branch
 2. rebuild
 3. rerun `pnpm lint`, `pnpm type-check`, `pnpm test`, and `pnpm build`
+
+## Pipeline Kill Switch
+
+When the autonomous pipeline misbehaves (loops, runaway spend, bad merges), pause the
+autonomous half immediately while keeping CI and the Main Red Guard alive:
+
+```
+gh workflow disable pipeline-advance.yml
+gh workflow disable codex-ci-autofix.yml
+gh workflow disable codex-low-risk-issue-to-pr.yml
+gh workflow disable codex-issue-plan.yml
+```
+
+Re-enable with `gh workflow enable <file>` once the cause is understood. Never disable
+`ci.yml`, `main-red-guard.yml`, or `safe-automerge.yml` as a first response — they are
+the safety net, not the actor.
+
+Repo visibility note: switching the repo private/public DELETES branch protection on
+the Free plan (verified 2026-07-04). Going private requires GitHub Pro first, and the
+protection must be re-created immediately after any visibility change:
+
+```
+gh api -X PUT repos/jpatel900/LifeOS/branches/main/protection --input protection.json
+# strict=false; contexts: Monorepo Validation, Playwright E2E, Migrations + RLS Verification;
+# linear history + conversation resolution on; force pushes/deletions off.
+```
