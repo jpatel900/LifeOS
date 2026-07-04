@@ -46,6 +46,57 @@ jobs:
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
           fi
 
+  diff-fingerprint:
+    name: Fingerprint PR diff
+    # Cost control: rebases, merges from main, and label events re-trigger this
+    # workflow without changing the PR's three-dot diff. If a posted Codex review
+    # already covers this exact diff (patch-id match), skip the LLM jobs entirely.
+    if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    outputs:
+      fingerprint: ${{ steps.fingerprint.outputs.fingerprint }}
+      already_reviewed: ${{ steps.check.outputs.already_reviewed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compute three-dot diff patch-id
+        id: fingerprint
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags origin "$PR_BASE_REF"
+          merge_base="$(git merge-base "origin/$PR_BASE_REF" "$PR_HEAD_SHA")"
+          fingerprint="$(git diff "$merge_base" "$PR_HEAD_SHA" | git patch-id --stable | cut -d' ' -f1)"
+          echo "fingerprint=${fingerprint:-empty}" >> "$GITHUB_OUTPUT"
+          echo "Three-dot diff patch-id: ${fingerprint:-empty}"
+      - name: Check for an existing review of this exact diff
+        id: check
+        uses: actions/github-script@v8
+        env:
+          DIFF_FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const marker = `<!-- codex-review-fingerprint: ${process.env.DIFF_FINGERPRINT} -->`;
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+            const match = reviews.find((review) => review.body?.includes(marker));
+            core.setOutput('already_reviewed', match ? 'true' : 'false');
+            if (match) {
+              core.notice(
+                `Diff unchanged since ${match.html_url}; skipping LLM re-review. Push a content change to get a fresh review.`,
+              );
+            }
+
   classify-risk:
     name: Classify PR risk
     if: github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
@@ -87,14 +138,17 @@ jobs:
   baseline-review:
     name: Codex baseline review
     # Single-review policy: baseline (mini) runs only when the escalated review will NOT.
-    # One LLM review per PR, never two.
+    # One LLM review per PR, never two. Skipped entirely when this exact diff was
+    # already reviewed (rebases, merges from main, label churn).
     if: >-
       github.event.pull_request.draft == false &&
       github.event.pull_request.user.type != 'Bot' &&
       needs.docs-scope.outputs.docs_only != 'true' &&
+      needs.diff-fingerprint.outputs.already_reviewed != 'true' &&
       needs.classify-risk.outputs.escalation_required != 'true'
     needs:
       - docs-scope
+      - diff-fingerprint
       - classify-risk
     runs-on: ubuntu-latest
     permissions:
@@ -145,6 +199,7 @@ jobs:
       needs.baseline-review.outputs.final_message != ''
     needs:
       - classify-risk
+      - diff-fingerprint
       - baseline-review
     runs-on: ubuntu-latest
     permissions:
@@ -158,6 +213,7 @@ jobs:
           CODEX_FINAL_MESSAGE: ${{ needs.baseline-review.outputs.final_message }}
           PR_RISK_LEVEL: ${{ needs.classify-risk.outputs.risk_level }}
           PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
+          DIFF_FINGERPRINT: ${{ needs.diff-fingerprint.outputs.fingerprint }}
         with:
           github-token: ${{ github.token }}
           script: |
@@ -169,6 +225,8 @@ jobs:
               `Classifier escalation reasons: ${process.env.PR_ESCALATION_REASONS}`,
               '',
               process.env.CODEX_FINAL_MESSAGE,
+              '',
+              `<!-- codex-review-fingerprint: ${process.env.DIFF_FINGERPRINT} -->`,
             ].join('\n');
 
             await github.rest.pulls.createReview({
@@ -191,12 +249,14 @@ jobs:
       github.event.pull_request.user.type != 'Bot' &&
       needs.classify-risk.result == 'success' &&
       needs.docs-scope.outputs.docs_only != 'true' &&
+      needs.diff-fingerprint.outputs.already_reviewed != 'true' &&
       (
         needs.classify-risk.outputs.escalation_required == 'true' ||
         contains(needs.baseline-review.outputs.final_message, 'ESCALATE_RECOMMENDED: true')
       )
     needs:
       - docs-scope
+      - diff-fingerprint
       - classify-risk
       - baseline-review
     runs-on: ubuntu-latest
@@ -252,6 +312,7 @@ jobs:
       needs.escalated-review.outputs.final_message != ''
     needs:
       - classify-risk
+      - diff-fingerprint
       - baseline-review
       - escalated-review
     runs-on: ubuntu-latest
@@ -266,6 +327,7 @@ jobs:
           CODEX_FINAL_MESSAGE: ${{ needs.escalated-review.outputs.final_message }}
           PR_ESCALATION_REASONS: ${{ needs.classify-risk.outputs.escalation_reasons }}
           BASELINE_FINAL_MESSAGE: ${{ needs.baseline-review.outputs.final_message }}
+          DIFF_FINGERPRINT: ${{ needs.diff-fingerprint.outputs.fingerprint }}
         with:
           github-token: ${{ github.token }}
           script: |
@@ -291,6 +353,8 @@ jobs:
               `Escalation trigger: ${triggerReasons.length > 0 ? triggerReasons.join(' | ') : 'manual risk escalation'}`,
               '',
               process.env.CODEX_FINAL_MESSAGE,
+              '',
+              `<!-- codex-review-fingerprint: ${process.env.DIFF_FINGERPRINT} -->`,
             ].join('\n');
 
             await github.rest.pulls.createReview({
