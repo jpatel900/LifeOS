@@ -73,6 +73,22 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date.**
 - **Status:** Fenced — default to sequential/inline work for bulk tasks; reserve fan-out for adversarial review and schedule it right after window resets.
 - **Date:** 2026-07-02
 
+## Merge race turned main red: a guard and its offenders merged 77 seconds apart
+
+- **Symptom:** Main CI failed on merge commit 8d6724d. PR #331's workflow-truth guard bans `WorkflowState` annotations in tests; two B6-era test files still carried them. Each PR was green in isolation; combined, main was red. Main Red Guard skipped instead of firing, and Codex CI Autofix ran and failed without producing a fix.
+- **Root cause:** A guard PR's CI proves the guard against the merge ref at *review* time, not against what main looks like when it lands; #337 merged 77 seconds earlier. The refactor of the two offender files that would have made #331 safe was reported complete by Codex but never actually pushed (see the stranded-delivery entry below).
+- **Evidence:** CI run 28707997136 (failure on 8d6724d); fix PR #340 (offenders rebuilt on `workflowSeed()` + transition helpers, no allowlist additions).
+- **Status:** Fixed by #340. Open follow-ups: why Main Red Guard's trigger condition skipped on a genuinely red main, and the standing rule that a guard PR must land only after (or together with) the refactor of every known offender, re-verified against current main immediately before merge.
+- **Date:** 2026-07-04
+
+## Codex mention-lane deliveries stranded: make_pr claimed success, nothing reached GitHub
+
+- **Symptom:** Six deliveries in one day (#240 twice, #313, #323, plus the #333 fix round and the #331 offender refactor) ended with Codex reporting green checks and "created the PR via make_pr" — but no branch existed on origin, no PR existed, and the task page offered no Create PR action. Sequential pipelines stall silently; work evaporates.
+- **Root cause:** The platform-side PR-creation step of the Codex mention lane failed silently while the sandbox work succeeded. Fresh re-kicked environments can neither recover a previous task's commits nor push (no origin remote, agent-phase network off), so naive re-kicks re-implement and re-strand.
+- **Evidence:** Issue threads on #240/#313/#323 (completion summaries with no corresponding branches); recovery PRs #347/#348/#349.
+- **Status:** Fenced by the patch-paste protocol, proven three-for-three on 2026-07-04: the kick instructs Codex to post `git format-patch origin/main --stdout` as issue comments; a maintainer applies the patch in a worktree (`git am`, author preserved), runs the lanes the sandbox cannot (local Supabase/RLS), and opens the PR. Candidate follow-up (owner call; delivery apparatus is frozen): make patch-paste the kick template's standard fallback and add a deterministic claimed-PR-exists check after any Codex completion comment.
+- **Date:** 2026-07-04
+
 ---
 
 *Seeded 2026-07-02 from repo history and operator memory. Dead branches at seeding time (`agent/single-review-policy`, `codex/...a4-governance-restructure...`, `fix/plan-single-task-scheduling`, `ui/handoff-cockpit-pass`) were not chronicled — whoever closes or deletes one adds its entry.*
