@@ -134,7 +134,7 @@ function extractBusyItems(payload: unknown, calendarId: string) {
   return busy;
 }
 
-function getCalendarDateKey(value: string, timezone: string) {
+export function getCalendarDateKey(value: string, timezone: string) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     day: "2-digit",
     month: "2-digit",
@@ -159,7 +159,7 @@ function addUtcDateDays(date: string, days: number) {
   return next.toISOString().slice(0, 10);
 }
 
-function allDayContextOverlapsProposal(
+export function allDayContextOverlapsProposal(
   context: GoogleCalendarAllDayContext,
   proposedStart: string,
   proposedEnd: string,
@@ -178,7 +178,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function extractAllDayContexts(
+export function extractAllDayContexts(
   payload: unknown,
   proposedStart: string,
   proposedEnd: string,
@@ -219,7 +219,7 @@ function extractAllDayContexts(
 
 // Busy windows that cannot be parsed count as conflicts so a malformed
 // provider response can never silently double-book the user.
-function busyWindowOverlapsProposal(
+export function busyWindowOverlapsProposal(
   item: unknown,
   proposedStart: string,
   proposedEnd: string,
