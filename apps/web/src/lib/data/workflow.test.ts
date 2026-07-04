@@ -596,7 +596,7 @@ describe("workflow data provider", () => {
         user_id: userId,
         area_id: areaId,
         policy_identifier: "triage.default_accept_task",
-        schema_version: "meta-learning-event-v1",
+        schema_version: "meta-learning-event-v2",
         suggestion_type: "triage_suggestion",
         subject_type: "task_draft",
         subject_id: null,
@@ -607,6 +607,8 @@ describe("workflow data provider", () => {
         },
         confidence: 0.82,
         status: "rejected",
+        resolution_reason: null,
+        decided_by: "user",
         resolved_at: expect.any(String),
       });
     });
@@ -911,7 +913,7 @@ describe("workflow data provider", () => {
     expect(suggestionInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         policy_identifier: "planning.default_time_block",
-        schema_version: "meta-learning-event-v1",
+        schema_version: "meta-learning-event-v2",
       }),
     );
     warn.mockRestore();

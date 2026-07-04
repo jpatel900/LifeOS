@@ -51,6 +51,23 @@ function walkRepoFiles(relativePath: string): string[] {
 }
 
 describe("source-of-truth boundaries", () => {
+  it("suggestionRecordColumns includes resolution_reason and decided_by", () => {
+    const workflow = readRepoFile("apps/web/src/lib/data/workflow.ts");
+    const source = normalizeWhitespace(workflow);
+
+    expect(source).toContain(
+      'const suggestionRecordColumns = "id,user_id,area_id,policy_identifier,schema_version,suggestion_type,subject_type,subject_id,suggestion_json,confidence,status,resolution_reason,decided_by,created_at,resolved_at"',
+    );
+  });
+
+  it("overrideRecordColumns includes suggestion_id", () => {
+    const workflow = readRepoFile("apps/web/src/lib/data/workflow.ts");
+    const source = normalizeWhitespace(workflow);
+
+    expect(source).toContain(
+      'const overrideRecordColumns = "id,user_id,area_id,policy_identifier,schema_version,suggestion_id,subject_type,subject_id,override_type,old_value_json,new_value_json,reason,created_at"',
+    );
+  });
   it("requires cockpit model tests to use transition-reachable workflow helpers", () => {
     const testFiles = walkRepoFiles("apps/web/src/__tests__").filter(
       (file) =>

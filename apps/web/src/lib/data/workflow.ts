@@ -16,6 +16,7 @@ import {
   CreateTaskInputSchema,
   ExecutionSessionSchema,
   MarkExecutionSessionInputSchema,
+  META_LEARNING_EVENT_SCHEMA_VERSION_V2,
   ProjectSchema,
   ReviewEntrySchema,
   SoftDeleteAreaInputSchema,
@@ -292,10 +293,10 @@ const reviewEntryColumns =
   "id,user_id,area_id,review_type,period_start,period_end,summary_json,created_at";
 
 const suggestionRecordColumns =
-  "id,user_id,area_id,policy_identifier,schema_version,suggestion_type,subject_type,subject_id,suggestion_json,confidence,status,created_at,resolved_at";
+  "id,user_id,area_id,policy_identifier,schema_version,suggestion_type,subject_type,subject_id,suggestion_json,confidence,status,resolution_reason,decided_by,created_at,resolved_at";
 
 const overrideRecordColumns =
-  "id,user_id,area_id,policy_identifier,schema_version,subject_type,subject_id,override_type,old_value_json,new_value_json,reason,created_at";
+  "id,user_id,area_id,policy_identifier,schema_version,suggestion_id,subject_type,subject_id,override_type,old_value_json,new_value_json,reason,created_at";
 
 function parseAreas(rows: unknown) {
   return AreaSchema.array().parse(normalizeSupabaseRows(rows));
@@ -448,13 +449,15 @@ export async function createSuggestionRecord(
       user_id: user.id,
       area_id: parsedInput.area_id,
       policy_identifier: parsedInput.policy_identifier,
-      schema_version: "meta-learning-event-v1",
+      schema_version: META_LEARNING_EVENT_SCHEMA_VERSION_V2,
       suggestion_type: parsedInput.suggestion_type,
       subject_type: parsedInput.subject_type,
       subject_id: parsedInput.subject_id ?? null,
       suggestion_json: parsedInput.suggestion_json,
       confidence: parsedInput.confidence ?? null,
       status: parsedInput.status,
+      resolution_reason: parsedInput.resolution_reason ?? null,
+      decided_by: parsedInput.decided_by,
       resolved_at: parsedInput.resolved_at ?? null,
     })
     .select(suggestionRecordColumns)
@@ -490,7 +493,8 @@ export async function createOverrideRecord(
       user_id: user.id,
       area_id: parsedInput.area_id,
       policy_identifier: parsedInput.policy_identifier,
-      schema_version: "meta-learning-event-v1",
+      schema_version: META_LEARNING_EVENT_SCHEMA_VERSION_V2,
+      suggestion_id: parsedInput.suggestion_id ?? null,
       subject_type: parsedInput.subject_type,
       subject_id: parsedInput.subject_id,
       override_type: parsedInput.override_type,

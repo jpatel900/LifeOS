@@ -44,6 +44,10 @@ function loadSeedSql() {
   return readFileSync(resolve(supabaseDir, "seed.sql"), "utf8");
 }
 
+function normalizeSql(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 describe("Supabase local database scaffold", () => {
   it("includes local config and seed documentation", () => {
     expect(existsSync(resolve(supabaseDir, "config.toml"))).toBe(true);
@@ -216,6 +220,35 @@ describe("Supabase local database scaffold", () => {
     );
     expect(sql).toContain(
       "constraint calendar_blocks_proposal_id_key unique (proposal_id)",
+    );
+  });
+
+  it("migration adds a composite override_records suggestion_id FK referencing (id, user_id)", () => {
+    const sql = normalizeSql(loadAllMigrations());
+
+    expect(sql).toContain("add column if not exists suggestion_id uuid");
+    expect(sql).toContain(
+      "constraint override_records_suggestion_fk foreign key (suggestion_id, user_id) references public.suggestion_records (id, user_id) on delete set null",
+    );
+    expect(sql).not.toContain(
+      "foreign key (suggestion_id) references public.suggestion_records (id)",
+    );
+  });
+
+  it("migration replaces the schema_version check with the v1/v2 enum form", () => {
+    const sql = normalizeSql(loadAllMigrations());
+
+    expect(sql).toContain(
+      "drop constraint if exists suggestion_records_schema_version_check",
+    );
+    expect(sql).toContain(
+      "drop constraint if exists override_records_schema_version_check",
+    );
+    expect(sql).toContain(
+      "constraint suggestion_records_schema_version_check check (schema_version in ('meta-learning-event-v1','meta-learning-event-v2'))",
+    );
+    expect(sql).toContain(
+      "constraint override_records_schema_version_check check (schema_version in ('meta-learning-event-v1','meta-learning-event-v2'))",
     );
   });
 
