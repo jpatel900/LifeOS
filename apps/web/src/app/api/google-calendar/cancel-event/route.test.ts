@@ -196,6 +196,12 @@ describe("google-calendar cancel-event route", () => {
       }),
     );
     expect(
+      mocks.createPendingExternalWriteEventForAccessToken.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      mocks.deleteGoogleCalendarEventForConnection.mock.invocationCallOrder[0],
+    );
+    expect(
       mocks.updateExternalWriteEventResultForAccessToken,
     ).toHaveBeenCalledWith(
       "supabase-access-token",
