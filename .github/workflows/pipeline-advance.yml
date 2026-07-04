@@ -83,6 +83,7 @@ jobs:
                 '- Smallest change that satisfies the issue; binding contracts and salvage rules in the issue body are not negotiable.',
                 '- Never weaken a schema, guard test, or RLS policy to make something pass. Doc deletions require matching removals from docs/doc-registry.json.',
                 '- Validation evidence (see .agents/skills/lifeos-testing/SKILL.md): run the full suite AND the specific tests guarding the constraints named in the issue. Your environment cannot run every lane (Supabase RLS, Playwright, provider-env paths) — list what you could NOT run in the PR body under "Unverified lanes". Unverified is acceptable; unreported is not.',
+                `- DELIVERY FALLBACK: after your PR-creation step, verify the PR actually exists on github.com/${owner}/${repo} (fetch the PR list or the URL you were given). If it does not exist, or PR creation failed or is unavailable, do NOT stop and do NOT just report completion: post the complete output of \`git format-patch origin/main --stdout\` as one or more comments on THIS issue, each starting with the line \`PATCH-PASTE DELIVERY (part n/N)\`. A maintainer will apply it with \`git am\` and open the PR crediting you as author.`,
               ].join('\n');
 
             const comment = (issue_number, body) =>
@@ -112,7 +113,6 @@ jobs:
               // is stalled. Covers Codex usage-limit windows (kick posted, no task
               // ever started) and missed advances.
               const RETRY_AFTER_HOURS = 6;
-              const NUDGE_AFTER_HOURS = 24;
               const MAX_KICKS = 5;
 
               for (const entry of pipeline) {
@@ -143,11 +143,13 @@ jobs:
                 const lastKickAt = new Date(kicks[kicks.length - 1].created_at);
                 const hoursSinceKick = (Date.now() - lastKickAt.getTime()) / 36e5;
 
-                const openPrs = await github.paginate(github.rest.pulls.list, {
-                  owner, repo, state: 'open', per_page: 100,
+                // Claimed-PR-exists check: search all PR states (open, closed, merged),
+                // since a merged PR closing the issue means delivery already succeeded.
+                const allPrs = await github.paginate(github.rest.pulls.list, {
+                  owner, repo, state: 'all', per_page: 100,
                 });
-                if (openPrs.some((p) => closingIssueNumbers(p.body).includes(entry.issue))) {
-                  core.info(`Watchdog: #${entry.issue} has an open PR; healthy.`);
+                if (allPrs.some((p) => closingIssueNumbers(p.body).includes(entry.issue))) {
+                  core.info(`Watchdog: #${entry.issue} has a PR (open or merged) that closes it; healthy.`);
                   return;
                 }
 
@@ -158,13 +160,52 @@ jobs:
                 );
 
                 if (codexRespondedAfterKick) {
-                  // Task ran but no PR reached GitHub (manual-publish case).
-                  // Nudge once after 24h; re-kicking would duplicate the work.
-                  if (hoursSinceKick >= NUDGE_AFTER_HOURS && hoursSinceKick < NUDGE_AFTER_HOURS + 6) {
+                  // Task ran but no PR (any state) reached GitHub. Check whether a
+                  // patch-paste delivery (docs/FAILURES.md protocol) is already waiting.
+                  const patchPasteAfterKick = comments.some(
+                    (c) =>
+                      new Date(c.created_at) > lastKickAt &&
+                      (c.body ?? '').startsWith('PATCH-PASTE DELIVERY'),
+                  );
+
+                  const epicComments = await github.paginate(github.rest.issues.listComments, {
+                    owner, repo, issue_number: epic, per_page: 100,
+                  });
+
+                  if (patchPasteAfterKick) {
+                    const marker = `PATCH-PASTE READY on #${entry.issue}`;
+                    const alreadyPosted = epicComments.some(
+                      (c) =>
+                        new Date(c.created_at) > lastKickAt &&
+                        (c.body ?? '').includes(marker),
+                    );
+                    if (!alreadyPosted) {
+                      await comment(
+                        epic,
+                        `Pipeline watchdog: ${marker} — Codex posted a format-patch on #${entry.issue}. @${manifest.owner} apply with \`git am\` and open the PR.`,
+                      );
+                    } else {
+                      core.info(`Watchdog: ${marker} already posted; skipping duplicate.`);
+                    }
+                    return;
+                  }
+
+                  // Stranded delivery: Codex reported completion but neither a PR nor
+                  // a patch-paste comment exists. Per docs/FAILURES.md "Codex mention-lane
+                  // deliveries stranded", alert the owner rather than silently nudging.
+                  const strandedMarker = `STRANDED DELIVERY on #${entry.issue}`;
+                  const alreadyFlagged = epicComments.some(
+                    (c) =>
+                      new Date(c.created_at) > lastKickAt &&
+                      (c.body ?? '').includes(strandedMarker),
+                  );
+                  if (!alreadyFlagged) {
                     await comment(
                       epic,
-                      `Pipeline watchdog: #${entry.issue} completed a Codex task ~${Math.round(hoursSinceKick)}h ago but no PR exists. @${manifest.owner} it may be waiting for a manual "Create PR" in the Codex UI.`,
+                      `Pipeline watchdog: ${strandedMarker} — Codex reported completion ~${Math.round(hoursSinceKick)}h ago but no PR or patch-paste exists. @${manifest.owner} recover per docs/FAILURES.md patch-paste protocol (re-kick will re-implement from scratch; prefer asking the existing task for \`git format-patch origin/main --stdout\`).`,
                     );
+                  } else {
+                    core.info(`Watchdog: ${strandedMarker} already flagged; skipping duplicate.`);
                   }
                   return;
                 }
