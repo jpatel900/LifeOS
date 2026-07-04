@@ -19,6 +19,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { createArea, listAreas, updateAreaColor } from "@/lib/data/workflow";
+import {
+  getHealthDashboard,
+  type HealthDashboardCheck,
+} from "@/lib/data/health";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   persistedAreaIdForWorkflowAreaId,
@@ -1728,7 +1732,42 @@ function ReviewView({
 
 function HealthView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
   const [pulse, setPulse] = useState(false);
-  const checks = vm.healthChecks;
+  const [checks, setChecks] = useState<
+    Array<(typeof vm.healthChecks)[number] | HealthDashboardCheck>
+  >(vm.healthChecks);
+  const [message, setMessage] = useState<string | null>(null);
+  async function runSystemCheck() {
+    setPulse(true);
+    setMessage(null);
+    try {
+      const client = createSupabaseBrowserClient();
+      if (!client) {
+        setMessage("Mock-only health check completed.");
+        return;
+      }
+      const result = await getHealthDashboard(client);
+      setChecks(result.checks);
+      setMessage(
+        result.persistence === "persisted"
+          ? "Persisted health snapshot for this session."
+          : (result.persistenceMessage ??
+              (result.provider === "mock"
+                ? "Mock-only health check completed."
+                : "Health check completed without persistence.")),
+      );
+    } catch {
+      setMessage(
+        "Unable to complete the health check. Refresh, sign in again, then retry.",
+      );
+    } finally {
+      window.setTimeout(() => setPulse(false), 1400);
+    }
+  }
+
+  useEffect(() => {
+    void runSystemCheck();
+    // Run once when the health view mounts so persisted mode never shows mock-only copy as truth.
+  }, []);
   const critical = checks.filter((check) => check.status === "critical").length;
   const watch = checks.filter((check) => check.status === "watch").length;
   const healthy = checks.filter((check) => check.status === "healthy").length;
@@ -1749,8 +1788,7 @@ function HealthView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
           <button
             type="button"
             onClick={() => {
-              setPulse(true);
-              window.setTimeout(() => setPulse(false), 1400);
+              void runSystemCheck();
             }}
             className={cn(
               "grid size-56 place-items-center rounded-full border border-[var(--grn-rng)] bg-[var(--grn-sf)] text-[var(--grn-fg)]",
@@ -1787,14 +1825,16 @@ function HealthView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
           <button
             type="button"
             onClick={() => {
-              setPulse(true);
-              window.setTimeout(() => setPulse(false), 1400);
+              void runSystemCheck();
             }}
             className="mt-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--btn)] font-bold text-[var(--btn-fg)]"
           >
             <RefreshCw size={18} />
             Run system check
           </button>
+          {message ? (
+            <p className="text-sm text-[var(--mut)]">{message}</p>
+          ) : null}
           <details className="rounded-2xl border border-[var(--ln)] p-4 text-[var(--mut)]">
             <summary className="cursor-pointer font-semibold text-[var(--ink)]">
               Full breakdown
