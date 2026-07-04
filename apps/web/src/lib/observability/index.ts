@@ -270,6 +270,7 @@ export const flushObservability =
 export const shutdownObservability =
   defaultObservability.shutdown.bind(defaultObservability);
 
+export * from "./aiCallTraces";
 export * from "./config";
 export * from "./langfuse";
 export * from "./runtime";
