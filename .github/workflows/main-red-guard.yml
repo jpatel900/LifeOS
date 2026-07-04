@@ -1,0 +1,121 @@
+name: Main Red Guard
+
+# Safety net for merging PRs without the strict up-to-date requirement:
+# if CI fails on a push to main (e.g. two individually-green PRs conflict
+# semantically), open a ready-to-merge revert PR back to the last green
+# commit. The revert is never auto-merged — the owner decides.
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+concurrency:
+  group: main-red-guard-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  guard:
+    name: Open revert PR when main goes red
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch == 'main'
+    steps:
+      - name: Checkout main history
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+
+      - name: Skip if a guard revert PR is already open
+        id: dedupe
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          script: |
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = prs.data.find((pr) =>
+              pr.head.ref.startsWith('guard/revert-main-'),
+            );
+            core.setOutput('skip', existing ? 'true' : 'false');
+            if (existing) {
+              core.notice(`Guard revert PR already open: ${existing.html_url}`);
+            }
+
+      - name: Find last green main commit
+        if: steps.dedupe.outputs.skip != 'true'
+        id: green
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          script: |
+            const failedSha = context.payload.workflow_run.head_sha;
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              branch: 'main',
+              status: 'success',
+              per_page: 50,
+            });
+            const green = runs.data.workflow_runs.find(
+              (r) => r.name === 'CI' && r.head_sha !== failedSha,
+            );
+            core.setOutput('sha', green ? green.head_sha : '');
+            core.setOutput('failed_sha', failedSha);
+
+      - name: Create revert branch and PR
+        if: steps.dedupe.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          GREEN_SHA: ${{ steps.green.outputs.sha }}
+          FAILED_SHA: ${{ steps.green.outputs.failed_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          git config user.name "main-red-guard[bot]"
+          git config user.email "main-red-guard@users.noreply.github.com"
+
+          short="${FAILED_SHA:0:8}"
+          branch="guard/revert-main-${short}"
+
+          # Fall back to the parent commit when no prior green run is known.
+          base="${GREEN_SHA:-$(git rev-parse "${FAILED_SHA}^")}"
+
+          if ! git merge-base --is-ancestor "$base" "$FAILED_SHA"; then
+            base="$(git rev-parse "${FAILED_SHA}^")"
+          fi
+
+          commits="$(git log --oneline "${base}..${FAILED_SHA}" | head -20)"
+          echo "Reverting range ${base}..${FAILED_SHA}:"
+          echo "$commits"
+
+          git switch -c "$branch" "$FAILED_SHA"
+          if git revert --no-commit "${base}..${FAILED_SHA}"; then
+            git commit -m "Revert main to last green (${base:0:8}) after red CI at ${short}"
+            git push origin "$branch"
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "Auto-revert: main went red at ${short}" \
+              --body "$(printf 'CI failed on main: %s\n\nThis PR reverts main back to the last green commit `%s`. Merge it to restore green immediately, or close it if a forward fix is faster.\n\nReverted commits:\n```\n%s\n```\n\nOpened automatically by Main Red Guard; never auto-merged.' "$RUN_URL" "${base:0:8}" "$commits")"
+          else
+            git revert --abort || true
+            gh issue create \
+              --title "main is red at ${short} and auto-revert could not apply" \
+              --body "$(printf 'CI failed on main: %s\n\nAutomatic revert of `%s..%s` hit conflicts, so no revert PR was opened. Manual intervention needed.\n\nCommits since last green:\n```\n%s\n```' "$RUN_URL" "${base:0:8}" "$short" "$commits")"
+          fi
