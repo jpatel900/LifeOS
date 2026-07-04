@@ -287,18 +287,84 @@ export function submitCapture(
   };
 }
 
+/**
+ * Raw-save-first: stages only the capture item so the raw text is in state
+ * (and persistable) before any parse attempt. Drafts arrive later via
+ * `appendParsedWorkflowResult` once /api/parse-capture returns.
+ */
+export function submitRawCapture(
+  state: WorkflowState,
+  input: SubmitCaptureInput,
+): WorkflowState {
+  const rawText = input.rawText.trim();
+  if (!rawText) {
+    throw new Error("Capture text is required.");
+  }
+
+  const captureItem: Phase2CaptureItem = {
+    id: nextId("capture"),
+    user_id: MOCK_USER_ID,
+    area_id: inferAreaId(rawText, input.areaId),
+    raw_text: rawText,
+    capture_mode: "text",
+    inferred_area_confidence: input.areaId ? 1 : 0.74,
+    status: "new",
+    created_at: nowIso(),
+  };
+
+  return {
+    ...state,
+    captureItems: [captureItem, ...state.captureItems],
+    reviewLog: [`Captured: ${makeTitle(rawText)}`, ...state.reviewLog],
+  };
+}
+
 export function appendParsedWorkflowResult(
   state: WorkflowState,
   parsed: ParsedWorkflowResult,
 ): WorkflowState {
+  const captureExists = state.captureItems.some(
+    (item) => item.id === parsed.captureItem.id,
+  );
+
+  // Deterministic local scaffold, not AI output: one draft focus block per
+  // task draft so triage acceptance can stage a plan proposal.
+  const proposalDrafts: Phase2TimeBlockProposalDraft[] = parsed.taskDrafts.map(
+    (draft) => {
+      const proposedStart = new Date(Date.now() + 60 * 60 * 1000);
+      const proposedEnd = new Date(proposedStart.getTime() + 45 * 60 * 1000);
+      return {
+        id: nextId("proposal-draft"),
+        user_id: draft.user_id,
+        area_id: draft.area_id,
+        capture_item_id: draft.capture_item_id,
+        task_draft_id: draft.id,
+        proposed_start: proposedStart.toISOString(),
+        proposed_end: proposedEnd.toISOString(),
+        rationale: "Create one local focus block for the first useful move.",
+        conflict_flag: false,
+        status: "draft",
+        created_at: nowIso(),
+      };
+    },
+  );
+
   return {
     ...state,
-    captureItems: [parsed.captureItem, ...state.captureItems],
+    captureItems: captureExists
+      ? state.captureItems.map((item) =>
+          item.id === parsed.captureItem.id ? parsed.captureItem : item,
+        )
+      : [parsed.captureItem, ...state.captureItems],
     taskDrafts: [...parsed.taskDrafts, ...state.taskDrafts],
     projectDrafts: [...parsed.projectDrafts, ...state.projectDrafts],
     ambiguityAssessments: parsed.ambiguityAssessment
       ? [parsed.ambiguityAssessment, ...state.ambiguityAssessments]
       : state.ambiguityAssessments,
+    timeBlockProposalDrafts: [
+      ...proposalDrafts,
+      ...state.timeBlockProposalDrafts,
+    ],
     reviewLog: [
       `Parsed capture: ${parsed.captureItem.raw_text}`,
       ...state.reviewLog,

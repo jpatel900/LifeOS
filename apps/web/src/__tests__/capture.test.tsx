@@ -1,13 +1,24 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CapturePage from "../app/capture/page";
 import { AppShell } from "../app/components/AppShell";
+import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/capture",
 }));
 
 describe("Capture cockpit", () => {
+  let restoreFetch: () => void;
+
+  beforeEach(() => {
+    restoreFetch = stubParseCaptureFetch();
+  });
+
+  afterEach(() => {
+    restoreFetch();
+  });
+
   it("saves a thought through the single primary action and routes it to triage", async () => {
     render(
       <AppShell>

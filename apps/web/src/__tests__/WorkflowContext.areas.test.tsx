@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
+import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
 const {
   mockListAreas,
@@ -134,7 +135,10 @@ const persistedTask = {
   updated_at: "2026-05-27T00:00:00.000Z",
 };
 
+let restoreParseCaptureFetch: () => void;
+
 beforeEach(() => {
+  restoreParseCaptureFetch = stubParseCaptureFetch();
   mockListAreas.mockResolvedValue({
     provider: "supabase",
     areas: [persistedArea],
@@ -181,6 +185,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  restoreParseCaptureFetch();
   vi.clearAllMocks();
 });
 
