@@ -1,21 +1,31 @@
 {
-  "$comment": "Sequential execution manifest for the context-lean + one-way-door program (epic #243). pipeline-advance.yml reads this. kick: 'mention' posts @codex on the issue when its predecessor's PR merges; 'pause' notifies the repo owner on the epic and stops; 'none' is a manually-managed step. automerge: true requests the safe auto-merge labels on the closing PR (the deterministic path evaluator in scripts/agent/check-safe-automerge.mjs remains the actual gate).",
-  "epic": 243,
+  "$comment": "Sequential execution manifest for the post-smoke hardening epic (#325). pipeline-advance.yml reads this. kick: 'mention' posts @codex on the issue when its predecessor's PR merges; 'pause' notifies the repo owner on the epic and stops; 'none' is a manually-managed step. automerge: true requests the safe auto-merge labels on the closing PR (the deterministic path evaluator in scripts/agent/check-safe-automerge.mjs remains the actual gate). Prior program (epic #243) completed through B6; its two remaining steps (#240 human-gated calendar spike, #241 production smoke) are human-managed outside this manifest — the 2026-07-03 smoke already ran and produced KNOWN_ISSUES rows 11-14, which this epic addresses.",
+  "epic": 325,
   "owner": "jpatel900",
   "pipeline": [
-    { "issue": 228, "kick": "none", "automerge": false, "note": "A0 in flight on PR #244; human merge starts the chain" },
-    { "issue": 229, "kick": "mention", "automerge": true, "note": "A1 implementation-notes deletion; docs-only" },
-    { "issue": 230, "kick": "mention", "automerge": false, "note": "A2 touches repo root + .gitignore; human merge" },
-    { "issue": 231, "kick": "mention", "automerge": true, "note": "A3 wiki fold; docs-only" },
-    { "issue": 232, "kick": "mention", "automerge": false, "note": "A4 governance rewrite; HUMAN PR REVIEW REQUIRED before merge" },
-    { "issue": 233, "kick": "mention", "automerge": false, "note": "A5 generated indexes; touches scripts/" },
-    { "issue": 234, "kick": "mention", "automerge": false, "note": "B1 reachability invariant; test guard changes, human merge per T2" },
-    { "issue": 235, "kick": "mention", "automerge": false, "note": "B2 learning capture; schema surface, human merge per T3" },
-    { "issue": 236, "kick": "mention", "automerge": false, "note": "B4 audit reconciliation + health incidents" },
-    { "issue": 237, "kick": "mention", "automerge": false, "note": "B5 all-day conflict semantics" },
-    { "issue": 238, "kick": "mention", "automerge": false, "note": "B7 AI capture end-to-end" },
-    { "issue": 239, "kick": "mention", "automerge": false, "note": "B6 cockpit approval bridge" },
-    { "issue": 240, "kick": "pause", "automerge": false, "note": "B3 update/cancel: requires human spike with a real Google account before implementation starts" },
-    { "issue": 241, "kick": "mention", "automerge": false, "note": "B8 production smoke" }
+    {
+      "issue": 321,
+      "kick": "mention",
+      "automerge": false,
+      "note": "H1 line-ending normalization + planning-loader footgun comment; touches repo root, human merge"
+    },
+    {
+      "issue": 322,
+      "kick": "mention",
+      "automerge": false,
+      "note": "H2 truthful /health persisted-mode probes (KNOWN_ISSUES row 13); T2 health behavior, human merge"
+    },
+    {
+      "issue": 323,
+      "kick": "mention",
+      "automerge": false,
+      "note": "H3 sync failure classification (loads vs saves vs missing capability); T2 data layer, human merge"
+    },
+    {
+      "issue": 324,
+      "kick": "mention",
+      "automerge": false,
+      "note": "H4 placement feedback + optimistic-echo dedup (KNOWN_ISSUES row 12); T2 data layer + UX, human merge"
+    }
   ]
 }
