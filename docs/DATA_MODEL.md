@@ -28,7 +28,10 @@ Workflow
   ├─ time_block_proposals
   ├─ calendar_blocks
   ├─ execution_sessions
-  └─ review_entries
+  ├─ review_entries
+  ├─ people (target, S1)
+  ├─ operator_profiles (target, S2)
+  └─ win_records (target, S7)
 
 Meta-Learning
   ├─ priority_profiles
@@ -36,7 +39,8 @@ Meta-Learning
   ├─ duration_profiles
   ├─ triage_learning_profiles
   ├─ suggestion_records
-  └─ override_records
+  ├─ override_records
+  └─ rollup_summaries (target, S8)
 
 Health / Audit
   ├─ health_checks
@@ -368,6 +372,86 @@ Review types:
 - daily
 - weekly
 
+---
+
+### 4.10 `people` (target shape, Stage 1 slice S1)
+
+Status: not yet implemented. Recorded here as the frozen Stage 1 contract per NS-INV-2; slice S1 creates this table exactly as specified, later slices only add.
+
+Purpose: user-scoped person records for waiting-on / committed-to tracking.
+
+| Column          | Type                 | Notes                              |
+| --------------- | -------------------- | ---------------------------------- |
+| id              | uuid pk              | generated                          |
+| user_id         | uuid                 | owner                              |
+| display_name    | text                 | not null                           |
+| normalized_name | text                 | not null; lowercased, for matching |
+| notes           | text nullable        |                                    |
+| created_at      | timestamptz          | generated                          |
+| updated_at      | timestamptz          | generated                          |
+| archived_at     | timestamptz nullable | soft delete                        |
+
+Standard owner RLS (section 8). Export coverage required (INV-2).
+
+---
+
+### 4.11 `tasks` — additive columns (target shape, Stage 1 slice S1)
+
+Status: not yet implemented. Adds to the existing `tasks` table (section 4.5) without altering or renaming any existing column, per NS-INV-2.
+
+| Column                 | Type                 | Notes                  |
+| ---------------------- | -------------------- | ---------------------- |
+| waiting_on_person_id   | uuid nullable        | fk `people`            |
+| waiting_on_since       | timestamptz nullable |                        |
+| is_commitment          | boolean              | not null default false |
+| committed_to_person_id | uuid nullable        | fk `people`            |
+
+Commitment due date reuses the existing `due_at` field rather than adding a new date column, consistent with the "prefer fields over new statuses" guardrail (section 11). `waiting_on_person_id` was already anticipated in that guardrail's example field list.
+
+---
+
+### 4.12 `operator_profiles` (target shape, Stage 1 slice S2)
+
+Status: not yet implemented.
+
+Purpose: single global operator profile (named strengths/weaknesses with compensation rules), consumed by the NS-INV-1 context-assembly module.
+
+| Column             | Type           | Notes                           |
+| ------------------ | -------------- | ------------------------------- |
+| id                 | uuid pk        | generated                       |
+| user_id            | uuid           | not null, unique                |
+| profile_text       | text nullable  |                                 |
+| compensation_rules | jsonb nullable | zod: array of `{ trait, rule }` |
+| created_at         | timestamptz    | generated                       |
+| updated_at         | timestamptz    | generated                       |
+
+Owner RLS (section 8). Export coverage required (INV-2).
+
+`areas` also gains additive columns in slice S2 (target shape): `charter_text` (text nullable) and `charter_updated_at` (timestamptz nullable), extending the existing `areas` table (section 3.1) without altering existing columns.
+
+---
+
+### 4.13 `win_records` (target shape, Stage 1 slice S7)
+
+Status: not yet implemented.
+
+Purpose: user-confirmed wins harvested from completions during weekly review (FR-020).
+
+| Column            | Type          | Notes               |
+| ----------------- | ------------- | ------------------- |
+| id                | uuid pk       | generated           |
+| user_id           | uuid          | owner               |
+| area_id           | uuid          | fk `areas`          |
+| source_task_id    | uuid nullable |                     |
+| source_project_id | uuid nullable |                     |
+| title             | text          | not null            |
+| detail            | text nullable |                     |
+| occurred_at       | date          | not null            |
+| review_entry_id   | uuid nullable | fk `review_entries` |
+| created_at        | timestamptz   | generated           |
+
+Owner RLS (section 8). Export coverage required (INV-2).
+
 ## 5. Meta-Learning Tables
 
 ### 5.1 `priority_profiles`
@@ -469,6 +553,35 @@ Statuses:
 | new_value_json | jsonb         |
 | reason         | text nullable |
 | created_at     | timestamptz   |
+
+---
+
+### 5.7 `rollup_summaries` (target shape, Stage 1 slice S8)
+
+Status: not yet implemented.
+
+Purpose: AI-drafted weekly/monthly rollups per area (FR-020). Only approved rollups persist; drafts live in the UI only (NS-INV-4).
+
+| Column       | Type        | Notes                                     |
+| ------------ | ----------- | ----------------------------------------- |
+| id           | uuid pk     | generated                                 |
+| user_id      | uuid        | owner                                     |
+| area_id      | uuid        | fk `areas`                                |
+| period_type  | text        | check in (`week`, `month`)                |
+| period_start | date        |                                           |
+| period_end   | date        |                                           |
+| summary      | jsonb       | zod: `highlights[]`, `misses[]`, `counts` |
+| created_at   | timestamptz | generated                                 |
+
+Constraints: unique `(user_id, area_id, period_type, period_start)`.
+
+Owner RLS (section 8). Export coverage required (INV-2).
+
+---
+
+### 5.8 Parse-result schema extension (target shape, Stage 1 slice S3)
+
+Status: not yet implemented. Versioned addition to the existing parse-result schema in `packages/schemas`, per draft: optional `person_mentions` — array of `{ name, role: waiting_on | committed_to | mention, confidence }` — plus an `is_commitment` boolean. Validated as strictly as existing contracts.
 
 ## 6. Health and Audit Tables
 
@@ -623,9 +736,11 @@ Indexes:
 
 ```text
 users
+  ├─ people (target, S1)
+  ├─ operator_profiles (target, S2)
   └─ areas
       ├─ projects
-      │   └─ tasks
+      │   └─ tasks (target additive: waiting_on_person_id, committed_to_person_id -> people, S1)
       ├─ capture_items
       │   ├─ ambiguity_assessments
       │   └─ discovery_questions
@@ -633,11 +748,15 @@ users
       │   └─ calendar_blocks
       ├─ execution_sessions
       ├─ review_entries
+      │   └─ win_records (target, S7)
       ├─ priority_profiles
       ├─ time_preference_profiles
       ├─ duration_profiles
+      ├─ rollup_summaries (target, S8)
       └─ health_checks
 ```
+
+Target-shape entries above are Stage 1 contract tables/columns not yet implemented (see sections 4.10-4.13, 5.7); they are listed here so the relationship graph stays a single source of truth once slices land.
 
 ## 8. RLS Policy Pattern
 
@@ -660,6 +779,8 @@ using ((select auth.uid()) = user_id)
 
 V1 can avoid hard deletes in the UI and rely on archive/status fields.
 
+This pattern applies unchanged to all Stage 1 target-shape tables (`people`, `operator_profiles`, `win_records`, `rollup_summaries`): standard owner RLS, no bespoke policy shape, export coverage from the same PR that creates the table (INV-2).
+
 ## 9. Migration Order
 
 1. create extensions if needed
@@ -675,6 +796,8 @@ V1 can avoid hard deletes in the UI and rely on archive/status fields.
 11. enable RLS
 12. add RLS policies
 13. seed default areas and global defaults
+
+Stage 1 target-shape tables slot into this order by dependency, not by appending at the end: `people` after step 5 (tasks reference it), `operator_profiles`/`areas` charter columns after step 3, `win_records` after step 7 (references review_entries), `rollup_summaries` after step 8. Each slice adds its own indexes/RLS/policies for its tables in the same step shape as steps 10-12.
 
 ## 10. Ambiguity and planning-theatre guardrails
 
@@ -697,6 +820,8 @@ Guardrails for the future operating-layer upgrade:
 - any task/project status expansion requires a separate approved T3 issue or spec that covers migration, UI, parser, tests, and review behavior
 - if a future transition writes more than one table, it must use one transactional `SECURITY INVOKER` RPC per `docs/ENGINEERING_INVARIANTS.md` INV-1
 - any new user-owned table or state-adjacent table remains subject to export coverage (INV-2), RLS, and two-user isolation tests
+
+Stage 1 aging defaults (target, slice S4): waiting-on is flagged after 3 days, using the existing `global_defaults` pattern for a per-area override; commitment aging uses the identical default and override mechanism.
 
 ## 12. Open Questions
 

@@ -39,6 +39,8 @@ Principles:
 
 **Read-only entry / routing surface:** Today / Home on `/` routes into the six primary workflow screens but is not a seventh mutable workflow.
 
+**Stage 1 target (slice S1-S8):** the flows below gain new steps once Stage 1 lands: a person-link approval step in Triage, aging/win-harvest/rollup-approval steps in Review, and a brief panel on Home. These are recorded ahead of implementation per NS-INV-2/ADR 0002 D5; each note is marked with its owning slice and stays consistent with the existing six-screen limit (NFR-005) and the read-only Home routing rule above — no new primary nav item is introduced. The referenced "mobile surface budget doctrine" is not yet defined in this doc or `AGENTS.md`; until a doctrine document exists, the Home brief panel note below is scoped conservatively against the existing screen-budget and anti-pattern rules (NFR-005; section 14 "full-screen analytics before basic use works").
+
 **Secondary / admin:** Settings (areas, policies, integrations) — supports the app but is not one of the six primary workflow screens.
 
 Suggested route map:
@@ -65,6 +67,10 @@ Use these defaults unless a reviewed product decision says otherwise:
 - top-level navigation expansion beyond the six primary workflow screens -> explicit product approval plus requirements update first
 
 The goal is to add operating clarity without turning LifeOS into a cluttered multi-dashboard app.
+
+### Stage 1 target: Home brief panel (FR-019)
+
+Home gains a read-only brief panel (blocks, focus items, aging items, one stale project, recovery nudge) issuing zero mutations. It stays within the read-only entry/routing surface defined above — Home remains a routing surface into the six primary workflow screens, not a seventh mutable workflow, and the panel does not become a full-screen dashboard ahead of basic use (section 14 anti-patterns). Placement must respect whatever "mobile surface budget doctrine" the product intends to define; that doctrine does not yet exist in this doc or `AGENTS.md` (flagged in the PR as a dangling referent, not resolved here).
 
 ## 3. Flow 1 — First-Time Setup
 
@@ -198,6 +204,10 @@ Resolve uncertain AI outputs before they pollute the system.
 - User can bulk reject low-value drafts.
 - Corrections are logged per area.
 - Accepted items become real objects.
+
+### Stage 1 target: person-link approval step (slice S1)
+
+When a capture's parse result includes a person mention (FR-017), Triage gains a person-link approval step alongside the existing accept/edit/reject/split/merge/reassign/defer choices: accept an existing matched person, create a new person record, or reject to a plain task (raw capture preserved). No person record is created or linked without this explicit approval (NS-INV-4).
 
 ## 7. Flow 5 — Task to Local Time-Block Proposal
 
@@ -344,6 +354,10 @@ Close today and reduce tomorrow's chaos.
 - App suggests but does not force cleanup.
 - Review generates no external writes without approval.
 
+### Stage 1 target: aging section (slice S4)
+
+Daily Review gains an aging section showing waiting-on and commitment items past the aging threshold (FR-017; default 3 days, per-area override via `global_defaults`). Aging is a display/surfacing concern only — rule-based, not AI-invented — and does not add a new mutation path.
+
 ## 12. Flow 10 — Weekly Review
 
 ### Goal
@@ -373,6 +387,14 @@ Update the system from reality.
 - Core policy changes require approval.
 - User can apply suggestions by area only.
 - Review does not create too many suggestions.
+
+### Stage 1 target: win-harvest step (slice S7)
+
+Weekly Review gains a win-harvest step: the app offers win candidates drawn from completions, and only user-confirmed wins persist as `win_records` (FR-020). Declining a candidate discards it; nothing is written silently.
+
+### Stage 1 target: rollup approval step (slice S8)
+
+Weekly Review gains a rollup approval step: an AI-drafted weekly rollup per area (strict schema) is shown for review, and persists as a `rollup_summaries` row only on explicit user approval (FR-020, NS-INV-4). Monthly rollups compose approved weeks and are surfaced the same way at the monthly cadence.
 
 ## 13. Flow 11 — Health Dashboard
 
