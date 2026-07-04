@@ -217,24 +217,35 @@ function extractAllDayContexts(
     .filter((item): item is GoogleCalendarAllDayContext => Boolean(item));
 }
 
-function isBusyWindowCoveredByAllDayContext(
+// Busy windows that cannot be parsed count as conflicts so a malformed
+// provider response can never silently double-book the user.
+function busyWindowOverlapsProposal(
   item: unknown,
-  allDayContexts: GoogleCalendarAllDayContext[],
-  timezone: string,
+  proposedStart: string,
+  proposedEnd: string,
 ) {
-  if (!isRecord(item)) return false;
-  const start = item.start;
-  const end = item.end;
-  if (typeof start !== "string" || typeof end !== "string") return false;
+  if (
+    !isRecord(item) ||
+    typeof item.start !== "string" ||
+    typeof item.end !== "string"
+  ) {
+    return true;
+  }
 
-  const startDate = getCalendarDateKey(start, timezone);
-  const endDate = getCalendarDateKey(end, timezone);
-  const exclusiveEnd =
-    startDate === endDate ? addUtcDateDays(endDate, 1) : endDate;
+  const busyStart = new Date(item.start).getTime();
+  const busyEnd = new Date(item.end).getTime();
+  const windowStart = new Date(proposedStart).getTime();
+  const windowEnd = new Date(proposedEnd).getTime();
 
-  return allDayContexts.some(
-    (context) => context.date === startDate && context.endDate === exclusiveEnd,
-  );
+  if (
+    [busyStart, busyEnd, windowStart, windowEnd].some((value) =>
+      Number.isNaN(value),
+    )
+  ) {
+    return true;
+  }
+
+  return busyStart < windowEnd && busyEnd > windowStart;
 }
 
 async function fetchAllDayContexts(params: {
@@ -305,14 +316,13 @@ export async function checkGoogleCalendarFreeBusyForConnection(
     proposedStart: params.proposedStart,
     timezone,
   });
-  const timedBusyItems = busyItems.filter(
-    (item) =>
-      !isBusyWindowCoveredByAllDayContext(item, allDayContexts, timezone),
+  const conflictingBusyItems = busyItems.filter((item) =>
+    busyWindowOverlapsProposal(item, params.proposedStart, params.proposedEnd),
   );
 
   return {
     allDayContexts,
     checkedAt: new Date().toISOString(),
-    hasConflict: timedBusyItems.length > 0,
+    hasConflict: conflictingBusyItems.length > 0,
   };
 }

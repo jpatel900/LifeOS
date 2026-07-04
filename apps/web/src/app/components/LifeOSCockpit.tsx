@@ -18,7 +18,13 @@ import {
   Sun,
   Trash2,
 } from "lucide-react";
-import { createArea, listAreas, updateAreaColor } from "@/lib/data/workflow";
+import {
+  GoogleCalendarEventCreateError,
+  createArea,
+  createGoogleCalendarEventFromProposal,
+  listAreas,
+  updateAreaColor,
+} from "@/lib/data/workflow";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   persistedAreaIdForWorkflowAreaId,
@@ -87,6 +93,7 @@ export function LifeOSCockpit({
     setSelectedAreaId,
     syncStatus,
     syncPersistedAreas,
+    refreshPersistedWorkflow,
     submitCaptureText,
     acceptTaskDraft,
     backlogTaskDraft,
@@ -120,6 +127,14 @@ export function LifeOSCockpit({
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [googleWriteProposalId, setGoogleWriteProposalId] = useState<
+    string | null
+  >(null);
+  const [googleWriteWarningProposalId, setGoogleWriteWarningProposalId] =
+    useState<string | null>(null);
+  const [googleWritePendingProposalId, setGoogleWritePendingProposalId] =
+    useState<string | null>(null);
+  const [googleWriteState, setGoogleWriteState] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [total, setTotal] = useState(0);
@@ -341,6 +356,49 @@ export function LifeOSCockpit({
     showToast("Proposal drafted locally");
   }
 
+  async function confirmGoogleCalendarWrite(proposalId: string) {
+    setGoogleWritePendingProposalId(proposalId);
+    setGoogleWriteState("Creating Google Calendar event…");
+    try {
+      const result = await createGoogleCalendarEventFromProposal(
+        createSupabaseBrowserClient(),
+        {
+          proposal_id: proposalId,
+          approved: true,
+          acknowledge_first_write_warning:
+            googleWriteWarningProposalId === proposalId,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        },
+      );
+      await refreshPersistedWorkflow();
+      setGoogleWriteProposalId(null);
+      setGoogleWriteWarningProposalId(null);
+      setGoogleWriteState(
+        `Google Calendar event created. Audit recorded; block ${result.block.id} is scheduled.`,
+      );
+      showToast("Google Calendar event created");
+    } catch (error) {
+      if (
+        error instanceof GoogleCalendarEventCreateError &&
+        error.status === 428
+      ) {
+        setGoogleWriteWarningProposalId(proposalId);
+        setGoogleWriteState(
+          "First Google Calendar write needs acknowledgement. Review the warning, then confirm this one write again.",
+        );
+        return;
+      }
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Google Calendar event could not be created.";
+      setGoogleWriteState(message);
+    } finally {
+      setGoogleWritePendingProposalId(null);
+    }
+  }
+
   function nudgeProposalLater(proposalId: string) {
     const proposal = state.timeBlockProposals.find(
       (item) => item.id === proposalId,
@@ -545,6 +603,18 @@ export function LifeOSCockpit({
               onRejectProposal={rejectLocalProposal}
               onNudgeProposal={nudgeProposalLater}
               onCreateProposal={createProposalForSelectedTask}
+              googleWriteProposalId={googleWriteProposalId}
+              googleWriteWarningProposalId={googleWriteWarningProposalId}
+              googleWritePendingProposalId={googleWritePendingProposalId}
+              googleWriteState={googleWriteState}
+              onReviewGoogleWrite={setGoogleWriteProposalId}
+              onCancelGoogleWrite={() => {
+                setGoogleWriteProposalId(null);
+                setGoogleWriteWarningProposalId(null);
+              }}
+              onConfirmGoogleWrite={(proposalId) => {
+                void confirmGoogleCalendarWrite(proposalId);
+              }}
               onExecute={() => navigate("execute")}
               onCapture={() => navigate("capture")}
             />
@@ -1047,6 +1117,13 @@ function PlanView({
   onRejectProposal,
   onNudgeProposal,
   onCreateProposal,
+  googleWriteProposalId,
+  googleWriteWarningProposalId,
+  googleWritePendingProposalId,
+  googleWriteState,
+  onReviewGoogleWrite,
+  onCancelGoogleWrite,
+  onConfirmGoogleWrite,
   onExecute,
   onCapture,
 }: {
@@ -1060,6 +1137,13 @@ function PlanView({
   onRejectProposal: (proposalId: string) => void;
   onNudgeProposal: (proposalId: string) => void;
   onCreateProposal: (taskId: string, hour: number) => void;
+  googleWriteProposalId: string | null;
+  googleWriteWarningProposalId: string | null;
+  googleWritePendingProposalId: string | null;
+  googleWriteState: string | null;
+  onReviewGoogleWrite: (proposalId: string) => void;
+  onCancelGoogleWrite: () => void;
+  onConfirmGoogleWrite: (proposalId: string) => void;
   onExecute: () => void;
   onCapture: () => void;
 }) {
@@ -1069,6 +1153,9 @@ function PlanView({
   const hasTaskToPlace = vm.today.length > 0;
   const firstOpenHour =
     HOURS.find((hour) => !vm.planned.some((item) => item.hour === hour)) ?? 9;
+  const googleWriteProposal = vm.proposals.find(
+    (item) => item.proposal.id === googleWriteProposalId,
+  );
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
@@ -1210,13 +1297,22 @@ function PlanView({
                         {formatHour(hour)} · {proposal.status}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => onAcceptProposal(proposal.id)}
-                      className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
-                    >
-                      Accept
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onAcceptProposal(proposal.id)}
+                        className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                      >
+                        Accept local
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onReviewGoogleWrite(proposal.id)}
+                        className="min-h-9 rounded-full bg-[var(--btn)] px-3 text-sm font-bold text-[var(--btn-fg)]"
+                      >
+                        Review Google write
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {allDayContexts.map((context) => (
@@ -1264,10 +1360,35 @@ function PlanView({
               need explicit approval.
             </p>
           </details>
+          {googleWriteProposal ? (
+            <CalendarWriteConfirmation
+              proposal={googleWriteProposal.proposal}
+              taskTitle={googleWriteProposal.task.title}
+              firstWriteWarning={
+                googleWriteWarningProposalId === googleWriteProposal.proposal.id
+              }
+              pending={
+                googleWritePendingProposalId === googleWriteProposal.proposal.id
+              }
+              stateMessage={googleWriteState}
+              onCancel={onCancelGoogleWrite}
+              onConfirm={() =>
+                onConfirmGoogleWrite(googleWriteProposal.proposal.id)
+              }
+            />
+          ) : googleWriteState ? (
+            <p
+              className="mt-4 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4 text-sm font-semibold text-[var(--ink)]"
+              role="status"
+            >
+              {googleWriteState}
+            </p>
+          ) : null}
           <GoogleCalendarApprovalBridge
             proposals={vm.proposals}
             planned={vm.planned}
           />
+
           <button
             type="button"
             onClick={hasReadyBlock ? onExecute : onCapture}
@@ -1286,6 +1407,75 @@ function PlanView({
                 : "Capture a thought"}
           </button>
         </Panel>
+      </div>
+    </div>
+  );
+}
+
+function CalendarWriteConfirmation({
+  proposal,
+  taskTitle,
+  firstWriteWarning,
+  pending,
+  stateMessage,
+  onCancel,
+  onConfirm,
+}: {
+  proposal: ReturnType<
+    typeof buildCockpitViewModel
+  >["proposals"][number]["proposal"];
+  taskTitle: string;
+  firstWriteWarning: boolean;
+  pending: boolean;
+  stateMessage: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const start = new Date(proposal.proposed_start);
+  const end = new Date(proposal.proposed_end);
+
+  return (
+    <div className="mt-4 rounded-2xl border border-[var(--acc-rng)] bg-[var(--acc-sf)] p-4">
+      <p className="text-sm font-bold text-[var(--ink)]">
+        Confirm one Google Calendar write
+      </p>
+      <p className="mt-2 text-sm text-[var(--mut)]">
+        LifeOS will create one event for {taskTitle} from{" "}
+        {start.toLocaleString()} to {end.toLocaleString()}. This confirmation is
+        only for this write.
+      </p>
+      {firstWriteWarning ? (
+        <p className="mt-3 rounded-xl bg-[var(--ylw-sf)] p-3 text-sm font-semibold text-[var(--ylw-fg)]">
+          First write warning: Google Calendar writes leave LifeOS and create an
+          external event. Confirm again only if this single event should be
+          created now.
+        </p>
+      ) : null}
+      {stateMessage ? (
+        <p
+          className="mt-3 text-sm font-semibold text-[var(--ink)]"
+          role="status"
+        >
+          {stateMessage}
+        </p>
+      ) : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onConfirm}
+          className="min-h-10 rounded-full bg-[var(--btn)] px-4 text-sm font-bold text-[var(--btn-fg)] disabled:cursor-wait disabled:opacity-60"
+        >
+          {pending ? "Creating…" : "Confirm and create event"}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onCancel}
+          className="min-h-10 rounded-full border border-[var(--ln2)] px-4 text-sm font-semibold text-[var(--mut)]"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

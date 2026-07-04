@@ -1,0 +1,249 @@
+name: Pipeline Watchdog
+
+# Issue #297: deterministic closing-keyword / issue-state watchdog for the
+# epic-relay pipeline defined in scripts/agent/pipeline-manifest.json, and the
+# machine-independent dead-man switch for the desktop merge-review driver.
+#
+# READ/COMMENT ONLY. This workflow never closes, merges, kicks, or mutates
+# labels; issues.createComment is its only write. It runs on github.token only
+# (deliberately NOT CODEX_KICK_TOKEN, so it still works when that token expires
+# — detecting exactly that failure is one of its jobs).
+#
+# Alerts (each posted at most once per condition instance, deduplicated by an
+# HTML comment marker embedded in the alert body):
+#   1. Closing-keyword nudge (on PR open)  -> comment on the PR itself.
+#   2. Merged-without-close  (daily sweep) -> comment on the epic.
+#   3. Stalled-green > 48h   (daily sweep) -> comment on the epic, tags owner.
+#   4. Dead-kick > 24h       (daily sweep) -> comment on the epic, tags owner.
+#
+# Per .github/AGENT_AUTOMATION_POLICY.md this file is T2: human review required.
+
+on:
+  pull_request:
+    types:
+      - opened
+  schedule:
+    # Daily sweep; offset minute to avoid the top-of-hour Actions rush.
+    - cron: "37 11 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  watchdog:
+    name: Watchdog sweep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run watchdog checks
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const manifest = JSON.parse(
+              fs.readFileSync('scripts/agent/pipeline-manifest.json', 'utf8'),
+            );
+            const pipeline = manifest.pipeline;
+            const epic = manifest.epic;
+            const ownerLogin = manifest.owner;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const manifestIssues = new Set(pipeline.map((e) => e.issue));
+
+            const HOURS = 36e5;
+            const STALLED_GREEN_HOURS = 48;
+            const DEAD_KICK_HOURS = 24;
+
+            // Same closing-keyword regex as pipeline-advance.yml.
+            const closingIssueNumbers = (body) => {
+              const nums = new Set();
+              const re = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi;
+              for (const m of (body ?? '').matchAll(re)) nums.add(Number(m[1]));
+              return [...nums];
+            };
+
+            const closingManifestIssues = (body) =>
+              closingIssueNumbers(body).filter((n) => manifestIssues.has(n));
+
+            // Manifest issues a PR appears to implement: closing keywords, plus
+            // loose references (title "#n", numeric head-branch segments) so a
+            // keyword-less pipeline PR — the PR #279 incident — is still seen.
+            const referencedManifestIssues = (pr) => {
+              const nums = new Set(closingManifestIssues(pr.body));
+              for (const m of (pr.title ?? '').matchAll(/#(\d+)/g)) {
+                const n = Number(m[1]);
+                if (manifestIssues.has(n)) nums.add(n);
+              }
+              for (const m of (pr.head?.ref ?? '').matchAll(/(?:^|[/_.-])(\d+)(?:[/_.-]|$)/g)) {
+                const n = Number(m[1]);
+                if (manifestIssues.has(n)) nums.add(n);
+              }
+              return [...nums];
+            };
+
+            const issueComments = (issue_number) =>
+              github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number, per_page: 100,
+              });
+
+            // The ONLY write this workflow performs. Dedup: skip if any existing
+            // comment on the target already contains the marker string.
+            const postOnce = async (issue_number, marker, body, existingComments) => {
+              const comments = existingComments ?? (await issueComments(issue_number));
+              if (comments.some((c) => (c.body ?? '').includes(marker))) {
+                core.info(`Skip (already posted): ${marker}`);
+                return;
+              }
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body: `${body}\n\n${marker}`,
+              });
+              core.info(`Posted: ${marker}`);
+            };
+
+            // ---- 1. Closing-keyword nudge on pipeline PR open ----------------
+            if (context.eventName === 'pull_request') {
+              const pr = context.payload.pull_request;
+              if (pr.head?.repo?.fork) {
+                core.info('Fork PR: token is read-only for comments; skipping.');
+                return;
+              }
+              const referenced = referencedManifestIssues(pr);
+              if (referenced.length === 0) {
+                core.info('Not a pipeline PR; nothing to do.');
+                return;
+              }
+              const closing = closingManifestIssues(pr.body);
+              if (closing.length > 0) {
+                core.info(`PR closes manifest issue(s) #${closing.join(', #')}; healthy.`);
+                return;
+              }
+              const target = referenced[0];
+              await postOnce(
+                pr.number,
+                `<!-- watchdog:closing-keyword:PR${pr.number} -->`,
+                [
+                  `Pipeline watchdog: this PR appears to implement pipeline issue #${target}, but the PR body has no closing keyword. Merging it will NOT auto-close the issue and the relay will stall silently (this is the PR #279 incident).`,
+                  '',
+                  `Please edit the PR body to include: \`Closes #${target}\``,
+                ].join('\n'),
+              );
+              return;
+            }
+
+            // ---- Daily sweep (schedule / workflow_dispatch) ------------------
+            const epicComments = await issueComments(epic);
+
+            // Window: the 100 most recently updated closed PRs against main.
+            const { data: closedPrs } = await github.rest.pulls.list({
+              owner, repo, state: 'closed', base: 'main',
+              sort: 'updated', direction: 'desc', per_page: 100,
+            });
+            const mergedPrs = closedPrs.filter((p) => p.merged_at);
+
+            const openPrs = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', per_page: 100,
+            });
+
+            const issueCache = new Map();
+            const getIssue = async (n) => {
+              if (!issueCache.has(n)) {
+                const { data } = await github.rest.issues.get({ owner, repo, issue_number: n });
+                issueCache.set(n, data);
+              }
+              return issueCache.get(n);
+            };
+
+            // ---- 2. Merged-without-close -------------------------------------
+            for (const pr of mergedPrs) {
+              for (const n of referencedManifestIssues(pr)) {
+                const issue = await getIssue(n);
+                if (issue.state !== 'open') continue;
+                await postOnce(
+                  epic,
+                  `<!-- watchdog:merged-without-close:PR${pr.number}-issue${n} -->`,
+                  `Pipeline watchdog: PR #${pr.number} merged but pipeline issue #${n} is still open (merged-without-close). If that PR implemented #${n}, close the issue manually so the relay condition unblocks; if not, ignore this alert.`,
+                  epicComments,
+                );
+              }
+            }
+
+            // ---- 3. Stalled-green > 48h ----------------------------------------
+            for (const pr of openPrs) {
+              if (pr.draft) continue; // the driver would not merge a draft anyway
+              const closing = closingManifestIssues(pr.body);
+              if (closing.length === 0) continue; // pipeline PR = closes a manifest issue
+              if (Date.now() - new Date(pr.created_at).getTime() < STALLED_GREEN_HOURS * HOURS) continue;
+              const checkRuns = await github.paginate(github.rest.checks.listForRef, {
+                owner, repo, ref: pr.head.sha, per_page: 100,
+              });
+              if (checkRuns.length === 0) continue;
+              const allGreen = checkRuns.every(
+                (c) => c.status === 'completed' &&
+                  ['success', 'neutral', 'skipped'].includes(c.conclusion),
+              );
+              if (!allGreen) continue;
+              const { data: combined } = await github.rest.repos.getCombinedStatusForRef({
+                owner, repo, ref: pr.head.sha,
+              });
+              if (combined.total_count > 0 && combined.state !== 'success') continue;
+              const greenSince = Math.max(
+                new Date(pr.created_at).getTime(),
+                ...checkRuns.map((c) => new Date(c.completed_at).getTime()),
+              );
+              const greenHours = (Date.now() - greenSince) / HOURS;
+              if (greenHours < STALLED_GREEN_HOURS) continue;
+              await postOnce(
+                epic,
+                `<!-- watchdog:stalled-green:PR${pr.number} -->`,
+                `Pipeline watchdog: @${ownerLogin} driver may be dark: green PR waiting > 48h. PR #${pr.number} (closes #${closing.join(', #')}) has been all-green for ~${Math.round(greenHours)}h without a merge. Check that the desktop merge-review driver machine/app is running.`,
+                epicComments,
+              );
+            }
+
+            // ---- 4. Dead-kick > 24h ----------------------------------------------
+            const deadKickChecked = new Set();
+            for (const pr of mergedPrs) {
+              const mergedHours = (Date.now() - new Date(pr.merged_at).getTime()) / HOURS;
+              if (mergedHours < DEAD_KICK_HOURS) continue;
+              const indexed = pipeline
+                .map((e, i) => ({ ...e, index: i }))
+                .filter((e) => referencedManifestIssues(pr).includes(e.issue));
+              if (indexed.length === 0) continue;
+              const furthest = indexed.reduce((a, b) => (a.index > b.index ? a : b));
+              const next = pipeline[furthest.index + 1];
+              if (!next) continue; // final step: nothing to kick
+              if (next.kick !== 'mention') continue; // pause/none steps are human-managed
+              if (deadKickChecked.has(next.issue)) continue;
+              deadKickChecked.add(next.issue);
+              const nextIssue = await getIssue(next.issue);
+              if (nextIssue.state !== 'open') continue; // successor already done
+              const inFlight = openPrs.some((p) =>
+                closingManifestIssues(p.body).includes(next.issue),
+              );
+              if (inFlight) continue; // work started despite a missing kick record
+              const successorComments = await issueComments(next.issue);
+              const kicked = successorComments.some((c) =>
+                (c.body ?? '').startsWith('@codex please implement'),
+              );
+              if (kicked) continue;
+              await postOnce(
+                epic,
+                `<!-- watchdog:dead-kick:PR${pr.number}-issue${next.issue} -->`,
+                `Pipeline watchdog: @${ownerLogin} kick missing — check pipeline-advance run + CODEX_KICK_TOKEN expiry. PR #${pr.number} merged ~${Math.round(mergedHours)}h ago but successor issue #${next.issue} has no @codex kick comment.`,
+                epicComments,
+              );
+            }
+
+            core.info('Watchdog sweep complete.');

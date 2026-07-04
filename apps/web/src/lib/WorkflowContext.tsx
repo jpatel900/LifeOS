@@ -16,6 +16,7 @@ import {
   Phase2ProjectDraftSchema,
   Phase2TaskDraftSchema,
   Phase2TimeBlockProposalDraftSchema,
+  ParseCaptureResponseSchema,
   Phase2TimeBlockProposalSchema,
   type Area,
   type CalendarBlock,
@@ -31,6 +32,7 @@ import {
   acceptDraft,
   acceptProjectDraft,
   appendParsedWorkflowResult,
+  appendRawCapture,
   acceptProposal,
   addWorkflowArea,
   applyGoogleCalendarCancelResult,
@@ -39,6 +41,7 @@ import {
   carryForwardTask,
   createLocalProposalFromTask,
   createInitialWorkflowState,
+  createRawCaptureItem,
   deferTask,
   dropTask,
   editDraft,
@@ -73,6 +76,7 @@ import {
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
@@ -85,7 +89,10 @@ import type {
   Phase2MockExecutionSession,
   Phase2MockTask,
 } from "./types";
-import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
+import {
+  buildParsedWorkflowResult,
+  type ParsedWorkflowResult,
+} from "./ai/parseCaptureWorkflow";
 import {
   persistedAreaIdForWorkflowAreaId,
   workflowAreaIdForPersistedArea,
@@ -120,6 +127,10 @@ type WorkflowAction =
       type: "submitCapture";
       rawText: string;
       areaId: string | null;
+    }
+  | {
+      type: "appendRawCapture";
+      capture: WorkflowState["captureItems"][number];
     }
   | {
       type: "appendParsedWorkflowResult";
@@ -235,6 +246,7 @@ interface WorkflowContextValue {
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
   syncPersistedAreas: (areas: Area[]) => void;
+  refreshPersistedWorkflow: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
@@ -834,6 +846,8 @@ function workflowReducer(
         rawText: action.rawText,
         areaId: action.areaId,
       });
+    case "appendRawCapture":
+      return appendRawCapture(state, action.capture);
     case "appendParsedWorkflowResult":
       return appendParsedWorkflowResult(state, action.parsed);
     case "acceptDraft":
@@ -1829,22 +1843,104 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "hydrate", state: nextState });
   }
 
-  function submitCaptureText(rawText: string, areaId: string | null) {
-    const previous = stateRef.current;
-    const next = submitCapture(previous, { rawText, areaId });
-    const localCapture = next.captureItems.find(
-      (capture) =>
-        !previous.captureItems.some((item) => item.id === capture.id),
-    );
+  async function submitCaptureText(rawText: string, areaId: string | null) {
+    const localCapture = createRawCaptureItem({ rawText, areaId });
+    const rawSavedState = appendRawCapture(stateRef.current, localCapture);
 
-    applyWorkflowState(next);
+    applyWorkflowState(rawSavedState);
 
-    if (localCapture) {
-      void persistCapture(localCapture).catch(() => {
-        markAccountSyncError(
-          "Capture saved locally; account sync failed and can recover later.",
-        );
+    void persistCapture(localCapture).catch(() => {
+      markAccountSyncError(
+        "Capture saved locally; account sync failed and can recover later.",
+      );
+    });
+
+    let routeResponded = false;
+
+    // Best-effort: attach the signed-in user's access token so the parse route
+    // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
+    // Parsing itself never requires this token, so any failure here is ignored.
+    const parseRequestHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    try {
+      const authClient = createSupabaseBrowserClient();
+      if (authClient) {
+        const { data } = await authClient.auth.getSession();
+        const accessToken = data.session?.access_token?.trim();
+        if (accessToken) {
+          parseRequestHeaders.Authorization = `Bearer ${accessToken}`;
+        }
+      }
+    } catch {
+      // Tracing is optional; a missing/failed session must never block parsing.
+    }
+
+    try {
+      const response = await fetch("/api/parse-capture", {
+        method: "POST",
+        headers: parseRequestHeaders,
+        body: JSON.stringify({
+          rawText: localCapture.raw_text,
+          areaContext: stateRef.current.areas.map((area) => ({
+            slug: area.id.replace(/^area-/, ""),
+            name: area.name,
+          })),
+          parserMode: "auto",
+        }),
       });
+      routeResponded = true;
+      const payload: unknown = await response.json();
+
+      if (
+        !response.ok ||
+        !payload ||
+        typeof payload !== "object" ||
+        !("response" in payload)
+      ) {
+        throw new Error("Parse capture route returned a safe failure.");
+      }
+
+      const parsedResponse = ParseCaptureResponseSchema.parse(
+        (payload as { response: unknown }).response,
+      );
+      const parsed = buildParsedWorkflowResult({
+        response: parsedResponse,
+        capture: {
+          id: localCapture.id,
+          user_id: localCapture.user_id,
+          area_id: localCapture.area_id,
+          raw_text: localCapture.raw_text,
+          raw_audio_ref: null,
+          capture_mode: "text",
+          inferred_area_confidence: localCapture.inferred_area_confidence,
+          status: localCapture.status,
+          created_at: localCapture.created_at,
+        },
+        workflowAreaId: areaId,
+      });
+
+      applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
+    } catch (error) {
+      if (
+        (error instanceof ReferenceError ||
+          error instanceof TypeError ||
+          typeof fetch === "undefined") &&
+        !routeResponded
+      ) {
+        applyWorkflowState(
+          submitCapture(stateRef.current, {
+            rawText: localCapture.raw_text,
+            areaId,
+            existingCapture: localCapture,
+          }),
+        );
+        return;
+      }
+
+      markLocalOnly(
+        "Capture saved for manual triage. AI parsing failed safely, so no unvalidated drafts were added.",
+      );
     }
   }
 
@@ -1954,6 +2050,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSelectedAreaId,
     syncStatus,
     syncPersistedAreas: applyPersistedAreas,
+    refreshPersistedWorkflow: async () => {
+      await syncPersistedWorkflowRows(createSupabaseBrowserClient());
+    },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
@@ -1978,8 +2077,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => {
+      const draft = stateRef.current.taskDrafts.find(
+        (item) => item.id === draftId,
+      );
       dispatch({ type: "rejectDraft", draftId });
       markLocalOnly("Dropped draft locally; account sync is pending.");
+
+      if (draft) {
+        recordRejectedTaskDraft(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWorkflowId(
+            draft.area_id,
+            persistedAreasRef.current,
+          ),
+          draft_id: draft.id,
+          title: draft.title,
+          confidence: draft.confidence,
+        });
+      }
     },
     rejectProjectDraft: (draftId) =>
       dispatch({ type: "rejectProjectDraft", draftId }),
