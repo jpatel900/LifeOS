@@ -1015,6 +1015,51 @@ function TriageView({
           <h1 className="mt-3 text-3xl font-extrabold">{current.title}</h1>
           <p className="mt-3 text-[var(--mut)]">{current.first_tiny_step}</p>
         </div>
+        {current.breakdown ? (
+          <section
+            aria-label="Task breakdown"
+            className="mt-4 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
+          >
+            <p className="mono text-sm text-[var(--acc2)]">
+              Start here (under 10 min)
+            </p>
+            <p className="mt-1 font-bold text-[var(--ink)]">
+              {current.breakdown.kickstart_step}
+            </p>
+            <ol className="mt-4 grid gap-2">
+              {[...current.breakdown.steps]
+                .sort((a, b) => a.order - b.order)
+                .map((step) => (
+                  <li
+                    key={step.order}
+                    className="flex items-baseline gap-2 text-sm"
+                  >
+                    <span className="mono text-[var(--fnt)]">
+                      {step.order}.
+                    </span>
+                    <span className="flex-1 text-[var(--ink)]">
+                      {step.title}
+                    </span>
+                    {step.on_critical_path ? (
+                      <span className="mono text-xs text-[var(--amb-fg)]">
+                        critical path
+                      </span>
+                    ) : null}
+                    {step.estimated_minutes !== null ? (
+                      <span className="mono text-xs text-[var(--mut)]">
+                        ~{step.estimated_minutes}m
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+            </ol>
+            {current.breakdown.sequence_summary ? (
+              <p className="mt-3 text-sm text-[var(--mut)]">
+                {current.breakdown.sequence_summary}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
         <div className="mt-4 flex justify-center gap-1">
           {vm.inbox.map((item) => (
             <Circle
