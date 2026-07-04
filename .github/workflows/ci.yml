@@ -166,4 +166,4 @@ jobs:
           RUN_SUPABASE_RLS_TESTS=1 \
           NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
           NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" \
-          pnpm --filter @lifeos/web test -- phase4aRls.local
+          pnpm --filter @lifeos/web test phase4aRls.local
