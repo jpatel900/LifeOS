@@ -7,7 +7,16 @@ import {
 } from "./health";
 
 const userId = "550e8400-e29b-41d4-a716-446655440001";
+const rpcExistsError = { message: "task not found" };
 const fixedNow = new Date("2026-05-08T20:00:00.000Z");
+
+function readableTable() {
+  return {
+    select: vi.fn().mockReturnValue({
+      limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+    }),
+  };
+}
 
 function checkBySubsystem(checks: HealthDashboardCheck[], subsystem: string) {
   const check = checks.find((item) => item.subsystem === subsystem);
@@ -135,12 +144,13 @@ describe("health dashboard data provider", () => {
       if (table === "areas") return { select: areasSelect };
       if (table === "capture_items") return { select: captureSelect };
       if (table === "health_checks") return { insert: healthInsert };
-      throw new Error(`Unexpected table ${table}`);
+      return readableTable();
     });
 
     const result = await getHealthDashboard(
       {
         from,
+        rpc: vi.fn().mockResolvedValue({ data: null, error: rpcExistsError }),
         auth: {
           getUser: vi.fn().mockResolvedValue({
             data: { user: { id: userId } },
@@ -210,12 +220,13 @@ describe("health dashboard data provider", () => {
       if (table === "areas") return { select: areasSelect };
       if (table === "capture_items") return { select: captureSelect };
       if (table === "health_checks") return { insert: healthInsert };
-      throw new Error(`Unexpected table ${table}`);
+      return readableTable();
     });
 
     const result = await getHealthDashboard(
       {
         from,
+        rpc: vi.fn().mockResolvedValue({ data: null, error: rpcExistsError }),
         auth: {
           getUser: vi.fn().mockResolvedValue({
             data: { user: { id: userId } },
@@ -246,12 +257,13 @@ describe("health dashboard data provider", () => {
       if (table === "areas") return { select: areasSelect };
       if (table === "capture_items") return { select: captureSelect };
       if (table === "health_checks") return { insert: healthInsert };
-      throw new Error(`Unexpected table ${table}`);
+      return readableTable();
     });
 
     const result = await getHealthDashboard(
       {
         from,
+        rpc: vi.fn().mockResolvedValue({ data: null, error: rpcExistsError }),
         auth: {
           getUser: vi.fn().mockResolvedValue({
             data: { user: { id: userId } },
@@ -270,6 +282,52 @@ describe("health dashboard data provider", () => {
       "Supabase denied access for this user/session.",
     );
     expect(checkBySubsystem(result.checks, "areas").status).toBe("healthy");
+  });
+
+  it("classifies missing transition RPCs as named persisted-mode failures", async () => {
+    const healthInsert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn((table: string) => {
+      if (table === "areas") {
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === "health_checks") return { insert: healthInsert };
+      return readableTable();
+    });
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: { code: "PGRST202", message: "Could not find the function" },
+      })
+      .mockResolvedValue({ data: null, error: rpcExistsError });
+
+    const result = await getHealthDashboard(
+      {
+        from,
+        rpc,
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: { user: { id: userId } },
+            error: null,
+          }),
+        },
+      } as MinimalHealthSupabaseClient,
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    const transitionRpcs = checkBySubsystem(result.checks, "transition RPCs");
+    expect(transitionRpcs.status).toBe("critical");
+    expect(transitionRpcs.summary).toContain("accept_time_block_proposal");
+    expect(transitionRpcs.details).toMatchObject({
+      missing: ["accept_time_block_proposal"],
+    });
+    expect(result.persistence).toBe("persisted");
   });
 
   it("keeps Google Calendar health deterministic when config exists without OAuth connection metadata", async () => {

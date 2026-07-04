@@ -1300,6 +1300,117 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
   });
+
+  it("forces server created_at on authenticated capture inserts and keeps it immutable", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const rawText = `rls-server-ts-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const bogusTimestamp = "2020-01-01T00:00:00.000Z";
+
+    try {
+      const { data: inserted, error: insertError } = await userAClient
+        .from("capture_items")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          raw_text: rawText,
+          capture_mode: "text",
+          status: "new",
+          created_at: bogusTimestamp,
+        })
+        .select("id,created_at")
+        .single();
+
+      expect(insertError).toBeNull();
+      const insertedRow = inserted as { id: string; created_at: string };
+      expect(insertedRow.created_at).not.toBe(bogusTimestamp);
+      expect(
+        Math.abs(Date.parse(insertedRow.created_at) - Date.now()),
+      ).toBeLessThan(5 * 60 * 1000);
+
+      const { data: updated, error: updateError } = await userAClient
+        .from("capture_items")
+        .update({ created_at: bogusTimestamp })
+        .eq("id", insertedRow.id)
+        .select("created_at")
+        .single();
+
+      expect(updateError).toBeNull();
+      const updatedRow = updated as { created_at: string };
+      expect(Date.parse(updatedRow.created_at)).toBe(
+        Date.parse(insertedRow.created_at),
+      );
+    } finally {
+      await deleteCaptureByText(userAClient, rawText);
+    }
+  });
+
+  it("forces server created_at and updated_at on authenticated task inserts", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const title = `rls-server-ts-task-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const bogusTimestamp = "2020-01-01T00:00:00.000Z";
+
+    try {
+      const { data, error } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title,
+          status: "active",
+          created_at: bogusTimestamp,
+          updated_at: bogusTimestamp,
+        })
+        .select("created_at,updated_at")
+        .single();
+
+      expect(error).toBeNull();
+      const row = data as { created_at: string; updated_at: string };
+      expect(row.created_at).not.toBe(bogusTimestamp);
+      expect(row.updated_at).not.toBe(bogusTimestamp);
+      expect(Math.abs(Date.parse(row.created_at) - Date.now())).toBeLessThan(
+        5 * 60 * 1000,
+      );
+      expect(Math.abs(Date.parse(row.updated_at) - Date.now())).toBeLessThan(
+        5 * 60 * 1000,
+      );
+    } finally {
+      await deleteTaskByTitle(userAClient, title);
+    }
+  });
+
+  it("forces server checked_at on authenticated health check inserts", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const subsystem = `rls-server-ts-health-${Date.now()}`;
+    const bogusTimestamp = "2020-01-01T00:00:00.000Z";
+
+    try {
+      const { data, error } = await userAClient
+        .from("health_checks")
+        .insert({
+          user_id: userA.id,
+          area_id: null,
+          subsystem,
+          status: "healthy",
+          score: 100,
+          details_json: {},
+          checked_at: bogusTimestamp,
+        })
+        .select("checked_at")
+        .single();
+
+      expect(error).toBeNull();
+      const row = data as { checked_at: string };
+      expect(row.checked_at).not.toBe(bogusTimestamp);
+      expect(Math.abs(Date.parse(row.checked_at) - Date.now())).toBeLessThan(
+        5 * 60 * 1000,
+      );
+    } finally {
+      await userAClient
+        .from("health_checks")
+        .delete()
+        .eq("subsystem", subsystem);
+    }
+  });
 });
 
 function expectDenied(data: unknown[] | null, error: { code?: string } | null) {

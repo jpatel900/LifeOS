@@ -1,24 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
-  acceptDraft,
   acceptProposal,
   applyGoogleCalendarCancelResult,
   applyGoogleCalendarWriteResult,
-  createInitialWorkflowState,
   rejectProposal,
-  submitCapture,
-  type WorkflowState,
 } from "@/lib/workflow";
+import {
+  acceptLatestDraft,
+  captureWorkflow,
+  workflowSeed,
+} from "./helpers/workflowReachability";
 
 const GOOGLE_EVENT_ID = `lifeos${"a1b2c3d4".repeat(4)}`;
 
-function stateWithOpenProposal(): WorkflowState {
-  let state = createInitialWorkflowState();
-  state = submitCapture(state, {
-    rawText: "Prepare sponsor recap for Friday",
-    areaId: "area-main-job",
-  });
-  return acceptDraft(state, state.taskDrafts[0].id);
+function stateWithOpenProposal() {
+  return acceptLatestDraft(
+    captureWorkflow(workflowSeed(), "Prepare sponsor recap for Friday"),
+  );
 }
 
 describe("applyGoogleCalendarWriteResult", () => {

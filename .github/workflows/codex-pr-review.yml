@@ -140,7 +140,11 @@ jobs:
     # Single-review policy: baseline (mini) runs only when the escalated review will NOT.
     # One LLM review per PR, never two. Skipped entirely when this exact diff was
     # already reviewed (rebases, merges from main, label churn).
+    # 2026-07-04: LLM review is opt-in via the review:llm label. The always-on lane
+    # burned the OpenAI API quota in three days (100+ runs) and then stamped a failing
+    # check on every PR. Label a PR review:llm to request a review.
     if: >-
+      contains(github.event.pull_request.labels.*.name, 'review:llm') &&
       github.event.pull_request.draft == false &&
       github.event.pull_request.user.type != 'Bot' &&
       needs.docs-scope.outputs.docs_only != 'true' &&
@@ -245,6 +249,7 @@ jobs:
     # the deterministic safe-automerge path evaluator gate those.
     if: >-
       !cancelled() &&
+      contains(github.event.pull_request.labels.*.name, 'review:llm') &&
       github.event.pull_request.draft == false &&
       github.event.pull_request.user.type != 'Bot' &&
       needs.classify-risk.result == 'success' &&
