@@ -45,3 +45,25 @@ Repeated external-provider failures (AI parse, calendar) must surface as Health 
 Every check the docs claim ("main must stay passing", RLS verified, migrations apply) runs in CI, not only on contributor machines. If you add a doc-claimed validation, wire it into `.github/workflows/` in the same change.
 
 Enforcement: `.github/workflows/ci.yml` (lint, type-check, unit, build), e2e job, and migration+RLS job.
+
+## Stage epic invariants (NS-INV, ADR 0002)
+
+The invariants below are defined in `docs/adr/0002-north-star-stages-and-trust-ladder.md` D4 and are binding on every Stage 1+ slice. They are recorded here with their concrete enforcement points as those slices land.
+
+### NS-INV-1 — One context-assembly choke point
+
+All personalization context injected into AI prompts (area charter, operator profile, rollups, people context) flows through a single assembly module: `apps/web/src/lib/ai/contextAssembly.ts` (alongside the existing `parseCapture` modules). No slice wires its own prompt-context plumbing.
+
+Enforcement: (target, slice S2) a guard test asserting no prompt-construction code imports charter/profile/rollup/people context outside `contextAssembly.ts`. Status: NOT yet wired — the module and its guard test do not exist yet; this entry names the frozen path so later slices land in the same place. Do not claim it enforced until the guard test merges.
+
+### NS-INV-2 — Additive-only schema within an epic
+
+No slice alters, renames, or repurposes a column/table introduced by an earlier slice of the same epic. The Stage 1 target schema shapes recorded in `docs/DATA_MODEL.md` sections 4.10-4.13 and 5.7-5.8 (`people`, `tasks` additive columns, `areas` additive columns, `operator_profiles`, `win_records`, `rollup_summaries`, parse-result schema extension) are the frozen Stage 1 contract; later slices may only add to them.
+
+Enforcement: code review trigger against the frozen shapes in DATA_MODEL.md; any deviation requires a dated decision-log entry in the governing epic before proceeding (ADR 0002 D4).
+
+### NS-INV-3 — Born instrumented
+
+Every new AI judgment surface introduced by a Stage 1+ slice writes `suggestion_records` / `override_records` from its first merge, using the issue #235 vocabulary (stable policy identifiers, versioned zod schemas in `packages/schemas`). Trust-ladder graduation (ADR 0002 D1) is impossible for surfaces that skipped this.
+
+Enforcement: (target) same pattern as issue #235's acceptance criteria — a golden-journey test proving suggestion/override rows are written with policy IDs, plus export coverage (INV-2 above) for both tables. Status: enforcement mechanism is per-slice; each Stage 1 slice that adds an AI judgment surface must include this test in its own PR, not defer it.

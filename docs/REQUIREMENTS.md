@@ -326,6 +326,112 @@ Acceptance criteria:
 
 ---
 
+### FR-017 — People & Commitments
+
+**Priority:** MUST, with SHOULD-level aging surfacing
+
+**Stage:** Stage 1 (epic #251), slice S1
+
+Acceptance criteria:
+
+- Person entity is scoped to the user.
+- Tasks can reference a person as waiting-on or committed-to.
+- Person creation/linking happens only via user approval at triage (NS-INV-4).
+- Unmatched person mentions degrade to plain tasks with raw capture preserved.
+- Aging surfacing follows FR-013 review and FR-015 health, rule-based only (SHOULD).
+
+Non-goals:
+
+- CRM features.
+- Contact sync.
+- Email/message ingestion.
+- Org charts.
+
+---
+
+### FR-018 — Identity Context
+
+**Priority:** MUST
+
+**Stage:** Stage 1 (epic #251), slice S2
+
+Acceptance criteria:
+
+- Per-area charter (purpose, ideal state, current season, constraints) exists, editable from area admin (SHOULD).
+- One global operator profile (named strengths/weaknesses with compensation rules) exists, editable from settings (SHOULD).
+- All prompt personalization flows through one context-assembly module (NS-INV-1).
+- Empty charter/profile leaves AI behavior identical to pre-Stage-1 behavior (fixture-proven).
+
+Non-goals:
+
+- AI-authored charters without user edit/approval.
+- Per-task identity overrides.
+
+---
+
+### FR-019 — Daily Focus & Brief
+
+**Priority:** MUST
+
+**Stage:** Stage 1 (epic #251)
+
+Acceptance criteria:
+
+- Daily focus budget is deterministic, derived from Google free/busy read data.
+- Default thresholds: free hours >= 5 => 3 focus items; 2-5 => 2; < 2 => 1; free/busy unavailable => 2 (degraded default).
+- Brief panel on Home is a read-only synthesis (blocks, focus, aging items, one stale project, recovery nudge) issuing zero mutations.
+
+Non-goals:
+
+- Notifications.
+- Email digests.
+- Autonomous re-planning.
+
+---
+
+### FR-020 — Wins & Rollups
+
+**Priority:** MUST
+
+**Stage:** Stage 1 (epic #251), slice S7 (wins), slice S8 (rollups)
+
+Acceptance criteria:
+
+- Weekly review offers win candidates from completions.
+- Only user-confirmed wins persist.
+- Weekly rollup per area is AI-drafted against a strict schema and persists only on user approval.
+- Monthly rollup composes approved weeks.
+- Rollups become a context source via the NS-INV-1 module.
+
+Non-goals:
+
+- Sentiment analysis.
+- Vector embeddings.
+- Background summarization jobs.
+
+---
+
+### FR-021 — Learning Consumer v1
+
+**Priority:** MUST
+
+**Stage:** Stage 1 (epic #251)
+
+Acceptance criteria:
+
+- Time-block proposals display area-scoped duration recalibration with its evidence, computed as median(actual/estimated) over the last >= 5 completed blocks in that area (no display below 5 samples).
+- Recalibrated default applies only after user acceptance.
+- Deterministic override-pattern scan (same policy_id overridden >= 4 of last 5 occurrences) produces a policy-change proposal in weekly review.
+- Accept/decline is recorded per #235 vocabulary.
+
+Non-goals:
+
+- Silent policy mutation.
+- AI-invented policies.
+- Cross-area generalization in v1.
+
+---
+
 ### Product Loop and Autonomy Boundary
 
 The V1 product loop is: capture messy input, diagnose ambiguity, bound the work, slice it into a reversible next move, discover missing information, act, and review the outcome. Requirements that support AI assistance must preserve this ambiguity-to-motion loop instead of turning LifeOS into a generic task list or autonomous agent.
