@@ -452,6 +452,44 @@ function mergePersistedRows<T extends { id: string }>(
   ];
 }
 
+/**
+ * A local (optimistic) calendar block and its freshly persisted counterpart
+ * briefly coexist: the local id map only catches up after the next sync
+ * round-trip. Without this, the Today "Scheduled" band and Plan hour rail
+ * double-count the same block for one request/response window.
+ *
+ * This drops a LOCAL block (non-UUID id) once a persisted row for the same
+ * task_id arrives at the same start_at. It never dedups two persisted rows —
+ * the DB is the source of truth and legitimate multiple blocks per task stay
+ * allowed (see docs/KNOWN_ISSUES.md row 12 / issue #324).
+ */
+export function mergePersistedCalendarBlocks(
+  persistedRows: Phase2MockCalendarBlock[],
+  localRows: Phase2MockCalendarBlock[],
+  dropLocalIds: Set<string>,
+): Phase2MockCalendarBlock[] {
+  const persistedIds = new Set(persistedRows.map((row) => row.id));
+  const isEchoOfPersisted = (localRow: Phase2MockCalendarBlock) =>
+    persistedRows.some(
+      (persistedRow) =>
+        persistedRow.task_id !== null &&
+        persistedRow.task_id === localRow.task_id &&
+        new Date(persistedRow.start_at).getTime() ===
+          new Date(localRow.start_at).getTime(),
+    );
+
+  return [
+    ...persistedRows,
+    ...localRows.filter(
+      (row) =>
+        !persistedIds.has(row.id) &&
+        !dropLocalIds.has(row.id) &&
+        !isUuid(row.id) &&
+        !isEchoOfPersisted(row),
+    ),
+  ];
+}
+
 function workflowAreaIdForPersistedAreaId(
   persistedAreaId: string | null,
   persistedAreas: Area[],
@@ -886,7 +924,7 @@ function workflowReducer(
           state.timeBlockProposals,
           action.payload.dropLocalIds.proposals,
         ),
-        calendarBlocks: mergePersistedRows(
+        calendarBlocks: mergePersistedCalendarBlocks(
           action.payload.blocks,
           state.calendarBlocks,
           action.payload.dropLocalIds.blocks,

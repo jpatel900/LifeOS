@@ -351,6 +351,11 @@ export function LifeOSCockpit({
     showToast("Proposal drafted locally");
   }
 
+  function acceptProposalWithFeedback(proposalId: string) {
+    acceptLocalProposal(proposalId);
+    showToast("Placed on the hour rail");
+  }
+
   function nudgeProposalLater(proposalId: string) {
     const proposal = state.timeBlockProposals.find(
       (item) => item.id === proposalId,
@@ -556,7 +561,7 @@ export function LifeOSCockpit({
               }}
               onUnplan={unplanTask}
               onPromote={promoteBacklogTask}
-              onAcceptProposal={acceptLocalProposal}
+              onAcceptProposal={acceptProposalWithFeedback}
               onRejectProposal={rejectLocalProposal}
               onNudgeProposal={nudgeProposalLater}
               onCreateProposal={createProposalForSelectedTask}
@@ -1303,54 +1308,72 @@ function PlanView({
           </div>
           <div className="mt-4 grid gap-2">
             {vm.proposals.length ? (
-              vm.proposals.map(({ allDayContexts, proposal, task, hour }) => (
-                <div
-                  key={proposal.id}
-                  className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold">{task.title}</p>
-                      <p className="mono mt-1 text-sm text-[var(--fnt)]">
-                        {formatHour(hour)} · {proposal.status}
-                      </p>
+              vm.proposals.map(
+                ({
+                  allDayContexts,
+                  proposal,
+                  task,
+                  hour,
+                  hasExistingBlock,
+                }) => (
+                  <div
+                    key={proposal.id}
+                    className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold">{task.title}</p>
+                        <p className="mono mt-1 text-sm text-[var(--fnt)]">
+                          {formatHour(hour)} · {proposal.status}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onAcceptProposal(proposal.id)}
+                          className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                        >
+                          Accept local
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    {hasExistingBlock ? (
+                      <p
+                        role="status"
+                        aria-live="polite"
+                        className="mt-3 rounded-xl bg-[var(--amb-sf)] px-3 py-2 text-sm font-semibold text-[var(--amb-fg)]"
+                      >
+                        This task already has a scheduled block. Accepting adds
+                        another one.
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {allDayContexts.map((context) => (
+                        <span
+                          key={`${proposal.id}:${context.id}`}
+                          className="rounded-full border border-[var(--ln2)] bg-[var(--sf3)] px-3 py-2 text-sm font-semibold text-[var(--mut)]"
+                        >
+                          All-day: {context.summary}
+                        </span>
+                      ))}
                       <button
                         type="button"
-                        onClick={() => onAcceptProposal(proposal.id)}
-                        className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                        onClick={() => onNudgeProposal(proposal.id)}
+                        className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-semibold text-[var(--ink)]"
                       >
-                        Accept local
+                        Move later
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRejectProposal(proposal.id)}
+                        className="min-h-9 rounded-full border border-[var(--ln2)] px-3 text-sm font-semibold text-[var(--mut)]"
+                      >
+                        Reject
                       </button>
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {allDayContexts.map((context) => (
-                      <span
-                        key={`${proposal.id}:${context.id}`}
-                        className="rounded-full border border-[var(--ln2)] bg-[var(--sf3)] px-3 py-2 text-sm font-semibold text-[var(--mut)]"
-                      >
-                        All-day: {context.summary}
-                      </span>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => onNudgeProposal(proposal.id)}
-                      className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-semibold text-[var(--ink)]"
-                    >
-                      Move later
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onRejectProposal(proposal.id)}
-                      className="min-h-9 rounded-full border border-[var(--ln2)] px-3 text-sm font-semibold text-[var(--mut)]"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              ))
+                ),
+              )
             ) : (
               <p className="text-[var(--mut)]">
                 {vm.today.length > 1
