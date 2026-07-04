@@ -1,0 +1,131 @@
+name: Security Scanning
+
+# Issue #286: secret + dependency + SAST scanning (gitleaks, OSV-Scanner, CodeQL).
+# Per .github/AGENT_AUTOMATION_POLICY.md this file is T2: changes require human review.
+#
+# All three scanners are NON-BLOCKING initially per the #286 guardrails:
+#   - gitleaks: continue-on-error at the job level (leak findings still appear in
+#     logs, annotations, and PR comments).
+#   - OSV-Scanner: fail-on-vuln=false; findings upload to Security > Code scanning.
+#   - CodeQL: findings never fail the job; they surface as code scanning alerts.
+# None of these checks is marked required in branch protection. Flipping any of
+# them to blocking/required is a later owner decision recorded on issue #286
+# after the first week of false-positive triage.
+#
+# No new secrets: github.token / secrets.GITHUB_TOKEN only. GITLEAKS_LICENSE is
+# not needed for personal (user-owned) repos.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly full sweep on main so CodeQL/OSV baselines stay fresh even in
+    # quiet weeks and gitleaks re-scans full history with updated rules.
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect change scope
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+      deps: ${{ steps.detect.outputs.deps }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect scan-relevant changes
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "deps=true" >> "$GITHUB_OUTPUT"
+            echo "Event ${{ github.event_name }}: running all scanners."
+            exit 0
+          fi
+          changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)"
+          echo "Changed files:"; echo "$changed"
+          if echo "$changed" | grep -qE '\.(ts|tsx|js|jsx|mjs|cjs)$|^(apps|packages|scripts)/|^\.github/workflows/security-scanning\.yml$'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "Code paths changed: CodeQL will run."
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+            echo "No code paths changed: CodeQL skipped for this PR."
+          fi
+          if echo "$changed" | grep -qE '(^|/)package\.json$|(^|/)pnpm-lock\.yaml$|^\.github/workflows/security-scanning\.yml$'; then
+            echo "deps=true" >> "$GITHUB_OUTPUT"
+            echo "Dependency manifests changed: OSV-Scanner will run."
+          else
+            echo "deps=false" >> "$GITHUB_OUTPUT"
+            echo "No dependency manifest changes: OSV-Scanner skipped for this PR."
+          fi
+
+  gitleaks:
+    name: Gitleaks secret scan
+    # Highest-value scanner for this repo (OAuth token flows): never path-gated.
+    runs-on: ubuntu-latest
+    # Non-blocking initially per #286; findings still annotate the run and PR.
+    continue-on-error: true
+    permissions:
+      contents: read
+      # gitleaks-action comments on PRs when it detects a leak.
+      pull-requests: write
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  osv-scan:
+    name: OSV-Scanner dependency scan
+    needs: changes
+    if: needs.changes.outputs.deps == 'true'
+    permissions:
+      actions: read
+      contents: read
+      # Required to upload the SARIF results to Security > Code scanning.
+      security-events: write
+    # Official Google reusable workflow; fail-on-vuln=false keeps it warn-only.
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
+    with:
+      scan-args: |-
+        --recursive
+        ./
+      fail-on-vuln: false
+
+  codeql:
+    name: CodeQL analysis (javascript-typescript)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          # Default query suite; TS/JS needs no build.
+          languages: javascript-typescript
+          build-mode: none
+      - name: Run CodeQL analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:javascript-typescript"
