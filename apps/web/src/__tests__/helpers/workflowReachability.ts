@@ -3,15 +3,21 @@ import { buildTodayCockpitModel } from "@/lib/today/buildTodayCockpitModel";
 import {
   acceptDraft,
   acceptProposal,
+  appendRawCapture,
   backlogDraft,
   createInitialWorkflowState,
   createLocalProposalFromTask,
+  createRawCaptureItem,
+  dropTask,
   markCurrentSession,
   planTaskAtHour,
   promoteBacklogTask,
+  rejectProposal,
   saveReview,
   startExecutionSession,
   submitCapture,
+  unplanTask,
+  updateProposal,
   type WorkflowState,
 } from "@/lib/workflow";
 
@@ -19,6 +25,14 @@ export const GOLDEN_AREA_ID = "area-main-job";
 
 export function workflowSeed(): WorkflowState {
   return createInitialWorkflowState();
+}
+
+export function rawCaptureWorkflow(
+  state: WorkflowState,
+  rawText: string,
+  areaId = GOLDEN_AREA_ID,
+): WorkflowState {
+  return appendRawCapture(state, createRawCaptureItem({ rawText, areaId }));
 }
 
 export function captureWorkflow(
@@ -81,6 +95,56 @@ export function proposeLatestActiveTask(state: WorkflowState): WorkflowState {
     proposed_end: end.toISOString(),
     rationale: "Reachability helper proposal.",
   });
+}
+
+export function editLatestProposal(state: WorkflowState): WorkflowState {
+  const proposal = state.timeBlockProposals.find(
+    (item) => item.status === "proposed",
+  );
+  if (!proposal) {
+    throw new Error("No proposed block is reachable from the workflow state.");
+  }
+  const start = new Date(proposal.proposed_start);
+  const end = new Date(proposal.proposed_end);
+  start.setMinutes(start.getMinutes() + 15);
+  end.setMinutes(end.getMinutes() + 15);
+  return updateProposal(state, proposal.id, {
+    proposed_start: start.toISOString(),
+    proposed_end: end.toISOString(),
+    rationale: `${proposal.rationale} Edited by reachability helper.`,
+  });
+}
+
+export function rejectLatestProposal(state: WorkflowState): WorkflowState {
+  const proposal = state.timeBlockProposals.find((item) =>
+    ["proposed", "edited"].includes(item.status),
+  );
+  if (!proposal) {
+    throw new Error(
+      "No rejectable proposal is reachable from the workflow state.",
+    );
+  }
+  return rejectProposal(state, proposal.id);
+}
+
+export function unplanLatestScheduledBlock(
+  state: WorkflowState,
+): WorkflowState {
+  const block = state.calendarBlocks.find(
+    (item) => item.status === "scheduled",
+  );
+  if (!block) {
+    throw new Error("No scheduled block is reachable from the workflow state.");
+  }
+  return unplanTask(state, block.id);
+}
+
+export function dropLatestTask(state: WorkflowState): WorkflowState {
+  const task = state.tasks[0];
+  if (!task) {
+    throw new Error("No task is reachable from the workflow state.");
+  }
+  return dropTask(state, task.id);
 }
 
 export function acceptLatestProposal(state: WorkflowState): WorkflowState {
