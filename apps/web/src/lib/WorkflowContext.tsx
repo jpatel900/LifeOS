@@ -597,16 +597,6 @@ const EXECUTION_OUTCOMES = new Set([
   "blocked",
   "skipped",
 ]);
-const HEALTH_SUBSYSTEMS = new Set([
-  "auth",
-  "database",
-  "ai_parsing",
-  "calendar_connector",
-  "scheduler",
-  "priority_model",
-  "duration_model",
-  "time_preferences",
-]);
 const HEALTH_STATUSES = new Set(["healthy", "watch", "critical"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -744,7 +734,7 @@ function isPhase2MockHealthCheck(
   return (
     isRecord(value) &&
     isString(value.id) &&
-    isOneOf(value.subsystem, HEALTH_SUBSYSTEMS) &&
+    isString(value.subsystem) &&
     isOneOf(value.status, HEALTH_STATUSES) &&
     typeof value.score === "number" &&
     isString(value.summary)

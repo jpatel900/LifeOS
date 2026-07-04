@@ -34,6 +34,10 @@ export interface HealthDashboardResult {
 
 export interface MinimalHealthSupabaseClient {
   from: (table: string) => unknown;
+  rpc?: (
+    functionName: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{ data: unknown; error: unknown }>;
   auth?: {
     getUser: () => Promise<{
       data: { user: { id: string } | null };
@@ -53,6 +57,87 @@ interface HealthDashboardOptions {
 
 const areaColumns =
   "id,user_id,name,slug,description,color,icon,sort_order,is_active,created_at,updated_at";
+
+const transitionRpcProbes = [
+  {
+    name: "accept_time_block_proposal",
+    args: (id: string) => ({ p_proposal_id: id }),
+  },
+  {
+    name: "start_execution_session",
+    args: (id: string) => ({ p_task_id: id, p_calendar_block_id: null }),
+  },
+  {
+    name: "unplan_calendar_block",
+    args: (id: string) => ({ p_block_id: id }),
+  },
+  {
+    name: "apply_task_review_transition",
+    args: (id: string) => ({ p_task_id: id, p_target_status: "active" }),
+  },
+] as const;
+
+const coreReadTables = [
+  "areas",
+  "capture_items",
+  "tasks",
+  "projects",
+  "time_block_proposals",
+  "calendar_blocks",
+  "execution_sessions",
+  "review_entries",
+] as const;
+
+function getErrorCode(error: unknown) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+
+  return null;
+}
+
+function getErrorStatus(error: unknown) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    (typeof error.status === "number" || typeof error.status === "string")
+  ) {
+    return String(error.status);
+  }
+
+  return null;
+}
+
+function isMissingRpcError(error: unknown) {
+  const code = getErrorCode(error);
+  const status = getErrorStatus(error);
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    code === "PGRST202" ||
+    code === "42883" ||
+    status === "404" ||
+    message.includes("could not find the function") ||
+    (message.includes("function") && message.includes("does not exist"))
+  );
+}
+
+function isExpectedNoMutationRpcError(error: unknown) {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("not found") ||
+    message.includes("not exist") ||
+    message.includes("proposal") ||
+    message.includes("task") ||
+    message.includes("block")
+  );
+}
 
 function getErrorMessage(error: unknown) {
   if (
@@ -339,6 +424,142 @@ async function readCaptureStatus(client: MinimalHealthSupabaseClient) {
   }
 }
 
+async function readCoreTable(
+  client: MinimalHealthSupabaseClient,
+  table: string,
+) {
+  const query = client.from(table) as {
+    select: (columns: string) => {
+      limit: (count: number) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+
+  const { error } = await query.select("id").limit(1);
+
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
+async function probeTransitionRpcs(client: MinimalHealthSupabaseClient) {
+  if (!client.rpc) {
+    return makeCheck(
+      "health-transition-rpcs",
+      "transition RPCs",
+      "critical",
+      0,
+      "Supabase RPC support is unavailable in the current client.",
+      { repair_steps: ["Recreate the Supabase browser client."] },
+    );
+  }
+
+  const probeId = crypto.randomUUID();
+  const missing: string[] = [];
+  const callable: string[] = [];
+  const invocationErrors: string[] = [];
+
+  for (const probe of transitionRpcProbes) {
+    const { error } = await client.rpc(probe.name, probe.args(probeId));
+    if (!error) {
+      callable.push(probe.name);
+    } else if (isMissingRpcError(error)) {
+      missing.push(probe.name);
+    } else if (isExpectedNoMutationRpcError(error)) {
+      callable.push(probe.name);
+    } else {
+      invocationErrors.push(probe.name);
+    }
+  }
+
+  if (missing.length > 0) {
+    return makeCheck(
+      "health-transition-rpcs",
+      "transition RPCs",
+      "critical",
+      0,
+      `Missing transition RPC${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}. Apply the pending Supabase migrations, then rerun the system check.`,
+      {
+        callable,
+        missing,
+        invocation_errors: invocationErrors,
+        repair_steps: ["Apply pending Supabase migrations."],
+      },
+    );
+  }
+
+  if (invocationErrors.length > 0) {
+    return makeCheck(
+      "health-transition-rpcs",
+      "transition RPCs",
+      "watch",
+      60,
+      `Transition RPCs exist, but ${invocationErrors.length} probe${invocationErrors.length === 1 ? "" : "s"} returned an unexpected invocation error.`,
+      {
+        callable,
+        missing,
+        invocation_errors: invocationErrors,
+        repair_steps: [
+          "Check Supabase function grants and RLS for transition RPCs.",
+        ],
+      },
+    );
+  }
+
+  return makeCheck(
+    "health-transition-rpcs",
+    "transition RPCs",
+    "healthy",
+    100,
+    "Required transition RPCs are callable without mutating workflow data.",
+    {
+      callable,
+      missing,
+      invocation_errors: invocationErrors,
+      repair_steps: [],
+    },
+  );
+}
+
+async function probeCoreReads(client: MinimalHealthSupabaseClient) {
+  const readable: string[] = [];
+  const failed: string[] = [];
+
+  for (const table of coreReadTables) {
+    try {
+      await readCoreTable(client, table);
+      readable.push(table);
+    } catch {
+      failed.push(table);
+    }
+  }
+
+  if (failed.length > 0) {
+    return makeCheck(
+      "health-core-reads",
+      "core table reads",
+      "critical",
+      0,
+      `Unable to read core user table${failed.length === 1 ? "" : "s"}: ${failed.join(", ")}. Check migrations, grants, RLS, and the active session.`,
+      {
+        readable,
+        failed,
+        repair_steps: [
+          "Check Supabase migrations, grants, RLS, and auth state.",
+        ],
+      },
+    );
+  }
+
+  return makeCheck(
+    "health-core-reads",
+    "core table reads",
+    "healthy",
+    100,
+    "Core user-owned workflow tables are readable for the active session.",
+    { readable, failed, repair_steps: [] },
+  );
+}
+
 async function persistHealthChecks(
   client: MinimalHealthSupabaseClient,
   userId: string,
@@ -574,6 +795,9 @@ export async function getHealthDashboard(
         ),
       );
     }
+
+    checks.push(await probeTransitionRpcs(client));
+    checks.push(await probeCoreReads(client));
   } else {
     checks.push(
       informationalCheck(
