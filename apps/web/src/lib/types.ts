@@ -75,7 +75,15 @@ export interface Phase2MockWeeklyReviewSummary {
 
 export interface Phase2MockHealthCheck {
   id: string;
-  subsystem: string;
+  subsystem:
+    | "auth"
+    | "database"
+    | "ai_parsing"
+    | "calendar_connector"
+    | "scheduler"
+    | "priority_model"
+    | "duration_model"
+    | "time_preferences";
   status: "healthy" | "watch" | "critical";
   score: number;
   summary: string;

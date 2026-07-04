@@ -19,7 +19,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { createArea, listAreas, updateAreaColor } from "@/lib/data/workflow";
-import { getHealthDashboard } from "@/lib/data/health";
+import {
+  getHealthDashboard,
+  type HealthDashboardCheck,
+} from "@/lib/data/health";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   persistedAreaIdForWorkflowAreaId,
@@ -1729,7 +1732,9 @@ function ReviewView({
 
 function HealthView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
   const [pulse, setPulse] = useState(false);
-  const [checks, setChecks] = useState(vm.healthChecks);
+  const [checks, setChecks] = useState<
+    Array<(typeof vm.healthChecks)[number] | HealthDashboardCheck>
+  >(vm.healthChecks);
   const [message, setMessage] = useState<string | null>(null);
   async function runSystemCheck() {
     setPulse(true);
