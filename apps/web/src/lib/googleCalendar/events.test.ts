@@ -10,6 +10,7 @@ vi.mock("./freebusy", () => ({
 
 import {
   GoogleCalendarEventDriftError,
+  GoogleCalendarMissingEtagError,
   deleteGoogleCalendarEventForConnection,
   insertGoogleCalendarEventForConnection,
 } from "./events";
@@ -195,7 +196,7 @@ describe("Google Calendar event delete helper", () => {
       deleteGoogleCalendarEventForConnection({
         connection,
         eventId: "someone-elses-event",
-        expectedEtag: null,
+        expectedEtag: '"etag-42"',
         supabaseAccessToken: "supabase-access-token",
       }),
     ).rejects.toThrow(/Only LifeOS-created/);
@@ -215,13 +216,25 @@ describe("Google Calendar event delete helper", () => {
     ).rejects.toThrow(GoogleCalendarEventDriftError);
   });
 
+  it("requires an expected etag before issuing a delete", async () => {
+    await expect(
+      deleteGoogleCalendarEventForConnection({
+        connection,
+        eventId: "lifeos550e8400e29b41d4a716446655440501",
+        expectedEtag: "",
+        supabaseAccessToken: "supabase-access-token",
+      }),
+    ).rejects.toThrow(GoogleCalendarMissingEtagError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("treats an already-deleted event as already gone", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 404 }));
 
     const result = await deleteGoogleCalendarEventForConnection({
       connection,
       eventId: "lifeos550e8400e29b41d4a716446655440501",
-      expectedEtag: null,
+      expectedEtag: '"etag-42"',
       supabaseAccessToken: "supabase-access-token",
     });
 

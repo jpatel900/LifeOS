@@ -4,6 +4,7 @@ import { getGoogleCalendarStoredConnectionForAccessToken } from "@/lib/googleCal
 import { getGoogleCalendarConfig } from "@/lib/googleCalendar/config";
 import {
   GoogleCalendarEventDriftError,
+  GoogleCalendarMissingEtagError,
   deleteGoogleCalendarEventForConnection,
   getGoogleCalendarEventForConnection,
   isLifeOsOwnedGoogleEventId,
@@ -42,7 +43,10 @@ function safeErrorMessage(error: unknown) {
 }
 
 function mapCancelEventFailure(error: unknown) {
-  if (error instanceof GoogleCalendarEventDriftError) {
+  if (
+    error instanceof GoogleCalendarEventDriftError ||
+    error instanceof GoogleCalendarMissingEtagError
+  ) {
     return { status: 409, error: error.message };
   }
 
@@ -169,6 +173,12 @@ export async function POST(request: Request) {
       );
     }
 
+    const eventRead = await getGoogleCalendarEventForConnection({
+      connection,
+      eventId: block.google_event_id,
+      supabaseAccessToken: accessToken,
+    });
+
     const auditEvent = await createPendingExternalWriteEventForAccessToken(
       accessToken,
       {
@@ -177,7 +187,10 @@ export async function POST(request: Request) {
         requestSummary: {
           calendar_block_id: block.id,
           calendar_id: connection.calendar_id,
+          google_event_before_image: eventRead.eventSnapshot,
+          google_event_etag: eventRead.googleEventEtag,
           google_event_id: block.google_event_id,
+          google_event_status: eventRead.googleEventStatus,
           proposal_id: block.proposal_id,
         },
         targetId: block.id,
@@ -187,14 +200,12 @@ export async function POST(request: Request) {
     );
     auditEventId = auditEvent.id;
 
-    const eventRead = await getGoogleCalendarEventForConnection({
-      connection,
-      eventId: block.google_event_id,
-      supabaseAccessToken: accessToken,
-    });
-
     if (eventRead.exists) {
-      if (
+      if (eventRead.googleEventStatus === "cancelled") {
+        // Google Calendar keeps deleted events as readable tombstones and can
+        // resurrect them via PATCH. LifeOS treats its cancelled app state as
+        // terminal and never patches a tombstone back to confirmed.
+      } else if (
         !eventRead.lifeosProposalId ||
         (block.proposal_id && eventRead.lifeosProposalId !== block.proposal_id)
       ) {
@@ -210,6 +221,7 @@ export async function POST(request: Request) {
             errorMessage: failure.error,
             resultStatus: "failed",
             resultSummary: {
+              google_event_status: eventRead.googleEventStatus,
               provenance_marker_matched: false,
             },
           },
@@ -219,14 +231,14 @@ export async function POST(request: Request) {
           { ok: false, error: failure.error },
           { status: failure.status },
         );
+      } else {
+        await deleteGoogleCalendarEventForConnection({
+          connection,
+          eventId: block.google_event_id,
+          expectedEtag: eventRead.googleEventEtag ?? "",
+          supabaseAccessToken: accessToken,
+        });
       }
-
-      await deleteGoogleCalendarEventForConnection({
-        connection,
-        eventId: block.google_event_id,
-        expectedEtag: eventRead.googleEventEtag,
-        supabaseAccessToken: accessToken,
-      });
     }
 
     const cancelledBlock = await markCalendarBlockCancelledForAccessToken(
@@ -241,10 +253,15 @@ export async function POST(request: Request) {
         resultStatus: "succeeded",
         resultSummary: {
           calendar_block_id: block.id,
-          event_already_gone: !eventRead.exists,
-          google_event_before_image: eventRead.eventSnapshot,
+          event_already_gone:
+            !eventRead.exists || eventRead.googleEventStatus === "cancelled",
           google_event_etag: eventRead.googleEventEtag,
-          provenance_marker_matched: eventRead.exists ? true : null,
+          google_event_status: eventRead.googleEventStatus,
+          provenance_marker_matched: eventRead.exists
+            ? eventRead.googleEventStatus === "cancelled"
+              ? null
+              : true
+            : null,
         },
       },
     );
@@ -253,7 +270,8 @@ export async function POST(request: Request) {
       ok: true,
       audit,
       block: cancelledBlock,
-      event_already_gone: !eventRead.exists,
+      event_already_gone:
+        !eventRead.exists || eventRead.googleEventStatus === "cancelled",
     });
   } catch (error) {
     const failure = mapCancelEventFailure(error);

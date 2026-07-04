@@ -50,7 +50,10 @@ vi.mock("@/lib/supabase/server", () => ({
   requireSupabaseServerUser: mocks.requireSupabaseServerUser,
 }));
 
-import { GoogleCalendarEventDriftError } from "@/lib/googleCalendar/events";
+import {
+  GoogleCalendarEventDriftError,
+  GoogleCalendarMissingEtagError,
+} from "@/lib/googleCalendar/events";
 import { POST } from "./route";
 
 const user = { id: "550e8400-e29b-41d4-a716-446655440001" };
@@ -93,6 +96,7 @@ const eventRead = {
   exists: true,
   googleEventId: ownedGoogleEventId,
   googleEventEtag: '"etag-1"',
+  googleEventStatus: "confirmed",
   lifeosProposalId: proposalId,
   eventSnapshot: {
     id: ownedGoogleEventId,
@@ -172,6 +176,24 @@ describe("google-calendar cancel-event route", () => {
 
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
+    expect(
+      mocks.createPendingExternalWriteEventForAccessToken,
+    ).toHaveBeenCalledWith(
+      "supabase-access-token",
+      expect.objectContaining({
+        requestSummary: expect.objectContaining({
+          google_event_before_image: eventRead.eventSnapshot,
+          google_event_etag: '"etag-1"',
+          google_event_status: "confirmed",
+        }),
+      }),
+    );
+    expect(
+      mocks.createPendingExternalWriteEventForAccessToken.mock
+        .invocationCallOrder[0],
+    ).toBeLessThan(
+      mocks.deleteGoogleCalendarEventForConnection.mock.invocationCallOrder[0],
+    );
     expect(mocks.deleteGoogleCalendarEventForConnection).toHaveBeenCalledWith(
       expect.objectContaining({
         eventId: ownedGoogleEventId,
@@ -191,8 +213,8 @@ describe("google-calendar cancel-event route", () => {
         errorMessage: null,
         resultStatus: "succeeded",
         resultSummary: expect.objectContaining({
-          google_event_before_image: eventRead.eventSnapshot,
           google_event_etag: '"etag-1"',
+          google_event_status: "confirmed",
           provenance_marker_matched: true,
         }),
       }),
@@ -287,6 +309,7 @@ describe("google-calendar cancel-event route", () => {
       googleEventId: ownedGoogleEventId,
       googleEventEtag: null,
       lifeosProposalId: null,
+      googleEventStatus: null,
       eventSnapshot: null,
     });
 
@@ -306,6 +329,59 @@ describe("google-calendar cancel-event route", () => {
       "supabase-access-token",
       block.id,
     );
+  });
+
+  it("treats a readable cancelled Google tombstone as terminal without resurrection", async () => {
+    mocks.getGoogleCalendarEventForConnection.mockResolvedValue({
+      ...eventRead,
+      googleEventStatus: "cancelled",
+      eventSnapshot: {
+        ...eventRead.eventSnapshot,
+        status: "cancelled",
+        etag: '"cancelled-etag"',
+      },
+    });
+
+    const response = await POST(
+      request({
+        calendar_block_id: block.id,
+        approved: true,
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.event_already_gone).toBe(true);
+    expect(mocks.deleteGoogleCalendarEventForConnection).not.toHaveBeenCalled();
+    expect(mocks.markCalendarBlockCancelledForAccessToken).toHaveBeenCalledWith(
+      "supabase-access-token",
+      block.id,
+    );
+  });
+
+  it("fails closed when the fetched event has no etag", async () => {
+    mocks.getGoogleCalendarEventForConnection.mockResolvedValue({
+      ...eventRead,
+      googleEventEtag: null,
+    });
+    mocks.deleteGoogleCalendarEventForConnection.mockRejectedValue(
+      new GoogleCalendarMissingEtagError(),
+    );
+
+    const response = await POST(
+      request({
+        calendar_block_id: block.id,
+        approved: true,
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("requires a live event etag");
+    expect(
+      mocks.markCalendarBlockCancelledForAccessToken,
+    ).not.toHaveBeenCalled();
   });
 
   it("blocks cancelling a block that is already cancelled", async () => {

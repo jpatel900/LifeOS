@@ -24,10 +24,17 @@ export interface InsertGoogleCalendarEventResult {
   eventSnapshot: Record<string, unknown> | null;
 }
 
+export type GoogleCalendarEventStatus =
+  | "confirmed"
+  | "tentative"
+  | "cancelled"
+  | string;
+
 export interface GoogleCalendarEventReadResult {
   exists: boolean;
   googleEventId: string;
   googleEventEtag: string | null;
+  googleEventStatus: GoogleCalendarEventStatus | null;
   lifeosProposalId: string | null;
   eventSnapshot: Record<string, unknown> | null;
 }
@@ -35,7 +42,7 @@ export interface GoogleCalendarEventReadResult {
 interface DeleteGoogleCalendarEventParams {
   connection: GoogleCalendarStoredConnection;
   eventId: string;
-  expectedEtag: string | null;
+  expectedEtag: string;
   supabaseAccessToken: string;
 }
 
@@ -49,6 +56,15 @@ export class GoogleCalendarEventDriftError extends Error {
       "Google Calendar event changed since it was reviewed. Cancel was aborted; review the event and approve again.",
     );
     this.name = "GoogleCalendarEventDriftError";
+  }
+}
+
+export class GoogleCalendarMissingEtagError extends Error {
+  constructor() {
+    super(
+      "Google Calendar event cancel requires a live event etag. Cancel was aborted; review the event and approve again.",
+    );
+    this.name = "GoogleCalendarMissingEtagError";
   }
 }
 
@@ -72,6 +88,12 @@ function requireNonEmptyText(value: unknown, message: string) {
 function readEtag(payload: Record<string, unknown> | null) {
   return typeof payload?.etag === "string" && payload.etag.trim()
     ? payload.etag
+    : null;
+}
+
+function readEventStatus(payload: Record<string, unknown> | null) {
+  return typeof payload?.status === "string" && payload.status.trim()
+    ? payload.status
     : null;
 }
 
@@ -133,6 +155,7 @@ export async function getGoogleCalendarEventForConnection(
       exists: false,
       googleEventId: params.eventId,
       googleEventEtag: null,
+      googleEventStatus: null,
       lifeosProposalId: null,
       eventSnapshot: null,
     };
@@ -154,6 +177,7 @@ export async function getGoogleCalendarEventForConnection(
       "Google Calendar event read returned no event id.",
     ),
     googleEventEtag: readEtag(payload),
+    googleEventStatus: readEventStatus(payload),
     lifeosProposalId: readPrivateExtendedProperty(
       payload,
       "lifeos_proposal_id",
@@ -241,6 +265,10 @@ export async function deleteGoogleCalendarEventForConnection(
     );
   }
 
+  if (typeof params.expectedEtag !== "string" || !params.expectedEtag.trim()) {
+    throw new GoogleCalendarMissingEtagError();
+  }
+
   const accessToken = await resolveGoogleCalendarAccessToken({
     connection: params.connection,
     supabaseAccessToken: params.supabaseAccessToken,
@@ -249,11 +277,8 @@ export async function deleteGoogleCalendarEventForConnection(
   const eventId = encodeURIComponent(params.eventId);
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
+    "If-Match": params.expectedEtag.trim(),
   };
-
-  if (params.expectedEtag) {
-    headers["If-Match"] = params.expectedEtag;
-  }
 
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
