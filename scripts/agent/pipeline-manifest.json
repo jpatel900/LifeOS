@@ -1,31 +1,67 @@
 {
-  "$comment": "Sequential execution manifest for the post-smoke hardening epic (#325). pipeline-advance.yml reads this. kick: 'mention' posts @codex on the issue when its predecessor's PR merges; 'pause' notifies the repo owner on the epic and stops; 'none' is a manually-managed step. automerge: true requests the safe auto-merge labels on the closing PR (the deterministic path evaluator in scripts/agent/check-safe-automerge.mjs remains the actual gate). Prior program (epic #243) completed through B6; its two remaining steps (#240 human-gated calendar spike, #241 production smoke) are human-managed outside this manifest — the 2026-07-03 smoke already ran and produced KNOWN_ISSUES rows 11-14, which this epic addresses.",
-  "epic": 325,
+  "$comment": "Sequential execution manifest for Stage 1 - chief-of-staff nouns (epic #251). pipeline-advance.yml reads this. kick: 'mention' posts @codex on the issue when its predecessor's PR merges; 'pause' notifies the repo owner on the epic and stops; 'none' is a manually-managed step. automerge: true requests the safe auto-merge labels on the closing PR (the deterministic path evaluator in scripts/agent/check-safe-automerge.mjs remains the actual gate). Cutover applied 2026-07-04 after epic #243 closed, per the ratified cutover block in the #251 body. Prior programs (epics #243, #325) completed in full. S0 (#252) is kick:none - dispatched via workflow_dispatch or the local subagent lane; every slice contract is pre-drafted in its issue body.",
+  "epic": 251,
   "owner": "jpatel900",
   "pipeline": [
     {
-      "issue": 321,
-      "kick": "mention",
+      "issue": 252,
+      "kick": "none",
       "automerge": false,
-      "note": "H1 line-ending normalization + planning-loader footgun comment; touches repo root, human merge"
+      "note": "S0 contract docs; Claude fidelity-review vs #252 appendix + merge starts the chain; kick via workflow_dispatch after cutover merges (automated by the pipeline driver)"
     },
     {
-      "issue": 322,
+      "issue": 253,
       "kick": "mention",
       "automerge": false,
-      "note": "H2 truthful /health persisted-mode probes (KNOWN_ISSUES row 13); T2 health behavior, human merge"
+      "note": "S1 schema; Claude merges when green after contract review"
     },
     {
-      "issue": 323,
+      "issue": 254,
       "kick": "mention",
       "automerge": false,
-      "note": "H3 sync failure classification (loads vs saves vs missing capability); T2 data layer, human merge"
+      "note": "S2 context choke point + charters; prompt fixtures must prove empty-charter parity"
     },
     {
-      "issue": 324,
+      "issue": 255,
       "kick": "mention",
       "automerge": false,
-      "note": "H4 placement feedback + optimistic-echo dedup (KNOWN_ISSUES row 12); T2 data layer + UX, human merge"
+      "note": "S3 extraction; confirm #238 merged before kicking"
+    },
+    {
+      "issue": 256,
+      "kick": "mention",
+      "automerge": false,
+      "note": "S4 aging rules; rule-based only"
+    },
+    {
+      "issue": 257,
+      "kick": "mention",
+      "automerge": false,
+      "note": "S5 daily focus; read-only free/busy"
+    },
+    {
+      "issue": 258,
+      "kick": "mention",
+      "automerge": false,
+      "note": "S6 daily brief; zero-mutation panel"
+    },
+    {
+      "issue": 259,
+      "kick": "mention",
+      "automerge": false,
+      "note": "S7 wins log"
+    },
+    {
+      "issue": 260,
+      "kick": "mention",
+      "automerge": false,
+      "note": "S8 rollups; approval-gated persistence"
+    },
+    {
+      "issue": 261,
+      "kick": "mention",
+      "automerge": false,
+      "note": "S9 learning consumer + golden journey; closes epic on evidence"
     }
   ]
 }
