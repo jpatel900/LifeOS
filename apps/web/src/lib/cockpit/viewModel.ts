@@ -48,6 +48,7 @@ export interface CockpitViewModel {
     proposal: Phase2TimeBlockProposal;
     task: Phase2MockTask;
     hour: number;
+    hasExistingBlock: boolean;
   }[];
   done: Phase2MockTask[];
   sessions: Phase2MockExecutionSession[];
@@ -214,6 +215,9 @@ export function buildCockpitViewModel(
             proposal,
             task,
             hour: new Date(proposal.proposed_start).getHours(),
+            hasExistingBlock: plannedBlocks.some(
+              (block) => block.task_id === task.id,
+            ),
           }
         : null;
     })
