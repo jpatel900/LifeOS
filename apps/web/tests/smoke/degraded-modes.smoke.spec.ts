@@ -43,7 +43,7 @@ test.describe("degraded-mode: designed states, not crashes", () => {
     // contract holds and the status is a known value.
     await assertDesignedJson(request, "/api/parse-capture", (body) => {
       expect(body.ok).toBe(true);
-      expect(["ready", "ai_unavailable"]).toContain(body.status);
+      expect(["ai_configured", "ai_unavailable"]).toContain(body.status);
       expect(["ai", "mock"]).toContain(body.preferredParser);
     });
   });
