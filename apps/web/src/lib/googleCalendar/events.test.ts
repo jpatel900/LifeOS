@@ -195,7 +195,7 @@ describe("Google Calendar event delete helper", () => {
       deleteGoogleCalendarEventForConnection({
         connection,
         eventId: "someone-elses-event",
-        expectedEtag: null,
+        expectedEtag: "",
         supabaseAccessToken: "supabase-access-token",
       }),
     ).rejects.toThrow(/Only LifeOS-created/);
@@ -221,10 +221,22 @@ describe("Google Calendar event delete helper", () => {
     const result = await deleteGoogleCalendarEventForConnection({
       connection,
       eventId: "lifeos550e8400e29b41d4a716446655440501",
-      expectedEtag: null,
+      expectedEtag: '"etag-42"',
       supabaseAccessToken: "supabase-access-token",
     });
 
     expect(result.status).toBe("already_gone");
+  });
+
+  it("refuses to send a delete without an If-Match etag", async () => {
+    await expect(
+      deleteGoogleCalendarEventForConnection({
+        connection,
+        eventId: "lifeos550e8400e29b41d4a716446655440501",
+        expectedEtag: "",
+        supabaseAccessToken: "supabase-access-token",
+      }),
+    ).rejects.toThrow(/If-Match etag guard/);
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
