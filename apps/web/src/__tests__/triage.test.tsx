@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CapturePage from "../app/capture/page";
 import TriagePage from "../app/triage/page";
 import { AppShell } from "../app/components/AppShell";
+import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
 const mockPathname = vi.fn(() => "/triage");
 
@@ -11,6 +12,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Triage cockpit", () => {
+  let restoreFetch: () => void;
+
+  beforeEach(() => {
+    restoreFetch = stubParseCaptureFetch();
+  });
+
+  afterEach(() => {
+    restoreFetch();
+  });
+
   it("shows the empty verdict-first triage state", async () => {
     render(
       <AppShell>

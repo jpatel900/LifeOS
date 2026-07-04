@@ -30,7 +30,11 @@ import {
   persistedAreaIdForWorkflowAreaId,
   workflowAreaIdForPersistedArea,
 } from "@/lib/workflowAreaMapping";
-import { useWorkflow, type WorkflowSyncStatus } from "@/lib/WorkflowContext";
+import {
+  useWorkflow,
+  type CaptureParseState,
+  type WorkflowSyncStatus,
+} from "@/lib/WorkflowContext";
 import { ACCENT_PALETTE, buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import {
   buildCockpitViewModel,
@@ -94,6 +98,8 @@ export function LifeOSCockpit({
     syncPersistedAreas,
     refreshPersistedWorkflow,
     submitCaptureText,
+    captureParse,
+    retryCaptureParseWithMock,
     acceptTaskDraft,
     backlogTaskDraft,
     rejectTaskDraft,
@@ -535,6 +541,11 @@ export function LifeOSCockpit({
 
         <SyncNotice status={syncStatus} />
 
+        <CaptureParseNotice
+          state={captureParse}
+          onRetryWithMock={retryCaptureParseWithMock}
+        />
+
         <nav
           className="relative grid grid-cols-6 gap-2 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2"
           aria-label="Workflow stages"
@@ -718,6 +729,51 @@ function SyncNotice({ status }: { status: WorkflowSyncStatus }) {
       className="rounded-[var(--cockpit-radius)] border border-[var(--amb-rng)] bg-[var(--amb-sf)] px-4 py-3 text-sm font-semibold text-[var(--amb-fg)]"
     >
       {messages[0]}
+    </div>
+  );
+}
+
+function CaptureParseNotice({
+  state,
+  onRetryWithMock,
+}: {
+  state: CaptureParseState;
+  onRetryWithMock: () => void;
+}) {
+  if (state.phase === "idle") return null;
+  if (state.phase === "parsed" && state.parser === "ai") return null;
+
+  const message =
+    state.phase === "parsing"
+      ? "Parsing capture into drafts…"
+      : state.phase === "parsed"
+        ? state.status === "ai_unavailable"
+          ? "AI parser is unavailable right now, so the built-in mock parser drafted this capture."
+          : "AI parsing is turned off, so the built-in mock parser drafted this capture."
+        : state.message;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="capture-parse-notice"
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-3 rounded-[var(--cockpit-radius)] border px-4 py-3 text-sm font-semibold",
+        state.phase === "failed"
+          ? "border-[var(--amb-rng)] bg-[var(--amb-sf)] text-[var(--amb-fg)]"
+          : "border-[var(--ln)] bg-[var(--sf)] text-[var(--mut)]",
+      )}
+    >
+      <span>{message}</span>
+      {state.phase === "failed" && state.canRetryWithMock ? (
+        <button
+          type="button"
+          onClick={onRetryWithMock}
+          className="min-h-10 rounded-full bg-[var(--btn)] px-4 font-bold text-[var(--btn-fg)]"
+        >
+          Parse with mock parser
+        </button>
+      ) : null}
     </div>
   );
 }

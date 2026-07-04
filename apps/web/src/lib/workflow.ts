@@ -346,16 +346,53 @@ export function submitCapture(
   };
 }
 
+/**
+ * Raw-save-first: stages only the capture item so the raw text is in state
+ * (and persistable) before any parse attempt. Drafts arrive later via
+ * `appendParsedWorkflowResult` once /api/parse-capture returns.
+ */
+export function submitRawCapture(
+  state: WorkflowState,
+  input: SubmitCaptureInput,
+): WorkflowState {
+  const rawText = input.rawText.trim();
+  if (!rawText) {
+    throw new Error("Capture text is required.");
+  }
+
+  const captureItem: Phase2CaptureItem = {
+    id: nextId("capture"),
+    user_id: MOCK_USER_ID,
+    area_id: inferAreaId(rawText, input.areaId),
+    raw_text: rawText,
+    capture_mode: "text",
+    inferred_area_confidence: input.areaId ? 1 : 0.74,
+    status: "new",
+    created_at: nowIso(),
+  };
+
+  return {
+    ...state,
+    captureItems: [captureItem, ...state.captureItems],
+    reviewLog: [`Captured: ${makeTitle(rawText)}`, ...state.reviewLog],
+  };
+}
+
 export function appendParsedWorkflowResult(
   state: WorkflowState,
   parsed: ParsedWorkflowResult,
 ): WorkflowState {
+  const captureExists = state.captureItems.some(
+    (item) => item.id === parsed.captureItem.id,
+  );
+
   return {
     ...state,
-    captureItems: [
-      parsed.captureItem,
-      ...state.captureItems.filter((item) => item.id !== parsed.captureItem.id),
-    ],
+    captureItems: captureExists
+      ? state.captureItems.map((item) =>
+          item.id === parsed.captureItem.id ? parsed.captureItem : item,
+        )
+      : [parsed.captureItem, ...state.captureItems],
     taskDrafts: [...parsed.taskDrafts, ...state.taskDrafts],
     projectDrafts: [...parsed.projectDrafts, ...state.projectDrafts],
     ambiguityAssessments: parsed.ambiguityAssessment

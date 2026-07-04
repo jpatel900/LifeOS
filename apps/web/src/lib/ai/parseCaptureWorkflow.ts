@@ -20,7 +20,7 @@ export interface ParsedWorkflowResult {
 
 interface BuildParsedWorkflowResultInput {
   response: ParseCaptureResponse;
-  capture: CaptureItem;
+  capture: Pick<CaptureItem, "id" | "user_id" | "raw_text" | "created_at">;
   workflowAreaId: string | null;
 }
 
@@ -84,6 +84,7 @@ export function buildParsedWorkflowResult(
       estimated_minutes_low: draft.estimated_minutes_low,
       estimated_minutes_high: draft.estimated_minutes_high,
       first_tiny_step: draft.first_tiny_step,
+      breakdown: draft.breakdown,
       status: "pending",
       created_at: new Date().toISOString(),
     }));

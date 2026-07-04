@@ -258,7 +258,9 @@ export async function POST(request: Request) {
         resultStatus: "succeeded",
         resultSummary: {
           calendar_block_id: block.id,
+          google_event_etag: insertResult.googleEventEtag,
           google_event_id_stored: true,
+          google_event_snapshot: insertResult.eventSnapshot,
           provider_event_id_present: true,
         },
       },

@@ -190,6 +190,69 @@ export async function getCalendarBlockForProposalForAccessToken(
   return data ? parseCalendarBlock(data) : null;
 }
 
+export async function getCalendarBlockForAccessToken(
+  accessToken: string,
+  blockId: string,
+) {
+  assertServerRuntime();
+
+  const { client } = await requireSupabaseServerUser(accessToken);
+  const query = client.from("calendar_blocks") as unknown as {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .select(calendarBlockColumns)
+    .eq("id", blockId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return data ? parseCalendarBlock(data) : null;
+}
+
+export async function markCalendarBlockCancelledForAccessToken(
+  accessToken: string,
+  blockId: string,
+) {
+  assertServerRuntime();
+
+  const { client } = await requireSupabaseServerUser(accessToken);
+  const query = client.from("calendar_blocks") as unknown as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({ status: "cancelled" })
+    .eq("id", blockId)
+    .select(calendarBlockColumns)
+    .single();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return parseCalendarBlock(data);
+}
+
 export async function createCalendarBlockForProposalForAccessToken(
   accessToken: string,
   proposal: TimeBlockProposal,

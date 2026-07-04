@@ -93,6 +93,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Get a first picture of monthly spending",
           description: "Capture expresses money worry without specifics.",
           area_slug_suggestion: "personal",
@@ -150,6 +151,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Name what stagnating means right now",
           description: "Career worry without a chosen direction.",
           area_slug_suggestion: "main-job",
@@ -207,6 +209,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Track energy dips for a few days",
           description: "Exhaustion with several suspected causes.",
           area_slug_suggestion: "personal",
@@ -268,6 +271,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Pick up medication refill",
           description: "One thread from a multi-item dump.",
           area_slug_suggestion: "personal",
@@ -279,6 +283,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Renew car registration sticker",
           description: "Expiry mentioned without an exact date.",
           area_slug_suggestion: "personal",
@@ -290,6 +295,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Email strata about the parking spot",
           description: "One thread from a multi-item dump.",
           area_slug_suggestion: "personal",
@@ -347,6 +353,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Fix the login redirect bug",
           description: "Named bug from standup notes.",
           area_slug_suggestion: "main-job",
@@ -358,6 +365,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Review Priya's PR before she is away",
           description: "Reviewer is unavailable after tomorrow.",
           area_slug_suggestion: "main-job",
@@ -369,6 +377,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Update the deck for Thursday",
           description: "Presentation deck needs refresh before Thursday.",
           area_slug_suggestion: "main-job",
@@ -380,6 +389,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Chase IT about the laptop ticket",
           description: "Follow up on an open IT ticket.",
           area_slug_suggestion: "main-job",
@@ -418,6 +428,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Patch the side project deploy script",
           description: "One weekend thread; area is side project.",
           area_slug_suggestion: "side-project",
@@ -429,6 +440,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Clean the gutters",
           description: "Household commitment mentioned for the weekend.",
           area_slug_suggestion: "personal",
@@ -440,6 +452,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Prep for Monday's interview panel",
           description: "Work prep with an implicit Monday deadline.",
           area_slug_suggestion: "main-job",
@@ -499,6 +512,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Send budget summary to Alex",
           description: "Explicit commitment with a stated Friday deadline.",
           area_slug_suggestion: "main-job",
@@ -536,6 +550,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Take the kids Saturday afternoon as promised to Sam",
           description: "Personal commitment with an approximate time.",
           area_slug_suggestion: "personal",
@@ -573,6 +588,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Call Jordan about the lunch topic",
           description: "Commitment to a person; topic not captured.",
           area_slug_suggestion: null,
@@ -631,6 +647,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Book a dentist appointment for next month",
           description:
             "Scheduling ask with soft constraints: mornings, not Mondays. No exact date given.",
@@ -671,6 +688,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Find 45 minutes with the team before release",
           description: "Scheduling ask bounded by an unstated release date.",
           area_slug_suggestion: "main-job",
@@ -708,6 +726,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Restart Tuesday/Thursday morning gym routine",
           description: "Recurring intent; no single date to commit yet.",
           area_slug_suggestion: "personal",
@@ -808,6 +827,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Gather T4 and RRSP receipts for tax filing",
           description: "Prerequisite documents for the April 30 deadline.",
           area_slug_suggestion: "personal",
@@ -819,6 +839,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "File taxes before April 30",
           description: "Hard statutory deadline stated in the capture.",
           area_slug_suggestion: "personal",
@@ -859,6 +880,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Unblock vendor API credentials for the data import",
           description: "Work is blocked on an external dependency.",
           area_slug_suggestion: "main-job",
@@ -922,6 +944,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Renew passport before the fall trip",
           description: "Extracted from a noisy voice transcript.",
           area_slug_suggestion: "personal",
@@ -970,6 +993,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "List the garage zones and worst clutter spots",
           description: "Small reversible first move for the overhaul.",
           area_slug_suggestion: "personal",
@@ -1031,6 +1055,7 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          breakdown: null,
           title: "Pay rent on the 1st",
           description:
             "Actionable item extracted; embedded instructions ignored as data.",

@@ -4,6 +4,31 @@ import { z } from "zod";
  * AI response for capture parsing (REQUIREMENTS FR-005 + AGENTS.md).
  * Drafts are suggestions until accepted through triage — not persisted rows verbatim.
  */
+/**
+ * Anti-procrastination breakdown: full scope as small ordered steps, the
+ * dependency chain that defines the critical path, and one tiny kick-start
+ * step. Designed to remove around-the-work thinking, not to schedule.
+ */
+export const ParseCaptureBreakdownStepSchema = z.object({
+  order: z.number().int().min(1),
+  title: z.string().min(1),
+  estimated_minutes: z.number().int().positive().nullable(),
+  depends_on_orders: z.array(z.number().int().min(1)),
+  on_critical_path: z.boolean(),
+});
+
+export type ParseCaptureBreakdownStep = z.infer<
+  typeof ParseCaptureBreakdownStepSchema
+>;
+
+export const ParseCaptureBreakdownSchema = z.object({
+  steps: z.array(ParseCaptureBreakdownStepSchema).min(1),
+  sequence_summary: z.string().nullable(),
+  kickstart_step: z.string().min(1),
+});
+
+export type ParseCaptureBreakdown = z.infer<typeof ParseCaptureBreakdownSchema>;
+
 export const ParseCaptureTaskDraftSchema = z.object({
   draft_type: z.literal("task_draft"),
   title: z.string().min(1),
@@ -14,6 +39,7 @@ export const ParseCaptureTaskDraftSchema = z.object({
   estimated_minutes_high: z.number().int().positive().nullable(),
   due_at: z.string().datetime().nullable(),
   confidence: z.number().min(0).max(1),
+  breakdown: ParseCaptureBreakdownSchema.nullable().default(null),
 });
 
 export const ParseCaptureProjectDraftSchema = z.object({

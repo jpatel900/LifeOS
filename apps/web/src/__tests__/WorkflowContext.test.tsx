@@ -370,13 +370,17 @@ describe("WorkflowProvider storage fallback", () => {
     );
 
     function FailureProbe() {
-      const { state, submitCaptureText, syncStatus } = useWorkflow();
+      const { state, submitCaptureText, syncStatus, captureParse } =
+        useWorkflow();
       return (
         <div>
           <span data-testid="capture-count">{state.captureItems.length}</span>
           <span data-testid="draft-count">{state.taskDrafts.length}</span>
           <span data-testid="account-status">{syncStatus.account}</span>
-          <span data-testid="sync-message">{syncStatus.message ?? ""}</span>
+          <span data-testid="parse-phase">{captureParse.phase}</span>
+          <span data-testid="parse-message">
+            {captureParse.phase === "failed" ? captureParse.message : ""}
+          </span>
           <span data-testid="first-capture-status">
             {state.captureItems[0]?.status ?? ""}
           </span>
@@ -413,8 +417,11 @@ describe("WorkflowProvider storage fallback", () => {
     expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
     expect(screen.getByTestId("draft-count")).toHaveTextContent("0");
     expect(screen.getByTestId("first-capture-status")).toHaveTextContent("new");
-    expect(screen.getByTestId("sync-message")).toHaveTextContent(
-      "Capture saved for manual triage",
+    await waitFor(() => {
+      expect(screen.getByTestId("parse-phase")).toHaveTextContent("failed");
+    });
+    expect(screen.getByTestId("parse-message")).toHaveTextContent(
+      "Parsing failed safely",
     );
   });
 });
