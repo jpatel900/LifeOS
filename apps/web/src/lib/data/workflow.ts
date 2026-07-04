@@ -1109,6 +1109,8 @@ export async function listPlanningItems(
 
   await requireSupabaseUser(client, "Sign in before loading planning rows.");
 
+  // Intentionally returns only active tasks. Planned-block joins MUST use
+  // listExecutionReviewItems' task list; see KNOWN_ISSUES row 11.
   const tasksQuery = client.from("tasks") as {
     select: (columns: string) => {
       order: (
