@@ -8,6 +8,7 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "type-check": "turbo type-check",
+    "smoke:prod": "node scripts/run-prod-smoke.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

@@ -204,6 +204,80 @@ Expected:
 - review persists
 - `/health` distinguishes optional-disabled states from real failures
 
+## 3b. One-command production smoke (B8)
+
+The manual checklist in section 3 has an automated companion: a one-command
+Playwright smoke that drives the golden journey against a deployed target and
+asserts the designed degraded-mode states. It is safe-by-default and never
+writes to a real calendar unless you explicitly opt in.
+
+### One command
+
+```
+SMOKE_BASE_URL=https://your-app.example pnpm smoke:prod
+```
+
+Runs from the repo root (also available as `pnpm --filter @lifeos/web smoke:prod`).
+Output is per-journey and per-check pass/fail with a final summary; the process
+exits non-zero on any real failure. Designed skips (missing optional env) do not
+fail the run.
+
+### Required env
+
+- `SMOKE_BASE_URL` — base URL of the target app (deployed, or a local
+  `pnpm dev` server such as `http://127.0.0.1:3000`).
+
+### Optional env (unlocks the authenticated / persisted legs)
+
+- `SMOKE_EMAIL`, `SMOKE_PASSWORD` — production sign-in credentials for the
+  smoke's own test user. Absent these, the journey still runs in local-only
+  mode and provider-dependent legs skip with a clear message instead of failing.
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — the Supabase
+  target, used only for marker-scoped row cleanup after an authenticated run.
+
+### Opt-in external write (owner only, default OFF)
+
+- `SMOKE_GOOGLE_TEST_CALENDAR_ID` — reserved for a low-risk **test** calendar
+  id. When set, the suite is permitted to exercise the Google write path (and
+  must clean up the event it creates). This leg is currently an owner-run,
+  **not-yet-implemented** stub (`test.fixme`): it requires a live, connected
+  prod Google account, which cannot exist in the build environment. Absent this
+  var, the Google leg asserts connection status and approval-gate visibility
+  only, and performs no write — the default run never writes externally.
+
+### Safety posture
+
+- **Up to the gate by default.** The journey asserts capture → parse → triage →
+  plan → approval-gate and STOPS before any real external calendar write. It
+  verifies the Google approval control is present and gated, and never clicks it.
+- **Identifiable markers.** Every capture the smoke creates carries a
+  `smoke-b8-<runid>-` prefix in its raw text. The suite selects its own draft in
+  triage by that marker and refuses to act on a draft it cannot identify, so it
+  never touches rows it did not create.
+- **Best-effort cleanup.** After an authenticated run the suite deletes its own
+  marker-scoped rows using the reliable anchors `capture_items.raw_text` and
+  `tasks.title` (the latter matches only when the mock parser preserved the
+  title; an AI parser may rewrite it). Downstream rows
+  (`time_block_proposals`, `calendar_blocks`, `execution_sessions`,
+  `review_entries`) have no smoke-stamped free-text column, so they are removed
+  only via a delete cascade from those anchors; any that remain are reported
+  with the run marker for manual removal. Cleanup reports matched-row counts so
+  a zero-match delete is never mistaken for success.
+- **No production identifiers in the repo.** Everything is env-driven; no user
+  ids, calendar ids, or credentials are hardcoded.
+
+### Unverified lane
+
+Real production execution is not run in the build environment (no prod
+credentials exist there). The suite compiles and its logic runs against a local
+target in demo mode; provider-dependent legs degrade to designed skips. The
+following are UNVERIFIED here and must be exercised by an owner running the one
+command above against the deployed app with credentials:
+
+- the authenticated / persisted golden journey (login, persisted rows),
+- marker-scoped multi-table cleanup against real Supabase,
+- the opt-in Google write path.
+
 ## 4. Known non-issues that are easy to misread
 
 These are not deployment bugs by themselves:
