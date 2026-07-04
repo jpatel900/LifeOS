@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import type { WorkflowState } from "@/lib/workflow";
 import {
   acceptLatestDraft,
   buildWorkflowCockpitViewModel,
@@ -8,7 +7,7 @@ import {
   workflowSeed,
 } from "./helpers/workflowReachability";
 
-function plannedJourneyState(): WorkflowState {
+function plannedJourneyState() {
   let state = workflowSeed();
   state = captureWorkflow(state, "Prove scheduled blocks stay visible.");
   state = acceptLatestDraft(state);
@@ -36,7 +35,7 @@ describe("cockpit planned join against task status drift", () => {
     );
     expect(plannedBlock).toBeDefined();
 
-    const driftedState: WorkflowState = {
+    const driftedState = {
       ...state,
       tasks: state.tasks.map((task) =>
         task.id === plannedBlock?.task_id

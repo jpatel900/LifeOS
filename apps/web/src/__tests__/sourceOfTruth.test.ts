@@ -24,6 +24,19 @@ const IGNORED_SCAN_DIRECTORIES = new Set([
   "test-results",
 ]);
 
+const WORKFLOW_STATE_ANNOTATION_ALLOWLIST = [
+  // Legitimate reachability helper boundary: tests must receive WorkflowState only through these transition wrappers.
+  "apps/web/src/__tests__/helpers/workflowReachability.ts",
+];
+
+function workflowStateAnnotationTestFiles() {
+  return walkRepoFiles("apps/web/src/__tests__").filter(
+    (file) =>
+      /apps\/web\/src\/__tests__\/.*\.(?:test|spec)\.(?:ts|tsx)$/.test(file) ||
+      /apps\/web\/src\/__tests__\/helpers\/[^/]+\.ts$/.test(file),
+  );
+}
+
 function walkRepoFiles(relativePath: string): string[] {
   const { readdirSync } = require("node:fs") as typeof import("node:fs");
   const currentPath = resolve(repoRoot, relativePath);
@@ -67,6 +80,35 @@ describe("source-of-truth boundaries", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("cockpit/workflow tests may not annotate hand-built WorkflowState literals outside the reachability helper", () => {
+    const annotationPattern = /(?::|\bas)\s+WorkflowState\b/;
+    const allowlist = new Set(WORKFLOW_STATE_ANNOTATION_ALLOWLIST);
+    const offenders = workflowStateAnnotationTestFiles().filter((file) => {
+      if (allowlist.has(file)) {
+        return false;
+      }
+
+      return annotationPattern.test(readRepoFile(file));
+    });
+
+    expect(
+      offenders,
+      `Build WorkflowState through workflowSeed() + transition helpers, or add an annotated WORKFLOW_STATE_ANNOTATION_ALLOWLIST entry. Offenders: ${offenders.join(
+        ", ",
+      )}`,
+    ).toEqual([]);
+  });
+
+  it("keeps the WorkflowState-annotation allowlist shrink-only", () => {
+    const annotationPattern = /(?::|\bas)\s+WorkflowState\b/;
+    const staleEntries = WORKFLOW_STATE_ANNOTATION_ALLOWLIST.filter(
+      (file) => !annotationPattern.test(readRepoFile(file)),
+    );
+
+    expect(staleEntries).toEqual([]);
+  });
+
   it("keeps AppShell singular and imported from the app shell boundary", () => {
     const layout = readRepoFile("apps/web/src/app/layout.tsx");
 
