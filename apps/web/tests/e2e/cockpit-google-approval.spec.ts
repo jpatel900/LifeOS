@@ -38,7 +38,7 @@ test("google approval bridge is visible but safely disabled in mock mode while l
 
   // The local mock workflow keeps working end to end: the proposal can be
   // accepted locally, producing a scheduled block without any Google write.
-  await page.getByRole("button", { name: "Accept", exact: true }).click();
+  await page.getByRole("button", { name: "Accept local", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Start focusing" }),
   ).toBeVisible();
