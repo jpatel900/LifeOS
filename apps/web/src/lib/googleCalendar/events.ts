@@ -30,18 +30,26 @@ export interface GoogleCalendarEventReadResult {
   googleEventEtag: string | null;
   lifeosProposalId: string | null;
   eventSnapshot: Record<string, unknown> | null;
+  status: string | null;
 }
 
 interface DeleteGoogleCalendarEventParams {
   connection: GoogleCalendarStoredConnection;
   eventId: string;
-  expectedEtag: string | null;
+  expectedEtag: string;
   supabaseAccessToken: string;
 }
 
 export type DeleteGoogleCalendarEventResult =
   | { status: "deleted" }
   | { status: "already_gone" };
+
+export class GoogleCalendarMissingEtagError extends Error {
+  constructor() {
+    super("Google Calendar update/cancel requires an If-Match etag guard.");
+    this.name = "GoogleCalendarMissingEtagError";
+  }
+}
 
 export class GoogleCalendarEventDriftError extends Error {
   constructor() {
@@ -72,6 +80,12 @@ function requireNonEmptyText(value: unknown, message: string) {
 function readEtag(payload: Record<string, unknown> | null) {
   return typeof payload?.etag === "string" && payload.etag.trim()
     ? payload.etag
+    : null;
+}
+
+function readEventStatus(payload: Record<string, unknown> | null) {
+  return typeof payload?.status === "string" && payload.status.trim()
+    ? payload.status
     : null;
 }
 
@@ -135,6 +149,7 @@ export async function getGoogleCalendarEventForConnection(
       googleEventEtag: null,
       lifeosProposalId: null,
       eventSnapshot: null,
+      status: null,
     };
   }
 
@@ -159,6 +174,7 @@ export async function getGoogleCalendarEventForConnection(
       "lifeos_proposal_id",
     ),
     eventSnapshot: payload,
+    status: readEventStatus(payload),
   };
 }
 
@@ -247,13 +263,14 @@ export async function deleteGoogleCalendarEventForConnection(
   });
   const calendarId = encodeURIComponent(params.connection.calendar_id);
   const eventId = encodeURIComponent(params.eventId);
+  if (!params.expectedEtag.trim()) {
+    throw new GoogleCalendarMissingEtagError();
+  }
+
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
+    "If-Match": params.expectedEtag,
   };
-
-  if (params.expectedEtag) {
-    headers["If-Match"] = params.expectedEtag;
-  }
 
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
