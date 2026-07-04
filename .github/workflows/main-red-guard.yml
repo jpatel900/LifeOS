@@ -2,8 +2,11 @@ name: Main Red Guard
 
 # Safety net for merging PRs without the strict up-to-date requirement:
 # if CI fails on a push to main (e.g. two individually-green PRs conflict
-# semantically), open a ready-to-merge revert PR back to the last green
-# commit. The revert is never auto-merged — the owner decides.
+# semantically), first retry the failed jobs once (flake guard). If the
+# failure reproduces, open a revert PR back to the last green commit and
+# arm auto-merge on it — it lands on its own once its checks pass, so
+# recovery needs no human in the loop. Closing the guard PR cancels the
+# revert when a forward fix is preferred.
 
 on:
   workflow_run:
@@ -20,15 +23,32 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  actions: read
+  actions: write
 
 jobs:
-  guard:
-    name: Open revert PR when main goes red
+  flake-guard:
+    name: Retry first failure once
     runs-on: ubuntu-latest
     if: >-
       github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.run_attempt == 1
+    steps:
+      - name: Re-run failed jobs before trusting the red
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          gh run rerun "$RUN_ID" --failed --repo "${{ github.repository }}"
+          echo "Red main at attempt 1: re-ran failed jobs. Only a reproduced failure (attempt 2+) triggers the auto-revert."
+
+  guard:
+    name: Open auto-merging revert PR when main stays red
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.run_attempt >= 2
     steps:
       - name: Checkout main history
         uses: actions/checkout@v5
@@ -108,11 +128,13 @@ jobs:
           if git revert --no-commit "${base}..${FAILED_SHA}"; then
             git commit -m "Revert main to last green (${base:0:8}) after red CI at ${short}"
             git push origin "$branch"
-            gh pr create \
+            pr_url="$(gh pr create \
               --base main \
               --head "$branch" \
               --title "Auto-revert: main went red at ${short}" \
-              --body "$(printf 'CI failed on main: %s\n\nThis PR reverts main back to the last green commit `%s`. Merge it to restore green immediately, or close it if a forward fix is faster.\n\nReverted commits:\n```\n%s\n```\n\nOpened automatically by Main Red Guard; never auto-merged.' "$RUN_URL" "${base:0:8}" "$commits")"
+              --body "$(printf 'CI failed on main twice (original + flake-guard retry): %s\n\nThis PR reverts main back to the last green commit `%s` and has auto-merge armed — it lands on its own once its checks pass. **Close this PR to cancel the revert** if a forward fix is faster.\n\nReverted commits:\n```\n%s\n```\n\nOpened automatically by Main Red Guard.' "$RUN_URL" "${base:0:8}" "$commits")")"
+            gh pr merge --squash --auto "$pr_url" \
+              || gh pr comment "$pr_url" --body "Auto-merge could not be armed (likely missing CODEX_KICK_TOKEN or checks not reporting on this PR). Merge manually to restore green."
           else
             git revert --abort || true
             gh issue create \
