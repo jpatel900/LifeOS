@@ -8,12 +8,12 @@
 # read-only role; the job only reads supabase_migrations.schema_migrations.
 name: Migration Drift
 
+# Runs on every push to main (not just migration paths) so an unresolved red
+# re-fires on each merge until production is caught up. The check takes ~5s.
 on:
   push:
     branches:
       - main
-    paths:
-      - "supabase/migrations/**"
   workflow_dispatch:
 
 permissions:
@@ -43,7 +43,7 @@ jobs:
           missing=$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))
 
           if [ -n "$missing" ]; then
-            echo "::error::Production is missing these repo migrations (run 'supabase db push' after human review):"
+            echo "::error::Production is missing these repo migrations. Response procedure: .agents/skills/lifeos-migration-drift-response/SKILL.md (assemble one transaction from the files below + ledger insert; human-gated apply):"
             printf '%s\n' "$missing"
             exit 1
           fi

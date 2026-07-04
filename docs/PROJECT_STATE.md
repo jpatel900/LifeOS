@@ -18,6 +18,7 @@ Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing
 - The handoff cockpit is the active UI model. `design_handoff_lifeos/README.md` remains the active design reference; old Pass 7 visual-contract docs are history only.
 - Google Calendar update/cancel, all-day conflict handling, and AI/env-dependent paths remain explicit follow-on scope, not implied fixes.
 - Governance docs are budgeted: `AGENTS.md` and `CLAUDE.md` stay small; detailed rulebooks live in `.agents/skills`; `docs/agent/` keeps only `CODEX_PROMPT_TEMPLATE.md`.
+- Production Supabase migrations are applied manually (never by deploys); the `Migration Drift` workflow red-flags unapplied migrations on every `main` push, and the response procedure is `.agents/skills/lifeos-migration-drift-response/SKILL.md` (armed and proven 2026-07-04 after KNOWN_ISSUES row 11).
 
 ## Constraints
 
@@ -31,7 +32,7 @@ Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing
 ## Open questions
 
 - Remaining cockpit Calendar/AI/env gaps from the 2026-06-30 flow audit need product decisions before implementation.
-- Production smoke for issue #93 still needs authenticated verification without weakening deployment protection.
+- The 2026-07-03 authenticated production smoke ran; its findings live in `docs/KNOWN_ISSUES.md` rows 11–14 (11 resolved; 12–13 scheduled in hardening epic #325, in flight; 14 scheduled as #338).
 - Durable audit for draft rejection/edit/split/merge remains a product decision, not a persistence bug.
 - Meta-learning logs exist but are not yet used for a closed learning loop.
 
