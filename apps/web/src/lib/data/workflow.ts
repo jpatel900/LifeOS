@@ -531,6 +531,40 @@ function recordOverrideFireAndForget(
   });
 }
 
+// Local triage draft ids are not persisted rows; only uuid ids qualify as subject_id.
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export interface RejectedTaskDraftInput {
+  area_id: string | null;
+  draft_id: string;
+  title: string;
+  confidence?: number | null;
+}
+
+export function recordRejectedTaskDraft(
+  client: MinimalSupabaseClient | null,
+  input: RejectedTaskDraftInput,
+): void {
+  if (!client) return;
+
+  recordSuggestionFireAndForget(client, {
+    area_id: input.area_id,
+    policy_identifier: "triage.default_accept_task",
+    suggestion_type: "triage_suggestion",
+    subject_type: "task_draft",
+    subject_id: uuidPattern.test(input.draft_id) ? input.draft_id : null,
+    suggestion_json: {
+      draft_id: input.draft_id,
+      title: input.title,
+      status: "rejected",
+    },
+    confidence: input.confidence ?? null,
+    status: "rejected",
+    resolved_at: new Date().toISOString(),
+  });
+}
+
 export async function listAreas(
   client: MinimalSupabaseClient | null,
   options: { includeInactive?: boolean } = {},
