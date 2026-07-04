@@ -143,13 +143,20 @@ jobs:
                 const lastKickAt = new Date(kicks[kicks.length - 1].created_at);
                 const hoursSinceKick = (Date.now() - lastKickAt.getTime()) / 36e5;
 
-                // Claimed-PR-exists check: search all PR states (open, closed, merged),
-                // since a merged PR closing the issue means delivery already succeeded.
+                // Claimed-PR-exists check: count open and MERGED PRs, since a merged
+                // PR closing the issue means delivery already succeeded. Closed-but-
+                // unmerged PRs (rejected or duplicate, e.g. #346/#349) do NOT count —
+                // they must not silence the watchdog.
                 const allPrs = await github.paginate(github.rest.pulls.list, {
                   owner, repo, state: 'all', per_page: 100,
                 });
-                if (allPrs.some((p) => closingIssueNumbers(p.body).includes(entry.issue))) {
-                  core.info(`Watchdog: #${entry.issue} has a PR (open or merged) that closes it; healthy.`);
+                const delivered = allPrs.some(
+                  (p) =>
+                    (p.state === 'open' || p.merged_at != null) &&
+                    closingIssueNumbers(p.body).includes(entry.issue),
+                );
+                if (delivered) {
+                  core.info(`Watchdog: #${entry.issue} has an open or merged PR that closes it; healthy.`);
                   return;
                 }
 
