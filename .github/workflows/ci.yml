@@ -6,6 +6,12 @@ on:
     branches:
       - main
 
+# A new push to the same PR supersedes the previous run — cancel it instead
+# of paying for both. Pushes to main keep distinct groups (never cancelled).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

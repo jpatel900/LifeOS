@@ -49,7 +49,7 @@ import {
   rejectProposal,
   splitDraft,
   startExecutionSession,
-  submitCapture,
+  submitRawCapture,
   syncWorkflowIdCounterFromState,
   unplanTask,
   updateWorkflowAreaColor,
@@ -71,6 +71,7 @@ import {
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
@@ -82,7 +83,15 @@ import type {
   Phase2MockExecutionSession,
   Phase2MockTask,
 } from "./types";
-import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
+import {
+  buildParsedWorkflowResult,
+  type ParsedWorkflowResult,
+} from "./ai/parseCaptureWorkflow";
+import {
+  requestParseCapture,
+  type ParseCaptureClientStatus,
+  type ParseCaptureParserMode,
+} from "./ai/parseCaptureClient";
 import {
   persistedAreaIdForWorkflowAreaId,
   workflowAreaIdForPersistedArea,
@@ -112,11 +121,6 @@ type WorkflowAction =
       type: "updateAreaColor";
       areaId: string;
       color: string;
-    }
-  | {
-      type: "submitCapture";
-      rawText: string;
-      areaId: string | null;
     }
   | {
       type: "appendParsedWorkflowResult";
@@ -226,15 +230,43 @@ type WorkflowAction =
       type: "reset";
     };
 
+/**
+ * UI-facing status of the async capture parse round-trip. The raw capture is
+ * already saved before this leaves "idle", so a failure never loses input.
+ */
+export type CaptureParseState =
+  | { phase: "idle" }
+  | {
+      phase: "parsing";
+      captureId: string;
+      parserMode: ParseCaptureParserMode;
+    }
+  | {
+      phase: "parsed";
+      captureId: string;
+      parser: "ai" | "mock";
+      status: ParseCaptureClientStatus;
+    }
+  | {
+      phase: "failed";
+      captureId: string;
+      status: ParseCaptureClientStatus;
+      message: string;
+      canRetryWithMock: boolean;
+    };
+
 interface WorkflowContextValue {
   state: WorkflowState;
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
   syncPersistedAreas: (areas: Area[]) => void;
+  refreshPersistedWorkflow: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
+  captureParse: CaptureParseState;
+  retryCaptureParseWithMock: () => void;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
   acceptTaskDraft: (draftId: string) => void;
   backlogTaskDraft: (draftId: string) => void;
@@ -800,11 +832,6 @@ function workflowReducer(
       return addWorkflowArea(state, { name: action.name, color: action.color });
     case "updateAreaColor":
       return updateWorkflowAreaColor(state, action.areaId, action.color);
-    case "submitCapture":
-      return submitCapture(state, {
-        rawText: action.rawText,
-        areaId: action.areaId,
-      });
     case "appendParsedWorkflowResult":
       return appendParsedWorkflowResult(state, action.parsed);
     case "acceptDraft":
@@ -900,6 +927,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
   const [syncStatus, setSyncStatus] =
     useState<WorkflowSyncStatus>(initialSyncStatus);
+  const [captureParse, setCaptureParse] = useState<CaptureParseState>({
+    phase: "idle",
+  });
+  const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
@@ -1555,14 +1586,80 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "hydrate", state: nextState });
   }
 
+  async function parseCaptureIntoDrafts(
+    capture: WorkflowState["captureItems"][number],
+    parserMode: ParseCaptureParserMode,
+  ) {
+    activeParseCaptureIdRef.current = capture.id;
+    setCaptureParse({ phase: "parsing", captureId: capture.id, parserMode });
+
+    // Best-effort: attach the signed-in user's access token so the parse route
+    // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
+    // Parsing itself never requires this token, so any failure here is ignored.
+    let authorization: string | undefined;
+    try {
+      const authClient = createSupabaseBrowserClient();
+      if (authClient) {
+        const { data } = await authClient.auth.getSession();
+        const accessToken = data.session?.access_token?.trim();
+        if (accessToken) {
+          authorization = `Bearer ${accessToken}`;
+        }
+      }
+    } catch {
+      // Tracing is optional; a missing/failed session must never block parsing.
+    }
+
+    const result = await requestParseCapture({
+      rawText: capture.raw_text,
+      areaContext: stateRef.current.areas.map((area) => ({
+        slug: area.name.toLowerCase().replace(/\s+/g, "-"),
+        name: area.name,
+      })),
+      parserMode,
+      authorization,
+    });
+
+    if (result.ok) {
+      const parsed = buildParsedWorkflowResult({
+        response: result.response,
+        capture,
+        workflowAreaId: capture.area_id,
+      });
+      applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
+    }
+
+    if (activeParseCaptureIdRef.current !== capture.id) {
+      return;
+    }
+
+    setCaptureParse(
+      result.ok
+        ? {
+            phase: "parsed",
+            captureId: capture.id,
+            parser: result.parser,
+            status: result.status,
+          }
+        : {
+            phase: "failed",
+            captureId: capture.id,
+            status: result.status,
+            message: result.error,
+            canRetryWithMock: result.canRetryWithMock,
+          },
+    );
+  }
+
   function submitCaptureText(rawText: string, areaId: string | null) {
     const previous = stateRef.current;
-    const next = submitCapture(previous, { rawText, areaId });
+    const next = submitRawCapture(previous, { rawText, areaId });
     const localCapture = next.captureItems.find(
       (capture) =>
         !previous.captureItems.some((item) => item.id === capture.id),
     );
 
+    // Raw capture is staged and persisted before any parse attempt.
     applyWorkflowState(next);
 
     if (localCapture) {
@@ -1571,7 +1668,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           "Capture saved locally; account sync failed and can recover later.",
         );
       });
+      void parseCaptureIntoDrafts(localCapture, "auto");
     }
+  }
+
+  function retryCaptureParseWithMock() {
+    if (captureParse.phase !== "failed") {
+      return;
+    }
+
+    const capture = stateRef.current.captureItems.find(
+      (item) => item.id === captureParse.captureId,
+    );
+    if (!capture) {
+      return;
+    }
+
+    void parseCaptureIntoDrafts(capture, "mock");
   }
 
   function acceptTaskDraftWithPersistence(
@@ -1680,10 +1793,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSelectedAreaId,
     syncStatus,
     syncPersistedAreas: applyPersistedAreas,
+    refreshPersistedWorkflow: async () => {
+      await syncPersistedWorkflowRows(createSupabaseBrowserClient());
+    },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
     submitCaptureText,
+    captureParse,
+    retryCaptureParseWithMock,
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),
     acceptTaskDraft: (draftId) =>
@@ -1704,8 +1822,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => {
+      const draft = stateRef.current.taskDrafts.find(
+        (item) => item.id === draftId,
+      );
       dispatch({ type: "rejectDraft", draftId });
       markLocalOnly("Dropped draft locally; account sync is pending.");
+
+      if (draft) {
+        recordRejectedTaskDraft(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWorkflowId(
+            draft.area_id,
+            persistedAreasRef.current,
+          ),
+          draft_id: draft.id,
+          title: draft.title,
+          confidence: draft.confidence,
+        });
+      }
     },
     rejectProjectDraft: (draftId) =>
       dispatch({ type: "rejectProjectDraft", draftId }),

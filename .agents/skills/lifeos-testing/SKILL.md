@@ -33,6 +33,16 @@ description: Use for LifeOS test failures, regression coverage, Vitest, route an
 5. For DB/RLS, include local Supabase coverage with `RUN_SUPABASE_RLS_TESTS=1` and env values from `supabase status -o env`.
 6. If any command is skipped or fails, report exactly which command, exit state, and why.
 
+## Environment-dependent lanes (cloud/sandboxed agents)
+
+- Some suites pass VACUOUSLY without local services: mock fallbacks make `pnpm test` green even when Supabase-backed behavior is broken. Lanes that CANNOT be validated without env: Migrations + RLS (`RUN_SUPABASE_RLS_TESTS=1` + local Supabase), Playwright E2E (browsers), any provider-env path (OpenAI/Google).
+- If your environment cannot run a lane, SAY SO in the PR body under "Unverified lanes" — unverified is acceptable, unreported is not. CI is the authoritative gate for those lanes.
+- When an issue names binding constraints, find and run the specific tests guarding them (grep the constraint's wording in `apps/web/src/__tests__/`) before opening the PR.
+
+## Shared test mock discipline
+
+- Any PR that adds a table, RPC, or write path MUST extend the shared mock Supabase client in the same PR. A mock that silently lacks the new surface makes every later test log errors ("query.insert is not a function") that train readers to ignore real failures. (Origin: B2 meta-learning writes; see docs/FAILURES.md.)
+
 ## Done criteria
 
 - Existing tests and guardrails are preserved.

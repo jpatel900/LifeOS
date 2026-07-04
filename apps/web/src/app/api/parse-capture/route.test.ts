@@ -72,7 +72,52 @@ describe("parse-capture route", () => {
     expect(body.ok).toBe(true);
     expect(mocks.parseCaptureWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({ rawText: "Plan Monday work." }),
-      { forceMock: true },
+      expect.objectContaining({
+        forceMock: true,
+        // No Authorization header on this request, so tracing runs tokenless
+        // (issue #288). Parsing still works; the trace insert is skipped.
+        traceContext: { accessToken: null },
+      }),
+    );
+  });
+
+  it("forwards the bearer token to the tracing context when present (issue #288)", async () => {
+    mocks.getParseCaptureStatus.mockReturnValue({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+    mocks.parseCaptureWithFallback.mockResolvedValue({
+      parser: "mock",
+      response: {
+        schema_version: "1.0",
+        prompt_version: "parse_capture.v1",
+        parse_status: "parsed",
+        overall_confidence: 0.8,
+        triage_required: false,
+        triage_reasons: [],
+        drafts: [],
+        clarification_questions: [],
+        ambiguity_assessment: null,
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer user-a-access-token",
+        },
+        body: JSON.stringify({ rawText: "Plan Monday work." }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.parseCaptureWithFallback).toHaveBeenCalledWith(
+      expect.objectContaining({ rawText: "Plan Monday work." }),
+      expect.objectContaining({
+        traceContext: { accessToken: "user-a-access-token" },
+      }),
     );
   });
 
