@@ -30,11 +30,17 @@ Route pages (`apps/web/src/app/**/page.tsx`) stay at or under 800 lines; pure lo
 
 Enforcement: `apps/web/src/__tests__/engineeringInvariants.test.ts` — grandfathered files may shrink but never grow past their recorded ceiling; new files get the default budget.
 
-## INV-5 — Degradation visibility (open)
+## INV-5 — Cockpit reachability
+
+Every cockpit state rendered by `apps/web/src/lib/cockpit/viewModel.ts` or `apps/web/src/lib/today/buildTodayCockpitModel.ts` must be produced by replaying real `apps/web/src/lib/workflow.ts` transitions from canonical seeds. Tests must not hand-construct view-model inputs; they use the transition-only helpers in `apps/web/src/__tests__/helpers/workflowReachability.ts`, with persistence-tier coverage adding `apps/web/src/lib/data/workflow.ts` rather than bypassing workflow truth.
+
+Enforcement: `apps/web/src/__tests__/sourceOfTruth.test.ts` fails if cockpit model tests call model builders directly outside the reachability helper; journey tests reuse the helper's golden capture → triage → plan → approve → execute → review seed.
+
+## INV-6 — Degradation visibility (open)
 
 Repeated external-provider failures (AI parse, calendar) must surface as Health incidents, not only observability logs. Status: NOT yet wired — tracked in `docs/KNOWN_ISSUES.md`. Do not claim it; do close it.
 
-## INV-6 — CI tells the truth
+## INV-7 — CI tells the truth
 
 Every check the docs claim ("main must stay passing", RLS verified, migrations apply) runs in CI, not only on contributor machines. If you add a doc-claimed validation, wire it into `.github/workflows/` in the same change.
 

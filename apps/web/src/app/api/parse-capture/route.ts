@@ -5,6 +5,21 @@ import {
 } from "@/lib/ai/parseCaptureService";
 import { captureError } from "@/lib/observability";
 
+function readBearerToken(request: Request) {
+  const authorization = request.headers.get("authorization");
+
+  if (!authorization) {
+    return null;
+  }
+
+  const [scheme, value] = authorization.split(/\s+/, 2);
+  if (scheme?.toLowerCase() !== "bearer" || !value?.trim()) {
+    return null;
+  }
+
+  return value.trim();
+}
+
 function parseRequestBody(body: unknown) {
   if (!body || typeof body !== "object") {
     throw new Error("Parse request body is required.");
@@ -92,7 +107,12 @@ export async function POST(request: Request) {
     const input = parseRequestBody(await request.json());
     const forceMock =
       input.parserMode === "mock" || status.status === "ai_unavailable";
-    const result = await parseCaptureWithFallback(input, { forceMock });
+    const result = await parseCaptureWithFallback(input, {
+      forceMock,
+      // Optional caller token: used only for fire-and-forget Postgres AI
+      // call tracing (issue #288); parsing works without it.
+      traceContext: { accessToken: readBearerToken(request) },
+    });
 
     return Response.json({
       ok: true,

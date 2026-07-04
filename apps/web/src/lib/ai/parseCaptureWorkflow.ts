@@ -5,6 +5,7 @@ import type {
   Phase2CaptureItem,
   Phase2ProjectDraft,
   Phase2TaskDraft,
+  Phase2TimeBlockProposalDraft,
 } from "@lifeos/schemas";
 
 export interface ParsedWorkflowResult {
@@ -12,13 +13,14 @@ export interface ParsedWorkflowResult {
   taskDrafts: Phase2TaskDraft[];
   projectDrafts: Phase2ProjectDraft[];
   ambiguityAssessment: Phase2AmbiguityAssessmentResponse | null;
+  timeBlockProposalDrafts: Phase2TimeBlockProposalDraft[];
   triageReasons: string[];
   clarificationQuestions: string[];
 }
 
 interface BuildParsedWorkflowResultInput {
   response: ParseCaptureResponse;
-  capture: CaptureItem;
+  capture: Pick<CaptureItem, "id" | "user_id" | "raw_text" | "created_at">;
   workflowAreaId: string | null;
 }
 
@@ -82,6 +84,7 @@ export function buildParsedWorkflowResult(
       estimated_minutes_low: draft.estimated_minutes_low,
       estimated_minutes_high: draft.estimated_minutes_high,
       first_tiny_step: draft.first_tiny_step,
+      breakdown: draft.breakdown,
       status: "pending",
       created_at: new Date().toISOString(),
     }));
@@ -136,11 +139,35 @@ export function buildParsedWorkflowResult(
         }
       : null;
 
+  // Local planning scaffolding, mirroring the mock parse path: one draft
+  // focus block per task draft. These are deterministic client-side drafts
+  // (status "draft", user decides), not AI output — without them the Plan
+  // stage renders parsed tasks with an empty Proposals list.
+  const timeBlockProposalDrafts: Phase2TimeBlockProposalDraft[] =
+    taskDrafts.map((taskDraft) => {
+      const proposedStart = new Date(Date.now() + 60 * 60 * 1000);
+      const proposedEnd = new Date(proposedStart.getTime() + 45 * 60 * 1000);
+      return {
+        id: makeId("proposal-draft"),
+        user_id: input.capture.user_id,
+        area_id: taskDraft.area_id,
+        capture_item_id: input.capture.id,
+        task_draft_id: taskDraft.id,
+        proposed_start: proposedStart.toISOString(),
+        proposed_end: proposedEnd.toISOString(),
+        rationale: "Create one local focus block for the first useful move.",
+        conflict_flag: false,
+        status: "draft",
+        created_at: new Date().toISOString(),
+      };
+    });
+
   return {
     captureItem,
     taskDrafts,
     projectDrafts,
     ambiguityAssessment,
+    timeBlockProposalDrafts,
     triageReasons: input.response.triage_reasons,
     clarificationQuestions: input.response.clarification_questions,
   };

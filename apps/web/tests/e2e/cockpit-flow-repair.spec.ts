@@ -17,7 +17,8 @@ async function planTaskAtEight(page: Page, title: string) {
   await captureTask(page, title);
   await page.getByRole("button", { name: "Do today" }).click();
   await goToStage(page, /Plan/);
-  await page.getByRole("button", { name: title }).click();
+  // Anchored: the Google approval bridge also labels buttons with the title.
+  await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
   await page.getByRole("button", { name: /8a\s+Drop here/ }).click();
 }
 
@@ -91,7 +92,7 @@ test("stuck execution is recoverable from review", async ({ page }) => {
   await page.getByRole("button", { name: "Carry forward" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
   await expect(
-    page.getByRole("button", { name: "Stuck execution repair item" }),
+    page.getByRole("button", { name: /^Stuck execution repair item/ }),
   ).toBeVisible();
 });
 
@@ -110,7 +111,7 @@ test("missed execution is recoverable from review", async ({ page }) => {
   await page.getByRole("button", { name: "Carry forward" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
   await expect(
-    page.getByRole("button", { name: "Missed execution repair item" }),
+    page.getByRole("button", { name: /^Missed execution repair item/ }),
   ).toBeVisible();
 });
 

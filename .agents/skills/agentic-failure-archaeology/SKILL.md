@@ -168,7 +168,7 @@ These are the recurring failure modes of agent-driven engineering, written in th
 - **Root cause:** Docs drift; executable config does not. The CI pipeline / lockfile / Makefile is the ground truth because it runs.
 - **Evidence:** Diff what docs claim vs. what CI does: read `.github/workflows/*.yml`, `Makefile`, `package.json` scripts (discover with: git ls-files | grep -iE "workflow|makefile|justfile|taskfile").
 - **Status:** open (structural)
-- **Prevention:** Precedence order: CI config > lockfiles/build scripts > code comments > README > wiki. When they disagree, CI wins; then fix the doc.
+- **Prevention:** Trust the source that executes over the source that describes. The full precedence ladder lives in `agentic-docs-and-writing` §4 Rule 2 (its one home); when sources disagree, CI wins, then fix the doc.
 - **Date:** 2026-07-02
 
 ## Test-gaming (agent edits assertion to green)

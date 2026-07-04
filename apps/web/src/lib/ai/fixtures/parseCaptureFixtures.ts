@@ -26,6 +26,35 @@ export const parseCaptureRegressionFixtures: Record<
         estimated_minutes_high: 25,
         due_at: "2026-05-10T15:00:00.000Z",
         confidence: 0.92,
+        breakdown: {
+          steps: [
+            {
+              order: 1,
+              title: "Open the sponsor thread and paste the update template.",
+              estimated_minutes: 5,
+              depends_on_orders: [],
+              on_critical_path: true,
+            },
+            {
+              order: 2,
+              title: "Fill in the latest attendee estimate.",
+              estimated_minutes: 10,
+              depends_on_orders: [1],
+              on_critical_path: true,
+            },
+            {
+              order: 3,
+              title: "Send the email and note the follow-up date.",
+              estimated_minutes: 5,
+              depends_on_orders: [2],
+              on_critical_path: true,
+            },
+          ],
+          sequence_summary:
+            "Open the thread, update the numbers, then send and log.",
+          kickstart_step:
+            "Open the sponsor thread and paste the update template.",
+        },
       },
     ],
     clarification_questions: [],
@@ -59,6 +88,7 @@ export const parseCaptureRegressionFixtures: Record<
         estimated_minutes_high: 45,
         due_at: null,
         confidence: 0.67,
+        breakdown: null,
       },
     ],
     clarification_questions: [
@@ -105,6 +135,7 @@ export const parseCaptureRegressionFixtures: Record<
         estimated_minutes_high: 40,
         due_at: null,
         confidence: 0.6,
+        breakdown: null,
       },
     ],
     clarification_questions: [
@@ -144,6 +175,7 @@ export const parseCaptureRegressionFixtures: Record<
         estimated_minutes_high: 60,
         due_at: "2026-05-11T13:00:00.000Z",
         confidence: 0.81,
+        breakdown: null,
       },
     ],
     clarification_questions: [],
@@ -170,6 +202,7 @@ export const parseCaptureRegressionFixtures: Record<
         estimated_minutes_high: null,
         due_at: null,
         confidence: 0.52,
+        breakdown: null,
       },
     ],
     clarification_questions: [
@@ -209,6 +242,7 @@ export const parseCaptureRegressionFixtures: Record<
         estimated_minutes_high: null,
         due_at: null,
         confidence: 0.39,
+        breakdown: null,
       },
     ],
     clarification_questions: [
@@ -236,6 +270,7 @@ export const parseCaptureRegressionFixtures: Record<
         estimated_minutes_high: 30,
         due_at: null,
         confidence: 0.66,
+        breakdown: null,
       },
     ],
     clarification_questions: ["Which single thread is most urgent today?"],

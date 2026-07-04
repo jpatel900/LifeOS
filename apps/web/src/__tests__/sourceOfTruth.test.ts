@@ -51,6 +51,22 @@ function walkRepoFiles(relativePath: string): string[] {
 }
 
 describe("source-of-truth boundaries", () => {
+  it("requires cockpit model tests to use transition-reachable workflow helpers", () => {
+    const testFiles = walkRepoFiles("apps/web/src/__tests__").filter(
+      (file) =>
+        /\.(?:test|spec)\.(?:ts|tsx)$/.test(file) ||
+        file.endsWith("helpers/workflowReachability.ts"),
+    );
+    const offenders = testFiles.filter((file) => {
+      if (file === "apps/web/src/__tests__/helpers/workflowReachability.ts") {
+        return false;
+      }
+      const source = readRepoFile(file);
+      return /\bbuild(?:CockpitViewModel|TodayCockpitModel)\s*\(/.test(source);
+    });
+
+    expect(offenders).toEqual([]);
+  });
   it("keeps AppShell singular and imported from the app shell boundary", () => {
     const layout = readRepoFile("apps/web/src/app/layout.tsx");
 
@@ -221,9 +237,7 @@ describe("source-of-truth boundaries", () => {
     const globalsCss = normalizeWhitespace(
       readRepoFile("apps/web/src/app/globals.css"),
     );
-    const uiGuide = normalizeWhitespace(
-      readRepoFile("docs/agent/UI_AGENT_GUIDE.md"),
-    );
+    const agents = normalizeWhitespace(readRepoFile("AGENTS.md"));
     const handoffReadme = normalizeWhitespace(
       readRepoFile("design_handoff_lifeos/README.md"),
     );
@@ -249,7 +263,7 @@ describe("source-of-truth boundaries", () => {
     expect(cockpit).toContain("Google writes are separate");
     expect(cockpit).toContain("All areas overview");
     expect(globalsCss).toContain(".lifeos-cockpit");
-    expect(uiGuide).toContain("design_handoff_lifeos/README.md");
+    expect(agents).toContain("design_handoff_lifeos/README.md");
     expect(handoffReadme).toContain("One screen component");
     expect(handoffReadme).toContain("view router");
   });

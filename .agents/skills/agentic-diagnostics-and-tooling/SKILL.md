@@ -95,10 +95,11 @@ PowerShell equivalents: `(Select-String "ERROR" app.log).Count`; `Select-String 
 
 ## 3. Repo forensics recipes
 
-Beyond the hotspots script (all identical in PowerShell):
+Beyond the hotspots script. These recipes are POSIX pipelines (`sed`, `sort | uniq -c`, `comm`, `xargs` do not exist in PowerShell) — on Windows run them in **Git Bash**, which ships with Git for Windows (`"C:\Program Files\Git\bin\bash.exe" -c '<recipe>'`), or use the PowerShell equivalents noted per recipe:
 
 ```sh
 # Files most often touched by fix-shaped commits (bug attractors)
+# PowerShell: git log -i --grep="fix" --format= --name-only | Where-Object { $_ } | Group-Object | Sort-Object Count -Descending | Select-Object -First 15
 git log --oneline -i --grep="fix" --format= --name-only | sed '/^$/d' | sort | uniq -c | sort -rn | head -15
 
 # Largest tracked files (review cost, hidden blobs)

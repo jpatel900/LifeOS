@@ -29,14 +29,27 @@ Two joined disciplines. First: every knob that changes a program's behavior is a
 
 A "config axis" is any input that changes runtime behavior without a code change. There are six. Enumerate all six for any repo; a catalog missing an axis is worse than none because it implies completeness.
 
-| Axis | What it is | Discovery command (run at repo root) |
-|---|---|---|
-| Environment variables | Values read from the process env | `git grep -nE 'process\.env|os\.environ|getenv|env::var|ENV\[' -- ':!*.lock'` |
-| CLI flags / args | Options parsed at startup | `git grep -nE 'argparse|yargs|commander|clap|flag\.' ` then run the binary with `--help` |
-| Config files | Committed or expected-on-disk files | `git ls-files \| grep -iE '\.(json\|ya?ml\|toml\|ini\|env\|cfg\|conf\|properties)$'` and check README for "create a .env" |
-| Feature flags | Runtime toggles, often via a flag service or a flags module | `git grep -niE 'feature.?flag|launchdarkly|unleash|flipper|isEnabled\(' ` |
-| CI variables | Env injected by the pipeline, not the repo | `git grep -nE 'secrets\.|vars\.|env:' -- .github/workflows` (adapt path for GitLab: `.gitlab-ci.yml`; others: search for the CI config file) |
-| Secrets locations | Where real credentials live (vault, CI secret store, .env.local) | `git grep -niE 'vault|secretsmanager|keyvault|\.env\.local|dotenv'` plus ask a human — secrets stores are often invisible to the repo |
+| Axis | What it is |
+|---|---|
+| Environment variables | Values read from the process env |
+| CLI flags / args | Options parsed at startup |
+| Config files | Committed or expected-on-disk files (also check README for "create a .env") |
+| Feature flags | Runtime toggles, often via a flag service or a flags module |
+| CI variables | Env injected by the pipeline, not the repo |
+| Secrets locations | Where real credentials live (vault, CI secret store, .env.local) — plus ask a human; secrets stores are often invisible to the repo |
+
+Discovery commands, one per axis (fenced so they copy-paste cleanly; run at repo root):
+
+```sh
+git grep -nE 'process\.env|os\.environ|getenv|env::var|ENV\[' -- ':!*.lock'      # env vars
+git grep -nE 'argparse|yargs|commander|clap|flag\.'                              # CLI flags; then run the binary with --help
+git ls-files | grep -iE '\.(json|ya?ml|toml|ini|env|cfg|conf|properties)$'       # config files
+git grep -niE 'feature.?flag|launchdarkly|unleash|flipper|isEnabled\('           # feature flags
+git grep -nE 'secrets\.|vars\.|env:' -- .github/workflows                        # CI vars (GitLab: .gitlab-ci.yml)
+git grep -niE 'vault|secretsmanager|keyvault|\.env\.local|dotenv'                # secrets locations
+```
+
+(PowerShell: the `git` invocations are identical; for the config-files line replace `| grep -iE '...'` with `| Select-String -Pattern '\.(json|ya?ml|toml|ini|env|cfg|conf|properties)$'`.)
 
 Also check for sample files that reveal expected env vars: `git ls-files | grep -iE 'example|sample|template'`.
 

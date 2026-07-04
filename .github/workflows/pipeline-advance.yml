@@ -13,6 +13,10 @@ on:
     types:
       - closed
       - opened
+  schedule:
+    # Watchdog: recover from missed/failed kicks (e.g. Codex 5-hour/weekly usage
+    # limits). Re-kicks a stalled issue after quota windows reset.
+    - cron: "23 */6 * * *"
   workflow_dispatch:
     inputs:
       kick_issue:
@@ -21,7 +25,7 @@ on:
         type: number
 
 concurrency:
-  group: pipeline-advance-${{ github.event.pull_request.number || inputs.kick_issue }}
+  group: pipeline-advance-${{ github.event.pull_request.number || inputs.kick_issue || 'watchdog' }}
   cancel-in-progress: false
 
 permissions:
@@ -34,6 +38,7 @@ jobs:
     name: Advance pipeline
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       github.event.action == 'opened' ||
       (github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-latest
@@ -71,13 +76,13 @@ jobs:
 
             const mentionBody = (issueNumber) =>
               [
-                '@codex please implement this issue exactly as specified in the issue body above.',
+                '@codex please implement this issue exactly as specified in the issue body above, then OPEN A PULL REQUEST on github.com/' + owner + '/' + repo + ' with your changes. Do not stop at a completed task: push the branch and create the pull request yourself using your GitHub access. Creating the PR is part of the task; the task is not done until the PR exists.',
                 `Follow epic #${epic} section "Standing agent rules for every issue in this epic":`,
                 '- Branch from origin/main; one issue per PR.',
                 `- PR body must state purpose, changes, tests run, risks, and include "Closes #${issueNumber}".`,
                 '- Smallest change that satisfies the issue; binding contracts and salvage rules in the issue body are not negotiable.',
                 '- Never weaken a schema, guard test, or RLS policy to make something pass. Doc deletions require matching removals from docs/doc-registry.json.',
-                '- Keep the PR reviewably small: aim for under ~15 changed files and ~800 changed lines of CODE (pure deletions and docs/** do not count against this). If the issue genuinely needs more, land preparatory PRs first (tests, scaffolding) and let only the final PR carry "Closes #' + issueNumber + '".',
+                '- Validation evidence (see .agents/skills/lifeos-testing/SKILL.md): run the full suite AND the specific tests guarding the constraints named in the issue. Your environment cannot run every lane (Supabase RLS, Playwright, provider-env paths) — list what you could NOT run in the PR body under "Unverified lanes". Unverified is acceptable; unreported is not.',
               ].join('\n');
 
             const comment = (issue_number, body) =>
@@ -101,6 +106,93 @@ jobs:
                 core.info(`Entry #${entry.issue} has kick=none; nothing to do.`);
               }
             };
+
+            if (context.eventName === 'schedule') {
+              // Watchdog: find the first open pipeline issue and decide whether it
+              // is stalled. Covers Codex usage-limit windows (kick posted, no task
+              // ever started) and missed advances.
+              const RETRY_AFTER_HOURS = 6;
+              const NUDGE_AFTER_HOURS = 24;
+              const MAX_KICKS = 5;
+
+              for (const entry of pipeline) {
+                const { data: issue } = await github.rest.issues.get({
+                  owner, repo, issue_number: entry.issue,
+                });
+                if (issue.state === 'closed') continue;
+
+                if (entry.kick === 'pause' || entry.kick === 'none') {
+                  core.info(`Watchdog: current step #${entry.issue} is ${entry.kick}; human-managed, nothing to do.`);
+                  return;
+                }
+
+                const comments = await github.paginate(github.rest.issues.listComments, {
+                  owner, repo, issue_number: entry.issue, per_page: 100,
+                });
+                const kicks = comments.filter((c) =>
+                  (c.body ?? '').startsWith('@codex please implement'),
+                );
+
+                if (kicks.length === 0) {
+                  // Predecessor merged but the advance never fired.
+                  await kick(entry);
+                  await comment(epic, `Pipeline watchdog: #${entry.issue} had no kick; kicked it now.`);
+                  return;
+                }
+
+                const lastKickAt = new Date(kicks[kicks.length - 1].created_at);
+                const hoursSinceKick = (Date.now() - lastKickAt.getTime()) / 36e5;
+
+                const openPrs = await github.paginate(github.rest.pulls.list, {
+                  owner, repo, state: 'open', per_page: 100,
+                });
+                if (openPrs.some((p) => closingIssueNumbers(p.body).includes(entry.issue))) {
+                  core.info(`Watchdog: #${entry.issue} has an open PR; healthy.`);
+                  return;
+                }
+
+                const codexRespondedAfterKick = comments.some(
+                  (c) =>
+                    (c.user?.login ?? '').includes('codex') &&
+                    new Date(c.created_at) > lastKickAt,
+                );
+
+                if (codexRespondedAfterKick) {
+                  // Task ran but no PR reached GitHub (manual-publish case).
+                  // Nudge once after 24h; re-kicking would duplicate the work.
+                  if (hoursSinceKick >= NUDGE_AFTER_HOURS && hoursSinceKick < NUDGE_AFTER_HOURS + 6) {
+                    await comment(
+                      epic,
+                      `Pipeline watchdog: #${entry.issue} completed a Codex task ~${Math.round(hoursSinceKick)}h ago but no PR exists. @${manifest.owner} it may be waiting for a manual "Create PR" in the Codex UI.`,
+                    );
+                  }
+                  return;
+                }
+
+                if (hoursSinceKick < RETRY_AFTER_HOURS) {
+                  core.info(`Watchdog: #${entry.issue} kicked ${hoursSinceKick.toFixed(1)}h ago; waiting.`);
+                  return;
+                }
+
+                if (kicks.length >= MAX_KICKS) {
+                  await comment(
+                    epic,
+                    `Pipeline watchdog: #${entry.issue} has been kicked ${kicks.length}x with no Codex response. Stopping automatic retries. @${manifest.owner} please investigate.`,
+                  );
+                  return;
+                }
+
+                await comment(entry.issue, mentionBody(entry.issue));
+                await comment(
+                  epic,
+                  `Pipeline watchdog: re-kicked #${entry.issue} (no Codex response ${Math.round(hoursSinceKick)}h after the last kick — likely a usage-limit window).`,
+                );
+                return;
+              }
+
+              core.info('Watchdog: no open pipeline issues.');
+              return;
+            }
 
             if (context.eventName === 'workflow_dispatch') {
               const n = Number(context.payload.inputs.kick_issue);

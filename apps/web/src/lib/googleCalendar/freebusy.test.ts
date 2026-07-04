@@ -78,19 +78,16 @@ describe("Google Calendar free/busy helper", () => {
       "encrypted-refreshed-access",
     );
     vi.mocked(fetch).mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          calendars: {
-            primary: {
-              busy: [],
-            },
-          },
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ calendars: { primary: { busy: [] } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     const result = await checkGoogleCalendarFreeBusyForConnection({
@@ -119,6 +116,12 @@ describe("Google Calendar free/busy helper", () => {
   it("reports a conflict when the free/busy response contains busy windows", async () => {
     mocks.decryptGoogleCalendarToken.mockReturnValue("google-access-token");
     vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           calendars: {
@@ -152,4 +155,247 @@ describe("Google Calendar free/busy helper", () => {
     expect(result.hasConflict).toBe(true);
     expect(mocks.refreshGoogleCalendarAccessToken).not.toHaveBeenCalled();
   });
+
+  it("reports a conflict when an opaque all-day event is reported busy by free/busy", async () => {
+    mocks.decryptGoogleCalendarToken.mockReturnValue("google-access-token");
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          calendars: {
+            primary: {
+              busy: [
+                {
+                  start: "2026-07-01T04:00:00.000Z",
+                  end: "2026-07-02T04:00:00.000Z",
+                },
+              ],
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "dentist-day",
+              summary: "Dentist day",
+              start: { date: "2026-07-01" },
+              end: { date: "2026-07-02" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await checkGoogleCalendarFreeBusyForConnection({
+      connection: {
+        ...connection,
+        token_expires_at: "2099-05-09T02:00:00.000Z",
+      },
+      proposedEnd: "2026-07-01T17:00:00.000Z",
+      proposedStart: "2026-07-01T16:00:00.000Z",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/New_York",
+    });
+
+    expect(result.hasConflict).toBe(true);
+    expect(result.allDayContexts).toEqual([
+      {
+        date: "2026-07-01",
+        endDate: "2026-07-02",
+        id: "dentist-day",
+        summary: "Dentist day",
+      },
+    ]);
+  });
+
+  it("does not report a conflict for a transparent all-day event absent from free/busy", async () => {
+    mocks.decryptGoogleCalendarToken.mockReturnValue("google-access-token");
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ calendars: { primary: { busy: [] } } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "birthday",
+              summary: "Mom's birthday",
+              start: { date: "2026-07-01" },
+              end: { date: "2026-07-02" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await checkGoogleCalendarFreeBusyForConnection({
+      connection: {
+        ...connection,
+        token_expires_at: "2099-05-09T02:00:00.000Z",
+      },
+      proposedEnd: "2026-07-01T17:00:00.000Z",
+      proposedStart: "2026-07-01T16:00:00.000Z",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/New_York",
+    });
+
+    expect(result.hasConflict).toBe(false);
+    expect(result.allDayContexts).toEqual([
+      {
+        date: "2026-07-01",
+        endDate: "2026-07-02",
+        id: "birthday",
+        summary: "Mom's birthday",
+      },
+    ]);
+  });
+
+  it("ignores an opaque all-day event on an adjacent local day despite a timezone offset", async () => {
+    mocks.decryptGoogleCalendarToken.mockReturnValue("google-access-token");
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          calendars: {
+            primary: {
+              busy: [
+                {
+                  start: "2026-07-02T04:00:00.000Z",
+                  end: "2026-07-03T04:00:00.000Z",
+                },
+              ],
+            },
+          },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "next-day-block",
+              summary: "Offsite day",
+              start: { date: "2026-07-02" },
+              end: { date: "2026-07-03" },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    const result = await checkGoogleCalendarFreeBusyForConnection({
+      connection: {
+        ...connection,
+        token_expires_at: "2099-05-09T02:00:00.000Z",
+      },
+      proposedEnd: "2026-07-02T01:00:00.000Z",
+      proposedStart: "2026-07-02T00:00:00.000Z",
+      supabaseAccessToken: "supabase-access-token",
+      timezone: "America/New_York",
+    });
+
+    expect(result.hasConflict).toBe(false);
+    expect(result.allDayContexts).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: "multi-day span in a timezone east of UTC",
+      timezone: "Asia/Tokyo",
+      proposedStart: "2026-07-01T00:30:00.000Z",
+      proposedEnd: "2026-07-01T01:30:00.000Z",
+      allDayStart: "2026-07-01",
+      allDayEnd: "2026-07-03",
+    },
+    {
+      name: "single DST boundary day in a timezone west of UTC",
+      timezone: "America/New_York",
+      proposedStart: "2026-03-08T14:00:00.000Z",
+      proposedEnd: "2026-03-08T15:00:00.000Z",
+      allDayStart: "2026-03-08",
+      allDayEnd: "2026-03-09",
+    },
+  ])(
+    "maps all-day context by the user's calendar date: $name",
+    async ({
+      allDayEnd,
+      allDayStart,
+      proposedEnd,
+      proposedStart,
+      timezone,
+    }) => {
+      mocks.decryptGoogleCalendarToken.mockReturnValue("google-access-token");
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ calendars: { primary: { busy: [] } } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "all-day-context",
+                summary: "Focus label",
+                start: { date: allDayStart },
+                end: { date: allDayEnd },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+
+      const result = await checkGoogleCalendarFreeBusyForConnection({
+        connection: {
+          ...connection,
+          token_expires_at: "2099-05-09T02:00:00.000Z",
+        },
+        proposedEnd,
+        proposedStart,
+        supabaseAccessToken: "supabase-access-token",
+        timezone,
+      });
+
+      expect(result.hasConflict).toBe(false);
+      expect(result.allDayContexts).toEqual([
+        {
+          date: allDayStart,
+          endDate: allDayEnd,
+          id: "all-day-context",
+          summary: "Focus label",
+        },
+      ]);
+    },
+  );
 });

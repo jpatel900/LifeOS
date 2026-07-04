@@ -33,6 +33,7 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/SECURITY_PRIVACY.md",
   "docs/TEST_PLAN.md",
   "docs/KNOWN_ISSUES.md",
+  "docs/FAILURES.md",
   "docs/PROJECT_STATE.md",
   "docs/OBSERVABILITY_RUNBOOK.md",
   "docs/VERCEL_PRODUCTION_CHECKLIST.md",
@@ -54,7 +55,7 @@ const CANONICAL_ALLOWLIST_PATTERNS = [
  * decisions go to `docs/adr/`, status goes to `docs/PROJECT_STATE.md`,
  * procedures go to `.agents/skills/`. Issue A4 ratchets this to 250.
  */
-const ENTRY_FILE_LINE_BUDGET = 629;
+const ENTRY_FILE_LINE_BUDGET = 250;
 
 const IGNORED_SCAN_DIRECTORIES = new Set([
   ".git",

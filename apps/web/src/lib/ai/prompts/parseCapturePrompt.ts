@@ -1,6 +1,6 @@
 import { PARSE_CAPTURE_SCHEMA_VERSION } from "../contracts/parseCapture";
 
-export const PARSE_CAPTURE_PROMPT_VERSION = "parse_capture.v1" as const;
+export const PARSE_CAPTURE_PROMPT_VERSION = "parse_capture.v2" as const;
 
 export interface ParseCaptureAreaContext {
   slug: string;
@@ -30,6 +30,11 @@ const systemPrompt = [
   "Use confidence values from 0 to 1. Prefer ranges over fake exact estimates.",
   "Expose unknowns and ambiguities instead of inventing details.",
   "Suggest reversible first moves and identify what not to do yet.",
+  "For each task_draft, fill breakdown so the user sees the full scope without thinking about it: 2-7 small concrete steps with order, estimated_minutes, depends_on_orders, and on_critical_path marking the dependency chain that gates completion.",
+  "Set breakdown.kickstart_step to the smallest physical action that starts step 1 in under ten minutes, and keep first_tiny_step consistent with it.",
+  "Set breakdown.sequence_summary to one plain sentence describing the order of work, or null when the order is obvious.",
+  "Set breakdown to null only when the task is a single trivial action that needs no decomposition.",
+  "Breakdown steps describe the work; they must not schedule it, assign times of day, or add commitments the capture never mentioned.",
   "Do not schedule, reschedule, email, browse, call APIs, or write to calendars.",
   "Keep wording non-shaming and practical.",
 ].join("\n");

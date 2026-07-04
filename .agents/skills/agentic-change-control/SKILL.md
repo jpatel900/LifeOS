@@ -131,25 +131,12 @@ Agent-authored PRs get skimmed, not read, unless you force reviewability. Defaul
 
 **Small diffs.** One logical change per PR. Candidate ceiling: ~400 changed lines; past that, reviewers approve on vibes. Check yourself: `git diff --stat <base>...HEAD | tail -1` (find the base: `git remote show origin | grep "HEAD branch"`; PowerShell: `git remote show origin | Select-String "HEAD branch"`). If the diff mixes a refactor with a behavior change, split it — refactor PR first, behavior PR on top.
 
-**PR body states what was verified and HOW.** Not "tests pass" but the literal command and its observed result:
+**PR body states what was verified and HOW.** Not "tests pass" but the literal command and its observed result. The PR description *template* has one home: `agentic-docs-and-writing` §5 — use it. This skill adds two mandatory policy requirements on top of that template:
 
-```markdown
-## What
-<one sentence>
+1. A **"NOT verified:"** line — what you did not check, stated plainly. An agent that never states what it didn't check is either omniscient or hiding something, and reviewers know which.
+2. A **reversibility classification** in the Risk & rollback section — two-way or one-way door per §1 of this skill, with the revert procedure.
 
-## Why
-<link to issue / task>
-
-## Verified
-- `npm test` — 214 passed, 0 failed (full output in CI run <link>)
-- Manually hit `GET /health` on local dev server — 200, correct payload
-- NOT verified: behavior under concurrent writes (out of scope, noted in #<issue>)
-
-## Reversibility
-Two-way door. Revert = `git revert <sha>`, no migration, no external effects.
-```
-
-The "NOT verified" line is mandatory. An agent that never states what it didn't check is either omniscient or hiding something, and reviewers know which. What counts as adequate verification is owned by `agentic-validation-and-qa`.
+Example of the two additions: `NOT verified: behavior under concurrent writes (out of scope, noted in #<issue>)` and `Two-way door. Revert = git revert <sha>, no migration, no external effects.` What counts as adequate verification is owned by `agentic-validation-and-qa`.
 
 **Self-review pass before requesting review** (checklist, run every time):
 

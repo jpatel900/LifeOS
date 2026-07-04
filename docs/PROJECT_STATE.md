@@ -1,120 +1,48 @@
 # PROJECT_STATE.md
 
-Status: Authority handoff for current shipped truth and near-term next work
-Purpose: Summarize current product state, recent completions, open issues, next tasks, and durable implementation notes
-Read when: You need current shipped status or a concise fresh-run handoff
-Do not use for: The active implementation queue or a historical phase diary
-Superseded by: n/a
+<!--
+Template: replace sections in place; do not append a phase diary. Keep this file <=120 lines.
+Sections: Current objective / Decisions in effect / Constraints / Open questions / Next action / Do-not-repeat.
+-->
 
-## Current status
+## Current objective
 
-- LifeOS MVP supports areas, capture, optional AI or mock parse capture, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, and deterministic health checks.
-- The current shipped workflow UI has moved to the handoff cockpit model: existing workflow URLs are thin aliases into one stage router for Today, Capture, Triage, Plan, Execute, Review, and Health, with All areas as a global overview inside the cockpit.
-- Persistence remains truthful and mixed by design: the cockpit hydrates authenticated Supabase areas, captures, tasks, proposals, blocks, sessions, and review rows through `WorkflowProvider`; raw capture, triage, hour-rail planning, and session outcomes persist best-effort through existing data helpers when signed in; local/session fallback remains the recovery path when account sync is unavailable.
-- A 2026-06-30 flow audit found that several cockpit journeys were still visual/parity implementations rather than complete workflow implementations. Four repair batches have fixed the highest-priority local cockpit dead ends, non-env local workflow gaps, admin area journey proof, and the scoped persistence parity slice for manual proposals, unplanning, task review transitions, session start, and daily review save; treat `docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md` as the active map for remaining Calendar and AI/env decisions before adding new cockpit surface area.
-- Safety boundaries remain unchanged: no silent external writes, no autonomous rescheduling, no Google Calendar update or delete path, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
-- The active UI guidance is the LifeOS handoff cockpit guide plus `design_handoff_lifeos/`; old Pass 7 visual-contract docs were removed as archived duplicates and are not current route UI authority.
+Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing narrow, issue-driven follow-up work. Current shipped surface includes areas, capture, optional AI/mock parse capture, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and the handoff cockpit UI model.
 
-## Recently completed
+## Decisions in effect
 
-- Deleted the legacy `docs/implementation-notes/` session-log directory after salvage review, removed those paths from the shrink-only doc registry, and preserved the only newly salvaged binding automation constraint in `docs/adr/0002-github-automation-control-plane.md`.
-- Completed issue #230 repo-root and archived-doc cleanup: removed archived/duplicate doc trees, the old UI roadmap, `PROJECT_BRIEF.md`, generated root artifacts, the stray npm lockfile, and stale doc-registry entries; folded the brief’s unique product-loop and autonomy-boundary constraints into `docs/REQUIREMENTS.md`. `design_handoff_lifeos/` remains because it is still the active handoff cockpit design reference.
-- Remediated all 21 open Dependabot alerts (2026-07-01): lockfile-level bumps for `@grpc/grpc-js`, `ws`, `form-data`, `js-yaml`, `@babel/core`, `esbuild`; workspace overrides for `vite` (`^7.3.5`, new) and `protobufjs` (floor raised to `^8.6.0`); direct-dep bumps `posthog-js` `^1.396.3` (drops its browser OTel stack, removing an unfixable exact-pinned `@opentelemetry/core@2.2.0`), `@sentry/nextjs` `^10.62.0`, and `@opentelemetry/sdk-node` `^0.219.0`. No alert deliberately left open; full validation green.
-- Implemented the LifeOS handoff cockpit pass (2026-06-26): the app now uses handoff tokens, exact accent derivation, `data-theme="light"` on the cockpit root, one stage router, thin workflow route aliases, count-bearing spine navigation, a borderless Capture surface, directional Triage choices, local hour-rail Planning with secondary Google approval disclosure, timer-style Execute, verdict-first Review, grouped Health, and a global All areas overview. Added `backlog` as the persisted Someday/later task status, replaced stale Pass 7 route E2E specs with focused handoff cockpit specs, and captured desktop/mobile screenshot evidence under `apps/web/test-results/handoff-cockpit/`.
-- Bridged the handoff cockpit to Supabase-backed workflow rows (2026-06-26): persisted account data now hydrates into cockpit area ids, Someday triage persists as `backlog`, hour-rail planning persists through proposal acceptance, and execution session outcomes sync through the existing transactional data helpers while preserving local-first recovery.
-- Added a comprehensive user-flow and edge-case map at `docs/implementation-planning/lifeos-user-flow-edge-case-map.md` so future cockpit work can track happy paths, branch cases, persistence parity gaps, and edge-case proof needs before implementation.
-- Audited the cockpit against that flow map (2026-06-30) and recorded broken/stuck journeys plus root causes in `docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md`. The main blockers are Execute running/outcome recovery, Plan/Execute empty states, All areas global scope, Capture guardrails, Review closeout, and Health truthfulness.
-- Repaired the first flow-audit batch (2026-06-30): Execute now keeps running blocks visible through Pause/Complete/Stuck/Missed, records actual elapsed duration, stages local stuck/missed recovery in Review, supports side capture without leaving focus, and uses better Plan/Execute empty-state routing. All areas now has a stable `/areas` overview route with global pipeline lists; Capture disables empty saves, dedupes save attempts, and removes the dead organize toggle; Review has local Carry forward/Defer/Drop/Save review actions; Health reads deterministic health checks instead of hardcoded healthy copy. Added source and Playwright regression coverage for these repairs.
-- Repaired the second non-env flow-audit batch (2026-06-30): Capture now blocks saves when there is no real area instead of using the `area-default` display fallback; Triage exposes local edit, reassign, split, and merge controls behind disclosure; Plan exposes local proposal draft/edit/reject/accept controls; proposal acceptance now schedules the task so Execute can pick it up; and `WorkflowProvider` exposes storage/account sync truth so local-only or sync-failed changes are visible instead of silent. Google Calendar and AI/env-dependent paths remain explicitly deferred.
-- Repaired the third non-env flow-audit batch (2026-06-30): Settings/Areas now creates areas with a selected starting accent instead of a null color fallback, centralizes admin palette values in the accent module, and has browser journey proof for create, recolor/reset, archive confirmation, and local/unauthenticated export failure recovery. Google connect/disconnect proof remains deferred with the rest of Google scope.
-- Repaired the fourth non-env persistence batch (2026-06-30): added `SECURITY INVOKER` RPCs for atomic session start, unplanning, and review task transitions; replaced proposal acceptance so persisted tasks become `scheduled`; wired cockpit manual proposal create/edit/reject/accept, backlog promotion, unplan, carry-forward/defer/drop, and daily review save through Supabase-backed helpers with local-first fallback; verified `supabase db reset` plus live two-user RLS tests 20/20.
-- Ran the periodic system review (2026-06-23, per `docs/agent/SYSTEM_REVIEW_CHECKLIST.md`) covering the #221 governance merge and the 2026-06-23 docs batches: guard tests green (324 passed), main CI green, all dangling-ref fixes verified, the #218 product/safety vs engineering-invariants split handled correctly, and a cross-reference sweep of all 24 changed docs found zero broken file references. Operating-layer guardrails confirmed wired to INV-1 / AGENTS §4·§20 / NFR-005. Only finding — CI ran the heavy e2e + migrations jobs on docs-only PRs — was fixed in the same change: a `changes` detection job now gates `e2e`/`migrations-rls` on `if: needs.changes.outputs.heavy == 'true'` for `pull_request` when changed paths hit `apps/web/**` or `supabase/**`, while `validate-monorepo` stays unconditional and `push` to `main` still runs the full suite, so docs-only PRs skip ~9 CI min (`KNOWN_ISSUES.md` #9, resolved).
-- Added operating-layer guardrails to the authority docs (2026-06-23): `docs/REQUIREMENTS.md` now scopes the next approved planning wave to the project/task/stakeholder/dependency/context operating layer without reopening forbidden platform features, `docs/UX_FLOWS.md` now contains explicit containment rules for future operating views, and `docs/DATA_MODEL.md` now defines task/project state-taxonomy guardrails tied back to `docs/ENGINEERING_INVARIANTS.md`.
-- Landed the context-diet routing/fallback cleanup batch (2026-06-23): `docs/CODEX_SKILL_ROUTING.md` is now the single canonical skill/plugin routing file, the dangling `frontend-ui-engineering` reference was replaced with the real repo-local `docs/agent/UI_AGENT_GUIDE.md` path, `docs/agent/CODEX_PROMPT_TEMPLATE.md` now starts with a manual-fallback status block plus a compact product/safety invariants block, background-reference docs now carry normalized non-authority banners, and `pnpm agent:context projects-tasks` now exists for bounded operating-layer planning.
-- Tightened the agent control-plane docs for issue intake and validation planning (2026-06-23): `.github/ISSUE_TEMPLATE/agent-task.yml` now includes `workflow` and `agent-governance` task types, no longer forces meaningless UI-proof boilerplate onto non-UI work, and points validation selection at the canonical change-type crosswalk. `docs/agent/VALIDATION_MATRIX.md` is now the single change-type ↔ T0-T4 validation crosswalk, and `docs/agent/CODEX_PROMPT_TEMPLATE.md` now points prompts to that crosswalk instead of implying full repo validation for every docs-only task.
-- Landed the agent-governance hardening batch (2026-06-12): new authority doc `docs/ENGINEERING_INVARIANTS.md` with guard tests in `apps/web/src/__tests__/engineeringInvariants.test.ts` (export coverage, vendor seams, module budgets), CI gained Playwright e2e and migrations+RLS jobs, `docs/KNOWN_ISSUES.md` registry plus `docs/agent/SYSTEM_REVIEW_CHECKLIST.md` cadence, and AGENTS.md sections 12B/12C plus the sanctioned debt-paydown amendment to section 17 rule 3.
-- Verified the transactional-transition migration live: `supabase db reset` applies cleanly and the RLS suite passes 17/17 including new two-user denial tests for `accept_time_block_proposal` and `apply_execution_session_outcome`.
-- Fixed the two pre-existing `areas-color-edit.spec.ts` failures (specs now open the Pass 7 registry disclosure before using color presets); the full spec passes 3/3.
+- Safety boundaries are unchanged: no silent external writes, no autonomous rescheduling, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
+- Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification` (2026-07-03); GitHub auto-merge gates on these. The T0 safe auto-merge allowlist includes `.agents/skills/**` (owner-approved, 2026-07-03).
+- The app remains one deployable Next.js app for V1 server logic; Supabase Edge Functions are later/default-no unless a specific scheduled or integration constraint justifies them.
+- Persistence is intentionally mixed: authenticated Supabase paths are used where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
+- The handoff cockpit is the active UI model. `design_handoff_lifeos/README.md` remains the active design reference; old Pass 7 visual-contract docs are history only.
+- Google Calendar update/cancel, all-day conflict handling, and AI/env-dependent paths remain explicit follow-on scope, not implied fixes.
+- Governance docs are budgeted: `AGENTS.md` and `CLAUDE.md` stay small; detailed rulebooks live in `.agents/skills`; `docs/agent/` keeps only `CODEX_PROMPT_TEMPLATE.md`.
 
-- Landed a robustness hardening batch: atomic RPC-backed transitions for proposal acceptance and execution-session outcomes (migration pending live-database verification and human review), an AI provider boundary in `apps/web/src/lib/ai/provider/` (OpenAI remains the configured provider), user data export per new FR-016 (`GET /api/export` plus a `/settings/areas` admin disclosure, Google tokens excluded), and extraction of pure planning presentation helpers into `apps/web/src/lib/planning/presentation.ts`.
-- Established the Pass 7 control-plane docs under archived UI/UX guidance and related agent routing docs.
-- Completed the historical UI/UX doc inventory and roadmap consolidation that led into the handoff cockpit pass; the old roadmap file was later removed during issue #230 cleanup, and current UI routing now uses `docs/agent/UI_AGENT_GUIDE.md` plus `design_handoff_lifeos/`.
-- Reopened the active roadmap explicitly as a clarity-and-diagnostic-staging program instead of a maintenance-only UX posture, while keeping prior passes recorded as shipped history.
-- Added mobile first-viewport proof for Home and Capture, and simplified `/capture` so raw input plus `Save thought` land before support or diagnostic surfaces at `390px`.
-- Defined the shared UI severity vocabulary so Pass 7 can distinguish calm degraded-but-usable states from blocked or failed states before expanding degraded-state tests and copy.
-- Added severity regression proof for recoverable versus blocked states, and corrected Home so partial account-data degradation warns calmly instead of reading like a hard failure.
-- Added the shared degraded-state copy contract so warning and blocked copy now has one explicit rule: say what happened, what still works, and the next move.
-- Standardized the system-versus-developer detail boundary around `DiagnosticsDisclosure`, and moved Health technical identifiers under an explicit developer disclosure.
-- Added diagnostics-before-action regression proof for Home and Capture, and quieted the shell context band on `/` so Home’s route-local launchpad stays ahead of shell support content.
-- Documented the shared `390px` mobile surface budget and wired it into UI review plus issue-proof requirements so shell and route work now has an explicit clutter ceiling.
-- Added shell-clutter regression coverage so quiet routes keep the extra shell context band off, Home and Capture keep quick-note controls off, and mobile shell nav still exposes one clear active state without overflow.
-- Split `Areas` out of the primary shell workflow nav and into a supporting admin affordance, with focused tests plus mobile and desktop shell screenshots proving the new role.
-- Calmed the mobile shell nav by forcing the primary workflow links into a single horizontal lane instead of a wrapped chip cloud, with Playwright proof that route access remains intact.
-- Made shell controls secondary to route-local work on non-quiet routes by collapsing the shell quick-note composer behind an explicit `Quick note` toggle, with mobile and desktop triage screenshots proving the quieter resting state.
-- Reduced repeated first-viewport area display by removing the extra shell area spotlight and keeping area context anchored in the persistent shell area selector instead.
-- Completed the Capture hierarchy recovery batch so raw input, primary save actions, and optional area selection stay ahead of metrics and deeper details at rest, with refreshed mobile and desktop screenshot proof.
-- Revalidated Capture raw-save safety after the hierarchy cleanup: `Save thought` still persists raw text first, parse failure still reports that the raw capture is safely stored, and local or mock fallback behavior remains intact.
-- Simplified Home further into a read-only launchpad by removing the separate `Daily loop` support card, keeping the read-only guidance inside the flagship `Today / Next` surface, and calming degraded account-data copy.
-- Tightened Triage so the current item now lands before queue summary or diagnostics, and moved the old summary out of the header into a quieter lower `Queue snapshot` support card.
-- Tightened Planning so the local-first flow now lands before queue summary or diagnostics, and clarified the Google surface as an explicit `Google write approval` gate rather than generic calendar options.
-- Completed the remaining workflow-route recovery batch: Execute now stages one mission above a quieter visible-state card and next-move lane, Review demotes the carry-forward board plus saved history behind one lower disclosure, Health keeps first-load trust answers ahead of celebratory run feedback, and Areas drops the extra header summary so the create-area registry action stays first.
-- Completed the Pass 7 visual-system restraint batch: shared workflow cards, headers, panels, and shell surfaces now use flatter depth and calmer shadows, dark-mode readability is tighter, and mobile shell controls now clear a touch-friendly `40px` target floor without changing workflow contracts.
-- Completed the Pass 7 accessibility, motion, performance, and evidence batch: non-destructive workflow feedback now announces through polite live regions, reduced-motion and warmed-route stability have explicit browser proof, and the screenshot workflow now defines the final packet format plus the current Pass 7 packet index.
-- Passed the Pass 7 final audit on `2026-06-11`: the final screenshot packet now exists under `apps/web/test-results/pass-7/final-audit/`, and every audited route cleared the rubric thresholds recorded in the archived Pass 7 docs.
-- Closed Pass 7 truthfully: the roadmap now returns to maintenance posture instead of claiming a new active recovery pass, and the remaining work is outside Pass 7 scope.
-- Landed the prior UX trust and hierarchy passes that produced the current shipped route posture across Home, Capture, Triage, Planning, Execute, Review, Health, and Areas.
-- Added durable browser-level regression proof for critical UX paths in `apps/web/tests/e2e/p0-ux-regression.spec.ts`.
-- Hardened Google Calendar safety with connect and disconnect flows, manual free or busy checks, and explicit approval-gated event creation only.
-- Hardened parser and observability boundaries: parse capture stays server-only with raw-save-first safety, and observability stays metadata-only with no raw capture, prompt, or calendar payload export.
+## Constraints
 
-## Known issues
+- Before feature work, map the task to `docs/REQUIREMENTS.md`, define acceptance criteria, identify tests, and flag risky surfaces.
+- Use the smallest relevant context and skill set; search before broad reading.
+- New user-owned tables require RLS policies, export coverage, and multi-user tests in the same change.
+- Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review.
+- UI changes must preserve the cockpit hierarchy: one obvious next action, visible area/time/uncertainty, non-shaming copy, and bounded browser proof when behavior changes.
+- Docs may not grow by creating session-note files; durable decisions go to ADRs and current status goes here.
 
-- The issue registry now lives in `docs/KNOWN_ISSUES.md` (with the aging rule from `AGENTS.md` 12C). Headlines: remaining handoff cockpit Calendar/AI/env gaps from the 2026-06-30 audit (#10), Google Calendar update/cancel and all-day conflicts unbuilt, provider degradation not yet fully surfaced in Health/account sync (INV-5), issue `#93` production smoke incomplete, and the meta-learning loop logged-but-unused. The accidental remote-schema drift dump that broke local `supabase db reset` was deleted 2026-06-13 (registry #7 resolved).
+## Open questions
 
-## Next recommended tasks
+- Remaining cockpit Calendar/AI/env gaps from the 2026-06-30 flow audit need product decisions before implementation.
+- Production smoke for issue #93 still needs authenticated verification without weakening deployment protection.
+- Durable audit for draft rejection/edit/split/merge remains a product decision, not a persistence bug.
+- Meta-learning logs exist but are not yet used for a closed learning loop.
 
-1. Continue the cockpit flow audit repairs from `docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md` only where in scope: Google approval bridging and AI/env-dependent capture/manual/audio/weekly paths remain deferred by user direction; draft rejection/edit/split/merge durable audit remains a product decision, not a persistence bug.
-2. Restore GitHub CLI auth or finish the remaining Pass 7 metadata backfill manually; issue comments are largely applied, but label and milestone work is still incomplete.
-3. Re-run authenticated production smoke for issue `#93` without weakening Vercel deployment protection.
-4. Extend persisted cockpit parity deliberately only where requirements justify it: retry queues and durable draft-decision audit are still local/session decisions, while manual proposal actions, unplanning, task review transitions, session start, and daily review save now have scoped Supabase persistence.
-5. Treat any future Google Calendar expansion as explicit follow-on scope only: all-day conflict handling first, then app-created event update or cancel after human approval.
-6. Treat future cross-route UI changes as maintenance unless a new reviewed roadmap pass is explicitly opened.
+## Next action
 
-## Important implementation notes
+Continue the smallest issue-scoped work that preserves V1 boundaries. For cockpit flow work, consult `docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md` and implement only the explicitly approved slice. For governance work, keep `AGENTS.md`/`CLAUDE.md` stable and move detailed procedures into skills.
 
-- Read `AGENTS.md`, `docs/agent/CONTEXT_INDEX.md`, and the smallest relevant context before broad repo search.
-- Active UI/UX implementation routes through `docs/agent/UI_AGENT_GUIDE.md` and `design_handoff_lifeos/`; removed archived Pass 7 docs are history only.
-- UI work is not done on lint, docs, or code review alone. When route hierarchy, shell, or degraded states change, require behavior checks, focused tests, and mobile plus desktop proof before claiming completion.
-- Primary workflow routes should foreground user action truth, keep safety truth near the relevant action, route diagnostic truth into details or Health unless the route is blocked, and keep developer truth out of primary workflow copy.
-- Use the active handoff cockpit guide for UI proof. Older Pass 7 severity, degraded-state, detail-boundary, and mobile-budget docs were removed as archived duplicates and should not override the handoff UI.
-- Before expanding cockpit behavior, check `docs/implementation-planning/lifeos-user-flow-edge-case-map.md` for the relevant user path, edge case, persistence status, and proof expectation.
-- Before changing cockpit flows, also check `docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md`; it is the current broken-flow/root-cause map and should drive the next repair sequence.
-- Current handoff browser proof lives in `apps/web/tests/e2e/handoff-cockpit.spec.ts`, `apps/web/tests/e2e/handoff-admin.spec.ts`, and `apps/web/test-results/handoff-cockpit/`. Treat older Pass 7 E2E spec names and screenshot packet paths as historical only.
-- Home account-data degradation is intentionally `warning`, not `danger`, because local workflow remains usable. Reserve destructive severity for blocked trust or real failures.
-- `AppShell` is now a provider/admin boundary. Workflow chrome belongs to `LifeOSCockpit`, and workflow route pages should stay thin aliases into `CockpitRoute`.
-- Area visibility, theme, add-area, recolor, and the spine live in the cockpit header. Settings/admin remains outside the cockpit.
-- Home must remain read-only and action-forward. It routes users to workflow screens but does not mutate workflow state directly.
-- Capture must preserve raw-save-first behavior. Raw captures are persisted before parsing, and AI or mock fallback behavior must stay intact.
-- Capture hierarchy now assumes this order at rest: main raw-input card first, support summary second, `Capture details` after that, and device-only draft history behind disclosure. Keep future styling or copy work inside that contract.
-- Home now assumes one flagship launchpad surface at rest. Do not reintroduce a separate empty-state support card just to restate the daily loop; keep read-only guidance quieter and inside the flagship surface unless the route becomes blocked.
-- Triage now assumes this order at rest: current item first, waiting queue second when needed, queue snapshot after that, then `Triage details`. Do not reintroduce a separate preamble card above the current decision.
-- Planning now assumes this order at rest: `Planning flow` first, support cards and summary after it, then `Planning details`. Keep Google write messaging framed as explicit approval, not ambient capability.
-- Triage stays one-current-item-first. Tests or UI flows that need another draft must move it into focus deliberately.
-- Planning stays local-first. Google Calendar remains secondary, explicitly approval-gated, and server-only.
-- `/execute` now assumes this order at rest: current mission first, quieter visible-state support second, next-move support third, and deeper mission truth or record only behind disclosures. Do not reintroduce a top-of-route diagnostic disclosure above the mission card.
-- `/review` now assumes closure-first at rest: flagship decision card first, carry-forward actions second, save details quieter, and the carry-forward board plus saved history behind the lower `Review details and history` disclosure.
-- `/health` is the diagnostic home. Primary workflow routes may stage deeper system detail behind disclosures, but Health owns the repair-first diagnostic surface.
-- `/health` should keep first-load trust answers ahead of celebratory feedback. Manual reruns may announce success or failure loudly; initial load should stay calm.
-- `/settings/areas` now assumes create-area work first, registry details after it, and no header-level summary card above the flagship admin action. Keep area registry actions quieter than the creation surface.
-- Shared workflow surfaces now assume calmer depth by default: keep flagship cards distinct, but do not reintroduce stacked inset borders, heavy shadows, or loud gradients on support and admin surfaces unless the route truly needs them.
-- Mobile shell controls should keep a touch-friendly floor of roughly `40px`; do not shrink nav pills, area selection, or the quick-note entry path below that just to fit more chrome.
-- Non-destructive workflow feedback should use polite status semantics. Reserve interruptive `alert` behavior for destructive or blocked states.
-- Reduced-motion proof now lives in `apps/web/tests/e2e/motion-performance.spec.ts`; if a new motion treatment matters, prove it there instead of assuming the media query still covers it.
-- The screenshot packet format now lives in `docs/agent/UI_SCREENSHOT_EVIDENCE_WORKFLOW.md`. Use that packet order for the final audit instead of inventing a new evidence layout in chat or PR text.
-- Frontend split: shared shadcn-compatible primitives live in `apps/web/src/components/ui`, while shell identity and route composition stay custom.
-- `WorkflowProvider` must keep SSR and first client render structurally identical; persisted session state restores after mount.
-- Browser code must not import parser helpers, Google token or OAuth helpers, or service-role helpers. Use route handlers and server-only modules.
-- Observability stays metadata-only and vendor-safe. Do not export raw capture, prompt, completion, or calendar payloads.
-- Use `pnpm --filter @lifeos/web test:e2e` rather than bare `playwright test` for safer Windows-local runs in this workspace.
-- Local Supabase RLS verification remains opt-in via `RUN_SUPABASE_RLS_TESTS=1` plus local env values from `supabase status -o env`.
-- There is no single production toggle. Missing env should degrade honestly to local or demo-safe behavior.
+## Do-not-repeat
+
+- Do not reintroduce broad autonomous behavior, vector search, realtime voice, team/SaaS features, or new ingestion channels without requirements review.
+- Do not re-add archived Pass 7 guidance as active UI authority.
+- Do not hide integration failures behind optimistic copy; degrade honestly to local/demo-safe behavior.
+- Do not bypass guard tests by weakening schemas, validators, RLS, server-only boundaries, or plain-language UX checks.
+- Do not append long running histories to this file; replace stale facts with current concise truth.

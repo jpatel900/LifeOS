@@ -16,6 +16,12 @@ const taskColumns =
   "id,user_id,area_id,project_id,source_capture_item_id,title,description,status,priority_score,priority_confidence,task_type,energy_type,estimated_minutes_low,estimated_minutes_high,due_at,definition_of_done,first_tiny_step,created_at,updated_at";
 
 interface TimeBlockProposalConflictDetails {
+  all_day_contexts?: {
+    date: string;
+    endDate: string;
+    id: string;
+    summary: string;
+  }[];
   checked_at: string;
   has_conflict: boolean;
   provider: "google_calendar";
@@ -182,6 +188,69 @@ export async function getCalendarBlockForProposalForAccessToken(
   }
 
   return data ? parseCalendarBlock(data) : null;
+}
+
+export async function getCalendarBlockForAccessToken(
+  accessToken: string,
+  blockId: string,
+) {
+  assertServerRuntime();
+
+  const { client } = await requireSupabaseServerUser(accessToken);
+  const query = client.from("calendar_blocks") as unknown as {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .select(calendarBlockColumns)
+    .eq("id", blockId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return data ? parseCalendarBlock(data) : null;
+}
+
+export async function markCalendarBlockCancelledForAccessToken(
+  accessToken: string,
+  blockId: string,
+) {
+  assertServerRuntime();
+
+  const { client } = await requireSupabaseServerUser(accessToken);
+  const query = client.from("calendar_blocks") as unknown as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({ status: "cancelled" })
+    .eq("id", blockId)
+    .select(calendarBlockColumns)
+    .single();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return parseCalendarBlock(data);
 }
 
 export async function createCalendarBlockForProposalForAccessToken(

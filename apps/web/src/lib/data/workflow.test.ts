@@ -13,6 +13,7 @@ import {
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   listAreas,
@@ -567,6 +568,128 @@ describe("workflow data provider", () => {
     expect(result.task.status).toBe("backlog");
   });
 
+  it("records a rejected triage suggestion when the user drops a draft", async () => {
+    const suggestionSingle = vi.fn().mockResolvedValue({
+      data: {},
+      error: null,
+    });
+    const suggestionSelect = vi
+      .fn()
+      .mockReturnValue({ single: suggestionSingle });
+    const suggestionInsert = vi.fn().mockReturnValue({
+      select: suggestionSelect,
+    });
+    const from = vi.fn((table: string) => {
+      if (table === "suggestion_records") return { insert: suggestionInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    recordRejectedTaskDraft(authenticatedClient(from), {
+      area_id: areaId,
+      draft_id: "task-draft-550e8400-e29b-41d4-a716-446655440901",
+      title: "Call dentist tomorrow",
+      confidence: 0.82,
+    });
+
+    await vi.waitFor(() => {
+      expect(suggestionInsert).toHaveBeenCalledWith({
+        user_id: userId,
+        area_id: areaId,
+        policy_identifier: "triage.default_accept_task",
+        schema_version: "meta-learning-event-v1",
+        suggestion_type: "triage_suggestion",
+        subject_type: "task_draft",
+        subject_id: null,
+        suggestion_json: {
+          draft_id: "task-draft-550e8400-e29b-41d4-a716-446655440901",
+          title: "Call dentist tomorrow",
+          status: "rejected",
+        },
+        confidence: 0.82,
+        status: "rejected",
+        resolved_at: expect.any(String),
+      });
+    });
+  });
+
+  it("points the rejection record subject_id at uuid draft ids", async () => {
+    const draftUuid = "550e8400-e29b-41d4-a716-446655440901";
+    const suggestionSingle = vi.fn().mockResolvedValue({
+      data: {},
+      error: null,
+    });
+    const suggestionSelect = vi
+      .fn()
+      .mockReturnValue({ single: suggestionSingle });
+    const suggestionInsert = vi.fn().mockReturnValue({
+      select: suggestionSelect,
+    });
+    const from = vi.fn().mockReturnValue({ insert: suggestionInsert });
+
+    recordRejectedTaskDraft(authenticatedClient(from), {
+      area_id: null,
+      draft_id: draftUuid,
+      title: "Review long-term idea",
+    });
+
+    await vi.waitFor(() => {
+      expect(suggestionInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          area_id: null,
+          subject_id: draftUuid,
+          confidence: null,
+          status: "rejected",
+        }),
+      );
+    });
+  });
+
+  it("preserves the user rejection when the meta-learning write fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const suggestionSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "learning table unavailable" },
+    });
+    const suggestionSelect = vi
+      .fn()
+      .mockReturnValue({ single: suggestionSingle });
+    const suggestionInsert = vi.fn().mockReturnValue({
+      select: suggestionSelect,
+    });
+    const from = vi.fn().mockReturnValue({ insert: suggestionInsert });
+
+    expect(() =>
+      recordRejectedTaskDraft(authenticatedClient(from), {
+        area_id: areaId,
+        draft_id: "task-draft-550e8400-e29b-41d4-a716-446655440901",
+        title: "Call dentist tomorrow",
+        confidence: 0.82,
+      }),
+    ).not.toThrow();
+
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        "LifeOS meta-learning write failed; user action preserved.",
+        expect.objectContaining({
+          error: "learning table unavailable",
+          table: "suggestion_records",
+          policy_identifier: "triage.default_accept_task",
+        }),
+      );
+    });
+    warn.mockRestore();
+  });
+
+  it("skips rejection learning writes in mock mode", () => {
+    expect(() =>
+      recordRejectedTaskDraft(null, {
+        area_id: null,
+        draft_id: "task-draft-550e8400-e29b-41d4-a716-446655440901",
+        title: "Mock rejected draft",
+      }),
+    ).not.toThrow();
+  });
+
   it("persists accepted project drafts through Supabase after validating input", async () => {
     const single = vi.fn().mockResolvedValue({
       data: {
@@ -734,6 +857,64 @@ describe("workflow data provider", () => {
     expect(result.blocks[0]?.end_at).toBe(end);
     expect(result.blocks[0]?.created_at).toBe("2026-05-08T15:05:00.000Z");
     expect(result.blocks[0]?.updated_at).toBe("2026-05-08T15:05:00.000Z");
+  });
+
+  it("preserves proposal creation when the meta-learning suggestion write fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const taskSingle = vi
+      .fn()
+      .mockResolvedValue({ data: taskRow, error: null });
+    const taskEq = vi.fn().mockReturnValue({ single: taskSingle });
+    const taskSelect = vi.fn().mockReturnValue({ eq: taskEq });
+
+    const proposalSingle = vi.fn().mockResolvedValue({
+      data: proposalRow,
+      error: null,
+    });
+    const proposalSelect = vi.fn().mockReturnValue({ single: proposalSingle });
+    const proposalInsert = vi.fn().mockReturnValue({ select: proposalSelect });
+
+    const suggestionSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "learning table unavailable" },
+    });
+    const suggestionSelect = vi
+      .fn()
+      .mockReturnValue({ single: suggestionSingle });
+    const suggestionInsert = vi.fn().mockReturnValue({
+      select: suggestionSelect,
+    });
+
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { select: taskSelect };
+      if (table === "time_block_proposals") return { insert: proposalInsert };
+      if (table === "suggestion_records") return { insert: suggestionInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await createTimeBlockProposal(authenticatedClient(from), {
+      task_id: taskId,
+      proposed_start: start,
+      proposed_end: end,
+    });
+
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        "LifeOS meta-learning write failed; user action preserved.",
+        expect.objectContaining({
+          error: "learning table unavailable",
+          table: "suggestion_records",
+        }),
+      );
+    });
+    expect(result.proposal.id).toBe(proposalId);
+    expect(suggestionInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policy_identifier: "planning.default_time_block",
+        schema_version: "meta-learning-event-v1",
+      }),
+    );
+    warn.mockRestore();
   });
 
   it("creates a local time_block_proposal from a persisted task", async () => {

@@ -3,6 +3,7 @@ import {
   type ParseCaptureResponse,
 } from "@lifeos/schemas";
 import { describe, expect, it, vi } from "vitest";
+import type { RecordAiCallTraceInput } from "@/lib/observability";
 import { PARSE_CAPTURE_SCHEMA_VERSION } from "./contracts/parseCapture";
 import { PARSE_CAPTURE_PROMPT_VERSION } from "./prompts/parseCapturePrompt";
 import {
@@ -29,6 +30,7 @@ const aiResponse: ParseCaptureResponse = {
       estimated_minutes_high: 20,
       due_at: null,
       confidence: 0.83,
+      breakdown: null,
     },
   ],
   clarification_questions: [],
@@ -185,7 +187,7 @@ describe("parse capture server service", () => {
         model_name: "gpt-4o-mini-2026-05-01",
         output_token_count: 18,
         parse_status: "parsed",
-        prompt_version: "parse_capture.v1",
+        prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
         schema_version: "1.0",
         status: "succeeded",
         total_token_count: 30,
@@ -397,7 +399,7 @@ describe("parse capture server service", () => {
         fallback_used: false,
         model_name: "standard-model",
         parse_status: "parsed",
-        prompt_version: "parse_capture.v1",
+        prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
         schema_version: "1.0",
         status: "succeeded",
         validation_status: "validated",
@@ -461,5 +463,178 @@ describe("parse capture server service", () => {
     expect(result.taskDrafts).toHaveLength(1);
     expect(result.taskDrafts[0]?.status).toBe("pending");
     expect(result.taskDrafts[0]?.capture_item_id).toBe(persistedCapture.id);
+  });
+
+  it("records exactly one metadata-only trace row on a successful AI parse (issue #288)", async () => {
+    const recordAiCallTraceImpl = vi.fn(
+      async (_input: RecordAiCallTraceInput) => {},
+    );
+
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        env: {
+          OPENAI_API_KEY: "test-key",
+          AI_MODEL_STANDARD: "standard-model",
+        },
+        parseCaptureImpl: vi.fn(async () => aiResponse),
+        traceContext: { accessToken: "user-a-access-token" },
+        recordAiCallTraceImpl,
+      },
+    );
+
+    expect(result.parser).toBe("ai");
+    expect(recordAiCallTraceImpl).toHaveBeenCalledTimes(1);
+
+    const traceInput = recordAiCallTraceImpl.mock.calls[0]?.[0];
+    expect(traceInput).toMatchObject({
+      accessToken: "user-a-access-token",
+      surface: "parse",
+      promptVersion: PARSE_CAPTURE_PROMPT_VERSION,
+      model: "standard-model",
+      validationOutcome: "passed",
+    });
+    expect(typeof traceInput?.latencyMs).toBe("number");
+    // Privacy doctrine: no raw prompt/response content may reach the trace.
+    expect(JSON.stringify(traceInput)).not.toMatch(/Taylor|launch notes/i);
+  });
+
+  it("records exactly one failed trace row when AI parsing throws (issue #288)", async () => {
+    const recordAiCallTraceImpl = vi.fn(
+      async (_input: RecordAiCallTraceInput) => {},
+    );
+
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          parseCaptureImpl: vi.fn(async () => {
+            throw new Error("AI provider request failed. secret payload");
+          }),
+          traceContext: { accessToken: "user-a-access-token" },
+          recordAiCallTraceImpl,
+        },
+      ),
+    ).rejects.toThrow(/request failed/i);
+
+    expect(recordAiCallTraceImpl).toHaveBeenCalledTimes(1);
+    const traceInput = recordAiCallTraceImpl.mock.calls[0]?.[0];
+    expect(traceInput).toMatchObject({
+      surface: "parse",
+      validationOutcome: "failed",
+    });
+    expect(JSON.stringify(traceInput)).not.toMatch(/Taylor|secret payload/i);
+  });
+
+  it("maps schema validation failures to the schema_failed trace outcome (issue #288)", async () => {
+    const recordAiCallTraceImpl = vi.fn(
+      async (_input: RecordAiCallTraceInput) => {},
+    );
+
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          parseCaptureImpl: vi.fn(async () => {
+            throw new Error(
+              "AI capture parsing response failed schema validation: private title",
+            );
+          }),
+          traceContext: { accessToken: "user-a-access-token" },
+          recordAiCallTraceImpl,
+        },
+      ),
+    ).rejects.toThrow(/failed schema validation/i);
+
+    expect(recordAiCallTraceImpl).toHaveBeenCalledTimes(1);
+    expect(recordAiCallTraceImpl.mock.calls[0]?.[0]).toMatchObject({
+      validationOutcome: "schema_failed",
+    });
+  });
+
+  it("does not record a trace row for the mock parser path (issue #288)", async () => {
+    const recordAiCallTraceImpl = vi.fn(async () => {});
+
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        env: { AI_MODEL_STANDARD: "standard-model" },
+        traceContext: { accessToken: "user-a-access-token" },
+        recordAiCallTraceImpl,
+      },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(recordAiCallTraceImpl).not.toHaveBeenCalled();
+  });
+
+  it("still resolves the user parse when the trace insert rejects asynchronously (issue #288)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const recordAiCallTraceImpl = vi.fn(async () => {
+      throw new Error("ai_call_traces insert exploded");
+    });
+
+    try {
+      await expect(
+        parseCaptureWithFallback(
+          { rawText: "Email Taylor about launch notes" },
+          {
+            env: {
+              OPENAI_API_KEY: "test-key",
+              AI_MODEL_STANDARD: "standard-model",
+            },
+            parseCaptureImpl: vi.fn(async () => aiResponse),
+            traceContext: { accessToken: "user-a-access-token" },
+            recordAiCallTraceImpl,
+          },
+        ),
+      ).resolves.toMatchObject({ parser: "ai", response: aiResponse });
+
+      // Let the fire-and-forget rejection settle so the catch handler runs.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(recordAiCallTraceImpl).toHaveBeenCalledTimes(1);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("still resolves the user parse when the trace call throws synchronously (issue #288)", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const recordAiCallTraceImpl = vi.fn(() => {
+      throw new Error("ai_call_traces synchronous failure");
+    }) as unknown as typeof import("@/lib/observability").recordAiCallTrace;
+
+    try {
+      await expect(
+        parseCaptureWithFallback(
+          { rawText: "Email Taylor about launch notes" },
+          {
+            env: {
+              OPENAI_API_KEY: "test-key",
+              AI_MODEL_STANDARD: "standard-model",
+            },
+            parseCaptureImpl: vi.fn(async () => aiResponse),
+            traceContext: { accessToken: "user-a-access-token" },
+            recordAiCallTraceImpl,
+          },
+        ),
+      ).resolves.toMatchObject({ parser: "ai", response: aiResponse });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("ai_call_traces"),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

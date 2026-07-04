@@ -84,6 +84,7 @@ Required fields:
 - risks
 - dependencies
 - first reversible move
+- first 3 actions or first-wave outline when the capture is larger than one move
 - what not to do yet
 - confidence level
 - review trigger
@@ -95,6 +96,7 @@ Acceptance criteria:
 - User can answer or resolve discovery questions.
 - System avoids exact timelines for unknown work.
 - System proposes a 30-60 minute uncertainty-reducing next step when applicable.
+- System keeps near-term ambiguous work detailed enough to start while leaving later waves rough until discovery improves confidence.
 
 ---
 
@@ -324,7 +326,6 @@ Acceptance criteria:
 
 ---
 
-
 ### Product Loop and Autonomy Boundary
 
 The V1 product loop is: capture messy input, diagnose ambiguity, bound the work, slice it into a reversible next move, discover missing information, act, and review the outcome. Requirements that support AI assistance must preserve this ambiguity-to-motion loop instead of turning LifeOS into a generic task list or autonomous agent.
@@ -335,7 +336,7 @@ Autonomy is intentionally tiered:
 - Rule-based code may score, surface patterns, and produce learning signals from approved logs.
 - External calendar writes, core policy changes, and destructive archive/delete behavior require explicit user action.
 
-When work is uncertain, the system should help the user distinguish facts, assumptions, guesses, unknowns, constraints, and what not to do yet before encouraging commitment to a plan.
+When work is uncertain, the system should help the user distinguish facts, assumptions, guesses, unknowns, constraints, reversible versus irreversible actions, and what not to do yet before encouraging commitment to a plan. Planning output for ambiguous work must include a next action, timebox, confidence level, known unknowns, review trigger, and what not to do yet.
 
 ## 3. Non-Functional Requirements
 

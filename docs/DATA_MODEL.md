@@ -676,7 +676,13 @@ V1 can avoid hard deletes in the UI and rely on archive/status fields.
 12. add RLS policies
 13. seed default areas and global defaults
 
-## 10. Future project/task state guardrails
+## 10. Ambiguity and planning-theatre guardrails
+
+Ambiguity-related persistence must keep assumptions and first-wave planning visible instead of burying them in prompt text. V1 can represent the first reversible move, review trigger, and what-not-to-do-yet guidance on `ambiguity_assessments`; if future work needs multiple first-wave actions or assumption lifecycle tracking, add explicit user-owned tables or fields with RLS, export coverage, and validation instead of storing opaque AI prose.
+
+Do not add `first_wave_plans` or `assumption_logs` as standalone tables without a separate approved implementation issue covering migration, UI behavior, parser output, export coverage, RLS, and tests.
+
+## 11. Future project/task state guardrails
 
 Use the smallest state machine that supports action.
 
@@ -692,7 +698,7 @@ Guardrails for the future operating-layer upgrade:
 - if a future transition writes more than one table, it must use one transactional `SECURITY INVOKER` RPC per `docs/ENGINEERING_INVARIANTS.md` INV-1
 - any new user-owned table or state-adjacent table remains subject to export coverage (INV-2), RLS, and two-user isolation tests
 
-## 11. Open Questions
+## 12. Open Questions
 
 - Should `area_id` be nullable on `capture_items` only, or also on ambiguous assessments?
 - Should deleted tasks be hard-deletable for privacy, or only archived in V1?

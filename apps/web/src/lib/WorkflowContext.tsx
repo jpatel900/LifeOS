@@ -33,6 +33,8 @@ import {
   appendParsedWorkflowResult,
   acceptProposal,
   addWorkflowArea,
+  applyGoogleCalendarCancelResult,
+  applyGoogleCalendarWriteResult,
   backlogDraft,
   carryForwardTask,
   createLocalProposalFromTask,
@@ -49,7 +51,7 @@ import {
   rejectProposal,
   splitDraft,
   startExecutionSession,
-  submitCapture,
+  submitRawCapture,
   syncWorkflowIdCounterFromState,
   unplanTask,
   updateWorkflowAreaColor,
@@ -71,18 +73,28 @@ import {
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
 import { createSupabaseBrowserClient } from "./supabase/browser";
+import { isLifeOsOwnedGoogleEventIdShape } from "./cockpit/googleCalendarBridge";
 import type {
   Phase2MockCalendarBlock,
   Phase2MockExecutionSession,
   Phase2MockTask,
 } from "./types";
-import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
+import {
+  buildParsedWorkflowResult,
+  type ParsedWorkflowResult,
+} from "./ai/parseCaptureWorkflow";
+import {
+  requestParseCapture,
+  type ParseCaptureClientStatus,
+  type ParseCaptureParserMode,
+} from "./ai/parseCaptureClient";
 import {
   persistedAreaIdForWorkflowAreaId,
   workflowAreaIdForPersistedArea,
@@ -112,11 +124,6 @@ type WorkflowAction =
       type: "updateAreaColor";
       areaId: string;
       color: string;
-    }
-  | {
-      type: "submitCapture";
-      rawText: string;
-      areaId: string | null;
     }
   | {
       type: "appendParsedWorkflowResult";
@@ -226,15 +233,43 @@ type WorkflowAction =
       type: "reset";
     };
 
+/**
+ * UI-facing status of the async capture parse round-trip. The raw capture is
+ * already saved before this leaves "idle", so a failure never loses input.
+ */
+export type CaptureParseState =
+  | { phase: "idle" }
+  | {
+      phase: "parsing";
+      captureId: string;
+      parserMode: ParseCaptureParserMode;
+    }
+  | {
+      phase: "parsed";
+      captureId: string;
+      parser: "ai" | "mock";
+      status: ParseCaptureClientStatus;
+    }
+  | {
+      phase: "failed";
+      captureId: string;
+      status: ParseCaptureClientStatus;
+      message: string;
+      canRetryWithMock: boolean;
+    };
+
 interface WorkflowContextValue {
   state: WorkflowState;
   selectedAreaId: string | null;
   setSelectedAreaId: (areaId: string | null) => void;
   syncStatus: WorkflowSyncStatus;
   syncPersistedAreas: (areas: Area[]) => void;
+  refreshPersistedWorkflow: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
   submitCaptureText: (rawText: string, areaId: string | null) => void;
+  captureParse: CaptureParseState;
+  retryCaptureParseWithMock: () => void;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
   acceptTaskDraft: (draftId: string) => void;
   backlogTaskDraft: (draftId: string) => void;
@@ -280,6 +315,32 @@ interface WorkflowContextValue {
   dropTask: (taskId: string) => void;
   saveReview: () => void;
   resetWorkflow: () => void;
+  approveProposalGoogleWrite: (
+    proposalId: string,
+    options?: { acknowledgeFirstWriteWarning?: boolean },
+  ) => Promise<GoogleCalendarBridgeResult>;
+  cancelGoogleCalendarBlock: (
+    blockId: string,
+  ) => Promise<GoogleCalendarBridgeResult>;
+}
+
+export interface GoogleCalendarBridgeResult {
+  outcome:
+    | "created"
+    | "cancelled"
+    | "first-write-warning"
+    | "unavailable"
+    | "failed";
+  message: string;
+}
+
+interface GoogleCalendarWriteRoutePayload {
+  ok?: boolean;
+  error?: string;
+  first_write_warning_required?: boolean;
+  google_event_id?: string;
+  block?: { id?: string };
+  event_already_gone?: boolean;
 }
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
@@ -800,11 +861,6 @@ function workflowReducer(
       return addWorkflowArea(state, { name: action.name, color: action.color });
     case "updateAreaColor":
       return updateWorkflowAreaColor(state, action.areaId, action.color);
-    case "submitCapture":
-      return submitCapture(state, {
-        rawText: action.rawText,
-        areaId: action.areaId,
-      });
     case "appendParsedWorkflowResult":
       return appendParsedWorkflowResult(state, action.parsed);
     case "acceptDraft":
@@ -900,6 +956,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
   const [syncStatus, setSyncStatus] =
     useState<WorkflowSyncStatus>(initialSyncStatus);
+  const [captureParse, setCaptureParse] = useState<CaptureParseState>({
+    phase: "idle",
+  });
+  const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
   const persistedCaptureIdByLocalIdRef = useRef(new Map<string, string>());
@@ -1464,6 +1524,251 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     await syncPersistedWorkflowRows(client);
   }
 
+  async function getGoogleBridgeAccessToken(): Promise<
+    | { ok: true; accessToken: string }
+    | { ok: false; result: GoogleCalendarBridgeResult }
+  > {
+    const client = createSupabaseBrowserClient();
+
+    if (
+      !client ||
+      !client.auth ||
+      typeof client.auth.getSession !== "function"
+    ) {
+      return {
+        ok: false,
+        result: {
+          outcome: "unavailable",
+          message:
+            "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
+        },
+      };
+    }
+
+    const { data, error } = await client.auth.getSession();
+
+    if (error || !data.session?.access_token) {
+      return {
+        ok: false,
+        result: {
+          outcome: "unavailable",
+          message:
+            "Sign in before approving Google Calendar changes. Local planning keeps working.",
+        },
+      };
+    }
+
+    return { ok: true, accessToken: data.session.access_token };
+  }
+
+  async function postGoogleCalendarRoute(
+    path: string,
+    accessToken: string,
+    body: Record<string, unknown>,
+  ): Promise<
+    | {
+        ok: true;
+        response: Response;
+        payload: GoogleCalendarWriteRoutePayload | null;
+      }
+    | { ok: false; result: GoogleCalendarBridgeResult }
+  > {
+    try {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const payload = (await response
+        .json()
+        .catch(() => null)) as GoogleCalendarWriteRoutePayload | null;
+      return { ok: true, response, payload };
+    } catch {
+      return {
+        ok: false,
+        result: {
+          outcome: "failed",
+          message:
+            "The Google Calendar request could not be sent. Local plan data is unchanged.",
+        },
+      };
+    }
+  }
+
+  async function approveProposalGoogleWrite(
+    proposalId: string,
+    options?: { acknowledgeFirstWriteWarning?: boolean },
+  ): Promise<GoogleCalendarBridgeResult> {
+    const proposal = stateRef.current.timeBlockProposals.find(
+      (item) => item.id === proposalId,
+    );
+    if (!proposal) {
+      return {
+        outcome: "failed",
+        message: "This proposal is no longer part of the local plan.",
+      };
+    }
+
+    const session = await getGoogleBridgeAccessToken();
+    if (!session.ok) {
+      return session.result;
+    }
+
+    const persistedProposalId = persistedIdForLocalId(
+      proposalId,
+      persistedProposalIdByLocalIdRef.current,
+    );
+    if (!persistedProposalId) {
+      return {
+        outcome: "unavailable",
+        message:
+          "This proposal has not synced to your account yet, so it cannot be written to Google. Try again after sync.",
+      };
+    }
+
+    const sent = await postGoogleCalendarRoute(
+      "/api/google-calendar/create-event",
+      session.accessToken,
+      {
+        proposal_id: persistedProposalId,
+        approved: true,
+        acknowledge_first_write_warning: Boolean(
+          options?.acknowledgeFirstWriteWarning,
+        ),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      },
+    );
+    if (!sent.ok) {
+      return sent.result;
+    }
+
+    const { response, payload } = sent;
+
+    if (response.status === 428 && payload?.first_write_warning_required) {
+      return {
+        outcome: "first-write-warning",
+        message:
+          payload.error ??
+          "Acknowledge the first Google Calendar write warning before creating the first event.",
+      };
+    }
+
+    if (
+      !response.ok ||
+      !payload?.ok ||
+      typeof payload.google_event_id !== "string"
+    ) {
+      return {
+        outcome: "failed",
+        message:
+          payload?.error ??
+          "Google Calendar write failed. The local proposal is unchanged.",
+      };
+    }
+
+    const previous = stateRef.current;
+    const next = applyGoogleCalendarWriteResult(
+      previous,
+      proposalId,
+      payload.google_event_id,
+    );
+    const localBlock =
+      next.calendarBlocks.find(
+        (block) =>
+          !previous.calendarBlocks.some((item) => item.id === block.id),
+      ) ?? null;
+    applyWorkflowState(next);
+
+    if (localBlock && typeof payload.block?.id === "string") {
+      persistedBlockIdByLocalIdRef.current.set(localBlock.id, payload.block.id);
+    }
+
+    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(() => {
+      markAccountSyncError(
+        "Google event created; account resync failed and can recover later.",
+      );
+    });
+
+    return {
+      outcome: "created",
+      message: "Google Calendar event created from your approved proposal.",
+    };
+  }
+
+  async function cancelGoogleCalendarBlock(
+    blockId: string,
+  ): Promise<GoogleCalendarBridgeResult> {
+    const block = stateRef.current.calendarBlocks.find(
+      (item) => item.id === blockId,
+    );
+    if (!block || !isLifeOsOwnedGoogleEventIdShape(block.google_event_id)) {
+      return {
+        outcome: "failed",
+        message:
+          "Only calendar events created by LifeOS can be cancelled from the cockpit.",
+      };
+    }
+
+    const session = await getGoogleBridgeAccessToken();
+    if (!session.ok) {
+      return session.result;
+    }
+
+    const persistedBlockId = persistedIdForLocalId(
+      blockId,
+      persistedBlockIdByLocalIdRef.current,
+    );
+    if (!persistedBlockId) {
+      return {
+        outcome: "unavailable",
+        message:
+          "This block has not synced to your account yet, so its Google event cannot be cancelled from here.",
+      };
+    }
+
+    const sent = await postGoogleCalendarRoute(
+      "/api/google-calendar/cancel-event",
+      session.accessToken,
+      {
+        calendar_block_id: persistedBlockId,
+        approved: true,
+      },
+    );
+    if (!sent.ok) {
+      return sent.result;
+    }
+
+    const { response, payload } = sent;
+
+    if (!response.ok || !payload?.ok) {
+      return {
+        outcome: "failed",
+        message:
+          payload?.error ??
+          "Google Calendar cancel failed. Local block data is unchanged.",
+      };
+    }
+
+    const next = applyGoogleCalendarCancelResult(stateRef.current, blockId);
+    applyWorkflowState(next);
+
+    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(() => {
+      markAccountSyncError(
+        "Google event cancelled; account resync failed and can recover later.",
+      );
+    });
+
+    return {
+      outcome: "cancelled",
+      message: payload.event_already_gone
+        ? "The Google event was already gone. The local block is now cancelled."
+        : "Google Calendar event cancelled. The task is back in the plannable pool.",
+    };
+  }
+
   useEffect(() => {
     const restored = loadStoredStateFromSession();
     const restoredState = restored.state;
@@ -1555,14 +1860,80 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "hydrate", state: nextState });
   }
 
+  async function parseCaptureIntoDrafts(
+    capture: WorkflowState["captureItems"][number],
+    parserMode: ParseCaptureParserMode,
+  ) {
+    activeParseCaptureIdRef.current = capture.id;
+    setCaptureParse({ phase: "parsing", captureId: capture.id, parserMode });
+
+    // Best-effort: attach the signed-in user's access token so the parse route
+    // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
+    // Parsing itself never requires this token, so any failure here is ignored.
+    let authorization: string | undefined;
+    try {
+      const authClient = createSupabaseBrowserClient();
+      if (authClient) {
+        const { data } = await authClient.auth.getSession();
+        const accessToken = data.session?.access_token?.trim();
+        if (accessToken) {
+          authorization = `Bearer ${accessToken}`;
+        }
+      }
+    } catch {
+      // Tracing is optional; a missing/failed session must never block parsing.
+    }
+
+    const result = await requestParseCapture({
+      rawText: capture.raw_text,
+      areaContext: stateRef.current.areas.map((area) => ({
+        slug: area.name.toLowerCase().replace(/\s+/g, "-"),
+        name: area.name,
+      })),
+      parserMode,
+      authorization,
+    });
+
+    if (result.ok) {
+      const parsed = buildParsedWorkflowResult({
+        response: result.response,
+        capture,
+        workflowAreaId: capture.area_id,
+      });
+      applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
+    }
+
+    if (activeParseCaptureIdRef.current !== capture.id) {
+      return;
+    }
+
+    setCaptureParse(
+      result.ok
+        ? {
+            phase: "parsed",
+            captureId: capture.id,
+            parser: result.parser,
+            status: result.status,
+          }
+        : {
+            phase: "failed",
+            captureId: capture.id,
+            status: result.status,
+            message: result.error,
+            canRetryWithMock: result.canRetryWithMock,
+          },
+    );
+  }
+
   function submitCaptureText(rawText: string, areaId: string | null) {
     const previous = stateRef.current;
-    const next = submitCapture(previous, { rawText, areaId });
+    const next = submitRawCapture(previous, { rawText, areaId });
     const localCapture = next.captureItems.find(
       (capture) =>
         !previous.captureItems.some((item) => item.id === capture.id),
     );
 
+    // Raw capture is staged and persisted before any parse attempt.
     applyWorkflowState(next);
 
     if (localCapture) {
@@ -1571,7 +1942,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           "Capture saved locally; account sync failed and can recover later.",
         );
       });
+      void parseCaptureIntoDrafts(localCapture, "auto");
     }
+  }
+
+  function retryCaptureParseWithMock() {
+    if (captureParse.phase !== "failed") {
+      return;
+    }
+
+    const capture = stateRef.current.captureItems.find(
+      (item) => item.id === captureParse.captureId,
+    );
+    if (!capture) {
+      return;
+    }
+
+    void parseCaptureIntoDrafts(capture, "mock");
   }
 
   function acceptTaskDraftWithPersistence(
@@ -1680,10 +2067,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSelectedAreaId,
     syncStatus,
     syncPersistedAreas: applyPersistedAreas,
+    refreshPersistedWorkflow: async () => {
+      await syncPersistedWorkflowRows(createSupabaseBrowserClient());
+    },
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
     submitCaptureText,
+    captureParse,
+    retryCaptureParseWithMock,
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),
     acceptTaskDraft: (draftId) =>
@@ -1704,8 +2096,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     acceptProjectDraft: (draftId) =>
       dispatch({ type: "acceptProjectDraft", draftId }),
     rejectTaskDraft: (draftId) => {
+      const draft = stateRef.current.taskDrafts.find(
+        (item) => item.id === draftId,
+      );
       dispatch({ type: "rejectDraft", draftId });
       markLocalOnly("Dropped draft locally; account sync is pending.");
+
+      if (draft) {
+        recordRejectedTaskDraft(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWorkflowId(
+            draft.area_id,
+            persistedAreasRef.current,
+          ),
+          draft_id: draft.id,
+          title: draft.title,
+          confidence: draft.confidence,
+        });
+      }
     },
     rejectProjectDraft: (draftId) =>
       dispatch({ type: "rejectProjectDraft", draftId }),
@@ -1865,6 +2272,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       });
     },
     resetWorkflow: () => dispatch({ type: "reset" }),
+    approveProposalGoogleWrite,
+    cancelGoogleCalendarBlock,
   };
 
   return (

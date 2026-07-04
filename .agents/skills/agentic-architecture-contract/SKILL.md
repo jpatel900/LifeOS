@@ -24,11 +24,11 @@ Hard rule: one home per fact. If a decision is recorded in an ADR, other docs li
 
 ## The contract: four artifacts
 
-Keep all four in one directory: `<repo>/docs/architecture/` (default; adapt to the repo's existing docs layout — discover with `git ls-files '*.md' | head -50`).
+Default layout (adapt to the repo's existing docs — discover with `git ls-files '*.md' | head -50`): ADRs at `docs/adr/` (the conventional path; template home is `agentic-docs-and-writing` §5), the three registers together in `docs/architecture/`.
 
 | Artifact | File | Answers |
 |---|---|---|
-| ADR log | `docs/architecture/adr/NNNN-<slug>.md` | "Why is it built this way?" |
+| ADR log | `docs/adr/NNNN-<slug>.md` | "Why is it built this way?" |
 | Invariants register | `docs/architecture/INVARIANTS.md` | "What must always hold?" |
 | Load-bearing list | `docs/architecture/LOAD-BEARING.md` | "What must I not touch without an ADR?" |
 | Weak-points register | `docs/architecture/WEAK-POINTS.md` | "What is known-bad and why is it still here?" |
@@ -37,37 +37,17 @@ Also add one line to the agent's persistent-instructions file (CLAUDE.md / AGENT
 
 ## 1. ADR-lite
 
-An ADR (Architecture Decision Record) is a one-page record of one decision. ADR-lite means: five sections, one page hard max, written in ten minutes or it will not be written at all.
+An ADR (Architecture Decision Record) is a one-page record of one decision, written in ten minutes or it will not be written at all.
 
-### Template (copy verbatim)
-
-```markdown
-# ADR-NNNN: <decision as a verb phrase, e.g. "Use SQLite as the single datastore">
-
-- Status: accepted | superseded-by-ADR-MMMM | deprecated
-- Date: YYYY-MM-DD
-
-## Context
-<2-5 sentences: the forces. What problem, what constraints, what alternatives were live.>
-
-## Decision
-<1-3 sentences, declarative. "We will X." Name the rejected alternatives by name.>
-
-## Rationale
-<Why X beat the alternatives. Include the one killer argument, not all arguments.>
-
-## Consequences
-<What gets harder/easier. What is now load-bearing because of this. What would
-have to be true for this to be revisited (the reversal trigger).>
-```
+**The template has exactly one home: `agentic-docs-and-writing` §5 (ADR-lite).** Copy it from there — do not reconstruct it from memory; forked templates are how ADR logs diverge. This skill owns the *policy*: when an ADR is mandatory (below) and what must be recorded (the rejected alternatives and the reversal trigger are the load-bearing parts — a decision without them cannot be defended or revisited).
 
 Numbering: zero-padded sequence (`0001-...`). Find the next number with:
 
 ```bash
-ls docs/architecture/adr/ | sort | tail -1        # bash
+ls docs/adr/ | sort | tail -1        # bash
 ```
 ```powershell
-Get-ChildItem docs/architecture/adr | Sort-Object Name | Select-Object -Last 1   # PowerShell
+Get-ChildItem docs/adr | Sort-Object Name | Select-Object -Last 1   # PowerShell
 ```
 
 ### When an ADR is mandatory (hard rule)
@@ -209,7 +189,7 @@ git log --grep="decid\|instead of\|chose\|switch\|migrat" -i --oneline | head -2
 
 ## Provenance and maintenance
 
-- Authored 2026-07-02. Doctrine and templates are experience-derived heuristics except where marked "hard rule"; the spine/perimeter doctrine is a strong default validated across agentic projects, not a theorem.
+- Authored 2026-07-02. Doctrine and templates are experience-derived heuristics except where marked "hard rule"; the spine/perimeter doctrine is a strong default, consistently observed across agentic projects but not a theorem.
 - Volatile facts: none load-bearing. The shell commands use only git, grep, ls, cat, and PowerShell built-ins; all flags used (`git log --format= --name-only`, `git tag --sort=creatordate`, `git diff --stat`, `grep -rniE`) are long-stable. As of 2026-07-02.
 - Re-verify commands if git behavior is suspected to have drifted: `git log --help`, `git tag --help`, `grep --help` (bash) / `Get-Help Select-String` (PowerShell).
 - Cross-references (re-check on library reorganization): agentic-change-control (gating), agentic-project-onboarding (recon), agentic-failure-archaeology (failure chronicle), agentic-validation-and-qa (evidence for invariant checks), agentic-docs-and-writing (doc style).

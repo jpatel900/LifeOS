@@ -31,6 +31,29 @@ const auditRow = {
   created_at: "2026-05-09T00:00:00.000Z",
 };
 
+function makeUpdate(status: "failed" | "succeeded") {
+  const single = vi.fn().mockResolvedValue({
+    data: {
+      ...auditRow,
+      result_status: status,
+      created_at: "2026-05-09T00:20:00.000Z",
+    },
+    error: null,
+  });
+  const select = vi.fn().mockReturnValue({ single });
+  const eq = vi.fn();
+  const chain = { eq, select };
+  eq.mockReturnValue(chain);
+  return { eq, update: vi.fn().mockReturnValue(chain) };
+}
+
+function makeIncidentEq() {
+  const eq = vi.fn();
+  const chain = { eq };
+  eq.mockReturnValue(chain);
+  return eq;
+}
+
 describe("external write audit helpers", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -71,21 +94,24 @@ describe("external write audit helpers", () => {
   });
 
   it("updates only the authenticated user's audit row through the service-role client", async () => {
-    const single = vi.fn().mockResolvedValue({
-      data: {
-        ...auditRow,
-        result_status: "failed",
-        error_message: "Google Calendar event insert failed.",
-      },
-      error: null,
-    });
-    const select = vi.fn().mockReturnValue({ single });
-    const eq = vi.fn();
-    const chain = { eq, select };
-    eq.mockReturnValue(chain);
-    const update = vi.fn().mockReturnValue(chain);
+    const { eq, update } = makeUpdate("failed");
+    const incidentEq = makeIncidentEq();
+    const incidentUpdate = vi.fn().mockReturnValue({ eq: incidentEq });
+    const historyOrder = vi.fn().mockResolvedValue({ data: [], error: null });
+    const historyGte = vi.fn().mockReturnValue({ order: historyOrder });
+    const historyEq = vi.fn();
+    historyEq.mockReturnValue({ eq: historyEq, gte: historyGte });
+    const historySelect = vi.fn().mockReturnValue({ eq: historyEq });
     const serviceClient = {
-      from: vi.fn().mockReturnValue({ update }),
+      from: vi.fn((table: string) => {
+        if (table === "health_incidents") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            update: incidentUpdate,
+          };
+        }
+        return { select: historySelect, update };
+      }),
     };
     mocks.requireSupabaseServiceRoleClient.mockReturnValue(serviceClient);
 
@@ -101,5 +127,69 @@ describe("external write audit helpers", () => {
 
     expect(eq).toHaveBeenCalledWith("id", auditRow.id);
     expect(eq).toHaveBeenCalledWith("user_id", user.id);
+  });
+
+  it("opens incidents only after three consecutive failures and closes them on success", async () => {
+    const insertIncident = vi.fn().mockResolvedValue({ error: null });
+    const incidentEq = makeIncidentEq();
+    const incidentUpdate = vi.fn().mockReturnValue({ eq: incidentEq });
+    const historyOrder = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [
+          { result_status: "failed" },
+          { result_status: "failed" },
+          { result_status: "succeeded" },
+        ],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [
+          { result_status: "failed" },
+          { result_status: "failed" },
+          { result_status: "failed" },
+        ],
+        error: null,
+      });
+    const historyGte = vi.fn().mockReturnValue({ order: historyOrder });
+    const historyEq = vi.fn();
+    historyEq.mockReturnValue({ eq: historyEq, gte: historyGte });
+    const historySelect = vi.fn().mockReturnValue({ eq: historyEq });
+    let current = makeUpdate("failed");
+    const serviceClient = {
+      from: vi.fn((table: string) => {
+        if (table === "health_incidents") {
+          return { insert: insertIncident, update: incidentUpdate };
+        }
+        return { select: historySelect, update: current.update };
+      }),
+    };
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue(serviceClient);
+
+    await updateExternalWriteEventResultForAccessToken(
+      "supabase-access-token",
+      auditRow.id,
+      { errorMessage: "failed", resultStatus: "failed", resultSummary: {} },
+    );
+    expect(insertIncident).not.toHaveBeenCalled();
+
+    await updateExternalWriteEventResultForAccessToken(
+      "supabase-access-token",
+      auditRow.id,
+      { errorMessage: "failed", resultStatus: "failed", resultSummary: {} },
+    );
+    expect(insertIncident).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "open" }),
+    );
+
+    current = makeUpdate("succeeded");
+    await updateExternalWriteEventResultForAccessToken(
+      "supabase-access-token",
+      auditRow.id,
+      { errorMessage: null, resultStatus: "succeeded", resultSummary: {} },
+    );
+    expect(incidentUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "closed" }),
+    );
   });
 });

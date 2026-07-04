@@ -9,6 +9,7 @@ export * from "./entities";
 export * from "./parse-capture";
 export * from "./user";
 export * from "./model-tier";
+export * from "./meta-learning";
 export * from "./phase2-mock-workflow";
 
 export const CreateCaptureItemInputSchema = z.object({
@@ -159,6 +160,7 @@ export type EditTimeBlockProposalInput = z.input<
 
 export const CheckTimeBlockProposalConflictInputSchema = z.object({
   proposal_id: z.string().uuid(),
+  timezone: z.string().trim().min(1).default("UTC"),
 });
 
 export type CheckTimeBlockProposalConflictInput = z.input<
@@ -174,6 +176,15 @@ export const CreateGoogleCalendarEventInputSchema = z.object({
 
 export type CreateGoogleCalendarEventInput = z.input<
   typeof CreateGoogleCalendarEventInputSchema
+>;
+
+export const CancelGoogleCalendarEventInputSchema = z.object({
+  calendar_block_id: z.string().uuid(),
+  approved: z.literal(true),
+});
+
+export type CancelGoogleCalendarEventInput = z.input<
+  typeof CancelGoogleCalendarEventInputSchema
 >;
 
 const isoDate = z

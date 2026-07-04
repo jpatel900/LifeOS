@@ -1,35 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import {
-  acceptDraft,
-  createInitialWorkflowState,
-  markCurrentSession,
-  planTaskAtHour,
-  startExecutionSession,
-  submitCapture,
-} from "@/lib/workflow";
-
-function addAcceptedTask(
-  state: ReturnType<typeof createInitialWorkflowState>,
-  rawText: string,
-  areaId: string,
-) {
-  const captured = submitCapture(state, { rawText, areaId });
-  return acceptDraft(captured, captured.taskDrafts[0].id);
-}
+  acceptLatestDraft,
+  buildWorkflowCockpitViewModel,
+  captureWorkflow,
+  GOLDEN_AREA_ID,
+  markLatestSession,
+  planLatestActiveTask,
+  startLatestScheduledTask,
+  workflowSeed,
+} from "./helpers/workflowReachability";
 
 describe("cockpit view model flow coverage", () => {
   it("keeps running planned blocks visible for execution", () => {
-    let state = createInitialWorkflowState();
-    state = addAcceptedTask(
-      state,
-      "Finish the running block proof.",
-      "area-main-job",
-    );
-    state = planTaskAtHour(state, state.tasks[0].id, 9);
-    state = startExecutionSession(state, state.tasks[0].id);
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Finish the running block proof.");
+    state = acceptLatestDraft(state);
+    state = planLatestActiveTask(state, 9);
+    state = startLatestScheduledTask(state);
 
-    const vm = buildCockpitViewModel(state, "area-main-job", true);
+    const vm = buildWorkflowCockpitViewModel(state);
 
     expect(vm.planned).toHaveLength(1);
     expect(vm.planned[0].task.title).toBe("Finish the running block proof");
@@ -37,17 +26,14 @@ describe("cockpit view model flow coverage", () => {
   });
 
   it("exposes stuck work as review recovery", () => {
-    let state = createInitialWorkflowState();
-    state = addAcceptedTask(
-      state,
-      "Recover stuck work from review.",
-      "area-main-job",
-    );
-    state = planTaskAtHour(state, state.tasks[0].id, 9);
-    state = startExecutionSession(state, state.tasks[0].id);
-    state = markCurrentSession(state, "stuck", { actualMinutes: 3 });
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Recover stuck work from review.");
+    state = acceptLatestDraft(state);
+    state = planLatestActiveTask(state, 9);
+    state = startLatestScheduledTask(state);
+    state = markLatestSession(state, "stuck");
 
-    const vm = buildCockpitViewModel(state, "area-main-job", true);
+    const vm = buildWorkflowCockpitViewModel(state);
 
     expect(vm.reviewQueue.map((item) => item.task.title)).toContain(
       "Recover stuck work from review",
@@ -56,17 +42,11 @@ describe("cockpit view model flow coverage", () => {
   });
 
   it("builds the overview pipeline from every area, not only the active area", () => {
-    let state = createInitialWorkflowState();
-    state = submitCapture(state, {
-      rawText: "Main area overview proof.",
-      areaId: "area-main-job",
-    });
-    state = submitCapture(state, {
-      rawText: "Personal overview proof.",
-      areaId: "area-personal",
-    });
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Main area overview proof.", GOLDEN_AREA_ID);
+    state = captureWorkflow(state, "Personal overview proof.", "area-personal");
 
-    const vm = buildCockpitViewModel(state, "area-personal", true);
+    const vm = buildWorkflowCockpitViewModel(state, "area-personal");
 
     expect(vm.global.inbox.map((item) => item.title)).toEqual(
       expect.arrayContaining([

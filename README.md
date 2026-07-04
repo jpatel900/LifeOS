@@ -2,7 +2,7 @@
 
 Area-scoped personal workflow cockpit. The current shipped surface includes Today/Home Cockpit v1, Supabase-backed areas and workflow slices, AI parse-capture routing, Google Calendar connection/free-busy/approval-gated event creation, observability wrappers, and broad UX hardening, while the Phase 2 mock vertical slice remains available for local triage.
 
-Project documentation lives in `docs/`. For bounded agent/developer orientation, start with `docs/agent/CONTEXT_INDEX.md` or `pnpm agent:context <area>`, then read `docs/PROJECT_STATE.md` and the relevant authority docs as needed. This helper is for orientation only and does not replace authority docs.
+Project documentation lives in `docs/`. For bounded agent/developer orientation, search first, use `pnpm agent:context <area>` when helpful, then read `docs/PROJECT_STATE.md` and the relevant authority docs only as needed. These helpers do not replace authority docs.
 
 ## Documentation authority order
 
@@ -16,7 +16,7 @@ Authority decreases down the list. Higher entries override lower ones when they 
 6. **UX_FLOWS.md** — User journeys and screen behavior.
 7. **SECURITY_PRIVACY.md** — Security, privacy, auth, and external-write rules.
 8. **TEST_PLAN.md** — Acceptance tests and validation requirements.
-The implementation authority docs are `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `ENGINEERING_INVARIANTS.md`, `UX_FLOWS.md`, `SECURITY_PRIVACY.md`, and `TEST_PLAN.md`. `AGENTS.md` governs agent behavior above all of them.
+   The implementation authority docs are `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATA_MODEL.md`, `ENGINEERING_INVARIANTS.md`, `UX_FLOWS.md`, `SECURITY_PRIVACY.md`, and `TEST_PLAN.md`. `AGENTS.md` governs agent behavior above all of them.
 
 Architecture Decision Records in `docs/adr/` clarify or amend `ARCHITECTURE.md` for the decisions they record.
 

@@ -24,6 +24,7 @@ Principles:
 8. External writes require explicit approval.
 9. Area context should be visible everywhere.
 10. The system must help the user recover after disruption.
+11. Planning outputs should prevent planning theatre: show the next action, timebox, confidence, known unknowns, review trigger, and what not to do yet instead of decorative roadmaps.
 
 ## 2. Primary Navigation
 
@@ -158,6 +159,7 @@ Turn a vague large task into a first workable map.
 - System does not create a fake full roadmap.
 - System shows uncertainty explicitly.
 - First move is reversible and time-boxed.
+- Near-term work is concrete enough to start; later-wave work stays rough until discovery improves confidence.
 - User can convert only selected items into tasks.
 
 ## 6. Flow 4 — Triage

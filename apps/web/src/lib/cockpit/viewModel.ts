@@ -39,6 +39,12 @@ export interface CockpitViewModel {
     hour: number;
   }[];
   proposals: {
+    allDayContexts: {
+      date: string;
+      endDate: string;
+      id: string;
+      summary: string;
+    }[];
     proposal: Phase2TimeBlockProposal;
     task: Phase2MockTask;
     hour: number;
@@ -90,6 +96,37 @@ function cardColorFor(area: Phase2MockArea, dark: boolean) {
     dark,
     sf2: dark ? "#1b1e25" : "#ffffff",
   });
+}
+
+function allDayContextsForProposal(proposal: Phase2TimeBlockProposal) {
+  const details = (proposal as { conflict_details_json?: unknown })
+    .conflict_details_json;
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    return [];
+  }
+
+  const contexts = (details as Record<string, unknown>).all_day_contexts;
+  if (!Array.isArray(contexts)) return [];
+
+  return contexts
+    .map((context) => {
+      if (!context || typeof context !== "object" || Array.isArray(context)) {
+        return null;
+      }
+      const item = context as Record<string, unknown>;
+      return typeof item.date === "string" &&
+        typeof item.endDate === "string" &&
+        typeof item.id === "string" &&
+        typeof item.summary === "string"
+        ? {
+            date: item.date,
+            endDate: item.endDate,
+            id: item.id,
+            summary: item.summary,
+          }
+        : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 }
 
 function makePipelineCard(
@@ -173,6 +210,7 @@ export function buildCockpitViewModel(
       );
       return task
         ? {
+            allDayContexts: allDayContextsForProposal(proposal),
             proposal,
             task,
             hour: new Date(proposal.proposed_start).getHours(),

@@ -40,7 +40,9 @@ interface ParseCaptureInput {
   areaId?: string | null;
 }
 
-interface SubmitCaptureInput extends ParseCaptureInput {}
+interface SubmitCaptureInput extends ParseCaptureInput {
+  existingCapture?: Phase2CaptureItem;
+}
 
 interface AddAreaInput {
   name: string;
@@ -202,6 +204,34 @@ export function mockParseCapture(
       estimated_minutes_low: 30,
       estimated_minutes_high: 60,
       first_tiny_step: firstMove,
+      breakdown: {
+        steps: [
+          {
+            order: 1,
+            title: firstMove,
+            estimated_minutes: 10,
+            depends_on_orders: [],
+            on_critical_path: true,
+          },
+          {
+            order: 2,
+            title: `Do the core work for: ${title}`,
+            estimated_minutes: 30,
+            depends_on_orders: [1],
+            on_critical_path: true,
+          },
+          {
+            order: 3,
+            title: `Confirm the outcome and capture follow-ups for: ${title}`,
+            estimated_minutes: 10,
+            depends_on_orders: [2],
+            on_critical_path: true,
+          },
+        ],
+        sequence_summary:
+          "Clarify the step, do the core work, then confirm the outcome.",
+        kickstart_step: `Open the capture and write one sentence defining done for: ${title}`,
+      },
       status: "pending",
       created_at: createdAt,
     },
@@ -262,28 +292,117 @@ export function mockParseCapture(
   return MockParseCaptureResponseSchema.parse(response);
 }
 
+export function createRawCaptureItem(
+  input: ParseCaptureInput,
+): Phase2CaptureItem {
+  const rawText = input.rawText.trim();
+  if (!rawText) {
+    throw new Error("Capture text is required.");
+  }
+
+  return {
+    id: nextId("capture"),
+    user_id: MOCK_USER_ID,
+    area_id: input.areaId ?? null,
+    raw_text: rawText,
+    capture_mode: "text",
+    inferred_area_confidence: null,
+    status: "new",
+    created_at: nowIso(),
+  };
+}
+
+export function appendRawCapture(
+  state: WorkflowState,
+  capture: Phase2CaptureItem,
+): WorkflowState {
+  return {
+    ...state,
+    captureItems: [capture, ...state.captureItems],
+    reviewLog: [`Captured raw text: ${capture.raw_text}`, ...state.reviewLog],
+  };
+}
+
 export function submitCapture(
   state: WorkflowState,
   input: SubmitCaptureInput,
 ): WorkflowState {
   const parsed = mockParseCapture(input);
+  const captureItem = input.existingCapture
+    ? {
+        ...parsed.captureItem,
+        id: input.existingCapture.id,
+        created_at: input.existingCapture.created_at,
+      }
+    : parsed.captureItem;
+  const taskDraft = {
+    ...parsed.taskDraft,
+    capture_item_id: captureItem.id,
+  };
+  const projectDraft = parsed.projectDraft
+    ? {
+        ...parsed.projectDraft,
+        capture_item_id: captureItem.id,
+      }
+    : null;
+  const ambiguityAssessment = {
+    ...parsed.ambiguityAssessment,
+    source_capture_item_id: captureItem.id,
+  };
+  const timeBlockProposalDraft = {
+    ...parsed.timeBlockProposalDraft,
+    capture_item_id: captureItem.id,
+    task_draft_id: taskDraft.id,
+  };
 
   return {
     ...state,
-    captureItems: [parsed.captureItem, ...state.captureItems],
-    taskDrafts: [parsed.taskDraft, ...state.taskDrafts],
-    projectDrafts: parsed.projectDraft
-      ? [parsed.projectDraft, ...state.projectDrafts]
-      : state.projectDrafts,
-    ambiguityAssessments: [
-      parsed.ambiguityAssessment,
-      ...state.ambiguityAssessments,
+    captureItems: [
+      captureItem,
+      ...state.captureItems.filter((item) => item.id !== captureItem.id),
     ],
+    taskDrafts: [taskDraft, ...state.taskDrafts],
+    projectDrafts: projectDraft
+      ? [projectDraft, ...state.projectDrafts]
+      : state.projectDrafts,
+    ambiguityAssessments: [ambiguityAssessment, ...state.ambiguityAssessments],
     timeBlockProposalDrafts: [
-      parsed.timeBlockProposalDraft,
+      timeBlockProposalDraft,
       ...state.timeBlockProposalDrafts,
     ],
     reviewLog: [`Captured: ${parsed.taskDraft.title}`, ...state.reviewLog],
+  };
+}
+
+/**
+ * Raw-save-first: stages only the capture item so the raw text is in state
+ * (and persistable) before any parse attempt. Drafts arrive later via
+ * `appendParsedWorkflowResult` once /api/parse-capture returns.
+ */
+export function submitRawCapture(
+  state: WorkflowState,
+  input: SubmitCaptureInput,
+): WorkflowState {
+  const rawText = input.rawText.trim();
+  if (!rawText) {
+    throw new Error("Capture text is required.");
+  }
+
+  const captureItem: Phase2CaptureItem = {
+    id: nextId("capture"),
+    user_id: MOCK_USER_ID,
+    area_id: inferAreaId(rawText, input.areaId),
+    raw_text: rawText,
+    capture_mode: "text",
+    inferred_area_confidence: input.areaId ? 1 : 0.74,
+    status: "new",
+    created_at: nowIso(),
+  };
+
+  return {
+    ...state,
+    captureItems: [captureItem, ...state.captureItems],
+    reviewLog: [`Captured: ${makeTitle(rawText)}`, ...state.reviewLog],
   };
 }
 
@@ -291,14 +410,26 @@ export function appendParsedWorkflowResult(
   state: WorkflowState,
   parsed: ParsedWorkflowResult,
 ): WorkflowState {
+  const captureExists = state.captureItems.some(
+    (item) => item.id === parsed.captureItem.id,
+  );
+
   return {
     ...state,
-    captureItems: [parsed.captureItem, ...state.captureItems],
+    captureItems: captureExists
+      ? state.captureItems.map((item) =>
+          item.id === parsed.captureItem.id ? parsed.captureItem : item,
+        )
+      : [parsed.captureItem, ...state.captureItems],
     taskDrafts: [...parsed.taskDrafts, ...state.taskDrafts],
     projectDrafts: [...parsed.projectDrafts, ...state.projectDrafts],
     ambiguityAssessments: parsed.ambiguityAssessment
       ? [parsed.ambiguityAssessment, ...state.ambiguityAssessments]
       : state.ambiguityAssessments,
+    timeBlockProposalDrafts: [
+      ...parsed.timeBlockProposalDrafts,
+      ...state.timeBlockProposalDrafts,
+    ],
     reviewLog: [
       `Parsed capture: ${parsed.captureItem.raw_text}`,
       ...state.reviewLog,
@@ -364,6 +495,8 @@ export function splitDraft(
       : `Split from: ${draft.title}`,
     confidence: Math.min(draft.confidence, 0.72),
     first_tiny_step: `Clarify the first move for: ${title}`,
+    // The parsed breakdown described the original scope; a split changes it.
+    breakdown: null,
     status: "pending",
     created_at: createdAt,
   });
@@ -423,6 +556,8 @@ export function mergeDrafts(
             primary.first_tiny_step ??
             secondary.first_tiny_step ??
             `Clarify the first move for: ${mergedTitle}`,
+          // The parsed breakdown described one draft's scope; a merge changes it.
+          breakdown: null,
         };
       }
       if (draft.id === secondaryDraftId) {
@@ -893,6 +1028,113 @@ export function acceptProposal(
     calendarBlocks: [block, ...state.calendarBlocks],
     reviewLog: [
       `Accepted local proposal for task ${proposal.task_id}`,
+      ...state.reviewLog,
+    ],
+  };
+}
+
+/**
+ * Records the outcome of an approved, server-executed Google Calendar event
+ * insert. The external write itself happens only in the server route after
+ * explicit approval; this transition just mirrors the result locally.
+ */
+export function applyGoogleCalendarWriteResult(
+  state: WorkflowState,
+  proposalId: string,
+  googleEventId: string,
+): WorkflowState {
+  const proposal = state.timeBlockProposals.find(
+    (item) => item.id === proposalId,
+  );
+  if (
+    !proposal ||
+    !["proposed", "edited", "accepted"].includes(proposal.status)
+  ) {
+    return state;
+  }
+
+  const task = state.tasks.find((item) => item.id === proposal.task_id);
+  const updatedAt = nowIso();
+  const existingBlock = state.calendarBlocks.find(
+    (block) => block.proposal_id === proposal.id,
+  );
+  const block: Phase2MockCalendarBlock = existingBlock
+    ? {
+        ...existingBlock,
+        google_event_id: googleEventId,
+        updated_at: updatedAt,
+      }
+    : {
+        id: nextId("block"),
+        user_id: proposal.user_id,
+        area_id: proposal.area_id,
+        task_id: proposal.task_id,
+        proposal_id: proposal.id,
+        google_event_id: googleEventId,
+        start_at: proposal.proposed_start,
+        end_at: proposal.proposed_end,
+        status: "scheduled",
+        created_at: updatedAt,
+        updated_at: updatedAt,
+      };
+
+  return {
+    ...state,
+    timeBlockProposals: state.timeBlockProposals.map((item) =>
+      item.id === proposalId ? { ...item, status: "accepted" } : item,
+    ),
+    tasks: state.tasks.map((item) =>
+      item.id === proposal.task_id
+        ? { ...item, status: "scheduled", updated_at: updatedAt }
+        : item,
+    ),
+    calendarBlocks: existingBlock
+      ? state.calendarBlocks.map((item) =>
+          item.id === existingBlock.id ? block : item,
+        )
+      : [block, ...state.calendarBlocks],
+    reviewLog: [
+      `Approved Google Calendar event: ${task?.title ?? proposal.task_id}`,
+      ...state.reviewLog,
+    ],
+  };
+}
+
+/**
+ * Records the outcome of an approved, server-executed Google Calendar event
+ * cancel. Only blocks that still carry a Google event id qualify; the task is
+ * released back to the plannable pool like a local unplan.
+ */
+export function applyGoogleCalendarCancelResult(
+  state: WorkflowState,
+  blockId: string,
+): WorkflowState {
+  const block = state.calendarBlocks.find(
+    (item) =>
+      item.id === blockId &&
+      ["scheduled", "running"].includes(item.status) &&
+      Boolean(item.google_event_id),
+  );
+  if (!block) {
+    return state;
+  }
+
+  const task = state.tasks.find((item) => item.id === block.task_id);
+  const updatedAt = nowIso();
+  return {
+    ...state,
+    calendarBlocks: state.calendarBlocks.map((item) =>
+      item.id === blockId
+        ? { ...item, status: "cancelled", updated_at: updatedAt }
+        : item,
+    ),
+    tasks: state.tasks.map((item) =>
+      item.id === block.task_id
+        ? { ...item, status: "active", updated_at: updatedAt }
+        : item,
+    ),
+    reviewLog: [
+      `Cancelled Google Calendar event: ${task?.title ?? block.id}`,
       ...state.reviewLog,
     ],
   };

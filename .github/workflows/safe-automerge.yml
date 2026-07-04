@@ -16,7 +16,10 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  # contents: write is required by the enablePullRequestAutoMerge GraphQL
+  # mutation (auto-merge schedules a merge, which writes contents). Fork PRs
+  # receive a read-only token regardless, so external PRs cannot use this.
+  contents: write
   pull-requests: write
 
 jobs:
@@ -64,8 +67,22 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const eligible = process.env.ELIGIBLE === 'true';
-            const pullRequestId = process.env.PR_NODE_ID;
+            let pullRequestId = process.env.PR_NODE_ID;
             const autoMergeEnabled = Boolean(context.payload.pull_request?.auto_merge);
+
+            if (!pullRequestId) {
+              // Some event deliveries omit node_id from the payload; fetch it
+              // from the API instead of failing the arming step.
+              const prNumber = context.payload.pull_request?.number;
+              if (prNumber) {
+                const { data: pr } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                });
+                pullRequestId = pr.node_id;
+              }
+            }
 
             if (!pullRequestId) {
               core.setFailed('pull_request.node_id is required to sync auto-merge.');

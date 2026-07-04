@@ -28,6 +28,7 @@ Open problems in agentic engineering where a single disciplined project — one 
 **The asset:** a project running `agentic-change-control` accumulates decision data — every propose→approve/override/edit event, per action class.
 **First three steps:** (1) Log every approval decision with action class, outcome, and any human edit (a one-file JSONL is enough). (2) Define graduation criteria per class in advance (e.g. N≥20 consecutive non-overridden instances; the ladder's graduation rule). (3) Graduate ONE low-stakes class (e.g. docs-only commits) by the data, and keep logging post-graduation defects.
 **You have a result when:** a data-graduated class runs auto-executed for 30+ days with zero overrides/defects, while a matched still-gated class shows the human approving ≥95% unchanged — demonstrating the gate carried no information the data hadn't already captured. Falsified if post-graduation defects exceed the gated baseline.
+**Field update (as of 2026-07):** industry now names the endpoint of this ladder the "dark factory" (fully hands-off pipelines; five-level maturity spectrum from human-written through agent-authored-human-reviewed to no-human-review). Practitioner writing on the pattern (e.g. the AI Pattern Book dark-factory entry, 2026) argues graduation is gated on test-oracle strength — "a weak oracle makes Dark Factory dangerous" — not on model capability; treat that as informed opinion, not established consensus. The open question stays open: graduation driven by *decision data* rather than by declaration.
 
 ### 2. Self-verification that transfers (OPEN)
 
@@ -54,7 +55,7 @@ Open problems in agentic engineering where a single disciplined project — one 
 
 **Why SOTA fails:** prompt/skill collections are published and adopted on plausibility; almost nobody measures whether a library actually lifts a smaller model's ceiling, so libraries bloat with unverifiable advice.
 **The asset:** you are holding a complete, versioned library with defined scope — an ideal treatment variable.
-**First three steps:** (1) Build a held-out suite of ~10 realistic tasks in a repo the library wasn't written from (debugging, onboarding, validation tasks). (2) Pre-register a rubric and margin. (3) Run smaller-tier model with library vs without (library dir removed), matched budgets; grade blind per `agentic-research-methodology` §6.
+**First three steps:** (1) Build a held-out suite of ~10 realistic tasks in a repo the library wasn't written from (debugging, onboarding, validation tasks). (2) Pre-register a rubric and margin. (3) Run smaller-tier model with library vs without (library dir removed), matched budgets; grade blind per `agentic-research-methodology` §6. Candidate harness (as of 2026-07): Evalite (mattpocock) ships agent-testing scorers that fit this shape — verify current state before adopting.
 **You have a result when:** with-library beats without-library by the pre-registered margin on the held-out suite — and, the stronger claim, approaches the frontier-model-without-library score. Falsified if no separation: the library is decoration, and honesty about that goes in the chronicle.
 
 ## Working a problem from this list
