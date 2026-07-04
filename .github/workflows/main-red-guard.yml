@@ -36,7 +36,12 @@ jobs:
     steps:
       - name: Re-run failed jobs before trusting the red
         env:
-          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          # github.token, NOT the kick PAT: rerunning needs actions:write, which this
+          # workflow grants to github.token. The Issues+PRs-scoped PAT got
+          # "Resource not accessible by personal access token" on 2026-07-04
+          # (run 28708134672), so the flake retry never happened and the
+          # auto-revert (gated on run_attempt >= 2) could never arm.
+          GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           gh run rerun "$RUN_ID" --failed --repo "${{ github.repository }}"
