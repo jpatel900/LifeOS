@@ -18,6 +18,10 @@ permissions:
 jobs:
   resolve-run:
     name: Resolve failed CI run
+    # Retired 2026-07-04: 100+ API-billed runs, zero landed fixes, and the lane kept
+    # burning quota during incidents (it failed on the 2026-07-04 red main too; the
+    # human/Claude repair path is what actually works). Delete the next line to re-enable.
+    if: false
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
