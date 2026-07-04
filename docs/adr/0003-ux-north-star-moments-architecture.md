@@ -1,6 +1,6 @@
 # ADR 0003 — UX north star: moments architecture, desktop-first, calm + coaching
 
-Status: Proposed (owner sign-off flips to Accepted)
+Status: Accepted (owner sign-off via merge of PR #343, 2026-07-04)
 Date: 2026-07-04
 Owners: jpatel900 (product), agents (execution)
 Amends: ADR 0002 (adds the UX layer of the north star; changes no stage gates, trust-ladder rungs, or spine/perimeter rules)
