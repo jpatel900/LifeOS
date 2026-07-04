@@ -48,6 +48,12 @@ function normalizeWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function loadMigrationFilenames() {
+  expect(existsSync(migrationsDir)).toBe(true);
+
+  return readdirSync(migrationsDir).filter((file) => file.endsWith(".sql"));
+}
+
 describe("Supabase local database scaffold", () => {
   it("includes local config and seed documentation", () => {
     expect(existsSync(resolve(supabaseDir, "config.toml"))).toBe(true);
@@ -247,6 +253,42 @@ describe("Supabase local database scaffold", () => {
     expect(sql).toContain(
       "add constraint override_records_schema_version_check check (schema_version in ('meta-learning-event-v1', 'meta-learning-event-v2'))",
     );
+  });
+
+  it("has no duplicate leading timestamps across migration filenames", () => {
+    const filenames = loadMigrationFilenames();
+
+    const filenamesByTimestamp = new Map<string, string[]>();
+    for (const filename of filenames) {
+      const match = filename.match(/^(\d{14})_/);
+      const timestamp = match ? match[1] : filename;
+      const existing = filenamesByTimestamp.get(timestamp) ?? [];
+      existing.push(filename);
+      filenamesByTimestamp.set(timestamp, existing);
+    }
+
+    const duplicates = [...filenamesByTimestamp.entries()].filter(
+      ([, files]) => files.length > 1,
+    );
+
+    expect(
+      duplicates,
+      `duplicate migration timestamps found:\n${duplicates
+        .map(([timestamp, files]) => `  ${timestamp}: ${files.join(", ")}`)
+        .join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("names every migration file with a 14-digit timestamp prefix and snake_case description", () => {
+    const filenames = loadMigrationFilenames();
+    const shapePattern = /^\d{14}_[a-z0-9_]+\.sql$/;
+
+    const malformed = filenames.filter((file) => !shapePattern.test(file));
+
+    expect(
+      malformed,
+      `malformed migration filenames found: ${malformed.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("seeds local authenticated users and starter areas for Phase 4A smoke tests", () => {
