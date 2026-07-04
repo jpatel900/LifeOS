@@ -79,6 +79,13 @@ function safeParserFailureMessage(status: ParseCaptureRuntimeStatus) {
 }
 
 async function logSafeParseFailure(error: unknown) {
+  // captureError ships to Sentry/PostHog/Langfuse only when those providers
+  // are configured; without them the provider failure (and its discriminating
+  // HTTP status, e.g. 429 quota vs 401 key vs 404 model) is invisible in
+  // platform logs. Always emit the sanitized message so prod stays diagnosable.
+  console.error(
+    `parse-capture failed safely: ${error instanceof Error ? error.message : String(error)}`,
+  );
   await captureError({
     feature: "parse_capture_route",
     error,
