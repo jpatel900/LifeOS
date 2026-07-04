@@ -1001,6 +1001,113 @@ export function acceptProposal(
   };
 }
 
+/**
+ * Records the outcome of an approved, server-executed Google Calendar event
+ * insert. The external write itself happens only in the server route after
+ * explicit approval; this transition just mirrors the result locally.
+ */
+export function applyGoogleCalendarWriteResult(
+  state: WorkflowState,
+  proposalId: string,
+  googleEventId: string,
+): WorkflowState {
+  const proposal = state.timeBlockProposals.find(
+    (item) => item.id === proposalId,
+  );
+  if (
+    !proposal ||
+    !["proposed", "edited", "accepted"].includes(proposal.status)
+  ) {
+    return state;
+  }
+
+  const task = state.tasks.find((item) => item.id === proposal.task_id);
+  const updatedAt = nowIso();
+  const existingBlock = state.calendarBlocks.find(
+    (block) => block.proposal_id === proposal.id,
+  );
+  const block: Phase2MockCalendarBlock = existingBlock
+    ? {
+        ...existingBlock,
+        google_event_id: googleEventId,
+        updated_at: updatedAt,
+      }
+    : {
+        id: nextId("block"),
+        user_id: proposal.user_id,
+        area_id: proposal.area_id,
+        task_id: proposal.task_id,
+        proposal_id: proposal.id,
+        google_event_id: googleEventId,
+        start_at: proposal.proposed_start,
+        end_at: proposal.proposed_end,
+        status: "scheduled",
+        created_at: updatedAt,
+        updated_at: updatedAt,
+      };
+
+  return {
+    ...state,
+    timeBlockProposals: state.timeBlockProposals.map((item) =>
+      item.id === proposalId ? { ...item, status: "accepted" } : item,
+    ),
+    tasks: state.tasks.map((item) =>
+      item.id === proposal.task_id
+        ? { ...item, status: "scheduled", updated_at: updatedAt }
+        : item,
+    ),
+    calendarBlocks: existingBlock
+      ? state.calendarBlocks.map((item) =>
+          item.id === existingBlock.id ? block : item,
+        )
+      : [block, ...state.calendarBlocks],
+    reviewLog: [
+      `Approved Google Calendar event: ${task?.title ?? proposal.task_id}`,
+      ...state.reviewLog,
+    ],
+  };
+}
+
+/**
+ * Records the outcome of an approved, server-executed Google Calendar event
+ * cancel. Only blocks that still carry a Google event id qualify; the task is
+ * released back to the plannable pool like a local unplan.
+ */
+export function applyGoogleCalendarCancelResult(
+  state: WorkflowState,
+  blockId: string,
+): WorkflowState {
+  const block = state.calendarBlocks.find(
+    (item) =>
+      item.id === blockId &&
+      ["scheduled", "running"].includes(item.status) &&
+      Boolean(item.google_event_id),
+  );
+  if (!block) {
+    return state;
+  }
+
+  const task = state.tasks.find((item) => item.id === block.task_id);
+  const updatedAt = nowIso();
+  return {
+    ...state,
+    calendarBlocks: state.calendarBlocks.map((item) =>
+      item.id === blockId
+        ? { ...item, status: "cancelled", updated_at: updatedAt }
+        : item,
+    ),
+    tasks: state.tasks.map((item) =>
+      item.id === block.task_id
+        ? { ...item, status: "active", updated_at: updatedAt }
+        : item,
+    ),
+    reviewLog: [
+      `Cancelled Google Calendar event: ${task?.title ?? block.id}`,
+      ...state.reviewLog,
+    ],
+  };
+}
+
 export function startExecutionSession(
   state: WorkflowState,
   taskId: string,
