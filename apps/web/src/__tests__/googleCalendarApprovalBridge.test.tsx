@@ -2,13 +2,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarPage from "../app/calendar/page";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import { applyGoogleCalendarWriteResult } from "@/lib/workflow";
 import {
-  acceptDraft,
-  applyGoogleCalendarWriteResult,
-  createInitialWorkflowState,
-  submitCapture,
-  type WorkflowState,
-} from "@/lib/workflow";
+  acceptLatestDraft,
+  captureWorkflow,
+  workflowSeed,
+} from "./helpers/workflowReachability";
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 const PROPOSAL_UUID = "3f2c8a34-9b1e-4c5d-8e2f-1a2b3c4d5e6f";
@@ -80,13 +79,8 @@ function stubFetch(
   return calls;
 }
 
-function stateWithSyncedProposal(): WorkflowState {
-  let state = createInitialWorkflowState();
-  state = submitCapture(state, {
-    rawText: TASK_TITLE,
-    areaId: "area-main-job",
-  });
-  state = acceptDraft(state, state.taskDrafts[0].id);
+function stateWithSyncedProposal() {
+  const state = acceptLatestDraft(captureWorkflow(workflowSeed(), TASK_TITLE));
   // Simulate account-synced rows: persisted proposals arrive with UUID ids.
   return {
     ...state,
@@ -97,11 +91,12 @@ function stateWithSyncedProposal(): WorkflowState {
   };
 }
 
-function stateWithGoogleScheduledBlock(
-  eventId: string = GOOGLE_EVENT_ID,
-): WorkflowState {
-  let state = stateWithSyncedProposal();
-  state = applyGoogleCalendarWriteResult(state, PROPOSAL_UUID, eventId);
+function stateWithGoogleScheduledBlock(eventId: string = GOOGLE_EVENT_ID) {
+  const state = applyGoogleCalendarWriteResult(
+    stateWithSyncedProposal(),
+    PROPOSAL_UUID,
+    eventId,
+  );
   return {
     ...state,
     calendarBlocks: state.calendarBlocks.map((block) =>
@@ -112,7 +107,7 @@ function stateWithGoogleScheduledBlock(
   };
 }
 
-function renderPlanStage(state: WorkflowState) {
+function renderPlanStage(state: ReturnType<typeof stateWithSyncedProposal>) {
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   return render(
     <WorkflowProvider>
