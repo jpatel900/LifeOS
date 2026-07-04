@@ -127,6 +127,19 @@ describe("source-of-truth boundaries", () => {
     expect(localTypes).toContain("Phase 2 mock-only UI view models");
   });
 
+  it("suggestionRecordColumns includes resolution_reason and decided_by", () => {
+    const workflow = readRepoFile("apps/web/src/lib/data/workflow.ts");
+
+    expect(workflow).toContain("resolution_reason");
+    expect(workflow).toContain("decided_by");
+  });
+
+  it("overrideRecordColumns includes suggestion_id", () => {
+    const workflow = readRepoFile("apps/web/src/lib/data/workflow.ts");
+
+    expect(workflow).toContain("suggestion_id");
+  });
+
   it("keeps browser persistence away from server-only calendar audit tables and secrets", () => {
     const files = [
       "apps/web/src/lib/data/workflow.ts",

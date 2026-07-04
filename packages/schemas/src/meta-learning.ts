@@ -2,6 +2,12 @@ import { z } from "zod";
 import { JsonValueSchema } from "./json";
 
 export const META_LEARNING_EVENT_SCHEMA_VERSION = "meta-learning-event-v1";
+export const META_LEARNING_EVENT_SCHEMA_VERSION_V2 = "meta-learning-event-v2";
+
+const MetaLearningEventSchemaVersionSchema = z.enum([
+  META_LEARNING_EVENT_SCHEMA_VERSION,
+  META_LEARNING_EVENT_SCHEMA_VERSION_V2,
+]);
 
 export const SuggestionRecordTypeSchema = z.enum([
   "parse_result",
@@ -38,13 +44,15 @@ export const SuggestionRecordSchema = z.object({
   user_id: z.string().uuid(),
   area_id: z.string().uuid().nullable(),
   policy_identifier: PolicyIdentifierSchema,
-  schema_version: z.literal(META_LEARNING_EVENT_SCHEMA_VERSION),
+  schema_version: MetaLearningEventSchemaVersionSchema,
   suggestion_type: SuggestionRecordTypeSchema,
   subject_type: z.string().min(1),
   subject_id: z.string().uuid().nullable(),
   suggestion_json: JsonValueSchema,
   confidence: z.number().min(0).max(1).nullable(),
   status: SuggestionRecordStatusSchema,
+  resolution_reason: z.string().trim().min(1).nullable(),
+  decided_by: z.enum(["user", "system"]),
   created_at: z.string().datetime(),
   resolved_at: z.string().datetime().nullable(),
 });
@@ -61,6 +69,8 @@ export const CreateSuggestionRecordInputSchema = z.object({
   confidence: z.number().min(0).max(1).nullable().optional(),
   status: SuggestionRecordStatusSchema.optional().default("pending"),
   resolved_at: z.string().datetime().nullable().optional(),
+  resolution_reason: z.string().trim().min(1).nullable().optional(),
+  decided_by: z.enum(["user", "system"]).optional().default("user"),
 });
 
 export type CreateSuggestionRecordInput = z.input<
@@ -72,7 +82,8 @@ export const OverrideRecordSchema = z.object({
   user_id: z.string().uuid(),
   area_id: z.string().uuid().nullable(),
   policy_identifier: PolicyIdentifierSchema,
-  schema_version: z.literal(META_LEARNING_EVENT_SCHEMA_VERSION),
+  schema_version: MetaLearningEventSchemaVersionSchema,
+  suggestion_id: z.string().uuid().nullable(),
   subject_type: z.string().min(1),
   subject_id: z.string().uuid(),
   override_type: OverrideRecordTypeSchema,
@@ -87,6 +98,7 @@ export type OverrideRecord = z.infer<typeof OverrideRecordSchema>;
 export const CreateOverrideRecordInputSchema = z.object({
   area_id: z.string().uuid().nullable(),
   policy_identifier: PolicyIdentifierSchema,
+  suggestion_id: z.string().uuid().nullable().optional(),
   subject_type: z.string().trim().min(1),
   subject_id: z.string().uuid(),
   override_type: OverrideRecordTypeSchema,
