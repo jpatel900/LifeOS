@@ -3,7 +3,7 @@
 Status: Living chronicle of closed battles — investigations, dead ends, and reverted approaches, so no session re-fights them.
 Read when: BEFORE investigating any recurring symptom, and before proposing an approach that feels obvious (check it wasn't already tried).
 Rule: every revert, abandoned branch, and multi-hour dead-end investigation adds an entry. Retirement with a documented "why" is a success outcome; silent abandonment is the failure.
-Distinction: live, tolerated flaws belong in `docs/KNOWN_ISSUES.md`. This file records *settled* matters: what was tried, why it lost, and what replaced it. Method reference: the `agentic-failure-archaeology` skill in `.agents/skills/`.
+Distinction: live, tolerated flaws belong in `docs/KNOWN_ISSUES.md`. This file records _settled_ matters: what was tried, why it lost, and what replaced it. Method reference: the `agentic-failure-archaeology` skill in `.agents/skills/`.
 
 Entry schema: **Symptom → Root cause → Evidence → Status → Date.**
 
@@ -36,7 +36,7 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date.**
 ## Remote schema dump committed as a migration broke local resets
 
 - **Symptom:** `supabase db reset` failed locally (storage trigger ordering) after adding `supabase/migrations/20260612231853_remote_schema.sql`.
-- **Root cause:** The file was a remote drift *dump* (platform-managed objects, no app tables), not an authored migration; platform-only objects don't replay locally.
+- **Root cause:** The file was a remote drift _dump_ (platform-managed objects, no app tables), not an authored migration; platform-only objects don't replay locally.
 - **Evidence:** KNOWN_ISSUES row 7 (resolved); reset verified clean after deletion, RLS suite 17/17.
 - **Status:** Fixed 2026-06-13 — dump deleted. Rule: never commit remote drift dumps as migrations; author migrations, then verify `supabase db reset` locally.
 - **Date:** 2026-06-12 → 2026-06-13
@@ -76,7 +76,7 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date.**
 ## Merge race turned main red: a guard and its offenders merged 77 seconds apart
 
 - **Symptom:** Main CI failed on merge commit 8d6724d. PR #331's workflow-truth guard bans `WorkflowState` annotations in tests; two B6-era test files still carried them. Each PR was green in isolation; combined, main was red. Main Red Guard skipped instead of firing, and Codex CI Autofix ran and failed without producing a fix.
-- **Root cause:** A guard PR's CI proves the guard against the merge ref at *review* time, not against what main looks like when it lands; #337 merged 77 seconds earlier. The refactor of the two offender files that would have made #331 safe was reported complete by Codex but never actually pushed (see the stranded-delivery entry below).
+- **Root cause:** A guard PR's CI proves the guard against the merge ref at _review_ time, not against what main looks like when it lands; #337 merged 77 seconds earlier. The refactor of the two offender files that would have made #331 safe was reported complete by Codex but never actually pushed (see the stranded-delivery entry below).
 - **Evidence:** CI run 28707997136 (failure on 8d6724d); fix PR #340 (offenders rebuilt on `workflowSeed()` + transition helpers, no allowlist additions).
 - **Status:** Fixed by #340. Open follow-ups: why Main Red Guard's trigger condition skipped on a genuinely red main, and the standing rule that a guard PR must land only after (or together with) the refactor of every known offender, re-verified against current main immediately before merge.
 - **Date:** 2026-07-04
@@ -91,4 +91,4 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date.**
 
 ---
 
-*Seeded 2026-07-02 from repo history and operator memory. Dead branches at seeding time (`agent/single-review-policy`, `codex/...a4-governance-restructure...`, `fix/plan-single-task-scheduling`, `ui/handoff-cockpit-pass`) were not chronicled — whoever closes or deletes one adds its entry.*
+_Seeded 2026-07-02 from repo history and operator memory. Dead branches at seeding time (`agent/single-review-policy`, `codex/...a4-governance-restructure...`, `fix/plan-single-task-scheduling`, `ui/handoff-cockpit-pass`) were not chronicled — whoever closes or deletes one adds its entry._
