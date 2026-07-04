@@ -3,20 +3,24 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"],
+      "outputLogs": "errors-only"
     },
     "dev": {
       "cache": false,
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputLogs": "errors-only"
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputLogs": "errors-only"
     },
     "type-check": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputLogs": "errors-only"
     }
   }
 }

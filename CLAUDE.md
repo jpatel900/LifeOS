@@ -23,6 +23,8 @@ Run from the repo root after `pnpm install`. Node 22 (`.nvmrc`), pnpm workspaces
 
 Scale validation to the change. Docs-only work needs doc/guard tests and formatting; code changes normally need lint, type-check, tests, and build. E2E runs through `pnpm --filter @lifeos/web test:e2e`. Supabase RLS tests are opt-in with `RUN_SUPABASE_RLS_TESTS=1` and local Supabase env values.
 
+These commands are quiet by design (Turbo `errors-only` logs, Vitest dot reporter): near-silent on success, full detail on failure. Do not add verbose flags; `test:verbose` exists in each workspace for humans.
+
 ## Architecture snapshot
 
 LifeOS is a single-user, area-scoped personal workflow cockpit: capture → AI parse → triage → time-block planning → approval-gated Google Calendar write → execute → review → health. V1 server logic lives in Next.js Route Handlers / Server Actions in `apps/web`; Supabase provides Auth/Postgres/RLS; shared schemas live in `packages/schemas`; app-local UI primitives live in `apps/web/src/components/ui` with tokens in `apps/web/src/app/globals.css`.
@@ -40,3 +42,5 @@ LifeOS is a single-user, area-scoped personal workflow cockpit: capture → AI p
 ## Working style
 
 Understand the touched surfaces before editing, prefer the smallest safe change, keep mock/demo fallbacks unless scope explicitly changes, and report what was verified and what remains unverified. `main` stays passing; branches stay narrow; PRs state purpose, changes, tests, risks, and rollback.
+
+Context is a budget (`AGENTS.md` operating rules 11–13): prefer Grep/Glob plus targeted reads over whole-file reads, run tests and builds with quiet or filtered output, keep large logs and diffs out of the conversation, and do not spawn subagents or fan-out workflows unless explicitly asked.

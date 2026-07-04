@@ -45,6 +45,9 @@ Do not change RLS policies, OAuth scopes, calendar write logic, service-role usa
 8. Every ~20 merged PRs or monthly, run a system review and file findings as `docs/KNOWN_ISSUES.md` rows.
 9. Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance guidance materially changes; keep it concise and replace-not-append.
 10. Do not create per-session note, handoff, implementation-summary, or scratch-plan `.md` files. Durable decisions go to ADRs; status goes to `PROJECT_STATE`; everything else goes to git history and PR text.
+11. Context economy: tool output accumulates in context and is re-billed every turn, so stop noise at the source. Repo defaults already enforce this — `pnpm test`/`lint`/`build`/`type-check` run quiet (Turbo `errors-only` logs, Vitest dot reporter) and print full detail only on failure, so do not add verbose flags; `test:verbose` exists for humans. Beyond that: run targeted test files, pipe long output through `tail` or `grep`, read file sections rather than whole files, never dump large logs or full diffs into the conversation, and do not re-read files already in context.
+12. No agent fan-out by default: work inline as a single agent. Spawn subagents, parallel workers, or multi-agent workflows only when the human explicitly asks — fan-out multiplies token cost faster than it multiplies progress on this repo.
+13. If the session has drifted across unrelated tasks or context has grown heavy with stale output, say so and recommend a fresh session with a scoped prompt instead of pushing on.
 
 ## Skill routing
 
