@@ -18,7 +18,7 @@ concurrency:
 
 permissions:
   contents: read
-  issues: read
+  issues: write
 
 jobs:
   resolve-issue:
@@ -61,14 +61,48 @@ jobs:
               typeof label === 'string' ? label : label.name ?? '',
             );
             const hasLabel = (name) => labels.includes(name);
+
+            // Claim protocol (AGENTS.md rule 14): never start work someone else
+            // already owns. A claim is an assignee, the agent:claimed label, or
+            // an open PR that references this issue.
+            const alreadyAssigned = (issue.assignees ?? []).length > 0;
+            const alreadyClaimed = hasLabel('agent:claimed');
+            const { data: prSearch } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:pr is:open "#${issue.number}" in:body`,
+              per_page: 5,
+            });
+            const linkedOpenPr = prSearch.items.find((item) => item.pull_request);
+
             const shouldRun =
               issue.state === 'open' &&
               hasLabel('agent:ready') &&
               hasLabel('risk:low') &&
               !hasLabel('needs:human-decision') &&
               !hasLabel('risk:medium') &&
-              !hasLabel('risk:high');
+              !hasLabel('risk:high') &&
+              !alreadyAssigned &&
+              !alreadyClaimed &&
+              !linkedOpenPr;
             const allowSafeAutomerge = shouldRun && hasLabel('automerge:safe');
+
+            if (issue.state === 'open' && (alreadyAssigned || alreadyClaimed || linkedOpenPr)) {
+              core.notice(
+                `Skipping issue #${issue.number}: already claimed (` +
+                  `assignees=${(issue.assignees ?? []).map((a) => a.login).join(',') || 'none'}, ` +
+                  `label=${alreadyClaimed}, openPr=${linkedOpenPr?.html_url ?? 'none'}).`,
+              );
+            }
+
+            if (shouldRun) {
+              // Stamp the claim so concurrent lanes (other agents, local
+              // sessions) see this issue as taken before any code exists.
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: ['agent:claimed'],
+              });
+            }
 
             core.setOutput('should_run', String(shouldRun));
             core.setOutput('issue_number', String(issue.number));

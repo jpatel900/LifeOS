@@ -46,6 +46,9 @@ Do not change RLS policies, OAuth scopes, calendar write logic, service-role usa
 9. Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance guidance materially changes; keep it concise and replace-not-append.
 10. Do not create per-session note, handoff, implementation-summary, or scratch-plan `.md` files. Durable decisions go to ADRs; status goes to `PROJECT_STATE`; everything else goes to git history and PR text.
 11. Keep context lean: report command output as failures-only (failing tests, error lines, exit codes — never full logs), return diffs or changed sections instead of full files, and cap exploration at the files the task needs.
+12. Never edit the primary checkout's working tree directly: concurrent agents switch its branches mid-session. All implementation work happens in a dedicated `git worktree`; commit by explicit pathspec and check `git branch --show-current` immediately before every commit.
+13. The repository is public: never write production identifiers (user or row UUIDs, project IDs, tokens), capture text, or personal life details into issues, PR bodies, commit messages, or docs. Reference production evidence abstractly ("the affected block rows") and keep concrete IDs in local session context only.
+14. Claim before building: before implementing anything scoped to an issue, check the issue for an assignee, the `agent:claimed` label, or an open PR referencing it — if any exist, do not start. Otherwise claim it (label or assignee, or a "claiming" comment for ad-hoc sessions) before writing code. Feature work with no tracking issue gets one first. Overlapping unclaimed work was the root cause of the 2026-07-03/04 duplicate-implementation conflicts.
 
 ## Skill routing
 
