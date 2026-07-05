@@ -33,6 +33,10 @@ export type ParseCaptureRequestResult =
       parser: "ai" | "mock";
       status: ParseCaptureClientStatus;
       response: ParseCaptureResponse;
+      // FR-030: true when the server auto-degraded this specific request to
+      // the mock parser after detecting the AI provider is runtime-down
+      // (429/5xx), so the UI can show a visible one-time notice.
+      degraded: boolean;
     }
   | {
       ok: false;
@@ -119,5 +123,6 @@ export async function requestParseCapture(input: {
     parser: body.parser === "ai" ? "ai" : "mock",
     status,
     response: parsedResponse.data,
+    degraded: body.degraded === true,
   };
 }

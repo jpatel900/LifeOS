@@ -191,6 +191,74 @@ describe("parse-capture route", () => {
     );
   });
 
+  it("surfaces degraded: true when the service auto-degraded to mock (FR-030)", async () => {
+    mocks.getParseCaptureStatus.mockReturnValue({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+    mocks.parseCaptureWithFallback.mockResolvedValue({
+      parser: "mock",
+      degraded: true,
+      response: {
+        schema_version: "1.0",
+        prompt_version: "parse_capture.v1",
+        parse_status: "parsed",
+        overall_confidence: 0.8,
+        triage_required: false,
+        triage_reasons: [],
+        drafts: [],
+        clarification_questions: [],
+        ambiguity_assessment: null,
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: "Plan Monday work." }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.parser).toBe("mock");
+    expect(body.degraded).toBe(true);
+  });
+
+  it("reports degraded: false for a normal (non-degraded) parse", async () => {
+    mocks.getParseCaptureStatus.mockReturnValue({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+    mocks.parseCaptureWithFallback.mockResolvedValue({
+      parser: "ai",
+      response: {
+        schema_version: "1.0",
+        prompt_version: "parse_capture.v1",
+        parse_status: "parsed",
+        overall_confidence: 0.8,
+        triage_required: false,
+        triage_reasons: [],
+        drafts: [],
+        clarification_questions: [],
+        ambiguity_assessment: null,
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: "Plan Monday work." }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(body.degraded).toBe(false);
+  });
+
   it("returns safe non-leaky failure response and sanitized observability capture", async () => {
     mocks.getParseCaptureStatus.mockReturnValue({
       status: "ai_configured",

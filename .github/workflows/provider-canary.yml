@@ -1,0 +1,115 @@
+# FR-030: Provider Canary + Mock-First Auto-Degrade.
+#
+# Detects a silently-down AI parse provider (the 2026-07-04 OpenAI 429
+# incident was only found by manual probing) and raises a GitHub issue on a
+# healthy->failing state transition -- it does not spam an issue every run.
+#
+# Near-free by construction (NFR-001): scripts/agent/provider-canary.mjs
+# reads recently recorded real-parse outcomes from `ai_call_traces` first
+# (a cheap Postgres read) and only issues a synthetic parse POST when there
+# is no recent real signal, or to confirm a suspected failure. It never
+# runs a paid parse on every tick.
+#
+# Requires two repository secrets to do real work; otherwise it skips with a
+# warning, matching migration-drift.yml's shape:
+#   SUPABASE_PROD_DB_URL   Postgres connection string for the prod project
+#                          (same secret migration-drift.yml already uses).
+#                          Prefer a read-only role; this workflow only reads
+#                          public.ai_call_traces.
+#   SMOKE_BASE_URL         Base URL of the deployed app (same variable name
+#                          used by scripts/run-prod-smoke.mjs), used only to
+#                          target the synthetic POST at /api/parse-capture.
+#
+# Per .github/AGENT_AUTOMATION_POLICY.md this file is T2: changes require
+# human review.
+name: Provider Canary
+
+on:
+  schedule:
+    # Every 30 minutes. Cheap trace read on every tick; a synthetic POST
+    # (the only paid-provider-adjacent call) fires only when there is no
+    # recent real signal or a failure is suspected (see decideProbeAction).
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: provider-canary
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    name: Provider canary probe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Run canary evaluator
+        id: canary
+        env:
+          SUPABASE_PROD_DB_URL: ${{ secrets.SUPABASE_PROD_DB_URL }}
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+        run: |
+          set -o pipefail
+          node scripts/agent/provider-canary.mjs | tee canary-output.txt
+          state=$(grep -o 'PROVIDER_CANARY_STATE=.*' canary-output.txt | tail -n1 | cut -d= -f2)
+          echo "state=${state:-skipped}" >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile canary GitHub issue
+        if: steps.canary.outputs.state == 'healthy' || steps.canary.outputs.state == 'failing'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const state = "${{ steps.canary.outputs.state }}";
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const label = "provider-canary";
+
+            const { findExistingCanaryIssue, decideTransition, buildIssueTitle, buildIssueBody, buildRecoveryComment } =
+              await import(`${process.env.GITHUB_WORKSPACE}/scripts/agent/provider-canary.mjs`);
+
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: "open", labels: label, per_page: 100,
+            });
+
+            const existing = findExistingCanaryIssue(openIssues);
+            const previousState = existing ? "failing" : "healthy";
+            const action = decideTransition(previousState, state);
+
+            if (action === "open_issue") {
+              const now = new Date().toISOString();
+              await github.rest.issues.create({
+                owner, repo,
+                title: buildIssueTitle(),
+                body: buildIssueBody({ recentFailedCount: 0, recentCount: 0, detectedAt: now }),
+                labels: [label],
+              });
+              core.info("Provider canary: opened a new incident issue.");
+              return;
+            }
+
+            if (action === "post_recovery" && existing) {
+              const now = new Date().toISOString();
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: buildRecoveryComment({ recoveredAt: now }),
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number, state: "closed",
+              });
+              core.info(`Provider canary: closed recovered issue #${existing.number}.`);
+              return;
+            }
+
+            core.info(`Provider canary: no_op (previous=${previousState}, current=${state}).`);
