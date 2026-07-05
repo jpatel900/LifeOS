@@ -115,6 +115,7 @@ export function LifeOSCockpit({
     editLocalProposal,
     createLocalProposalForTask,
     planTaskAtHour,
+    updateTaskFirstTinyStep,
     unplanTask,
     carryForwardTask,
     deferTask,
@@ -545,6 +546,7 @@ export function LifeOSCockpit({
               onRejectProposal={rejectLocalProposal}
               onNudgeProposal={nudgeProposalLater}
               onCreateProposal={createProposalForSelectedTask}
+              onUpdateFirstTinyStep={updateTaskFirstTinyStep}
               onExecute={() => navigate("execute")}
               onCapture={() => navigate("capture")}
             />
@@ -996,10 +998,10 @@ function TriageView({
             className="mt-4 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
           >
             <p className="mono text-sm text-[var(--acc2)]">
-              Start here (under 10 min)
+              Start here (same first move)
             </p>
             <p className="mt-1 font-bold text-[var(--ink)]">
-              {current.breakdown.kickstart_step}
+              {current.first_tiny_step}
             </p>
             <ol className="mt-4 grid gap-2">
               {[...current.breakdown.steps]
@@ -1223,6 +1225,52 @@ function TriageView({
   );
 }
 
+function LaunchStepPrompt({
+  taskId,
+  value,
+  onChange,
+  onSave,
+}: {
+  taskId: string;
+  value: string;
+  onChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  const inputId = `launch-step-${taskId}`;
+  const canSave = value.trim().length > 0;
+
+  return (
+    <div className="rounded-2xl border border-[var(--amb-rng)] bg-[var(--amb-sf)] p-3">
+      <label
+        htmlFor={inputId}
+        className="grid gap-2 text-sm font-semibold text-[var(--amb-fg)]"
+      >
+        What is the under-a-minute physical move that starts this?
+        <input
+          id={inputId}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Example: open the notes and write one bullet"
+          className="min-h-11 rounded-xl border border-[var(--amb-rng)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+        />
+      </label>
+      <button
+        type="button"
+        disabled={!canSave}
+        onClick={onSave}
+        className={cn(
+          "mt-3 min-h-10 rounded-full px-4 text-sm font-bold",
+          canSave
+            ? "bg-[var(--acc)] text-[var(--on-acc)]"
+            : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+        )}
+      >
+        Save first move
+      </button>
+    </div>
+  );
+}
+
 function PlanView({
   vm,
   selectedTaskId,
@@ -1234,6 +1282,7 @@ function PlanView({
   onRejectProposal,
   onNudgeProposal,
   onCreateProposal,
+  onUpdateFirstTinyStep,
   onExecute,
   onCapture,
 }: {
@@ -1247,15 +1296,29 @@ function PlanView({
   onRejectProposal: (proposalId: string) => void;
   onNudgeProposal: (proposalId: string) => void;
   onCreateProposal: (taskId: string, hour: number) => void;
+  onUpdateFirstTinyStep: (taskId: string, firstTinyStep: string) => void;
   onExecute: () => void;
   onCapture: () => void;
 }) {
   const onlyReadyTaskId = vm.today.length === 1 ? vm.today[0].id : null;
   const taskIdToPlace = selectedTaskId ?? onlyReadyTaskId;
+  const taskToPlace =
+    vm.today.find((task) => task.id === taskIdToPlace) ?? null;
+  const [firstMoveDrafts, setFirstMoveDrafts] = useState<
+    Record<string, string>
+  >({});
+  const missingLaunchStep =
+    taskToPlace && !taskToPlace.first_tiny_step?.trim() ? taskToPlace : null;
   const hasReadyBlock = vm.planned.length > 0;
   const hasTaskToPlace = vm.today.length > 0;
   const firstOpenHour =
     HOURS.find((hour) => !vm.planned.some((item) => item.hour === hour)) ?? 9;
+  function saveFirstMove(taskId: string) {
+    const value = firstMoveDrafts[taskId]?.trim();
+    if (!value) return;
+    onUpdateFirstTinyStep(taskId, value);
+    setFirstMoveDrafts((current) => ({ ...current, [taskId]: "" }));
+  }
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
@@ -1274,7 +1337,7 @@ function PlanView({
                 onClick={() =>
                   placed
                     ? onUnplan(placed.block.id)
-                    : taskIdToPlace
+                    : taskIdToPlace && !missingLaunchStep
                       ? onPlan(taskIdToPlace, hour)
                       : undefined
                 }
@@ -1319,6 +1382,19 @@ function PlanView({
         <Panel>
           <h2 className="text-xl font-bold">To place</h2>
           <div className="mt-4 grid gap-2">
+            {missingLaunchStep ? (
+              <LaunchStepPrompt
+                taskId={missingLaunchStep.id}
+                value={firstMoveDrafts[missingLaunchStep.id] ?? ""}
+                onChange={(value) =>
+                  setFirstMoveDrafts((current) => ({
+                    ...current,
+                    [missingLaunchStep.id]: value,
+                  }))
+                }
+                onSave={() => saveFirstMove(missingLaunchStep.id)}
+              />
+            ) : null}
             {vm.today.length ? (
               vm.today.map((task) => (
                 <button
@@ -1350,14 +1426,43 @@ function PlanView({
           <div className="mt-4 grid gap-2">
             {vm.backlog.length ? (
               vm.backlog.map((task) => (
-                <button
+                <div
                   key={task.id}
-                  type="button"
-                  onClick={() => onPromote(task.id)}
-                  className="rounded-2xl bg-[var(--blu-sf)] p-4 text-left text-[var(--blu-fg)]"
+                  className="rounded-2xl bg-[var(--blu-sf)] p-4 text-[var(--blu-fg)]"
                 >
-                  Move to today: {task.title}
-                </button>
+                  <button
+                    type="button"
+                    disabled={!task.first_tiny_step?.trim()}
+                    onClick={() =>
+                      task.first_tiny_step?.trim()
+                        ? onPromote(task.id)
+                        : undefined
+                    }
+                    className={cn(
+                      "min-h-10 text-left font-semibold",
+                      task.first_tiny_step?.trim()
+                        ? "text-[var(--blu-fg)]"
+                        : "cursor-not-allowed text-[var(--fnt)]",
+                    )}
+                  >
+                    Move to today: {task.title}
+                  </button>
+                  {!task.first_tiny_step?.trim() ? (
+                    <div className="mt-3">
+                      <LaunchStepPrompt
+                        taskId={task.id}
+                        value={firstMoveDrafts[task.id] ?? ""}
+                        onChange={(value) =>
+                          setFirstMoveDrafts((current) => ({
+                            ...current,
+                            [task.id]: value,
+                          }))
+                        }
+                        onSave={() => saveFirstMove(task.id)}
+                      />
+                    </div>
+                  ) : null}
+                </div>
               ))
             ) : (
               <p className="text-[var(--mut)]">Nothing deferred here.</p>
@@ -1369,13 +1474,15 @@ function PlanView({
             <h2 className="text-xl font-bold">Proposals</h2>
             <button
               type="button"
-              disabled={!taskIdToPlace}
+              disabled={!taskIdToPlace || Boolean(missingLaunchStep)}
               onClick={() =>
-                taskIdToPlace && onCreateProposal(taskIdToPlace, firstOpenHour)
+                taskIdToPlace &&
+                !missingLaunchStep &&
+                onCreateProposal(taskIdToPlace, firstOpenHour)
               }
               className={cn(
                 "min-h-10 rounded-full px-4 text-sm font-bold",
-                taskIdToPlace
+                taskIdToPlace && !missingLaunchStep
                   ? "bg-[var(--blu-sf)] text-[var(--blu-fg)]"
                   : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
               )}
@@ -1407,8 +1514,18 @@ function PlanView({
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => onAcceptProposal(proposal.id)}
-                          className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                          disabled={!task.first_tiny_step?.trim()}
+                          onClick={() =>
+                            task.first_tiny_step?.trim()
+                              ? onAcceptProposal(proposal.id)
+                              : undefined
+                          }
+                          className={cn(
+                            "min-h-9 rounded-full px-3 text-sm font-bold",
+                            task.first_tiny_step?.trim()
+                              ? "bg-[var(--acc)] text-[var(--on-acc)]"
+                              : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+                          )}
                         >
                           Accept local
                         </button>
@@ -1424,6 +1541,25 @@ function PlanView({
                         another one.
                       </p>
                     ) : null}
+                    {task.first_tiny_step?.trim() ? (
+                      <p className="mt-3 rounded-xl bg-[var(--acc-sf)] px-3 py-2 text-sm font-semibold text-[var(--acc2)]">
+                        First move: {task.first_tiny_step}
+                      </p>
+                    ) : (
+                      <div className="mt-3">
+                        <LaunchStepPrompt
+                          taskId={task.id}
+                          value={firstMoveDrafts[task.id] ?? ""}
+                          onChange={(value) =>
+                            setFirstMoveDrafts((current) => ({
+                              ...current,
+                              [task.id]: value,
+                            }))
+                          }
+                          onSave={() => saveFirstMove(task.id)}
+                        />
+                      </div>
+                    )}
                     <div className="mt-3 flex flex-wrap gap-2">
                       {allDayContexts.map((context) => (
                         <span
