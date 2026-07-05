@@ -31,6 +31,10 @@ const aiResponse: ParseCaptureResponse = {
       due_at: null,
       confidence: 0.83,
       breakdown: null,
+      person_mentions: [
+        { name: "Taylor", role: "mention", confidence: 0.8 },
+      ],
+      is_commitment: false,
     },
   ],
   clarification_questions: [],

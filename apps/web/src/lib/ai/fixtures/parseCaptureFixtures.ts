@@ -55,6 +55,10 @@ export const parseCaptureRegressionFixtures: Record<
           kickstart_step:
             "Open the sponsor thread and paste the update template.",
         },
+        person_mentions: [
+          { name: "Alex", role: "committed_to", confidence: 0.9 },
+        ],
+        is_commitment: true,
       },
     ],
     clarification_questions: [],
@@ -89,6 +93,8 @@ export const parseCaptureRegressionFixtures: Record<
         due_at: null,
         confidence: 0.67,
         breakdown: null,
+        person_mentions: [],
+        is_commitment: false,
       },
     ],
     clarification_questions: [
@@ -136,6 +142,8 @@ export const parseCaptureRegressionFixtures: Record<
         due_at: null,
         confidence: 0.6,
         breakdown: null,
+        person_mentions: [],
+        is_commitment: false,
       },
     ],
     clarification_questions: [
@@ -176,6 +184,8 @@ export const parseCaptureRegressionFixtures: Record<
         due_at: "2026-05-11T13:00:00.000Z",
         confidence: 0.81,
         breakdown: null,
+        person_mentions: [],
+        is_commitment: false,
       },
     ],
     clarification_questions: [],
@@ -203,6 +213,10 @@ export const parseCaptureRegressionFixtures: Record<
         due_at: null,
         confidence: 0.52,
         breakdown: null,
+        person_mentions: [
+          { name: "the vendor", role: "waiting_on", confidence: 0.4 },
+        ],
+        is_commitment: false,
       },
     ],
     clarification_questions: [
@@ -243,6 +257,8 @@ export const parseCaptureRegressionFixtures: Record<
         due_at: null,
         confidence: 0.39,
         breakdown: null,
+        person_mentions: [],
+        is_commitment: false,
       },
     ],
     clarification_questions: [
@@ -271,6 +287,8 @@ export const parseCaptureRegressionFixtures: Record<
         due_at: null,
         confidence: 0.66,
         breakdown: null,
+        person_mentions: [],
+        is_commitment: false,
       },
     ],
     clarification_questions: ["Which single thread is most urgent today?"],
@@ -294,5 +312,93 @@ export const parseCaptureRegressionFixtures: Record<
       confidence: 0.63,
       review_trigger: "Overloaded capture needs triage-first reduction.",
     },
+  },
+  // S3 (#255): a clear promise the user made to another person. The dropped-
+  // commitment case Dex flags as highest-value; is_commitment true and a
+  // high-confidence committed_to mention.
+  commitmentToSarah: {
+    schema_version: PARSE_CAPTURE_SCHEMA_VERSION,
+    prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
+    parse_status: "parsed",
+    overall_confidence: 0.9,
+    triage_required: false,
+    triage_reasons: [],
+    drafts: [
+      {
+        draft_type: "task_draft",
+        title: "Send Sarah the deck",
+        description: "Follow through on the promise made to Sarah.",
+        area_slug_suggestion: "main-job",
+        first_tiny_step: "Open the deck and check it is export-ready.",
+        estimated_minutes_low: 10,
+        estimated_minutes_high: 20,
+        due_at: null,
+        confidence: 0.9,
+        breakdown: null,
+        person_mentions: [
+          { name: "Sarah", role: "committed_to", confidence: 0.94 },
+        ],
+        is_commitment: true,
+      },
+    ],
+    clarification_questions: [],
+    ambiguity_assessment: null,
+  },
+  // S3 (#255): an ambiguous first-name-only reference. Low mention confidence
+  // signals the triage flow to require explicit link approval or new-person
+  // creation rather than assuming a match.
+  ambiguousPersonName: {
+    schema_version: PARSE_CAPTURE_SCHEMA_VERSION,
+    prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
+    parse_status: "parsed",
+    overall_confidence: 0.72,
+    triage_required: true,
+    triage_reasons: ["Person reference 'J' is ambiguous."],
+    drafts: [
+      {
+        draft_type: "task_draft",
+        title: "Wait on J for the budget numbers",
+        description: "Blocked until the referenced person replies.",
+        area_slug_suggestion: "main-job",
+        first_tiny_step: "Note who 'J' is before following up.",
+        estimated_minutes_low: 5,
+        estimated_minutes_high: 15,
+        due_at: null,
+        confidence: 0.6,
+        breakdown: null,
+        person_mentions: [{ name: "J", role: "waiting_on", confidence: 0.35 }],
+        is_commitment: false,
+      },
+    ],
+    clarification_questions: ["Who is 'J'?"],
+    ambiguity_assessment: null,
+  },
+  // S3 (#255): no person involved. Empty person_mentions and is_commitment
+  // false — the "degrade to a plain task" baseline; parity with pre-S3 output.
+  noPersonCapture: {
+    schema_version: PARSE_CAPTURE_SCHEMA_VERSION,
+    prompt_version: PARSE_CAPTURE_PROMPT_VERSION,
+    parse_status: "parsed",
+    overall_confidence: 0.88,
+    triage_required: false,
+    triage_reasons: [],
+    drafts: [
+      {
+        draft_type: "task_draft",
+        title: "Back up the laptop before the OS update",
+        description: "Solo maintenance task with no person reference.",
+        area_slug_suggestion: "personal",
+        first_tiny_step: "Plug in the external drive.",
+        estimated_minutes_low: 20,
+        estimated_minutes_high: 40,
+        due_at: null,
+        confidence: 0.88,
+        breakdown: null,
+        person_mentions: [],
+        is_commitment: false,
+      },
+    ],
+    clarification_questions: [],
+    ambiguity_assessment: null,
   },
 };
