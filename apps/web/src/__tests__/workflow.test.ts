@@ -18,6 +18,9 @@ import {
   splitDraft,
   startExecutionSession,
   submitCapture,
+  swapWipSlot,
+  WIP_ENFORCEMENT_LIMIT,
+  WIP_ENFORCEMENT_POLICY_ID,
   unplanTask,
   updateProposal,
 } from "@/lib/workflow";
@@ -287,6 +290,74 @@ describe("local mock workflow", () => {
 
     state = rejectProposal(editedState, proposalId);
     expect(state.timeBlockProposals[0].status).toBe("rejected");
+  });
+
+  it("refuses the fourth accept-to-today item and supports one-click swap", () => {
+    let state = createInitialWorkflowState();
+
+    for (const title of [
+      "First active item",
+      "Second active item",
+      "Third active item",
+    ]) {
+      state = submitCapture(state, { rawText: title, areaId: "area-main-job" });
+      state = acceptDraft(state, state.taskDrafts[0].id);
+    }
+
+    state = submitCapture(state, {
+      rawText: "Fourth active item",
+      areaId: "area-main-job",
+    });
+    const refusedDraftId = state.taskDrafts[0].id;
+    const refused = acceptDraft(state, refusedDraftId);
+
+    expect(
+      refused.tasks.filter((task) => task.status === "active"),
+    ).toHaveLength(WIP_ENFORCEMENT_LIMIT);
+    expect(refused.wipRefusal?.policy_id).toBe(WIP_ENFORCEMENT_POLICY_ID);
+    expect(refused.wipRefusal?.activation_path).toBe("triage_accept_to_today");
+    expect(refused.wipRefusal?.slot_holders).toHaveLength(
+      WIP_ENFORCEMENT_LIMIT,
+    );
+    expect(
+      refused.taskDrafts.find((draft) => draft.id === refusedDraftId)?.status,
+    ).toBe("pending");
+
+    const releasedTaskId = refused.wipRefusal!.slot_holders[0].task_id;
+    const swapped = swapWipSlot(refused, releasedTaskId);
+
+    expect(swapped.wipRefusal).toBeNull();
+    expect(
+      swapped.tasks.find((task) => task.id === releasedTaskId)?.status,
+    ).toBe("backlog");
+    expect(
+      swapped.tasks.some((task) => task.title === "Fourth active item"),
+    ).toBe(true);
+  });
+
+  it("refuses planning a fourth committed item and exposes slot holders", () => {
+    let state = createInitialWorkflowState();
+
+    for (const title of [
+      "First plan item",
+      "Second plan item",
+      "Third plan item",
+    ]) {
+      state = submitCapture(state, { rawText: title, areaId: "area-main-job" });
+      state = acceptDraft(state, state.taskDrafts[0].id);
+    }
+
+    state = submitCapture(state, {
+      rawText: "Fourth plan item",
+      areaId: "area-main-job",
+    });
+    state = backlogDraft(state, state.taskDrafts[0].id);
+    state = promoteBacklogTask(state, state.tasks[0].id);
+
+    expect(state.wipRefusal?.activation_path).toBe("triage_accept_to_today");
+    expect(
+      state.wipRefusal?.slot_holders.map((holder) => holder.title),
+    ).toEqual(["Third plan item", "Second plan item", "First plan item"]);
   });
 
   it("uses elapsed minutes when marking an execution session complete", () => {

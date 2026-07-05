@@ -522,7 +522,7 @@ export async function createOverrideRecord(
 }
 
 function recordSuggestionFireAndForget(
-  client: MinimalSupabaseClient,
+  client: MinimalSupabaseClient | null,
   input: CreateSuggestionRecordInput,
 ) {
   void createSuggestionRecord(client, input).catch((error) => {
@@ -550,6 +550,49 @@ function recordOverrideFireAndForget(
 // Local triage draft ids are not persisted rows; only uuid ids qualify as subject_id.
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export interface WipEnforcementRecordInput {
+  area_id: string | null;
+  subject_id?: string | null;
+  subject_type: "task" | "task_draft";
+  action: "wip_refused" | "wip_swapped";
+  refused_task_id: string;
+  refused_task_title: string;
+  slot_holders: Array<{ task_id: string; title: string; status: string }>;
+  released_task_id?: string | null;
+  activation_path: string;
+}
+
+export function recordWipEnforcementEvent(
+  client: MinimalSupabaseClient | null,
+  input: WipEnforcementRecordInput,
+) {
+  recordSuggestionFireAndForget(client, {
+    area_id: input.area_id,
+    policy_identifier: "wip_enforcement.v1",
+    suggestion_type: input.action,
+    subject_type: input.subject_type,
+    subject_id:
+      input.subject_id && uuidPattern.test(input.subject_id)
+        ? input.subject_id
+        : null,
+    suggestion_json: {
+      refused_task_id: input.refused_task_id,
+      refused_task_title: input.refused_task_title,
+      slot_holders: input.slot_holders,
+      released_task_id: input.released_task_id ?? null,
+      activation_path: input.activation_path,
+    },
+    confidence: null,
+    status: input.action === "wip_swapped" ? "accepted" : "rejected",
+    resolved_at: new Date().toISOString(),
+    resolution_reason:
+      input.action === "wip_swapped"
+        ? "User swapped a WIP slot to admit the refused item."
+        : "LifeOS refused a fourth active WIP item.",
+    decided_by: input.action === "wip_swapped" ? "user" : "system",
+  });
+}
 
 export interface RejectedTaskDraftInput {
   area_id: string | null;

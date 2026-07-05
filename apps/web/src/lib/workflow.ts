@@ -19,6 +19,28 @@ import type {
 } from "./types";
 import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
 
+export const WIP_ENFORCEMENT_POLICY_ID = "wip_enforcement.v1";
+export const WIP_ENFORCEMENT_LIMIT = 3;
+
+export interface WipSlotHolder {
+  task_id: string;
+  title: string;
+  status: Phase2MockTask["status"];
+  block_id: string | null;
+}
+
+export interface WipRefusal {
+  policy_id: typeof WIP_ENFORCEMENT_POLICY_ID;
+  refused_task_id: string;
+  refused_task_title: string;
+  activation_path:
+    | "triage_accept_to_today"
+    | "plan_scheduling"
+    | "execute_start";
+  slot_holders: WipSlotHolder[];
+  created_at: string;
+}
+
 export interface WorkflowState {
   areas: Phase2MockArea[];
   captureItems: Phase2CaptureItem[];
@@ -33,6 +55,7 @@ export interface WorkflowState {
   executionSessions: Phase2MockExecutionSession[];
   healthChecks: typeof healthChecks;
   reviewLog: string[];
+  wipRefusal: WipRefusal | null;
 }
 
 interface ParseCaptureInput {
@@ -142,6 +165,135 @@ function shouldCreateProjectDraft(rawText: string) {
   );
 }
 
+export function getWipSlotHolders(state: WorkflowState): WipSlotHolder[] {
+  const openBlocksByTask = new Map<string, Phase2MockCalendarBlock>();
+  for (const block of state.calendarBlocks) {
+    if (!block.task_id || !["scheduled", "running"].includes(block.status)) {
+      continue;
+    }
+    if (!openBlocksByTask.has(block.task_id)) {
+      openBlocksByTask.set(block.task_id, block);
+    }
+  }
+
+  return state.tasks
+    .filter(
+      (task) =>
+        ["active", "scheduled"].includes(task.status) ||
+        openBlocksByTask.has(task.id) ||
+        state.executionSessions.some(
+          (session) =>
+            session.task_id === task.id && session.status === "running",
+        ),
+    )
+    .map((task) => ({
+      task_id: task.id,
+      title: task.title,
+      status: task.status,
+      block_id: openBlocksByTask.get(task.id)?.id ?? null,
+    }))
+    .slice(0, WIP_ENFORCEMENT_LIMIT);
+}
+
+function withWipRefusal(
+  state: WorkflowState,
+  task: Phase2MockTask | Phase2TaskDraft,
+  activationPath: WipRefusal["activation_path"],
+): WorkflowState {
+  const slotHolders = getWipSlotHolders(state);
+  if (slotHolders.length < WIP_ENFORCEMENT_LIMIT) {
+    return state;
+  }
+
+  return {
+    ...state,
+    wipRefusal: {
+      policy_id: WIP_ENFORCEMENT_POLICY_ID,
+      refused_task_id: task.id,
+      refused_task_title: task.title,
+      activation_path: activationPath,
+      slot_holders: slotHolders,
+      created_at: nowIso(),
+    },
+    reviewLog: [
+      `WIP refused ${task.title}: ${WIP_ENFORCEMENT_LIMIT} slots already active`,
+      ...state.reviewLog,
+    ],
+  };
+}
+
+function canAdmitWipTask(state: WorkflowState, admittedTaskId?: string) {
+  return (
+    getWipSlotHolders(state).filter(
+      (holder) => holder.task_id !== admittedTaskId,
+    ).length < WIP_ENFORCEMENT_LIMIT
+  );
+}
+
+export function clearWipRefusal(state: WorkflowState): WorkflowState {
+  return { ...state, wipRefusal: null };
+}
+
+export function swapWipSlot(
+  state: WorkflowState,
+  slotTaskId: string,
+): WorkflowState {
+  const refusal = state.wipRefusal;
+  if (!refusal) {
+    return state;
+  }
+
+  const releasedTask = state.tasks.find((task) => task.id === slotTaskId);
+  const releasedAt = nowIso();
+  const releasedState: WorkflowState = {
+    ...state,
+    tasks: state.tasks.map((task) =>
+      task.id === slotTaskId
+        ? { ...task, status: "backlog", updated_at: releasedAt }
+        : task,
+    ),
+    calendarBlocks: state.calendarBlocks.map((block) =>
+      block.task_id === slotTaskId &&
+      ["scheduled", "running"].includes(block.status)
+        ? { ...block, status: "cancelled", updated_at: releasedAt }
+        : block,
+    ),
+    executionSessions: state.executionSessions.map((session) =>
+      session.task_id === slotTaskId && session.status === "running"
+        ? { ...session, status: "stopped", outcome: "stopped" }
+        : session,
+    ),
+    wipRefusal: null,
+  };
+
+  const admitted =
+    refusal.activation_path === "triage_accept_to_today"
+      ? acceptDraft(releasedState, refusal.refused_task_id)
+      : refusal.activation_path === "execute_start"
+        ? startExecutionSession(releasedState, refusal.refused_task_id)
+        : planFirstProposalForTask(releasedState, refusal.refused_task_id);
+
+  return {
+    ...admitted,
+    wipRefusal: null,
+    reviewLog: [
+      `WIP swap: released ${releasedTask?.title ?? slotTaskId} for ${refusal.refused_task_title}`,
+      ...admitted.reviewLog,
+    ],
+  };
+}
+
+function planFirstProposalForTask(
+  state: WorkflowState,
+  taskId: string,
+): WorkflowState {
+  const proposal = state.timeBlockProposals.find(
+    (item) =>
+      item.task_id === taskId && ["proposed", "edited"].includes(item.status),
+  );
+  return proposal ? acceptProposal(state, proposal.id) : state;
+}
+
 export function createInitialWorkflowState(): WorkflowState {
   return {
     areas,
@@ -157,6 +309,7 @@ export function createInitialWorkflowState(): WorkflowState {
     executionSessions: [],
     healthChecks,
     reviewLog: [],
+    wipRefusal: null,
   };
 }
 
@@ -827,6 +980,10 @@ function acceptDraftWithStatus(
       })
     : null;
 
+  if (status === "active" && !canAdmitWipTask(state)) {
+    return withWipRefusal(state, draft, "triage_accept_to_today");
+  }
+
   return {
     ...state,
     captureItems: state.captureItems.map((capture) =>
@@ -864,6 +1021,10 @@ export function promoteBacklogTask(
     return state;
   }
 
+  if (!canAdmitWipTask(state)) {
+    return withWipRefusal(state, task, "triage_accept_to_today");
+  }
+
   return {
     ...state,
     tasks: state.tasks.map((item) =>
@@ -885,6 +1046,9 @@ export function planTaskAtHour(
   );
   if (!task || hour < 8 || hour > 18) {
     return state;
+  }
+  if (!canAdmitWipTask(state, task.id)) {
+    return withWipRefusal(state, task, "plan_scheduling");
   }
 
   const start = new Date();
@@ -1052,6 +1216,10 @@ export function acceptProposal(
   if (!proposal || proposal.status === "accepted") {
     return state;
   }
+  const task = state.tasks.find((item) => item.id === proposal.task_id);
+  if (task && !canAdmitWipTask(state, task.id)) {
+    return withWipRefusal(state, task, "plan_scheduling");
+  }
 
   const createdAt = nowIso();
   const block: Phase2MockCalendarBlock = {
@@ -1202,6 +1370,21 @@ export function startExecutionSession(
   );
   if (!task) {
     return state;
+  }
+  const holdersWithoutThisTask = getWipSlotHolders(state).filter(
+    (holder) => holder.task_id !== taskId,
+  );
+  if (holdersWithoutThisTask.length >= WIP_ENFORCEMENT_LIMIT) {
+    return withWipRefusal(
+      {
+        ...state,
+        calendarBlocks: state.calendarBlocks.filter(
+          (block) => block.task_id !== taskId,
+        ),
+      },
+      task,
+      "execute_start",
+    );
   }
 
   const block =

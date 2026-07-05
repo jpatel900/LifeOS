@@ -121,6 +121,8 @@ export function LifeOSCockpit({
     deferTask,
     dropTask,
     saveReview,
+    clearWipRefusal,
+    swapWipSlot,
   } = useWorkflow();
   const [stage, setStage] = useState<CockpitStage>(initialStage);
   const [dark, setDark] = useState(true);
@@ -528,6 +530,13 @@ export function LifeOSCockpit({
         </nav>
 
         <section className="min-h-[560px]">
+          {state.wipRefusal ? (
+            <WipRefusalPanel
+              refusal={state.wipRefusal}
+              onSwap={swapWipSlot}
+              onDismiss={clearWipRefusal}
+            />
+          ) : null}
           {stage === "today" ? (
             <TodayView vm={vm} onNavigate={navigate} />
           ) : null}
@@ -717,6 +726,60 @@ function CaptureParseNotice({
           Parse with mock parser
         </button>
       ) : null}
+    </div>
+  );
+}
+
+function WipRefusalPanel({
+  refusal,
+  onSwap,
+  onDismiss,
+}: {
+  refusal: NonNullable<ReturnType<typeof useWorkflow>["state"]["wipRefusal"]>;
+  onSwap: (slotTaskId: string) => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="mb-5 rounded-[2rem] border border-[var(--amb)] bg-[var(--amb-sf)] p-5 text-[var(--amb-fg)] shadow-sm">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="mono text-xs font-bold uppercase tracking-[0.18em]">
+            WIP enforcement · {refusal.policy_id}
+          </p>
+          <h2 className="mt-2 text-xl font-extrabold">
+            LifeOS refused a fourth active item.
+          </h2>
+          <p className="mt-2 text-sm font-semibold">
+            {refusal.refused_task_title} needs a slot. Pick one current holder
+            to swap out, or leave the refusal in place.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="min-h-10 rounded-full border border-current px-4 text-sm font-bold"
+        >
+          Keep refused
+        </button>
+      </div>
+      <div className="mt-4 grid gap-2 md:grid-cols-3">
+        {refusal.slot_holders.map((holder) => (
+          <button
+            key={holder.task_id}
+            type="button"
+            onClick={() => onSwap(holder.task_id)}
+            className="rounded-2xl bg-[var(--sf1)] p-4 text-left text-[var(--ink)] shadow-sm"
+          >
+            <span className="mono text-xs font-bold uppercase tracking-[0.14em] text-[var(--fnt)]">
+              {holder.status}
+            </span>
+            <span className="mt-1 block font-extrabold">{holder.title}</span>
+            <span className="mt-3 block text-sm font-bold text-[var(--amb-fg)]">
+              Swap this out
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

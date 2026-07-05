@@ -17,6 +17,8 @@ export const SuggestionRecordTypeSchema = z.enum([
   // the DB column is free text with a not-blank check; this enum is the
   // client-side vocabulary gate.
   "re_entry_defer",
+  "wip_refused",
+  "wip_swapped",
 ]);
 
 export const SuggestionRecordStatusSchema = z.enum([

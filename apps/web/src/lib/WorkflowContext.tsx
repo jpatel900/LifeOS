@@ -59,6 +59,9 @@ import {
   updateWorkflowAreaColor,
   updateProposal,
   saveReview,
+  swapWipSlot,
+  clearWipRefusal,
+  type WipRefusal,
   type WorkflowState,
 } from "./workflow";
 import {
@@ -82,6 +85,7 @@ import {
   recordPersonLinkAcceptance,
   recordPersonLinkRejection,
   recordPersonMentionProposal,
+  recordWipEnforcementEvent,
   recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
@@ -331,6 +335,8 @@ interface WorkflowContextValue {
   deferTask: (taskId: string) => void;
   dropTask: (taskId: string) => void;
   saveReview: () => void;
+  clearWipRefusal: () => void;
+  swapWipSlot: (slotTaskId: string) => void;
   resetWorkflow: () => void;
   approveProposalGoogleWrite: (
     proposalId: string,
@@ -895,7 +901,10 @@ function isStoredWorkflowState(value: unknown): value is WorkflowState {
     isArrayOf(state.calendarBlocks, isPhase2MockCalendarBlock) &&
     isArrayOf(state.executionSessions, isPhase2MockExecutionSession) &&
     isArrayOf(state.healthChecks, isPhase2MockHealthCheck) &&
-    isArrayOf(state.reviewLog, isString)
+    isArrayOf(state.reviewLog, isString) &&
+    (state.wipRefusal === null ||
+      state.wipRefusal === undefined ||
+      isRecord(state.wipRefusal))
   );
 }
 
@@ -908,6 +917,7 @@ function normalizeStoredWorkflowState(value: unknown): unknown {
     ...value,
     projectDrafts: value.projectDrafts ?? [],
     projects: value.projects ?? [],
+    wipRefusal: value.wipRefusal ?? null,
   };
 }
 
@@ -2229,6 +2239,40 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     void parseCaptureIntoDrafts(capture, "mock");
   }
 
+  function persistedAreaIdForWipRefusal(refusal: WipRefusal) {
+    const task = stateRef.current.tasks.find(
+      (item) => item.id === refusal.refused_task_id,
+    );
+    const draft = stateRef.current.taskDrafts.find(
+      (item) => item.id === refusal.refused_task_id,
+    );
+    const workflowAreaId = task?.area_id ?? draft?.area_id ?? null;
+    return workflowAreaId
+      ? persistedAreaIdForWorkflowId(workflowAreaId, persistedAreasRef.current)
+      : null;
+  }
+
+  function recordWipRefusalIfNew(previous: WorkflowState, next: WorkflowState) {
+    if (!next.wipRefusal || next.wipRefusal === previous.wipRefusal) {
+      return;
+    }
+
+    const refusal = next.wipRefusal;
+    recordWipEnforcementEvent(createSupabaseBrowserClient(), {
+      area_id: persistedAreaIdForWipRefusal(refusal),
+      subject_id: refusal.refused_task_id,
+      subject_type:
+        refusal.activation_path === "triage_accept_to_today"
+          ? "task_draft"
+          : "task",
+      action: "wip_refused",
+      refused_task_id: refusal.refused_task_id,
+      refused_task_title: refusal.refused_task_title,
+      slot_holders: refusal.slot_holders,
+      activation_path: refusal.activation_path,
+    });
+  }
+
   function acceptTaskDraftWithPersistence(
     draftId: string,
     status: "active" | "backlog",
@@ -2254,6 +2298,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         : null;
 
     applyWorkflowState(next);
+    recordWipRefusalIfNew(previous, next);
 
     if (draft && localTask) {
       void persistAcceptedTaskDraft(
@@ -2279,6 +2324,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
 
     applyWorkflowState(next);
+    recordWipRefusalIfNew(previous, next);
 
     if (localProposal && localBlock) {
       void persistPlannedTask(taskId, localProposal, localBlock).catch(
@@ -2298,6 +2344,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
 
     applyWorkflowState(next);
+    recordWipRefusalIfNew(previous, next);
 
     if (localSession) {
       void persistStartedSession(localSession).catch((error) => {
@@ -2315,6 +2362,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const next = markCurrentSession(previous, status, { actualMinutes });
 
     applyWorkflowState(next);
+    recordWipRefusalIfNew(previous, next);
 
     if (localSession) {
       void persistMarkedSession(localSession, status, actualMinutes).catch(
@@ -2350,8 +2398,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const previous = stateRef.current;
       const next = promoteBacklogTask(previous, taskId);
       applyWorkflowState(next);
+      recordWipRefusalIfNew(previous, next);
 
-      if (next !== previous) {
+      if (next !== previous && !next.wipRefusal) {
         void persistTaskReviewTransition(taskId, "active").catch((error) => {
           markPersistedSaveFailure(error);
         });
@@ -2428,8 +2477,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             !previous.calendarBlocks.some((item) => item.id === block.id),
         ) ?? null;
       applyWorkflowState(next);
+      recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous) {
+      if (proposal && next !== previous && !next.wipRefusal) {
         void persistAcceptedLocalProposal(proposal, localBlock).catch(
           (error) => {
             markPersistedSaveFailure(error);
@@ -2444,8 +2494,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         null;
       const next = rejectProposal(previous, proposalId);
       applyWorkflowState(next);
+      recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous) {
+      if (proposal && next !== previous && !next.wipRefusal) {
         void persistRejectedLocalProposal(proposal).catch((error) => {
           markPersistedSaveFailure(error);
         });
@@ -2457,8 +2508,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const proposal =
         next.timeBlockProposals.find((item) => item.id === proposalId) ?? null;
       applyWorkflowState(next);
+      recordWipRefusalIfNew(previous, next);
 
-      if (proposal && next !== previous) {
+      if (proposal && next !== previous && !next.wipRefusal) {
         void persistEditedLocalProposal(proposal).catch((error) => {
           markPersistedSaveFailure(error);
         });
@@ -2509,8 +2561,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const previous = stateRef.current;
       const next = carryForwardTask(previous, taskId);
       applyWorkflowState(next);
+      recordWipRefusalIfNew(previous, next);
 
-      if (next !== previous) {
+      if (next !== previous && !next.wipRefusal) {
         void persistTaskReviewTransition(taskId, "active").catch((error) => {
           markPersistedSaveFailure(error);
         });
@@ -2546,6 +2599,31 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       void persistReviewEntry(next).catch((error) => {
         markPersistedSaveFailure(error);
       });
+    },
+    clearWipRefusal: () =>
+      applyWorkflowState(clearWipRefusal(stateRef.current)),
+    swapWipSlot: (slotTaskId) => {
+      const previous = stateRef.current;
+      const refusal = previous.wipRefusal;
+      const next = swapWipSlot(previous, slotTaskId);
+      applyWorkflowState(next);
+      if (refusal && next !== previous) {
+        recordWipEnforcementEvent(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWipRefusal(refusal),
+          subject_id: refusal.refused_task_id,
+          subject_type:
+            refusal.activation_path === "triage_accept_to_today"
+              ? "task_draft"
+              : "task",
+          action: "wip_swapped",
+          refused_task_id: refusal.refused_task_id,
+          refused_task_title: refusal.refused_task_title,
+          slot_holders: refusal.slot_holders,
+          released_task_id: slotTaskId,
+          activation_path: refusal.activation_path,
+        });
+        markLocalOnly("WIP swap saved locally; account sync is pending.");
+      }
     },
     resetWorkflow: () => dispatch({ type: "reset" }),
     approveProposalGoogleWrite,
