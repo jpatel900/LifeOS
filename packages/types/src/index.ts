@@ -13,6 +13,7 @@ export type {
   ModelTier,
   ParseCaptureDraft,
   ParseCaptureResponse,
+  Person,
   Project,
   ReviewEntry,
   Task,

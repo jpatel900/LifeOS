@@ -22,6 +22,7 @@ import {
   GoogleCalendarConnectionSchema,
   HealthCheckSchema,
   ParseCaptureResponseSchema,
+  PersonSchema,
   ProjectSchema,
   ReviewEntrySchema,
   UpdateAreaColorInputSchema,
@@ -432,6 +433,122 @@ describe("TaskSchema", () => {
       });
       expect(result.success).toBe(true);
     }
+  });
+
+  it("still parses task rows that omit the S1 commitment columns (existing readers)", () => {
+    const result = TaskSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      project_id: null,
+      source_capture_item_id: null,
+      title: "Draft sponsor email",
+      description: null,
+      status: "active",
+      priority_score: null,
+      priority_confidence: null,
+      task_type: null,
+      energy_type: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      due_at: null,
+      definition_of_done: null,
+      first_tiny_step: null,
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Optional in the Zod contract so partial-select rows still parse; the DB
+      // (not Zod) supplies the real `not null default false` for is_commitment.
+      expect(result.data.waiting_on_person_id).toBeUndefined();
+      expect(result.data.waiting_on_since).toBeUndefined();
+      expect(result.data.is_commitment).toBeUndefined();
+      expect(result.data.committed_to_person_id).toBeUndefined();
+    }
+  });
+
+  it("accepts a task row carrying populated S1 commitment columns", () => {
+    const result = TaskSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      project_id: null,
+      source_capture_item_id: null,
+      title: "Ship the deck to Priya",
+      description: null,
+      status: "active",
+      priority_score: null,
+      priority_confidence: null,
+      task_type: null,
+      energy_type: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      due_at: "2026-07-10T12:00:00.000Z",
+      definition_of_done: null,
+      first_tiny_step: null,
+      waiting_on_person_id: uid2,
+      waiting_on_since: "2026-07-01T12:00:00.000Z",
+      is_commitment: true,
+      committed_to_person_id: uid,
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.is_commitment).toBe(true);
+      expect(result.data.waiting_on_person_id).toBe(uid2);
+      expect(result.data.committed_to_person_id).toBe(uid);
+    }
+  });
+});
+
+describe("PersonSchema", () => {
+  it("accepts a valid person row shape", () => {
+    const result = PersonSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      display_name: "Priya Sharma",
+      normalized_name: "priya sharma",
+      notes: null,
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+      archived_at: null,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an archived person with notes", () => {
+    const result = PersonSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      display_name: "Alex Doe",
+      normalized_name: "alex doe",
+      notes: "Prefers async updates",
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-02T12:00:00.000Z",
+      archived_at: "2024-02-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a blank display_name", () => {
+    const result = PersonSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      display_name: "",
+      normalized_name: "someone",
+      notes: null,
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+      archived_at: null,
+    });
+
+    expect(result.success).toBe(false);
   });
 });
 

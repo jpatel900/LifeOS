@@ -191,6 +191,22 @@ async function deleteAiCallTraceBySurface(
   }
 }
 
+async function deletePersonByDisplayName(
+  client: SupabaseClient,
+  displayName: string,
+) {
+  const { error } = await client
+    .from("people")
+    .delete()
+    .eq("display_name", displayName);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up person '${displayName}': ${error.message}`,
+    );
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -1299,6 +1315,174 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     });
 
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A access own people but not user B rows", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userAName = `rls-person-a-${suffix}`;
+    const userBName = `rls-person-b-${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient.from("people").insert({
+        user_id: userA.id,
+        display_name: userAName,
+        normalized_name: userAName.toLowerCase(),
+      });
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient.from("people").insert({
+        user_id: userB.id,
+        display_name: userBName,
+        normalized_name: userBName.toLowerCase(),
+      });
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("people")
+        .select("user_id,display_name")
+        .in("display_name", [userAName, userBName])
+        .order("display_name", { ascending: true });
+
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        { user_id: userA.id, display_name: userAName },
+      ]);
+    } finally {
+      await deletePersonByDisplayName(userAClient, userAName);
+      await deletePersonByDisplayName(userBClient, userBName);
+    }
+  });
+
+  it("prevents user A from inserting people for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const name = `rls-cross-user-person-${suffix}`;
+
+    const { error } = await userAClient.from("people").insert({
+      user_id: userB.id,
+      display_name: name,
+      normalized_name: name.toLowerCase(),
+    });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("blocks tasks referencing another user's person via the composite FK", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userBPersonName = `rls-fk-person-b-${suffix}`;
+    const userATaskTitle = `rls-fk-task-a-${suffix}`;
+    let userBPersonId = "";
+
+    try {
+      const { data: personB, error: insertPersonBError } = await userBClient
+        .from("people")
+        .insert({
+          user_id: userB.id,
+          display_name: userBPersonName,
+          normalized_name: userBPersonName.toLowerCase(),
+        })
+        .select("id")
+        .single();
+      expect(insertPersonBError).toBeNull();
+      userBPersonId = personB!.id;
+
+      // User A cannot attach user B's person to their own task: the composite
+      // (person_id, user_id) FK has no matching (id, user_id) row for user A.
+      const { error: waitingOnError } = await userAClient.from("tasks").insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: userATaskTitle,
+        status: "active",
+        waiting_on_person_id: userBPersonId,
+      });
+      expect(waitingOnError?.message).toMatch(
+        /violates foreign key constraint|tasks_waiting_on_person_fk/i,
+      );
+
+      const { error: committedToError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: userATaskTitle,
+          status: "active",
+          is_commitment: true,
+          committed_to_person_id: userBPersonId,
+        });
+      expect(committedToError?.message).toMatch(
+        /violates foreign key constraint|tasks_committed_to_person_fk/i,
+      );
+    } finally {
+      await deleteTaskByTitle(userAClient, userATaskTitle);
+      if (userBPersonId) {
+        await deletePersonByDisplayName(userBClient, userBPersonName);
+      }
+    }
+  });
+
+  it("lets user A own a task committed to their own person and defaults is_commitment", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const personName = `rls-person-own-${suffix}`;
+    const commitmentTitle = `rls-commitment-task-${suffix}`;
+    const plainTitle = `rls-plain-task-${suffix}`;
+    let personId = "";
+
+    try {
+      const { data: person, error: personError } = await userAClient
+        .from("people")
+        .insert({
+          user_id: userA.id,
+          display_name: personName,
+          normalized_name: personName.toLowerCase(),
+        })
+        .select("id")
+        .single();
+      expect(personError).toBeNull();
+      personId = person!.id;
+
+      const { data: commitment, error: commitmentError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: commitmentTitle,
+          status: "active",
+          is_commitment: true,
+          committed_to_person_id: personId,
+          due_at: "2026-07-10T12:00:00.000Z",
+        })
+        .select("is_commitment,committed_to_person_id")
+        .single();
+      expect(commitmentError).toBeNull();
+      expect(commitment!.is_commitment).toBe(true);
+      expect(commitment!.committed_to_person_id).toBe(personId);
+
+      const { data: plain, error: plainError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: plainTitle,
+          status: "active",
+        })
+        .select("is_commitment,waiting_on_person_id,committed_to_person_id")
+        .single();
+      expect(plainError).toBeNull();
+      expect(plain!.is_commitment).toBe(false);
+      expect(plain!.waiting_on_person_id).toBeNull();
+      expect(plain!.committed_to_person_id).toBeNull();
+    } finally {
+      await deleteTaskByTitle(userAClient, commitmentTitle);
+      await deleteTaskByTitle(userAClient, plainTitle);
+      if (personId) {
+        await deletePersonByDisplayName(userAClient, personName);
+      }
+    }
   });
 
   it("forces server created_at on authenticated capture inserts and keeps it immutable", async () => {
