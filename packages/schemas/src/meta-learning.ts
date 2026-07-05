@@ -13,6 +13,10 @@ export const SuggestionRecordTypeSchema = z.enum([
   "parse_result",
   "triage_suggestion",
   "time_block_proposal",
+  // FR-028 (F-G2b): deterministic re-entry auto-deferral events. Additive —
+  // the DB column is free text with a not-blank check; this enum is the
+  // client-side vocabulary gate.
+  "re_entry_defer",
 ]);
 
 export const SuggestionRecordStatusSchema = z.enum([
