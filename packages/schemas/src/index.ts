@@ -87,6 +87,14 @@ export const CreateTaskInputSchema = z
     due_at: z.string().datetime().nullable().optional(),
     definition_of_done: optionalNullableTrimmedText.optional(),
     first_tiny_step: nullableTrimmedText,
+    // Stage 1 slice S3 (issue #255): person/commitment link columns, written on
+    // the persisted accept path only after explicit user approval (NS-INV-4).
+    // Optional so every existing task-create call site is unaffected. The DB
+    // remains the source of truth for the FKs and `is_commitment` default.
+    waiting_on_person_id: z.string().uuid().nullable().optional(),
+    waiting_on_since: z.string().datetime().nullable().optional(),
+    is_commitment: z.boolean().optional(),
+    committed_to_person_id: z.string().uuid().nullable().optional(),
   })
   .refine(
     (input) =>
@@ -113,6 +121,18 @@ export const CreateTaskInputSchema = z
   }));
 
 export type CreateTaskInput = z.input<typeof CreateTaskInputSchema>;
+
+// Stage 1 slice S3 (issue #255): user-approved person creation (FR-017). The UI
+// resolver supplies both the raw `display_name` (the mention text) and the
+// `normalized_name` matching key (via `normalizePersonName`). Trimmed/non-blank
+// mirror the `people_display_name_not_blank` / `people_normalized_name_not_blank`
+// DB constraints; the row is only ever inserted after explicit triage approval.
+export const CreatePersonInputSchema = z.object({
+  display_name: z.string().trim().min(1),
+  normalized_name: z.string().trim().min(1),
+});
+
+export type CreatePersonInput = z.input<typeof CreatePersonInputSchema>;
 
 function endAfterStart(input: {
   proposed_start: string;

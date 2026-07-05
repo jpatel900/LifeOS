@@ -70,6 +70,7 @@ import {
   createTask,
   createTimeBlockProposal,
   editTimeBlockProposal,
+  findOrCreatePerson,
   getOperatorProfile,
   listAreas,
   listCaptureItems,
@@ -78,6 +79,7 @@ import {
   listPlanningItems,
   markExecutionSession,
   recordCommitmentProposal,
+  recordPersonLinkAcceptance,
   recordPersonLinkRejection,
   recordPersonMentionProposal,
   recordRejectedTaskDraft,
@@ -86,7 +88,7 @@ import {
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
-import { resolvePersonMention } from "./data/personLinks";
+import { normalizePersonName, resolvePersonMention } from "./data/personLinks";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import { isLifeOsOwnedGoogleEventIdShape } from "./cockpit/googleCalendarBridge";
 import type {
@@ -1261,6 +1263,53 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       draft.capture_item_id,
       persistedCaptureIdByLocalIdRef.current,
     );
+
+    // S3 (#255): resolve the approved person links before the task insert (FK
+    // ordering). A mention that survived to accept was not rejected, so it is
+    // user-approved. For each such mention we find-or-create the person
+    // (idempotent per normalized_name, re-checked at accept time), then write the
+    // link column for its role. Multiple mentions of one role map to a single
+    // column, so the first resolved id wins deterministically. role "mention" is
+    // informational — it creates the person but links no column. A find/create
+    // failure degrades that one link to no-link; the task still lands (NS-INV-4).
+    const acceptTime = new Date().toISOString();
+    let waitingOnPersonId: string | null = null;
+    let committedToPersonId: string | null = null;
+    const acceptedLinks: Array<{
+      name: string;
+      role: "waiting_on" | "committed_to" | "mention";
+      personId: string | null;
+    }> = [];
+
+    for (const mention of draft.person_mentions) {
+      let personId: string | null = null;
+      try {
+        const personResult = await findOrCreatePerson(client, {
+          display_name: mention.name,
+          normalized_name: normalizePersonName(mention.name),
+        });
+        personId = personResult.person?.id ?? null;
+      } catch {
+        // A person find/create failure degrades this link to no-link; never
+        // block the task creation the user just approved.
+        personId = null;
+      }
+
+      if (personId) {
+        if (mention.role === "waiting_on" && !waitingOnPersonId) {
+          waitingOnPersonId = personId;
+        } else if (mention.role === "committed_to" && !committedToPersonId) {
+          committedToPersonId = personId;
+        }
+      }
+
+      acceptedLinks.push({ name: mention.name, role: mention.role, personId });
+    }
+
+    // committed_to link OR an approved commitment draft flag both set the task as
+    // a commitment (deliverable b honors draft.is_commitment without a person).
+    const isCommitment = draft.is_commitment || committedToPersonId !== null;
+
     const taskResult = await createTask(client, {
       area_id: persistedAreaId,
       source_capture_item_id: sourceCaptureId,
@@ -1271,10 +1320,27 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       estimated_minutes_low: draft.estimated_minutes_low,
       estimated_minutes_high: draft.estimated_minutes_high,
       first_tiny_step: draft.first_tiny_step,
+      waiting_on_person_id: waitingOnPersonId,
+      waiting_on_since: waitingOnPersonId ? acceptTime : null,
+      is_commitment: isCommitment,
+      committed_to_person_id: committedToPersonId,
     });
 
     if (taskResult.provider !== "supabase") {
       return;
+    }
+
+    // Resolve the pending person-link proposals to accepted (mirrors the
+    // rejection path). Fire-and-forget — a learning-write failure never affects
+    // the accept flow (NS-INV-3).
+    for (const link of acceptedLinks) {
+      recordPersonLinkAcceptance(client, {
+        area_id: persistedAreaId,
+        draft_id: draft.id,
+        name: link.name,
+        role: link.role,
+        matched_person_id: link.personId,
+      });
     }
 
     persistedTaskIdByLocalIdRef.current.set(localTask.id, taskResult.task.id);

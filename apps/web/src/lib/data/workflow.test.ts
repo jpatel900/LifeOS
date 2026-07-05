@@ -542,6 +542,10 @@ describe("workflow data provider", () => {
       definition_of_done:
         "Complete the first useful move and note the outcome.",
       first_tiny_step: "Find the dentist number",
+      waiting_on_person_id: null,
+      waiting_on_since: null,
+      is_commitment: false,
+      committed_to_person_id: null,
     });
     expect(result.provider).toBe("supabase");
     expect(result.task.status).toBe("active");
