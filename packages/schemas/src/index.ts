@@ -81,6 +81,7 @@ export const CreateTaskInputSchema = z
     priority_score: z.number().nullable().optional(),
     priority_confidence: z.number().min(0).max(1).nullable(),
     task_type: optionalNullableTrimmedText.optional(),
+    is_reversible: z.boolean().nullable().optional(),
     energy_type: optionalNullableTrimmedText.optional(),
     estimated_minutes_low: z.number().int().positive().nullable(),
     estimated_minutes_high: z.number().int().positive().nullable(),
@@ -96,6 +97,19 @@ export const CreateTaskInputSchema = z
     is_commitment: z.boolean().optional(),
     committed_to_person_id: z.string().uuid().nullable().optional(),
   })
+  .refine((input) => input.task_type !== "decision" || Boolean(input.due_at), {
+    message: "decision tasks require due_at",
+    path: ["due_at"],
+  })
+  .refine(
+    (input) =>
+      input.task_type !== "decision" ||
+      typeof input.is_reversible === "boolean",
+    {
+      message: "decision tasks require is_reversible",
+      path: ["is_reversible"],
+    },
+  )
   .refine(
     (input) =>
       input.estimated_minutes_low === null ||
@@ -113,6 +127,7 @@ export const CreateTaskInputSchema = z
     source_capture_item_id: input.source_capture_item_id ?? null,
     priority_score: input.priority_score ?? null,
     task_type: input.task_type ?? null,
+    is_reversible: input.is_reversible ?? null,
     energy_type: input.energy_type ?? null,
     due_at: input.due_at ?? null,
     definition_of_done:

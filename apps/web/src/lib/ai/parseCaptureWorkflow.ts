@@ -84,6 +84,9 @@ export function buildParsedWorkflowResult(
       estimated_minutes_low: draft.estimated_minutes_low,
       estimated_minutes_high: draft.estimated_minutes_high,
       first_tiny_step: draft.first_tiny_step,
+      due_at: draft.due_at ?? null,
+      task_type: draft.task_type ?? "task",
+      is_reversible: draft.is_reversible ?? null,
       breakdown: draft.breakdown,
       // S3 (#255): carry the person/commitment signals through untouched so the
       // triage flow can propose a person link; a plain task with no mentions

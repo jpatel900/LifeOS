@@ -123,6 +123,7 @@ export function LifeOSCockpit({
     saveReview,
     clearWipRefusal,
     swapWipSlot,
+    markSession,
   } = useWorkflow();
   const [stage, setStage] = useState<CockpitStage>(initialStage);
   const [dark, setDark] = useState(true);
@@ -288,7 +289,26 @@ export function LifeOSCockpit({
   }
 
   function finishSession(status: "completed" | "stuck" | "missed") {
-    finish(status);
+    const currentSession = state.executionSessions[0] ?? null;
+    const currentTask = currentSession?.task_id
+      ? state.tasks.find((task) => task.id === currentSession.task_id)
+      : null;
+    const decisionChoice =
+      status === "completed" && currentTask?.task_type === "decision"
+        ? window
+            .prompt("Record the decision choice as free text before closing.")
+            ?.trim()
+        : undefined;
+
+    if (status === "completed" && currentTask?.task_type === "decision") {
+      if (!decisionChoice) {
+        showToast("Decision choice is required before closing");
+        return;
+      }
+      markSession(status, undefined, decisionChoice);
+    } else {
+      finish(status);
+    }
     showToast(status === "completed" ? "Session complete" : "Session logged");
     navigate("review");
   }

@@ -66,6 +66,8 @@ export const ParseCaptureTaskDraftSchema = z.object({
   estimated_minutes_low: z.number().int().positive().nullable(),
   estimated_minutes_high: z.number().int().positive().nullable(),
   due_at: z.string().datetime().nullable(),
+  task_type: z.enum(["task", "decision"]).optional(),
+  is_reversible: z.boolean().nullable().optional(),
   confidence: z.number().min(0).max(1),
   breakdown: ParseCaptureBreakdownSchema.nullable().default(null),
   // S3 (#255): optional, additive. `person_mentions` is a (possibly empty)

@@ -337,6 +337,7 @@ interface WorkflowContextValue {
   markSession: (
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
+    notes?: string | null,
   ) => void;
   carryForwardTask: (taskId: string) => void;
   deferTask: (taskId: string) => void;
@@ -785,6 +786,9 @@ function isPhase2MockTask(
     isNullableNumber(value.priority_score) &&
     isNullableNumber(value.priority_confidence) &&
     isNullableString(value.task_type) &&
+    (value.is_reversible === undefined ||
+      value.is_reversible === null ||
+      typeof value.is_reversible === "boolean") &&
     isNullableString(value.energy_type) &&
     isNullableNumber(value.estimated_minutes_low) &&
     isNullableNumber(value.estimated_minutes_high) &&
@@ -1346,6 +1350,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       description: draft.description,
       status,
       priority_confidence: draft.confidence,
+      task_type: draft.task_type ?? "task",
+      is_reversible:
+        draft.task_type === "decision" ? (draft.is_reversible ?? null) : null,
+      due_at: draft.due_at ?? null,
       estimated_minutes_low: draft.estimated_minutes_low,
       estimated_minutes_high: draft.estimated_minutes_high,
       first_tiny_step: draft.first_tiny_step,
@@ -1693,6 +1701,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     localSession: Phase2MockExecutionSession,
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
+    notes?: string | null,
   ) {
     const client = createSupabaseBrowserClient();
     const persistedSessionId = persistedIdForLocalId(
@@ -1732,7 +1741,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           : (actualMinutes ?? localSession.actual_minutes ?? 0),
       productivity_rating:
         status === "paused" ? null : status === "completed" ? 4 : 1,
-      notes: status === "stuck" ? "Need a smaller next step." : null,
+      notes:
+        notes !== undefined
+          ? notes
+          : status === "stuck"
+            ? "Need a smaller next step."
+            : null,
     });
 
     await syncPersistedWorkflowRows(client);
@@ -2369,20 +2383,24 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   function markSessionWithPersistence(
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
+    notes?: string | null,
   ) {
     const previous = stateRef.current;
     const localSession = previous.executionSessions[0];
-    const next = markCurrentSession(previous, status, { actualMinutes });
+    const next = markCurrentSession(previous, status, { actualMinutes, notes });
 
     applyWorkflowState(next);
     recordWipRefusalIfNew(previous, next);
 
     if (localSession) {
-      void persistMarkedSession(localSession, status, actualMinutes).catch(
-        (error) => {
-          markPersistedSaveFailure(error);
-        },
-      );
+      void persistMarkedSession(
+        localSession,
+        status,
+        actualMinutes,
+        notes,
+      ).catch((error) => {
+        markPersistedSaveFailure(error);
+      });
     }
   }
 

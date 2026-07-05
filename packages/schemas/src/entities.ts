@@ -110,6 +110,7 @@ export const TaskSchema = z.object({
   priority_score: z.number().nullable(),
   priority_confidence: z.number().min(0).max(1).nullable(),
   task_type: z.string().nullable(),
+  is_reversible: z.boolean().nullable().optional(),
   energy_type: z.string().nullable(),
   estimated_minutes_low: z.number().int().nullable(),
   estimated_minutes_high: z.number().int().nullable(),
