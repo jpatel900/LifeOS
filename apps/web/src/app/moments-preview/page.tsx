@@ -1,9 +1,17 @@
 "use client";
 
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { TodayMoments } from "../components/moments/TodayMoments";
+import { deepLinkTargetForPath } from "../components/moments/deepLink";
 
 /**
  * Moments pass P3 — dev-only preview route (packet: assembled moments).
+ * Moments pass P6 — packet: deep-link fallback shims. Supports an optional
+ * `?link=<path>` query param (e.g. `/moments-preview?link=/triage`) that maps
+ * through `deepLinkTargetForPath` into TodayMoments' `deepLink` prop. This is
+ * how the P6 shims are exercised pre-P7 without touching the live routes'
+ * behavior — the actual route -> Today redirect is P7's job.
  *
  * Renders the assembled Start/Flow/Close container wired to the live
  * WorkflowContext (already mounted globally via AppShell). Live time in the
@@ -11,6 +19,14 @@ import { TodayMoments } from "../components/moments/TodayMoments";
  * `new Date()` at the component boundary. Not linked from anywhere in the
  * app.
  */
+
+function MomentsPreviewContent() {
+  const searchParams = useSearchParams();
+  const link = searchParams.get("link");
+  const deepLink = link ? deepLinkTargetForPath(link) : null;
+
+  return <TodayMoments now={undefined} deepLink={deepLink} />;
+}
 
 export default function MomentsPreviewPage() {
   return (
@@ -22,11 +38,14 @@ export default function MomentsPreviewPage() {
         </h1>
         <p className="text-sm text-muted-foreground">
           Live time, live WorkflowContext state. Not linked from anywhere in the
-          app.
+          app. Append <code>?link=/triage</code> (or /capture, /calendar,
+          /execute, /review) to exercise the P6 deep-link shims.
         </p>
       </header>
 
-      <TodayMoments now={undefined} />
+      <Suspense fallback={null}>
+        <MomentsPreviewContent />
+      </Suspense>
     </div>
   );
 }

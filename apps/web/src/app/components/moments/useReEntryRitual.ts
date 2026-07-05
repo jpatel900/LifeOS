@@ -77,6 +77,14 @@ export interface UseReEntryRitualResult {
   plan: ReEntryDeferralPlan | null;
   outcomes: ReEntryDeferralOutcome[];
   demoMode: boolean;
+  /**
+   * True on the render where an eligible-and-unsuppressed absence has been
+   * detected but the mount effect has not yet flushed `status` past "idle".
+   * Consumers that must not race the ritual for screen ownership (e.g. P6's
+   * deep-link shims) should treat `pending` the same as an active ritual —
+   * `status` alone lags one commit behind eligibility.
+   */
+  pending: boolean;
   complete(): void;
 }
 
@@ -187,6 +195,7 @@ export function useReEntryRitual(
     plan: latched?.plan ?? null,
     outcomes,
     demoMode,
+    pending: status === "idle" && (candidate !== null || latched !== null),
     complete,
   };
 }

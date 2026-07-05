@@ -780,3 +780,144 @@ describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
     );
   });
 });
+
+/**
+ * Moments pass P6 — packet: deep-link fallback shims. Additive coverage for
+ * the `deepLink` prop: applies once on mount, does not re-apply on
+ * re-render, and defers until the re-entry ritual completes when the ritual
+ * is active. Reuses the re-entry seeding pattern from the FR-028 describe
+ * block above (real WorkflowContext journey, `now` derived from seeded
+ * activity, never hardcoded).
+ */
+describe("TodayMoments — P6 deep-link shims", () => {
+  let restoreFetch: (() => void) | null = null;
+
+  beforeEach(() => {
+    restoreFetch = stubParseCaptureFetch();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    restoreFetch?.();
+    restoreFetch = null;
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  it("opens the capture overlay once when deepLink = { overlay: 'capture' }", () => {
+    renderToday({ initialMoment: "start", deepLink: { overlay: "capture" } });
+
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+  });
+
+  it("opens the triage sheet once when deepLink = { sheet: 'triage' }", () => {
+    renderToday({ initialMoment: "start", deepLink: { sheet: "triage" } });
+
+    expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+      "aria-label",
+      "Triage",
+    );
+  });
+
+  it("switches to the flow moment once when deepLink = { moment: 'flow' }", () => {
+    renderToday({ initialMoment: "start", deepLink: { moment: "flow" } });
+
+    expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+  });
+
+  it("does not re-apply the deep link on re-render (user can close the overlay and it stays closed)", () => {
+    const { rerender } = renderToday({
+      initialMoment: "start",
+      deepLink: { overlay: "capture" },
+    });
+
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
+      key: "Escape",
+    });
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+
+    rerender(
+      <WorkflowProvider>
+        <TaskSeedBridge />
+        <TodayMoments
+          now={FIXED_NOW}
+          initialMoment="start"
+          deepLink={{ overlay: "capture" }}
+        />
+      </WorkflowProvider>,
+    );
+
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+  });
+
+  it("defers the deep link until the re-entry ritual completes, then applies it", async () => {
+    let lastActivityAt: string | null = null;
+    const { rerender } = render(
+      <WorkflowProvider>
+        <ReEntrySeedBridge
+          onState={(value) => {
+            lastActivityAt = value;
+          }}
+        />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("re-entry-seed-submit"));
+    await waitFor(() => {
+      expect(screen.getByTestId("re-entry-seed-draft-count")).toHaveTextContent(
+        "1",
+      );
+    });
+    fireEvent.click(screen.getByTestId("re-entry-seed-accept"));
+
+    await waitFor(() => {
+      expect(lastActivityAt).not.toBeNull();
+    });
+
+    const now = new Date(
+      new Date(lastActivityAt as unknown as string).getTime() +
+        RE_ENTRY_ABSENCE_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    // rerender the SAME provider instance (not a fresh render) so the
+    // already-seeded in-memory state is present on TodayMoments' very first
+    // commit — a fresh WorkflowProvider would re-hydrate from sessionStorage
+    // via an async effect, and since child effects (TodayMoments') fire
+    // before parent effects (the Provider's hydrate effect) on initial
+    // mount, that would create a transient window where the ritual looks
+    // ineligible purely because state hasn't hydrated yet — a test-harness
+    // race, not the ritual-defer behavior under test.
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} deepLink={{ overlay: "capture" }} />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("re-entry-ritual")).toBeInTheDocument();
+    });
+
+    // Ritual owns the screen — the deep link has not applied yet. The
+    // capture overlay renders outside the ritual/moment conditional, so this
+    // genuinely proves deferral rather than being masked by the ritual's
+    // own conditional rendering (a moment target would pass trivially here).
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("re-entry-ritual-start-day"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+    });
+
+    // Ritual completed — the deferred deep link now applies.
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+  });
+});

@@ -22,6 +22,7 @@ import { buildProgressionNodes } from "./progressionNodes";
 import { buildPipelineCounts } from "./pipelineCounts";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
+import type { DeepLinkTarget } from "./deepLink";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -72,11 +73,13 @@ function heuristicMoment(now: Date, hasCurrentBlock: boolean): MomentValue {
 export interface TodayMomentsProps {
   initialMoment?: MomentValue;
   now?: Date;
+  deepLink?: DeepLinkTarget;
 }
 
 export function TodayMoments({
   initialMoment,
   now: nowProp,
+  deepLink,
 }: TodayMomentsProps) {
   const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
   const {
@@ -153,6 +156,29 @@ export function TodayMoments({
   useEffect(() => {
     writeStoredPreferences({ moment, timeDisplay });
   }, [moment, timeDisplay]);
+
+  // P6 deep-link shims: apply the incoming deepLink target exactly once. If
+  // the re-entry ritual is active OR merely eligible-but-not-yet-latched
+  // (ritual.pending — status still reads "idle" on the very first commit
+  // before the mount effect flips it), defer application until the ritual
+  // resolves rather than fighting it for the moment/overlay/sheet state —
+  // the ritual owns the screen until dismissed. Gating on ritualActive
+  // alone races: on mount, ritualActive is derived from status === "idle"
+  // even when an absence is about to latch, so an overlay/sheet target
+  // would pop on top of the ritual before its own effect has a chance to
+  // run.
+  const deepLinkAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!deepLink) return;
+    if (deepLinkAppliedRef.current) return;
+    if (ritualActive || ritual.pending) return;
+
+    deepLinkAppliedRef.current = true;
+    if (deepLink.moment) setMoment(deepLink.moment);
+    if (deepLink.overlay === "capture") setCaptureOpen(true);
+    if (deepLink.overlay === "palette") setPaletteOpen(true);
+    if (deepLink.sheet) setActiveSheet(deepLink.sheet);
+  }, [deepLink, ritualActive, ritual.pending]);
 
   useEffect(() => {
     if (!session.running) return undefined;
