@@ -1,5 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
+import {
+  findOrCreatePerson,
+  type MinimalSupabaseClient,
+} from "@/lib/data/workflow";
 
 const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
 const describeLocalRls = runLocalRlsTests ? describe : describe.skip;
@@ -1495,6 +1499,63 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       if (personId) {
         await deletePersonByDisplayName(userAClient, personName);
       }
+    }
+  });
+
+  it("find-or-creates a person idempotently on the live table (accept path, FR-017)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    // Distinct display casings, one normalized key — the accept path must reuse.
+    const displayName = `RLS FindOrCreate ${suffix}`;
+    const normalizedName = displayName.toLowerCase();
+    const client = userAClient as unknown as MinimalSupabaseClient;
+
+    try {
+      const first = await findOrCreatePerson(client, {
+        display_name: displayName,
+        normalized_name: normalizedName,
+      });
+      expect(first.provider).toBe("supabase");
+      expect(first.person?.id).toBeTruthy();
+
+      // A second accept for the same normalized name must reuse the row, not
+      // insert a duplicate — the re-check-at-accept-time idempotency contract.
+      const second = await findOrCreatePerson(client, {
+        display_name: `${displayName} (again)`,
+        normalized_name: normalizedName,
+      });
+      expect(second.person?.id).toBe(first.person?.id);
+
+      const { data: rows, error } = await userAClient
+        .from("people")
+        .select("id")
+        .eq("normalized_name", normalizedName);
+      expect(error).toBeNull();
+      expect(rows).toHaveLength(1);
+
+      // The returned id is a real, owned people row that a task can link to.
+      const taskTitle = `rls-foc-task-${suffix}`;
+      try {
+        const { data: task, error: taskError } = await userAClient
+          .from("tasks")
+          .insert({
+            user_id: userA.id,
+            area_id: userA.areaId,
+            title: taskTitle,
+            status: "active",
+            waiting_on_person_id: first.person!.id,
+            waiting_on_since: new Date().toISOString(),
+          })
+          .select("waiting_on_person_id")
+          .single();
+        expect(taskError).toBeNull();
+        expect(task!.waiting_on_person_id).toBe(first.person!.id);
+      } finally {
+        await deleteTaskByTitle(userAClient, taskTitle);
+      }
+    } finally {
+      await deletePersonByDisplayName(userAClient, displayName);
+      await deletePersonByDisplayName(userAClient, `${displayName} (again)`);
     }
   });
 

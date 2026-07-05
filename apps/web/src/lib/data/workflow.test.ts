@@ -10,12 +10,14 @@ import {
   createExecutionSession,
   createTask,
   editTimeBlockProposal,
+  findOrCreatePerson,
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
   getOperatorProfile,
   listPeople,
   recordCommitmentProposal,
+  recordPersonLinkAcceptance,
   recordPersonLinkRejection,
   recordPersonMentionProposal,
   recordRejectedTaskDraft,
@@ -941,6 +943,125 @@ describe("workflow data provider", () => {
 
   it("returns an empty people list in mock mode", async () => {
     await expect(listPeople(null)).resolves.toEqual([]);
+  });
+
+  const personRow = {
+    id: "550e8400-e29b-41d4-a716-446655440b01",
+    user_id: userId,
+    display_name: "Sarah Lee",
+    normalized_name: "sarah lee",
+    notes: null,
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-01T00:00:00.000Z",
+    archived_at: null,
+  };
+
+  it("reuses an existing person by normalized_name instead of inserting (idempotent)", async () => {
+    const maybeSingle = vi
+      .fn()
+      .mockResolvedValue({ data: personRow, error: null });
+    const eqNormalized = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqNormalized });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    const insert = vi.fn();
+    const from = vi.fn((table: string) => {
+      if (table === "people") return { select, insert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await findOrCreatePerson(authenticatedClient(from), {
+      display_name: "Sarah Lee",
+      normalized_name: "sarah lee",
+    });
+
+    expect(eqUser).toHaveBeenCalledWith("user_id", userId);
+    expect(eqNormalized).toHaveBeenCalledWith("normalized_name", "sarah lee");
+    // Re-check found a match, so no insert — idempotent per normalized_name.
+    expect(insert).not.toHaveBeenCalled();
+    expect(result.provider).toBe("supabase");
+    expect(result.person?.id).toBe(personRow.id);
+  });
+
+  it("inserts a new person when no normalized_name match exists (FR-017)", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const eqNormalized = vi.fn().mockReturnValue({ maybeSingle });
+    const eqUser = vi.fn().mockReturnValue({ eq: eqNormalized });
+    const select = vi.fn().mockReturnValue({ eq: eqUser });
+    const insertSingle = vi
+      .fn()
+      .mockResolvedValue({ data: personRow, error: null });
+    const insertSelect = vi.fn().mockReturnValue({ single: insertSingle });
+    const insert = vi.fn().mockReturnValue({ select: insertSelect });
+    const from = vi.fn((table: string) => {
+      if (table === "people") return { select, insert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const result = await findOrCreatePerson(authenticatedClient(from), {
+      display_name: "Sarah Lee",
+      normalized_name: "sarah lee",
+    });
+
+    expect(insert).toHaveBeenCalledWith({
+      user_id: userId,
+      display_name: "Sarah Lee",
+      normalized_name: "sarah lee",
+    });
+    expect(result.provider).toBe("supabase");
+    expect(result.person?.normalized_name).toBe("sarah lee");
+  });
+
+  it("creates no person in mock mode (local demo degrades to no-link)", async () => {
+    const result = await findOrCreatePerson(null, {
+      display_name: "Sarah Lee",
+      normalized_name: "sarah lee",
+    });
+    expect(result.provider).toBe("mock");
+    expect(result.person).toBeNull();
+  });
+
+  it("records an accepted person-link suggestion that resolves the pending proposal", async () => {
+    const single = vi.fn().mockResolvedValue({ data: {}, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const suggestionInsert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn((table: string) => {
+      if (table === "suggestion_records") return { insert: suggestionInsert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    recordPersonLinkAcceptance(authenticatedClient(from), {
+      area_id: areaId,
+      draft_id: "550e8400-e29b-41d4-a716-446655440901",
+      name: "Sarah Lee",
+      role: "waiting_on",
+      matched_person_id: personRow.id,
+    });
+
+    await vi.waitFor(() => {
+      expect(suggestionInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_identifier: PERSON_LINK_POLICY_ID,
+          subject_type: "person_mention",
+          subject_id: "550e8400-e29b-41d4-a716-446655440901",
+          status: "accepted",
+          suggestion_json: expect.objectContaining({
+            status: "accepted",
+            linked_person_id: personRow.id,
+          }),
+        }),
+      );
+    });
+  });
+
+  it("skips person-link acceptance learning writes in mock mode", () => {
+    expect(() =>
+      recordPersonLinkAcceptance(null, {
+        area_id: null,
+        draft_id: "task-draft-local-1",
+        name: "Sarah Lee",
+        role: "committed_to",
+      }),
+    ).not.toThrow();
   });
 
   it("persists accepted project drafts through Supabase after validating input", async () => {

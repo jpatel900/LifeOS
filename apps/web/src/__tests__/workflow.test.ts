@@ -180,6 +180,53 @@ describe("local mock workflow", () => {
     expect(draft?.is_commitment).toBe(true);
   });
 
+  it("honors is_commitment on the accepted local task and degrades person-id links to null", () => {
+    let state = createInitialWorkflowState();
+    state = submitCapture(state, {
+      rawText: "Send Sarah the deck like I promised.",
+      areaId: "area-main-job",
+    });
+    const draftId = state.taskDrafts[0].id;
+    state = {
+      ...state,
+      taskDrafts: state.taskDrafts.map((draft) =>
+        draft.id === draftId
+          ? {
+              ...draft,
+              is_commitment: true,
+              person_mentions: [
+                { name: "Sarah", role: "committed_to", confidence: 0.9 },
+              ],
+            }
+          : draft,
+      ),
+    };
+
+    state = acceptDraft(state, draftId);
+
+    const task = state.tasks[0];
+    // The person-less commitment flag survives locally; the local demo path has
+    // no people store, so the person-id FKs degrade to null (no-link).
+    expect(task?.is_commitment).toBe(true);
+    expect(task?.waiting_on_person_id).toBeNull();
+    expect(task?.committed_to_person_id).toBeNull();
+    expect(task?.waiting_on_since).toBeNull();
+  });
+
+  it("leaves a plain accepted local task as a non-commitment with no person links", () => {
+    let state = createInitialWorkflowState();
+    state = submitCapture(state, {
+      rawText: "Draft agenda for tomorrow's project check-in.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+
+    const task = state.tasks[0];
+    expect(task?.is_commitment).toBe(false);
+    expect(task?.waiting_on_person_id).toBeNull();
+    expect(task?.committed_to_person_id).toBeNull();
+  });
+
   it("splits and merges pending triage drafts locally", () => {
     let state = createInitialWorkflowState();
 
