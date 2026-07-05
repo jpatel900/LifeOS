@@ -30,8 +30,8 @@ export function DemoModeBanner() {
       data-testid="demo-mode-banner"
       className="sticky top-0 z-50 border-b-4 border-black/30 bg-amber-400 px-4 py-2 text-center text-sm font-bold text-black"
     >
-      Demo mode — nothing here is saved. Captures, plans, and reviews live
-      only in this tab and vanish on reload.
+      Demo mode — nothing here is saved. Captures, plans, and reviews live only
+      in this tab and vanish on reload.
     </div>
   );
 }
