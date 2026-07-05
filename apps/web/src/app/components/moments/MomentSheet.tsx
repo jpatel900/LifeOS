@@ -68,8 +68,11 @@ export function MomentSheet({
       data-testid="moment-sheet"
     >
       <div
-        className="absolute inset-0 bg-black/40"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="absolute inset-0 bg-black/40 motion-reduce:transition-none motion-reduce:duration-0"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
         onClick={onClose}
         data-testid="moment-sheet-scrim"
       />
@@ -80,8 +83,11 @@ export function MomentSheet({
         aria-label={title}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="workflow-primary-card relative z-10 grid h-full w-full max-w-sm gap-4 overflow-y-auto border-l border-border bg-card p-5 outline-none sm:max-w-md"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="workflow-primary-card relative z-10 grid h-full w-full max-w-sm gap-4 overflow-y-auto border-l border-border bg-card p-5 outline-none motion-reduce:transition-none motion-reduce:duration-0 sm:max-w-md"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
         data-testid="moment-sheet-dialog"
       >
         <div className="flex items-center justify-between gap-3">

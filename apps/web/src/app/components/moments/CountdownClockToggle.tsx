@@ -41,7 +41,7 @@ export function CountdownClockToggle({
             aria-pressed={active}
             onClick={() => onChange(segment.value)}
             className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+              "rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0",
               active
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",

@@ -175,4 +175,25 @@ describe("MomentSheet", () => {
       expect(closeButton).toHaveFocus();
     });
   });
+
+  // SP-4: motion tokens only, with reduced-motion fallbacks on every
+  // transitioned element.
+  it("scrim and dialog use motion tokens with reduced-motion fallbacks", () => {
+    render(
+      <MomentSheet open title="Triage" onClose={() => {}}>
+        <p>content</p>
+      </MomentSheet>,
+    );
+
+    const scrim = screen.getByTestId("moment-sheet-scrim");
+    expect(scrim).toHaveClass("motion-reduce:transition-none");
+    expect(scrim).toHaveClass("motion-reduce:duration-0");
+    expect(scrim.style.transitionDuration).toBe("var(--motion-base)");
+    expect(scrim.style.transitionTimingFunction).toBe("var(--motion-ease)");
+
+    const dialog = screen.getByTestId("moment-sheet-dialog");
+    expect(dialog).toHaveClass("motion-reduce:transition-none");
+    expect(dialog).toHaveClass("motion-reduce:duration-0");
+    expect(dialog.style.transitionDuration).toBe("var(--motion-base)");
+  });
 });

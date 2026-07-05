@@ -999,6 +999,30 @@ describe("TodayMoments — P6 deep-link shims", () => {
     expect(toastAfter).toHaveClass("fixed");
     expect(within(toastAfter).getByText("Captured")).toBeInTheDocument();
   });
+
+  // SP-4: the toast message pill uses motion tokens (not a literal ms
+  // value) and falls back to no motion for prefers-reduced-motion users.
+  it("toast message pill uses motion tokens with a reduced-motion fallback", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "c" });
+    fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+      target: { value: "Follow up with Alex about the contract" },
+    });
+    fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
+      key: "Enter",
+    });
+
+    const toastMessage = within(
+      screen.getByTestId("today-moments-toast"),
+    ).getByText("Captured");
+    expect(toastMessage).toHaveClass("motion-reduce:transition-none");
+    expect(toastMessage).toHaveClass("motion-reduce:duration-0");
+    expect(toastMessage.style.transitionDuration).toBe("var(--motion-base)");
+    expect(toastMessage.style.transitionTimingFunction).toBe(
+      "var(--motion-ease)",
+    );
+  });
 });
 
 /**

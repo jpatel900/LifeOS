@@ -211,4 +211,30 @@ describe("CaptureOverlay", () => {
       expect(screen.getByTestId("capture-overlay-textarea")).toHaveFocus();
     });
   });
+
+  // SP-4: motion tokens only, exits no slower than entrances, and every
+  // transitioned element must fall back to no motion for
+  // prefers-reduced-motion users.
+  it("scrim, dialog, and kind chips use motion tokens with reduced-motion fallbacks", () => {
+    render(
+      <CaptureOverlay open kinds={KINDS} onSave={vi.fn()} onClose={vi.fn()} />,
+    );
+
+    const scrim = screen.getByTestId("capture-overlay-scrim");
+    expect(scrim).toHaveClass("motion-reduce:transition-none");
+    expect(scrim).toHaveClass("motion-reduce:duration-0");
+    expect(scrim.style.transitionDuration).toBe("var(--motion-base)");
+    expect(scrim.style.transitionTimingFunction).toBe("var(--motion-ease)");
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("motion-reduce:transition-none");
+    expect(dialog).toHaveClass("motion-reduce:duration-0");
+    expect(dialog.style.transitionDuration).toBe("var(--motion-base)");
+
+    const kindChip = screen.getByTestId("capture-overlay-kind-Task");
+    expect(kindChip).toHaveClass("duration-[var(--motion-fast)]");
+    expect(kindChip).toHaveClass("ease-[var(--motion-ease)]");
+    expect(kindChip).toHaveClass("motion-reduce:transition-none");
+    expect(kindChip).toHaveClass("motion-reduce:duration-0");
+  });
 });

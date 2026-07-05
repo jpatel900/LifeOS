@@ -16,7 +16,7 @@ export function CaptureAffordance({ onOpen }: CaptureAffordanceProps) {
     <button
       type="button"
       onClick={onOpen}
-      className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-[1.02]"
+      className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:scale-[1.02] motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:hover:scale-100"
       data-testid="capture-affordance"
     >
       Capture a thought

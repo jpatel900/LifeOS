@@ -105,8 +105,11 @@ export function CommandPalette({
       data-testid="command-palette"
     >
       <div
-        className="absolute inset-0 bg-black/40"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="absolute inset-0 bg-black/40 motion-reduce:transition-none motion-reduce:duration-0"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
         onClick={onClose}
         data-testid="command-palette-scrim"
       />
@@ -115,8 +118,11 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="workflow-primary-card relative z-10 m-4 grid w-full max-w-lg gap-2 rounded-xl border border-border bg-card p-4"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="workflow-primary-card relative z-10 m-4 grid w-full max-w-lg gap-2 rounded-xl border border-border bg-card p-4 motion-reduce:transition-none motion-reduce:duration-0"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
       >
         <input
           ref={inputRef}
