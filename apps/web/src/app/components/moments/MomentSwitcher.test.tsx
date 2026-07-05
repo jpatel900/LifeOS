@@ -46,4 +46,13 @@ describe("MomentSwitcher", () => {
     expect(tab).toHaveClass("motion-reduce:transition-none");
     expect(tab).toHaveClass("motion-reduce:duration-0");
   });
+
+  // SP-9: tabs reach a >=44px effective hit area and drop the 300ms
+  // double-tap delay on coarse pointers.
+  it("tabs carry hit-area and touch-manipulation utilities", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const tab = screen.getByTestId("moment-switcher-flow");
+    expect(tab).toHaveClass("min-h-[44px]");
+    expect(tab).toHaveClass("touch-manipulation");
+  });
 });

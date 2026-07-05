@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
+import { HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -160,6 +161,7 @@ export function CommandPalette({
                     onClose();
                   }}
                   className={cn(
+                    HIT_TARGET_ROW,
                     "flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm",
                     active
                       ? "bg-primary text-primary-foreground"

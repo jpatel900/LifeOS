@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
+import { HIT_TARGET_INVISIBLE, HIT_TARGET_MIN } from "./hitTarget";
 
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
@@ -158,6 +159,7 @@ export function CaptureOverlay({
                 aria-pressed={selected}
                 onClick={() => setSelectedKind(kind)}
                 className={cn(
+                  HIT_TARGET_MIN,
                   "rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0",
                   selected
                     ? "border-transparent bg-primary text-primary-foreground"
@@ -178,7 +180,10 @@ export function CaptureOverlay({
           <button
             type="button"
             onClick={onClose}
-            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+            className={cn(
+              HIT_TARGET_INVISIBLE,
+              "text-xs font-semibold text-muted-foreground hover:text-foreground",
+            )}
             data-testid="capture-overlay-close"
           >
             Close

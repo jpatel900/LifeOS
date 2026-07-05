@@ -2,8 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
+import { HIT_TARGET_INVISIBLE } from "./hitTarget";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -95,7 +97,10 @@ export function MomentSheet({
           <button
             type="button"
             onClick={onClose}
-            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+            className={cn(
+              HIT_TARGET_INVISIBLE,
+              "text-xs font-semibold text-muted-foreground hover:text-foreground",
+            )}
             data-testid="moment-sheet-close"
           >
             Close

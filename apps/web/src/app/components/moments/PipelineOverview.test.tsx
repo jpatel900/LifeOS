@@ -77,4 +77,18 @@ describe("PipelineOverview", () => {
     expect(zeroBadge).toHaveClass("min-w-[2ch]");
     expect(zeroBadge).toHaveTextContent("0");
   });
+
+  // SP-9: each stage node reaches a >=44px effective hit area and drops
+  // the 300ms double-tap delay on coarse pointers.
+  it("stage nodes carry hit-area and touch-manipulation utilities", () => {
+    render(
+      <PipelineOverview
+        counts={{ capture: 0, triage: 0, plan: 0, execute: 0, review: 0 }}
+        onDrill={() => {}}
+      />,
+    );
+    const node = screen.getByTestId("pipeline-overview-stage-triage");
+    expect(node).toHaveClass("min-h-[44px]");
+    expect(node).toHaveClass("touch-manipulation");
+  });
 });

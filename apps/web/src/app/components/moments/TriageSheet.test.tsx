@@ -129,6 +129,39 @@ describe("TriageSheet", () => {
     );
   });
 
+  // SP-9: the accept/reject actions and the "open full view" link reach a
+  // >=44px effective hit area and drop the 300ms double-tap delay on
+  // coarse pointers. Clears sessionStorage before AND after so this
+  // test's seeded draft can never leak into a sibling test in this file
+  // (WorkflowProvider persists to sessionStorage across renders within
+  // the same test file/jsdom instance).
+  it("accept/reject buttons and the open-full link carry hit-area and touch-manipulation utilities", async () => {
+    window.sessionStorage.clear();
+    const restoreFetch = stubParseCaptureFetch();
+    renderSheet(true);
+
+    fireEvent.click(screen.getByTestId("seed-submit"));
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+    });
+
+    const acceptButtons = screen.getAllByTestId(/^triage-sheet-accept-/);
+    expect(acceptButtons[0]).toHaveClass("min-h-[44px]");
+    expect(acceptButtons[0]).toHaveClass("min-w-[44px]");
+    expect(acceptButtons[0]).toHaveClass("touch-manipulation");
+
+    const rejectButtons = screen.getAllByTestId(/^triage-sheet-reject-/);
+    expect(rejectButtons[0]).toHaveClass("min-h-[44px]");
+    expect(rejectButtons[0]).toHaveClass("touch-manipulation");
+
+    const openFull = screen.getByTestId("triage-sheet-open-full");
+    expect(openFull).toHaveClass("min-h-[44px]");
+    expect(openFull).toHaveClass("touch-manipulation");
+
+    restoreFetch();
+    window.sessionStorage.clear();
+  });
+
   it("in 'All areas' mode (selectedAreaId=null), scopes to the first area — matching the badge's activeArea-fallback resolution — so a second area's draft is not shown", async () => {
     const restoreFetch = stubParseCaptureFetch();
     render(

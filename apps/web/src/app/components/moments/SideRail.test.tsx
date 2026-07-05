@@ -62,4 +62,13 @@ describe("SideRail", () => {
       /nothing here|empty|no data|\bnone\b/,
     );
   });
+
+  // SP-9: the "View area health" affordance reaches a >=44px effective
+  // hit area and drops the 300ms double-tap delay on coarse pointers.
+  it("open-health button carries hit-area and touch-manipulation utilities", () => {
+    render(<SideRail waitingOn={[]} areas={AREAS} onOpenHealth={vi.fn()} />);
+    const button = screen.getByTestId("side-rail-open-health");
+    expect(button).toHaveClass("min-h-[44px]");
+    expect(button).toHaveClass("touch-manipulation");
+  });
 });

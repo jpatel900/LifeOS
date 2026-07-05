@@ -72,7 +72,7 @@ export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
             variant="ghost"
             size="sm"
             onClick={onOpenHealth}
-            className="justify-start px-0"
+            className="min-h-[44px] touch-manipulation justify-start px-0"
             data-testid="side-rail-open-health"
           >
             View area health →

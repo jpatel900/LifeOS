@@ -220,4 +220,21 @@ describe("CommandPalette", () => {
     expect(dialog).toHaveClass("motion-reduce:duration-0");
     expect(dialog.style.transitionDuration).toBe("var(--motion-base)");
   });
+
+  // SP-9: palette rows reach a >=44px effective hit area and drop the
+  // 300ms double-tap delay on coarse pointers.
+  it("option rows carry hit-area and touch-manipulation utilities", () => {
+    render(
+      <CommandPalette
+        open
+        actions={ACTIONS}
+        onRun={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByTestId("command-palette-option-capture");
+    expect(row).toHaveClass("min-h-[44px]");
+    expect(row).toHaveClass("touch-manipulation");
+  });
 });

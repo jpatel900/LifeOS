@@ -249,6 +249,7 @@ export function ReEntryRitual({
                 type="button"
                 variant="default"
                 onClick={() => onAcceptRecovery(recovery.taskId)}
+                className="min-h-[44px] touch-manipulation"
                 data-testid="re-entry-ritual-recovery-accept"
               >
                 Make this my first move
@@ -258,6 +259,7 @@ export function ReEntryRitual({
                 variant="ghost"
                 size="sm"
                 onClick={onSwapRecovery}
+                className="min-h-[44px] touch-manipulation"
                 data-testid="re-entry-ritual-recovery-swap"
               >
                 Something else
@@ -267,6 +269,7 @@ export function ReEntryRitual({
                 variant="ghost"
                 size="sm"
                 onClick={onDismiss}
+                className="min-h-[44px] touch-manipulation"
                 data-testid="re-entry-ritual-recovery-not-now"
               >
                 Not now
@@ -281,6 +284,7 @@ export function ReEntryRitual({
           type="button"
           variant="ghost"
           onClick={onDismiss}
+          className="min-h-[44px] touch-manipulation"
           data-testid="re-entry-ritual-start-day"
         >
           Start my day

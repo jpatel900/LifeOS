@@ -260,6 +260,29 @@ describe("ReEntryRitual", () => {
     expect(container.innerHTML).not.toMatch(/state-risk/i);
   });
 
+  // SP-9: the recovery actions and "Start my day" reach a >=44px
+  // effective hit area and drop the 300ms double-tap delay on coarse
+  // pointers.
+  it("recovery and start-day buttons carry hit-area and touch-manipulation utilities", () => {
+    renderRitual();
+
+    expect(screen.getByTestId("re-entry-ritual-recovery-accept")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("re-entry-ritual-recovery-accept")).toHaveClass(
+      "touch-manipulation",
+    );
+    expect(screen.getByTestId("re-entry-ritual-recovery-swap")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("re-entry-ritual-recovery-not-now")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("re-entry-ritual-start-day")).toHaveClass(
+      "min-h-[44px]",
+    );
+  });
+
   // SP-1: focus discipline. The ritual has no explicit "opener" — it
   // appears in place of the moments content on load rather than being
   // summoned over it — so return-focus is a safe no-op here (nothing

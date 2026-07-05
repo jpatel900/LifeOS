@@ -94,4 +94,24 @@ describe("FirstMoveCard", () => {
     );
     expect(screen.getByText(/Then: Next: 1:1 with Priya/)).toBeInTheDocument();
   });
+
+  // SP-9: the Start/Snooze/Swap actions reach a >=44px effective hit area
+  // and drop the 300ms double-tap delay on coarse pointers.
+  it("action buttons carry hit-area and touch-manipulation utilities", () => {
+    render(
+      <FirstMoveCard
+        move={makeMove()}
+        onStart={vi.fn()}
+        onSnooze={vi.fn()}
+        onSwap={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("first-move-start")).toHaveClass("min-h-[44px]");
+    expect(screen.getByTestId("first-move-start")).toHaveClass(
+      "touch-manipulation",
+    );
+    expect(screen.getByTestId("first-move-snooze")).toHaveClass("min-h-[44px]");
+    expect(screen.getByTestId("first-move-swap")).toHaveClass("min-h-[44px]");
+  });
 });

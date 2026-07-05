@@ -237,4 +237,21 @@ describe("CaptureOverlay", () => {
     expect(kindChip).toHaveClass("motion-reduce:transition-none");
     expect(kindChip).toHaveClass("motion-reduce:duration-0");
   });
+
+  // SP-9: every tappable element reaches a >=44px effective hit area and
+  // drops the 300ms double-tap delay on coarse pointers.
+  it("kind chips and the close button carry hit-area and touch-manipulation utilities", () => {
+    render(
+      <CaptureOverlay open kinds={KINDS} onSave={vi.fn()} onClose={vi.fn()} />,
+    );
+
+    const kindChip = screen.getByTestId("capture-overlay-kind-Task");
+    expect(kindChip).toHaveClass("min-h-[44px]");
+    expect(kindChip).toHaveClass("min-w-[44px]");
+    expect(kindChip).toHaveClass("touch-manipulation");
+
+    const closeButton = screen.getByTestId("capture-overlay-close");
+    expect(closeButton).toHaveClass("min-h-[44px]");
+    expect(closeButton).toHaveClass("touch-manipulation");
+  });
 });

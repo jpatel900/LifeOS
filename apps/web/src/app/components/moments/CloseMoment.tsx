@@ -80,6 +80,7 @@ export function CloseMoment({
                     variant="ghost"
                     size="sm"
                     onClick={() => onCarryForward(entry.taskId)}
+                    className="min-h-[44px] touch-manipulation"
                     data-testid={`close-moment-carry-forward-${entry.taskId}`}
                   >
                     Carry forward
@@ -113,7 +114,7 @@ export function CloseMoment({
           type="button"
           variant="default"
           onClick={onCloseDay}
-          className="gap-2"
+          className="min-h-[44px] touch-manipulation gap-2"
           data-testid="close-moment-close-day"
         >
           Close the day

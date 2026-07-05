@@ -196,4 +196,18 @@ describe("MomentSheet", () => {
     expect(dialog).toHaveClass("motion-reduce:duration-0");
     expect(dialog.style.transitionDuration).toBe("var(--motion-base)");
   });
+
+  // SP-9: the close button reaches a >=44px effective hit area and drops
+  // the 300ms double-tap delay on coarse pointers.
+  it("close button carries hit-area and touch-manipulation utilities", () => {
+    render(
+      <MomentSheet open title="Triage" onClose={() => {}}>
+        <p>content</p>
+      </MomentSheet>,
+    );
+
+    const closeButton = screen.getByTestId("moment-sheet-close");
+    expect(closeButton).toHaveClass("min-h-[44px]");
+    expect(closeButton).toHaveClass("touch-manipulation");
+  });
 });
