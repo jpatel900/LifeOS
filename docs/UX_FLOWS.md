@@ -132,6 +132,10 @@ Convert a simple thought into a task.
 - Raw capture remains recoverable if parsing fails.
 - No calendar proposal is forced.
 
+### Constraint layer: capture containment (FR-026)
+
+During the parse wait the UI holds the user in context — the raw text stays visible and a one-line "return hook" field (what you go back to afterward) is visible and editable. No new capture may begin until this one resolves; parse never goes fire-and-forget (past the latency budget the surface offers mock parse / save-raw synchronously instead). On resolve, the flow ends with "back to: <hook>". This is deliberately counter to the standard submit-and-wander async pattern; implementers must not normalize it.
+
 ## 5. Flow 3 — Ambiguous Capture to Sense-Making
 
 ### Goal
@@ -298,6 +302,10 @@ Help the user start and finish a work session.
 - End-session data updates logs.
 - Persisted execution does not pretend a live timer is authoritative when it is not.
 
+### Constraint layer: DoD-cap state machine (FR-025)
+
+When the block's time cap arrives and the definition of done is unmet, the surface forces a binary choice — cut scope (edit the DoD down to what is true and close done) or defer (explicit re-block/backlog with a one-line carry note). Silently continuing is not a reachable state. Copy stays matter-of-fact: caps are how work ends, not a failure.
+
 ## 10. Flow 8 — Missed Block Recovery
 
 ### Goal
@@ -437,6 +445,7 @@ Avoid:
 - too many AI-generated suggestions
 - dashboards with no next action
 - full-screen analytics before basic use works
+- fire-and-forget capture parse (submit → spinner → notify-later; see FR-026 — the wait must hold context, never release the user to wander)
 
 ## 15. Core UI Components
 
