@@ -158,22 +158,27 @@ export function TodayMoments({
   }, [moment, timeDisplay]);
 
   // P6 deep-link shims: apply the incoming deepLink target exactly once. If
-  // the re-entry ritual is active on mount/update, defer application until
-  // the ritual completes (ritualActive flips false) rather than fighting it
-  // for the moment/overlay/sheet state — the ritual owns the screen until
-  // dismissed.
+  // the re-entry ritual is active OR merely eligible-but-not-yet-latched
+  // (ritual.pending — status still reads "idle" on the very first commit
+  // before the mount effect flips it), defer application until the ritual
+  // resolves rather than fighting it for the moment/overlay/sheet state —
+  // the ritual owns the screen until dismissed. Gating on ritualActive
+  // alone races: on mount, ritualActive is derived from status === "idle"
+  // even when an absence is about to latch, so an overlay/sheet target
+  // would pop on top of the ritual before its own effect has a chance to
+  // run.
   const deepLinkAppliedRef = useRef(false);
   useEffect(() => {
     if (!deepLink) return;
     if (deepLinkAppliedRef.current) return;
-    if (ritualActive) return;
+    if (ritualActive || ritual.pending) return;
 
     deepLinkAppliedRef.current = true;
     if (deepLink.moment) setMoment(deepLink.moment);
     if (deepLink.overlay === "capture") setCaptureOpen(true);
     if (deepLink.overlay === "palette") setPaletteOpen(true);
     if (deepLink.sheet) setActiveSheet(deepLink.sheet);
-  }, [deepLink, ritualActive]);
+  }, [deepLink, ritualActive, ritual.pending]);
 
   useEffect(() => {
     if (!session.running) return undefined;

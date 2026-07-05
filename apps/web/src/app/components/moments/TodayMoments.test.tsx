@@ -859,7 +859,7 @@ describe("TodayMoments — P6 deep-link shims", () => {
 
   it("defers the deep link until the re-entry ritual completes, then applies it", async () => {
     let lastActivityAt: string | null = null;
-    render(
+    const { rerender } = render(
       <WorkflowProvider>
         <ReEntrySeedBridge
           onState={(value) => {
@@ -886,10 +886,18 @@ describe("TodayMoments — P6 deep-link shims", () => {
         RE_ENTRY_ABSENCE_DAYS * 24 * 60 * 60 * 1000,
     );
 
-    render(
+    // rerender the SAME provider instance (not a fresh render) so the
+    // already-seeded in-memory state is present on TodayMoments' very first
+    // commit — a fresh WorkflowProvider would re-hydrate from sessionStorage
+    // via an async effect, and since child effects (TodayMoments') fire
+    // before parent effects (the Provider's hydrate effect) on initial
+    // mount, that would create a transient window where the ritual looks
+    // ineligible purely because state hasn't hydrated yet — a test-harness
+    // race, not the ritual-defer behavior under test.
+    rerender(
       <WorkflowProvider>
         <ReEntrySeedBridge onState={() => {}} />
-        <TodayMoments now={now} deepLink={{ moment: "flow" }} />
+        <TodayMoments now={now} deepLink={{ overlay: "capture" }} />
       </WorkflowProvider>,
     );
 
@@ -897,8 +905,11 @@ describe("TodayMoments — P6 deep-link shims", () => {
       expect(screen.getByTestId("re-entry-ritual")).toBeInTheDocument();
     });
 
-    // Ritual owns the screen — the deep link has not applied yet.
-    expect(screen.queryByTestId("flow-moment")).not.toBeInTheDocument();
+    // Ritual owns the screen — the deep link has not applied yet. The
+    // capture overlay renders outside the ritual/moment conditional, so this
+    // genuinely proves deferral rather than being masked by the ritual's
+    // own conditional rendering (a moment target would pass trivially here).
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("re-entry-ritual-start-day"));
 
@@ -907,6 +918,6 @@ describe("TodayMoments — P6 deep-link shims", () => {
     });
 
     // Ritual completed — the deferred deep link now applies.
-    expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
   });
 });
