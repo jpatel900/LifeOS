@@ -37,8 +37,23 @@ import type { DeepLinkTarget } from "./deepLink";
 const PREFERENCES_KEY = "lifeos.moments.preferences";
 const CAPTURE_DRAFT_KEY = "lifeos.moments.captureDraft";
 const TOAST_DURATION_MS = 2500;
+// SP-6: undo over confirm. A toast carrying an Undo action stays up longer
+// (6s) than a plain acknowledgement (2.5s) — the extra time is the reading
+// + decision budget for the one thing a mistake is worth reversing.
+const TOAST_WITH_ACTION_DURATION_MS = 6000;
 const CAPTURE_KINDS = ["Task", "Note", "Idea"];
 const DEFAULT_FOCUS_MINUTES = 25;
+
+/** SP-6: the toast slot's action — a real, focusable (never auto-focused) Undo button. */
+export interface ToastAction {
+  label: string;
+  run(): void;
+}
+
+interface ToastState {
+  message: string;
+  action?: ToastAction;
+}
 
 interface StoredPreferences {
   moment?: MomentValue;
@@ -152,6 +167,7 @@ export function TodayMoments({
     saveReview,
     refreshPersistedWorkflow,
     promoteBacklogTask,
+    deferTask,
   } = useWorkflow();
 
   const ritual = useReEntryRitual({
@@ -190,7 +206,7 @@ export function TodayMoments({
   const [activeSheet, setActiveSheet] = useState<null | "triage" | "plan">(
     null,
   );
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Interim local session state — replaced by useFocusSession when packet
@@ -262,12 +278,20 @@ export function TodayMoments({
     };
   }, []);
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
+  // SP-6: back-compat signature — every existing call site passes a plain
+  // string and keeps working unchanged (auto-dismisses at the original
+  // 2.5s). An optional action extends the slot to a real, focusable Undo
+  // button and the toast lingers longer (6s) to give it a fair chance to be
+  // read and clicked before it auto-dismisses.
+  const showToast = useCallback((message: string, action?: ToastAction) => {
+    setToast({ message, action });
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => {
-      setToast(null);
-    }, TOAST_DURATION_MS);
+    toastTimeoutRef.current = setTimeout(
+      () => {
+        setToast(null);
+      },
+      action ? TOAST_WITH_ACTION_DURATION_MS : TOAST_DURATION_MS,
+    );
   }, []);
 
   const startFocus = useCallback(
@@ -440,14 +464,25 @@ export function TodayMoments({
   const handleAcceptRecovery = useCallback(
     (taskId: string) => {
       const task = state.tasks.find((item) => item.id === taskId);
-      if (task && task.status === "backlog") {
+      const wasBacklog = task ? task.status === "backlog" : false;
+      if (wasBacklog) {
         promoteBacklogTask(taskId);
       }
       ritual.complete();
       setMoment("start");
-      showToast("Welcome back — first move queued");
+      // SP-6: `deferTask` genuinely reverses `promoteBacklogTask` here — it
+      // returns the task to backlog exactly where it started, cancelling no
+      // blocks that didn't already exist (a backlog task has none). Only
+      // wire the undo when the promotion actually ran; otherwise there is
+      // nothing to reverse and Undo would be a lie.
+      showToast(
+        "Welcome back — first move queued",
+        wasBacklog
+          ? { label: "Undo", run: () => deferTask(taskId) }
+          : undefined,
+      );
     },
-    [state.tasks, promoteBacklogTask, ritual, showToast],
+    [state.tasks, promoteBacklogTask, deferTask, ritual, showToast],
   );
 
   const handleSwapRecovery = useCallback(() => {
@@ -707,14 +742,36 @@ export function TodayMoments({
       >
         {toast ? (
           <div
-            className="rounded-full border border-border bg-card px-4 py-2 text-sm shadow-lg motion-reduce:transition-none motion-reduce:duration-0"
+            className={
+              "flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-lg motion-reduce:transition-none motion-reduce:duration-0" +
+              (toast.action ? " pointer-events-auto" : "")
+            }
             style={{
               transitionProperty: "opacity, transform",
               transitionDuration: "var(--motion-base)",
               transitionTimingFunction: "var(--motion-ease)",
             }}
           >
-            {toast}
+            {toast.message}
+            {toast.action ? (
+              <button
+                type="button"
+                // SP-6: a real, focusable button — but never auto-focused.
+                // Undo is there for the hand that wants it, not forced on
+                // the eye that doesn't.
+                onClick={() => {
+                  toast.action?.run();
+                  setToast(null);
+                  if (toastTimeoutRef.current) {
+                    clearTimeout(toastTimeoutRef.current);
+                  }
+                }}
+                className="font-semibold text-primary underline-offset-2 hover:underline"
+                data-testid="today-moments-toast-undo"
+              >
+                {toast.action.label}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
