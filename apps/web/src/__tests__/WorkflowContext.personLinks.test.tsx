@@ -136,6 +136,8 @@ function makeParsedResult(
     projectDrafts: [],
     ambiguityAssessment: null,
     timeBlockProposalDrafts: [],
+    triageReasons: [],
+    clarificationQuestions: [],
   };
 }
 
@@ -214,7 +216,10 @@ beforeEach(() => {
     provider: "supabase",
     areas: [persistedArea],
   });
-  mockListCaptureItems.mockResolvedValue({ provider: "supabase", captures: [] });
+  mockListCaptureItems.mockResolvedValue({
+    provider: "supabase",
+    captures: [],
+  });
   mockListPlanningItems.mockResolvedValue({
     provider: "supabase",
     tasks: [],
@@ -232,7 +237,10 @@ beforeEach(() => {
     provider: "supabase",
     proposal: null,
   });
-  mockCreateTask.mockResolvedValue({ provider: "supabase", task: persistedTask });
+  mockCreateTask.mockResolvedValue({
+    provider: "supabase",
+    task: persistedTask,
+  });
   mockFindOrCreatePerson.mockResolvedValue({
     provider: "supabase",
     person: {
