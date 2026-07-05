@@ -105,7 +105,15 @@ describe("Triage cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
-    expect(await screen.findByText("Start here (under 10 min)")).toBeDefined();
+    // Generous timeouts: this journey chains two async state flushes (parse
+    // response, then split). Under CI worker contention the default 1s findBy
+    // window flaked twice on 2026-07-05 (CI run 28738354680 + a Codex sandbox)
+    // while always passing warm — the wait is load-bound, not behavioral.
+    expect(
+      await screen.findByText("Start here (under 10 min)", undefined, {
+        timeout: 10_000,
+      }),
+    ).toBeDefined();
 
     fireEvent.change(screen.getByPlaceholderText("First split task"), {
       target: { value: "Sort tools into bins" },
@@ -115,7 +123,11 @@ describe("Triage cockpit", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Split draft" }));
 
-    expect(await screen.findByText("Sort tools into bins")).toBeDefined();
+    expect(
+      await screen.findByText("Sort tools into bins", undefined, {
+        timeout: 10_000,
+      }),
+    ).toBeDefined();
     expect(screen.queryByText("Start here (under 10 min)")).toBeNull();
   });
 });
