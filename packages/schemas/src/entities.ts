@@ -35,6 +35,13 @@ export const AreaSchema = z.object({
   icon: z.string().nullable(),
   sort_order: z.number().int(),
   is_active: z.boolean(),
+  // Stage 1 slice S2 (issue #254) additive columns. Marked optional so existing
+  // area readers/fixtures that do not yet select or construct these columns keep
+  // parsing and type-checking unchanged. The charter feeds the NS-INV-1
+  // context-assembly module; the DB remains the source of truth (migration
+  // enforces both columns nullable).
+  charter_text: z.string().nullable().optional(),
+  charter_updated_at: z.string().datetime().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });
@@ -136,6 +143,31 @@ export const PersonSchema = z.object({
 });
 
 export type Person = z.infer<typeof PersonSchema>;
+
+// Stage 1 slice S2 (issue #254). A single compensation rule pairs a named
+// operator trait (e.g. "starting friction") with the rule that compensates for
+// it (e.g. "require a concrete first move"). Frozen shape per DATA_MODEL 4.12:
+// `compensation_rules` is a jsonb array of exactly `{ trait, rule }`.
+export const CompensationRuleSchema = z.object({
+  trait: z.string().min(1),
+  rule: z.string().min(1),
+});
+
+export type CompensationRule = z.infer<typeof CompensationRuleSchema>;
+
+// The single global operator profile per user (unique user_id). Consumed by the
+// NS-INV-1 context-assembly module. Both text fields are nullable in the DB;
+// `compensation_rules` is null when unset, otherwise a validated rule array.
+export const OperatorProfileSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  profile_text: z.string().nullable(),
+  compensation_rules: z.array(CompensationRuleSchema).nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+});
+
+export type OperatorProfile = z.infer<typeof OperatorProfileSchema>;
 
 export const TimeBlockProposalSchema = z.object({
   id: z.string().uuid(),

@@ -207,6 +207,19 @@ async function deletePersonByDisplayName(
   }
 }
 
+async function deleteOperatorProfile(client: SupabaseClient, userId: string) {
+  const { error } = await client
+    .from("operator_profiles")
+    .delete()
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up operator profile for '${userId}': ${error.message}`,
+    );
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -1593,6 +1606,99 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         .from("health_checks")
         .delete()
         .eq("subsystem", subsystem);
+    }
+  });
+
+  // Stage 1 slice S2 (issue #254): operator_profiles owner isolation + areas
+  // charter column update.
+  it("lets user A read own operator profile but not user B's", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userAText = `rls-operator-a-${suffix}`;
+    const userBText = `rls-operator-b-${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("operator_profiles")
+        .upsert(
+          {
+            user_id: userA.id,
+            profile_text: userAText,
+            compensation_rules: [
+              { trait: "starting friction", rule: "require a first move" },
+            ],
+          },
+          { onConflict: "user_id" },
+        );
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("operator_profiles")
+        .upsert(
+          { user_id: userB.id, profile_text: userBText },
+          { onConflict: "user_id" },
+        );
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("operator_profiles")
+        .select("user_id,profile_text");
+
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        { user_id: userA.id, profile_text: userAText },
+      ]);
+    } finally {
+      await deleteOperatorProfile(userAClient, userA.id);
+      await deleteOperatorProfile(userBClient, userB.id);
+    }
+  });
+
+  it("prevents user A from inserting an operator profile for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+
+    const { error } = await userAClient.from("operator_profiles").insert({
+      user_id: userB.id,
+      profile_text: `rls-cross-user-operator-${Date.now()}`,
+    });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A set an area charter and denies cross-user charter writes", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const charter = `rls-charter-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    try {
+      const { data, error } = await userAClient
+        .from("areas")
+        .update({
+          charter_text: charter,
+          charter_updated_at: new Date().toISOString(),
+        })
+        .eq("id", userA.areaId)
+        .select("id,charter_text")
+        .single();
+
+      expect(error).toBeNull();
+      expect(data).toEqual({ id: userA.areaId, charter_text: charter });
+
+      // User B cannot see or modify user A's charter (RLS on areas).
+      const { data: userBUpdate, error: userBError } = await userBClient
+        .from("areas")
+        .update({ charter_text: "hijack" })
+        .eq("id", userA.areaId)
+        .select("id");
+
+      expect(userBError).toBeNull();
+      expect(userBUpdate).toEqual([]);
+    } finally {
+      await userAClient
+        .from("areas")
+        .update({ charter_text: null, charter_updated_at: null })
+        .eq("id", userA.areaId);
     }
   });
 });

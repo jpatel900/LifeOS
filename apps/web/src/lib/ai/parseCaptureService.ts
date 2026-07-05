@@ -20,11 +20,15 @@ import {
   resolveStructuredOutputProvider,
 } from "./provider";
 import { PARSE_CAPTURE_PROMPT_VERSION } from "./prompts/parseCapturePrompt";
-import type { ParseCaptureAreaContext } from "./prompts/parseCapturePrompt";
+import type {
+  OperatorProfileContext,
+  ParseCaptureAreaContext,
+} from "./prompts/parseCapturePrompt";
 
 export interface ParseCaptureServiceInput {
   rawText: string;
   areaContext?: ParseCaptureAreaContext[];
+  operatorProfile?: OperatorProfileContext | null;
 }
 
 export interface ParseCaptureServiceOptions {
@@ -388,95 +392,100 @@ export async function parseCaptureWithFallback(
   };
 
   const runTraced = (): Promise<ParseCaptureServiceResult> =>
-    (options.traceParseCaptureImpl ?? traceParseCapture)<ParseCaptureServiceResult>(
-    {
-      parser,
-      provider: parser === "ai" ? providerId : "mock",
-      metadata: {
-        fallback_used: parser === "mock",
-        model_name: parser === "ai" ? modelConfig?.model : undefined,
-        model_tier_label: parser === "ai" ? modelConfig?.tierLabel : undefined,
-      },
-      finalizeMetadata(outcome) {
-        if (outcome.ok) {
-          const result = outcome.value as ParseCaptureServiceResult;
+    (
+      options.traceParseCaptureImpl ?? traceParseCapture
+    )<ParseCaptureServiceResult>(
+      {
+        parser,
+        provider: parser === "ai" ? providerId : "mock",
+        metadata: {
+          fallback_used: parser === "mock",
+          model_name: parser === "ai" ? modelConfig?.model : undefined,
+          model_tier_label:
+            parser === "ai" ? modelConfig?.tierLabel : undefined,
+        },
+        finalizeMetadata(outcome) {
+          if (outcome.ok) {
+            const result = outcome.value as ParseCaptureServiceResult;
+            return {
+              fallback_used: result.parser === "mock",
+              input_token_count: result.telemetry?.inputTokenCount,
+              model_name: result.telemetry?.modelName,
+              output_token_count: result.telemetry?.outputTokenCount,
+              parse_status: result.response.parse_status,
+              prompt_version: result.response.prompt_version,
+              schema_version: result.response.schema_version,
+              status: "succeeded",
+              total_token_count: result.telemetry?.totalTokenCount,
+              validation_status: "validated",
+              estimated_cost_usd: result.telemetry?.estimatedCostUsd,
+            };
+          }
+
           return {
-            fallback_used: result.parser === "mock",
-            input_token_count: result.telemetry?.inputTokenCount,
-            model_name: result.telemetry?.modelName,
-            output_token_count: result.telemetry?.outputTokenCount,
-            parse_status: result.response.parse_status,
-            prompt_version: result.response.prompt_version,
-            schema_version: result.response.schema_version,
-            status: "succeeded",
-            total_token_count: result.telemetry?.totalTokenCount,
-            validation_status: "validated",
-            estimated_cost_usd: result.telemetry?.estimatedCostUsd,
+            error_category: categorizeParseCaptureError(outcome.error),
+            fallback_used: parser === "mock",
+            status: "failed",
+            validation_status: getValidationStatus(outcome.error),
+          };
+        },
+      },
+      async () => {
+        if (parser === "mock") {
+          return {
+            parser: "mock",
+            response: buildMockResponse(rawText),
           };
         }
 
-        return {
-          error_category: categorizeParseCaptureError(outcome.error),
-          fallback_used: parser === "mock",
-          status: "failed",
-          validation_status: getValidationStatus(outcome.error),
-        };
-      },
-    },
-    async () => {
-      if (parser === "mock") {
-        return {
-          parser: "mock",
-          response: buildMockResponse(rawText),
-        };
-      }
+        if (!modelConfig) {
+          throw new Error(
+            "One of AI_MODEL_STANDARD, AI_MODEL_CHEAP, or AI_MODEL_STRONG is required when OPENAI_API_KEY is configured.",
+          );
+        }
 
-      if (!modelConfig) {
-        throw new Error(
-          "One of AI_MODEL_STANDARD, AI_MODEL_CHEAP, or AI_MODEL_STRONG is required when OPENAI_API_KEY is configured.",
-        );
-      }
+        if (options.parseCaptureImpl) {
+          const response = await options.parseCaptureImpl(
+            {
+              rawText,
+              areaContext: input.areaContext,
+              operatorProfile: input.operatorProfile,
+            },
+            {
+              apiKey,
+              model: modelConfig.model,
+            },
+          );
 
-      if (options.parseCaptureImpl) {
-        const response = await options.parseCaptureImpl(
+          return {
+            parser: "ai",
+            response,
+            telemetry: {
+              modelName: modelConfig.model,
+            },
+          };
+        }
+
+        const result: ParseCaptureExecutionResult = await parseCaptureDetailed(
           {
             rawText,
             areaContext: input.areaContext,
+            operatorProfile: input.operatorProfile,
           },
           {
             apiKey,
             model: modelConfig.model,
+            provider: resolveStructuredOutputProvider(env),
           },
         );
 
         return {
           parser: "ai",
-          response,
-          telemetry: {
-            modelName: modelConfig.model,
-          },
+          response: result.response,
+          telemetry: result.telemetry,
         };
-      }
-
-      const result: ParseCaptureExecutionResult = await parseCaptureDetailed(
-        {
-          rawText,
-          areaContext: input.areaContext,
-        },
-        {
-          apiKey,
-          model: modelConfig.model,
-          provider: resolveStructuredOutputProvider(env),
-        },
-      );
-
-      return {
-        parser: "ai",
-        response: result.response,
-        telemetry: result.telemetry,
-      };
-    },
-  );
+      },
+    );
 
   try {
     const result = await runTraced();

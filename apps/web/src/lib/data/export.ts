@@ -7,6 +7,7 @@ export const USER_DATA_EXPORT_TABLES = [
   "areas",
   "capture_items",
   "people",
+  "operator_profiles",
   "tasks",
   "projects",
   "time_block_proposals",

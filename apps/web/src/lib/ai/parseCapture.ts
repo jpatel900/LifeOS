@@ -5,6 +5,7 @@ import {
 } from "./contracts/parseCapture";
 import {
   buildParseCaptureMessages,
+  type OperatorProfileContext,
   type ParseCaptureAreaContext,
 } from "./prompts/parseCapturePrompt";
 import {
@@ -16,11 +17,13 @@ export interface BuildParseCaptureRequestInput {
   rawText: string;
   model: string;
   areaContext?: ParseCaptureAreaContext[];
+  operatorProfile?: OperatorProfileContext | null;
 }
 
 export interface ParseCaptureInput {
   rawText: string;
   areaContext?: ParseCaptureAreaContext[];
+  operatorProfile?: OperatorProfileContext | null;
 }
 
 export interface ParseCaptureOptions {
@@ -64,6 +67,7 @@ export function buildParseCaptureRequest(input: BuildParseCaptureRequestInput) {
     input: buildParseCaptureMessages({
       rawText,
       areaContext: input.areaContext,
+      operatorProfile: input.operatorProfile,
     }),
     text: {
       format: parseCaptureResponseFormat,
@@ -100,6 +104,7 @@ export async function parseCaptureDetailed(
     messages: buildParseCaptureMessages({
       rawText,
       areaContext: input.areaContext,
+      operatorProfile: input.operatorProfile,
     }),
     responseFormat: parseCaptureResponseFormat,
   });
