@@ -54,6 +54,14 @@ export interface ParseCaptureServiceResult {
   parser: "ai" | "mock";
   response: ParseCaptureResponse;
   telemetry?: ParseCaptureTelemetry;
+  /**
+   * FR-030: true when this result is a mock parse produced by an automatic,
+   * same-request degrade after the AI provider returned a runtime-down
+   * response (429/5xx), rather than a normal mock path (key absent /
+   * AI disabled / user-forced mock). Surfaces the incident synchronously
+   * instead of a failed parse with no signal.
+   */
+  degraded?: boolean;
 }
 
 export type ParseCaptureRuntimeStatus =
@@ -139,6 +147,10 @@ function categorizeParseCaptureError(error: unknown) {
 
   if (/OPENAI_API_KEY/i.test(message)) {
     return "provider_config_missing_api_key";
+  }
+
+  if (/request failed: (429|500|502|503|504)\b/i.test(message)) {
+    return "provider_runtime_unavailable";
   }
 
   if (/request failed/i.test(message)) {
@@ -496,6 +508,23 @@ export async function parseCaptureWithFallback(
       status:
         getValidationStatus(error) === "failed" ? "schema_failed" : "failed",
     });
+
+    // FR-030 mock-first auto-degrade: a provider runtime-down response
+    // (429/5xx) must not surface as a failed parse with no signal. Degrade
+    // to the deterministic mock parser synchronously, in the same request —
+    // no retry loop, no async notify-later, consistent with FR-026's
+    // prohibition on fire-and-forget pending states.
+    if (
+      parser === "ai" &&
+      categorizeParseCaptureError(error) === "provider_runtime_unavailable"
+    ) {
+      return {
+        parser: "mock",
+        response: buildMockResponse(rawText),
+        degraded: true,
+      };
+    }
+
     throw error;
   }
 }

@@ -176,6 +176,11 @@ export async function POST(request: Request) {
       parser: result.parser,
       response: result.response,
       status: status.status,
+      // FR-030: true when this request was auto-degraded to the mock parser
+      // after a provider runtime-down response (429/5xx), so the client can
+      // show a visible "AI is down, mock used" notice for this response
+      // even though status stayed ai_configured (no persistent env change).
+      degraded: result.degraded ?? false,
     });
   } catch (error) {
     await logSafeParseFailure(error);

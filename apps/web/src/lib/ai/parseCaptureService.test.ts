@@ -428,6 +428,105 @@ describe("parse capture server service", () => {
     });
   });
 
+  it("auto-degrades to the mock parser when the provider returns a runtime 429 (FR-030)", async () => {
+    const recordAiCallTraceImpl = vi.fn(
+      async (_input: RecordAiCallTraceInput) => {},
+    );
+
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        env: {
+          OPENAI_API_KEY: "test-key",
+          AI_MODEL_STANDARD: "standard-model",
+        },
+        parseCaptureImpl: vi.fn(async () => {
+          throw new Error("AI capture parsing request failed: 429");
+        }),
+        traceContext: { accessToken: "user-a-access-token" },
+        recordAiCallTraceImpl,
+      },
+    );
+
+    // FR-030 mock-first auto-degrade: the request resolves synchronously
+    // with a mock parse instead of throwing/502ing — no notify-later.
+    expect(result.parser).toBe("mock");
+    expect(result.degraded).toBe(true);
+    expect(ParseCaptureResponseSchema.safeParse(result.response).success).toBe(
+      true,
+    );
+
+    // The failed AI attempt still records a trace row (provider incident
+    // must be visible to the learning loop / audit per FR-030).
+    expect(recordAiCallTraceImpl).toHaveBeenCalledTimes(1);
+    expect(recordAiCallTraceImpl.mock.calls[0]?.[0]).toMatchObject({
+      surface: "parse",
+      validationOutcome: "failed",
+    });
+  });
+
+  it("auto-degrades to the mock parser on a runtime 503 as well as 429 (FR-030)", async () => {
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      {
+        env: {
+          OPENAI_API_KEY: "test-key",
+          AI_MODEL_STANDARD: "standard-model",
+        },
+        parseCaptureImpl: vi.fn(async () => {
+          throw new Error("AI capture parsing request failed: 503");
+        }),
+      },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(result.degraded).toBe(true);
+  });
+
+  it("does not mark a normal mock parse (no API key) as degraded", async () => {
+    const result = await parseCaptureWithFallback(
+      { rawText: "Email Taylor about launch notes" },
+      { env: { AI_MODEL_STANDARD: "standard-model" } },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(result.degraded).toBeUndefined();
+  });
+
+  it("does not degrade and still throws for a non-runtime provider failure (e.g. bad JSON)", async () => {
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          parseCaptureImpl: vi.fn(async () => {
+            throw new Error("AI capture parsing response was not valid JSON.");
+          }),
+        },
+      ),
+    ).rejects.toThrow(/not valid JSON/i);
+  });
+
+  it("does not degrade for a 4xx auth failure (401), which is a config error not a runtime outage", async () => {
+    await expect(
+      parseCaptureWithFallback(
+        { rawText: "Email Taylor about launch notes" },
+        {
+          env: {
+            OPENAI_API_KEY: "test-key",
+            AI_MODEL_STANDARD: "standard-model",
+          },
+          parseCaptureImpl: vi.fn(async () => {
+            throw new Error("AI capture parsing request failed: 401");
+          }),
+        },
+      ),
+    ).rejects.toThrow(/request failed: 401/i);
+  });
+
   it("uses the mock parser when forced by route/UI recovery", async () => {
     const parseCaptureImpl = vi.fn(async () => aiResponse);
 
