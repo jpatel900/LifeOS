@@ -19,9 +19,9 @@ Entry format: Situation / Move / Why it worked / Evidence / Reuse trigger.
 ## Patch-paste delivery recovery
 
 - **Situation:** Codex cloud completed work but platform-side PR creation failed silently; fresh re-kicks cannot recover a prior task's commits.
-- **Move:** Kick asks the still-live task for `git format-patch origin/main --stdout` posted as issue comments; maintainer applies with `git am` in a worktree (author preserved), runs the lanes the sandbox cannot, opens the PR.
+- **Move:** Get `git format-patch origin/main --stdout` out of the ORIGINAL task session as issue comments — proactively in the first run (the kick demands it whenever PR existence isn't positively confirmed), or for already-stranded work via the owner opening the task's "View task →" link and asking there (a follow-up @codex mention spawns a fresh env with no task state — dead path per FAILURES.md 2026-07-05). Maintainer applies with `git am` in a worktree (author preserved), runs the lanes the sandbox cannot, opens the PR.
 - **Why it worked:** The patch travels over the one channel that always works (issue comments), and `git am` keeps attribution and history clean.
-- **Evidence:** Proven 3/3 on 2026-07-04 (recovery PRs #347/#348/#349); now the kick template's standard fallback (PR #357).
+- **Evidence:** Proven 3/3 on 2026-07-04 (recovery PRs #347/#348/#349); kick template's standard fallback since PR #357.
 - **Reuse trigger:** Any delivery lane where the artifact exists but the transport failed.
 
 ## Guard test born with the invariant
