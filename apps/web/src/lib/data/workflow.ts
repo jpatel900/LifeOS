@@ -1,5 +1,6 @@
 import {
   AreaSchema,
+  OperatorProfileSchema,
   CalendarBlockSchema,
   CheckTimeBlockProposalConflictInputSchema,
   CaptureItemSchema,
@@ -45,6 +46,7 @@ import {
   type Task,
   type TimeBlockProposal,
   type UpdateAreaColorInput,
+  type OperatorProfile,
 } from "@lifeos/schemas";
 import {
   normalizeSupabaseRow,
@@ -268,8 +270,11 @@ export const mockAreas: Area[] = [
   },
 ];
 
+// S3 (#255): `charter_text` is now selected so the live parse read path can
+// send per-area charters through the NS-INV-1 context-assembly module. S2
+// added the column and injection; this slice wires the request-time read.
 const areaColumns =
-  "id,user_id,name,slug,description,color,icon,sort_order,is_active,created_at,updated_at";
+  "id,user_id,name,slug,description,color,icon,sort_order,is_active,charter_text,charter_updated_at,created_at,updated_at";
 
 const captureColumns =
   "id,user_id,area_id,raw_text,raw_audio_ref,capture_mode,inferred_area_confidence,status,created_at";
@@ -567,6 +572,166 @@ export function recordRejectedTaskDraft(
     status: "rejected",
     resolved_at: new Date().toISOString(),
   });
+}
+
+// S3 (#255) meta-learning policy identifiers for person/commitment proposals.
+// Stable lowercase keys per the #235 vocabulary (`<domain>.<policy>`), designed
+// to survive schema evolution; not foreign keys.
+export const PERSON_LINK_POLICY_ID = "person.link_proposal" as const;
+export const COMMITMENT_POLICY_ID = "commitment.detection" as const;
+
+export interface PersonMentionProposalInput {
+  area_id: string | null;
+  draft_id: string;
+  name: string;
+  role: "waiting_on" | "committed_to" | "mention";
+  confidence: number;
+  /** Resolution against existing people, decided by the resolver (not the UI). */
+  match: "matched" | "new";
+  matched_person_id?: string | null;
+}
+
+export interface CommitmentProposalInput {
+  area_id: string | null;
+  draft_id: string;
+  title: string;
+  confidence?: number | null;
+}
+
+/**
+ * Instrument a proposed person link at birth (NS-INV-3). One pending
+ * suggestion_records row per mention; fire-and-forget so a learning-write
+ * failure never blocks the parse/triage flow. Nothing is persisted to `people`
+ * here — this only records that the AI proposed the link.
+ */
+export function recordPersonMentionProposal(
+  client: MinimalSupabaseClient | null,
+  input: PersonMentionProposalInput,
+): void {
+  if (!client) return;
+
+  recordSuggestionFireAndForget(client, {
+    area_id: input.area_id,
+    policy_identifier: PERSON_LINK_POLICY_ID,
+    suggestion_type: "triage_suggestion",
+    subject_type: "person_mention",
+    subject_id: uuidPattern.test(input.draft_id) ? input.draft_id : null,
+    suggestion_json: {
+      draft_id: input.draft_id,
+      name: input.name,
+      role: input.role,
+      match: input.match,
+      matched_person_id: input.matched_person_id ?? null,
+    },
+    confidence: input.confidence,
+    status: "pending",
+  });
+}
+
+/**
+ * Instrument a detected commitment at birth (NS-INV-3). Fire-and-forget.
+ */
+export function recordCommitmentProposal(
+  client: MinimalSupabaseClient | null,
+  input: CommitmentProposalInput,
+): void {
+  if (!client) return;
+
+  recordSuggestionFireAndForget(client, {
+    area_id: input.area_id,
+    policy_identifier: COMMITMENT_POLICY_ID,
+    suggestion_type: "triage_suggestion",
+    subject_type: "task_draft",
+    subject_id: uuidPattern.test(input.draft_id) ? input.draft_id : null,
+    suggestion_json: {
+      draft_id: input.draft_id,
+      title: input.title,
+      is_commitment: true,
+    },
+    confidence: input.confidence ?? null,
+    status: "pending",
+  });
+}
+
+export interface PersonLinkRejectionInput {
+  area_id: string | null;
+  draft_id: string;
+  name: string;
+  role: "waiting_on" | "committed_to" | "mention";
+}
+
+/**
+ * Record that the user rejected a proposed person link (override_records).
+ * The mention degrades to no link — the task stays a plain task. Override rows
+ * require a uuid subject_id; local draft ids are non-uuid, so we skip the
+ * override write for local-only drafts while still surfacing the rejection via
+ * the suggestion path when a persisted subject exists. Fire-and-forget.
+ */
+export function recordPersonLinkRejection(
+  client: MinimalSupabaseClient | null,
+  input: PersonLinkRejectionInput,
+): void {
+  if (!client) return;
+  if (!uuidPattern.test(input.draft_id)) return;
+
+  recordOverrideFireAndForget(client, {
+    area_id: input.area_id,
+    policy_identifier: PERSON_LINK_POLICY_ID,
+    subject_type: "person_mention",
+    subject_id: input.draft_id,
+    override_type: "rejected",
+    old_value_json: {
+      name: input.name,
+      role: input.role,
+      proposed_link: true,
+    },
+    new_value_json: {
+      proposed_link: false,
+      degraded_to_plain_task: true,
+    },
+  });
+}
+
+const operatorProfileColumns =
+  "id,user_id,profile_text,compensation_rules,created_at,updated_at";
+
+/**
+ * S3 (#255): live read of the single operator profile so the parse request can
+ * carry it through the NS-INV-1 context-assembly module. Returns null when no
+ * profile row exists (the empty-profile parity case). Never throws for a
+ * missing profile — a personalization read must not break parsing.
+ */
+export async function getOperatorProfile(
+  client: MinimalSupabaseClient | null,
+): Promise<OperatorProfile | null> {
+  if (!client) {
+    return null;
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before loading the operator profile.",
+  );
+
+  const query = client.from("operator_profiles") as {
+    select: (columns: string) => {
+      maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+
+  const { data, error } = await query
+    .select(operatorProfileColumns)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return OperatorProfileSchema.parse(normalizeSupabaseRow(data));
 }
 
 export async function listAreas(

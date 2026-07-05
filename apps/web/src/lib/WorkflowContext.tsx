@@ -47,6 +47,7 @@ import {
   planTaskAtHour,
   promoteBacklogTask,
   rejectDraft,
+  rejectPersonMention,
   rejectProjectDraft,
   rejectProposal,
   splitDraft,
@@ -68,11 +69,15 @@ import {
   createTask,
   createTimeBlockProposal,
   editTimeBlockProposal,
+  getOperatorProfile,
   listAreas,
   listCaptureItems,
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordCommitmentProposal,
+  recordPersonLinkRejection,
+  recordPersonMentionProposal,
   recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
@@ -93,6 +98,7 @@ import {
 import {
   requestParseCapture,
   type ParseCaptureClientStatus,
+  type ParseCaptureOperatorProfileContext,
   type ParseCaptureParserMode,
 } from "./ai/parseCaptureClient";
 import {
@@ -162,6 +168,11 @@ type WorkflowAction =
           "title" | "description" | "area_id" | "first_tiny_step"
         >
       >;
+    }
+  | {
+      type: "rejectPersonMention";
+      draftId: string;
+      mentionIndex: number;
     }
   | {
       type: "splitDraft";
@@ -286,6 +297,7 @@ interface WorkflowContextValue {
       >
     >,
   ) => void;
+  rejectPersonLink: (draftId: string, mentionIndex: number) => void;
   splitTaskDraft: (draftId: string, titles: [string, string]) => void;
   mergeTaskDrafts: (primaryDraftId: string, secondaryDraftId: string) => void;
   acceptLocalProposal: (proposalId: string) => void;
@@ -961,6 +973,8 @@ function workflowReducer(
       return rejectProjectDraft(state, action.draftId);
     case "editDraft":
       return editDraft(state, action.draftId, action.changes);
+    case "rejectPersonMention":
+      return rejectPersonMention(state, action.draftId, action.mentionIndex);
     case "splitDraft":
       return splitDraft(state, action.draftId, action.titles);
     case "mergeDrafts":
@@ -1984,12 +1998,48 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // Tracing is optional; a missing/failed session must never block parsing.
     }
 
+    // S3 (#255): live charter/profile read path. S2 landed the context-assembly
+    // module, storage, and injection; the request-time read was deferred to
+    // this slice. Read persisted charters + the operator profile and forward
+    // them through the S2 plumbing. An empty charter/profile leaves the prompt
+    // byte-identical to baseline (S2 parity), and any read failure degrades to
+    // the pre-S3 name-only context — personalization must never block parsing.
+    const persistedAreas = persistedAreasRef.current;
+    const charterBySlug = new Map(
+      persistedAreas.map((area) => [
+        area.slug,
+        typeof area.charter_text === "string" ? area.charter_text : null,
+      ]),
+    );
+
+    let operatorProfileContext: ParseCaptureOperatorProfileContext | undefined;
+    try {
+      const profileClient = createSupabaseBrowserClient();
+      if (profileClient) {
+        const profile = await getOperatorProfile(profileClient);
+        if (profile) {
+          operatorProfileContext = {
+            profileText: profile.profile_text,
+            compensationRules: profile.compensation_rules,
+          };
+        }
+      }
+    } catch {
+      // Personalization is best-effort; a failed profile read must never block
+      // parsing. Fall through with no operator profile (S2 empty-profile parity).
+    }
+
     const result = await requestParseCapture({
       rawText: capture.raw_text,
-      areaContext: stateRef.current.areas.map((area) => ({
-        slug: area.name.toLowerCase().replace(/\s+/g, "-"),
-        name: area.name,
-      })),
+      areaContext: stateRef.current.areas.map((area) => {
+        const slug = area.name.toLowerCase().replace(/\s+/g, "-");
+        return {
+          slug,
+          name: area.name,
+          charterText: charterBySlug.get(slug) ?? null,
+        };
+      }),
+      operatorProfile: operatorProfileContext,
       parserMode,
       authorization,
     });
@@ -2001,6 +2051,38 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         workflowAreaId: capture.area_id,
       });
       applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
+
+      // Born instrumented (NS-INV-3): record person/commitment proposals as
+      // pending suggestions. Fire-and-forget — a learning-write failure must
+      // never affect parsing or triage. Nothing is persisted to `people` here;
+      // approval happens in triage (NS-INV-4).
+      const learningClient = createSupabaseBrowserClient();
+      for (const draft of parsed.taskDrafts) {
+        const area_id = persistedAreaIdForWorkflowId(
+          draft.area_id,
+          persistedAreasRef.current,
+        );
+        for (const mention of draft.person_mentions) {
+          recordPersonMentionProposal(learningClient, {
+            area_id,
+            draft_id: draft.id,
+            name: mention.name,
+            role: mention.role,
+            confidence: mention.confidence,
+            // Resolution against existing people happens at approval time; the
+            // proposal is recorded as "new" until the user confirms a match.
+            match: "new",
+          });
+        }
+        if (draft.is_commitment) {
+          recordCommitmentProposal(learningClient, {
+            area_id,
+            draft_id: draft.id,
+            title: draft.title,
+            confidence: draft.confidence,
+          });
+        }
+      }
     }
 
     if (activeParseCaptureIdRef.current !== capture.id) {
@@ -2213,6 +2295,30 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     editTaskDraft: (draftId, changes) => {
       dispatch({ type: "editDraft", draftId, changes });
       markLocalOnly("Draft edit saved locally; account sync is pending.");
+    },
+    rejectPersonLink: (draftId, mentionIndex) => {
+      const draft = stateRef.current.taskDrafts.find(
+        (item) => item.id === draftId,
+      );
+      const mention = draft?.person_mentions[mentionIndex] ?? null;
+      dispatch({ type: "rejectPersonMention", draftId, mentionIndex });
+      markLocalOnly(
+        "Removed proposed person link locally; the task stays a plain task.",
+      );
+
+      // Fire-and-forget override: the user rejected the proposed link. A failed
+      // learning write must never affect the triage flow (NS-INV-3).
+      if (draft && mention) {
+        recordPersonLinkRejection(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWorkflowId(
+            draft.area_id,
+            persistedAreasRef.current,
+          ),
+          draft_id: draft.id,
+          name: mention.name,
+          role: mention.role,
+        });
+      }
     },
     splitTaskDraft: (draftId, titles) => {
       dispatch({ type: "splitDraft", draftId, titles });

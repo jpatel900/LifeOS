@@ -104,6 +104,7 @@ export function LifeOSCockpit({
     editTaskDraft,
     splitTaskDraft,
     mergeTaskDrafts,
+    rejectPersonLink,
     addArea,
     updateAreaColor: updateLocalAreaColor,
     promoteBacklogTask,
@@ -547,6 +548,7 @@ export function LifeOSCockpit({
               onEdit={editTaskDraft}
               onSplit={splitTaskDraft}
               onMerge={mergeTaskDrafts}
+              onRejectPersonLink={rejectPersonLink}
               onPlan={() => navigate("plan")}
             />
           ) : null}
@@ -878,6 +880,7 @@ function TriageView({
   onEdit,
   onSplit,
   onMerge,
+  onRejectPersonLink,
   onPlan,
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
@@ -895,6 +898,7 @@ function TriageView({
   ) => void;
   onSplit: (draftId: string, titles: [string, string]) => void;
   onMerge: (primaryDraftId: string, secondaryDraftId: string) => void;
+  onRejectPersonLink: (draftId: string, mentionIndex: number) => void;
   onPlan: () => void;
 }) {
   const current = vm.inbox[0];
@@ -997,6 +1001,47 @@ function TriageView({
                 {current.breakdown.sequence_summary}
               </p>
             ) : null}
+          </section>
+        ) : null}
+        {current.person_mentions.length > 0 ? (
+          <section
+            aria-label="Proposed person links"
+            className="mt-4 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
+          >
+            <div className="flex items-center justify-between">
+              <p className="mono text-sm text-[var(--acc2)]">People</p>
+              {current.is_commitment ? (
+                <span className="mono rounded-full bg-[var(--acc-sf)] px-2 py-0.5 text-xs text-[var(--acc2)]">
+                  Commitment
+                </span>
+              ) : null}
+            </div>
+            <ul className="mt-3 grid gap-2">
+              {current.person_mentions.map((mention, index) => (
+                <li
+                  key={`${mention.name}-${mention.role}-${index}`}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span className="text-[var(--ink)]">
+                    <span className="font-bold">{mention.name}</span>
+                    <span className="mono ml-2 text-xs text-[var(--mut)]">
+                      {mention.role.replace("_", " ")}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onRejectPersonLink(current.id, index)}
+                    className="mono min-h-8 rounded-full border border-[var(--ln)] px-3 text-xs text-[var(--mut)]"
+                  >
+                    Not this person
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-[var(--mut)]">
+              Links are proposals only. Removing one keeps the task as a plain
+              task; nothing about a person is saved without your approval.
+            </p>
           </section>
         ) : null}
         <div className="mt-4 flex justify-center gap-1">

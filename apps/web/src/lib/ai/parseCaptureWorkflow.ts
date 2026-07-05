@@ -85,6 +85,11 @@ export function buildParsedWorkflowResult(
       estimated_minutes_high: draft.estimated_minutes_high,
       first_tiny_step: draft.first_tiny_step,
       breakdown: draft.breakdown,
+      // S3 (#255): carry the person/commitment signals through untouched so the
+      // triage flow can propose a person link; a plain task with no mentions
+      // stays a plain task.
+      person_mentions: draft.person_mentions,
+      is_commitment: draft.is_commitment,
       status: "pending",
       created_at: new Date().toISOString(),
     }));
