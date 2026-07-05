@@ -42,6 +42,7 @@ import {
 } from "@/lib/cockpit/viewModel";
 import { cn } from "@/lib/utils";
 import { GoogleCalendarApprovalBridge } from "./GoogleCalendarApprovalBridge";
+import { useFocusSession } from "./moments/useFocusSession";
 
 const STAGE_LABELS: Record<CockpitStage, string> = {
   today: "Today",
@@ -115,8 +116,6 @@ export function LifeOSCockpit({
     createLocalProposalForTask,
     planTaskAtHour,
     unplanTask,
-    startTaskSession,
-    markSession,
     carryForwardTask,
     deferTask,
     dropTask,
@@ -133,10 +132,8 @@ export function LifeOSCockpit({
   const [newAreaName, setNewAreaName] = useState("");
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
-  const [remaining, setRemaining] = useState(0);
-  const [total, setTotal] = useState(0);
+  const { activeTaskId, running, remaining, total, start, toggle, finish } =
+    useFocusSession();
   const captureSavingRef = useRef(false);
   const vm = useMemo(
     () => buildCockpitViewModel(state, selectedAreaId, dark),
@@ -187,20 +184,6 @@ export function LifeOSCockpit({
       // Workflow remains usable when localStorage is blocked.
     }
   }, [dark, selectedAreaId, stage]);
-
-  useEffect(() => {
-    if (!running || remaining <= 0) return;
-    const interval = window.setInterval(() => {
-      setRemaining((value) => Math.max(value - 1, 0));
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [remaining, running]);
-
-  useEffect(() => {
-    if (running && remaining === 0 && activeTaskId) {
-      setRunning(false);
-    }
-  }, [activeTaskId, remaining, running]);
 
   function navigate(nextStage: CockpitStage) {
     setStage(nextStage);
@@ -300,32 +283,17 @@ export function LifeOSCockpit({
   }
 
   function startFocus(taskId: string, minutes: number) {
-    setActiveTaskId(taskId);
-    setTotal(minutes * 60);
-    setRemaining(minutes * 60);
-    setRunning(true);
-    startTaskSession(taskId);
+    start(taskId, minutes);
   }
 
   function finishSession(status: "completed" | "stuck" | "missed") {
-    const actualMinutes = Math.max(0, Math.ceil((total - remaining) / 60));
-    markSession(status, actualMinutes);
-    setRunning(false);
-    setRemaining(0);
-    setActiveTaskId(null);
+    finish(status);
     showToast(status === "completed" ? "Session complete" : "Session logged");
     navigate("review");
   }
 
   function toggleFocus() {
-    if (running) {
-      const actualMinutes = Math.max(0, Math.ceil((total - remaining) / 60));
-      markSession("paused", actualMinutes);
-      setRunning(false);
-      return;
-    }
-
-    setRunning(true);
+    toggle();
   }
 
   function saveSideCapture(text: string) {
