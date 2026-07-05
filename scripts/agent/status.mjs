@@ -20,6 +20,66 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const MANIFEST_PATH = path.join(__dirname, "pipeline-manifest.json");
+const COHERENCE_REGISTRY_PATH = path.join(
+  REPO_ROOT,
+  "docs",
+  "coherence-registry.json",
+);
+
+function formatCoherenceFeature(feature) {
+  const fr = typeof feature?.fr === "string" ? feature.fr : "unknown-fr";
+  const title = typeof feature?.title === "string" ? feature.title : "untitled";
+  return `${fr} ${title}`;
+}
+
+function readCoherenceRegistry() {
+  const raw = readFileSync(COHERENCE_REGISTRY_PATH, "utf8");
+  return JSON.parse(raw);
+}
+
+function collectCoherenceStats(registry) {
+  const features = Array.isArray(registry?.features) ? registry.features : [];
+  const byFr = new Map(features.map((feature) => [feature.fr, feature]));
+  const edges = features.flatMap((feature) =>
+    Array.isArray(feature?.interacts_with)
+      ? feature.interacts_with.map((edge) => ({ from: feature, edge }))
+      : [],
+  );
+  const unresolved = edges.filter(
+    ({ edge }) =>
+      edge?.kind === "X" &&
+      (typeof edge.resolution_ref !== "string" ||
+        edge.resolution_ref.trim() === ""),
+  );
+
+  return {
+    featureCount: features.length,
+    edgeCount: edges.length,
+    unresolvedPairs: unresolved.map(({ from, edge }) => ({
+      from,
+      to: byFr.get(edge.fr) ?? { fr: edge.fr, title: "unknown feature" },
+    })),
+  };
+}
+
+function printCoherenceStatus() {
+  try {
+    const stats = collectCoherenceStats(readCoherenceRegistry());
+    const guards = stats.unresolvedPairs.length === 0 ? "ok" : "fail";
+    console.log(
+      `coherence: ${stats.featureCount} features, ${stats.edgeCount} edges, ${stats.unresolvedPairs.length} unresolved-X, guards ${guards}`,
+    );
+    for (const pair of stats.unresolvedPairs) {
+      console.log(
+        `  unresolved-X: ${formatCoherenceFeature(pair.from)} -> ${formatCoherenceFeature(pair.to)}`,
+      );
+    }
+  } catch (err) {
+    console.log(
+      `coherence: warning: could not read docs/coherence-registry.json (${err.message.split("\n")[0]})`,
+    );
+  }
+}
 
 function ghJson(args) {
   const output = execFileSync("gh", args, {
@@ -278,6 +338,8 @@ function printSuggestedActions({
 }
 
 function main() {
+  printCoherenceStatus();
+
   const auth = checkGhAvailable();
   if (!auth.ok) {
     console.log(
