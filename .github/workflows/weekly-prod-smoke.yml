@@ -104,7 +104,7 @@ jobs:
             echo "outcome=skipped" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if pnpm smoke:prod -- --trace off --reporter=list,html; then
+          if node scripts/run-prod-smoke.mjs --trace off --reporter=list,html; then
             echo "outcome=success" >> "$GITHUB_OUTPUT"
           else
             echo "outcome=failure" >> "$GITHUB_OUTPUT"
