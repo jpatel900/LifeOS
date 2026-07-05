@@ -108,7 +108,39 @@ export function TodayMoments({
   now: nowProp,
   deepLink,
 }: TodayMomentsProps) {
-  const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
+  // SP-10: relative/aging labels (schedule "in Xm"/"Xm left" rows, waiting-on
+  // day counts) and the mount-time-of-day moment heuristic all derive from
+  // `now`. Left frozen at mount, `now` goes stale in a long-lived tab. When
+  // no `now` is injected (production path), self-refresh into state on a
+  // slow ~60s cadence, aligned to the minute boundary via a self-rescheduling
+  // setTimeout (mirrors the SP-2 anchored-scheduler style — no drift, no
+  // interval left running while irrelevant). When `nowProp` IS injected
+  // (tests), the timer never arms: `now` stays exactly the injected value,
+  // so existing and new deterministic tests are unaffected unless they
+  // explicitly opt into the default-clock path.
+  const [autoNow, setAutoNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    if (nowProp) return undefined;
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+
+    function schedule() {
+      if (cancelled) return;
+      const delay = 60000 - (Date.now() % 60000);
+      timeoutId = setTimeout(() => {
+        setAutoNow(new Date());
+        schedule();
+      }, delay);
+    }
+
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [nowProp]);
+  const now = nowProp ?? autoNow;
   const {
     state,
     selectedAreaId,
