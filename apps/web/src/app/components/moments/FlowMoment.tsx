@@ -1,14 +1,20 @@
 "use client";
 
 import { CurrentBlockHero } from "./CurrentBlockHero";
+import { DriftRecoveryCard } from "./DriftRecoveryCard";
+import { ProgressionRail } from "./ProgressionRail";
 import type { FlowVM } from "./momentsViewModel";
+import type { ProgressionNode } from "./progressionNodes";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
+ * Moments pass P4 — packet: adds DriftRecoveryCard + ProgressionRail v0.
  *
  * The Flow moment: the current block/session hero, or a truthful empty
- * state pointing back to Start (UX-INV-6 — no dead ends). Drift recovery is
- * explicitly out of scope here; packet P4 owns rendering `vm.drift`.
+ * state pointing back to Start (UX-INV-6 — no dead ends). When `vm.drift`
+ * is present, the recovery card renders regardless of hero/empty state
+ * (UX-INV-3 — a derailed Flow is never a dead end). The progression rail
+ * renders below, showing v0's presentation-only progress derivation.
  */
 
 export interface FlowMomentSession {
@@ -26,6 +32,9 @@ export interface FlowMomentProps {
   onPause(): void;
   onExtend(minutes: number): void;
   onToggleTime(): void;
+  onReclaimDrift(): void;
+  onAbandonDrift(): void;
+  progressionNodes: ProgressionNode[];
 }
 
 export function FlowMoment({
@@ -36,6 +45,9 @@ export function FlowMoment({
   onPause,
   onExtend,
   onToggleTime,
+  onReclaimDrift,
+  onAbandonDrift,
+  progressionNodes,
 }: FlowMomentProps) {
   const hasActiveSession = session.activeTaskId !== null || session.total > 0;
 
@@ -71,7 +83,15 @@ export function FlowMoment({
         </p>
       )}
 
-      {/* P4: DriftRecoveryCard slot */}
+      {vm.drift ? (
+        <DriftRecoveryCard
+          drift={vm.drift}
+          onReclaim={onReclaimDrift}
+          onAbandon={onAbandonDrift}
+        />
+      ) : null}
+
+      <ProgressionRail nodes={progressionNodes} />
     </div>
   );
 }

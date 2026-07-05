@@ -18,6 +18,7 @@ import { FlowMoment } from "./FlowMoment";
 import { CloseMoment } from "./CloseMoment";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
+import { buildProgressionNodes } from "./progressionNodes";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -130,6 +131,15 @@ export function TodayMoments({
     total: number;
   }>({ activeTaskId: null, running: false, remaining: 0, total: 0 });
 
+  const railTaskId = useMemo(
+    () => session.activeTaskId ?? startVM.firstMove?.taskId ?? null,
+    [session.activeTaskId, startVM.firstMove],
+  );
+  const progressionNodes = useMemo(
+    () => buildProgressionNodes(state, railTaskId),
+    [state, railTaskId],
+  );
+
   useEffect(() => {
     writeStoredPreferences({ moment, timeDisplay });
   }, [moment, timeDisplay]);
@@ -206,6 +216,34 @@ export function TodayMoments({
     },
     [startFocus],
   );
+
+  const handleReclaimDrift = useCallback(() => {
+    const hasSession = session.activeTaskId !== null || session.total > 0;
+    if (hasSession) {
+      if (!session.running) {
+        pauseFocus();
+      }
+    } else if (startVM.firstMove) {
+      startFocus(
+        startVM.firstMove.taskId,
+        startVM.firstMove.estMinutes || DEFAULT_FOCUS_MINUTES,
+      );
+    }
+    showToast("Block reclaimed");
+  }, [
+    session.activeTaskId,
+    session.total,
+    session.running,
+    pauseFocus,
+    startVM.firstMove,
+    startFocus,
+    showToast,
+  ]);
+
+  const handleAbandonDrift = useCallback(() => {
+    setMoment("start");
+    showToast("Fresh start — pick your next move");
+  }, [showToast]);
 
   const runPrimary = useCallback(() => {
     if (moment === "start") {
@@ -467,6 +505,9 @@ export function TodayMoments({
                   current === "countdown" ? "clock" : "countdown",
                 )
               }
+              onReclaimDrift={handleReclaimDrift}
+              onAbandonDrift={handleAbandonDrift}
+              progressionNodes={progressionNodes}
             />
           ) : null}
 
