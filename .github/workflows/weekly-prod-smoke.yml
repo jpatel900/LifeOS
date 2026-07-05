@@ -1,0 +1,180 @@
+# Weekly scheduled production smoke (issue #241, B8 follow-up).
+#
+# Makes prod health self-reporting: runs `pnpm smoke:prod` (scripts/run-prod-smoke.mjs
+# + apps/web/playwright.smoke.config.ts) against the live deployed app on a
+# weekly cadence, without waiting for a human to remember to run it manually.
+#
+# Requires three repository secrets, all already added by the owner:
+#   SMOKE_BASE_URL   base URL of the deployed app (e.g. https://your-app.vercel.app)
+#   SMOKE_EMAIL      production sign-in email for the authenticated smoke legs
+#   SMOKE_PASSWORD   production sign-in password for the authenticated smoke legs
+#
+# SMOKE_GOOGLE_TEST_CALENDAR_ID is deliberately NOT set here: leaving it unset
+# keeps the opt-in external calendar write off, matching the smoke script's
+# documented default-safe posture (see scripts/run-prod-smoke.mjs header).
+#
+# Browser channel: apps/web/playwright.smoke.config.ts hardcodes the `msedge`
+# Playwright channel (chosen to avoid a possibly-unavailable Chromium
+# download). ci.yml's own Playwright E2E job already proves the right way to
+# get msedge onto an ubuntu-latest runner: `playwright install --with-deps
+# msedge`. This workflow reuses that exact step rather than overriding the
+# channel, so the smoke config that runs in CI-adjacent contexts and the one
+# that runs against prod stay identical -- the only difference is the target
+# URL (SMOKE_BASE_URL) and credentials.
+#
+# Alert dedupe mirrors provider-canary.yml / migration-drift.yml's shape:
+# one open `prod-smoke` labelled issue at a time. A failing run opens an
+# issue if none is open, or comments on the existing one (no duplicate
+# issues on repeat failures). The next successful run comments with a
+# recovery note and closes it. Per .github/AGENT_AUTOMATION_POLICY.md this
+# file is T2: workflow changes require human review.
+#
+# Secret-safety note (jpatel900/LifeOS is a PUBLIC repo, so any uploaded
+# artifact is publicly downloadable): apps/web/tests/smoke/helpers/smoke.ts
+# logs in via `page.locator("#password").fill(env.password)`, and the smoke
+# config sets `trace: "retain-on-failure"` -- a Playwright trace records
+# fill-action values, so a retained trace would embed the plaintext
+# SMOKE_PASSWORD. This workflow passes `--trace off` on the CLI (forwarded by
+# run-prod-smoke.mjs's `...process.argv.slice(2)` straight to the Playwright
+# CLI) to suppress trace capture for this run ONLY, without editing
+# playwright.smoke.config.ts. Failure screenshots (`only-on-failure`) are
+# still produced and uploaded: a `type=password` field renders masked dots
+# in a screenshot, so it cannot leak the password. Also passes
+# `--reporter=list,html` so the config's default `list` reporter (no report
+# directory) is supplemented with a real HTML report to satisfy "upload the
+# Playwright report" without touching the shared config. Residual: if the
+# LOGIN leg itself fails, its failure screenshot shows SMOKE_EMAIL typed
+# into the visible email field (password field stays masked either way).
+name: Weekly Prod Smoke
+
+on:
+  schedule:
+    # Sunday 13:00 UTC -- a quiet time for both traffic and on-call attention
+    # (weekend afternoon UTC, which is early morning in the Americas and
+    # evening in Europe/most of Asia), well clear of ci.yml's per-push load
+    # and provider-canary's 30-minute cadence.
+    - cron: "0 13 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-prod-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  smoke:
+    name: Production smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm --filter @lifeos/web exec playwright install --with-deps msedge
+
+      - name: Run production smoke
+        id: smoke
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          if [ -z "$SMOKE_BASE_URL" ]; then
+            echo "::warning::SMOKE_BASE_URL secret is not set; skipping the weekly prod smoke."
+            echo "outcome=skipped" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if pnpm smoke:prod -- --trace off --reporter=list,html; then
+            echo "outcome=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "outcome=failure" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload Playwright report on failure
+        if: steps.smoke.outputs.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-smoke-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+
+      - name: Reconcile prod-smoke GitHub issue
+        if: steps.smoke.outputs.outcome == 'success' || steps.smoke.outputs.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const outcome = "${{ steps.smoke.outputs.outcome }}";
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const label = "prod-smoke";
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: "open", labels: label, per_page: 100,
+            });
+            const existing = openIssues[0] ?? null;
+
+            if (outcome === "failure") {
+              const now = new Date().toISOString();
+              if (!existing) {
+                await github.rest.issues.create({
+                  owner, repo,
+                  title: "Weekly prod smoke: production smoke failed",
+                  body: [
+                    `The weekly production smoke (\`.github/workflows/weekly-prod-smoke.yml\`) failed at ${now}.`,
+                    "",
+                    `Run: ${runUrl}`,
+                    "",
+                    "The Playwright HTML report and failure screenshots (no traces -- see the workflow's secret-safety note) are attached to the failed run as the `prod-smoke-report` artifact.",
+                    "",
+                    "This issue will get a recovery comment and be closed automatically once the smoke passes again. Do not close manually -- closing early will cause a duplicate issue on the next failing run.",
+                  ].join("\n"),
+                  labels: [label],
+                });
+                core.info("Weekly prod smoke: opened a new incident issue.");
+              } else {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number,
+                  body: `Weekly prod smoke: still failing as of ${now}.\n\nRun: ${runUrl}`,
+                });
+                core.info(`Weekly prod smoke: commented on existing issue #${existing.number}.`);
+              }
+              return;
+            }
+
+            // outcome === "success"
+            if (existing) {
+              const now = new Date().toISOString();
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `Weekly prod smoke: recovered. A passing run was observed at ${now}.\n\nRun: ${runUrl}\n\nClosing.`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number, state: "closed",
+              });
+              core.info(`Weekly prod smoke: closed recovered issue #${existing.number}.`);
+            } else {
+              core.info("Weekly prod smoke: passed, no open issue to reconcile.");
+            }
