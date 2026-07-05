@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { extname, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 const repoRoot = resolve(__dirname, "../../../..");
@@ -16,7 +16,12 @@ type CoherenceRegistry = {
       resolution_ref?: string;
     }>;
   }>;
-  policies: Array<{ id: string }>;
+  policies: Array<{
+    id: string;
+    note?: string;
+    reserved?: boolean;
+    pre_registered?: boolean;
+  }>;
 };
 
 function readRegistry(): CoherenceRegistry {
@@ -39,6 +44,96 @@ function findDuplicateValues(values: string[]): string[] {
   }
 
   return [...duplicates].sort();
+}
+
+const POLICY_SOURCE_ROOTS = ["packages/schemas/src", "apps/web/src/lib"];
+
+const IGNORED_POLICY_SOURCE_DIRECTORIES = new Set([
+  "__fixtures__",
+  "__tests__",
+  "fixtures",
+]);
+
+const POLICY_SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
+const POLICY_ID_LITERAL_PATTERN =
+  /["']([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*\.v\d+)["']/g;
+
+function walkPolicySourceFiles(relativePath: string): string[] {
+  const currentPath = resolve(repoRoot, relativePath);
+
+  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
+    const nextRelativePath = `${relativePath}/${entry.name}`;
+
+    if (entry.isDirectory()) {
+      if (IGNORED_POLICY_SOURCE_DIRECTORIES.has(entry.name)) {
+        return [];
+      }
+
+      return walkPolicySourceFiles(nextRelativePath);
+    }
+
+    if (!entry.isFile() || !POLICY_SOURCE_EXTENSIONS.has(extname(entry.name))) {
+      return [];
+    }
+
+    if (/\.(?:test|spec)\.[^/]+$/.test(entry.name)) {
+      return [];
+    }
+
+    return [nextRelativePath];
+  });
+}
+
+function readProductionPolicySourceText(): Map<string, string> {
+  const sourceTextByPath = new Map<string, string>();
+
+  for (const sourcePath of POLICY_SOURCE_ROOTS.flatMap(walkPolicySourceFiles)) {
+    sourceTextByPath.set(
+      sourcePath,
+      readFileSync(resolve(repoRoot, sourcePath), "utf8"),
+    );
+  }
+
+  return sourceTextByPath;
+}
+
+function readProductionPolicyIdLiterals(
+  sourceTextByPath: Map<string, string>,
+): Map<string, string[]> {
+  const policyIdSources = new Map<string, string[]>();
+
+  for (const [sourcePath, sourceText] of sourceTextByPath) {
+    for (const match of sourceText.matchAll(POLICY_ID_LITERAL_PATTERN)) {
+      const policyId = match[1];
+      const sources = policyIdSources.get(policyId) ?? [];
+      sources.push(sourcePath);
+      policyIdSources.set(policyId, sources);
+    }
+  }
+
+  return policyIdSources;
+}
+
+function hasPolicyIdLiteral(
+  sourceTextByPath: Map<string, string>,
+  policyId: string,
+): boolean {
+  const escapedPolicyId = policyId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const policyIdLiteralPattern = new RegExp(`["']${escapedPolicyId}["']`);
+
+  return [...sourceTextByPath.values()].some((sourceText) =>
+    policyIdLiteralPattern.test(sourceText),
+  );
+}
+
+function isReservedPolicy(
+  policy: CoherenceRegistry["policies"][number],
+): boolean {
+  return (
+    policy.reserved === true ||
+    policy.pre_registered === true ||
+    /\b(?:pre-registered|registered ahead|reserved)\b/i.test(policy.note ?? "")
+  );
 }
 
 function readRequirementFrHeadings(): string[] {
@@ -191,6 +286,46 @@ describe("coherence registry", () => {
     expect(
       missingPathSurfaces,
       `Registry surfaces[] path entries that do not exist: ${missingPathSurfaces.join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("coherence registry policy-id code sweep", () => {
+  it("G-FUNC-2 — registers every production policy-id literal and keeps policies findable or reserved.", () => {
+    const registry = readRegistry();
+    const productionSourceText = readProductionPolicySourceText();
+    const productionPolicyIdLiterals =
+      readProductionPolicyIdLiterals(productionSourceText);
+    const registeredPolicyIds = new Set(
+      registry.policies.map((policy) => policy.id),
+    );
+    const unregisteredCodePolicyIds = [...productionPolicyIdLiterals.keys()]
+      .filter((policyId) => !registeredPolicyIds.has(policyId))
+      .sort();
+    const unreferencedRegisteredPolicyIds = registry.policies
+      .filter(
+        (policy) =>
+          !hasPolicyIdLiteral(productionSourceText, policy.id) &&
+          !isReservedPolicy(policy),
+      )
+      .map((policy) => policy.id)
+      .sort();
+
+    expect(
+      unregisteredCodePolicyIds,
+      [
+        "Production policy-id literals in packages/schemas/src/** or apps/web/src/lib/**",
+        "must be registered in docs/coherence-registry.json policies[].",
+        `Unregistered ids: ${unregisteredCodePolicyIds.join(", ")}`,
+      ].join(" "),
+    ).toEqual([]);
+    expect(
+      unreferencedRegisteredPolicyIds,
+      [
+        "Registry policies[] ids must be present in production code or carry a",
+        "reserved/pre-registered marker.",
+        `Unreferenced ids: ${unreferencedRegisteredPolicyIds.join(", ")}`,
+      ].join(" "),
     ).toEqual([]);
   });
 });

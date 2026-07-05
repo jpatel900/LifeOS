@@ -436,6 +436,16 @@
       "id": "dod_cap.v1",
       "fr": "FR-025",
       "note": "DoD-cap outcome records. Registered ahead of code landing (C4 #367 queued)."
+    },
+    {
+      "id": "phase2.mock.v1",
+      "fr": "FR-005",
+      "note": "Mock workflow schema marker used by parser/workflow production source."
+    },
+    {
+      "id": "parse_capture.v3",
+      "fr": "FR-005",
+      "note": "Parse-capture prompt contract version used by the AI context assembly path."
     }
   ]
 }
