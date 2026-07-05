@@ -186,4 +186,26 @@ describe("CurrentBlockHero", () => {
       "Resume",
     );
   });
+
+  // SP-3 numeric steadiness: the countdown digit must never wobble
+  // horizontally as it ticks, so it renders with tabular figures.
+  it("renders the countdown time with tabular-nums so digits don't jiggle", () => {
+    render(
+      <CurrentBlockHero
+        block={makeBlock()}
+        remaining={125}
+        total={1500}
+        running
+        timeDisplay="countdown"
+        onDone={vi.fn()}
+        onPause={vi.fn()}
+        onExtend={vi.fn()}
+        onToggleTime={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("current-block-hero-time")).toHaveClass(
+      "tabular-nums",
+    );
+  });
 });

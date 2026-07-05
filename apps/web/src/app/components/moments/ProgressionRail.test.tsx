@@ -115,6 +115,19 @@ describe("ProgressionRail", () => {
     );
   });
 
+  // SP-3 numeric steadiness: the "+N done"/"+N steps" fold counters must not
+  // jiggle as the count changes, so both render with tabular figures.
+  it("renders the fold counters with tabular-nums", () => {
+    render(<ProgressionRail nodes={NODES} />);
+
+    expect(screen.getByTestId("progression-rail-fold-done")).toHaveClass(
+      "tabular-nums",
+    );
+    expect(screen.getByTestId("progression-rail-fold-steps")).toHaveClass(
+      "tabular-nums",
+    );
+  });
+
   it("all-done chain (no current/next node) collapses to last node with a leading fold and no trailing fold", () => {
     const allDone: ProgressionNode[] = [
       { id: "real-0", label: "Captured", status: "done", kind: "real" },

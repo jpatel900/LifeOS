@@ -71,7 +71,7 @@ export function ReEntryRitual({
   return (
     <div className="grid gap-6" data-testid="re-entry-ritual">
       <div className="grid gap-1">
-        <h1 className="workflow-surface-title text-xl font-semibold">
+        <h1 className="workflow-surface-title text-xl font-semibold tabular-nums">
           Welcome back — {summary.absenceDays} days away.
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -84,20 +84,20 @@ export function ReEntryRitual({
         data-testid="re-entry-ritual-counts"
       >
         <li
-          className="rounded-full border border-border bg-card px-3 py-1 text-xs"
+          className="rounded-full border border-border bg-card px-3 py-1 text-xs tabular-nums"
           style={{ color: "var(--state-watch)" }}
           data-testid="re-entry-ritual-count-lapsed"
         >
           {summary.counts.lapsedBlocks} moved to backlog for you
         </li>
         <li
-          className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground"
+          className="rounded-full border border-border bg-card px-3 py-1 text-xs tabular-nums text-muted-foreground"
           data-testid="re-entry-ritual-count-triage"
         >
           {summary.counts.pendingTriage} waiting for triage
         </li>
         <li
-          className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground"
+          className="rounded-full border border-border bg-card px-3 py-1 text-xs tabular-nums text-muted-foreground"
           data-testid="re-entry-ritual-count-active"
         >
           {summary.counts.activeTasks} open
@@ -205,7 +205,7 @@ export function ReEntryRitual({
 
       {summary.stalest ? (
         <p
-          className="text-sm text-muted-foreground"
+          className="text-sm tabular-nums text-muted-foreground"
           data-testid="re-entry-ritual-stalest"
         >
           Oldest waiting: {summary.stalest.label} ({summary.stalest.ageDays}{" "}

@@ -56,4 +56,25 @@ describe("PipelineOverview", () => {
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-plan"));
     expect(onDrill).toHaveBeenCalledWith("plan");
   });
+
+  // SP-3 numeric steadiness: count badges use tabular figures and reserve a
+  // stable width so a 9->10 digit rollover never shifts sibling nodes, and a
+  // zero count still renders a stable "0" rather than collapsing the badge.
+  it("gives each count badge tabular-nums and a reserved width", () => {
+    render(
+      <PipelineOverview
+        counts={{ capture: 0, triage: 3, plan: 1, execute: 0, review: 5 }}
+        onDrill={() => {}}
+      />,
+    );
+
+    const badge = screen.getByTestId("pipeline-overview-count-triage");
+    expect(badge).toHaveClass("tabular-nums");
+    expect(badge).toHaveClass("min-w-[2ch]");
+
+    const zeroBadge = screen.getByTestId("pipeline-overview-count-execute");
+    expect(zeroBadge).toHaveClass("tabular-nums");
+    expect(zeroBadge).toHaveClass("min-w-[2ch]");
+    expect(zeroBadge).toHaveTextContent("0");
+  });
 });

@@ -216,6 +216,28 @@ describe("ReEntryRitual", () => {
     ).not.toBeInTheDocument();
   });
 
+  // SP-3 numeric steadiness: absence days, the three count pills, and the
+  // stalest-item age must not jiggle, so each renders with tabular figures.
+  it("renders absence days, count pills, and stalest age with tabular-nums", () => {
+    renderRitual();
+
+    expect(screen.getByText("Welcome back — 5 days away.")).toHaveClass(
+      "tabular-nums",
+    );
+    expect(screen.getByTestId("re-entry-ritual-count-lapsed")).toHaveClass(
+      "tabular-nums",
+    );
+    expect(screen.getByTestId("re-entry-ritual-count-triage")).toHaveClass(
+      "tabular-nums",
+    );
+    expect(screen.getByTestId("re-entry-ritual-count-active")).toHaveClass(
+      "tabular-nums",
+    );
+    expect(screen.getByTestId("re-entry-ritual-stalest")).toHaveClass(
+      "tabular-nums",
+    );
+  });
+
   it("zero-red guard: no destructive class and no guilt language", () => {
     renderRitual({
       outcomes: [

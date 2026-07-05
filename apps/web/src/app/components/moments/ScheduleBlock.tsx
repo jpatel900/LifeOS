@@ -91,7 +91,7 @@ export function ScheduleBlock({ block, timeDisplay, now }: ScheduleBlockProps) {
           </span>
         ) : isNow ? (
           <span
-            className="rounded-full px-2 py-0.5 text-xs font-semibold"
+            className="rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums"
             style={{
               background: "color-mix(in oklch, var(--acc) 18%, transparent)",
               color: "var(--acc)",
@@ -101,7 +101,7 @@ export function ScheduleBlock({ block, timeDisplay, now }: ScheduleBlockProps) {
             {timeColumnLabel(block, timeDisplay, now)}
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {timeColumnLabel(block, timeDisplay, now)}
           </span>
         )}

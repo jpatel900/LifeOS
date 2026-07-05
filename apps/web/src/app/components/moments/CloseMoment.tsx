@@ -100,7 +100,7 @@ export function CloseMoment({
           </CardHeader>
           <CardContent className="grid gap-1 pt-0">
             <p className="text-sm font-medium">{vm.tomorrowFirstMove.title}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs tabular-nums text-muted-foreground">
               {vm.tomorrowFirstMove.why} · {vm.tomorrowFirstMove.areaLabel} ·{" "}
               {vm.tomorrowFirstMove.estMinutes} min
             </p>

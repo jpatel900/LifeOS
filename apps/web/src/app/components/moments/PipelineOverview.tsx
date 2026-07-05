@@ -44,7 +44,7 @@ export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
           >
             <span>{STAGE_LABELS[stage]}</span>
             <span
-              className="grid size-5 place-items-center rounded-full bg-muted text-[0.7rem] font-semibold text-muted-foreground"
+              className="grid size-5 min-w-[2ch] place-items-center rounded-full bg-muted text-[0.7rem] font-semibold tabular-nums text-muted-foreground"
               data-testid={`pipeline-overview-count-${stage}`}
             >
               {counts[stage] ?? 0}
