@@ -326,6 +326,31 @@ Assertions:
 - no unsupported external action is suggested as already done
 - ambiguous planning output includes a review trigger and what-not-to-do-yet guidance
 
+### 8.1 Context-assembly charter/profile fixtures (NS-INV-1, slice S2)
+
+Per-area fixtures exercise the single context-assembly choke point
+(`apps/web/src/lib/ai/contextAssembly.ts`) with charter and operator-profile
+context present and absent. Structural expectations only — never assert exact
+prompt wording beyond the presence/absence markers below.
+
+Fixtures:
+
+1. area context, charter absent (empty/whitespace/null)
+2. area context, charter present on one area
+3. operator profile absent
+4. operator profile present (profile text and/or compensation rules)
+
+Assertions:
+
+- empty charter AND empty profile => assembled messages are byte-identical to
+  the pre-slice baseline (parity is proven, not eyeballed)
+- a present charter adds an "Area charters:" block scoped to the chartered
+  area's slug; areas without a charter never appear in that block
+- a present operator profile adds an "Operator profile:" block; each
+  compensation rule renders its trait and rule
+- the system prompt and `prompt_version` are unchanged whether or not charter
+  or profile context is supplied
+
 ## 9. Manual Test Checklist
 
 Before using real production calendar:

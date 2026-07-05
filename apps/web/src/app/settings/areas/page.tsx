@@ -26,8 +26,10 @@ import { saveModeLabel } from "../../../lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { AreaCharterPanel } from "./AreaCharterPanel";
 import { DataExportPanel } from "./DataExportPanel";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
+import { OperatorProfilePanel } from "./OperatorProfilePanel";
 import { AREA_COLOR_PRESETS, buildAreaAccentStyle } from "@/lib/areaAccent";
 import { AreaAccentPicker } from "./AreaAccentPicker";
 
@@ -845,6 +847,14 @@ export default function AreasSettingsPage() {
           </p>
         </Alert>
       ) : null}
+
+      <DiagnosticsDisclosure title="Area charters" contentClassName="mt-4">
+        <AreaCharterPanel />
+      </DiagnosticsDisclosure>
+
+      <DiagnosticsDisclosure title="Operator profile" contentClassName="mt-4">
+        <OperatorProfilePanel />
+      </DiagnosticsDisclosure>
 
       <DiagnosticsDisclosure
         title="Google Calendar admin"

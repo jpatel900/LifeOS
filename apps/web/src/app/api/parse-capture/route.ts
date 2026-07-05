@@ -56,18 +56,68 @@ function parseRequestBody(body: unknown) {
       throw new Error("areaContext entries require slug and name.");
     }
 
-    const area = item as Record<string, string>;
+    const area = item as Record<string, unknown>;
+    // charterText is optional personalization consumed by the NS-INV-1
+    // context-assembly module; a missing/blank charter leaves the prompt
+    // byte-identical to baseline (issue #254).
+    const charterText =
+      typeof area.charterText === "string" ? area.charterText : null;
     return {
-      slug: area.slug,
-      name: area.name,
+      slug: area.slug as string,
+      name: area.name as string,
+      charterText,
     };
   });
+
+  const operatorProfile = parseOperatorProfile(record.operatorProfile);
 
   return {
     rawText: record.rawText.trim(),
     areaContext,
+    operatorProfile,
     parserMode,
   };
+}
+
+function parseOperatorProfile(value: unknown) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value !== "object") {
+    throw new Error("operatorProfile must be an object when provided.");
+  }
+
+  const record = value as Record<string, unknown>;
+  const profileText =
+    typeof record.profileText === "string" ? record.profileText : null;
+
+  let compensationRules: { trait: string; rule: string }[] | null = null;
+  if (record.compensationRules !== undefined) {
+    if (!Array.isArray(record.compensationRules)) {
+      throw new Error(
+        "operatorProfile.compensationRules must be an array when provided.",
+      );
+    }
+
+    compensationRules = record.compensationRules.map((entry) => {
+      if (
+        !entry ||
+        typeof entry !== "object" ||
+        typeof (entry as Record<string, unknown>).trait !== "string" ||
+        typeof (entry as Record<string, unknown>).rule !== "string"
+      ) {
+        throw new Error(
+          "operatorProfile.compensationRules entries require trait and rule.",
+        );
+      }
+
+      const rule = entry as Record<string, string>;
+      return { trait: rule.trait, rule: rule.rule };
+    });
+  }
+
+  return { profileText, compensationRules };
 }
 
 function safeParserFailureMessage(status: ParseCaptureRuntimeStatus) {
