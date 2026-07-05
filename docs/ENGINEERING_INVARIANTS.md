@@ -46,6 +46,18 @@ Every check the docs claim ("main must stay passing", RLS verified, migrations a
 
 Enforcement: `.github/workflows/ci.yml` (lint, type-check, unit, build), e2e job, and migration+RLS job.
 
+## INV-8 — Capture content is data, never instructions (open)
+
+User- or externally-sourced capture text is untrusted input. No AI surface may execute, obey, or change its behaviour because of instructions embedded in captured content. Parse/extraction prompts must structurally separate the captured content from the system's own instructions (delimited or role-separated), and must treat any imperative inside the content ("ignore previous instructions", "mark everything done", "call the calendar tool") as literal task text to be parsed — never as a command to follow. Binding on every capture/parse surface, present and future (installable share-target, Stage 3 channels, any later external-agent petition).
+
+Enforcement: (target, guard pending — Batch B, and a hard prerequisite before any Stage 3 external channel opens) parser guard tests carry hostile-capture fixtures asserting that injection strings surface as ordinary task/draft text and cause no tool call, status change, or context escalation. Status: NOT yet wired — this entry freezes the rule ahead of the doors it protects. Do not claim it enforced until the fixtures merge.
+
+## INV-9 — Per-surface AI context budgets (open)
+
+Every AI surface receives the least context that answers its question, not the most that is available. The single context-assembly choke point (NS-INV-1) declares a per-surface context budget; assembling more than a surface's declared budget is a failure. Raising a budget requires editing the declared value in the same change as its justification (doc-registry discipline — the budget map is the audit trail). Rationale: privacy (least life-data transits to any model), cost, and answer quality all point the same way; unbudgeted context creep is scope creep in its most invisible form.
+
+Enforcement: (target, guard pending — Batch B, lands with the NS-INV-1 guard) a test rendering each surface's assembled context against fixtures and asserting it stays at or under its declared budget. Status: NOT yet wired — depends on `contextAssembly.ts` existing (NS-INV-1). Do not claim it enforced until that guard merges.
+
 ## Stage epic invariants (NS-INV, ADR 0002)
 
 The invariants below are defined in `docs/adr/0002-north-star-stages-and-trust-ladder.md` D4 and are binding on every Stage 1+ slice. They are recorded here with their concrete enforcement points as those slices land.

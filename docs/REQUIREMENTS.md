@@ -651,6 +651,154 @@ FR-031 is reserved for the task-map contract plan (progression-map / breakdown w
 
 ---
 
+### FR-032 (reservation) — Initiative Ladder
+
+**Priority:** SHOULD
+
+**Stage:** Doctrine reservation now; I2+ code is Stage 3+.
+
+Rationale: the trust ladder (ADR 0002 D1) governs what the system may _do_; nothing yet governs when it may _speak_. Attention is the scarcest resource in the dyad, and every proactive surface (brief, aging nudges, recovery proposals, future Hermes presence, future notifications) draws on one unpriced account. Interruption rights must be earned the same way autonomy is.
+
+Acceptance criteria (reservation-grade — this entry freezes the model; per-rung code lands later):
+
+- Interruption rights form a ladder parallel to the trust ladder: **I0** answers only when asked; **I1** surfaces only at user-initiated moments (Start / Flow / Close, the brief); **I2** may interject mid-day within an explicit budget (default max 1/day) for evidence-strong classes only; **I3** may initiate outside the app (notification, channel).
+- Every proactive surface declares an initiative class. **Through Stage 2, nothing exceeds I1** (hard cap).
+- I2 unlocks at Stage 3; I3 at Stage 4, per-class, graduated on accumulated acceptance (e.g. ≥ 20 I2 acceptances, dismiss-rate < 20%, shadow-rehearsed first) and **demoted automatically** on dismissal spikes (e.g. 3 dismissals of a class in 7 days → drop one rung, cooldown before re-eligibility).
+- The FR-019 "notifications" non-goal is hereby reframed as **I1-capped until graduation**, not a permanent never. Any future notification/Hermes surface must cite this FR and its rung.
+
+Non-goals (binding):
+
+- Any I2+ surface before the Stage 3 gate.
+- Exempting any proactive surface (delight, health, Hermes) from the ladder.
+- Engagement-driven interruption (variable-reward timing, streak pressure) — see permanent non-goals.
+
+---
+
+### FR-033 (reservation) — Purpose Gauge
+
+**Priority:** SHOULD
+
+**Stage:** Stage 2.
+
+Rationale: the system's purpose is anxiety reduction, yet every metric it holds (throughput, override rate, re-entry latency) is a _proxy_ for calm. Optimizing proxies of calm can diverge from calm itself (Goodhart). The system's one true variable should be observable, honestly, so a stage that improves throughput but not calm can be seen to be failing its purpose.
+
+Acceptance criteria:
+
+- At Close (I1, never interruptive), occasionally — sampled, at most ~4×/month, never daily — one optional tap: "how did today sit with you?" on a 3-point scale (lighter / even / heavier).
+- Skippable forever with no consequence; no streak; a skipped or absent check is never counted, shown, or treated as signal (sanctuary-compatible, FR-034).
+- The only consumers are the Mirror (a trend line placed _against_ the proxy gauges) and stage-gate reviews. It never enters AI prompt context.
+
+Non-goals (binding):
+
+- Expanding the scale beyond 3 points or the frequency beyond monthly sampling without an owner ADR.
+- Sentiment analysis or mood tracking (stays in the graveyard — this is a compass check, not a diary).
+- Feeding the gauge into any automated proposal or recalibration.
+
+---
+
+### FR-034 (reservation) — Sanctuary (what the system must not see)
+
+**Priority:** SHOULD
+
+**Stage:** Doctrine now; the sanctuary mark is a small Stage 2 build.
+
+Rationale: a life-operating system's terminal failure mode is totalization — treating a life as its captured portion, an unrecorded span as an empty one. Guaranteed blind spots are what make full capture _safe_: the operator can give the system the whole workload precisely because it has no appetite for the whole self.
+
+Acceptance criteria:
+
+- **Absence of data is never evidence.** No surface, metric, brief, or AI prompt may treat uncaptured time as idle, wasted, or missing. Mirror inflow gauges measure the _system's_ health, never the person's.
+- **Off-the-record is a first-class mark** on areas, days, or captures: excluded from all AI context (the INV-9 hard floor), and exempt from every aging, compost, rollup, and person-side Mirror computation. One shared exclusion predicate applied everywhere, fixture-proven — a sanctuary row reaches no prompt, draft, or scan.
+- **The system never solicits more visibility.** Prompts of the form "you haven't logged X lately" are prohibited at every initiative rung. Coverage expands only when the operator volunteers it.
+
+Non-goals (binding):
+
+- Softening the no-solicitation rule for "helpful" cases — that _is_ the rule.
+- Any analytics that infer over sanctuary-marked or uncaptured spans.
+
+---
+
+### FR-035 (reservation) — Closure Ritual (dignified endings)
+
+**Priority:** SHOULD
+
+**Stage:** With the wins/rollup era (S7/S8-adjacent).
+
+Rationale: the one-in-one-out load rule has no graceful exit; today projects and areas end by silent abandonment, which is exactly how guilt accretes. Quitting well is a skill the operator's profile records as never taught; the system can make it a ceremony instead of a shame.
+
+Acceptance criteria:
+
+- Closure is an explicit, operator-initiated operation on any project or area: an AI-drafted post-mortem (what it was for, what got done, wins extracted to the log, one lessons line to the chronicle), one-pass approved.
+- Terminal status is a binary choice: **COMPLETE** (it did its job) or **RELEASED** (we chose to stop). The status **"failed" does not exist** — the distinction is the feature. Archive follows.
+
+Non-goals (binding):
+
+- Auto-running closure (always operator-initiated).
+- Any penalty, score, or "abandoned" framing.
+
+---
+
+### FR-036 (reservation) — Compost (guilt-free capture aging)
+
+**Priority:** SHOULD
+
+**Stage:** Stage 1-adjacent / Stage 2.
+
+Rationale: refusal's gentle twin at the inbox. The same operator trait that makes WIP refusal necessary (FR-022) makes inbox dread real: aged captures become guilt objects, and inbox-guilt kills the capture habit (the predecessor system's death spiral). Capture ubiquity (FR-027) is only safe at volume if aging is guilt-free.
+
+Acceptance criteria:
+
+- Untriaged captures older than a threshold (default 14 days, config not prompt) move to status `composted` (additive) — a searchable, tagged archive, with explicitly blame-free copy ("kept, findable, owes you nothing").
+- Close shows a one-line compost count for the period, never a list. Resurrection is one tap (search → re-capture).
+
+Non-goals (binding):
+
+- Any listed backlog, badge, or unread count of composted items.
+- Treating a composted capture as a missed task (it was a thought, not a commitment).
+
+---
+
+### FR-037 (reservation) — Adaptive Surface Area (rupture protocol)
+
+**Priority:** SHOULD
+
+**Stage:** Stage 2 (needs surfaces to hide — after the moments shell + S5–S9).
+
+Rationale: the deep failure mode of every productivity system is the spiral — absence → guilt → avoidance → abandonment. Re-Entry Amnesty (FR-028) forgives the _user_ on return; nothing yet changes the _system's_ posture. Usage earned the system's complexity; disuse should shrink it. The message: the system re-earns the operator, not the reverse.
+
+Acceptance criteria:
+
+- On rupture (no meaningful activity ≥ 7 days, or a dismissal spike across proactive surfaces), the app reduces its own visible surface to a **minimal face**: capture + one focus item + one 2-minute first move + the re-entry ritual. Everything else is hidden, not removed; all data persists.
+- Hidden surfaces return progressively as their underlying feature is re-used once; a single always-visible "show me everything" affordance restores full immediately (fallibility axiom — visible exit).
+- Blame-free, system-owns-it copy; no summary of what was missed on the minimal face. Respects pre-declared absences and sanctuary (FR-034).
+
+Non-goals (binding):
+
+- Deleting or archiving data on rupture.
+- Any missed-item count on the minimal face.
+- Triggering on an operator-declared away period.
+
+---
+
+### FR-038 (reservation) — Portable Life Archive (extends FR-016)
+
+**Priority:** SHOULD
+
+**Stage:** Now or Stage 2 (extends the existing export).
+
+Rationale: exit-anxiety is anxiety; the system's own doctrine (reversible, non-hostage) must apply at the largest scale — LifeOS may never hold the operator hostage, including to itself. Cheap exit keeps every other promise honest.
+
+Acceptance criteria:
+
+- Extends FR-016: in addition to the JSON export, a human-readable archive — markdown per area/charter, plus the structured tables — generated on demand into an export directory.
+- The archive format is documented as **perimeter-contract v1**: the Operator Profile export (Hermes) and any future designated-person slice are defined as _filtered slices of this one format_, never bespoke artifacts and never direct DB access.
+
+Non-goals (binding):
+
+- A second export mechanism that diverges from FR-016's coverage guarantees (INV-2 still governs table coverage).
+- Any archive path that can include secrets or token material (FR-016's exclusion list holds).
+
+---
+
 ### Constraint Layer — Deferred Capabilities
 
 The following feel productive to build and are explicitly deferred (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires reopening this section first.
@@ -758,6 +906,15 @@ V1 will not include:
 - vector search
 - multi-agent runtime
 - public SaaS billing
+
+### Permanent non-goals (binding beyond V1 — the graveyard)
+
+These do not expire with V1; building any requires reopening this section first (per the constraint-over-capability axiom):
+
+- **Visibility solicitation** — the system never asks the operator to log, explain, or account for uncaptured time (FR-034).
+- **Engagement-bait copy or mechanics** — variable-reward timing, streak-as-guilt, manipulative nudging. Delight, if built, must be true (evidence-generated), rare, and budgeted on the initiative ladder (FR-032).
+- **Health scores / quantified-self** — any wearable or health data enters as one-way capture rendered as day-condition "weather" only; no scores, streaks, optimization loops, or health advice.
+- **Household / multi-person management** — one dyad per spine. Other people interact with the _perimeter_ (their requests enter as captures; visibility scoped to commitments that name them); LifeOS never becomes a household-management or anyone-else's-time surface. A second person gets a second spine.
 
 ## 5. Requirement Risk Review
 
