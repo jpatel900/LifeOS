@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import { DemoModeBanner } from "./DemoModeBanner";
 
 function AdminShell({ children }: { children: ReactNode }) {
   return (
@@ -48,6 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       disableTransitionOnChange
     >
       <WorkflowProvider>
+        <DemoModeBanner />
         {isAdmin ? (
           <AdminShell>{children}</AdminShell>
         ) : isLogin ? (
