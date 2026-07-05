@@ -466,6 +466,18 @@ Status: not yet implemented. All additive per NS-INV-2; no new tables.
 
 WIP enforcement (FR-022) adds no columns: the committed-for-execution count is derived from existing scheduling/execution state, and refusals/swaps are recorded through the section 5 suggestion/override vocabulary with stable policy ids (`wip_enforcement.v1`, `dod_cap.v1`).
 
+### 4.15 Daily-driver floor — additive target shapes (FR-027..FR-030)
+
+Status: not yet implemented. All additive per NS-INV-2; no new tables preferred — re-entry events ride the existing section 5 suggestion/override vocabulary rather than a dedicated table.
+
+| Table         | Column            | Type                           | Notes                                                                                                                       |
+| ------------- | ----------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| capture_items | client_capture_id | text nullable, unique per user | FR-027; client-generated id set by the offline queue so a reconnect-triggered sync is idempotent (dedupes replayed inserts) |
+
+`re_entry.v1` (FR-028) is recorded through the existing section 5 suggestion/override record vocabulary — the absence, each auto-deferral, and the single recovery-proposal's resolution are logged with that policy id; no new column or table is added for it. Auto-deferral itself is a status transition on the existing scheduled-block state (no new column beyond what scheduling already tracks), reversible and enumerated in the "while you were out" summary per FR-028.
+
+FR-029 (persistence truth + session longevity) and FR-030 (provider canary + mock-first auto-degrade) add no schema: FR-029 reuses the existing `provider === "mock"` signal (section 6 health tables / `workflow.ts`) and the Supabase client's own session store; FR-030 reads the existing `ai_call_traces` table (`latency_ms`, `status`) added for the constraint layer's parse-service instrumentation and writes no new columns.
+
 ## 5. Meta-Learning Tables
 
 ### 5.1 `priority_profiles`
