@@ -1,6 +1,6 @@
 # ADR 0004 — Coherence Framework: registries, guards, and the STOP-and-surface rule
 
-- **Status:** Proposed (owner sign-off pending; framework ratified as a plan 2026-07-05, this ADR is its durable home)
+- **Status:** Accepted (owner sign-off 2026-07-05)
 - **Date:** 2026-07-05
 - **Deciders:** jpatel900 (owner), coherence architect session
 - **Amends:** ADR 0002 (trust ladder), ADR 0003 (moments architecture); extends `docs/ENGINEERING_INVARIANTS.md`, `CONTRACT_REVIEW_CHECKLIST`, the stage-contract-authoring skill
