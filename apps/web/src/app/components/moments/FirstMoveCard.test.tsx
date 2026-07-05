@@ -57,6 +57,22 @@ describe("FirstMoveCard", () => {
     expect(onSwap).toHaveBeenCalledTimes(1);
   });
 
+  // SP-3 numeric steadiness: the estimated-minutes eyebrow must not jiggle,
+  // so it renders with tabular figures.
+  it("renders the estMinutes eyebrow with tabular-nums", () => {
+    render(
+      <FirstMoveCard
+        move={makeMove()}
+        onStart={vi.fn()}
+        onSnooze={vi.fn()}
+        onSwap={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/First move · 25 min · Work/)).toHaveClass(
+      "tabular-nums",
+    );
+  });
+
   it("renders followOn only when present", () => {
     const { rerender } = render(
       <FirstMoveCard

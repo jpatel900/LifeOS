@@ -115,7 +115,7 @@ export function ProgressionRail({ nodes, onExpand }: ProgressionRailProps) {
       <ul className="flex flex-wrap items-center gap-2">
         {leadingFoldCount > 0 ? (
           <li
-            className="text-xs text-muted-foreground"
+            className="text-xs tabular-nums text-muted-foreground"
             data-testid="progression-rail-fold-done"
           >
             +{leadingFoldCount} done
@@ -128,7 +128,7 @@ export function ProgressionRail({ nodes, onExpand }: ProgressionRailProps) {
           <li>
             <button
               type="button"
-              className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+              className="text-xs font-medium tabular-nums text-muted-foreground underline-offset-2 hover:underline"
               onClick={handleExpand}
               data-testid="progression-rail-fold-steps"
             >

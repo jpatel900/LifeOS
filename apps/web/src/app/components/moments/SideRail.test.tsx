@@ -41,4 +41,13 @@ describe("SideRail", () => {
     fireEvent.click(screen.getByTestId("side-rail-open-health"));
     expect(onOpenHealth).toHaveBeenCalledTimes(1);
   });
+
+  // SP-3 numeric steadiness: the days-waiting figure must not jiggle as it
+  // changes, so it renders with tabular figures.
+  it("renders the days-waiting figure with tabular-nums", () => {
+    render(
+      <SideRail waitingOn={WAITING} areas={AREAS} onOpenHealth={vi.fn()} />,
+    );
+    expect(screen.getByText("8d")).toHaveClass("tabular-nums");
+  });
 });

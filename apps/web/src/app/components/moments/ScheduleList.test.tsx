@@ -83,4 +83,26 @@ describe("ScheduleList", () => {
     render(<ScheduleList blocks={[]} timeDisplay="clock" now={NOW} />);
     expect(screen.getByTestId("schedule-list-empty")).toBeInTheDocument();
   });
+
+  // SP-3 numeric steadiness: the now-row's remaining-time pill and the
+  // upcoming-row's countdown label must not jiggle, so both render with
+  // tabular figures.
+  it("renders the now pill and upcoming countdown label with tabular-nums", () => {
+    render(<ScheduleList blocks={BLOCKS} timeDisplay="countdown" now={NOW} />);
+    const rows = screen.getAllByTestId("schedule-block");
+
+    const nowRow = rows.find((row) => row.getAttribute("data-state") === "now");
+    const nowPill = nowRow!.querySelector(
+      '[data-testid="schedule-block-pill"]',
+    );
+    expect(nowPill).toHaveClass("tabular-nums");
+
+    const upcomingRow = rows.find(
+      (row) => row.getAttribute("data-state") === "upcoming",
+    );
+    const label = upcomingRow!.querySelector(
+      ".shrink-0 span.text-xs.text-muted-foreground",
+    );
+    expect(label).toHaveClass("tabular-nums");
+  });
 });

@@ -50,7 +50,7 @@ export function DriftRecoveryCard({
         >
           Drift recovery
         </p>
-        <h2 className="workflow-surface-title">{headline}</h2>
+        <h2 className="workflow-surface-title tabular-nums">{headline}</h2>
         {reasonLine ? (
           <p className="text-sm text-muted-foreground">{reasonLine}</p>
         ) : null}

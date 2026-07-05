@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
@@ -919,5 +920,33 @@ describe("TodayMoments — P6 deep-link shims", () => {
 
     // Ritual completed — the deferred deep link now applies.
     expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+  });
+
+  // SP-3 numeric steadiness: the toast slot is always mounted (fixed
+  // positioning, out of normal flow) so a toast appearing/disappearing never
+  // reflows the document. This is a structural class assertion, not a pixel
+  // measurement — jsdom does not apply Tailwind's stylesheet, so asserting
+  // computed `position` would be meaningless; the `fixed` class itself is
+  // the durable contract. The container node is asserted `fixed` both before
+  // and after a real toast mounts inside it, proving the same out-of-flow
+  // node hosts the content rather than a fresh in-flow element appearing.
+  it("toast slot is fixed-positioned so mounting a toast never reflows the page", () => {
+    renderToday({ initialMoment: "start" });
+
+    const toast = screen.getByTestId("today-moments-toast");
+    expect(toast).toHaveClass("fixed");
+    expect(toast.textContent).toBe("");
+
+    fireEvent.keyDown(window, { key: "c" });
+    fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+      target: { value: "Follow up with Alex about the contract" },
+    });
+    fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
+      key: "Enter",
+    });
+
+    const toastAfter = screen.getByTestId("today-moments-toast");
+    expect(toastAfter).toHaveClass("fixed");
+    expect(within(toastAfter).getByText("Captured")).toBeInTheDocument();
   });
 });

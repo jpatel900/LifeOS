@@ -40,7 +40,7 @@ export function FirstMoveCard({
       data-testid="first-move-card"
     >
       <CardContent className="grid gap-3 p-5 sm:p-6">
-        <p className="workflow-page-eyebrow m-0">
+        <p className="workflow-page-eyebrow m-0 tabular-nums">
           First move · {move.estMinutes} min · {move.areaLabel}
         </p>
         <h2 className="workflow-surface-title">{move.title}</h2>

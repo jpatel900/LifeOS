@@ -76,6 +76,15 @@ describe("DriftRecoveryCard", () => {
     expect(onAbandon).toHaveBeenCalledTimes(1);
   });
 
+  // SP-3 numeric steadiness: the drift-minutes headline must not jiggle, so
+  // it renders with tabular figures.
+  it("renders the drift-minutes headline with tabular-nums", () => {
+    render(<DriftRecoveryCard drift={{ minutes: 12 }} onReclaim={() => {}} />);
+    expect(screen.getByText("You drifted for ~12 minutes.")).toHaveClass(
+      "tabular-nums",
+    );
+  });
+
   it("contains no banned words and no destructive class", () => {
     render(
       <DriftRecoveryCard

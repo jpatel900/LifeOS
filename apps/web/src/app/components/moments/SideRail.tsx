@@ -48,7 +48,7 @@ export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
                 >
                   <span className="min-w-0 truncate">{entry.title}</span>
                   <span
-                    className="shrink-0 text-xs font-semibold"
+                    className="shrink-0 text-xs font-semibold tabular-nums"
                     style={{ color: WAITING_STATUS_VAR[entry.status] }}
                   >
                     {entry.daysWaiting}d
