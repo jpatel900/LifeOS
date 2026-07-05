@@ -250,6 +250,59 @@ describe("useFocusSession", () => {
       });
     });
 
+    // Regression guard: an earlier draft of this packet stopped scheduling
+    // entirely once a pending setTimeout fired while hidden and bailed out —
+    // the visibilitychange handler recomputed the value once on return, but
+    // no further ticks ever followed because the tick effect's dependency
+    // list didn't change when visibility flipped back. This models exactly
+    // that sequence (hidden -> a background timer fires -> visible again)
+    // and asserts a SUBSEQUENT tick still lands, not just the one-time
+    // recompute on return.
+    it("resumes ticking after a hidden span even if a pending timeout fires while hidden", () => {
+      const clock = makeClock(1_700_000_000_000);
+      const { result } = renderHook(() => useFocusSession({ now: clock.now }), {
+        wrapper,
+      });
+
+      act(() => {
+        result.current.start("task-1", 10); // 600s
+      });
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => true,
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // A pending timeout fires WHILE hidden (background tab throttling).
+      clock.advance(1000);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => false,
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      clock.advance(1000);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      expect(result.current.remaining).toBe(600 - 2);
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => false,
+      });
+    });
+
     it("pause -> resume elapsed time is correct across a paused span", () => {
       const clock = makeClock(1_700_000_000_250);
       const { result } = renderHook(() => useFocusSession({ now: clock.now }), {

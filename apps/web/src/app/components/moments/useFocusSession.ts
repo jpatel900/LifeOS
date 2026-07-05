@@ -64,6 +64,14 @@ export function useFocusSession(
   const [running, setRunning] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [total, setTotal] = useState(0);
+  // Mirrors document.hidden. Lifted into state (rather than read ad hoc
+  // inside the scheduling loop) so becoming visible again is a dependency
+  // change that re-runs the tick effect below — that is what restarts
+  // scheduling after a hidden span, instead of leaving the setTimeout chain
+  // permanently dead once it bails out once while hidden.
+  const [hidden, setHidden] = useState(
+    () => typeof document !== "undefined" && document.hidden,
+  );
 
   // Anchor: the epoch-ms timestamp at which the running countdown reaches
   // zero, given the `remaining` value in effect when ticking last (re)armed
@@ -85,19 +93,35 @@ export function useFocusSession(
   }
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    function handleVisibilityChange() {
+      setHidden(document.hidden);
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
     if (!running || remaining <= 0) return;
+
+    if (hidden) {
+      // Tab hidden: stop scheduling ticks entirely (battery + honesty). No
+      // timeout is armed while hidden; becoming visible flips `hidden` to
+      // false, which re-runs this effect (see deps) and both recomputes the
+      // true value immediately and re-arms scheduling in one step.
+      return;
+    }
+
+    recompute();
 
     let timeoutId: number | undefined;
     let cancelled = false;
 
     function scheduleNext() {
       if (cancelled) return;
-      if (typeof document !== "undefined" && document.hidden) {
-        // Tab hidden: stop scheduling ticks entirely (battery + honesty).
-        // The visibilitychange handler below recomputes immediately and
-        // re-arms scheduling the instant the tab becomes visible again.
-        return;
-      }
       const delay = 1000 - (now() % 1000);
       timeoutId = window.setTimeout(() => {
         recompute();
@@ -112,22 +136,7 @@ export function useFocusSession(
       if (timeoutId !== undefined) window.clearTimeout(timeoutId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running, remaining <= 0]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    function handleVisibilityChange() {
-      if (!document.hidden && running) {
-        recompute();
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [running]);
+  }, [running, remaining <= 0, hidden]);
 
   useEffect(() => {
     if (running && remaining === 0 && activeTaskId) {
