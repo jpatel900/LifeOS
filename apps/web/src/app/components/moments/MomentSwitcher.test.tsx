@@ -35,4 +35,24 @@ describe("MomentSwitcher", () => {
     expect(screen.getByRole("tablist")).toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(3);
   });
+
+  // SP-4: quick color transitions use the fast motion token and fall back
+  // to no motion for prefers-reduced-motion users.
+  it("tabs use the fast motion token with a reduced-motion fallback", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const tab = screen.getByTestId("moment-switcher-flow");
+    expect(tab).toHaveClass("duration-[var(--motion-fast)]");
+    expect(tab).toHaveClass("ease-[var(--motion-ease)]");
+    expect(tab).toHaveClass("motion-reduce:transition-none");
+    expect(tab).toHaveClass("motion-reduce:duration-0");
+  });
+
+  // SP-9: tabs reach a >=44px effective hit area and drop the 300ms
+  // double-tap delay on coarse pointers.
+  it("tabs carry hit-area and touch-manipulation utilities", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const tab = screen.getByTestId("moment-switcher-flow");
+    expect(tab).toHaveClass("min-h-[44px]");
+    expect(tab).toHaveClass("touch-manipulation");
+  });
 });

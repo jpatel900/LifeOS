@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatClock } from "./formatTime";
+import { HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -79,7 +80,10 @@ export function CurrentBlockHero({
             <button
               type="button"
               onClick={onToggleTime}
-              className="text-3xl font-semibold tabular-nums tracking-tight"
+              className={cn(
+                HIT_TARGET_ROW,
+                "flex items-center text-3xl font-semibold tabular-nums tracking-tight",
+              )}
               data-testid="current-block-hero-time"
             >
               until {clockEndLabel(remaining)}
@@ -89,7 +93,8 @@ export function CurrentBlockHero({
               type="button"
               onClick={onToggleTime}
               className={cn(
-                "text-3xl font-semibold tabular-nums tracking-tight",
+                HIT_TARGET_ROW,
+                "flex items-center text-3xl font-semibold tabular-nums tracking-tight",
                 warn && "text-[color:var(--state-warn)]",
               )}
               data-testid="current-block-hero-time"
@@ -123,7 +128,7 @@ export function CurrentBlockHero({
             type="button"
             variant="default"
             onClick={onDone}
-            className="gap-2"
+            className="min-h-[44px] touch-manipulation gap-2"
             data-testid="current-block-hero-done"
           >
             Done — log it
@@ -136,6 +141,7 @@ export function CurrentBlockHero({
             variant="ghost"
             size="sm"
             onClick={onPause}
+            className="min-h-[44px] touch-manipulation"
             data-testid="current-block-hero-pause"
           >
             {running ? "Pause" : "Resume"}
@@ -145,6 +151,7 @@ export function CurrentBlockHero({
             variant="ghost"
             size="sm"
             onClick={() => onExtend(25)}
+            className="min-h-[44px] touch-manipulation"
             data-testid="current-block-hero-extend"
           >
             +25 min

@@ -2,8 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
+import { HIT_TARGET_INVISIBLE } from "./hitTarget";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -68,8 +70,11 @@ export function MomentSheet({
       data-testid="moment-sheet"
     >
       <div
-        className="absolute inset-0 bg-black/40"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="absolute inset-0 bg-black/40 motion-reduce:transition-none motion-reduce:duration-0"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
         onClick={onClose}
         data-testid="moment-sheet-scrim"
       />
@@ -80,8 +85,11 @@ export function MomentSheet({
         aria-label={title}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="workflow-primary-card relative z-10 grid h-full w-full max-w-sm gap-4 overflow-y-auto border-l border-border bg-card p-5 outline-none sm:max-w-md"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="workflow-primary-card relative z-10 grid h-full w-full max-w-sm gap-4 overflow-y-auto border-l border-border bg-card p-5 outline-none motion-reduce:transition-none motion-reduce:duration-0 sm:max-w-md"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
         data-testid="moment-sheet-dialog"
       >
         <div className="flex items-center justify-between gap-3">
@@ -89,7 +97,10 @@ export function MomentSheet({
           <button
             type="button"
             onClick={onClose}
-            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+            className={cn(
+              HIT_TARGET_INVISIBLE,
+              "text-xs font-semibold text-muted-foreground hover:text-foreground",
+            )}
             data-testid="moment-sheet-close"
           >
             Close

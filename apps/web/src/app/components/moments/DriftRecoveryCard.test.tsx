@@ -99,4 +99,25 @@ describe("DriftRecoveryCard", () => {
     }
     expect(card.innerHTML).not.toMatch(/destructive/i);
   });
+
+  // SP-9: the Reclaim/Fresh-start actions reach a >=44px effective hit
+  // area and drop the 300ms double-tap delay on coarse pointers.
+  it("action buttons carry hit-area and touch-manipulation utilities", () => {
+    render(
+      <DriftRecoveryCard
+        drift={{ minutes: 5 }}
+        onReclaim={() => {}}
+        onAbandon={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("drift-recovery-reclaim")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("drift-recovery-reclaim")).toHaveClass(
+      "touch-manipulation",
+    );
+    expect(screen.getByTestId("drift-recovery-abandon")).toHaveClass(
+      "min-h-[44px]",
+    );
+  });
 });

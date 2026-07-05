@@ -150,4 +150,21 @@ describe("ProgressionRail", () => {
       screen.getByTestId("progression-node-speculative-breakdown"),
     ).toBeInTheDocument();
   });
+
+  // SP-9: the fold/collapse affordances reach a >=44px effective hit area
+  // and drop the 300ms double-tap delay on coarse pointers.
+  it("fold-steps and collapse buttons carry hit-area and touch-manipulation utilities", () => {
+    render(<ProgressionRail nodes={NODES} />);
+
+    const foldSteps = screen.getByTestId("progression-rail-fold-steps");
+    expect(foldSteps).toHaveClass("min-h-[44px]");
+    expect(foldSteps).toHaveClass("min-w-[44px]");
+    expect(foldSteps).toHaveClass("touch-manipulation");
+
+    fireEvent.click(foldSteps);
+
+    const collapse = screen.getByTestId("progression-rail-collapse");
+    expect(collapse).toHaveClass("min-h-[44px]");
+    expect(collapse).toHaveClass("touch-manipulation");
+  });
 });

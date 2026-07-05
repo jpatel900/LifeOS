@@ -20,4 +20,24 @@ describe("CountdownClockToggle", () => {
     fireEvent.click(screen.getByTestId("countdown-clock-toggle-clock"));
     expect(onChange).toHaveBeenCalledWith("clock");
   });
+
+  // SP-4: quick color transitions use the fast motion token and fall back
+  // to no motion for prefers-reduced-motion users.
+  it("segments use the fast motion token with a reduced-motion fallback", () => {
+    render(<CountdownClockToggle value="countdown" onChange={vi.fn()} />);
+    const segment = screen.getByTestId("countdown-clock-toggle-clock");
+    expect(segment).toHaveClass("duration-[var(--motion-fast)]");
+    expect(segment).toHaveClass("ease-[var(--motion-ease)]");
+    expect(segment).toHaveClass("motion-reduce:transition-none");
+    expect(segment).toHaveClass("motion-reduce:duration-0");
+  });
+
+  // SP-9: segments reach a >=44px effective hit area and drop the 300ms
+  // double-tap delay on coarse pointers.
+  it("segments carry hit-area and touch-manipulation utilities", () => {
+    render(<CountdownClockToggle value="countdown" onChange={vi.fn()} />);
+    const segment = screen.getByTestId("countdown-clock-toggle-clock");
+    expect(segment).toHaveClass("min-h-[44px]");
+    expect(segment).toHaveClass("touch-manipulation");
+  });
 });

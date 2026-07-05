@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ProgressionNode } from "./progressionNodes";
+import { HIT_TARGET_INVISIBLE } from "./hitTarget";
 
 /**
  * Moments pass P4 — packet: ProgressionRail v0.
@@ -91,7 +92,10 @@ export function ProgressionRail({ nodes, onExpand }: ProgressionRailProps) {
         </ul>
         <button
           type="button"
-          className="mt-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+          className={cn(
+            HIT_TARGET_INVISIBLE,
+            "mt-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline",
+          )}
           onClick={handleCollapse}
           data-testid="progression-rail-collapse"
         >
@@ -128,7 +132,10 @@ export function ProgressionRail({ nodes, onExpand }: ProgressionRailProps) {
           <li>
             <button
               type="button"
-              className="text-xs font-medium tabular-nums text-muted-foreground underline-offset-2 hover:underline"
+              className={cn(
+                HIT_TARGET_INVISIBLE,
+                "text-xs font-medium tabular-nums text-muted-foreground underline-offset-2 hover:underline",
+              )}
               onClick={handleExpand}
               data-testid="progression-rail-fold-steps"
             >

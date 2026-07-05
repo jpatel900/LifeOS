@@ -238,4 +238,39 @@ describe("CurrentBlockHero", () => {
       "tabular-nums",
     );
   });
+
+  // SP-9: the time toggle and the Done/Pause/Extend actions reach a
+  // >=44px effective hit area and drop the 300ms double-tap delay on
+  // coarse pointers.
+  it("time toggle and action buttons carry hit-area and touch-manipulation utilities", () => {
+    render(
+      <CurrentBlockHero
+        block={makeBlock()}
+        remaining={125}
+        total={1500}
+        running
+        timeDisplay="countdown"
+        onDone={vi.fn()}
+        onPause={vi.fn()}
+        onExtend={vi.fn()}
+        onToggleTime={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("current-block-hero-time")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("current-block-hero-time")).toHaveClass(
+      "touch-manipulation",
+    );
+    expect(screen.getByTestId("current-block-hero-done")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("current-block-hero-pause")).toHaveClass(
+      "min-h-[44px]",
+    );
+    expect(screen.getByTestId("current-block-hero-extend")).toHaveClass(
+      "min-h-[44px]",
+    );
+  });
 });

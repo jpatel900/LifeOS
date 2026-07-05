@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
@@ -41,7 +42,8 @@ export function CountdownClockToggle({
             aria-pressed={active}
             onClick={() => onChange(segment.value)}
             className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
+              HIT_TARGET_ROW,
+              "flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0",
               active
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",

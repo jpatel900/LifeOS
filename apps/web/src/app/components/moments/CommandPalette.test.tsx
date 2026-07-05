@@ -45,6 +45,31 @@ describe("CommandPalette", () => {
     ).not.toBeInTheDocument();
   });
 
+  // SP-8: the zero-matches empty state names the filling action (try a
+  // different word or clear the search) and echoes the query, instead of
+  // being a dead end, and avoids the banned dead-end phrasing.
+  it("zero-matches empty state names retrying or clearing the search as the filling action", () => {
+    render(
+      <CommandPalette
+        open
+        actions={ACTIONS}
+        onRun={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "zzz-no-match" },
+    });
+
+    const list = screen.getByTestId("command-palette-list");
+    expect(list).toHaveTextContent("zzz-no-match");
+    expect(list).toHaveTextContent("try a different word or clear the search");
+    expect(list.textContent?.toLowerCase()).not.toMatch(
+      /nothing here|empty|no data|\bnone\b/,
+    );
+  });
+
   it("moves the highlighted row with arrow keys (wrapping) and runs it on Enter", () => {
     const onRun = vi.fn();
     const onClose = vi.fn();
@@ -170,5 +195,46 @@ describe("CommandPalette", () => {
       });
       expect(input).toHaveFocus();
     });
+  });
+
+  // SP-4: motion tokens only, with reduced-motion fallbacks on every
+  // transitioned element.
+  it("scrim and dialog use motion tokens with reduced-motion fallbacks", () => {
+    render(
+      <CommandPalette
+        open
+        actions={ACTIONS}
+        onRun={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const scrim = screen.getByTestId("command-palette-scrim");
+    expect(scrim).toHaveClass("motion-reduce:transition-none");
+    expect(scrim).toHaveClass("motion-reduce:duration-0");
+    expect(scrim.style.transitionDuration).toBe("var(--motion-base)");
+    expect(scrim.style.transitionTimingFunction).toBe("var(--motion-ease)");
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("motion-reduce:transition-none");
+    expect(dialog).toHaveClass("motion-reduce:duration-0");
+    expect(dialog.style.transitionDuration).toBe("var(--motion-base)");
+  });
+
+  // SP-9: palette rows reach a >=44px effective hit area and drop the
+  // 300ms double-tap delay on coarse pointers.
+  it("option rows carry hit-area and touch-manipulation utilities", () => {
+    render(
+      <CommandPalette
+        open
+        actions={ACTIONS}
+        onRun={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByTestId("command-palette-option-capture");
+    expect(row).toHaveClass("min-h-[44px]");
+    expect(row).toHaveClass("touch-manipulation");
   });
 });

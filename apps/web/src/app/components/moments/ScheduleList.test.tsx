@@ -85,6 +85,17 @@ describe("ScheduleList", () => {
     expect(screen.getByTestId("schedule-list-empty")).toBeInTheDocument();
   });
 
+  // SP-8: the empty state names the filling action (plan a block) instead
+  // of being a dead end, and avoids the banned dead-end phrasing.
+  it("empty state names planning a block as the filling action", () => {
+    render(<ScheduleList blocks={[]} timeDisplay="clock" now={NOW} />);
+    const empty = screen.getByTestId("schedule-list-empty");
+    expect(empty).toHaveTextContent("plan a block");
+    expect(empty.textContent?.toLowerCase()).not.toMatch(
+      /nothing here|empty|no data|\bnone\b/,
+    );
+  });
+
   // SP-7: locks the ScheduleBlock -> formatTime.formatClock refactor. The
   // rendered clock label must stay byte-identical to formatClock's own
   // output for the same ISO input (this was true before the refactor too,

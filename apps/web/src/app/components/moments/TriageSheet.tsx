@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { MomentSheet } from "./MomentSheet";
+import { HIT_TARGET_INVISIBLE, HIT_TARGET_MIN } from "./hitTarget";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -55,7 +57,7 @@ export function TriageSheet({
           className="text-sm text-muted-foreground"
           data-testid="triage-sheet-empty"
         >
-          Nothing waiting in triage.
+          Nothing waiting in triage — press C to capture the first thing.
         </p>
       ) : (
         <ul className="grid gap-2" data-testid="triage-sheet-list">
@@ -70,7 +72,10 @@ export function TriageSheet({
                 <button
                   type="button"
                   onClick={() => backlogTaskDraft(draft.id)}
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-muted/60"
+                  className={cn(
+                    HIT_TARGET_MIN,
+                    "rounded-full border border-border px-3 py-1 text-xs font-semibold hover:bg-muted/60",
+                  )}
                   data-testid={`triage-sheet-accept-${draft.id}`}
                 >
                   Accept to backlog
@@ -78,7 +83,10 @@ export function TriageSheet({
                 <button
                   type="button"
                   onClick={() => rejectTaskDraft(draft.id)}
-                  className="rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted/60"
+                  className={cn(
+                    HIT_TARGET_MIN,
+                    "rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted/60",
+                  )}
                   data-testid={`triage-sheet-reject-${draft.id}`}
                 >
                   Reject
@@ -91,7 +99,10 @@ export function TriageSheet({
 
       <Link
         href="/triage"
-        className="text-sm font-semibold text-primary hover:underline"
+        className={cn(
+          HIT_TARGET_INVISIBLE,
+          "text-sm font-semibold text-primary hover:underline",
+        )}
         data-testid="triage-sheet-open-full"
       >
         Open full view →

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { MomentSheet } from "./MomentSheet";
 import { ScheduleList } from "./ScheduleList";
 import type { ScheduleBlockVM } from "./momentsViewModel";
+import { HIT_TARGET_INVISIBLE } from "./hitTarget";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -38,7 +40,10 @@ export function PlanSheet({
         <ScheduleList blocks={blocks} timeDisplay={timeDisplay} now={now} />
         <Link
           href="/calendar"
-          className="text-sm font-semibold text-primary hover:underline"
+          className={cn(
+            HIT_TARGET_INVISIBLE,
+            "text-sm font-semibold text-primary hover:underline",
+          )}
           data-testid="plan-sheet-open-full"
         >
           Open full view →

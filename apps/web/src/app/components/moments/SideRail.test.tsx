@@ -50,4 +50,25 @@ describe("SideRail", () => {
     );
     expect(screen.getByText("8d")).toHaveClass("tabular-nums");
   });
+
+  // SP-8: the waiting-empty state names the filling action (marking a task
+  // as waiting during triage) instead of being a dead end, and avoids the
+  // banned dead-end phrasing.
+  it("waiting-empty state names marking a task as waiting as the filling action", () => {
+    render(<SideRail waitingOn={[]} areas={AREAS} onOpenHealth={vi.fn()} />);
+    const empty = screen.getByTestId("side-rail-waiting-empty");
+    expect(empty).toHaveTextContent("Mark a task as waiting");
+    expect(empty.textContent?.toLowerCase()).not.toMatch(
+      /nothing here|empty|no data|\bnone\b/,
+    );
+  });
+
+  // SP-9: the "View area health" affordance reaches a >=44px effective
+  // hit area and drops the 300ms double-tap delay on coarse pointers.
+  it("open-health button carries hit-area and touch-manipulation utilities", () => {
+    render(<SideRail waitingOn={[]} areas={AREAS} onOpenHealth={vi.fn()} />);
+    const button = screen.getByTestId("side-rail-open-health");
+    expect(button).toHaveClass("min-h-[44px]");
+    expect(button).toHaveClass("touch-manipulation");
+  });
 });

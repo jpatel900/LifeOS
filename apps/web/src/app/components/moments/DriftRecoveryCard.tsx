@@ -62,7 +62,7 @@ export function DriftRecoveryCard({
           <Button
             type="button"
             onClick={onReclaim}
-            className="gap-2"
+            className="min-h-[44px] touch-manipulation gap-2"
             style={{
               background: "var(--state-warn)",
               color: "var(--primary-foreground)",
@@ -77,6 +77,7 @@ export function DriftRecoveryCard({
               variant="ghost"
               size="sm"
               onClick={onAbandon}
+              className="min-h-[44px] touch-manipulation"
               data-testid="drift-recovery-abandon"
             >
               Fresh start

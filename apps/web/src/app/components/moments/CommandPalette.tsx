@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
+import { HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -105,8 +106,11 @@ export function CommandPalette({
       data-testid="command-palette"
     >
       <div
-        className="absolute inset-0 bg-black/40"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="absolute inset-0 bg-black/40 motion-reduce:transition-none motion-reduce:duration-0"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
         onClick={onClose}
         data-testid="command-palette-scrim"
       />
@@ -115,8 +119,11 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
-        className="workflow-primary-card relative z-10 m-4 grid w-full max-w-lg gap-2 rounded-xl border border-border bg-card p-4"
-        style={{ transitionDuration: "var(--motion-base)" }}
+        className="workflow-primary-card relative z-10 m-4 grid w-full max-w-lg gap-2 rounded-xl border border-border bg-card p-4 motion-reduce:transition-none motion-reduce:duration-0"
+        style={{
+          transitionDuration: "var(--motion-base)",
+          transitionTimingFunction: "var(--motion-ease)",
+        }}
       >
         <input
           ref={inputRef}
@@ -137,7 +144,8 @@ export function CommandPalette({
         >
           {filtered.length === 0 ? (
             <li className="px-2 py-3 text-sm text-muted-foreground">
-              No matching commands.
+              No commands match &ldquo;{query}&rdquo; — try a different word or
+              clear the search.
             </li>
           ) : (
             filtered.map((action, index) => {
@@ -153,6 +161,7 @@ export function CommandPalette({
                     onClose();
                   }}
                   className={cn(
+                    HIT_TARGET_ROW,
                     "flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm",
                     active
                       ? "bg-primary text-primary-foreground"

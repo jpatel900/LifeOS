@@ -53,7 +53,7 @@ export function FirstMoveCard({
             type="button"
             variant="default"
             onClick={onStart}
-            className="gap-2"
+            className="min-h-[44px] touch-manipulation gap-2"
             data-testid="first-move-start"
           >
             Start now
@@ -66,6 +66,7 @@ export function FirstMoveCard({
             variant="ghost"
             size="sm"
             onClick={onSnooze}
+            className="min-h-[44px] touch-manipulation"
             data-testid="first-move-snooze"
           >
             Snooze 10m
@@ -75,6 +76,7 @@ export function FirstMoveCard({
             variant="ghost"
             size="sm"
             onClick={onSwap}
+            className="min-h-[44px] touch-manipulation"
             data-testid="first-move-swap"
           >
             Not this →

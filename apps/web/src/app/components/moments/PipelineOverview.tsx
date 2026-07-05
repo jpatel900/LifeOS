@@ -1,9 +1,11 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import {
   PIPELINE_OVERVIEW_STAGES,
   type PipelineOverviewStage,
 } from "./pipelineCounts";
+import { HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -39,7 +41,10 @@ export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
           <button
             type="button"
             onClick={() => onDrill(stage)}
-            className="workflow-compact-item flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60"
+            className={cn(
+              HIT_TARGET_ROW,
+              "workflow-compact-item flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60",
+            )}
             data-testid={`pipeline-overview-stage-${stage}`}
           >
             <span>{STAGE_LABELS[stage]}</span>

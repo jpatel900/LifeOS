@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
@@ -40,7 +41,8 @@ export function MomentSwitcher({ value, onChange }: MomentSwitcherProps) {
             aria-selected={selected}
             onClick={() => onChange(tab.value)}
             className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
+              HIT_TARGET_ROW,
+              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0",
               selected
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",
