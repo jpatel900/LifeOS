@@ -452,6 +452,20 @@ Purpose: user-confirmed wins harvested from completions during weekly review (FR
 
 Owner RLS (section 8). Export coverage required (INV-2).
 
+---
+
+### 4.14 Constraint layer — additive target shapes (FR-022..FR-026)
+
+Status: not yet implemented. All additive per NS-INV-2; no new tables.
+
+| Table              | Column        | Type                                              | Notes                                                                            |
+| ------------------ | ------------- | ------------------------------------------------- | -------------------------------------------------------------------------------- |
+| tasks              | is_reversible | boolean nullable                                  | FR-024; meaningful only when `task_type = 'decision'` (deadline reuses `due_at`) |
+| capture_items      | return_hook   | text nullable                                     | FR-026; what the user returns to after the capture resolves                      |
+| execution_sessions | cap_outcome   | text nullable, check in (`cut_scope`, `deferred`) | FR-025; recorded when the DoD-cap state machine fires                            |
+
+WIP enforcement (FR-022) adds no columns: the committed-for-execution count is derived from existing scheduling/execution state, and refusals/swaps are recorded through the section 5 suggestion/override vocabulary with stable policy ids (`wip_enforcement.v1`, `dod_cap.v1`).
+
 ## 5. Meta-Learning Tables
 
 ### 5.1 `priority_profiles`

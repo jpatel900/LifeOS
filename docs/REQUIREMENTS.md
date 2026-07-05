@@ -432,6 +432,122 @@ Non-goals:
 
 ---
 
+### FR-022 — WIP Enforcement
+
+**Priority:** MUST
+
+**Stage:** Constraint layer (owner-ratified 2026-07-05; lands interleaved with Stage 1 slices)
+
+Rationale: the operator's root bottleneck is over-activation, not under-capability. The predecessor system structurally could not refuse a fourth active item. Refusal is the feature.
+
+Acceptance criteria:
+
+- At most 3 tasks may hold the committed-for-execution state (scheduled into today or in-execution) at any time.
+- Attempting to activate a 4th is refused — not warned, refused. The refusal surface shows which 3 items hold the slots and offers a one-click swap (deactivate one to admit the new one).
+- Enforcement is deterministic code, not prompt behavior, and applies to every activation path (triage accept-to-today, plan scheduling, execute start).
+- Each refusal and each swap is recorded (per #235 vocabulary) so the learning loop can see over-activation pressure.
+
+Non-goals:
+
+- Configurable or per-area WIP limits (the limit is 3; changing it is a REQUIREMENTS change, not a setting).
+- Soft-warning mode.
+- Any override toggle in v1.
+
+---
+
+### FR-023 — Launch-Sequence Gate
+
+**Priority:** MUST
+
+**Stage:** Constraint layer
+
+Rationale: starting-friction compensation. A task without a physically executable opening move is a stall in waiting.
+
+Acceptance criteria:
+
+- A task cannot be scheduled (time-block proposal accepted, or added to today's committed set) unless `first_tiny_step` is populated with a sub-60-second physical first move.
+- The gate blocks with an inline prompt to write the move ("What is the under-a-minute physical move that starts this?"); AI may pre-draft it at parse time (existing `first_tiny_step` flow), but the gate validates presence and the scheduling UI displays the move at the moment of commitment.
+- The first node of any task breakdown/progression rail and `first_tiny_step` are the same fact — one field rendered in both places, never two competing values.
+
+Non-goals:
+
+- Measuring or enforcing the actual duration.
+- Gating capture or triage (the gate applies at scheduling, where commitment happens).
+
+---
+
+### FR-024 — Decision Object
+
+**Priority:** MUST
+
+**Stage:** Constraint layer
+
+Rationale: decisions loop as research when they carry no deadline and no reversibility framing. The deadline is the anti-research-loop mechanism.
+
+Acceptance criteria:
+
+- A decision is a task with `task_type = "decision"` carrying exactly: what is being decided (title), a reversibility flag (reversible / one-way door), and a decision deadline (reuses `due_at`; required for decisions).
+- The deadline surfaces in daily focus and brief exactly like a due task; a reversible decision at deadline prompts "decide now with what you know — it's reversible."
+- Closing a decision records the choice as free text.
+
+Non-goals (binding — these metastasize):
+
+- Options tables.
+- Criteria weighting or scoring matrices.
+- Research-link collections attached to decisions.
+
+---
+
+### FR-025 — DoD-Cap State Machine
+
+**Priority:** MUST
+
+**Stage:** Constraint layer
+
+Rationale: deletes "polish forever" as a reachable state.
+
+Acceptance criteria:
+
+- An execution block reaching its time cap with the task's `definition_of_done` unmet forces a binary choice: CUT SCOPE (edit the DoD down to what is true now and close done) or DEFER (explicit re-block or return to backlog, with a one-line carry note).
+- Silently continuing past the cap is not a reachable state in the execute surface.
+- The outcome (cut vs defer, plus the DoD delta when cut) is recorded per #235 vocabulary — prime learning-loop signal.
+
+Non-goals:
+
+- Auto-extension or snooze.
+- Penalty framing (caps are how work ends, not a failure).
+
+---
+
+### FR-026 — Capture Containment (AI-Wait)
+
+**Priority:** MUST
+
+**Stage:** Constraint layer — binding on every capture/parse surface, including future ones.
+
+Rationale: the standard async pattern (submit → spinner → notify-when-done → user wanders off) is a context-switch cascade generator for this operator. This requirement is deliberately counter to the default pattern any implementer would reach for. Do not normalize it back to the standard pattern.
+
+Acceptance criteria:
+
+- During a parse wait, the capture UI holds the user in context: the raw captured text remains fully visible, and a "return hook" field (one line: what you were doing before this thought interrupted, i.e. what you return to) is visible and editable while waiting.
+- A new capture cannot begin until the current one resolves (parse returns and the draft is dispatched, or the capture is saved raw). No capture queue.
+- No fire-and-forget: notify-me-later parsing is prohibited for capture. If parse exceeds its latency budget, the surface degrades synchronously (offer mock parse / save raw now) rather than going async.
+- On resolve, the return hook is displayed as the final element of the capture interaction ("back to: <hook>").
+
+Non-goals:
+
+- Background parse queues.
+- A parse notification center.
+- Making the return hook mandatory-to-submit in v1 (visible and encouraged; hard-mandatory only if decision data shows it is skipped and regretted).
+
+---
+
+### Constraint Layer — Deferred Capabilities
+
+The following feel productive to build and are explicitly deferred (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires reopening this section first.
+
+---
+
 ### Product Loop and Autonomy Boundary
 
 The V1 product loop is: capture messy input, diagnose ambiguity, bound the work, slice it into a reversible next move, discover missing information, act, and review the outcome. Requirements that support AI assistance must preserve this ambiguity-to-motion loop instead of turning LifeOS into a generic task list or autonomous agent.
