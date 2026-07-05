@@ -39,6 +39,8 @@ Pin every module path. Pin every constant.>
 
 ## Appendix D - UX flow notes
 <Flow-level only; respect mobile surface budget doctrine.>
+
+map_view: <hosting moment / state tokens / collapsed+expanded representation>
 ```
 
 ## 2. Stage epic (campaign file) skeleton
