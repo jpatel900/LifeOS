@@ -1282,17 +1282,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }> = [];
 
     for (const mention of draft.person_mentions) {
+      // role "mention" is informational only (deliverable b): it links no column
+      // and creates no person row — approval to create a person (FR-017) comes
+      // only with a waiting_on / committed_to link. Its pending suggestion is
+      // still resolved to accepted below.
       let personId: string | null = null;
-      try {
-        const personResult = await findOrCreatePerson(client, {
-          display_name: mention.name,
-          normalized_name: normalizePersonName(mention.name),
-        });
-        personId = personResult.person?.id ?? null;
-      } catch {
-        // A person find/create failure degrades this link to no-link; never
-        // block the task creation the user just approved.
-        personId = null;
+      if (mention.role === "waiting_on" || mention.role === "committed_to") {
+        try {
+          const personResult = await findOrCreatePerson(client, {
+            display_name: mention.name,
+            normalized_name: normalizePersonName(mention.name),
+          });
+          personId = personResult.person?.id ?? null;
+        } catch {
+          // A person find/create failure degrades this link to no-link; never
+          // block the task creation the user just approved.
+          personId = null;
+        }
       }
 
       if (personId) {

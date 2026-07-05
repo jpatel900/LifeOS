@@ -184,6 +184,19 @@ function PersonLinkProbe() {
       </button>
       <button
         type="button"
+        onClick={() =>
+          addParsedWorkflowResult(
+            makeParsedResult(
+              [{ name: "Sarah", role: "mention", confidence: 0.9 }],
+              false,
+            ),
+          )
+        }
+      >
+        Inject mention-only draft
+      </button>
+      <button
+        type="button"
         disabled={!draft}
         onClick={() => draft && rejectPersonLink(draft.id, 0)}
       >
@@ -364,5 +377,32 @@ describe("WorkflowProvider accept-path person/commitment persistence", () => {
     // A plain task creates no person and fires no acceptance suggestion.
     expect(mockFindOrCreatePerson).not.toHaveBeenCalled();
     expect(mockRecordPersonLinkAcceptance).not.toHaveBeenCalled();
+  });
+
+  it("creates no person and links no column for an informational mention, but resolves its suggestion", async () => {
+    renderProbe();
+    await waitForPersistedAreas();
+
+    fireEvent.click(screen.getByText("Inject mention-only draft"));
+    await waitFor(() =>
+      expect(screen.getByTestId("draft-count").textContent).toBe("1"),
+    );
+    fireEvent.click(screen.getByText("Accept"));
+
+    await waitFor(() => expect(mockCreateTask).toHaveBeenCalled());
+    const taskInput = mockCreateTask.mock.calls[0][1];
+    // role "mention" is informational: no person row (FR-017 approval is only
+    // granted by a waiting_on/committed_to link) and no column linked.
+    expect(mockFindOrCreatePerson).not.toHaveBeenCalled();
+    expect(taskInput.waiting_on_person_id).toBeNull();
+    expect(taskInput.committed_to_person_id).toBeNull();
+    expect(taskInput.is_commitment).toBe(false);
+    // The dangling pending proposal for the mention is still resolved.
+    await waitFor(() =>
+      expect(mockRecordPersonLinkAcceptance).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ role: "mention", name: "Sarah" }),
+      ),
+    );
   });
 });
