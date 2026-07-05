@@ -1,0 +1,441 @@
+{
+  "description": "Coherence registry (CO-0, ADR 0004). One entry per SHIPPED FR in docs/REQUIREMENTS.md — draft/future FRs are never registered (anti-sprawl bound B1). Edges: kind C = compatible, S = synergy, X = conflict; every X edge MUST carry a non-empty resolution_ref (G-FUNC-4 — an unresolved contradiction cannot merge). Guards (CO-1/CO-2, apps/web/src/__tests__/coherenceRegistry.test.ts once landed): G-FUNC-1 FR referential integrity, G-FUNC-2 policy-id registration, G-FUNC-3 invariant-id validity, G-FUNC-4 no unresolved X, G-FUNC-5 surface freshness (soft). Maintenance: an entry is added when its FR is adopted into REQUIREMENTS, extended when a slice adds a cross-feature interaction, removed only when the FR is retired.",
+  "features": [
+    {
+      "fr": "FR-001",
+      "title": "Area Management",
+      "surfaces": ["areas", "apps/web/src/app/settings/areas/page.tsx"],
+      "invariants": [],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-002",
+      "title": "Text Capture",
+      "surfaces": ["capture"],
+      "invariants": ["INV-2"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-026",
+          "kind": "S",
+          "note": "Containment governs the online awaiting-parse path of this same surface."
+        },
+        {
+          "fr": "FR-027",
+          "kind": "S",
+          "note": "Capture ubiquity extends this surface's reach (PWA/offline); raw-save-first is shared doctrine."
+        }
+      ]
+    },
+    {
+      "fr": "FR-003",
+      "title": "Audio Capture",
+      "surfaces": ["capture"],
+      "invariants": [],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-004",
+      "title": "Sense-Making Assessment",
+      "surfaces": ["capture", "triage"],
+      "invariants": ["NS-INV-1"],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-005",
+      "title": "AI Parsing Into Drafts",
+      "surfaces": [
+        "apps/web/src/app/api/parse-capture/route.ts",
+        "apps/web/src/lib/ai/parseCaptureService.ts"
+      ],
+      "invariants": ["INV-1", "NS-INV-1"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-030",
+          "kind": "S",
+          "note": "Provider canary + auto-degrade protect this parse path's availability."
+        },
+        {
+          "fr": "FR-018",
+          "kind": "S",
+          "note": "Identity context (charters/operator profile) is injected through the NS-INV-1 context-assembly choke point."
+        }
+      ]
+    },
+    {
+      "fr": "FR-006",
+      "title": "Triage",
+      "surfaces": ["triage"],
+      "invariants": ["NS-INV-4"],
+      "policy_ids": ["triage.default_accept_task"],
+      "interacts_with": [
+        {
+          "fr": "FR-017",
+          "kind": "S",
+          "note": "Person/commitment proposals are approved at triage (propose-approve-persist)."
+        },
+        {
+          "fr": "FR-022",
+          "kind": "X",
+          "note": "Triage accept-to-today is a WIP-gated activation path: the 4th active item is refused, never silently queued.",
+          "resolution_ref": "docs/REQUIREMENTS.md FR-022 acceptance criteria"
+        }
+      ]
+    },
+    {
+      "fr": "FR-007",
+      "title": "Task and Project Management",
+      "surfaces": ["tasks"],
+      "invariants": ["NS-INV-2"],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-008",
+      "title": "Local Time-Block Proposals",
+      "surfaces": ["plan"],
+      "invariants": ["NS-INV-4"],
+      "policy_ids": ["planning.default_time_block"],
+      "interacts_with": [
+        {
+          "fr": "FR-023",
+          "kind": "X",
+          "note": "Scheduling is gated: no time block commits without a sub-60s first move on the task.",
+          "resolution_ref": "docs/REQUIREMENTS.md FR-023 acceptance criteria"
+        }
+      ]
+    },
+    {
+      "fr": "FR-009",
+      "title": "Google Calendar Free/Busy Check",
+      "surfaces": ["apps/web/src/lib/googleCalendar/freebusy.ts"],
+      "invariants": ["INV-3"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-019",
+          "kind": "S",
+          "note": "Calendar-load-aware daily focus consumes free/busy to size the focus budget."
+        }
+      ]
+    },
+    {
+      "fr": "FR-010",
+      "title": "Approval-Gated Google Calendar Write",
+      "surfaces": [
+        "apps/web/src/lib/googleCalendar/events.ts",
+        "apps/web/src/app/api/google-calendar/create-event/route.ts"
+      ],
+      "invariants": ["INV-3", "NS-INV-4"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-028",
+          "kind": "X",
+          "note": "Re-entry auto-defer must never mutate an external calendar: Google-backed blocks are routed to approval, and the transition RPCs refuse Google-backed rows at the database layer.",
+          "resolution_ref": "docs/REQUIREMENTS.md FR-028 acceptance criteria (no external calendar mutation)"
+        }
+      ]
+    },
+    {
+      "fr": "FR-011",
+      "title": "Execution Screen",
+      "surfaces": ["execute"],
+      "invariants": [],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-022",
+          "kind": "X",
+          "note": "Execute start is a WIP-gated activation path.",
+          "resolution_ref": "docs/REQUIREMENTS.md FR-022 acceptance criteria"
+        },
+        {
+          "fr": "FR-025",
+          "kind": "S",
+          "note": "DoD-cap fires at execution session close: cut scope or defer, no third state."
+        }
+      ]
+    },
+    {
+      "fr": "FR-012",
+      "title": "Missed Block Recovery",
+      "surfaces": ["execute", "today"],
+      "invariants": ["UX-INV-3"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-028",
+          "kind": "X",
+          "note": "Boundary between per-block Flow-8 recovery and batched re-entry amnesty: blocks that lapsed BEFORE the absence window stay in Flow 8; blocks whose end fell INSIDE the absence window are batch-deferred by the re-entry rule.",
+          "resolution_ref": "docs/REQUIREMENTS.md FR-028 (deferral window rule); apps/web/src/lib/reEntry/summary.ts"
+        }
+      ]
+    },
+    {
+      "fr": "FR-013",
+      "title": "Review",
+      "surfaces": ["review"],
+      "invariants": [],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-020",
+          "kind": "S",
+          "note": "Wins harvest and rollup approval live in the review surface."
+        }
+      ]
+    },
+    {
+      "fr": "FR-014",
+      "title": "Meta-Learning Logs",
+      "surfaces": ["suggestion_records", "override_records"],
+      "invariants": ["NS-INV-3"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-021",
+          "kind": "S",
+          "note": "Learning consumer v1 reads these records to source recalibrations and policy-change proposals."
+        }
+      ]
+    },
+    {
+      "fr": "FR-015",
+      "title": "Health Dashboard",
+      "surfaces": ["health", "apps/web/src/lib/data/health.ts"],
+      "invariants": ["INV-6"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-029",
+          "kind": "S",
+          "note": "Persistence truth (mock_only/persisted) is surfaced here; the loud demo banner is the same signal made unmissable on write surfaces."
+        },
+        {
+          "fr": "FR-030",
+          "kind": "S",
+          "note": "Provider-down and degrade/recovery states are visible on health."
+        }
+      ]
+    },
+    {
+      "fr": "FR-016",
+      "title": "User Data Export",
+      "surfaces": ["apps/web/src/lib/data/export.ts"],
+      "invariants": ["NS-INV-2"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-017",
+          "kind": "S",
+          "note": "New user-owned tables (people) inherit export coverage as an adoption precondition."
+        }
+      ]
+    },
+    {
+      "fr": "FR-017",
+      "title": "People & Commitments",
+      "surfaces": ["people", "tasks", "apps/web/src/lib/data/personLinks.ts"],
+      "invariants": ["NS-INV-2", "NS-INV-4"],
+      "policy_ids": ["person.link_proposal", "commitment.detection"],
+      "interacts_with": [
+        {
+          "fr": "FR-019",
+          "kind": "S",
+          "note": "Waiting-on aging (S4) feeds the daily brief and side-rail surfaces."
+        }
+      ]
+    },
+    {
+      "fr": "FR-018",
+      "title": "Identity Context",
+      "surfaces": [
+        "areas.charter_text",
+        "operator_profiles",
+        "apps/web/src/lib/ai/contextAssembly.ts"
+      ],
+      "invariants": ["NS-INV-1", "NS-INV-2"],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-019",
+      "title": "Daily Focus & Brief",
+      "surfaces": ["today"],
+      "invariants": ["UX-INV-6"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-022",
+          "kind": "S",
+          "note": "The focus budget and the WIP cap are complementary limits on the committed set."
+        }
+      ]
+    },
+    {
+      "fr": "FR-020",
+      "title": "Wins & Rollups",
+      "surfaces": ["review"],
+      "invariants": ["NS-INV-4"],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-021",
+      "title": "Learning Consumer v1",
+      "surfaces": ["review", "today"],
+      "invariants": ["NS-INV-3", "NS-INV-4"],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-022",
+      "title": "WIP Enforcement",
+      "surfaces": ["triage", "plan", "execute"],
+      "invariants": ["NS-INV-4", "UX-INV-1"],
+      "policy_ids": ["wip_enforcement.v1"],
+      "interacts_with": [
+        {
+          "fr": "FR-028",
+          "kind": "X",
+          "note": "Re-entry auto-defer only REDUCES the committed count (frees WIP slots before the ritual renders), and the single recovery move follows the normal activation path — it inherits the WIP check and launch-sequence gate with no special-cased bypass.",
+          "resolution_ref": "docs/REQUIREMENTS.md FR-028 acceptance criteria; plan-daily-driver-floor harmony matrix (C1-C4 row)"
+        },
+        {
+          "fr": "FR-023",
+          "kind": "S",
+          "note": "Both are activation-path gates; a swap-in passes the launch-sequence gate like any fresh commitment."
+        }
+      ]
+    },
+    {
+      "fr": "FR-023",
+      "title": "Launch-Sequence Gate",
+      "surfaces": ["plan"],
+      "invariants": ["NS-INV-4"],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-024",
+      "title": "Decision Object",
+      "surfaces": ["tasks"],
+      "invariants": [],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-025",
+      "title": "DoD-Cap State Machine",
+      "surfaces": ["execute"],
+      "invariants": ["NS-INV-4"],
+      "policy_ids": ["dod_cap.v1"],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-026",
+      "title": "Capture Containment (AI-Wait)",
+      "surfaces": ["capture"],
+      "invariants": ["UX-INV-2", "UX-INV-3"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-027",
+          "kind": "X",
+          "note": "Same capture surface, complementary halves: FR-026 owns the online awaiting-parse containment path (return hook, no second capture, synchronous degrade); FR-027 owns the raw-save/offline/share path with no parse wait. Implementation lands as ONE packet set so return_hook and client_capture_id reach capture_items together; never both waiting at once.",
+          "resolution_ref": "docs/REQUIREMENTS.md FR-027 (FR-026 reconciliation clauses); plan-daily-driver-floor §3 hot-spot resolution"
+        }
+      ]
+    },
+    {
+      "fr": "FR-027",
+      "title": "Capture Ubiquity (installable + offline raw-capture)",
+      "surfaces": ["capture", "capture_items"],
+      "invariants": ["NS-INV-2", "UX-INV-2"],
+      "policy_ids": [],
+      "interacts_with": [
+        {
+          "fr": "FR-010",
+          "kind": "C",
+          "note": "The PWA is trusted first-party spine reach, not a perimeter channel: no tokens held, no new write path beyond the existing authenticated capture_items insert."
+        }
+      ]
+    },
+    {
+      "fr": "FR-028",
+      "title": "Re-Entry Amnesty (return without a guilt wall)",
+      "surfaces": [
+        "today",
+        "apps/web/src/lib/reEntry/detect.ts",
+        "apps/web/src/lib/reEntry/defer.ts"
+      ],
+      "invariants": ["NS-INV-4", "UX-INV-3", "UX-INV-6"],
+      "policy_ids": ["re_entry.v1"],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-029",
+      "title": "Persistence Truth + Session Longevity",
+      "surfaces": [
+        "apps/web/src/lib/supabase/browser.ts",
+        "apps/web/src/app/components/DemoModeBanner.tsx"
+      ],
+      "invariants": ["INV-6", "UX-INV-6"],
+      "policy_ids": [],
+      "interacts_with": []
+    },
+    {
+      "fr": "FR-030",
+      "title": "Provider Canary + Mock-First Auto-Degrade",
+      "surfaces": [
+        ".github/workflows/provider-canary.yml",
+        "apps/web/src/lib/ai/parseCaptureService.ts"
+      ],
+      "invariants": ["INV-1", "INV-6", "NS-INV-3"],
+      "policy_ids": [],
+      "interacts_with": []
+    }
+  ],
+  "policies": [
+    {
+      "id": "triage.default_accept_task",
+      "fr": "FR-006",
+      "note": "Triage accept/reject learning records."
+    },
+    {
+      "id": "planning.default_time_block",
+      "fr": "FR-008",
+      "note": "Time-block proposal accept/edit/reject records."
+    },
+    {
+      "id": "person.link_proposal",
+      "fr": "FR-017",
+      "note": "Person-mention resolution proposals (matched vs new)."
+    },
+    {
+      "id": "commitment.detection",
+      "fr": "FR-017",
+      "note": "Commitment-detection proposals on task drafts."
+    },
+    {
+      "id": "re_entry.v1",
+      "fr": "FR-028",
+      "note": "Deterministic re-entry auto-deferral events (decided_by system, enumerated in the ritual)."
+    },
+    {
+      "id": "wip_enforcement.v1",
+      "fr": "FR-022",
+      "note": "WIP refusal/swap records. Registered ahead of code landing (C1 #364 in flight)."
+    },
+    {
+      "id": "dod_cap.v1",
+      "fr": "FR-025",
+      "note": "DoD-cap outcome records. Registered ahead of code landing (C4 #367 queued)."
+    }
+  ]
+}
