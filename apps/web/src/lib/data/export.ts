@@ -6,6 +6,7 @@ export const USER_DATA_EXPORT_FORMAT_VERSION = 1;
 export const USER_DATA_EXPORT_TABLES = [
   "areas",
   "capture_items",
+  "people",
   "tasks",
   "projects",
   "time_block_proposals",

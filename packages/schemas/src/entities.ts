@@ -109,11 +109,33 @@ export const TaskSchema = z.object({
   due_at: z.string().datetime().nullable(),
   definition_of_done: z.string().nullable(),
   first_tiny_step: z.string().nullable(),
+  // Stage 1 slice S1 (issue #253) additive columns. Marked optional so existing
+  // task readers/fixtures that do not yet select or construct these columns
+  // continue to parse and type-check unchanged (schema-only slice, zero
+  // user-visible change). The DB remains the source of truth: the migration
+  // enforces nullable FKs/timestamps and `is_commitment not null default false`.
+  waiting_on_person_id: z.string().uuid().nullable().optional(),
+  waiting_on_since: z.string().datetime().nullable().optional(),
+  is_commitment: z.boolean().optional(),
+  committed_to_person_id: z.string().uuid().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });
 
 export type Task = z.infer<typeof TaskSchema>;
+
+export const PersonSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  display_name: z.string().min(1),
+  normalized_name: z.string().min(1),
+  notes: z.string().nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+  archived_at: z.string().datetime().nullable(),
+});
+
+export type Person = z.infer<typeof PersonSchema>;
 
 export const TimeBlockProposalSchema = z.object({
   id: z.string().uuid(),
