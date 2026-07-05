@@ -34,6 +34,7 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/TEST_PLAN.md",
   "docs/KNOWN_ISSUES.md",
   "docs/FAILURES.md",
+  "docs/PLAYS.md",
   "docs/PROJECT_STATE.md",
   "docs/OBSERVABILITY_RUNBOOK.md",
   "docs/VERCEL_PRODUCTION_CHECKLIST.md",
