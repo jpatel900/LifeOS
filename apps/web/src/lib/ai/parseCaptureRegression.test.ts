@@ -95,6 +95,32 @@ describe("parse capture regression fixtures", () => {
     expect(taskDraft?.is_commitment).toBe(false);
   });
 
+  it("carries person mentions and the commitment flag through the bridge", () => {
+    const parsed = buildParsedWorkflowResult({
+      response: parseCaptureRegressionFixtures.commitmentToSarah,
+      capture: persistedCapture,
+      workflowAreaId: "area-main-job",
+    });
+
+    const taskDraft = parsed.taskDrafts[0];
+    expect(taskDraft.is_commitment).toBe(true);
+    expect(taskDraft.person_mentions).toEqual([
+      { name: "Sarah", role: "committed_to", confidence: 0.94 },
+    ]);
+  });
+
+  it("carries an empty mention list for person-free captures", () => {
+    const parsed = buildParsedWorkflowResult({
+      response: parseCaptureRegressionFixtures.noPersonCapture,
+      capture: persistedCapture,
+      workflowAreaId: "area-personal",
+    });
+
+    const taskDraft = parsed.taskDrafts[0];
+    expect(taskDraft.is_commitment).toBe(false);
+    expect(taskDraft.person_mentions).toEqual([]);
+  });
+
   it("routes low-confidence output to triage", () => {
     const lowConfidence = parseCaptureRegressionFixtures.lowConfidenceOutput;
     const parsed = buildParsedWorkflowResult({

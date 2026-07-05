@@ -72,9 +72,7 @@ export const ParseCaptureTaskDraftSchema = z.object({
   // array — "no person" is `[]`, not null — and `is_commitment` mirrors the
   // frozen `tasks.is_commitment boolean not null default false` DB column.
   // Both default so pre-S3 persisted parse results still validate (NS-INV-2).
-  person_mentions: z
-    .array(ParseCapturePersonMentionSchema)
-    .default([]),
+  person_mentions: z.array(ParseCapturePersonMentionSchema).default([]),
   is_commitment: z.boolean().default(false),
 });
 

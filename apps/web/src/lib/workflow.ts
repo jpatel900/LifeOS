@@ -484,7 +484,11 @@ export function rejectPersonMention(
   mentionIndex: number,
 ): WorkflowState {
   const draft = state.taskDrafts.find((item) => item.id === draftId);
-  if (!draft || mentionIndex < 0 || mentionIndex >= draft.person_mentions.length) {
+  if (
+    !draft ||
+    mentionIndex < 0 ||
+    mentionIndex >= draft.person_mentions.length
+  ) {
     return state;
   }
 

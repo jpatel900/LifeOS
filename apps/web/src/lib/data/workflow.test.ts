@@ -13,12 +13,18 @@ import {
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  getOperatorProfile,
+  recordCommitmentProposal,
+  recordPersonLinkRejection,
+  recordPersonMentionProposal,
   recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   listAreas,
   softDeleteArea,
   updateAreaColor,
+  COMMITMENT_POLICY_ID,
+  PERSON_LINK_POLICY_ID,
   type MinimalSupabaseClient,
 } from "./workflow";
 
@@ -183,7 +189,7 @@ describe("workflow data provider", () => {
     expect(getUser).toHaveBeenCalled();
     expect(from).toHaveBeenCalledWith("areas");
     expect(select).toHaveBeenCalledWith(
-      "id,user_id,name,slug,description,color,icon,sort_order,is_active,created_at,updated_at",
+      "id,user_id,name,slug,description,color,icon,sort_order,is_active,charter_text,charter_updated_at,created_at,updated_at",
     );
     expect(order).toHaveBeenCalledWith("sort_order", { ascending: true });
     expect(eq).toHaveBeenCalledWith("is_active", true);
@@ -690,6 +696,194 @@ describe("workflow data provider", () => {
         title: "Mock rejected draft",
       }),
     ).not.toThrow();
+  });
+
+  it("records a pending person-link suggestion under the person policy id", async () => {
+    const single = vi.fn().mockResolvedValue({ data: {}, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    recordPersonMentionProposal(authenticatedClient(from), {
+      area_id: areaId,
+      draft_id: "550e8400-e29b-41d4-a716-446655440901",
+      name: "Sarah",
+      role: "committed_to",
+      confidence: 0.94,
+      match: "new",
+    });
+
+    await vi.waitFor(() => {
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_identifier: PERSON_LINK_POLICY_ID,
+          suggestion_type: "triage_suggestion",
+          subject_type: "person_mention",
+          subject_id: "550e8400-e29b-41d4-a716-446655440901",
+          status: "pending",
+          confidence: 0.94,
+        }),
+      );
+    });
+  });
+
+  it("records a pending commitment suggestion under the commitment policy id", async () => {
+    const single = vi.fn().mockResolvedValue({ data: {}, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    recordCommitmentProposal(authenticatedClient(from), {
+      area_id: areaId,
+      draft_id: "550e8400-e29b-41d4-a716-446655440901",
+      title: "Send Sarah the deck",
+      confidence: 0.9,
+    });
+
+    await vi.waitFor(() => {
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_identifier: COMMITMENT_POLICY_ID,
+          subject_type: "task_draft",
+          status: "pending",
+        }),
+      );
+    });
+  });
+
+  it("records an override when a proposed person link is rejected", async () => {
+    const single = vi.fn().mockResolvedValue({ data: {}, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn((table: string) => {
+      if (table === "override_records") return { insert };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    recordPersonLinkRejection(authenticatedClient(from), {
+      area_id: areaId,
+      draft_id: "550e8400-e29b-41d4-a716-446655440901",
+      name: "Sarah",
+      role: "committed_to",
+    });
+
+    await vi.waitFor(() => {
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_identifier: PERSON_LINK_POLICY_ID,
+          subject_type: "person_mention",
+          override_type: "rejected",
+        }),
+      );
+    });
+  });
+
+  it("preserves the user action when a person-link learning write fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const single = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "learning table unavailable" },
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    expect(() =>
+      recordPersonMentionProposal(authenticatedClient(from), {
+        area_id: areaId,
+        draft_id: "550e8400-e29b-41d4-a716-446655440901",
+        name: "Sarah",
+        role: "committed_to",
+        confidence: 0.9,
+        match: "new",
+      }),
+    ).not.toThrow();
+
+    await vi.waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        "LifeOS meta-learning write failed; user action preserved.",
+        expect.objectContaining({
+          policy_identifier: PERSON_LINK_POLICY_ID,
+        }),
+      );
+    });
+    warn.mockRestore();
+  });
+
+  it("skips the override write for non-uuid local draft ids", () => {
+    const from = vi.fn(() => {
+      throw new Error("should not query in mock/local mode");
+    });
+    expect(() =>
+      recordPersonLinkRejection(authenticatedClient(from), {
+        area_id: null,
+        draft_id: "task-draft-local-1",
+        name: "Sarah",
+        role: "committed_to",
+      }),
+    ).not.toThrow();
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("skips person/commitment learning writes in mock mode", () => {
+    expect(() =>
+      recordPersonMentionProposal(null, {
+        area_id: null,
+        draft_id: "task-draft-local-1",
+        name: "Sarah",
+        role: "mention",
+        confidence: 0.5,
+        match: "new",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      recordCommitmentProposal(null, {
+        area_id: null,
+        draft_id: "task-draft-local-1",
+        title: "Local commitment",
+      }),
+    ).not.toThrow();
+  });
+
+  it("reads the operator profile live for the parse context read path", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: "550e8400-e29b-41d4-a716-446655440a01",
+        user_id: userId,
+        profile_text: "Strong at synthesis, weak at starting.",
+        compensation_rules: [
+          { trait: "starting friction", rule: "require a concrete first move" },
+        ],
+        created_at: "2026-07-01T00:00:00.000Z",
+        updated_at: "2026-07-01T00:00:00.000Z",
+      },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ maybeSingle });
+    const from = vi.fn((table: string) => {
+      if (table === "operator_profiles") return { select };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const profile = await getOperatorProfile(authenticatedClient(from));
+    expect(profile?.profile_text).toBe(
+      "Strong at synthesis, weak at starting.",
+    );
+    expect(profile?.compensation_rules?.[0]?.trait).toBe("starting friction");
+  });
+
+  it("returns a null operator profile when no row exists (empty-profile parity)", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    const select = vi.fn().mockReturnValue({ maybeSingle });
+    const from = vi.fn().mockReturnValue({ select });
+
+    await expect(
+      getOperatorProfile(authenticatedClient(from)),
+    ).resolves.toBeNull();
+  });
+
+  it("reads no operator profile in mock mode", async () => {
+    await expect(getOperatorProfile(null)).resolves.toBeNull();
   });
 
   it("persists accepted project drafts through Supabase after validating input", async () => {

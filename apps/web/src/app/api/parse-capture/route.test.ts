@@ -121,6 +121,76 @@ describe("parse-capture route", () => {
     );
   });
 
+  it("forwards live area charters and the operator profile to the parser (S3 #255)", async () => {
+    mocks.getParseCaptureStatus.mockReturnValue({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+    mocks.parseCaptureWithFallback.mockResolvedValue({
+      parser: "ai",
+      response: {
+        schema_version: "1.0",
+        prompt_version: "parse_capture.v3",
+        parse_status: "parsed",
+        overall_confidence: 0.9,
+        triage_required: false,
+        triage_reasons: [],
+        drafts: [],
+        clarification_questions: [],
+        ambiguity_assessment: null,
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rawText: "Send Sarah the deck.",
+          areaContext: [
+            {
+              slug: "main-job",
+              name: "Main Job",
+              charterText: "Ship the cockpit; protect deep-work mornings.",
+            },
+          ],
+          operatorProfile: {
+            profileText: "Strong at synthesis, weak at starting.",
+            compensationRules: [
+              {
+                trait: "starting friction",
+                rule: "require a concrete first move",
+              },
+            ],
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.parseCaptureWithFallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        areaContext: [
+          {
+            slug: "main-job",
+            name: "Main Job",
+            charterText: "Ship the cockpit; protect deep-work mornings.",
+          },
+        ],
+        operatorProfile: {
+          profileText: "Strong at synthesis, weak at starting.",
+          compensationRules: [
+            {
+              trait: "starting friction",
+              rule: "require a concrete first move",
+            },
+          ],
+        },
+      }),
+      expect.anything(),
+    );
+  });
+
   it("returns safe non-leaky failure response and sanitized observability capture", async () => {
     mocks.getParseCaptureStatus.mockReturnValue({
       status: "ai_configured",

@@ -41,9 +41,7 @@ export const Phase2TaskDraftSchema = z.object({
   // Never persisted to `tasks` verbatim — a person link only lands after
   // explicit approval (NS-INV-4); an unmatched/rejected mention degrades the
   // task to a plain task and the raw capture is never lost.
-  person_mentions: z
-    .array(ParseCapturePersonMentionSchema)
-    .default([]),
+  person_mentions: z.array(ParseCapturePersonMentionSchema).default([]),
   is_commitment: z.boolean().default(false),
   status: z.enum(["pending", "accepted", "rejected"]),
   created_at: z.string().datetime(),
