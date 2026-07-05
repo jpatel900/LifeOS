@@ -666,3 +666,117 @@ describe("TodayMoments — P4 derail -> recovery journey", () => {
     utils.unmount();
   });
 });
+
+/**
+ * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
+ * Additive coverage: the Start moment's Pipeline disclosure opens the
+ * triage/plan sheets, Escape ordering, and the new palette entries.
+ */
+describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+  });
+
+  it("the Pipeline disclosure is collapsed by default and renders PipelineOverview", () => {
+    renderToday({ initialMoment: "start" });
+
+    const disclosure = screen.getByTestId("start-moment-pipeline-disclosure");
+    expect(disclosure).toBeInTheDocument();
+    expect(disclosure).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByText("Pipeline"));
+    expect(screen.getByTestId("pipeline-overview")).toBeInTheDocument();
+  });
+
+  it("drilling into triage from the Pipeline disclosure opens the TriageSheet", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByText("Pipeline"));
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-triage"));
+
+    expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+      "aria-label",
+      "Triage",
+    );
+  });
+
+  it("drilling into plan from the Pipeline disclosure opens the PlanSheet", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByText("Pipeline"));
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-plan"));
+
+    expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+      "aria-label",
+      "Plan",
+    );
+  });
+
+  it("drilling into a non-wired stage (execute) shows the 'opens with full shell' toast", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByText("Pipeline"));
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-execute"));
+
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Opens with the full shell",
+    );
+  });
+
+  it("closes the sheet via its own Escape handling without affecting the capture overlay's independent Escape path", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByText("Pipeline"));
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-triage"));
+    expect(screen.getByTestId("moment-sheet-dialog")).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByTestId("moment-sheet-dialog"), {
+      key: "Escape",
+    });
+    expect(screen.queryByTestId("moment-sheet-dialog")).not.toBeInTheDocument();
+  });
+
+  it("global Escape (via useMomentKeyboard) is disabled while a sheet is open — number keys do not switch moments", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByText("Pipeline"));
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-triage"));
+    expect(screen.getByTestId("moment-sheet-dialog")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "2" });
+    // Still on the sheet — the underlying moment did not switch to Flow.
+    expect(screen.getByTestId("moment-sheet-dialog")).toBeInTheDocument();
+    expect(screen.queryByTestId("flow-moment")).not.toBeInTheDocument();
+  });
+
+  it("the command palette offers 'Open triage' and 'Open plan', each opening the matching sheet", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(screen.getByTestId("command-palette")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("command-palette-option-open-triage"));
+    expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+      "aria-label",
+      "Triage",
+    );
+
+    fireEvent.click(screen.getByTestId("moment-sheet-close"));
+    expect(screen.queryByTestId("moment-sheet-dialog")).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByTestId("command-palette-option-open-plan"));
+    expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+      "aria-label",
+      "Plan",
+    );
+  });
+});
