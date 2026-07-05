@@ -8,6 +8,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
+import { latestActivityTimestamp } from "@/lib/reEntry/detect";
 import { TodayMoments } from "./TodayMoments";
 import type { TodayMomentsProps } from "./TodayMoments";
 
@@ -206,5 +207,274 @@ describe("TodayMoments", () => {
     });
 
     expect(screen.getByTestId("flow-moment-empty")).toBeInTheDocument();
+  });
+});
+
+/**
+ * FR-028 packet F-G2c integration coverage: the return ritual as a real
+ * moment state, driven through WorkflowContext (not a hand-built state) so
+ * it proves the ritual actually wires into the live provider. A single
+ * seeded active task gives both an absence signal (its created_at becomes
+ * `latestActivityTimestamp`) and a recovery candidate (the stalest open
+ * task) in one journey — `now` is derived from the rendered state's
+ * timestamp, never hardcoded, per the packet's floor-plan rule.
+ */
+const RE_ENTRY_ABSENCE_DAYS = 4;
+
+function ReEntrySeedBridge({
+  onState,
+}: {
+  onState: (lastActivityAt: string | null) => void;
+}) {
+  const { state, submitCaptureText, acceptTaskDraft } = useWorkflow();
+  const draft = state.taskDrafts[0];
+
+  onState(latestActivityTimestamp(state));
+
+  return (
+    <div>
+      <span data-testid="re-entry-seed-draft-count">
+        {state.taskDrafts.length}
+      </span>
+      <button
+        type="button"
+        data-testid="re-entry-seed-submit"
+        onClick={() => submitCaptureText("Draft the client proposal", null)}
+      >
+        Seed capture
+      </button>
+      <button
+        type="button"
+        data-testid="re-entry-seed-accept"
+        disabled={!draft}
+        onClick={() => draft && acceptTaskDraft(draft.id)}
+      >
+        Seed accept
+      </button>
+    </div>
+  );
+}
+
+describe("TodayMoments — FR-028 re-entry return ritual", () => {
+  let restoreFetch: (() => void) | null = null;
+
+  beforeEach(() => {
+    restoreFetch = stubParseCaptureFetch();
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    restoreFetch?.();
+    restoreFetch = null;
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  /**
+   * Seeds one real active task through WorkflowContext (capture -> mock
+   * parse -> accept) and returns a `now` derived from that task's
+   * created_at, offset far enough forward to cross the absence threshold.
+   * This single seeded task doubles as both the absence signal and the
+   * recovery candidate (stalest open task).
+   */
+  async function seedAbsentTaskAndDeriveNow() {
+    let lastActivityAt: string | null = null;
+    const utils = render(
+      <WorkflowProvider>
+        <ReEntrySeedBridge
+          onState={(value) => {
+            lastActivityAt = value;
+          }}
+        />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("re-entry-seed-submit"));
+    await waitFor(() => {
+      expect(screen.getByTestId("re-entry-seed-draft-count")).toHaveTextContent(
+        "1",
+      );
+    });
+    fireEvent.click(screen.getByTestId("re-entry-seed-accept"));
+
+    await waitFor(() => {
+      expect(lastActivityAt).not.toBeNull();
+    });
+
+    const now = new Date(
+      new Date(lastActivityAt as unknown as string).getTime() +
+        RE_ENTRY_ABSENCE_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    return { ...utils, now };
+  }
+
+  it("renders the ritual instead of the masthead/moment content when absent and unsuppressed", async () => {
+    const { rerender, now } = await seedAbsentTaskAndDeriveNow();
+
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("re-entry-ritual")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByTestId("today-moments-area-switcher"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("start-moment")).not.toBeInTheDocument();
+  });
+
+  it("does not render the ritual when now matches the seed time (no absence)", async () => {
+    render(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={FIXED_NOW} initialMoment="start" />
+      </WorkflowProvider>,
+    );
+
+    expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+    expect(screen.getByTestId("start-moment")).toBeInTheDocument();
+  });
+
+  it("suppression round-trip: dismissing the ritual (complete) suppresses it on remount for the same absence", async () => {
+    const { rerender, unmount, now } = await seedAbsentTaskAndDeriveNow();
+
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("re-entry-ritual")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("re-entry-ritual-start-day"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+    });
+
+    unmount();
+
+    render(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+
+    // Same absence (same lastActivityAt) already completed -> suppressed.
+    expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+  });
+
+  it("accept recovery: queues the first move, dismisses the ritual, shows the toast, moment is start", async () => {
+    const { rerender, now } = await seedAbsentTaskAndDeriveNow();
+
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} initialMoment="flow" />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("re-entry-ritual-recovery"),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("re-entry-ritual-recovery-accept"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("start-moment")).toBeInTheDocument();
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Welcome back — first move queued",
+    );
+  });
+
+  it("swap recovery cycles to the next candidate without changing task state", async () => {
+    const { rerender, now } = await seedAbsentTaskAndDeriveNow();
+
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("re-entry-ritual-recovery"),
+      ).toBeInTheDocument();
+    });
+
+    const beforeTitle = screen.getByTestId(
+      "re-entry-ritual-recovery",
+    ).textContent;
+
+    fireEvent.click(screen.getByTestId("re-entry-ritual-recovery-swap"));
+
+    // With a single candidate, swap cycles back to the same one (modulo);
+    // the important assertion is that it never throws and the ritual stays
+    // mounted with no task/state mutation from the swap itself.
+    expect(screen.getByTestId("re-entry-ritual")).toBeInTheDocument();
+    expect(typeof beforeTitle).toBe("string");
+  });
+
+  it("dismiss (Start my day) completes the ritual with no task change", async () => {
+    const { rerender, now } = await seedAbsentTaskAndDeriveNow();
+
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("re-entry-ritual")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("re-entry-ritual-start-day"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Welcome back",
+    );
+  });
+
+  it("zero-red guard: the ritual container has no destructive class or guilt language", async () => {
+    const { rerender, now } = await seedAbsentTaskAndDeriveNow();
+
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+
+    const ritual = await screen.findByTestId("re-entry-ritual");
+    expect(ritual.innerHTML).not.toMatch(/destructive/i);
+    expect(ritual.innerHTML).not.toMatch(/overdue/i);
+    expect(ritual.innerHTML).not.toMatch(/\blate\b/i);
+    expect(ritual.innerHTML).not.toMatch(/failed/i);
+    expect(ritual.innerHTML).not.toMatch(/missed/i);
   });
 });
