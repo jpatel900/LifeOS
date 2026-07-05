@@ -11,7 +11,8 @@
     "smoke:prod": "node scripts/run-prod-smoke.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "status": "node scripts/agent/status.mjs"
+    "status": "node scripts/agent/status.mjs",
+    "coherence:map": "node scripts/coherence-map.mjs"
   },
   "devDependencies": {
     "prettier": "^3.5.0",

@@ -48,3 +48,5 @@ codex-*.json
 /.codex-*.log
 /debug.log
 /web-build-error.log
+
+/coherence-map.html
