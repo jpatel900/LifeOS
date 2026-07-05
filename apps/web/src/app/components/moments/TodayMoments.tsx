@@ -16,6 +16,8 @@ import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
 import { StartMoment } from "./StartMoment";
 import { FlowMoment } from "./FlowMoment";
 import { CloseMoment } from "./CloseMoment";
+import { useReEntryRitual } from "./useReEntryRitual";
+import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -82,7 +84,19 @@ export function TodayMoments({
     markSession,
     carryForwardTask,
     saveReview,
+    refreshPersistedWorkflow,
+    promoteBacklogTask,
   } = useWorkflow();
+
+  const ritual = useReEntryRitual({
+    state,
+    now,
+    refreshPersistedWorkflow,
+  });
+  const ritualActive =
+    ritual.status === "deferring" || ritual.status === "ready";
+
+  const [recoverySwapIndex, setRecoverySwapIndex] = useState(0);
 
   const startVM = useMemo(
     () => buildStartVM(state, { now, selectedAreaId }),
@@ -229,13 +243,68 @@ export function TodayMoments({
     }
   }, [paletteOpen, captureOpen]);
 
+  // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
+  // = [stalest open task, then each planned task deferral], deduped by
+  // taskId. "Something else" cycles the index; empty list -> null.
+  const recoveryCandidates = useMemo<RecoveryCandidate[]>(() => {
+    if (!ritual.summary || !ritual.plan) return [];
+
+    const candidates: RecoveryCandidate[] = [];
+    const seen = new Set<string>();
+
+    if (ritual.summary.stalest && ritual.summary.stalest.kind === "task") {
+      const { id, label } = ritual.summary.stalest;
+      candidates.push({ taskId: id, title: label, why: "Oldest waiting" });
+      seen.add(id);
+    }
+
+    for (const deferral of ritual.plan.taskDeferrals) {
+      if (seen.has(deferral.taskId)) continue;
+      seen.add(deferral.taskId);
+      candidates.push({
+        taskId: deferral.taskId,
+        title: deferral.taskTitle ?? "Task",
+        why: "Just moved to backlog",
+      });
+    }
+
+    return candidates;
+  }, [ritual.summary, ritual.plan]);
+
+  const recovery: RecoveryCandidate | null =
+    recoveryCandidates.length > 0
+      ? recoveryCandidates[recoverySwapIndex % recoveryCandidates.length]
+      : null;
+
+  const handleAcceptRecovery = useCallback(
+    (taskId: string) => {
+      const task = state.tasks.find((item) => item.id === taskId);
+      if (task && task.status === "backlog") {
+        promoteBacklogTask(taskId);
+      }
+      ritual.complete();
+      setMoment("start");
+      showToast("Welcome back — first move queued");
+    },
+    [state.tasks, promoteBacklogTask, ritual, showToast],
+  );
+
+  const handleSwapRecovery = useCallback(() => {
+    setRecoverySwapIndex((current) => current + 1);
+  }, []);
+
+  const handleDismissRitual = useCallback(() => {
+    ritual.complete();
+    showToast("Welcome back");
+  }, [ritual, showToast]);
+
   useMomentKeyboard({
     onSwitchMoment: setMoment,
     onCapture: () => setCaptureOpen(true),
     onPalette: () => setPaletteOpen(true),
     onPrimary: runPrimary,
     onEscape: closeTopOverlay,
-    enabled: !captureOpen && !paletteOpen,
+    enabled: !captureOpen && !paletteOpen && !ritualActive,
   });
 
   const paletteActions = useMemo<CommandPaletteAction[]>(() => {
@@ -328,71 +397,91 @@ export function TodayMoments({
 
   return (
     <div className="grid gap-6" data-testid="today-moments">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-semibold tracking-tight">
-            LifeOS · Today
-          </span>
-          <select
-            aria-label="Area"
-            value={selectedAreaId ?? ""}
-            onChange={(event) => setSelectedAreaId(event.target.value || null)}
-            className="rounded-md border border-border bg-background px-2 py-1 text-sm"
-            data-testid="today-moments-area-switcher"
-          >
-            <option value="">All areas</option>
-            {state.areas.map((area) => (
-              <option key={area.id} value={area.id}>
-                {area.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <CountdownClockToggle value={timeDisplay} onChange={setTimeDisplay} />
-          <MomentSwitcher value={moment} onChange={setMoment} />
-        </div>
-      </header>
-
-      {moment === "start" ? (
-        <StartMoment
-          vm={startVM}
-          timeDisplay={timeDisplay}
-          now={now}
-          onStartMove={handleStartMove}
-          onSnooze={() => showToast("Snoozed 10m")}
-          onSwap={() => showToast("Looking for something else")}
-          onOpenHealth={() => showToast("Area health is on the roadmap")}
+      {ritualActive && ritual.summary && ritual.plan ? (
+        <ReEntryRitual
+          summary={ritual.summary}
+          plan={ritual.plan}
+          outcomes={ritual.outcomes}
+          demoMode={ritual.demoMode}
+          recovery={recovery}
+          onAcceptRecovery={handleAcceptRecovery}
+          onSwapRecovery={handleSwapRecovery}
+          onDismiss={handleDismissRitual}
         />
-      ) : null}
+      ) : (
+        <>
+          <header className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-semibold tracking-tight">
+                LifeOS · Today
+              </span>
+              <select
+                aria-label="Area"
+                value={selectedAreaId ?? ""}
+                onChange={(event) =>
+                  setSelectedAreaId(event.target.value || null)
+                }
+                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                data-testid="today-moments-area-switcher"
+              >
+                <option value="">All areas</option>
+                {state.areas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {moment === "flow" ? (
-        <FlowMoment
-          vm={flowVM}
-          session={session}
-          timeDisplay={timeDisplay}
-          onDone={finishFocus}
-          onPause={pauseFocus}
-          onExtend={extendFocus}
-          onToggleTime={() =>
-            setTimeDisplay((current) =>
-              current === "countdown" ? "clock" : "countdown",
-            )
-          }
-        />
-      ) : null}
+            <div className="flex flex-wrap items-center gap-3">
+              <CountdownClockToggle
+                value={timeDisplay}
+                onChange={setTimeDisplay}
+              />
+              <MomentSwitcher value={moment} onChange={setMoment} />
+            </div>
+          </header>
 
-      {moment === "close" ? (
-        <CloseMoment
-          vm={closeVM}
-          onCloseDay={() => {
-            saveReview();
-            showToast("Day closed");
-          }}
-          onCarryForward={(taskId) => carryForwardTask(taskId)}
-        />
-      ) : null}
+          {moment === "start" ? (
+            <StartMoment
+              vm={startVM}
+              timeDisplay={timeDisplay}
+              now={now}
+              onStartMove={handleStartMove}
+              onSnooze={() => showToast("Snoozed 10m")}
+              onSwap={() => showToast("Looking for something else")}
+              onOpenHealth={() => showToast("Area health is on the roadmap")}
+            />
+          ) : null}
+
+          {moment === "flow" ? (
+            <FlowMoment
+              vm={flowVM}
+              session={session}
+              timeDisplay={timeDisplay}
+              onDone={finishFocus}
+              onPause={pauseFocus}
+              onExtend={extendFocus}
+              onToggleTime={() =>
+                setTimeDisplay((current) =>
+                  current === "countdown" ? "clock" : "countdown",
+                )
+              }
+            />
+          ) : null}
+
+          {moment === "close" ? (
+            <CloseMoment
+              vm={closeVM}
+              onCloseDay={() => {
+                saveReview();
+                showToast("Day closed");
+              }}
+              onCarryForward={(taskId) => carryForwardTask(taskId)}
+            />
+          ) : null}
+        </>
+      )}
 
       <CaptureAffordance onOpen={() => setCaptureOpen(true)} />
 
