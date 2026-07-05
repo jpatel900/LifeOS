@@ -83,7 +83,7 @@ jobs:
                 '- Smallest change that satisfies the issue; binding contracts and salvage rules in the issue body are not negotiable.',
                 '- Never weaken a schema, guard test, or RLS policy to make something pass. Doc deletions require matching removals from docs/doc-registry.json.',
                 '- Validation evidence (see .agents/skills/lifeos-testing/SKILL.md): run the full suite AND the specific tests guarding the constraints named in the issue. Your environment cannot run every lane (Supabase RLS, Playwright, provider-env paths) — list what you could NOT run in the PR body under "Unverified lanes". Unverified is acceptable; unreported is not.',
-                `- DELIVERY FALLBACK: after your PR-creation step, verify the PR actually exists on github.com/${owner}/${repo} (fetch the PR list or the URL you were given). If it does not exist, or PR creation failed or is unavailable, do NOT stop and do NOT just report completion: post the complete output of \`git format-patch origin/main --stdout\` as one or more comments on THIS issue, each starting with the line \`PATCH-PASTE DELIVERY (part n/N)\`. A maintainer will apply it with \`git am\` and open the PR crediting you as author.`,
+                `- DELIVERY FALLBACK (mandatory, THIS run): PR creation has silently failed platform-side before, and your sandbox cannot reach github.com — so unless you have POSITIVELY confirmed your PR exists on github.com/${owner}/${repo} (you fetched its URL and saw it live), treat delivery as unconfirmed and ALSO post the complete output of \`git format-patch origin/main --stdout\` as one or more comments on THIS issue, each starting with the line \`PATCH-PASTE DELIVERY (part n/N)\`, before you finish. Do not wait to be asked: a follow-up mention spawns a fresh environment that cannot reach your commits, so the patch you post now is the ONLY recoverable copy of your work. A maintainer will apply it with \`git am\` and open the PR crediting you as author; a duplicate PR is harmless, a stranded task is lost work.`,
               ].join('\n');
 
             const comment = (issue_number, body) =>
@@ -209,7 +209,7 @@ jobs:
                   if (!alreadyFlagged) {
                     await comment(
                       epic,
-                      `Pipeline watchdog: ${strandedMarker} — Codex reported completion ~${Math.round(hoursSinceKick)}h ago but no PR or patch-paste exists. @${manifest.owner} recover per docs/FAILURES.md patch-paste protocol (re-kick will re-implement from scratch; prefer asking the existing task for \`git format-patch origin/main --stdout\`).`,
+                      `Pipeline watchdog: ${strandedMarker} — Codex reported completion ~${Math.round(hoursSinceKick)}h ago but no PR or patch-paste exists. @${manifest.owner} recover per docs/FAILURES.md patch-paste protocol: open the ORIGINAL task session via its "View task →" link and ask it to post \`git format-patch origin/main --stdout\` as PATCH-PASTE DELIVERY comments. Do NOT recover by mention — a follow-up @codex mention spawns a fresh environment with no access to the task's commits, and a re-kick re-implements from scratch.`,
                     );
                   } else {
                     core.info(`Watchdog: ${strandedMarker} already flagged; skipping duplicate.`);
