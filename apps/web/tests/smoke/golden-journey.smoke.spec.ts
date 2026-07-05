@@ -58,6 +58,26 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
   }
 
   // ---- Journey: capture -> parse ------------------------------------------
+  // Force the deterministic MOCK parser for this journey's parse request. The
+  // smoke's entire marker/cleanup safety contract depends on the draft title
+  // carrying the run marker verbatim, and only the mock parser guarantees
+  // that: the live AI parser classifies the marker-prefixed capture text as
+  // an unactionable placeholder (parse_status "unsupported", zero drafts), so
+  // the journey draft never reaches triage (observed in prod 2026-07-05 once
+  // the AI provider came back healthy — issue #379). The AI provider's own
+  // health is asserted separately by degraded-modes.smoke.spec.ts; this
+  // journey exercises the app's capture→triage→plan→execute plumbing against
+  // the deployed target, which the real /api/parse-capture route still serves
+  // (only the provider call inside it is pinned to mock).
+  await page.route("**/api/parse-capture", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    await route.continue({
+      postData: JSON.stringify({ ...body, parserMode: "mock" }),
+    });
+  });
   await page.goto("/capture");
   const parseResponsePromise = page.waitForResponse(
     (response) =>
@@ -77,9 +97,9 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
 
   // ---- Journey: triage (select the journey's own draft by marker) ---------
   await page.waitForURL(/\/triage$/, { timeout: 30_000 });
-  // Match by the run MARKER, not the full text: the mock parser preserves the
-  // title verbatim, and even an AI parser is expected to keep the marker
-  // token. If the marker is absent we FAIL LOUDLY rather than accept an
+  // Match by the run MARKER, not the full text: the mock parser (pinned
+  // above) preserves the title verbatim, so the marker is guaranteed present.
+  // If the marker is absent we FAIL LOUDLY rather than accept an
   // ambiguous/foreign draft — the smoke never touches rows it cannot identify.
   const journeyDraft = page.getByRole("heading", {
     name: new RegExp(marker(runId)),
