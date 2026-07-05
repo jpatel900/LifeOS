@@ -31,6 +31,96 @@ describe("parse capture regression fixtures", () => {
     }
   });
 
+  it("extracts a committed_to person and flags a commitment for promise phrasings", () => {
+    const fixture = parseCaptureRegressionFixtures.commitmentToSarah;
+    const taskDraft = fixture.drafts.find(
+      (draft) => draft.draft_type === "task_draft",
+    );
+    expect(taskDraft?.is_commitment).toBe(true);
+    expect(
+      taskDraft?.person_mentions.some(
+        (mention) =>
+          mention.role === "committed_to" && mention.name === "Sarah",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps an ambiguous person mention low-confidence and non-committing", () => {
+    const fixture = parseCaptureRegressionFixtures.ambiguousPersonName;
+    const taskDraft = fixture.drafts.find(
+      (draft) => draft.draft_type === "task_draft",
+    );
+    expect(taskDraft?.is_commitment).toBe(false);
+    const mention = taskDraft?.person_mentions[0];
+    expect(mention?.confidence).toBeLessThan(0.5);
+  });
+
+  it("degrades a person-free capture to a plain task with no mentions", () => {
+    const fixture = parseCaptureRegressionFixtures.noPersonCapture;
+    const taskDraft = fixture.drafts.find(
+      (draft) => draft.draft_type === "task_draft",
+    );
+    expect(taskDraft?.is_commitment).toBe(false);
+    expect(taskDraft?.person_mentions).toEqual([]);
+  });
+
+  it("applies person-mention defaults when the model omits the S3 fields", () => {
+    const parsed = ParseCaptureResponseSchema.parse({
+      schema_version: "1.0",
+      prompt_version: "parse_capture.v3",
+      parse_status: "parsed",
+      overall_confidence: 0.9,
+      triage_required: false,
+      triage_reasons: [],
+      drafts: [
+        {
+          draft_type: "task_draft",
+          title: "Legacy draft without S3 fields",
+          description: null,
+          area_slug_suggestion: null,
+          first_tiny_step: null,
+          estimated_minutes_low: null,
+          estimated_minutes_high: null,
+          due_at: null,
+          confidence: 0.9,
+        },
+      ],
+      clarification_questions: [],
+      ambiguity_assessment: null,
+    });
+    const taskDraft = parsed.drafts.find(
+      (draft) => draft.draft_type === "task_draft",
+    );
+    expect(taskDraft?.person_mentions).toEqual([]);
+    expect(taskDraft?.is_commitment).toBe(false);
+  });
+
+  it("carries person mentions and the commitment flag through the bridge", () => {
+    const parsed = buildParsedWorkflowResult({
+      response: parseCaptureRegressionFixtures.commitmentToSarah,
+      capture: persistedCapture,
+      workflowAreaId: "area-main-job",
+    });
+
+    const taskDraft = parsed.taskDrafts[0];
+    expect(taskDraft.is_commitment).toBe(true);
+    expect(taskDraft.person_mentions).toEqual([
+      { name: "Sarah", role: "committed_to", confidence: 0.94 },
+    ]);
+  });
+
+  it("carries an empty mention list for person-free captures", () => {
+    const parsed = buildParsedWorkflowResult({
+      response: parseCaptureRegressionFixtures.noPersonCapture,
+      capture: persistedCapture,
+      workflowAreaId: "area-personal",
+    });
+
+    const taskDraft = parsed.taskDrafts[0];
+    expect(taskDraft.is_commitment).toBe(false);
+    expect(taskDraft.person_mentions).toEqual([]);
+  });
+
   it("routes low-confidence output to triage", () => {
     const lowConfidence = parseCaptureRegressionFixtures.lowConfidenceOutput;
     const parsed = buildParsedWorkflowResult({

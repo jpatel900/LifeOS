@@ -53,6 +53,8 @@ const validPayload = {
       due_at: null,
       confidence: 0.82,
       breakdown: null,
+      person_mentions: [{ name: "Taylor", role: "mention", confidence: 0.8 }],
+      is_commitment: false,
     },
   ],
   clarification_questions: ["What deadline should this use?"],

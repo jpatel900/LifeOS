@@ -15,7 +15,7 @@ function baselineMessages(input: {
 }) {
   const systemPrompt = [
     "You parse one private LifeOS capture into structured draft objects.",
-    "Return schema_version 1.0 and prompt_version parse_capture.v2.",
+    "Return schema_version 1.0 and prompt_version parse_capture.v3.",
     "Use parse_status parsed, needs_clarification, unsupported, or low_confidence.",
     "Set triage_required true for low confidence, unsupported captures, missing critical details, or any draft that needs user review.",
     "Return only task_draft and project_draft items in drafts for V1.",
@@ -31,6 +31,9 @@ function baselineMessages(input: {
     "Set breakdown.sequence_summary to one plain sentence describing the order of work, or null when the order is obvious.",
     "Set breakdown to null only when the task is a single trivial action that needs no decomposition.",
     "Breakdown steps describe the work; they must not schedule it, assign times of day, or add commitments the capture never mentioned.",
+    "For each task_draft, fill person_mentions with the people named or clearly implied: name, role, and confidence 0 to 1. Use role waiting_on when the user is waiting on that person, committed_to when the user promised or owes that person something, and mention for any other reference.",
+    "Set is_commitment true only when the task is a promise the user made to another person (for example 'I told Sarah I would send the deck'); otherwise false.",
+    "Use an empty person_mentions array and is_commitment false when no person is involved. Never invent a person the capture does not reference.",
     "Do not schedule, reschedule, email, browse, call APIs, or write to calendars.",
     "Keep wording non-shaming and practical.",
   ].join("\n");
@@ -61,7 +64,7 @@ const areas: ParseCaptureAreaContext[] = [
 
 describe("contextAssembly parse prompt", () => {
   it("pins the prompt version so empty-context parity is stable", () => {
-    expect(PARSE_CAPTURE_PROMPT_VERSION).toBe("parse_capture.v2");
+    expect(PARSE_CAPTURE_PROMPT_VERSION).toBe("parse_capture.v3");
   });
 
   it("is byte-identical to the pre-slice baseline when charter and profile are empty (no area context)", () => {

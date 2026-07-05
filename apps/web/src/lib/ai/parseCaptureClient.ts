@@ -14,6 +14,15 @@ export type ParseCaptureParserMode = "auto" | "mock";
 export interface ParseCaptureAreaContextEntry {
   slug: string;
   name: string;
+  // S3 (#255): optional per-area charter, read live from persisted areas and
+  // forwarded so the NS-INV-1 context-assembly module can inject it. A missing
+  // or blank charter leaves the prompt byte-identical to baseline (S2 parity).
+  charterText?: string | null;
+}
+
+export interface ParseCaptureOperatorProfileContext {
+  profileText?: string | null;
+  compensationRules?: { trait: string; rule: string }[] | null;
 }
 
 export type ParseCaptureClientStatus = ParseCaptureRuntimeStatus | "unknown";
@@ -46,6 +55,8 @@ function toClientStatus(value: unknown): ParseCaptureClientStatus {
 export async function requestParseCapture(input: {
   rawText: string;
   areaContext?: ParseCaptureAreaContextEntry[];
+  // S3 (#255): live operator profile forwarded through the S2 plumbing.
+  operatorProfile?: ParseCaptureOperatorProfileContext | null;
   parserMode: ParseCaptureParserMode;
   // Optional bearer token so the route can write a user-scoped AI call
   // trace row (issue #288); parsing itself never requires it.
@@ -66,6 +77,7 @@ export async function requestParseCapture(input: {
       body: JSON.stringify({
         rawText: input.rawText,
         areaContext: input.areaContext,
+        operatorProfile: input.operatorProfile ?? undefined,
         parserMode: input.parserMode,
       }),
     });

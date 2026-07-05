@@ -595,7 +595,7 @@ Owner RLS (section 8). Export coverage required (INV-2).
 
 ### 5.8 Parse-result schema extension (target shape, Stage 1 slice S3)
 
-Status: not yet implemented. Versioned addition to the existing parse-result schema in `packages/schemas`, per draft: optional `person_mentions` — array of `{ name, role: waiting_on | committed_to | mention, confidence }` — plus an `is_commitment` boolean. Validated as strictly as existing contracts.
+Status: implemented (slice S3, issue #255). Versioned addition to the existing parse-result schema in `packages/schemas`, per draft: optional `person_mentions` — array of `{ name, role: waiting_on | committed_to | mention, confidence }` — plus an `is_commitment` boolean, both added to `task_draft`. Both default (`[]` / `false`) so pre-S3 parse results still validate; strict JSON-schema and zod contracts stay in lockstep. Prompt bumped to `parse_capture.v3`; `schema_version` stays `1.0` (additive optional, following the `breakdown` precedent).
 
 ## 6. Health and Audit Tables
 

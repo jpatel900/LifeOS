@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { ParseCaptureBreakdownSchema } from "./parse-capture";
+import {
+  ParseCaptureBreakdownSchema,
+  ParseCapturePersonMentionSchema,
+} from "./parse-capture";
 
 /**
  * Phase 2 vertical-slice mock workflow types (local session state, non-UUID ids).
@@ -33,6 +36,13 @@ export const Phase2TaskDraftSchema = z.object({
   // untouched; never persisted to the tasks table (that schema change needs
   // separate human review).
   breakdown: ParseCaptureBreakdownSchema.nullable().default(null),
+  // S3 (#255): display-only staging copy of the parse-capture person/commitment
+  // signals, carried through so the triage UI can offer person-link approval.
+  // Never persisted to `tasks` verbatim — a person link only lands after
+  // explicit approval (NS-INV-4); an unmatched/rejected mention degrades the
+  // task to a plain task and the raw capture is never lost.
+  person_mentions: z.array(ParseCapturePersonMentionSchema).default([]),
+  is_commitment: z.boolean().default(false),
   status: z.enum(["pending", "accepted", "rejected"]),
   created_at: z.string().datetime(),
 });

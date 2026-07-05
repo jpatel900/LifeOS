@@ -237,6 +237,58 @@ describe("golden capture eval harness", () => {
     }
   });
 
+  it("marks commitment-category captures as commitments linked to a committed_to person", () => {
+    const commitmentCases = goldenCaptureCases.filter(
+      (goldenCase) => goldenCase.category === "commitment_to_person",
+    );
+    expect(commitmentCases.length).toBeGreaterThan(0);
+
+    for (const goldenCase of commitmentCases) {
+      const commitmentDrafts = taskDraftsOf(goldenCase).filter(
+        (draft) => draft.is_commitment,
+      );
+      expect(
+        commitmentDrafts.length,
+        `commitment capture produced no commitment draft: ${goldenCase.id}`,
+      ).toBeGreaterThan(0);
+
+      for (const draft of commitmentDrafts) {
+        expect(
+          draft.person_mentions.some(
+            (mention) => mention.role === "committed_to",
+          ),
+          `commitment draft lacks a committed_to person mention: ${goldenCase.id}`,
+        ).toBe(true);
+        for (const mention of draft.person_mentions) {
+          expect(mention.name.length).toBeGreaterThan(0);
+          expect(mention.confidence).toBeGreaterThanOrEqual(0);
+          expect(mention.confidence).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  it("leaves person-free captures with empty mentions and no commitment flag", () => {
+    for (const goldenCase of goldenCaptureCases) {
+      if (goldenCase.category === "commitment_to_person") {
+        continue;
+      }
+
+      // Non-commitment captures may still name people, but must never be
+      // flagged as a commitment without a committed_to mention to back it.
+      for (const draft of taskDraftsOf(goldenCase)) {
+        if (draft.is_commitment) {
+          expect(
+            draft.person_mentions.some(
+              (mention) => mention.role === "committed_to",
+            ),
+            `commitment flag without a committed_to mention: ${goldenCase.id}`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
   it("carries at least one clarification question whenever clarification is the status", () => {
     for (const goldenCase of goldenCaptureCases) {
       const { recordedResponse: response, id } = goldenCase;

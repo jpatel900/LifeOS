@@ -15,7 +15,7 @@ import { PARSE_CAPTURE_SCHEMA_VERSION } from "./contracts/parseCapture";
  * and profile context are strictly append-only blocks gated on non-empty input.
  */
 
-export const PARSE_CAPTURE_PROMPT_VERSION = "parse_capture.v2" as const;
+export const PARSE_CAPTURE_PROMPT_VERSION = "parse_capture.v3" as const;
 
 export interface CompensationRuleContext {
   trait: string;
@@ -67,6 +67,9 @@ const systemPrompt = [
   "Set breakdown.sequence_summary to one plain sentence describing the order of work, or null when the order is obvious.",
   "Set breakdown to null only when the task is a single trivial action that needs no decomposition.",
   "Breakdown steps describe the work; they must not schedule it, assign times of day, or add commitments the capture never mentioned.",
+  "For each task_draft, fill person_mentions with the people named or clearly implied: name, role, and confidence 0 to 1. Use role waiting_on when the user is waiting on that person, committed_to when the user promised or owes that person something, and mention for any other reference.",
+  "Set is_commitment true only when the task is a promise the user made to another person (for example 'I told Sarah I would send the deck'); otherwise false.",
+  "Use an empty person_mentions array and is_commitment false when no person is involved. Never invent a person the capture does not reference.",
   "Do not schedule, reschedule, email, browse, call APIs, or write to calendars.",
   "Keep wording non-shaming and practical.",
 ].join("\n");

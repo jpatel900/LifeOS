@@ -472,6 +472,51 @@ export function editDraft(
   };
 }
 
+/**
+ * S3 (#255): reject a proposed person link on a draft. The mention at
+ * `mentionIndex` is removed; if it was a `committed_to` mention and no other
+ * commitment mention remains, `is_commitment` degrades to false. The draft
+ * itself survives as a plain task (NS-INV-4) — the raw capture is never lost.
+ */
+export function rejectPersonMention(
+  state: WorkflowState,
+  draftId: string,
+  mentionIndex: number,
+): WorkflowState {
+  const draft = state.taskDrafts.find((item) => item.id === draftId);
+  if (
+    !draft ||
+    mentionIndex < 0 ||
+    mentionIndex >= draft.person_mentions.length
+  ) {
+    return state;
+  }
+
+  const nextMentions = draft.person_mentions.filter(
+    (_, index) => index !== mentionIndex,
+  );
+  const stillCommitted = nextMentions.some(
+    (mention) => mention.role === "committed_to",
+  );
+
+  return {
+    ...state,
+    taskDrafts: state.taskDrafts.map((item) =>
+      item.id === draftId
+        ? {
+            ...item,
+            person_mentions: nextMentions,
+            is_commitment: item.is_commitment && stillCommitted,
+          }
+        : item,
+    ),
+    reviewLog: [
+      `Removed proposed person link on: ${draft.title}`,
+      ...state.reviewLog,
+    ],
+  };
+}
+
 export function splitDraft(
   state: WorkflowState,
   draftId: string,
@@ -748,6 +793,14 @@ function acceptDraftWithStatus(
     due_at: null,
     first_tiny_step: draft.first_tiny_step,
     definition_of_done: "Complete the first useful move and note the outcome.",
+    // S3 (#255): the local demo path has no people store, so person-id links
+    // (waiting_on_person_id / committed_to_person_id) degrade to null — a
+    // graceful no-link degrade. The person-less commitment flag is still honored
+    // so an accepted commitment draft reads back as a commitment locally.
+    waiting_on_person_id: null,
+    waiting_on_since: null,
+    is_commitment: draft.is_commitment,
+    committed_to_person_id: null,
     created_at: nowIso(),
     updated_at: nowIso(),
   };

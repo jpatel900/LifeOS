@@ -37,6 +37,22 @@ const breakdownSchema: JsonSchema = {
   required: ["steps", "sequence_summary", "kickstart_step"],
 };
 
+// S3 (#255): person references detected per draft. `role` mirrors the frozen
+// DATA_MODEL commitment columns; "no person" is an empty array, not null.
+const personMentionSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: { type: "string" },
+    role: {
+      type: "string",
+      enum: ["waiting_on", "committed_to", "mention"],
+    },
+    confidence: { type: "number" },
+  },
+  required: ["name", "role", "confidence"],
+};
+
 const taskDraftSchema: JsonSchema = {
   type: "object",
   additionalProperties: false,
@@ -53,6 +69,8 @@ const taskDraftSchema: JsonSchema = {
     breakdown: {
       anyOf: [breakdownSchema, { type: "null" }],
     },
+    person_mentions: { type: "array", items: personMentionSchema },
+    is_commitment: { type: "boolean" },
   },
   required: [
     "draft_type",
@@ -65,6 +83,8 @@ const taskDraftSchema: JsonSchema = {
     "due_at",
     "confidence",
     "breakdown",
+    "person_mentions",
+    "is_commitment",
   ],
 };
 

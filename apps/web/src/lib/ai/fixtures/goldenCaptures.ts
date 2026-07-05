@@ -93,6 +93,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Get a first picture of monthly spending",
           description: "Capture expresses money worry without specifics.",
@@ -151,6 +153,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Name what stagnating means right now",
           description: "Career worry without a chosen direction.",
@@ -209,6 +213,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Track energy dips for a few days",
           description: "Exhaustion with several suspected causes.",
@@ -271,6 +277,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Pick up medication refill",
           description: "One thread from a multi-item dump.",
@@ -283,6 +291,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Renew car registration sticker",
           description: "Expiry mentioned without an exact date.",
@@ -295,6 +305,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Email strata about the parking spot",
           description: "One thread from a multi-item dump.",
@@ -353,6 +365,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Fix the login redirect bug",
           description: "Named bug from standup notes.",
@@ -365,6 +379,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Review Priya's PR before she is away",
           description: "Reviewer is unavailable after tomorrow.",
@@ -377,6 +393,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Update the deck for Thursday",
           description: "Presentation deck needs refresh before Thursday.",
@@ -389,6 +407,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Chase IT about the laptop ticket",
           description: "Follow up on an open IT ticket.",
@@ -428,6 +448,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Patch the side project deploy script",
           description: "One weekend thread; area is side project.",
@@ -440,6 +462,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Clean the gutters",
           description: "Household commitment mentioned for the weekend.",
@@ -452,6 +476,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Prep for Monday's interview panel",
           description: "Work prep with an implicit Monday deadline.",
@@ -512,6 +538,10 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [
+            { name: "Alex", role: "committed_to", confidence: 0.92 },
+          ],
+          is_commitment: true,
           breakdown: null,
           title: "Send budget summary to Alex",
           description: "Explicit commitment with a stated Friday deadline.",
@@ -550,6 +580,10 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [
+            { name: "Sam", role: "committed_to", confidence: 0.9 },
+          ],
+          is_commitment: true,
           breakdown: null,
           title: "Take the kids Saturday afternoon as promised to Sam",
           description: "Personal commitment with an approximate time.",
@@ -588,6 +622,10 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [
+            { name: "Jordan", role: "committed_to", confidence: 0.88 },
+          ],
+          is_commitment: true,
           breakdown: null,
           title: "Call Jordan about the lunch topic",
           description: "Commitment to a person; topic not captured.",
@@ -647,6 +685,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Book a dentist appointment for next month",
           description:
@@ -688,6 +728,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Find 45 minutes with the team before release",
           description: "Scheduling ask bounded by an unstated release date.",
@@ -726,6 +768,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Restart Tuesday/Thursday morning gym routine",
           description: "Recurring intent; no single date to commit yet.",
@@ -827,6 +871,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Gather T4 and RRSP receipts for tax filing",
           description: "Prerequisite documents for the April 30 deadline.",
@@ -839,6 +885,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "File taxes before April 30",
           description: "Hard statutory deadline stated in the capture.",
@@ -880,6 +928,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Unblock vendor API credentials for the data import",
           description: "Work is blocked on an external dependency.",
@@ -944,6 +994,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Renew passport before the fall trip",
           description: "Extracted from a noisy voice transcript.",
@@ -993,6 +1045,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
         },
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "List the garage zones and worst clutter spots",
           description: "Small reversible first move for the overhaul.",
@@ -1055,6 +1109,8 @@ export const goldenCaptureCases: GoldenCaptureCase[] = [
       drafts: [
         {
           draft_type: "task_draft",
+          person_mentions: [],
+          is_commitment: false,
           breakdown: null,
           title: "Pay rent on the 1st",
           description:

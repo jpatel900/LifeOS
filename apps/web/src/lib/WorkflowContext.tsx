@@ -21,6 +21,7 @@ import {
   type CalendarBlock,
   type CaptureItem,
   type ExecutionSession,
+  type Person,
   type Phase2TaskDraft,
   type Phase2TimeBlockProposal,
   type ReviewEntry,
@@ -47,6 +48,7 @@ import {
   planTaskAtHour,
   promoteBacklogTask,
   rejectDraft,
+  rejectPersonMention,
   rejectProjectDraft,
   rejectProposal,
   splitDraft,
@@ -68,17 +70,25 @@ import {
   createTask,
   createTimeBlockProposal,
   editTimeBlockProposal,
+  findOrCreatePerson,
+  getOperatorProfile,
   listAreas,
   listCaptureItems,
+  listPeople,
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
+  recordCommitmentProposal,
+  recordPersonLinkAcceptance,
+  recordPersonLinkRejection,
+  recordPersonMentionProposal,
   recordRejectedTaskDraft,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
+import { normalizePersonName, resolvePersonMention } from "./data/personLinks";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import { isLifeOsOwnedGoogleEventIdShape } from "./cockpit/googleCalendarBridge";
 import type {
@@ -93,6 +103,7 @@ import {
 import {
   requestParseCapture,
   type ParseCaptureClientStatus,
+  type ParseCaptureOperatorProfileContext,
   type ParseCaptureParserMode,
 } from "./ai/parseCaptureClient";
 import {
@@ -162,6 +173,11 @@ type WorkflowAction =
           "title" | "description" | "area_id" | "first_tiny_step"
         >
       >;
+    }
+  | {
+      type: "rejectPersonMention";
+      draftId: string;
+      mentionIndex: number;
     }
   | {
       type: "splitDraft";
@@ -286,6 +302,7 @@ interface WorkflowContextValue {
       >
     >,
   ) => void;
+  rejectPersonLink: (draftId: string, mentionIndex: number) => void;
   splitTaskDraft: (draftId: string, titles: [string, string]) => void;
   mergeTaskDrafts: (primaryDraftId: string, secondaryDraftId: string) => void;
   acceptLocalProposal: (proposalId: string) => void;
@@ -961,6 +978,8 @@ function workflowReducer(
       return rejectProjectDraft(state, action.draftId);
     case "editDraft":
       return editDraft(state, action.draftId, action.changes);
+    case "rejectPersonMention":
+      return rejectPersonMention(state, action.draftId, action.mentionIndex);
     case "splitDraft":
       return splitDraft(state, action.draftId, action.titles);
     case "mergeDrafts":
@@ -1244,6 +1263,59 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       draft.capture_item_id,
       persistedCaptureIdByLocalIdRef.current,
     );
+
+    // S3 (#255): resolve the approved person links before the task insert (FK
+    // ordering). A mention that survived to accept was not rejected, so it is
+    // user-approved. For each such mention we find-or-create the person
+    // (idempotent per normalized_name, re-checked at accept time), then write the
+    // link column for its role. Multiple mentions of one role map to a single
+    // column, so the first resolved id wins deterministically. role "mention" is
+    // informational — it creates the person but links no column. A find/create
+    // failure degrades that one link to no-link; the task still lands (NS-INV-4).
+    const acceptTime = new Date().toISOString();
+    let waitingOnPersonId: string | null = null;
+    let committedToPersonId: string | null = null;
+    const acceptedLinks: Array<{
+      name: string;
+      role: "waiting_on" | "committed_to" | "mention";
+      personId: string | null;
+    }> = [];
+
+    for (const mention of draft.person_mentions) {
+      // role "mention" is informational only (deliverable b): it links no column
+      // and creates no person row — approval to create a person (FR-017) comes
+      // only with a waiting_on / committed_to link. Its pending suggestion is
+      // still resolved to accepted below.
+      let personId: string | null = null;
+      if (mention.role === "waiting_on" || mention.role === "committed_to") {
+        try {
+          const personResult = await findOrCreatePerson(client, {
+            display_name: mention.name,
+            normalized_name: normalizePersonName(mention.name),
+          });
+          personId = personResult.person?.id ?? null;
+        } catch {
+          // A person find/create failure degrades this link to no-link; never
+          // block the task creation the user just approved.
+          personId = null;
+        }
+      }
+
+      if (personId) {
+        if (mention.role === "waiting_on" && !waitingOnPersonId) {
+          waitingOnPersonId = personId;
+        } else if (mention.role === "committed_to" && !committedToPersonId) {
+          committedToPersonId = personId;
+        }
+      }
+
+      acceptedLinks.push({ name: mention.name, role: mention.role, personId });
+    }
+
+    // committed_to link OR an approved commitment draft flag both set the task as
+    // a commitment (deliverable b honors draft.is_commitment without a person).
+    const isCommitment = draft.is_commitment || committedToPersonId !== null;
+
     const taskResult = await createTask(client, {
       area_id: persistedAreaId,
       source_capture_item_id: sourceCaptureId,
@@ -1254,10 +1326,27 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       estimated_minutes_low: draft.estimated_minutes_low,
       estimated_minutes_high: draft.estimated_minutes_high,
       first_tiny_step: draft.first_tiny_step,
+      waiting_on_person_id: waitingOnPersonId,
+      waiting_on_since: waitingOnPersonId ? acceptTime : null,
+      is_commitment: isCommitment,
+      committed_to_person_id: committedToPersonId,
     });
 
     if (taskResult.provider !== "supabase") {
       return;
+    }
+
+    // Resolve the pending person-link proposals to accepted (mirrors the
+    // rejection path). Fire-and-forget — a learning-write failure never affects
+    // the accept flow (NS-INV-3).
+    for (const link of acceptedLinks) {
+      recordPersonLinkAcceptance(client, {
+        area_id: persistedAreaId,
+        draft_id: draft.id,
+        name: link.name,
+        role: link.role,
+        matched_person_id: link.personId,
+      });
     }
 
     persistedTaskIdByLocalIdRef.current.set(localTask.id, taskResult.task.id);
@@ -1984,12 +2073,58 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // Tracing is optional; a missing/failed session must never block parsing.
     }
 
+    // S3 (#255): live charter/profile read path. S2 landed the context-assembly
+    // module, storage, and injection; the request-time read was deferred to
+    // this slice. Read persisted charters + the operator profile and forward
+    // them through the S2 plumbing. An empty charter/profile leaves the prompt
+    // byte-identical to baseline (S2 parity), and any read failure degrades to
+    // the pre-S3 name-only context — personalization must never block parsing.
+    const persistedAreas = persistedAreasRef.current;
+    const charterBySlug = new Map(
+      persistedAreas.map((area) => [
+        area.slug,
+        typeof area.charter_text === "string" ? area.charter_text : null,
+      ]),
+    );
+
+    let operatorProfileContext: ParseCaptureOperatorProfileContext | undefined;
+    try {
+      const profileClient = createSupabaseBrowserClient();
+      if (profileClient) {
+        const profile = await getOperatorProfile(profileClient);
+        if (profile) {
+          operatorProfileContext = {
+            profileText: profile.profile_text,
+            compensationRules: profile.compensation_rules,
+          };
+        }
+      }
+    } catch {
+      // Personalization is best-effort; a failed profile read must never block
+      // parsing. Fall through with no operator profile (S2 empty-profile parity).
+    }
+
+    // S3 (#255): load existing people so a proposed mention can resolve against
+    // one (normalized_name matching) instead of always proposing a new person.
+    // Best-effort — a failed read degrades resolution to "new", never blocks.
+    let peopleForResolution: Person[] = [];
+    try {
+      peopleForResolution = await listPeople(createSupabaseBrowserClient());
+    } catch {
+      // People read is best-effort; fall through with no candidates.
+    }
+
     const result = await requestParseCapture({
       rawText: capture.raw_text,
-      areaContext: stateRef.current.areas.map((area) => ({
-        slug: area.name.toLowerCase().replace(/\s+/g, "-"),
-        name: area.name,
-      })),
+      areaContext: stateRef.current.areas.map((area) => {
+        const slug = area.name.toLowerCase().replace(/\s+/g, "-");
+        return {
+          slug,
+          name: area.name,
+          charterText: charterBySlug.get(slug) ?? null,
+        };
+      }),
+      operatorProfile: operatorProfileContext,
       parserMode,
       authorization,
     });
@@ -2001,6 +2136,41 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         workflowAreaId: capture.area_id,
       });
       applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
+
+      // Born instrumented (NS-INV-3): record person/commitment proposals as
+      // pending suggestions. Fire-and-forget — a learning-write failure must
+      // never affect parsing or triage. Nothing is persisted to `people` here;
+      // approval happens in triage (NS-INV-4).
+      const learningClient = createSupabaseBrowserClient();
+      for (const draft of parsed.taskDrafts) {
+        const area_id = persistedAreaIdForWorkflowId(
+          draft.area_id,
+          persistedAreasRef.current,
+        );
+        for (const mention of draft.person_mentions) {
+          // Resolve against existing people by normalized name; a match records
+          // the linked person id, otherwise the proposal is a new-person one.
+          const resolution = resolvePersonMention(mention, peopleForResolution);
+          recordPersonMentionProposal(learningClient, {
+            area_id,
+            draft_id: draft.id,
+            name: mention.name,
+            role: mention.role,
+            confidence: mention.confidence,
+            match: resolution.kind === "matched" ? "matched" : "new",
+            matched_person_id:
+              resolution.kind === "matched" ? resolution.person.id : null,
+          });
+        }
+        if (draft.is_commitment) {
+          recordCommitmentProposal(learningClient, {
+            area_id,
+            draft_id: draft.id,
+            title: draft.title,
+            confidence: draft.confidence,
+          });
+        }
+      }
     }
 
     if (activeParseCaptureIdRef.current !== capture.id) {
@@ -2213,6 +2383,30 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     editTaskDraft: (draftId, changes) => {
       dispatch({ type: "editDraft", draftId, changes });
       markLocalOnly("Draft edit saved locally; account sync is pending.");
+    },
+    rejectPersonLink: (draftId, mentionIndex) => {
+      const draft = stateRef.current.taskDrafts.find(
+        (item) => item.id === draftId,
+      );
+      const mention = draft?.person_mentions[mentionIndex] ?? null;
+      dispatch({ type: "rejectPersonMention", draftId, mentionIndex });
+      markLocalOnly(
+        "Removed proposed person link locally; the task stays a plain task.",
+      );
+
+      // Fire-and-forget override: the user rejected the proposed link. A failed
+      // learning write must never affect the triage flow (NS-INV-3).
+      if (draft && mention) {
+        recordPersonLinkRejection(createSupabaseBrowserClient(), {
+          area_id: persistedAreaIdForWorkflowId(
+            draft.area_id,
+            persistedAreasRef.current,
+          ),
+          draft_id: draft.id,
+          name: mention.name,
+          role: mention.role,
+        });
+      }
     },
     splitTaskDraft: (draftId, titles) => {
       dispatch({ type: "splitDraft", draftId, titles });

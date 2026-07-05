@@ -29,6 +29,34 @@ export const ParseCaptureBreakdownSchema = z.object({
 
 export type ParseCaptureBreakdown = z.infer<typeof ParseCaptureBreakdownSchema>;
 
+/**
+ * Stage 1 slice S3 (issue #255): person references detected in a capture.
+ * `role` distinguishes who owes whom, matching the frozen DATA_MODEL 4.11
+ * commitment columns: `waiting_on` (the user is waiting on this person),
+ * `committed_to` (the user promised this person), or a plain `mention`.
+ * Never persisted verbatim — a proposed link only resolves against `people`
+ * (normalized_name) or proposes a new person after explicit user approval.
+ */
+export const ParseCapturePersonMentionRoleSchema = z.enum([
+  "waiting_on",
+  "committed_to",
+  "mention",
+]);
+
+export type ParseCapturePersonMentionRole = z.infer<
+  typeof ParseCapturePersonMentionRoleSchema
+>;
+
+export const ParseCapturePersonMentionSchema = z.object({
+  name: z.string().min(1),
+  role: ParseCapturePersonMentionRoleSchema,
+  confidence: z.number().min(0).max(1),
+});
+
+export type ParseCapturePersonMention = z.infer<
+  typeof ParseCapturePersonMentionSchema
+>;
+
 export const ParseCaptureTaskDraftSchema = z.object({
   draft_type: z.literal("task_draft"),
   title: z.string().min(1),
@@ -40,6 +68,12 @@ export const ParseCaptureTaskDraftSchema = z.object({
   due_at: z.string().datetime().nullable(),
   confidence: z.number().min(0).max(1),
   breakdown: ParseCaptureBreakdownSchema.nullable().default(null),
+  // S3 (#255): optional, additive. `person_mentions` is a (possibly empty)
+  // array — "no person" is `[]`, not null — and `is_commitment` mirrors the
+  // frozen `tasks.is_commitment boolean not null default false` DB column.
+  // Both default so pre-S3 persisted parse results still validate (NS-INV-2).
+  person_mentions: z.array(ParseCapturePersonMentionSchema).default([]),
+  is_commitment: z.boolean().default(false),
 });
 
 export const ParseCaptureProjectDraftSchema = z.object({
