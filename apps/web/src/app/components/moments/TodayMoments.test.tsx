@@ -478,6 +478,56 @@ describe("TodayMoments — FR-028 re-entry return ritual", () => {
     expect(ritual.innerHTML).not.toMatch(/failed/i);
     expect(ritual.innerHTML).not.toMatch(/missed/i);
   });
+
+  // SP-5: never lose typed capture text. The re-entry ritual renders instead
+  // of the moments content, but it must not clobber a pending capture draft
+  // sitting in sessionStorage — this proves the draft survives a ritual
+  // render/dismiss round trip and is still there when capture reopens after.
+  it("SP-5: a capture draft in sessionStorage survives a re-entry ritual render and dismiss", async () => {
+    const { rerender, now } = await seedAbsentTaskAndDeriveNow();
+
+    window.sessionStorage.setItem(
+      "lifeos.moments.captureDraft",
+      "half-typed thought before the ritual",
+    );
+
+    rerender(
+      <WorkflowProvider>
+        <ReEntrySeedBridge onState={() => {}} />
+        <TodayMoments now={now} />
+      </WorkflowProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("re-entry-ritual")).toBeInTheDocument();
+    });
+
+    // The ritual owns the screen; the draft must still be untouched in
+    // storage while it renders.
+    expect(window.sessionStorage.getItem("lifeos.moments.captureDraft")).toBe(
+      "half-typed thought before the ritual",
+    );
+
+    fireEvent.click(screen.getByTestId("re-entry-ritual-start-day"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("re-entry-ritual")).not.toBeInTheDocument();
+    });
+
+    // Ritual dismissed — draft survives, and reopening capture shows it.
+    expect(window.sessionStorage.getItem("lifeos.moments.captureDraft")).toBe(
+      "half-typed thought before the ritual",
+    );
+
+    fireEvent.keyDown(window, { key: "c" });
+
+    expect(screen.getByTestId("capture-overlay-textarea")).toHaveValue(
+      "half-typed thought before the ritual",
+    );
+    expect(
+      screen.getByTestId("capture-overlay-draft-restored"),
+    ).toBeInTheDocument();
+  });
 });
 
 /**
@@ -948,5 +998,109 @@ describe("TodayMoments — P6 deep-link shims", () => {
     const toastAfter = screen.getByTestId("today-moments-toast");
     expect(toastAfter).toHaveClass("fixed");
     expect(within(toastAfter).getByText("Captured")).toBeInTheDocument();
+  });
+});
+
+/**
+ * SP-5: never lose typed capture text. Unsaved capture input must survive
+ * an accidental close/reopen within a session via sessionStorage (not
+ * localStorage, so it does not haunt a brand-new session), and must be
+ * cleared only on a successful save. Palette persistence is explicitly out
+ * of scope — palettes conventionally reset — so no equivalent test exists
+ * for CommandPalette.
+ */
+describe("TodayMoments — SP-5 capture draft preservation", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  it("preserves typed text through Esc/close and reopen, with the cursor at the end and a restored hint", async () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "c" });
+    const textarea = screen.getByTestId(
+      "capture-overlay-textarea",
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: { value: "three words lost" },
+    });
+
+    fireEvent.keyDown(textarea, { key: "Escape" });
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+
+    // Sessions-worth persistence: the draft is in sessionStorage, not
+    // localStorage, per the SP-5 contract.
+    expect(window.sessionStorage.getItem("lifeos.moments.captureDraft")).toBe(
+      "three words lost",
+    );
+    expect(
+      window.localStorage.getItem("lifeos.moments.captureDraft"),
+    ).toBeNull();
+
+    fireEvent.keyDown(window, { key: "c" });
+    const reopened = screen.getByTestId(
+      "capture-overlay-textarea",
+    ) as HTMLTextAreaElement;
+
+    await waitFor(() => {
+      expect(reopened).toHaveFocus();
+    });
+    expect(reopened.value).toBe("three words lost");
+    expect(reopened.selectionStart).toBe("three words lost".length);
+    expect(
+      screen.getByTestId("capture-overlay-draft-restored"),
+    ).toBeInTheDocument();
+  });
+
+  it("clears the draft only after a successful save, and the captured text reaches workflow state", async () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "c" });
+    const textarea = screen.getByTestId("capture-overlay-textarea");
+    fireEvent.change(textarea, {
+      target: { value: "Follow up with Alex about the contract" },
+    });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Captured",
+    );
+    expect(
+      window.sessionStorage.getItem("lifeos.moments.captureDraft"),
+    ).toBeNull();
+
+    fireEvent.keyDown(window, { key: "c" });
+    const reopened = screen.getByTestId(
+      "capture-overlay-textarea",
+    ) as HTMLTextAreaElement;
+    expect(reopened.value).toBe("");
+    expect(
+      screen.queryByTestId("capture-overlay-draft-restored"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("fresh mount with empty sessionStorage shows an empty box and no false restored hint", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "c" });
+    const textarea = screen.getByTestId(
+      "capture-overlay-textarea",
+    ) as HTMLTextAreaElement;
+
+    expect(textarea.value).toBe("");
+    expect(
+      screen.queryByTestId("capture-overlay-draft-restored"),
+    ).not.toBeInTheDocument();
   });
 });

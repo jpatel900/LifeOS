@@ -84,4 +84,66 @@ describe("CaptureOverlay", () => {
       "false",
     );
   });
+
+  // SP-5: never lose typed capture text. These cover the CaptureOverlay half
+  // of the contract in isolation (seeding, hint, cursor position, reporting
+  // keystrokes upward); TodayMoments.test.tsx covers the sessionStorage
+  // read/write + clear-on-save + ritual-safety wiring end to end.
+  describe("SP-5 draft seeding", () => {
+    it("seeds the textarea from initialText and shows the restored hint, with the cursor at the end", async () => {
+      render(
+        <CaptureOverlay
+          open
+          kinds={KINDS}
+          initialText="half a thought"
+          onSave={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      const textarea = screen.getByTestId(
+        "capture-overlay-textarea",
+      ) as HTMLTextAreaElement;
+
+      await waitFor(() => {
+        expect(textarea).toHaveFocus();
+      });
+      expect(textarea.value).toBe("half a thought");
+      expect(textarea.selectionStart).toBe("half a thought".length);
+      expect(textarea.selectionEnd).toBe("half a thought".length);
+      expect(
+        screen.getByTestId("capture-overlay-draft-restored"),
+      ).toHaveTextContent("Draft restored");
+    });
+
+    it("does not show the restored hint when initialText is empty or omitted", () => {
+      render(
+        <CaptureOverlay
+          open
+          kinds={KINDS}
+          onSave={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByTestId("capture-overlay-draft-restored"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("reports every keystroke via onDraftChange without requiring it", () => {
+      const onDraftChange = vi.fn();
+      render(
+        <CaptureOverlay
+          open
+          kinds={KINDS}
+          onSave={vi.fn()}
+          onClose={vi.fn()}
+          onDraftChange={onDraftChange}
+        />,
+      );
+      const textarea = screen.getByTestId("capture-overlay-textarea");
+      fireEvent.change(textarea, { target: { value: "a stray thought" } });
+      expect(onDraftChange).toHaveBeenCalledWith("a stray thought");
+    });
+  });
 });

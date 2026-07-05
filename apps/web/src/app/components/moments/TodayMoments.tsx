@@ -35,6 +35,7 @@ import type { DeepLinkTarget } from "./deepLink";
  */
 
 const PREFERENCES_KEY = "lifeos.moments.preferences";
+const CAPTURE_DRAFT_KEY = "lifeos.moments.captureDraft";
 const TOAST_DURATION_MS = 2500;
 const CAPTURE_KINDS = ["Task", "Note", "Idea"];
 const DEFAULT_FOCUS_MINUTES = 25;
@@ -60,6 +61,32 @@ function writeStoredPreferences(prefs: StoredPreferences): void {
     window.localStorage.setItem(PREFERENCES_KEY, JSON.stringify(prefs));
   } catch {
     // Blocked storage (private mode, quota, etc.) — preferences just won't persist.
+  }
+}
+
+// SP-5: unsaved capture text must survive an accidental close/reopen within
+// the session, but must not haunt a brand-new session — sessionStorage, not
+// localStorage. Cleared only on a successful save; an Esc/close/re-entry
+// ritual must never clear it. Mirrors the try/catch-guarded idiom used by
+// readStoredPreferences/writeStoredPreferences and the reentry suppression
+// helpers in useReEntryRitual.ts.
+function readStoredCaptureDraft(): string {
+  try {
+    return window.sessionStorage.getItem(CAPTURE_DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStoredCaptureDraft(text: string): void {
+  try {
+    if (text) {
+      window.sessionStorage.setItem(CAPTURE_DRAFT_KEY, text);
+    } else {
+      window.sessionStorage.removeItem(CAPTURE_DRAFT_KEY);
+    }
+  } catch {
+    // Blocked storage (private mode, quota, etc.) — draft just won't persist.
   }
 }
 
@@ -124,6 +151,9 @@ export function TodayMoments({
   });
 
   const [captureOpen, setCaptureOpen] = useState(false);
+  const [captureDraft, setCaptureDraft] = useState<string>(() =>
+    readStoredCaptureDraft(),
+  );
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [activeSheet, setActiveSheet] = useState<null | "triage" | "plan">(
     null,
@@ -600,10 +630,19 @@ export function TodayMoments({
       <CaptureOverlay
         open={captureOpen}
         kinds={CAPTURE_KINDS}
+        initialText={captureDraft}
+        onDraftChange={(text) => {
+          setCaptureDraft(text);
+          writeStoredCaptureDraft(text);
+        }}
         onSave={(text) => {
           submitCaptureText(text, selectedAreaId);
           showToast("Captured");
           setCaptureOpen(false);
+          // Clear the draft only after a successful save — Esc/close must
+          // preserve it, so this write happens nowhere else.
+          setCaptureDraft("");
+          writeStoredCaptureDraft("");
         }}
         onClose={() => setCaptureOpen(false)}
       />

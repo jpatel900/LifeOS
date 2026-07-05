@@ -12,6 +12,14 @@ import { Textarea } from "@/components/ui/textarea";
  * Escape closes. Kind chips are single-select, first kind defaults active.
  * Transition duration reads --motion-base via inline style per house rule
  * (no new keyframes added to globals.css in this packet).
+ *
+ * SP-5: unsaved text must survive an accidental close/reopen within the
+ * session. This component stays uncontrolled for `text` (it still owns
+ * local useState and still clears it on save, so standalone callers/tests
+ * that omit the new props keep working) but accepts an optional
+ * `initialText` to seed from on open and an optional `onDraftChange` to
+ * report keystrokes upward. TodayMoments owns the sessionStorage
+ * read/write; this component never touches storage directly.
  */
 
 export interface CaptureOverlayProps {
@@ -19,6 +27,8 @@ export interface CaptureOverlayProps {
   kinds: string[];
   onSave(text: string, kind: string): void;
   onClose(): void;
+  initialText?: string;
+  onDraftChange?(text: string): void;
 }
 
 export function CaptureOverlay({
@@ -26,22 +36,42 @@ export function CaptureOverlay({
   kinds,
   onSave,
   onClose,
+  initialText,
+  onDraftChange,
 }: CaptureOverlayProps) {
   const [text, setText] = useState("");
   const [selectedKind, setSelectedKind] = useState(kinds[0] ?? "");
+  const [restored, setRestored] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (open) {
       setSelectedKind(kinds[0] ?? "");
-      const id = requestAnimationFrame(() => textareaRef.current?.focus());
+      const seeded = initialText ?? "";
+      setText(seeded);
+      setRestored(seeded.length > 0);
+      const id = requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
       return () => cancelAnimationFrame(id);
     }
     return undefined;
+    // Seeding only happens on the open transition, not on every
+    // initialText change, so mid-typing edits never get clobbered by a
+    // stale prop from the parent's own state update cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;
+
+  function handleChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = event.target.value;
+    setText(value);
+    onDraftChange?.(value);
+  }
 
   function handleSave() {
     const trimmed = text.trim();
@@ -83,11 +113,20 @@ export function CaptureOverlay({
         <Textarea
           ref={textareaRef}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder="What's on your mind?"
           data-testid="capture-overlay-textarea"
         />
+
+        {restored ? (
+          <p
+            className="text-xs text-muted-foreground"
+            data-testid="capture-overlay-draft-restored"
+          >
+            Draft restored
+          </p>
+        ) : null}
 
         <div
           className="flex flex-wrap gap-2"
