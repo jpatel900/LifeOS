@@ -19,6 +19,9 @@ import { CloseMoment } from "./CloseMoment";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 import { buildProgressionNodes } from "./progressionNodes";
+import { buildPipelineCounts } from "./pipelineCounts";
+import { TriageSheet } from "./TriageSheet";
+import { PlanSheet } from "./PlanSheet";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -119,6 +122,9 @@ export function TodayMoments({
 
   const [captureOpen, setCaptureOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [activeSheet, setActiveSheet] = useState<null | "triage" | "plan">(
+    null,
+  );
   const [toast, setToast] = useState<string | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -138,6 +144,10 @@ export function TodayMoments({
   const progressionNodes = useMemo(
     () => buildProgressionNodes(state, railTaskId),
     [state, railTaskId],
+  );
+  const pipelineCounts = useMemo(
+    () => buildPipelineCounts(state, selectedAreaId),
+    [state, selectedAreaId],
   );
 
   useEffect(() => {
@@ -245,6 +255,21 @@ export function TodayMoments({
     showToast("Fresh start — pick your next move");
   }, [showToast]);
 
+  const handleDrillPipeline = useCallback(
+    (stage: string) => {
+      if (stage === "triage") {
+        setActiveSheet("triage");
+        return;
+      }
+      if (stage === "plan") {
+        setActiveSheet("plan");
+        return;
+      }
+      showToast("Opens with the full shell");
+    },
+    [showToast],
+  );
+
   const runPrimary = useCallback(() => {
     if (moment === "start") {
       if (startVM.firstMove) {
@@ -271,6 +296,12 @@ export function TodayMoments({
     showToast,
   ]);
 
+  // Ordering: palette -> capture -> sheet. In practice Escape while a sheet
+  // is focused is handled by MomentSheet itself (mirroring how
+  // CommandPalette/CaptureOverlay own their own Escape via onKeyDown on the
+  // focused element, since useMomentKeyboard is disabled while any overlay
+  // is open) — this function exists for parity with that ordering and as a
+  // defensive fallback, not as the primary Escape path.
   const closeTopOverlay = useCallback(() => {
     if (paletteOpen) {
       setPaletteOpen(false);
@@ -278,8 +309,12 @@ export function TodayMoments({
     }
     if (captureOpen) {
       setCaptureOpen(false);
+      return;
     }
-  }, [paletteOpen, captureOpen]);
+    if (activeSheet) {
+      setActiveSheet(null);
+    }
+  }, [paletteOpen, captureOpen, activeSheet]);
 
   // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
   // = [stalest open task, then each planned task deferral], deduped by
@@ -342,7 +377,7 @@ export function TodayMoments({
     onPalette: () => setPaletteOpen(true),
     onPrimary: runPrimary,
     onEscape: closeTopOverlay,
-    enabled: !captureOpen && !paletteOpen && !ritualActive,
+    enabled: !captureOpen && !paletteOpen && !activeSheet && !ritualActive,
   });
 
   const paletteActions = useMemo<CommandPaletteAction[]>(() => {
@@ -351,6 +386,8 @@ export function TodayMoments({
       { id: "switch-flow", label: "Switch to Flow", hint: "2" },
       { id: "switch-close", label: "Switch to Close", hint: "3" },
       { id: "open-capture", label: "Open capture", hint: "C" },
+      { id: "open-triage", label: "Open triage" },
+      { id: "open-plan", label: "Open plan" },
     ];
     if (moment === "start" && startVM.firstMove) {
       actions.push({ id: "start-first-move", label: "Start first move" });
@@ -400,6 +437,12 @@ export function TodayMoments({
           break;
         case "open-capture":
           setCaptureOpen(true);
+          break;
+        case "open-triage":
+          setActiveSheet("triage");
+          break;
+        case "open-plan":
+          setActiveSheet("plan");
           break;
         case "start-first-move":
           if (startVM.firstMove) handleStartMove(startVM.firstMove);
@@ -489,6 +532,8 @@ export function TodayMoments({
               onSnooze={() => showToast("Snoozed 10m")}
               onSwap={() => showToast("Looking for something else")}
               onOpenHealth={() => showToast("Area health is on the roadmap")}
+              pipelineCounts={pipelineCounts}
+              onDrillPipeline={handleDrillPipeline}
             />
           ) : null}
 
@@ -542,6 +587,20 @@ export function TodayMoments({
         actions={paletteActions}
         onRun={runPaletteAction}
         onClose={() => setPaletteOpen(false)}
+      />
+
+      <TriageSheet
+        open={activeSheet === "triage"}
+        selectedAreaId={selectedAreaId}
+        onClose={() => setActiveSheet(null)}
+      />
+
+      <PlanSheet
+        open={activeSheet === "plan"}
+        onClose={() => setActiveSheet(null)}
+        blocks={startVM.blocks}
+        timeDisplay={timeDisplay}
+        now={now}
       />
 
       <div
