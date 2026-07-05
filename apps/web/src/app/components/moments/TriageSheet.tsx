@@ -55,7 +55,7 @@ export function TriageSheet({
           className="text-sm text-muted-foreground"
           data-testid="triage-sheet-empty"
         >
-          Nothing waiting in triage.
+          Nothing waiting in triage — press C to capture the first thing.
         </p>
       ) : (
         <ul className="grid gap-2" data-testid="triage-sheet-list">

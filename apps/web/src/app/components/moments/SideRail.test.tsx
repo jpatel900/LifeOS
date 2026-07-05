@@ -50,4 +50,16 @@ describe("SideRail", () => {
     );
     expect(screen.getByText("8d")).toHaveClass("tabular-nums");
   });
+
+  // SP-8: the waiting-empty state names the filling action (marking a task
+  // as waiting during triage) instead of being a dead end, and avoids the
+  // banned dead-end phrasing.
+  it("waiting-empty state names marking a task as waiting as the filling action", () => {
+    render(<SideRail waitingOn={[]} areas={AREAS} onOpenHealth={vi.fn()} />);
+    const empty = screen.getByTestId("side-rail-waiting-empty");
+    expect(empty).toHaveTextContent("Mark a task as waiting");
+    expect(empty.textContent?.toLowerCase()).not.toMatch(
+      /nothing here|empty|no data|\bnone\b/,
+    );
+  });
 });

@@ -87,6 +87,18 @@ describe("TriageSheet", () => {
     expect(screen.getByTestId("triage-sheet-empty")).toBeInTheDocument();
   });
 
+  // SP-8: the empty state names the filling action (capture via the C
+  // shortcut) instead of being a dead end, and avoids the banned dead-end
+  // phrasing.
+  it("empty state names the capture shortcut as the filling action", () => {
+    renderSheet(true);
+    const empty = screen.getByTestId("triage-sheet-empty");
+    expect(empty).toHaveTextContent("press C to capture the first thing");
+    expect(empty.textContent?.toLowerCase()).not.toMatch(
+      /nothing here|empty|no data|\bnone\b/,
+    );
+  });
+
   it("shows a pending capture draft and accept-to-backlog moves it out of the list", async () => {
     const restoreFetch = stubParseCaptureFetch();
     renderSheet(true);

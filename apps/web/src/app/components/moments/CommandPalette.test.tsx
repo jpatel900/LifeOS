@@ -45,6 +45,31 @@ describe("CommandPalette", () => {
     ).not.toBeInTheDocument();
   });
 
+  // SP-8: the zero-matches empty state names the filling action (try a
+  // different word or clear the search) and echoes the query, instead of
+  // being a dead end, and avoids the banned dead-end phrasing.
+  it("zero-matches empty state names retrying or clearing the search as the filling action", () => {
+    render(
+      <CommandPalette
+        open
+        actions={ACTIONS}
+        onRun={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "zzz-no-match" },
+    });
+
+    const list = screen.getByTestId("command-palette-list");
+    expect(list).toHaveTextContent("zzz-no-match");
+    expect(list).toHaveTextContent("try a different word or clear the search");
+    expect(list.textContent?.toLowerCase()).not.toMatch(
+      /nothing here|empty|no data|\bnone\b/,
+    );
+  });
+
   it("moves the highlighted row with arrow keys (wrapping) and runs it on Enter", () => {
     const onRun = vi.fn();
     const onClose = vi.fn();

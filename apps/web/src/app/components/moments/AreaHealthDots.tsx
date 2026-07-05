@@ -35,7 +35,7 @@ export function AreaHealthDots({ areas }: AreaHealthDotsProps) {
         className="text-sm text-muted-foreground"
         data-testid="area-health-dots-empty"
       >
-        No areas yet.
+        No areas yet — add one in Settings to start tracking health.
       </p>
     );
   }

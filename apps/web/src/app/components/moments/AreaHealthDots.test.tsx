@@ -36,4 +36,16 @@ describe("AreaHealthDots", () => {
     render(<AreaHealthDots areas={[]} />);
     expect(screen.getByTestId("area-health-dots-empty")).toBeInTheDocument();
   });
+
+  // SP-8: the empty state names the filling action (adding an area in
+  // Settings) instead of being a dead end, and avoids the banned dead-end
+  // phrasing.
+  it("empty state names adding an area in Settings as the filling action", () => {
+    render(<AreaHealthDots areas={[]} />);
+    const empty = screen.getByTestId("area-health-dots-empty");
+    expect(empty).toHaveTextContent("add one in Settings");
+    expect(empty.textContent?.toLowerCase()).not.toMatch(
+      /nothing here|empty|no data|\bnone\b/,
+    );
+  });
 });

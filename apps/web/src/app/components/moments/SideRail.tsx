@@ -37,7 +37,8 @@ export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
               className="text-sm text-muted-foreground"
               data-testid="side-rail-waiting-empty"
             >
-              Nothing waiting on anyone.
+              Nothing waiting on anyone. Mark a task as waiting during triage to
+              track it here.
             </p>
           ) : (
             <ul className="grid gap-2" data-testid="side-rail-waiting-list">

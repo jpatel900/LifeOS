@@ -143,7 +143,8 @@ export function CommandPalette({
         >
           {filtered.length === 0 ? (
             <li className="px-2 py-3 text-sm text-muted-foreground">
-              No matching commands.
+              No commands match &ldquo;{query}&rdquo; — try a different word or
+              clear the search.
             </li>
           ) : (
             filtered.map((action, index) => {

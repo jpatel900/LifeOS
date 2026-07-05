@@ -24,7 +24,7 @@ export function ScheduleList({ blocks, timeDisplay, now }: ScheduleListProps) {
         className="text-sm text-muted-foreground"
         data-testid="schedule-list-empty"
       >
-        Nothing on today&apos;s schedule.
+        Nothing on today&apos;s schedule yet — plan a block to fill it in.
       </p>
     );
   }
