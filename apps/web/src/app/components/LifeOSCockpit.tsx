@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Sun,
   Trash2,
+  Users,
 } from "lucide-react";
 import { createArea, listAreas, updateAreaColor } from "@/lib/data/workflow";
 import {
@@ -1781,6 +1782,43 @@ function ReviewView({
             ))}
           </div>
         ) : null}
+        {vm.agingWaitingOn.length ? (
+          <div
+            data-testid="review-aging-waiting-on"
+            className="mt-6 grid gap-3"
+          >
+            <h2 className="text-xl font-bold">Waiting on (aging)</h2>
+            {vm.agingWaitingOn.map((item) => (
+              <div
+                key={`waiting-on-${item.task.id}`}
+                className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-3"
+              >
+                <p className="font-bold text-[var(--ink)]">{item.task.title}</p>
+                <p className="text-sm text-[var(--mut)]">
+                  Waiting {Math.floor(item.ageDays)} day
+                  {Math.floor(item.ageDays) === 1 ? "" : "s"} (threshold{" "}
+                  {item.thresholdDays})
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {vm.openCommitments.length ? (
+          <div
+            data-testid="review-open-commitments"
+            className="mt-6 grid gap-3"
+          >
+            <h2 className="text-xl font-bold">Open commitments</h2>
+            {vm.openCommitments.map((task) => (
+              <div
+                key={`commitment-${task.id}`}
+                className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-3"
+              >
+                <p className="font-bold text-[var(--ink)]">{task.title}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <details className="mt-6 text-[var(--mut)]">
           <summary className="cursor-pointer font-semibold text-[var(--ink)]">
             Carry-forward details
@@ -1890,6 +1928,34 @@ function HealthView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
               <p className="mt-1 text-sm text-[var(--mut)]">{check.summary}</p>
             </div>
           ))}
+          <div
+            data-testid="health-aging-signals"
+            className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-bold">People &amp; commitments</span>
+              <Users
+                className={
+                  vm.agingSummary.agingWaitingOnCount +
+                    vm.agingSummary.staleCommitmentCount ===
+                  0
+                    ? "text-[var(--grn-fg)]"
+                    : "text-[var(--amb-fg)]"
+                }
+                size={20}
+              />
+            </div>
+            <p className="mt-1 text-sm text-[var(--mut)]">
+              {vm.agingSummary.agingWaitingOnCount === 0 &&
+              vm.agingSummary.staleCommitmentCount === 0
+                ? "No aging waiting-ons or stale commitments."
+                : `${vm.agingSummary.agingWaitingOnCount} aging waiting-on${
+                    vm.agingSummary.agingWaitingOnCount === 1 ? "" : "s"
+                  } · ${vm.agingSummary.staleCommitmentCount} stale commitment${
+                    vm.agingSummary.staleCommitmentCount === 1 ? "" : "s"
+                  }`}
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => {

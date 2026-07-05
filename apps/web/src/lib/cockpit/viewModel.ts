@@ -6,6 +6,14 @@ import type {
   Phase2MockExecutionSession,
   Phase2MockTask,
 } from "@/lib/types";
+import {
+  findAgingWaitingOnItems,
+  findOpenCommitments,
+  summarizeAging,
+  type AgingRulesOptions,
+  type AgingSummary,
+  type AgingWaitingOnItem,
+} from "@/lib/agingRules";
 import { cardBg } from "./accent";
 
 export type CockpitStage =
@@ -59,6 +67,12 @@ export interface CockpitViewModel {
     session: Phase2MockExecutionSession | null;
     reason: "open" | "backlog" | "stuck" | "missed";
   }[];
+  /** S4 (#256): rule-based waiting-on aging, scoped to the active area. */
+  agingWaitingOn: AgingWaitingOnItem<Phase2MockTask>[];
+  /** S4 (#256): open commitments owed by the user, oldest first, scoped to the active area. */
+  openCommitments: Phase2MockTask[];
+  /** S4 (#256): rule-based counts for the health surface, scoped to the active area. */
+  agingSummary: AgingSummary;
   global: {
     inbox: PipelineCard[];
     today: PipelineCard[];
@@ -160,6 +174,7 @@ export function buildCockpitViewModel(
   state: WorkflowState,
   selectedAreaId: string | null,
   dark: boolean,
+  agingOptions: AgingRulesOptions = {},
 ): CockpitViewModel {
   const activeArea = state.areas.find((area) => area.id === selectedAreaId) ??
     state.areas[0] ?? {
@@ -319,6 +334,16 @@ export function buildCockpitViewModel(
       .filter((item): item is PipelineCard => Boolean(item)),
   };
 
+  const areaTasksForAging = state.tasks.filter((task) =>
+    taskAreaMatches(task, areaId),
+  );
+  const agingWaitingOn = findAgingWaitingOnItems(
+    areaTasksForAging,
+    agingOptions,
+  );
+  const openCommitments = findOpenCommitments(areaTasksForAging);
+  const agingSummary = summarizeAging(areaTasksForAging, agingOptions);
+
   return {
     activeArea,
     areas: state.areas,
@@ -331,6 +356,9 @@ export function buildCockpitViewModel(
     sessions,
     healthChecks: state.healthChecks,
     reviewQueue,
+    agingWaitingOn,
+    openCommitments,
+    agingSummary,
     global,
     counts: {
       today: today.length,
