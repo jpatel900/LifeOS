@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CaptureOverlay } from "./CaptureOverlay";
 
@@ -144,6 +145,70 @@ describe("CaptureOverlay", () => {
       const textarea = screen.getByTestId("capture-overlay-textarea");
       fireEvent.change(textarea, { target: { value: "a stray thought" } });
       expect(onDraftChange).toHaveBeenCalledWith("a stray thought");
+    });
+  });
+
+  // SP-1: focus discipline — return-focus and the Tab trap layer on top of
+  // the existing autofocus/Escape behavior without changing it (the
+  // "autofocuses the textarea when opened" test above already proves
+  // autofocus survives the wiring).
+  describe("SP-1 focus discipline", () => {
+    function OpenerHarness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button data-testid="opener" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <CaptureOverlay
+            open={open}
+            kinds={KINDS}
+            onSave={vi.fn()}
+            onClose={() => setOpen(false)}
+          />
+        </div>
+      );
+    }
+
+    it("returns focus to the opener once closed", async () => {
+      render(<OpenerHarness />);
+      const opener = screen.getByTestId("opener");
+      opener.focus();
+      fireEvent.click(opener);
+
+      await waitFor(() => {
+        expect(screen.getByTestId("capture-overlay-textarea")).toHaveFocus();
+      });
+
+      fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
+        key: "Escape",
+      });
+
+      expect(opener).toHaveFocus();
+    });
+
+    it("traps Tab within the dialog", async () => {
+      render(
+        <CaptureOverlay
+          open
+          kinds={KINDS}
+          onSave={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId("capture-overlay-textarea")).toHaveFocus();
+      });
+
+      const closeButton = screen.getByTestId("capture-overlay-close");
+      closeButton.focus();
+      expect(closeButton).toHaveFocus();
+
+      fireEvent.keyDown(screen.getByRole("dialog"), {
+        key: "Tab",
+      });
+
+      expect(screen.getByTestId("capture-overlay-textarea")).toHaveFocus();
     });
   });
 });

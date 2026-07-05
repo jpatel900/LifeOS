@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { WhileYouWereOutSummary } from "@/lib/reEntry/summary";
@@ -7,6 +8,8 @@ import type {
   ReEntryDeferralOutcome,
   ReEntryDeferralPlan,
 } from "@/lib/reEntry/defer";
+import { useReturnFocus } from "./useReturnFocus";
+import { useFocusTrap } from "./useFocusTrap";
 
 /**
  * FR-028 re-entry amnesty, packet F-G2c: the return ritual presentation.
@@ -67,9 +70,25 @@ export function ReEntryRitual({
   onDismiss,
 }: ReEntryRitualProps) {
   const hasApprovals = plan.requiresApproval.length > 0;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // SP-1: the ritual has no explicit "opener" — it appears in place of the
+  // moments content on load rather than being summoned over it — so
+  // return-focus has little to restore (it's a safe no-op when there was no
+  // meaningful prior focus). The trap is the load-bearing half here: while
+  // the ritual is mounted, Tab must stay inside it rather than escaping to
+  // controls the ritual is deliberately standing in front of. Both hooks
+  // treat "mounted" as "active" since this component only renders while the
+  // ritual owns the screen (TodayMoments conditionally mounts/unmounts it).
+  useReturnFocus(true);
+  useFocusTrap(true, containerRef);
 
   return (
-    <div className="grid gap-6" data-testid="re-entry-ritual">
+    <div
+      ref={containerRef}
+      className="grid gap-6"
+      data-testid="re-entry-ritual"
+    >
       <div className="grid gap-1">
         <h1 className="workflow-surface-title text-xl font-semibold tabular-nums">
           Welcome back — {summary.absenceDays} days away.

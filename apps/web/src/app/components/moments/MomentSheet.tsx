@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import { useReturnFocus } from "./useReturnFocus";
+import { useFocusTrap } from "./useFocusTrap";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -37,6 +39,11 @@ export function MomentSheet({
   children,
 }: MomentSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  // SP-1: capture the opener before the autofocus effect below moves focus
+  // onto the dialog shell itself, and trap Tab within it while open.
+  useReturnFocus(open);
+  useFocusTrap(open, dialogRef);
 
   useEffect(() => {
     if (open) {

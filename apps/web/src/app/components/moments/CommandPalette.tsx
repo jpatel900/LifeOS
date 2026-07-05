@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useReturnFocus } from "./useReturnFocus";
+import { useFocusTrap } from "./useFocusTrap";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -36,6 +38,12 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // SP-1: capture the opener before the autofocus effect below moves focus
+  // into the input, and trap Tab while open.
+  useReturnFocus(open);
+  useFocusTrap(open, dialogRef);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -103,6 +111,7 @@ export function CommandPalette({
         data-testid="command-palette-scrim"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -116,7 +125,7 @@ export function CommandPalette({
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a command…"
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="command-palette-input"
         />
 

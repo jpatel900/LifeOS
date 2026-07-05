@@ -259,4 +259,77 @@ describe("ReEntryRitual", () => {
     expect(container.innerHTML).not.toMatch(/missed/i);
     expect(container.innerHTML).not.toMatch(/state-risk/i);
   });
+
+  // SP-1: focus discipline. The ritual has no explicit "opener" — it
+  // appears in place of the moments content on load rather than being
+  // summoned over it — so return-focus is a safe no-op here (nothing
+  // meaningful to restore); the Tab trap is the load-bearing half, keeping
+  // keyboard users from tabbing past the ritual into whatever it's standing
+  // in front of.
+  describe("SP-1 focus discipline", () => {
+    it("mounts without throwing (return-focus no-ops with no prior opener)", () => {
+      expect(() => renderRitual()).not.toThrow();
+    });
+
+    it("traps Tab within the ritual container", () => {
+      renderRitual();
+
+      const container = screen.getByTestId("re-entry-ritual");
+      const first = screen.getByTestId("re-entry-ritual-recovery-accept");
+      const last = screen.getByTestId("re-entry-ritual-start-day");
+
+      last.focus();
+      expect(last).toHaveFocus();
+      fireEvent.keyDown(container, { key: "Tab" });
+      expect(first).toHaveFocus();
+
+      fireEvent.keyDown(container, { key: "Tab", shiftKey: true });
+      expect(last).toHaveFocus();
+    });
+
+    it("does not intercept a non-Tab key inside the ritual", () => {
+      const { onDismiss } = renderRitual();
+      const startDay = screen.getByTestId("re-entry-ritual-start-day");
+      startDay.focus();
+
+      fireEvent.keyDown(screen.getByTestId("re-entry-ritual"), {
+        key: "Escape",
+      });
+
+      expect(onDismiss).not.toHaveBeenCalled();
+      expect(startDay).toHaveFocus();
+    });
+
+    it("restores focus to a real opener once the ritual unmounts", () => {
+      function Harness({ showRitual }: { showRitual: boolean }) {
+        return (
+          <div>
+            <button data-testid="opener">Open</button>
+            {showRitual ? (
+              <ReEntryRitual
+                summary={baseSummary}
+                plan={basePlan}
+                outcomes={[]}
+                demoMode={false}
+                recovery={null}
+                onAcceptRecovery={vi.fn()}
+                onSwapRecovery={vi.fn()}
+                onDismiss={vi.fn()}
+              />
+            ) : null}
+          </div>
+        );
+      }
+
+      const { rerender } = render(<Harness showRitual={false} />);
+      const opener = screen.getByTestId("opener");
+      opener.focus();
+      expect(opener).toHaveFocus();
+
+      rerender(<Harness showRitual />);
+      rerender(<Harness showRitual={false} />);
+
+      expect(opener).toHaveFocus();
+    });
+  });
 });

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+import { useReturnFocus } from "./useReturnFocus";
+import { useFocusTrap } from "./useFocusTrap";
 
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
@@ -43,6 +45,14 @@ export function CaptureOverlay({
   const [selectedKind, setSelectedKind] = useState(kinds[0] ?? "");
   const [restored, setRestored] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // SP-1: capture the opener before any autofocus effect below moves focus
+  // into the dialog, and trap Tab while open. Both hooks must be called
+  // above the `if (!open) return null` so they see the same commit `open`
+  // flips true on.
+  useReturnFocus(open);
+  useFocusTrap(open, dialogRef);
 
   useEffect(() => {
     if (open) {
@@ -104,6 +114,7 @@ export function CaptureOverlay({
         data-testid="capture-overlay-scrim"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Capture a thought"
