@@ -89,6 +89,30 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date.**
 - **Status:** Fenced by the patch-paste protocol, proven three-for-three on 2026-07-04: the kick instructs Codex to post `git format-patch origin/main --stdout` as issue comments; a maintainer applies the patch in a worktree (`git am`, author preserved), runs the lanes the sandbox cannot (local Supabase/RLS), and opens the PR. Candidate follow-up (owner call; delivery apparatus is frozen): make patch-paste the kick template's standard fallback and add a deterministic claimed-PR-exists check after any Codex completion comment.
 - **Date:** 2026-07-04
 
+## Prod parse 502s were undiagnosable: safe degradation without loud reporting
+
+- **Symptom:** The first real production smoke (2026-07-04) found POST /api/parse-capture returning 502 "Parsing failed safely" for hours. The app degraded exactly as designed (raw capture survived, mock retry offered), but nothing anywhere said WHY: Vercel runtime logs showed only a trace-skip warning. Root-causing required manual probing and code spelunking.
+- **Root cause:** Two stacked gaps. (1) `captureError` ships errors only to Sentry/PostHog/Langfuse adapters — with none configured in prod, server-side error capture was a silent no-op; the provider error (whose HTTP status pinpoints quota-vs-key-vs-model) was swallowed. (2) A first diagnosis probe used the wrong request shape (`{"text":...}` vs required `rawText`) and produced a plausible-but-wrong confirmation of the quota theory — the probe's own 502 was a validation error that never reached the provider. Pattern: "degrade safely" without "report loudly" makes failures invisible, and unvalidated probes confirm whatever you already believe.
+- **Evidence:** PR #361 (one console.error line made the next probe definitive: `AI capture parsing request failed: 429`); Vercel runtime log queries 2026-07-04/05.
+- **Status:** Fixed by #361 for this route. Open pattern-level follow-up: every catch-and-degrade path repo-wide must emit a sanitized console line (works with zero adapters configured); the daily-driver floor's provider canary (FR-030 draft) closes the detection gap end-to-end. Probe rule: before trusting a probe result, confirm the probe exercised the layer under test (find its server-side log line).
+- **Date:** 2026-07-05
+
+## Smoke test asserted a vocabulary the API never spoke
+
+- **Symptom:** The prod smoke's parser-status check failed against a HEALTHY production: the test allowed `["ready", "ai_unavailable"]` but the API's designed value is `ai_configured`. A green surface produced a red smoke.
+- **Root cause:** The smoke test restated the status vocabulary by hand instead of importing/deriving it from the source of truth (the route's own unit tests assert `ai_configured`); it was written against a remembered contract, not a read one. Restated vocabularies drift; imported ones cannot.
+- **Evidence:** PR #360 (fix); the GET /api/parse-capture contract in route.ts + route.test.ts.
+- **Status:** Fixed by #360. Standing rule for test authors (including agents): assert enum/status values by importing the canonical constant or reading the contract file in the same change — never from memory.
+- **Date:** 2026-07-05
+
+## Subagent delegate-and-quit, and the checkpoint gap in mid-task deaths
+
+- **Symptom:** (a) A subagent tasked with implementation spawned its own background agent and stopped — twice, recursively; the grandchild eventually delivered, creating near-duplicate-work ambiguity when a retry agent launched. (b) Separately, agents dying mid-task (~50% of runs in the 2026-07-04 batch) left work only as local uncommitted worktree state.
+- **Root cause:** (a) Nothing in the subagent prompt forbade delegation, and delegating is a low-effort "completion" for an agent unsure how to start. (b) No checkpoint discipline was specified, so agents defaulted to one giant end-of-task commit — maximally exposed to mid-task death.
+- **Evidence:** PR #356's double-delegation chain (2026-07-04); the retry agent correctly verified-not-redid the existing branch and PR.
+- **Status:** Fenced by two mandatory prompt clauses (operator-ratified 2026-07-04/05): every implementation subagent prompt explicitly forbids the Agent tool, and requires checkpoint discipline — untracked WORKPLAN.md first, commit per coherent unit, push after every commit, HANDOFF section on failure. Salvage protocol: fetch the branch, read WORKPLAN + diff, fresh-launch a continuation agent (never resume the dead one). A death now costs minutes, not work.
+- **Date:** 2026-07-05
+
 ---
 
 _Seeded 2026-07-02 from repo history and operator memory. Dead branches at seeding time (`agent/single-review-policy`, `codex/...a4-governance-restructure...`, `fix/plan-single-task-scheduling`, `ui/handoff-cockpit-pass`) were not chronicled — whoever closes or deletes one adds its entry._
