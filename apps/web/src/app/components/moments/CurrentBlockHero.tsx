@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatClock } from "./formatTime";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -45,10 +46,7 @@ export function formatMmSs(totalSeconds: number): string {
 
 function clockEndLabel(remainingSeconds: number): string {
   const end = new Date(Date.now() + Math.max(0, remainingSeconds) * 1000);
-  return end.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatClock(end.toISOString());
 }
 
 export function CurrentBlockHero({

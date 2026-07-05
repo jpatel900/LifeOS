@@ -5,6 +5,7 @@ import {
   formatMmSs,
   type CurrentBlockHeroBlock,
 } from "./CurrentBlockHero";
+import { formatClock } from "./formatTime";
 
 function makeBlock(
   overrides: Partial<CurrentBlockHeroBlock> = {},
@@ -133,6 +134,35 @@ describe("CurrentBlockHero", () => {
 
     expect(screen.getByTestId("current-block-hero-time")).toHaveTextContent(
       "until",
+    );
+  });
+
+  // SP-7: locks the CurrentBlockHero -> formatTime.formatClock refactor.
+  // The rendered end-of-block label must stay byte-identical to
+  // formatClock's own output for the same instant.
+  it("renders the exact formatClock output for the clock-mode end label", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-05T15:00:00.000Z"));
+
+    render(
+      <CurrentBlockHero
+        block={makeBlock()}
+        remaining={600}
+        total={1500}
+        running
+        timeDisplay="clock"
+        onDone={vi.fn()}
+        onPause={vi.fn()}
+        onExtend={vi.fn()}
+        onToggleTime={vi.fn()}
+      />,
+    );
+
+    const expected = formatClock(
+      new Date(Date.now() + 600 * 1000).toISOString(),
+    );
+    expect(screen.getByTestId("current-block-hero-time")).toHaveTextContent(
+      `until ${expected}`,
     );
   });
 

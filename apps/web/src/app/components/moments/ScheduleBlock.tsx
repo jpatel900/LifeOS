@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { formatRemaining, formatUntil } from "./useCountdown";
+import { formatClock } from "./formatTime";
 import type { ScheduleBlockVM } from "./momentsViewModel";
 
 /**
@@ -20,20 +21,13 @@ export interface ScheduleBlockProps {
   now: Date;
 }
 
-function clockLabel(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function timeColumnLabel(
   block: ScheduleBlockVM,
   timeDisplay: ScheduleTimeDisplay,
   now: Date,
 ): string {
   if (timeDisplay === "clock") {
-    return clockLabel(block.startAt);
+    return formatClock(block.startAt);
   }
 
   if (block.state === "now" && block.endAt) {
@@ -44,7 +38,7 @@ function timeColumnLabel(
     return formatUntil(new Date(block.startAt).getTime() - now.getTime());
   }
 
-  return clockLabel(block.startAt);
+  return formatClock(block.startAt);
 }
 
 export function ScheduleBlock({ block, timeDisplay, now }: ScheduleBlockProps) {

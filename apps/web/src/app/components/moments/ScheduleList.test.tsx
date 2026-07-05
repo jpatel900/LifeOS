@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { ScheduleList } from "./ScheduleList";
+import { formatClock } from "./formatTime";
 import type { ScheduleBlockVM } from "./momentsViewModel";
 
 const NOW = new Date("2026-07-05T15:00:00.000Z");
@@ -82,6 +83,19 @@ describe("ScheduleList", () => {
   it("renders an empty state with no blocks", () => {
     render(<ScheduleList blocks={[]} timeDisplay="clock" now={NOW} />);
     expect(screen.getByTestId("schedule-list-empty")).toBeInTheDocument();
+  });
+
+  // SP-7: locks the ScheduleBlock -> formatTime.formatClock refactor. The
+  // rendered clock label must stay byte-identical to formatClock's own
+  // output for the same ISO input (this was true before the refactor too,
+  // since the inline helper used the identical toLocaleTimeString call).
+  it("renders the exact formatClock output for a done row's wall-clock label", () => {
+    render(<ScheduleList blocks={BLOCKS} timeDisplay="clock" now={NOW} />);
+    const rows = screen.getAllByTestId("schedule-block");
+    const doneRow = rows.find(
+      (row) => row.getAttribute("data-state") === "done",
+    );
+    expect(doneRow!.textContent).toContain(formatClock(BLOCKS[0].startAt));
   });
 
   // SP-3 numeric steadiness: the now-row's remaining-time pill and the
