@@ -6,6 +6,8 @@ Guidance for Claude Code in this repository.
 
 `AGENTS.md` is the repo's agent-governance authority. Its product, safety, scope, and forbidden-change invariants are binding for Claude too. If this file and `AGENTS.md` disagree on safety or scope, `AGENTS.md` wins; if they disagree on process, use judgment while preserving the invariants.
 
+Cold-starting on the whole system (new human or AI builder)? Read `docs/SYSTEM_MAP.md` first — the one-page builder orientation: layers, where truth lives, safe-change path, reading order, named principles.
+
 Implementation truth lives in `docs/REQUIREMENTS.md`, `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, `docs/ENGINEERING_INVARIANTS.md`, `docs/UX_FLOWS.md`, `docs/SECURITY_PRIVACY.md`, and `docs/TEST_PLAN.md`; ADRs in `docs/adr/` amend architecture. `docs/PROJECT_STATE.md` is the concise current-state handoff and should be read or updated only when current status, shipped behavior, or governance guidance changes.
 
 ## Commands
