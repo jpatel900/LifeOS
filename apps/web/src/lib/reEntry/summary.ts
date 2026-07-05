@@ -18,6 +18,12 @@ export interface LapsedBlockSummary {
   /** Title of the linked task, or null for an unlinked block. */
   taskTitle: string | null;
   endAt: string;
+  /**
+   * Non-null when the block is Google-backed. F-G2b never auto-defers these
+   * (FR-028: external calendar changes stay Flow 8 proposals); the planner
+   * routes them to the requires-approval list instead.
+   */
+  googleEventId: string | null;
 }
 
 export interface StalestItemSummary {
@@ -98,6 +104,7 @@ export function buildWhileYouWereOutSummary(input: {
         ? (taskTitleById.get(block.task_id) ?? null)
         : null,
       endAt: block.end_at,
+      googleEventId: block.google_event_id,
     }));
 
   const pendingTriageCaptures = state.captureItems.filter(

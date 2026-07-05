@@ -581,6 +581,53 @@ export function recordRejectedTaskDraft(
   });
 }
 
+// FR-028 (F-G2b) re-entry amnesty policy identifier per the #235 vocabulary.
+export const RE_ENTRY_POLICY_ID = "re_entry.v1" as const;
+
+export interface ReEntryDeferralRecordInput {
+  area_id: string | null;
+  /** "task" when a whole task was deferred to backlog, "calendar_block" for a lone unplan. */
+  subject_type: "task" | "calendar_block";
+  subject_id: string;
+  /** Deterministic action applied; enumerated in the while-you-were-out summary. */
+  action: "task_to_backlog" | "block_unplanned";
+  /** ISO end times of the lapsed block(s) this deferral covered. */
+  lapsed_block_end_ats: string[];
+  absence_days: number;
+  resolved_at: string;
+}
+
+/**
+ * Record one FR-028 auto-deferral (fire-and-forget; a learning-write failure
+ * must never affect the return ritual). Status "accepted" + decided_by
+ * "system": the deferral is a deterministic bounded-rule transition that has
+ * already been applied and enumerated to the user — not a pending proposal.
+ */
+export function recordReEntryDeferral(
+  client: MinimalSupabaseClient | null,
+  input: ReEntryDeferralRecordInput,
+): void {
+  if (!client) return;
+
+  recordSuggestionFireAndForget(client, {
+    area_id:
+      input.area_id && uuidPattern.test(input.area_id) ? input.area_id : null,
+    policy_identifier: RE_ENTRY_POLICY_ID,
+    suggestion_type: "re_entry_defer",
+    subject_type: input.subject_type,
+    subject_id: uuidPattern.test(input.subject_id) ? input.subject_id : null,
+    suggestion_json: {
+      action: input.action,
+      subject_id: input.subject_id,
+      lapsed_block_end_ats: input.lapsed_block_end_ats,
+      absence_days: input.absence_days,
+    },
+    status: "accepted",
+    decided_by: "system",
+    resolved_at: input.resolved_at,
+  });
+}
+
 // S3 (#255) meta-learning policy identifiers for person/commitment proposals.
 // Stable lowercase keys per the #235 vocabulary (`<domain>.<policy>`), designed
 // to survive schema evolution; not foreign keys.
