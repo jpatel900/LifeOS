@@ -217,6 +217,16 @@ body {
   --acc-sf: #20232e;
   --acc-rng: #414a7a;
   --on-acc: #ffffff;
+  /* Moments pass P1: color-carries-state + motion tokens */
+  --state-ok: var(--grn-fg);
+  --state-watch: var(--amb-fg);
+  --state-risk: var(--destructive);
+  --state-idle: var(--fnt);
+  --state-warn: var(--amb-fg);
+  --motion-fast: 90ms;
+  --motion-base: 160ms;
+  --motion-slow: 240ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   min-height: 100vh;
   background: var(--bd);
   color: var(--ink);
@@ -248,6 +258,16 @@ body {
   --grn-fg: #4a8c63;
   --grn-sf: #e4efe8;
   --grn-rng: #d2e6da;
+  /* Moments pass P1: color-carries-state + motion tokens */
+  --state-ok: var(--grn-fg);
+  --state-watch: var(--amb-fg);
+  --state-risk: var(--destructive);
+  --state-idle: var(--fnt);
+  --state-warn: var(--amb-fg);
+  --motion-fast: 90ms;
+  --motion-base: 160ms;
+  --motion-slow: 240ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .lifeos-cockpit button,
