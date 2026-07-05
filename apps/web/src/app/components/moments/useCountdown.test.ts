@@ -121,4 +121,79 @@ describe("useCountdown", () => {
     expect(clearSpy).toHaveBeenCalled();
     clearSpy.mockRestore();
   });
+
+  /**
+   * SP-2 — packet: drift-free anchored clocks. `useCountdown` already
+   * derives `remainingMs` from `endAtMs - now()` on every tick (no
+   * accumulation), so a wall-clock jump is correct by construction as long
+   * as the interval still fires and reads the injected clock. These tests
+   * add the two things SP-2 requires beyond that: immediate recompute on
+   * `visibilitychange` (no stale window up to `intervalMs` long) and no
+   * update while the tab is reported hidden.
+   */
+  describe("SP-2 anchored clock", () => {
+    afterEach(() => {
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => false,
+      });
+    });
+
+    it("reflects a simulated tab-hidden 2-minute wall-clock jump on return", () => {
+      let nowMs = new Date("2026-07-05T12:00:00.000Z").getTime();
+      const endAt = new Date(nowMs + 10 * 60_000).toISOString(); // 10 minutes out
+
+      const { result } = renderHook(() =>
+        useCountdown(endAt, { now: () => nowMs, intervalMs: 1000 }),
+      );
+      expect(result.current.remainingMs).toBe(10 * 60_000);
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => true,
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      // Wall clock jumps 2 minutes while the tab is hidden; interval ticks
+      // are suppressed during this span (asserted implicitly: no update
+      // happens until the visibilitychange-to-visible fires below).
+      nowMs += 2 * 60_000;
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => false,
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(result.current.remainingMs).toBe(8 * 60_000);
+      expect(result.current.label).toBe("8m left");
+    });
+
+    it("does not update remainingMs on interval ticks while hidden", () => {
+      let nowMs = new Date("2026-07-05T12:00:00.000Z").getTime();
+      const endAt = new Date(nowMs + 5 * 60_000).toISOString();
+
+      const { result } = renderHook(() =>
+        useCountdown(endAt, { now: () => nowMs, intervalMs: 1000 }),
+      );
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => true,
+      });
+
+      nowMs += 30_000;
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // Still reflects the value from before the tab went hidden — the
+      // interval tick was suppressed rather than reading the jumped clock.
+      expect(result.current.remainingMs).toBe(5 * 60_000);
+    });
+  });
 });
