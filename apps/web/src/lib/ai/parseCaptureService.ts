@@ -254,6 +254,8 @@ function buildMockResponse(rawText: string): ParseCaptureResponse {
         estimated_minutes_low: 30,
         estimated_minutes_high: 60,
         due_at: null,
+        task_type: "task",
+        is_reversible: null,
         confidence: 0.78,
         breakdown: {
           steps: [

@@ -949,11 +949,13 @@ function acceptDraftWithStatus(
     status,
     priority_score: 2,
     priority_confidence: null,
-    task_type: null,
+    task_type: draft.task_type ?? "task",
+    is_reversible:
+      draft.task_type === "decision" ? (draft.is_reversible ?? null) : null,
     energy_type: null,
     estimated_minutes_low: draft.estimated_minutes_low,
     estimated_minutes_high: draft.estimated_minutes_high,
-    due_at: null,
+    due_at: draft.due_at ?? null,
     first_tiny_step: draft.first_tiny_step,
     definition_of_done: "Complete the first useful move and note the outcome.",
     // S3 (#255): the local demo path has no people store, so person-id links
@@ -1462,7 +1464,7 @@ export function startExecutionSession(
 export function markCurrentSession(
   state: WorkflowState,
   status: Phase2MockExecutionSession["status"],
-  options: { actualMinutes?: number } = {},
+  options: { actualMinutes?: number; notes?: string | null } = {},
 ): WorkflowState {
   const current = state.executionSessions[0];
   if (!current) {
@@ -1504,7 +1506,11 @@ export function markCurrentSession(
             productivity_rating:
               status === "completed" ? 4 : session.productivity_rating,
             notes:
-              status === "stuck" ? "Need a smaller next step." : session.notes,
+              options.notes !== undefined
+                ? options.notes
+                : status === "stuck"
+                  ? "Need a smaller next step."
+                  : session.notes,
           }
         : session,
     ),

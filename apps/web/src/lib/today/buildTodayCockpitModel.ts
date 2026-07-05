@@ -4,6 +4,9 @@ export interface TodayCockpitTask {
   id: string;
   title: string;
   status: string;
+  taskType?: string | null;
+  dueAt?: string | null;
+  isReversible?: boolean | null;
 }
 
 export interface TodayCockpitDraft {
@@ -74,7 +77,7 @@ export interface TodayCockpitModel {
   };
   unplanned: {
     title: "Unplanned tasks" | "Active tasks";
-    items: TodayCockpitTask[];
+    items: Array<TodayCockpitTask & { focusNudge?: string }>;
   };
   todayBlocks: TodayCockpitBlock[];
   recoveryItems: Array<{
@@ -106,6 +109,27 @@ function getRuntimeLocalDateKey(value: Date) {
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getDueTime(task: TodayCockpitTask): number {
+  return task.dueAt ? new Date(task.dueAt).getTime() : Number.POSITIVE_INFINITY;
+}
+
+function isDueBy(task: TodayCockpitTask, now: Date): boolean {
+  return getDueTime(task) <= now.getTime();
+}
+
+export function decisionFocusNudge(task: TodayCockpitTask, now = new Date()) {
+  if (
+    task.taskType === "decision" &&
+    task.isReversible === true &&
+    task.dueAt &&
+    isDueBy(task, now)
+  ) {
+    return "Decide now with what you know — it's reversible.";
+  }
+
+  return undefined;
 }
 
 function createCalendarDateKeyGetter(timezone?: string) {
@@ -184,12 +208,14 @@ export function buildTodayCockpitModel(
       .map((block) => block.taskId as string),
   );
 
-  const unplannedTasks = input.tasks.filter(
-    (task) =>
-      task.status === "active" &&
-      !activeProposalTaskIds.has(task.id) &&
-      !activeBlockTaskIds.has(task.id),
-  );
+  const unplannedTasks = input.tasks
+    .filter(
+      (task) =>
+        task.status === "active" &&
+        !activeProposalTaskIds.has(task.id) &&
+        !activeBlockTaskIds.has(task.id),
+    )
+    .sort((a, b) => getDueTime(a) - getDueTime(b));
 
   const todayBlocks = input.blocks
     .filter(
@@ -358,7 +384,10 @@ export function buildTodayCockpitModel(
       title: input.tasks.some((task) => task.status === "active")
         ? "Unplanned tasks"
         : "Active tasks",
-      items: unplannedTasks.slice(0, 4),
+      items: unplannedTasks.slice(0, 4).map((task) => ({
+        ...task,
+        focusNudge: decisionFocusNudge(task, now),
+      })),
     },
     todayBlocks,
     recoveryItems: recoveryItems.slice(0, 4),

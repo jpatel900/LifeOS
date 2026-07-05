@@ -43,6 +43,40 @@ export function captureWorkflow(
   return submitCapture(state, { rawText, areaId });
 }
 
+export function acceptedReversibleDecisionDueAt(
+  state: WorkflowState,
+  dueAt: string,
+): WorkflowState {
+  return {
+    ...state,
+    tasks: [
+      {
+        id: "task-decision-reversible",
+        user_id: "user-demo",
+        area_id: GOLDEN_AREA_ID,
+        project_id: null,
+        source_capture_item_id: null,
+        title: "Choose the reversible decision lane",
+        description: null,
+        status: "active",
+        priority_score: 2,
+        priority_confidence: null,
+        task_type: "decision",
+        is_reversible: true,
+        energy_type: null,
+        estimated_minutes_low: 10,
+        estimated_minutes_high: 20,
+        due_at: dueAt,
+        definition_of_done: "Record the decision choice.",
+        first_tiny_step: "Write the choice in one sentence",
+        created_at: "2026-07-05T08:00:00.000Z",
+        updated_at: "2026-07-05T08:00:00.000Z",
+      },
+      ...state.tasks,
+    ],
+  };
+}
+
 export function acceptLatestDraft(state: WorkflowState): WorkflowState {
   const draft = state.taskDrafts.find((item) => item.status === "pending");
   if (!draft) {
@@ -180,12 +214,19 @@ export function buildWorkflowCockpitViewModel(
   return buildCockpitViewModel(state, selectedAreaId, dark);
 }
 
-export function buildWorkflowTodayCockpitModel(state: WorkflowState) {
+export function buildWorkflowTodayCockpitModel(
+  state: WorkflowState,
+  options: { now?: Date } = {},
+) {
   return buildTodayCockpitModel({
+    now: options.now,
     tasks: state.tasks.map((task) => ({
       id: task.id,
       title: task.title,
       status: task.status,
+      taskType: task.task_type,
+      dueAt: task.due_at,
+      isReversible: task.is_reversible ?? null,
     })),
     drafts: [
       ...state.taskDrafts.map((draft) => ({

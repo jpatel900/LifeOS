@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  acceptedReversibleDecisionDueAt,
   acceptLatestDraft,
   backlogLatestDraft,
   buildWorkflowTodayCockpitModel,
@@ -116,5 +117,23 @@ describe("buildTodayCockpitModel", () => {
       "completed",
     );
     expect(model.next.href).toBe("/capture");
+  });
+});
+
+it("surfaces reversible decisions at deadline with the FR-024 nudge", () => {
+  const state = acceptedReversibleDecisionDueAt(
+    workflowSeed(),
+    "2026-07-05T09:00:00.000Z",
+  );
+
+  const model = buildWorkflowTodayCockpitModel(state, {
+    now: new Date("2026-07-05T10:00:00.000Z"),
+  });
+
+  expect(model.unplanned.items[0]).toMatchObject({
+    taskType: "decision",
+    dueAt: "2026-07-05T09:00:00.000Z",
+    isReversible: true,
+    focusNudge: "Decide now with what you know — it's reversible.",
   });
 });

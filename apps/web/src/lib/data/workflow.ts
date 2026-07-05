@@ -287,7 +287,7 @@ const captureColumns =
 // path can return them and S4 aging can read populated values. Additive — every
 // task reader parses through TaskSchema, which optional-accepts these columns.
 const taskColumns =
-  "id,user_id,area_id,project_id,source_capture_item_id,title,description,status,priority_score,priority_confidence,task_type,energy_type,estimated_minutes_low,estimated_minutes_high,due_at,definition_of_done,first_tiny_step,waiting_on_person_id,waiting_on_since,is_commitment,committed_to_person_id,created_at,updated_at";
+  "id,user_id,area_id,project_id,source_capture_item_id,title,description,status,priority_score,priority_confidence,task_type,is_reversible,energy_type,estimated_minutes_low,estimated_minutes_high,due_at,definition_of_done,first_tiny_step,waiting_on_person_id,waiting_on_since,is_commitment,committed_to_person_id,created_at,updated_at";
 
 const projectColumns =
   "id,user_id,area_id,title,description,status,created_at,updated_at";
@@ -1422,6 +1422,7 @@ export async function createTask(
         priority_score: parsedInput.priority_score,
         priority_confidence: parsedInput.priority_confidence,
         task_type: parsedInput.task_type,
+        is_reversible: parsedInput.is_reversible,
         energy_type: parsedInput.energy_type,
         estimated_minutes_low: parsedInput.estimated_minutes_low,
         estimated_minutes_high: parsedInput.estimated_minutes_high,
@@ -1463,6 +1464,7 @@ export async function createTask(
       priority_score: parsedInput.priority_score,
       priority_confidence: parsedInput.priority_confidence,
       task_type: parsedInput.task_type,
+      is_reversible: parsedInput.is_reversible,
       energy_type: parsedInput.energy_type,
       estimated_minutes_low: parsedInput.estimated_minutes_low,
       estimated_minutes_high: parsedInput.estimated_minutes_high,

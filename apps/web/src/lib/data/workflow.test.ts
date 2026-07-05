@@ -537,6 +537,7 @@ describe("workflow data provider", () => {
       priority_score: null,
       priority_confidence: 0.82,
       task_type: null,
+      is_reversible: null,
       energy_type: null,
       estimated_minutes_low: 10,
       estimated_minutes_high: 20,
