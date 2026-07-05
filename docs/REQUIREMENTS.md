@@ -542,6 +542,115 @@ Non-goals:
 
 ---
 
+### FR-027 — Capture Ubiquity (installable + offline raw-capture)
+
+**Priority:** MUST
+
+**Stage:** Daily-driver floor (owner-ratified 2026-07-04; lands before further behavioral features). Same capture/parse surface as FR-026 — see reconciliation note.
+
+Rationale: capture today is a desktop web tab; thoughts arrive on the phone and mid-task. A capture that is not reachable at the moment of the thought is a capture that never happens — the highest-frequency adoption saboteur. This is not a new perimeter integration: it is the same spine capture surface made reachable and resilient. It is the raw-save-first complement to FR-026 containment, not a competitor to it.
+
+Acceptance criteria:
+
+- The web app is installable as a PWA (web app manifest + service worker) so capture opens from a phone home-screen icon in one tap, and registers as a share target so text shared from another phone app lands directly in a raw capture.
+- Offline raw capture is save-first with no parse wait. When offline (or when the user chooses "save raw"), the capture is written to a device-local queue immediately and the interaction ends — there is NO spinner, NO parse wait, NO "notify me later" (consistent with FR-026's prohibition of fire-and-forget async: the offline path resolves synchronously as saved-raw, it does not go pending-async).
+- Queued raw captures sync to the spine (`capture_items`) automatically when connectivity returns; parse happens at triage, not at sync time. Sync is idempotent (a client-generated `client_capture_id` dedupes replays).
+- A queued-but-unsynced capture is never silently lost and its unsynced state is visible (count/badge); loss of the device before sync is the only unrecoverable case and the queue is durable across app restarts until synced.
+- The PWA is a capture + read reach extension only. It introduces no new write path to the spine beyond the existing authenticated `capture_items` insert; it holds no OAuth tokens and no service keys (NS-INV-9 perimeter containment holds even though the PWA is first-party).
+- When the user is in the capture surface awaiting a parse (online, chose to parse now), FR-026 containment applies unchanged (return hook visible, no second capture, synchronous degrade). FR-027 governs only the raw-save / offline / share-target entry paths where there is no parse wait at all.
+
+Non-goals:
+
+- Any new ingestion channel, messaging bridge, or third-party integration (that is Stage-3 perimeter, gated separately — a first-party PWA is not a perimeter channel).
+- Background sync that parses without the user (parse stays a triage step; the queue only transports raw text).
+- Offline editing/triage/planning (offline scope is raw capture only in v1).
+- Push notifications.
+- A capture queue while online and awaiting parse (FR-026 forbids that; the offline queue is a distinct raw-transport buffer, not an online parse queue).
+
+---
+
+### FR-028 — Re-Entry Amnesty (return without a guilt wall)
+
+**Priority:** MUST
+
+**Stage:** Daily-driver floor. Extends UX_FLOWS Flow 8 (missed-block recovery) philosophy — does not fork it.
+
+Rationale: after days away, the app currently greets the returning user with a wall of overdue/red — the single most common cause of abandonment for this operator profile. A return after an absence must lower activation energy, not raise it. This is Flow 8's "a missed block is not a failure" doctrine, batched across an absence.
+
+Acceptance criteria:
+
+- On the first open after an absence of >= N days (default N configurable in settings, seed N = 3), the app runs a deterministic, rule-based return ritual instead of the normal today view.
+- Scheduled blocks whose time has fully passed during the absence are auto-deferred to an unscheduled/backlog state by a deterministic rule (no AI), and every such deferral is enumerated in the "while you were out" summary — it is a reversible internal status transition surfaced in a batch, not a silent write. NS-INV-4 governs AI-generated artifacts and external writes; a rule-based, deterministic, reversible, non-AI, enumerated local status transition is a bounded-rule exception to it, not a violation — the single recovery proposal below remains a full NS-INV-4 proposal. No external calendar mutation occurs (any calendar change remains a Flow 8 proposal).
+- The backlog is collapsed into a single "while you were out" summary (counts + the deferral list + the one stalest thing) rather than an item-by-item overdue list.
+- The ritual surfaces exactly one recovery proposal — a single suggested first move to re-enter — as an L1 proposal the user accepts, edits, or dismisses (never auto-started). On accept, the recovery move follows the normal activation path and is subject to FR-022 WIP and FR-023 launch-sequence gating like any other commitment — no special-cased bypass.
+- Zero red on screen during the ritual: no overdue badges, no failure language, no penalty framing (UX_FLOWS principle: no guilt/penalty language).
+- The absence, the auto-deferrals, and the recovery-proposal resolution are recorded per #235 vocabulary (`re_entry.v1`) so the learning loop sees absence/recovery patterns.
+
+Non-goals:
+
+- AI-generated re-entry narrative or summarization (the summary is rule-based aggregation; the single recovery move may be an existing-mechanism suggestion, not a new AI surface).
+- Auto-starting the recovery move or auto-rescheduling anything onto the calendar.
+- A configurable multi-step "catch-up wizard."
+- Silently deleting or archiving lapsed items (they are deferred to backlog, always recoverable, always listed).
+
+---
+
+### FR-029 — Persistence Truth + Session Longevity
+
+**Priority:** MUST
+
+**Stage:** Daily-driver floor.
+
+Rationale: (a) the app can run in a browser-only demo fallback that looks identical to the persisted app — a user can capture for days into memory that evaporates on reload, the most corrosive possible trust failure. (b) The Supabase session does not survive weeks, so a returning user is bounced to login and loses the "what now" in one action. Both are silent, both kill daily trust.
+
+Acceptance criteria:
+
+- Loud non-persistence. Whenever the data provider is the browser-only demo fallback (`provider === "mock"` — the existing signal in `workflow.ts`/`health.ts`), the capture surface (and other write surfaces) render an unmissable, persistent non-persistence indicator ("Demo mode — nothing here is saved") that cannot be mistaken for the normal persisted UI. The surface refuses to look normal in this state (UX_FLOWS truthful-surface / UX-INV-6).
+- Demo mode is never entered silently: per VERCEL_PRODUCTION_CHECKLIST §1, a production deploy with missing `NEXT_PUBLIC_SUPABASE_URL`/`_ANON_KEY` truthfully degrades to Demo mode on the affected surfaces (the checklist deliberately does NOT fail the build closed) — so FR-029's job is to make that degrade loud and unmissable on-surface, not to block the deploy. The loud banner IS the production safeguard; there is no fail-closed build gate to add.
+- Session longevity. The Supabase browser session is configured to persist and auto-refresh through a secure client library (SECURITY_PRIVACY §3) so a returning user within a multi-week window is not forced to re-authenticate; the session survives normal browser restarts.
+- Fast "what now". On open with a live session, the primary "what now" surface is interactive within ~3s on a warm load.
+- Session/token handling continues to obey SECURITY_PRIVACY: no tokens in logs, no tokens to AI, no service-role key client-side; session storage uses the secure client-library mechanism (cookies via `@supabase/ssr` or the library's `persistSession` storage), not hand-rolled token stashing.
+
+Non-goals:
+
+- "Remember me forever" / non-expiring sessions (respect Supabase refresh-token lifetime; longevity means "survives weeks," not "never expires").
+- Offline auth or local credential storage beyond the client library's own session store.
+- A second persistence backend or local-first sync engine (that is not this floor).
+- Making demo mode unavailable — it stays as the deterministic offline/dev fallback; it is only made loud.
+
+---
+
+### FR-030 — Provider Canary + Mock-First Auto-Degrade
+
+**Priority:** MUST
+
+**Stage:** Daily-driver floor.
+
+Rationale: a real incident (OpenAI 429 for hours) was discovered only by manual probing. A provider that is silently down turns every capture into a failed parse with no signal. A scheduled canary + automatic degrade closes both the detection gap and the user-facing blast radius.
+
+Acceptance criteria:
+
+- A scheduled GitHub Actions cron probes the production parse path (and other provider paths as they are added) on a fixed interval, reusing the house watchdog pattern (`migration-drift.yml` shape: skip-with-warning when the required secret is absent; `::error:: + exit 1` on failure so the run goes red).
+- On a detected failure state transition (healthy→failing), the canary raises a GitHub issue (the house alert channel, per `pipeline-advance.yml`'s issue-write pattern) — it does not spam an issue every run.
+- The probe is near-free (NFR-001): it first reads recent recorded real-parse outcomes from `ai_call_traces` (a cheap read; `latency_ms`/`status` already recorded fire-and-forget per real parse); it issues a synthetic real parse POST only when there is no recent real signal or to confirm a suspected transition. It never runs a paid parse on every tick.
+- Mock-first auto-degrade. When the provider is known-down (canary-detected or runtime 429 observed), the parse surface degrades to mock/deterministic parsing automatically and visibly, rather than surfacing repeated failures — extending the existing `parseCaptureWithFallback` degrade from "key absent" to "provider runtime-down."
+- The degrade and the recovery are visible on the Health surface (connector/AI-failure separation, NFR-004) and recorded so the learning loop / audit sees provider incidents.
+
+Non-goals:
+
+- A second AI provider / failover vendor (doctrine cap: no new vendors; degrade target is the existing mock path, not a competitor LLM).
+- A paid probe on every cron tick (cost cap — synthetic POST only on transition/no-signal).
+- A realtime status page or paging/on-call integration (the GitHub issue is the alert channel).
+- Auto-re-enabling the provider without evidence it recovered (recovery is canary-confirmed, then auto or one-tap).
+
+---
+
+### FR-031 (reserved) — Task-Map v1
+
+FR-031 is reserved for the task-map contract plan (progression-map / breakdown work), not yet landed. It is referenced here only to record the renumbering: the daily-driver floor (FR-027..030) claimed the FR-027..030 slots ahead of the previously-numbered task-map draft, which now lands as FR-031 when its own docs-first slice is integrated. No task-map requirements text is adopted by this entry.
+
+---
+
 ### Constraint Layer — Deferred Capabilities
 
 The following feel productive to build and are explicitly deferred (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires reopening this section first.

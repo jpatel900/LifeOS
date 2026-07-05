@@ -136,6 +136,10 @@ Convert a simple thought into a task.
 
 During the parse wait the UI holds the user in context — the raw text stays visible and a one-line "return hook" field (what you go back to afterward) is visible and editable. No new capture may begin until this one resolves; parse never goes fire-and-forget (past the latency budget the surface offers mock parse / save-raw synchronously instead). On resolve, the flow ends with "back to: <hook>". This is deliberately counter to the standard submit-and-wander async pattern; implementers must not normalize it.
 
+### Daily-driver floor: offline raw-save path (FR-027)
+
+FR-026 containment governs the online, awaiting-parse path above. A distinct entry path exists for when the user is offline or chooses "save raw": the capture is written to a device-local queue immediately and the interaction ends synchronously as saved-raw — no spinner, no parse wait, no fire-and-forget pending state (the same anti-async doctrine as FR-026, applied to a path that never waits on a parse at all). The queue syncs to `capture_items` automatically on reconnect, idempotently (via `client_capture_id`), and parse happens later at triage, not at sync. The two paths never overlap: online-parse ⇒ FR-026 containment; save-raw/offline ⇒ FR-027 queue; never both waiting at once. Raw capture surviving the device going offline is a strengthening of this flow's existing "raw capture remains recoverable if parsing fails" acceptance criterion, not a new guarantee.
+
 ## 5. Flow 3 — Ambiguous Capture to Sense-Making
 
 ### Goal
@@ -332,6 +336,10 @@ Recover from disruption without collapsing the plan.
 - Reschedule creates proposals, not automatic writes.
 - User can drop or defer without penalty language.
 - Missed block contributes to learning logs.
+
+### Daily-driver floor: re-entry ritual (FR-028)
+
+This flow's "a missed block is not a failure" doctrine extends, batched, to a multi-day absence rather than forking into a separate recovery flow. On first open after an absence of >= N days (seed N = 3, settings-configurable), the app runs a deterministic, rule-based return ritual in place of the normal today view instead of surfacing missed blocks one at a time: scheduled blocks whose time fully passed during the absence are auto-deferred to backlog by a deterministic rule (no AI) and every deferral is enumerated in a single "while you were out" summary (counts + the deferral list + the one stalest thing) — a reversible, non-AI, enumerated status transition, not a silent write. The ritual then surfaces exactly one recovery proposal as an L1 proposal (accept/edit/dismiss, never auto-started); on accept it re-enters through the normal activation path with the same WIP and launch-sequence gating as any other commitment. Zero red on screen during the ritual — no overdue badges, no failure language, no penalty framing — and the absence, deferrals, and recovery resolution are recorded (`re_entry.v1`) for the learning loop.
 
 ## 11. Flow 9 — Daily Review
 
