@@ -24,6 +24,7 @@ Deterministic conformance rubric for the reviewer/merger (scheduled driver or an
 - [ ] New AI judgment surfaces write suggestion_records/override_records (NS-INV-3) — search the diff.
 - [ ] New persisted AI artifacts are approval-gated (NS-INV-4) — no new silent write path.
 - [ ] New prompt context flows through the context-assembly module (NS-INV-1), not ad-hoc plumbing.
+- [ ] **Coherence pass honored.** The slice's FR(s) are registered in `coherence-registry.json` with valid `invariants`/`policy_ids`; any new cross-feature interaction the diff creates is a registered edge; every `X` edge has a `resolution_ref`; new interactions map to a named interaction-pattern (or logged petition); the map-view field is answered; new copy conforms to house voice (no retired terms); new UI uses only registered keymap entries and `--state-*`/`--area-accent*` tokens (no raw hex). `coherenceRegistry.test.ts` is green.
 
 ## E. S0 (contract slice) PRs only
 - [ ] Diff touches ONLY the four contract docs (+ doc-guard expectations).
@@ -33,4 +34,5 @@ Deterministic conformance rubric for the reviewer/merger (scheduled driver or an
 ## F. Verdict
 - ALL PASS -> plain merge (never --admin, never --no-verify). Comment: "Contract review: PASS on all checklist sections."
 - Any FAIL -> comment the failed items with file/line specifics + @codex fix request. Do NOT merge partially conformant work.
+- **Coherence STOP-and-surface.** When authoring or review surfaces a contradiction between two features, two artifacts, or a feature and an invariant — an FR-number collision, a token/keyword meaning two things, a policy id used two ways, an interaction pattern that fights another, an invariant an FR would violate — you MUST NOT silently resolve it, author around it, or pick a side to keep moving. STOP. Record it as a `kind:"X"` edge (or an open contradiction note) and surface it: a dated decision-log entry on the governing epic + tag @jpatel900. Resolution is an owner-gated decision that lands in REQUIREMENTS/the registry/the ADR **and all affected sibling artifacts together**. Silent resolution is itself a coherence failure.
 - Anything not covered by this checklist that feels wrong -> STOP, comment on the epic, tag @jpatel900. Uncertainty escalates; it never merges.
