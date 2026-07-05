@@ -1,6 +1,7 @@
 import {
   AreaSchema,
   OperatorProfileSchema,
+  PersonSchema,
   CalendarBlockSchema,
   CheckTimeBlockProposalConflictInputSchema,
   CaptureItemSchema,
@@ -47,6 +48,7 @@ import {
   type TimeBlockProposal,
   type UpdateAreaColorInput,
   type OperatorProfile,
+  type Person,
 } from "@lifeos/schemas";
 import {
   normalizeSupabaseRow,
@@ -613,7 +615,9 @@ export function recordPersonMentionProposal(
   recordSuggestionFireAndForget(client, {
     area_id: input.area_id,
     policy_identifier: PERSON_LINK_POLICY_ID,
-    suggestion_type: "triage_suggestion",
+    // Generated at parse time, so the parse_result suggestion type is the
+    // accurate #235 vocabulary value.
+    suggestion_type: "parse_result",
     subject_type: "person_mention",
     subject_id: uuidPattern.test(input.draft_id) ? input.draft_id : null,
     suggestion_json: {
@@ -640,7 +644,7 @@ export function recordCommitmentProposal(
   recordSuggestionFireAndForget(client, {
     area_id: input.area_id,
     policy_identifier: COMMITMENT_POLICY_ID,
-    suggestion_type: "triage_suggestion",
+    suggestion_type: "parse_result",
     subject_type: "task_draft",
     subject_id: uuidPattern.test(input.draft_id) ? input.draft_id : null,
     suggestion_json: {
@@ -661,35 +665,92 @@ export interface PersonLinkRejectionInput {
 }
 
 /**
- * Record that the user rejected a proposed person link (override_records).
- * The mention degrades to no link — the task stays a plain task. Override rows
- * require a uuid subject_id; local draft ids are non-uuid, so we skip the
- * override write for local-only drafts while still surfacing the rejection via
- * the suggestion path when a persisted subject exists. Fire-and-forget.
+ * Record that the user rejected a proposed person link. The mention degrades to
+ * no link — the task stays a plain task (NS-INV-4). This ALWAYS fires (unlike an
+ * override, which requires a persisted uuid subject the local draft lacks):
+ * following the `recordRejectedTaskDraft` precedent, the rejection is captured
+ * as a resolved suggestion (`status: "rejected"`) with a nullable `subject_id`,
+ * which also resolves the dangling pending person-link proposal. When a uuid
+ * subject exists we additionally write a true override_records row. Both are
+ * fire-and-forget: a learning-write failure never affects the triage flow.
  */
 export function recordPersonLinkRejection(
   client: MinimalSupabaseClient | null,
   input: PersonLinkRejectionInput,
 ): void {
   if (!client) return;
-  if (!uuidPattern.test(input.draft_id)) return;
 
-  recordOverrideFireAndForget(client, {
+  const isPersistedSubject = uuidPattern.test(input.draft_id);
+
+  recordSuggestionFireAndForget(client, {
     area_id: input.area_id,
     policy_identifier: PERSON_LINK_POLICY_ID,
+    suggestion_type: "parse_result",
     subject_type: "person_mention",
-    subject_id: input.draft_id,
-    override_type: "rejected",
-    old_value_json: {
+    subject_id: isPersistedSubject ? input.draft_id : null,
+    suggestion_json: {
+      draft_id: input.draft_id,
       name: input.name,
       role: input.role,
-      proposed_link: true,
-    },
-    new_value_json: {
-      proposed_link: false,
+      status: "rejected",
       degraded_to_plain_task: true,
     },
+    status: "rejected",
+    resolved_at: new Date().toISOString(),
   });
+
+  // A true override row requires a uuid subject; only write one for persisted
+  // subjects. Local drafts are covered by the resolved suggestion above.
+  if (isPersistedSubject) {
+    recordOverrideFireAndForget(client, {
+      area_id: input.area_id,
+      policy_identifier: PERSON_LINK_POLICY_ID,
+      subject_type: "person_mention",
+      subject_id: input.draft_id,
+      override_type: "rejected",
+      old_value_json: {
+        name: input.name,
+        role: input.role,
+        proposed_link: true,
+      },
+      new_value_json: {
+        proposed_link: false,
+        degraded_to_plain_task: true,
+      },
+    });
+  }
+}
+
+const peopleColumns =
+  "id,user_id,display_name,normalized_name,notes,created_at,updated_at,archived_at";
+
+/**
+ * S3 (#255): live read of the user's people so a proposed person mention can
+ * resolve against an existing person (normalized_name matching) instead of
+ * always proposing a new person. Returns an empty list in mock mode. Excludes
+ * archived people from matching is left to the resolver; this returns all rows
+ * so the caller can decide.
+ */
+export async function listPeople(
+  client: MinimalSupabaseClient | null,
+): Promise<Person[]> {
+  if (!client) {
+    return [];
+  }
+
+  await requireSupabaseUser(client, "Sign in before loading people.");
+
+  const query = client.from("people") as {
+    select: (columns: string) => Promise<{ data: unknown; error: unknown }>;
+  };
+
+  const { data, error } = await query.select(peopleColumns);
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return PersonSchema.array().parse(normalizeSupabaseRows(data));
 }
 
 const operatorProfileColumns =

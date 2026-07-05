@@ -21,6 +21,7 @@ import {
   type CalendarBlock,
   type CaptureItem,
   type ExecutionSession,
+  type Person,
   type Phase2TaskDraft,
   type Phase2TimeBlockProposal,
   type ReviewEntry,
@@ -72,6 +73,7 @@ import {
   getOperatorProfile,
   listAreas,
   listCaptureItems,
+  listPeople,
   listExecutionReviewItems,
   listPlanningItems,
   markExecutionSession,
@@ -84,6 +86,7 @@ import {
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
+import { resolvePersonMention } from "./data/personLinks";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import { isLifeOsOwnedGoogleEventIdShape } from "./cockpit/googleCalendarBridge";
 import type {
@@ -2029,6 +2032,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // parsing. Fall through with no operator profile (S2 empty-profile parity).
     }
 
+    // S3 (#255): load existing people so a proposed mention can resolve against
+    // one (normalized_name matching) instead of always proposing a new person.
+    // Best-effort — a failed read degrades resolution to "new", never blocks.
+    let peopleForResolution: Person[] = [];
+    try {
+      peopleForResolution = await listPeople(createSupabaseBrowserClient());
+    } catch {
+      // People read is best-effort; fall through with no candidates.
+    }
+
     const result = await requestParseCapture({
       rawText: capture.raw_text,
       areaContext: stateRef.current.areas.map((area) => {
@@ -2063,15 +2076,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           persistedAreasRef.current,
         );
         for (const mention of draft.person_mentions) {
+          // Resolve against existing people by normalized name; a match records
+          // the linked person id, otherwise the proposal is a new-person one.
+          const resolution = resolvePersonMention(mention, peopleForResolution);
           recordPersonMentionProposal(learningClient, {
             area_id,
             draft_id: draft.id,
             name: mention.name,
             role: mention.role,
             confidence: mention.confidence,
-            // Resolution against existing people happens at approval time; the
-            // proposal is recorded as "new" until the user confirms a match.
-            match: "new",
+            match: resolution.kind === "matched" ? "matched" : "new",
+            matched_person_id:
+              resolution.kind === "matched" ? resolution.person.id : null,
           });
         }
         if (draft.is_commitment) {
