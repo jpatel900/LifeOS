@@ -65,7 +65,7 @@ export function DriftRecoveryCard({
             className="gap-2"
             style={{
               background: "var(--state-warn)",
-              color: "var(--on-acc, #fff)",
+              color: "var(--primary-foreground)",
             }}
             data-testid="drift-recovery-reclaim"
           >
