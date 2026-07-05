@@ -856,6 +856,12 @@ export function acceptProjectDraft(
   };
 }
 
+export function hasLaunchSequenceStep(
+  value: string | null | undefined,
+): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export function acceptDraft(
   state: WorkflowState,
   draftId: string,
@@ -925,6 +931,10 @@ function acceptDraftWithStatus(
     (task) => task.source_capture_item_id === draft.capture_item_id,
   );
   if (existingTask) {
+    return state;
+  }
+
+  if (status === "active" && !hasLaunchSequenceStep(draft.first_tiny_step)) {
     return state;
   }
 
@@ -1021,6 +1031,10 @@ export function promoteBacklogTask(
     return state;
   }
 
+  if (!hasLaunchSequenceStep(task.first_tiny_step)) {
+    return state;
+  }
+
   if (!canAdmitWipTask(state)) {
     return withWipRefusal(state, task, "triage_accept_to_today");
   }
@@ -1045,6 +1059,9 @@ export function planTaskAtHour(
     (item) => item.id === taskId && item.status === "active",
   );
   if (!task || hour < 8 || hour > 18) {
+    return state;
+  }
+  if (!hasLaunchSequenceStep(task.first_tiny_step)) {
     return state;
   }
   if (!canAdmitWipTask(state, task.id)) {
@@ -1097,6 +1114,26 @@ export function planTaskAtHour(
   };
 }
 
+export function updateTaskFirstTinyStep(
+  state: WorkflowState,
+  taskId: string,
+  firstTinyStep: string,
+): WorkflowState {
+  const trimmed = firstTinyStep.trim();
+  if (!trimmed || !state.tasks.some((task) => task.id === taskId)) {
+    return state;
+  }
+
+  return {
+    ...state,
+    tasks: state.tasks.map((task) =>
+      task.id === taskId
+        ? { ...task, first_tiny_step: trimmed, updated_at: nowIso() }
+        : task,
+    ),
+  };
+}
+
 export function unplanTask(
   state: WorkflowState,
   blockId: string,
@@ -1139,7 +1176,7 @@ export function createLocalProposalFromTask(
   const task = state.tasks.find(
     (item) => item.id === taskId && item.status === "active",
   );
-  if (!task) {
+  if (!task || !hasLaunchSequenceStep(task.first_tiny_step)) {
     return state;
   }
 
@@ -1217,6 +1254,9 @@ export function acceptProposal(
     return state;
   }
   const task = state.tasks.find((item) => item.id === proposal.task_id);
+  if (!hasLaunchSequenceStep(task?.first_tiny_step)) {
+    return state;
+  }
   if (task && !canAdmitWipTask(state, task.id)) {
     return withWipRefusal(state, task, "plan_scheduling");
   }

@@ -36,8 +36,9 @@ describe("cockpit plan flow", () => {
   it("schedules the only ready task from the hour rail without selecting it first", async () => {
     renderCalendarWithStoredJourney();
 
-    // To place, Proposals, and Google approvals each show the ready task.
-    expect(await screen.findAllByText(/Draft agenda/i)).toHaveLength(3);
+    // To place, Proposals, launch-step commitment display, and Google approvals
+    // each show the ready task context.
+    expect(await screen.findAllByText(/Draft agenda/i)).toHaveLength(4);
     expect(screen.getAllByText("Drop here")).toHaveLength(11);
 
     fireEvent.click(screen.getByRole("button", { name: /10a\s+Drop here/i }));

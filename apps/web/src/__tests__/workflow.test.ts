@@ -22,6 +22,7 @@ import {
   WIP_ENFORCEMENT_LIMIT,
   WIP_ENFORCEMENT_POLICY_ID,
   unplanTask,
+  updateTaskFirstTinyStep,
   updateProposal,
 } from "@/lib/workflow";
 
@@ -95,6 +96,70 @@ describe("local mock workflow", () => {
     state = unplanTask(state, state.calendarBlocks[0].id);
     expect(state.tasks[0].status).toBe("active");
     expect(state.calendarBlocks[0].status).toBe("cancelled");
+  });
+
+  it("requires a first tiny step before accepting a draft to today's committed set", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Draft agenda for tomorrow's project check-in.",
+      areaId: "area-main-job",
+    });
+    state = editDraft(state, state.taskDrafts[0].id, {
+      first_tiny_step: null,
+    });
+
+    const blocked = acceptDraft(state, state.taskDrafts[0].id);
+    expect(blocked.tasks).toHaveLength(0);
+    expect(blocked.taskDrafts[0].status).toBe("pending");
+
+    const ready = editDraft(state, state.taskDrafts[0].id, {
+      first_tiny_step: "Open the agenda doc.",
+    });
+    const accepted = acceptDraft(ready, ready.taskDrafts[0].id);
+    expect(accepted.tasks[0].first_tiny_step).toBe("Open the agenda doc.");
+    expect(accepted.tasks[0].status).toBe("active");
+  });
+
+  it("requires a first tiny step before scheduling or accepting a time-block proposal", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Prepare the plan proposal parity proof.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    state = updateTaskFirstTinyStep(state, state.tasks[0].id, "   ");
+    state = {
+      ...state,
+      tasks: state.tasks.map((task) => ({
+        ...task,
+        first_tiny_step: null,
+      })),
+    };
+
+    expect(
+      planTaskAtHour(state, state.tasks[0].id, 10).calendarBlocks,
+    ).toHaveLength(0);
+    expect(
+      createLocalProposalFromTask(state, state.tasks[0].id, {
+        proposed_start: "2026-06-30T14:00:00.000Z",
+        proposed_end: "2026-06-30T14:45:00.000Z",
+        rationale: "Manual local proposal proof.",
+      }).timeBlockProposals,
+    ).toHaveLength(state.timeBlockProposals.length);
+
+    const proposalId = state.timeBlockProposals[0].id;
+    expect(acceptProposal(state, proposalId).calendarBlocks).toHaveLength(0);
+
+    const ready = updateTaskFirstTinyStep(
+      state,
+      state.tasks[0].id,
+      "Open the proof notes.",
+    );
+    const accepted = acceptProposal(ready, proposalId);
+    expect(accepted.tasks[0].status).toBe("scheduled");
+    expect(accepted.calendarBlocks[0].task_id).toBe(accepted.tasks[0].id);
   });
 
   it("edits and reassigns a pending triage draft", () => {

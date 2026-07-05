@@ -56,6 +56,7 @@ import {
   submitRawCapture,
   syncWorkflowIdCounterFromState,
   unplanTask,
+  updateTaskFirstTinyStep,
   updateWorkflowAreaColor,
   updateProposal,
   saveReview,
@@ -222,6 +223,11 @@ type WorkflowAction =
       hour: number;
     }
   | {
+      type: "updateTaskFirstTinyStep";
+      taskId: string;
+      firstTinyStep: string;
+    }
+  | {
       type: "unplanTask";
       blockId: string;
     }
@@ -325,6 +331,7 @@ interface WorkflowContextValue {
     rationale: string;
   }) => void;
   planTaskAtHour: (taskId: string, hour: number) => void;
+  updateTaskFirstTinyStep: (taskId: string, firstTinyStep: string) => void;
   unplanTask: (blockId: string) => void;
   startTaskSession: (taskId: string) => void;
   markSession: (
@@ -1008,6 +1015,12 @@ function workflowReducer(
       });
     case "planTaskAtHour":
       return planTaskAtHour(state, action.taskId, action.hour);
+    case "updateTaskFirstTinyStep":
+      return updateTaskFirstTinyStep(
+        state,
+        action.taskId,
+        action.firstTinyStep,
+      );
     case "unplanTask":
       return unplanTask(state, action.blockId);
     case "startSession":
@@ -2544,6 +2557,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     },
     planTaskAtHour: planTaskAtHourWithPersistence,
+    updateTaskFirstTinyStep: (taskId, firstTinyStep) => {
+      const previous = stateRef.current;
+      const next = updateTaskFirstTinyStep(previous, taskId, firstTinyStep);
+      applyWorkflowState(next);
+
+      if (next !== previous) {
+        markLocalOnly("First move saved locally; account sync is pending.");
+      }
+    },
     unplanTask: (blockId) => {
       const previous = stateRef.current;
       const next = unplanTask(previous, blockId);

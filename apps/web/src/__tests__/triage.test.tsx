@@ -70,12 +70,14 @@ describe("Triage cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
-    expect(await screen.findByText("Start here (under 10 min)")).toBeDefined();
     expect(
-      screen.getByText(
-        "Open the capture and write one sentence defining done for: Prepare the sponsor update deck",
-      ),
+      await screen.findByText("Start here (same first move)"),
     ).toBeDefined();
+    expect(
+      screen.getAllByText(
+        "Clarify the next concrete step for: Prepare the sponsor update deck",
+      ),
+    ).toHaveLength(3);
     expect(
       screen.getByText("Do the core work for: Prepare the sponsor update deck"),
     ).toBeDefined();
@@ -110,7 +112,7 @@ describe("Triage cockpit", () => {
     // window flaked twice on 2026-07-05 (CI run 28738354680 + a Codex sandbox)
     // while always passing warm — the wait is load-bound, not behavioral.
     expect(
-      await screen.findByText("Start here (under 10 min)", undefined, {
+      await screen.findByText("Start here (same first move)", undefined, {
         timeout: 10_000,
       }),
     ).toBeDefined();
@@ -128,6 +130,6 @@ describe("Triage cockpit", () => {
         timeout: 10_000,
       }),
     ).toBeDefined();
-    expect(screen.queryByText("Start here (under 10 min)")).toBeNull();
+    expect(screen.queryByText("Start here (same first move)")).toBeNull();
   });
 });
