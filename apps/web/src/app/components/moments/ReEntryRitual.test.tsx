@@ -12,7 +12,16 @@ import { ReEntryRitual } from "./ReEntryRitual";
 
 const baseSummary: WhileYouWereOutSummary = {
   absenceDays: 5,
-  lapsedBlocks: [],
+  lapsedBlocks: [
+    {
+      blockId: "b2",
+      taskId: null,
+      areaId: "area-1",
+      taskTitle: null,
+      endAt: "2026-07-02T00:00:00.000Z",
+      googleEventId: null,
+    },
+  ],
   counts: { lapsedBlocks: 2, pendingTriage: 1, activeTasks: 3 },
   stalest: {
     kind: "task",
@@ -92,6 +101,39 @@ describe("ReEntryRitual", () => {
     expect(
       screen.getByTestId("re-entry-ritual-deferral-block-b2"),
     ).toHaveTextContent("Block unscheduled");
+  });
+
+  it("labels a task-linked block unplan with the task title, not a generic 'Block'", () => {
+    renderRitual({
+      summary: {
+        ...baseSummary,
+        lapsedBlocks: [
+          {
+            blockId: "b3",
+            taskId: "t2",
+            areaId: "area-1",
+            taskTitle: "Prep the deck",
+            endAt: "2026-07-02T00:00:00.000Z",
+            googleEventId: null,
+          },
+        ],
+      },
+      plan: {
+        ...basePlan,
+        blockUnplans: [
+          {
+            blockId: "b3",
+            areaId: "area-1",
+            taskId: "t2",
+            endAt: "2026-07-02T00:00:00.000Z",
+          },
+        ],
+      },
+    });
+
+    expect(
+      screen.getByTestId("re-entry-ritual-deferral-block-b3"),
+    ).toHaveTextContent("Prep the deck unscheduled");
   });
 
   it("shows a needs-a-hand note for failed outcomes, never destructive styling", () => {

@@ -46,6 +46,16 @@ function findOutcome(
   );
 }
 
+function blockUnplanLabel(
+  unplan: ReEntryRitualProps["plan"]["blockUnplans"][number],
+  summary: WhileYouWereOutSummary,
+): string {
+  const lapsed = summary.lapsedBlocks.find(
+    (block) => block.blockId === unplan.blockId,
+  );
+  return `${lapsed?.taskTitle ?? "Block"} unscheduled`;
+}
+
 export function ReEntryRitual({
   summary,
   plan,
@@ -151,7 +161,7 @@ export function ReEntryRitual({
                     className="flex items-center justify-between gap-3 text-sm"
                     data-testid={`re-entry-ritual-deferral-block-${unplan.blockId}`}
                   >
-                    <span>Block unscheduled</span>
+                    <span>{blockUnplanLabel(unplan, summary)}</span>
                     {demoMode ? (
                       <span className="text-xs text-muted-foreground">
                         not saved in demo mode
