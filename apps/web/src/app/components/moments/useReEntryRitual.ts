@@ -138,16 +138,16 @@ export function useReEntryRitual(
     setLatched(ritualToRun);
     executedRef.current = true;
 
-    let cancelled = false;
-
+    // No cancellation flag: the batch is already once-guarded by executedRef,
+    // React 18 setState after unmount is a safe no-op, and a StrictMode
+    // dev remount reuses this same state — a cancel flag would strand the
+    // ritual at "deferring" with the outcomes silently dropped.
     async function run() {
       const client = createSupabaseBrowserClient();
 
       if (!client) {
-        if (!cancelled) {
-          setDemoMode(true);
-          setStatus("ready");
-        }
+        setDemoMode(true);
+        setStatus("ready");
         return;
       }
 
@@ -159,23 +159,16 @@ export function useReEntryRitual(
         now,
       });
 
-      if (cancelled) return;
-
       setOutcomes(result);
 
       if (refreshPersistedWorkflow) {
         await refreshPersistedWorkflow();
       }
 
-      if (cancelled) return;
       setStatus("ready");
     }
 
     void run();
-
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidate, latched]);
 
