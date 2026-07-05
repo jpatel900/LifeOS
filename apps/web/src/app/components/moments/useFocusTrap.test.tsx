@@ -35,6 +35,20 @@ function SingleFocusableDialog({ active }: { active: boolean }) {
   );
 }
 
+// Mirrors MomentSheet exactly: the dialog shell itself is a tabIndex=-1
+// programmatic-focus target (not one of the tracked focusables), which is
+// where focus actually sits right after autofocus-on-open.
+function ContainerFocusedDialog({ active }: { active: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(active, containerRef);
+  return (
+    <div ref={containerRef} tabIndex={-1} data-testid="dialog">
+      <button data-testid="first">First</button>
+      <button data-testid="last">Last</button>
+    </div>
+  );
+}
+
 describe("useFocusTrap", () => {
   it("wraps Tab from the last focusable back to the first", () => {
     render(<Dialog active />);
@@ -90,6 +104,31 @@ describe("useFocusTrap", () => {
       shiftKey: true,
     });
     expect(only).toHaveFocus();
+  });
+
+  it("treats focus sitting on the tabIndex=-1 container itself as a boundary, not as 'inside, do nothing'", () => {
+    // Regression: right after autofocus-on-open, focus is on the dialog
+    // shell (a tabIndex=-1 container), which is not one of the tracked
+    // focusables. Both Tab and Shift+Tab from there must land inside the
+    // trap (first/last respectively) rather than falling through to
+    // native tab order and escaping into the page behind the dialog.
+    render(<ContainerFocusedDialog active />);
+    const dialog = screen.getByTestId("dialog");
+    const first = screen.getByTestId("first");
+    const last = screen.getByTestId("last");
+
+    dialog.focus();
+    expect(dialog).toHaveFocus();
+
+    fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+    expect(last).toHaveFocus();
+
+    last.blur();
+    dialog.focus();
+    expect(dialog).toHaveFocus();
+
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    expect(first).toHaveFocus();
   });
 
   it("does nothing when inactive", () => {

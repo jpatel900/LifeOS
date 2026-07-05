@@ -144,5 +144,35 @@ describe("MomentSheet", () => {
       });
       expect(closeButton).toHaveFocus();
     });
+
+    it("traps Tab even when focus is still on the dialog shell itself (the state right after autofocus-on-open)", async () => {
+      render(
+        <MomentSheet open title="Triage" onClose={vi.fn()}>
+          <button data-testid="body-button">Body action</button>
+        </MomentSheet>,
+      );
+
+      const dialog = screen.getByTestId("moment-sheet-dialog");
+      const closeButton = screen.getByTestId("moment-sheet-close");
+      const bodyButton = screen.getByTestId("body-button");
+
+      await waitFor(() => {
+        expect(dialog).toHaveFocus();
+      });
+
+      // The dialog's own tabIndex=-1 container is not itself one of the
+      // trap's tracked focusables. Shift+Tab from here must still land on
+      // the last focusable, not fall through to native tab order and
+      // escape into the page behind the sheet.
+      fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+      expect(bodyButton).toHaveFocus();
+
+      bodyButton.blur();
+      dialog.focus();
+      expect(dialog).toHaveFocus();
+
+      fireEvent.keyDown(dialog, { key: "Tab" });
+      expect(closeButton).toHaveFocus();
+    });
   });
 });

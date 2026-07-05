@@ -48,15 +48,24 @@ export function useFocusTrap(
 
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      const current = document.activeElement;
+      const current = document.activeElement as HTMLElement | null;
+
+      // Focus may currently be on something that isn't itself in the
+      // focusable list — e.g. the dialog shell's own tabIndex=-1 container,
+      // which is what actually holds focus right after autofocus-on-open
+      // for MomentSheet. Treat "not one of the tracked focusables" as being
+      // at a boundary (same as sitting on `first`/`last`), not as "inside,
+      // do nothing" — otherwise native Tab falls through and focus escapes
+      // the trap on the very first keypress.
+      const isTracked = current !== null && focusable.includes(current);
 
       if (event.shiftKey) {
-        if (current === first || !container.contains(current)) {
+        if (!isTracked || current === first) {
           event.preventDefault();
           last.focus();
         }
       } else {
-        if (current === last || !container.contains(current)) {
+        if (!isTracked || current === last) {
           event.preventDefault();
           first.focus();
         }
