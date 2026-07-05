@@ -98,6 +98,18 @@ jobs:
           SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
           SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
           SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          # The authenticated (persisted) journey leg needs the Supabase
+          # target too: helpers/smoke.ts canAuthenticate() gates on
+          # NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY in
+          # addition to the credentials. Without them every run silently
+          # fell back to local-only demo mode, so SMOKE_EMAIL/SMOKE_PASSWORD
+          # never actually exercised login or persistence. Both values are
+          # public by design (they ship in the deployed app's browser
+          # bundle), so they live as repository VARIABLES, not secrets. If
+          # the variables are unset the smoke keeps its designed fallback:
+          # demo-mode journey, authenticated legs skip with a clear message.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$SMOKE_BASE_URL" ]; then
             echo "::warning::SMOKE_BASE_URL secret is not set; skipping the weekly prod smoke."
