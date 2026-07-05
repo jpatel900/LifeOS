@@ -89,12 +89,33 @@ export function useCountdown(
 
     setRemainingMs(Math.max(0, endAtMs - now()));
     const id = setInterval(() => {
+      // Honesty + battery: while the tab is hidden, skip recomputation
+      // entirely rather than accumulating stale ticks. The visibilitychange
+      // handler below recomputes immediately the instant the tab returns,
+      // so there is never a stale-number window on resume.
+      if (typeof document !== "undefined" && document.hidden) return;
       setRemainingMs(Math.max(0, endAtMs - now()));
     }, intervalMs);
 
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endAtMs, intervalMs]);
+
+  useEffect(() => {
+    if (endAtMs === null) return;
+    if (typeof document === "undefined") return;
+
+    function handleVisibilityChange() {
+      if (!document.hidden && endAtMs !== null) {
+        setRemainingMs(Math.max(0, endAtMs - now()));
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endAtMs]);
 
   if (endAtMs === null) {
     return { remainingMs: 0, label: "", warn: false };

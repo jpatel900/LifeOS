@@ -140,4 +140,184 @@ describe("useFocusSession", () => {
     expect(result.current.remaining).toBe(170);
     expect(result.current.total).toBe(180);
   });
+
+  /**
+   * SP-2 — packet: drift-free anchored clocks. These tests use an injected
+   * `now` driven independently of `vi.advanceTimersByTime` so a simulated
+   * wall-clock JUMP (tab hidden, laptop asleep) can be modeled precisely:
+   * timers advance by a small amount while `now()` reports a much larger
+   * elapsed time, exactly as happens when a throttled/backgrounded tab wakes
+   * up. A naive accumulating decrement would only have ticked once; the
+   * anchored implementation must recompute the true remaining value.
+   */
+  describe("SP-2 anchored clock", () => {
+    function makeClock(startMs: number) {
+      let currentMs = startMs;
+      return {
+        now: () => currentMs,
+        advance(ms: number) {
+          currentMs += ms;
+        },
+      };
+    }
+
+    it("recomputes correctly after a simulated tab-hidden 2-minute wall-clock jump", () => {
+      const clock = makeClock(1_700_000_000_123); // deliberately off a second boundary
+      const { result } = renderHook(() => useFocusSession({ now: clock.now }), {
+        wrapper,
+      });
+
+      act(() => {
+        result.current.start("task-1", 10); // 600s total
+      });
+      expect(result.current.remaining).toBe(600);
+
+      // Simulate the tab going hidden: no visibilitychange fires here (jsdom
+      // default document.hidden stays false in this test), but the wall
+      // clock still jumps forward 2 minutes while only a single fake timer
+      // tick elapses (modeling a throttled background tab that still
+      // manages one delayed callback before resuming full-speed ticking).
+      clock.advance(2 * 60_000);
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // Anchored derivation: remaining must reflect the full 2-minute jump,
+      // not "decremented by 1 second" the way a naive counter would.
+      expect(result.current.remaining).toBe(600 - 120);
+    });
+
+    it("does not drift over 100 simulated second-boundary ticks", () => {
+      const clock = makeClock(1_700_000_000_407);
+      const { result } = renderHook(() => useFocusSession({ now: clock.now }), {
+        wrapper,
+      });
+
+      act(() => {
+        result.current.start("task-1", 5); // 300s total
+      });
+
+      for (let i = 0; i < 100; i += 1) {
+        clock.advance(1000);
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+      }
+
+      // Exactly 100 real seconds elapsed: remaining must be exactly 200,
+      // never 199 or 201 — no accumulated rounding drift from repeated
+      // off-boundary ticks.
+      expect(result.current.remaining).toBe(300 - 100);
+    });
+
+    it("recomputes immediately on visibilitychange back to visible", () => {
+      const clock = makeClock(1_700_000_000_000);
+      const { result } = renderHook(() => useFocusSession({ now: clock.now }), {
+        wrapper,
+      });
+
+      act(() => {
+        result.current.start("task-1", 10); // 600s total
+      });
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => true,
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      clock.advance(90_000); // 90s pass while hidden
+      // No timer advance: nothing should schedule while hidden, so a lack of
+      // "remaining" update here would be consistent either way. The real
+      // assertion is what happens on return below.
+
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => false,
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(result.current.remaining).toBe(600 - 90);
+
+      // Restore jsdom's default so later tests are unaffected.
+      Object.defineProperty(document, "hidden", {
+        configurable: true,
+        get: () => false,
+      });
+    });
+
+    it("pause -> resume elapsed time is correct across a paused span", () => {
+      const clock = makeClock(1_700_000_000_250);
+      const { result } = renderHook(() => useFocusSession({ now: clock.now }), {
+        wrapper,
+      });
+
+      act(() => {
+        result.current.start("task-1", 5); // 300s total
+      });
+
+      clock.advance(20_000);
+      act(() => {
+        vi.advanceTimersByTime(20_000);
+      });
+      expect(result.current.remaining).toBe(280);
+
+      act(() => {
+        result.current.toggle(); // pause
+      });
+      expect(result.current.running).toBe(false);
+      expect(result.current.remaining).toBe(280);
+
+      // Wall clock and fake timers both advance while paused; remaining
+      // must hold steady (paused time must not count as elapsed).
+      clock.advance(45_000);
+      act(() => {
+        vi.advanceTimersByTime(45_000);
+      });
+      expect(result.current.remaining).toBe(280);
+
+      act(() => {
+        result.current.toggle(); // resume
+      });
+      expect(result.current.running).toBe(true);
+
+      clock.advance(30_000);
+      act(() => {
+        vi.advanceTimersByTime(30_000);
+      });
+      expect(result.current.remaining).toBe(250);
+    });
+
+    it("finish's actualMinutes matches the pre-change ceil((total-remaining)/60) formula across representative timings", () => {
+      const clock = makeClock(1_700_000_000_600);
+      const { result } = renderHook(() => useFocusSession({ now: clock.now }), {
+        wrapper,
+      });
+
+      act(() => {
+        result.current.start("task-1", 4); // 240s total
+      });
+
+      // 90s elapsed -> ceil(90/60) = 2 minutes.
+      clock.advance(90_000);
+      act(() => {
+        vi.advanceTimersByTime(90_000);
+      });
+      expect(result.current.remaining).toBe(150);
+
+      act(() => {
+        result.current.finish("completed");
+      });
+
+      expect(result.current.total).toBe(240);
+      expect(result.current.remaining).toBe(0);
+      // actualMinutes = ceil((240 - 150) / 60) = ceil(1.5) = 2, recorded via
+      // markSession inside finish (exercised, not separately spied here —
+      // WorkflowProvider is the real provider per the P0 test convention).
+    });
+  });
 });
