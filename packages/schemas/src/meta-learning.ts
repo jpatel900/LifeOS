@@ -19,6 +19,13 @@ export const SuggestionRecordTypeSchema = z.enum([
   "re_entry_defer",
   "wip_refused",
   "wip_swapped",
+  // S9 (#261): learning-loop consumer decisions. Additive — the DB column is
+  // free text with a not-blank check; these extend the client vocabulary gate.
+  // "duration_recalibration" = the user accepted/dismissed a sourced estimate
+  // adjustment; "policy_change" = the user approved/declined an override-pattern
+  // policy proposal (propose->approve, never auto-applied).
+  "duration_recalibration",
+  "policy_change",
 ]);
 
 export const SuggestionRecordStatusSchema = z.enum([

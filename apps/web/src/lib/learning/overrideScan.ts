@@ -1,0 +1,95 @@
+import type { OverrideRecord } from "@lifeos/schemas";
+
+/**
+ * S9 (#261) — override-pattern scan (task 2).
+ *
+ * Deterministic, non-AI: when the user has overridden the same default policy in
+ * the same area on >= N of its last M decisions, surface a policy-change
+ * proposal. Nothing here mutates a default — the proposal card in review is
+ * propose->approve (L1 on the ADR 0002 trust ladder). This module only reads the
+ * recorded override_records and decides what to *offer*.
+ *
+ * "Overridden" = the user did NOT accept the default: override_type in
+ * edited / rejected / replaced. An `accepted` record is the default working.
+ */
+
+export interface OverridePatternConfig {
+  /** M — how many of the most recent decisions on a policy to examine. */
+  windowSize: number;
+  /** N — how many of those must be overrides to propose a change. */
+  minOverrides: number;
+}
+
+export const DEFAULT_OVERRIDE_PATTERN_CONFIG: OverridePatternConfig = {
+  windowSize: 5,
+  minOverrides: 3,
+};
+
+export interface PolicyChangeCandidate {
+  policyIdentifier: string;
+  areaId: string | null;
+  /** How many recent decisions were examined (<= windowSize). */
+  examined: number;
+  /** How many of the examined decisions were overrides. */
+  overrideCount: number;
+  /** The most recent override_type seen for this policy. */
+  latestOverrideType: string;
+  /** Plain, sourced evidence line for the proposal card (no invented numbers). */
+  evidence: string;
+}
+
+const OVERRIDE_TYPES = new Set(["edited", "rejected", "replaced"]);
+
+function groupKey(record: OverrideRecord): string {
+  // "::" delimiter so the (policy, area) pair can't collide: policy_identifier
+  // is a slug and area_id is a UUID or "", neither of which contains "::".
+  // (An earlier revision used a raw NUL byte, which made git treat this binary.)
+  return `${record.policy_identifier}::${record.area_id ?? ""}`;
+}
+
+/**
+ * Returns one candidate per (policy, area) whose recent override rate meets the
+ * threshold, most-overridden first. Pure and order-independent: input need not
+ * be pre-sorted.
+ */
+export function scanOverridePatterns(
+  records: OverrideRecord[],
+  config: OverridePatternConfig = DEFAULT_OVERRIDE_PATTERN_CONFIG,
+): PolicyChangeCandidate[] {
+  const groups = new Map<string, OverrideRecord[]>();
+  for (const record of records) {
+    const key = groupKey(record);
+    const list = groups.get(key);
+    if (list) list.push(record);
+    else groups.set(key, [record]);
+  }
+
+  const candidates: PolicyChangeCandidate[] = [];
+  for (const list of groups.values()) {
+    // Most-recent first, then examine at most the window.
+    const window = [...list]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, config.windowSize);
+
+    const overrides = window.filter((record) =>
+      OVERRIDE_TYPES.has(record.override_type),
+    );
+    if (overrides.length < config.minOverrides) continue;
+
+    const first = window[0];
+    candidates.push({
+      policyIdentifier: first.policy_identifier,
+      areaId: first.area_id,
+      examined: window.length,
+      overrideCount: overrides.length,
+      latestOverrideType: overrides[0].override_type,
+      evidence: `overridden ${overrides.length} of the last ${window.length}`,
+    });
+  }
+
+  return candidates.sort(
+    (a, b) =>
+      b.overrideCount - a.overrideCount ||
+      a.policyIdentifier.localeCompare(b.policyIdentifier),
+  );
+}

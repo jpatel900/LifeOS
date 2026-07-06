@@ -83,6 +83,7 @@ import {
   listCaptureItems,
   listPeople,
   listExecutionReviewItems,
+  listOverrideRecords,
   listPlanningItems,
   markExecutionSession,
   recordCommitmentProposal,
@@ -91,11 +92,20 @@ import {
   recordPersonMentionProposal,
   recordWipEnforcementEvent,
   recordRejectedTaskDraft,
+  recordPolicyProposalDecision,
+  recordDurationRecalibrationDecision,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
+import {
+  buildPolicyProposals,
+  buildProposalRecalibration,
+  type ProposalRecalibrationVM,
+} from "./learning/learningSurface";
+import type { PolicyChangeCandidate } from "./learning/overrideScan";
+import type { OverrideRecord } from "@lifeos/schemas";
 import { normalizePersonName, resolvePersonMention } from "./data/personLinks";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import { isLifeOsOwnedGoogleEventIdShape } from "./cockpit/googleCalendarBridge";
@@ -364,6 +374,22 @@ interface WorkflowContextValue {
     periodEnd: string;
     summary: RollupSummaryContent;
   }) => Promise<void>;
+  // S9 (#261) learning-loop consumer. Reads are derived from loaded
+  // override_records + execution-session actuals; decisions are propose->approve
+  // and NEVER auto-apply a default (the recorded decision is the only mutation).
+  overridePolicyProposals: PolicyChangeCandidate[];
+  decideOverridePolicyProposal: (
+    candidate: PolicyChangeCandidate,
+    decision: "accepted" | "declined",
+  ) => void;
+  recalibrationForProposal: (
+    areaId: string | null,
+    estimateMinutes: number,
+  ) => ProposalRecalibrationVM | null;
+  decideDurationRecalibration: (
+    input: { areaId: string | null; recalibration: ProposalRecalibrationVM },
+    decision: "accepted" | "dismissed",
+  ) => void;
   clearWipRefusal: () => void;
   swapWipSlot: (slotTaskId: string) => void;
   resetWorkflow: () => void;
@@ -1114,6 +1140,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [captureParse, setCaptureParse] = useState<CaptureParseState>({
     phase: "idle",
   });
+  // S9 (#261): loaded override_records (learning history) + the set of policy
+  // proposals the user has already decided this session (so a decided proposal
+  // leaves the review surface without needing a reload).
+  const [overrideRecords, setOverrideRecords] = useState<OverrideRecord[]>([]);
+  const [decidedPolicyKeys, setDecidedPolicyKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
@@ -1259,6 +1292,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         },
       });
       markAccountSynced();
+
+      // S9 (#261): load learning history for the override-pattern scan. Kept
+      // OUT of the strict provider gate above and failure-isolated — a missing
+      // override read must never knock the workflow sync into local-only.
+      void listOverrideRecords(client)
+        .then((result) => {
+          if (result.provider === "supabase") {
+            setOverrideRecords(result.overrideRecords);
+          }
+        })
+        .catch(() => {
+          // Non-fatal: the review surface simply shows no policy proposals.
+        });
     },
     [buildDropLocalIds, markAccountSynced, markLocalOnly],
   );
@@ -1756,6 +1802,73 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     },
     [markLocalOnly],
+  );
+
+  // S9 (#261): a stable key for a (policy, area) proposal so a decided proposal
+  // is hidden without a reload. Mirrors the scan's grouping.
+  const policyProposalKey = (candidate: PolicyChangeCandidate) =>
+    `${candidate.policyIdentifier}::${candidate.areaId ?? ""}`;
+
+  // Override-pattern proposals still awaiting the user's decision this session.
+  const overridePolicyProposals = buildPolicyProposals(overrideRecords).filter(
+    (candidate) => !decidedPolicyKeys.has(policyProposalKey(candidate)),
+  );
+
+  // Record the user's decision on a policy proposal (propose->approve). Nothing
+  // mutates a default — the suggestion_record IS the recorded decision — and the
+  // proposal leaves the surface. Fire-and-forget write (NS-INV-3).
+  const decideOverridePolicyProposal = useCallback(
+    (candidate: PolicyChangeCandidate, decision: "accepted" | "declined") => {
+      recordPolicyProposalDecision(createSupabaseBrowserClient(), {
+        area_id: candidate.areaId,
+        policy_identifier: candidate.policyIdentifier,
+        decision,
+        evidence: candidate.evidence,
+        examined: candidate.examined,
+        override_count: candidate.overrideCount,
+        latest_override_type: candidate.latestOverrideType,
+        resolved_at: new Date().toISOString(),
+      });
+      setDecidedPolicyKeys((current) => {
+        const next = new Set(current);
+        next.add(policyProposalKey(candidate));
+        return next;
+      });
+    },
+    [],
+  );
+
+  // The sourced duration recalibration for a proposal in `areaId`, or null when
+  // the area's actuals don't justify one. Reads the live reducer state (not
+  // stateRef, which lags a render behind) because this is called during render.
+  const recalibrationForProposal = useCallback(
+    (areaId: string | null, estimateMinutes: number) =>
+      buildProposalRecalibration(
+        state.executionSessions,
+        areaId,
+        estimateMinutes,
+      ),
+    [state.executionSessions],
+  );
+
+  // Record the user's decision on a shown recalibration (apply-on-accept). The
+  // adjusted estimate is what the user accepts; dismiss keeps the original.
+  const decideDurationRecalibration = useCallback(
+    (
+      input: { areaId: string | null; recalibration: ProposalRecalibrationVM },
+      decision: "accepted" | "dismissed",
+    ) => {
+      recordDurationRecalibrationDecision(createSupabaseBrowserClient(), {
+        area_id: input.areaId,
+        decision,
+        multiplier: input.recalibration.recalibration.multiplier,
+        sample_count: input.recalibration.recalibration.sampleCount,
+        estimate_minutes: input.recalibration.estimateMinutes,
+        adjusted_minutes: input.recalibration.adjustedMinutes,
+        resolved_at: new Date().toISOString(),
+      });
+    },
+    [],
   );
 
   async function persistStartedSession(
@@ -2771,6 +2884,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     confirmWin,
     confirmRollup,
+    overridePolicyProposals,
+    decideOverridePolicyProposal,
+    recalibrationForProposal,
+    decideDurationRecalibration,
     clearWipRefusal: () =>
       applyWorkflowState(clearWipRefusal(stateRef.current)),
     swapWipSlot: (slotTaskId) => {

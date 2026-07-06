@@ -26,6 +26,7 @@ import {
   ReviewEntrySchema,
   WinRecordSchema,
   RollupSummarySchema,
+  OverrideRecordSchema,
   SoftDeleteAreaInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
@@ -53,6 +54,7 @@ import {
   type ReviewEntry,
   type WinRecord,
   type RollupSummary,
+  type OverrideRecord,
   type SoftDeleteAreaInput,
   type Task,
   type TimeBlockProposal,
@@ -734,6 +736,95 @@ export function recordReEntryDeferral(
     },
     status: "accepted",
     decided_by: "system",
+    resolved_at: input.resolved_at,
+  });
+}
+
+// S9 (#261) policy identifier for duration-recalibration decisions (#235 vocab).
+export const DURATION_RECALIBRATION_POLICY_ID =
+  "planning.duration_estimate" as const;
+
+export interface PolicyProposalDecisionInput {
+  area_id: string | null;
+  /** The policy the override-pattern scan proposed changing (already a #235 key). */
+  policy_identifier: string;
+  decision: "accepted" | "declined";
+  evidence: string;
+  examined: number;
+  override_count: number;
+  latest_override_type: string;
+  resolved_at: string;
+}
+
+/**
+ * Record the user's decision on an override-pattern policy proposal (S9). The
+ * proposal is propose->approve: NOTHING mutates a default here — this row IS the
+ * recorded decision the "zero policy mutation without a recorded decision"
+ * invariant requires. Fire-and-forget so a learning-write failure never affects
+ * the review flow (NS-INV-3).
+ */
+export function recordPolicyProposalDecision(
+  client: MinimalSupabaseClient | null,
+  input: PolicyProposalDecisionInput,
+): void {
+  if (!client) return;
+
+  recordSuggestionFireAndForget(client, {
+    area_id:
+      input.area_id && uuidPattern.test(input.area_id) ? input.area_id : null,
+    policy_identifier: input.policy_identifier,
+    suggestion_type: "policy_change",
+    subject_type: "policy",
+    subject_id: null,
+    suggestion_json: {
+      evidence: input.evidence,
+      examined: input.examined,
+      override_count: input.override_count,
+      latest_override_type: input.latest_override_type,
+    },
+    status: input.decision === "accepted" ? "accepted" : "rejected",
+    decided_by: "user",
+    resolved_at: input.resolved_at,
+  });
+}
+
+export interface DurationRecalibrationDecisionInput {
+  area_id: string | null;
+  decision: "accepted" | "dismissed";
+  multiplier: number;
+  sample_count: number;
+  estimate_minutes: number;
+  adjusted_minutes: number;
+  resolved_at: string;
+}
+
+/**
+ * Record the user's decision on a sourced duration recalibration (S9,
+ * apply-on-accept). Accept means the adjusted estimate was applied for this
+ * proposal; dismiss keeps the original. Either way the decision is recorded
+ * (NS-INV-3). Fire-and-forget.
+ */
+export function recordDurationRecalibrationDecision(
+  client: MinimalSupabaseClient | null,
+  input: DurationRecalibrationDecisionInput,
+): void {
+  if (!client) return;
+
+  recordSuggestionFireAndForget(client, {
+    area_id:
+      input.area_id && uuidPattern.test(input.area_id) ? input.area_id : null,
+    policy_identifier: DURATION_RECALIBRATION_POLICY_ID,
+    suggestion_type: "duration_recalibration",
+    subject_type: "time_block_proposal",
+    subject_id: null,
+    suggestion_json: {
+      multiplier: input.multiplier,
+      sample_count: input.sample_count,
+      estimate_minutes: input.estimate_minutes,
+      adjusted_minutes: input.adjusted_minutes,
+    },
+    status: input.decision === "accepted" ? "accepted" : "rejected",
+    decided_by: "user",
     resolved_at: input.resolved_at,
   });
 }
@@ -2743,5 +2834,42 @@ export async function listRollupSummaries(
   return {
     provider: "supabase",
     rollupSummaries: parseRollupSummaries(data),
+  };
+}
+
+export interface OverrideRecordsResult {
+  provider: DataProvider;
+  overrideRecords: OverrideRecord[];
+}
+
+// S9 (#261): read the user's override_records for the deterministic override-
+// pattern scan (learning-loop consumer). Read-only; most-recent first.
+export async function listOverrideRecords(
+  client: MinimalSupabaseClient | null,
+): Promise<OverrideRecordsResult> {
+  if (!client) {
+    return { provider: "mock", overrideRecords: [] };
+  }
+
+  await requireSupabaseUser(client, "Sign in before loading learning history.");
+
+  const query = client.from("override_records") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+  const { data, error } = await query
+    .select(overrideRecordColumns)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    overrideRecords: OverrideRecordSchema.array().parse(
+      normalizeSupabaseRows(data),
+    ),
   };
 }

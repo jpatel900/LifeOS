@@ -114,6 +114,22 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
 
   // ---- Journey: plan (local proposal, no external write) ------------------
   await goToStage(page, /Plan/);
+
+  // S9 (#261) point 6a — assert-if-present: a fresh journey account has no
+  // duration-recalibration history (needs >= 3 completed sessions in the area
+  // running off-estimate), so the sourced card is absent here. When it IS
+  // present we assert it renders without crashing. The data-dependent behaviour
+  // is proven deterministically in CI with seeded history (learningLoopSurfaces).
+  const recalCard = page.getByTestId("proposal-recalibration");
+  if ((await recalCard.count()) > 0) {
+    await expect(recalCard.first()).toBeVisible();
+    console.log("[smoke] PASS S9 6a: recalibration surface present + rendered.");
+  } else {
+    console.log(
+      "[smoke] S9 6a: no recalibration history on this account (expected on a fresh journey).",
+    );
+  }
+
   await page.getByRole("button", { name: "Accept local", exact: true }).click();
   console.log(
     "[smoke] PASS plan: local proposal accepted (no external write).",
@@ -152,6 +168,22 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
 
   // ---- Journey: review ----------------------------------------------------
   await goToStage(page, /Review/);
+
+  // S9 (#261) point 6b — assert-if-present: an override-pattern policy proposal
+  // needs >= 3 overrides of one policy in the recent window, which a fresh
+  // journey account has not accumulated, so the surface is absent here. When it
+  // IS present we assert it renders. The propose->approve decision recording is
+  // proven in CI (learningLoopSurfaces + workflow data-layer tests).
+  const policySurface = page.getByTestId("policy-proposals");
+  if ((await policySurface.count()) > 0) {
+    await expect(policySurface.first()).toBeVisible();
+    console.log("[smoke] PASS S9 6b: policy-proposal surface present + rendered.");
+  } else {
+    console.log(
+      "[smoke] S9 6b: no override-pattern proposals on this account (expected on a fresh journey).",
+    );
+  }
+
   await page.getByRole("button", { name: "Save review" }).click();
   // Saving a review navigates back to the "today" stage by design; the smoke
   // does not depend on that transition and reaches health directly below.
