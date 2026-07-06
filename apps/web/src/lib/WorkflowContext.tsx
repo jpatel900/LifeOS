@@ -25,6 +25,7 @@ import {
   type Phase2TaskDraft,
   type Phase2TimeBlockProposal,
   type ReviewEntry,
+  type RollupSummaryContent,
   type Task,
   type TimeBlockProposal as PersistedTimeBlockProposal,
 } from "@lifeos/schemas";
@@ -72,6 +73,7 @@ import {
   createExecutionSession,
   createReviewEntry,
   createWinRecord,
+  createRollupSummary,
   createTask,
   createTimeBlockProposal,
   editTimeBlockProposal,
@@ -351,6 +353,12 @@ interface WorkflowContextValue {
     taskId: string;
     title: string;
     detail?: string | null;
+  }) => Promise<void>;
+  confirmRollup: (input: {
+    areaId: string;
+    periodStart: string;
+    periodEnd: string;
+    summary: RollupSummaryContent;
   }) => Promise<void>;
   clearWipRefusal: () => void;
   swapWipSlot: (slotTaskId: string) => void;
@@ -1703,6 +1711,43 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [markLocalOnly],
   );
 
+  // S8 (#260): persist a user-APPROVED rollup (NS-INV-4 — dismissed drafts never
+  // reach here). Weekly period; same local↔persisted area mapping + markLocalOnly
+  // fallback as confirmWin. Mock/preview keeps the approval local.
+  const confirmRollup = useCallback(
+    async (input: {
+      areaId: string;
+      periodStart: string;
+      periodEnd: string;
+      summary: RollupSummaryContent;
+    }) => {
+      const client = createSupabaseBrowserClient();
+      if (!client) return;
+
+      const persistedAreaId = persistedAreaIdForWorkflowId(
+        input.areaId,
+        persistedAreasRef.current,
+      );
+      if (!persistedAreaId) {
+        markLocalOnly("Rollup saved locally; account sync is pending.");
+        return;
+      }
+
+      try {
+        await createRollupSummary(client, {
+          area_id: persistedAreaId,
+          period_type: "week",
+          period_start: input.periodStart,
+          period_end: input.periodEnd,
+          summary: input.summary,
+        });
+      } catch {
+        markLocalOnly("Rollup saved locally; account sync is pending.");
+      }
+    },
+    [markLocalOnly],
+  );
+
   async function persistStartedSession(
     localSession: Phase2MockExecutionSession,
   ) {
@@ -2703,6 +2748,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       });
     },
     confirmWin,
+    confirmRollup,
     clearWipRefusal: () =>
       applyWorkflowState(clearWipRefusal(stateRef.current)),
     swapWipSlot: (slotTaskId) => {
