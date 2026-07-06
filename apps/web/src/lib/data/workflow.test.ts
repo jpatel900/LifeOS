@@ -462,6 +462,7 @@ describe("workflow data provider", () => {
       user_id: "550e8400-e29b-41d4-a716-446655440001",
       area_id: null,
       raw_text: "Call dentist tomorrow",
+      return_hook: null,
       capture_mode: "text",
       status: "new",
     });
@@ -1902,7 +1903,8 @@ describe("workflow data provider", () => {
           }),
         };
       }
-      const rows = table === "tasks" ? [doneTaskFresh, doneTaskHarvested] : [doneProject];
+      const rows =
+        table === "tasks" ? [doneTaskFresh, doneTaskHarvested] : [doneProject];
       const order = vi.fn().mockResolvedValue({ data: rows, error: null });
       const gte = vi.fn().mockReturnValue({ order });
       const eq = vi.fn().mockReturnValue({ gte });
@@ -2011,7 +2013,9 @@ describe("workflow data provider", () => {
 
     expect(result.provider).toBe("mock");
     expect(result.rollupSummary.period_type).toBe("month");
-    expect(result.rollupSummary.summary.highlights).toEqual(["Launched pricing"]);
+    expect(result.rollupSummary.summary.highlights).toEqual([
+      "Launched pricing",
+    ]);
   });
 
   it("rejects a rollup whose period_end precedes period_start", async () => {

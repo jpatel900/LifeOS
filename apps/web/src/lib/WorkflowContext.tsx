@@ -298,7 +298,11 @@ interface WorkflowContextValue {
   refreshPersistedWorkflow: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
-  submitCaptureText: (rawText: string, areaId: string | null) => void;
+  submitCaptureText: (
+    rawText: string,
+    areaId: string | null,
+    returnHook?: string | null,
+  ) => void;
   captureParse: CaptureParseState;
   retryCaptureParseWithMock: () => void;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
@@ -601,6 +605,7 @@ function toWorkflowCapture(
     user_id: capture.user_id,
     area_id: workflowAreaIdForPersistedAreaId(capture.area_id, persistedAreas),
     raw_text: capture.raw_text,
+    return_hook: capture.return_hook ?? null,
     capture_mode: "text",
     inferred_area_confidence: capture.inferred_area_confidence,
     status: capture.status,
@@ -1276,6 +1281,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     const result = await createCaptureItem(client, {
       raw_text: localCapture.raw_text,
+      return_hook: localCapture.return_hook ?? null,
       area_id: persistedAreaId,
     });
     if (result.provider !== "supabase") {
@@ -1674,7 +1680,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // mapping and markLocalOnly fallback; in mock/preview mode the harvest UI
   // holds the win locally and there is nothing to persist.
   const confirmWin = useCallback(
-    async (input: { taskId: string; title: string; detail?: string | null }) => {
+    async (input: {
+      taskId: string;
+      title: string;
+      detail?: string | null;
+    }) => {
       const title = input.title.trim();
       if (title.length === 0) return;
 
@@ -2333,9 +2343,21 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  function submitCaptureText(rawText: string, areaId: string | null) {
+  function submitCaptureText(
+    rawText: string,
+    areaId: string | null,
+    returnHook?: string | null,
+  ) {
+    if (captureParse.phase === "parsing") {
+      return;
+    }
+
     const previous = stateRef.current;
-    const next = submitRawCapture(previous, { rawText, areaId });
+    const next = submitRawCapture(previous, {
+      rawText,
+      areaId,
+      returnHook,
+    });
     const localCapture = next.captureItems.find(
       (capture) =>
         !previous.captureItems.some((item) => item.id === capture.id),

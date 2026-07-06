@@ -20,7 +20,10 @@ export interface ParsedWorkflowResult {
 
 interface BuildParsedWorkflowResultInput {
   response: ParseCaptureResponse;
-  capture: Pick<CaptureItem, "id" | "user_id" | "raw_text" | "created_at">;
+  capture: Pick<
+    CaptureItem,
+    "id" | "user_id" | "raw_text" | "return_hook" | "created_at"
+  >;
   workflowAreaId: string | null;
 }
 
@@ -62,6 +65,7 @@ export function buildParsedWorkflowResult(
     user_id: input.capture.user_id,
     area_id: input.workflowAreaId,
     raw_text: input.capture.raw_text,
+    return_hook: input.capture.return_hook ?? null,
     capture_mode: "text",
     inferred_area_confidence: input.response.overall_confidence,
     status: triageRequired ? "triage_required" : "parsed",

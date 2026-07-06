@@ -22,6 +22,7 @@ export * from "./phase2-mock-workflow";
 
 export const CreateCaptureItemInputSchema = z.object({
   raw_text: z.string().trim().min(1),
+  return_hook: z.string().trim().nullable().optional(),
   area_id: z.string().uuid().nullable(),
 });
 
@@ -336,7 +337,8 @@ export const CreateWinRecordInputSchema = z
     review_entry_id: z.string().uuid().nullable().optional().default(null),
   })
   .refine(
-    (input) => input.source_task_id !== null || input.source_project_id !== null,
+    (input) =>
+      input.source_task_id !== null || input.source_project_id !== null,
     {
       message: "A win must reference the task or project it came from.",
       path: ["source_task_id"],

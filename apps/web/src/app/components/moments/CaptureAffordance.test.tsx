@@ -10,6 +10,17 @@ describe("CaptureAffordance", () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
+  it("blocks opening a second capture while containment is active", () => {
+    const onOpen = vi.fn();
+    render(<CaptureAffordance disabled onOpen={onOpen} />);
+    const button = screen.getByTestId("capture-affordance");
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent("Capture resolving");
+    fireEvent.click(button);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   // SP-4: the hover scale transition uses the fast motion token and falls
   // back to no motion (and no hover scale) for prefers-reduced-motion users.
   it("uses the fast motion token with a reduced-motion fallback", () => {

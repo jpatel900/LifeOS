@@ -61,6 +61,7 @@ export interface WorkflowState {
 interface ParseCaptureInput {
   rawText: string;
   areaId?: string | null;
+  returnHook?: string | null;
 }
 
 interface SubmitCaptureInput extends ParseCaptureInput {
@@ -341,6 +342,7 @@ export function mockParseCapture(
       user_id: MOCK_USER_ID,
       area_id: areaId,
       raw_text: rawText,
+      return_hook: input.returnHook?.trim() || null,
       capture_mode: "text",
       inferred_area_confidence: input.areaId ? 1 : 0.74,
       status: "triage_required",
@@ -458,6 +460,7 @@ export function createRawCaptureItem(
     user_id: MOCK_USER_ID,
     area_id: input.areaId ?? null,
     raw_text: rawText,
+    return_hook: input.returnHook?.trim() || null,
     capture_mode: "text",
     inferred_area_confidence: null,
     status: "new",
@@ -546,6 +549,7 @@ export function submitRawCapture(
     user_id: MOCK_USER_ID,
     area_id: inferAreaId(rawText, input.areaId),
     raw_text: rawText,
+    return_hook: input.returnHook?.trim() || null,
     capture_mode: "text",
     inferred_area_confidence: input.areaId ? 1 : 0.74,
     status: "new",

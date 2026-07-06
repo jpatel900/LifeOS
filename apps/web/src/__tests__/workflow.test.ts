@@ -47,9 +47,11 @@ describe("local mock workflow", () => {
     state = submitCapture(state, {
       rawText: "Draft agenda for tomorrow's project check-in.",
       areaId: "area-main-job",
+      returnHook: "back to planning",
     });
 
     expect(state.captureItems).toHaveLength(1);
+    expect(state.captureItems[0].return_hook).toBe("back to planning");
     expect(state.taskDrafts).toHaveLength(1);
     expect(state.timeBlockProposalDrafts).toHaveLength(1);
 
