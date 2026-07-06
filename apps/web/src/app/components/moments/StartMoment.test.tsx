@@ -16,6 +16,8 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     focusDegraded: false,
     focusItems: [],
     deferredItems: [],
+    staleProject: null,
+    recoveryNudge: null,
     ...overrides,
   };
 }
