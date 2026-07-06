@@ -224,6 +224,17 @@ async function deleteOperatorProfile(client: SupabaseClient, userId: string) {
   }
 }
 
+async function deleteWinByTitle(client: SupabaseClient, title: string) {
+  const { error } = await client
+    .from("win_records")
+    .delete()
+    .eq("title", title);
+
+  if (error) {
+    throw new Error(`Could not clean up win '${title}': ${error.message}`);
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -327,6 +338,62 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       raw_text: rawText,
       capture_mode: "text",
       status: "new",
+    });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A access own win_records but not user B win_records", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userATitle = `rls-win-a-${suffix}`;
+    const userBTitle = `rls-win-b-${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("win_records")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: userATitle,
+          occurred_at: "2026-05-08",
+        });
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("win_records")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          title: userBTitle,
+          occurred_at: "2026-05-08",
+        });
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("win_records")
+        .select("user_id,title")
+        .in("title", [userATitle, userBTitle])
+        .order("title", { ascending: true });
+
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([{ user_id: userA.id, title: userATitle }]);
+    } finally {
+      await deleteWinByTitle(userAClient, userATitle);
+      await deleteWinByTitle(userBClient, userBTitle);
+    }
+  });
+
+  it("prevents user A from inserting win_records for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const title = `rls-cross-user-win-${Date.now()}`;
+
+    const { error } = await userAClient.from("win_records").insert({
+      user_id: userB.id,
+      area_id: userB.areaId,
+      title,
+      occurred_at: "2026-05-08",
     });
 
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
