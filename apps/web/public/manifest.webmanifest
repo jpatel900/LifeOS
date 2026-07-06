@@ -1,0 +1,27 @@
+{
+  "name": "LifeOS",
+  "short_name": "LifeOS",
+  "description": "Area-scoped personal workflow cockpit",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "method": "GET",
+    "action": "/",
+    "params": {
+      "title": "shared_text",
+      "text": "shared_text",
+      "url": "shared_text"
+    }
+  }
+}
