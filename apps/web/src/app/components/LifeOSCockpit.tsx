@@ -293,6 +293,64 @@ export function LifeOSCockpit({
     const currentTask = currentSession?.task_id
       ? state.tasks.find((task) => task.id === currentSession.task_id)
       : null;
+    const capHit = remaining <= 0;
+    const hasDefinitionOfDone = Boolean(
+      currentTask?.definition_of_done?.trim(),
+    );
+
+    if (status === "completed" && capHit && hasDefinitionOfDone) {
+      const choice = window
+        .prompt(
+          "The time cap is here. If the definition of done is not true yet, choose: 1 cut scope and close done, or 2 defer with a carry note.",
+        )
+        ?.trim()
+        .toLowerCase();
+
+      if (choice === "1" || choice === "cut" || choice === "cut scope") {
+        const revisedDod = window
+          .prompt("Cut scope: write the definition of done that is true now.")
+          ?.trim();
+        if (!revisedDod) {
+          showToast("Write the cut scope before closing");
+          return;
+        }
+        markSession(
+          "completed",
+          undefined,
+          `dod_cap.v1 cut_scope: ${revisedDod}`,
+          "cut_scope",
+        );
+        showToast("Scope cut and session closed");
+        navigate("review");
+        return;
+      }
+
+      if (choice === "2" || choice === "defer" || choice === "deferred") {
+        const carryNote = window
+          .prompt("Defer: write one carry note for the next block or backlog.")
+          ?.trim();
+        if (!carryNote) {
+          showToast("Write a carry note before deferring");
+          return;
+        }
+        markSession(
+          "stuck",
+          undefined,
+          `dod_cap.v1 deferred: ${carryNote}`,
+          "deferred",
+        );
+        if (currentTask) {
+          deferTask(currentTask.id);
+        }
+        showToast("Carried forward to backlog");
+        navigate("review");
+        return;
+      }
+
+      showToast("Choose cut scope or defer at the cap");
+      return;
+    }
+
     const decisionChoice =
       status === "completed" && currentTask?.task_type === "decision"
         ? window
@@ -1759,6 +1817,17 @@ function ExecuteView({
           <h2 className="mt-28 text-2xl font-extrabold">
             {active?.task.title ?? "Pick a block"}
           </h2>
+          {active?.task.definition_of_done ? (
+            <p className="mx-auto mt-3 max-w-md text-sm text-[var(--mut)]">
+              Definition of done: {active.task.definition_of_done}
+            </p>
+          ) : null}
+          {active && remaining <= 0 && active.task.definition_of_done ? (
+            <div className="mx-auto mt-4 max-w-md rounded-2xl border border-[var(--amb)] bg-[var(--amb-sf)] p-3 text-sm text-[var(--amb-fg)]">
+              Time cap reached. If the definition of done is unmet, choose cut
+              scope or defer; continuing silently is not an option.
+            </div>
+          ) : null}
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             {active ? (
               <>

@@ -299,7 +299,7 @@ const calendarBlockColumns =
   "id,user_id,area_id,proposal_id,task_id,google_event_id,start_at,end_at,status,created_at,updated_at";
 
 const executionSessionColumns =
-  "id,user_id,area_id,task_id,calendar_block_id,planned_minutes,actual_minutes,paused_minutes,distraction_minutes,productivity_rating,energy_rating,outcome,notes,created_at";
+  "id,user_id,area_id,task_id,calendar_block_id,planned_minutes,actual_minutes,paused_minutes,distraction_minutes,productivity_rating,energy_rating,outcome,cap_outcome,notes,created_at";
 
 const reviewEntryColumns =
   "id,user_id,area_id,review_type,period_start,period_end,summary_json,created_at";
@@ -2060,6 +2060,7 @@ function mockExecutionSession(input: CreateExecutionSessionInput) {
     productivity_rating: null,
     energy_rating: null,
     outcome: "partial",
+    cap_outcome: null,
     notes: null,
     created_at: new Date().toISOString(),
   });
@@ -2192,6 +2193,7 @@ function executionMarkPatch(
       paused_minutes: session.paused_minutes ?? 0,
       distraction_minutes: session.distraction_minutes ?? 0,
       productivity_rating: session.productivity_rating,
+      cap_outcome: session.cap_outcome ?? null,
       notes: session.notes,
     };
   }
@@ -2202,6 +2204,7 @@ function executionMarkPatch(
     paused_minutes: session.paused_minutes ?? 0,
     distraction_minutes: session.distraction_minutes ?? 0,
     productivity_rating: input.productivity_rating,
+    cap_outcome: input.cap_outcome ?? null,
     notes: input.notes,
   };
 }
@@ -2231,6 +2234,7 @@ export async function markExecutionSession(
       productivity_rating: mockPatch.productivity_rating,
       energy_rating: null,
       outcome: mockPatch.outcome,
+      cap_outcome: mockPatch.cap_outcome,
       notes: mockPatch.notes,
       created_at: new Date().toISOString(),
     });
@@ -2273,6 +2277,7 @@ export async function markExecutionSession(
     p_distraction_minutes: patch.distraction_minutes,
     p_productivity_rating: patch.productivity_rating,
     p_notes: patch.notes,
+    p_cap_outcome: patch.cap_outcome,
   });
   if (error) {
     throw new Error(getSupabaseMessage(error));

@@ -323,6 +323,7 @@ describe("MarkExecutionSessionInputSchema", () => {
         actual_minutes: 42,
         productivity_rating: 4,
         notes: "solid focus",
+        cap_outcome: "deferred",
       });
       expect(result.success).toBe(true);
     }
@@ -605,6 +606,7 @@ describe("ExecutionSessionSchema", () => {
       productivity_rating: 4,
       energy_rating: "medium",
       outcome: "partial",
+      cap_outcome: "cut_scope",
       notes: null,
       created_at: "2024-01-01T12:00:00.000Z",
     });
