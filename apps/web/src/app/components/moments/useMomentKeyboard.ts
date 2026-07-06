@@ -1,4 +1,8 @@
 import { useEffect } from "react";
+import {
+  matchesMomentKeyBinding,
+  momentKeyBindingById,
+} from "@/lib/keys/keymap";
 
 /**
  * Moments pass P1 — packet: structural moments (Start/Flow/Close cockpit).
@@ -19,12 +23,6 @@ export interface MomentKeyboardHandlers {
   /** When false, the listener is inert (still attached/detached, no-op). */
   enabled?: boolean;
 }
-
-const MOMENT_BY_DIGIT: Record<string, "start" | "flow" | "close"> = {
-  "1": "start",
-  "2": "flow",
-  "3": "close",
-};
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -53,15 +51,19 @@ export function useMomentKeyboard(handlers: MomentKeyboardHandlers): void {
 
     function handleKeyDown(event: KeyboardEvent): void {
       const typing = isTypingTarget(event.target);
-      const paletteCombo =
-        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+      const paletteCombo = matchesMomentKeyBinding(
+        event,
+        momentKeyBindingById("open-command-palette"),
+      );
 
       if (typing) {
         // Typing fields win: only Escape/Enter pass through; the palette
         // combo is ignored too (ADR D2), every other mapping is inert.
-        if (event.key === "Escape") {
+        if (matchesMomentKeyBinding(event, momentKeyBindingById("escape"))) {
           onEscape();
-        } else if (event.key === "Enter") {
+        } else if (
+          matchesMomentKeyBinding(event, momentKeyBindingById("primary-action"))
+        ) {
           onPrimary();
         }
         return;
@@ -76,22 +78,31 @@ export function useMomentKeyboard(handlers: MomentKeyboardHandlers): void {
       // Any other held modifier is a pass-through combo we don't own.
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-      if (event.key in MOMENT_BY_DIGIT) {
-        onSwitchMoment(MOMENT_BY_DIGIT[event.key]);
+      const momentBinding = [
+        momentKeyBindingById("switch-start"),
+        momentKeyBindingById("switch-flow"),
+        momentKeyBindingById("switch-close"),
+      ].find((binding) => matchesMomentKeyBinding(event, binding));
+      if (momentBinding?.moment) {
+        onSwitchMoment(momentBinding.moment);
         return;
       }
 
-      if (event.key === "c" || event.key === "C") {
+      if (
+        matchesMomentKeyBinding(event, momentKeyBindingById("open-capture"))
+      ) {
         onCapture();
         return;
       }
 
-      if (event.key === "Enter") {
+      if (
+        matchesMomentKeyBinding(event, momentKeyBindingById("primary-action"))
+      ) {
         onPrimary();
         return;
       }
 
-      if (event.key === "Escape") {
+      if (matchesMomentKeyBinding(event, momentKeyBindingById("escape"))) {
         onEscape();
       }
     }

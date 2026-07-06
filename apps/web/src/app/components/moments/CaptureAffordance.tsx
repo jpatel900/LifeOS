@@ -1,5 +1,6 @@
 "use client";
 
+import { momentKeyLabel } from "@/lib/keys/keymap";
 import { cn } from "@/lib/utils";
 import { HIT_TARGET_ROW } from "./hitTarget";
 
@@ -35,7 +36,7 @@ export function CaptureAffordance({
     >
       {captureLocked ? "Capture resolving…" : "Capture a thought"}
       <kbd className="rounded border border-primary-foreground/40 bg-black/10 px-1.5 py-0.5 text-[0.7rem] font-semibold">
-        C
+        {momentKeyLabel("open-capture")}
       </kbd>
     </button>
   );

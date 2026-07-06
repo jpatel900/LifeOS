@@ -1,5 +1,6 @@
 "use client";
 
+import { momentKeyLabel } from "@/lib/keys/keymap";
 import { cn } from "@/lib/utils";
 import { HIT_TARGET_ROW } from "./hitTarget";
 
@@ -17,10 +18,10 @@ export interface MomentSwitcherProps {
   onChange(value: MomentValue): void;
 }
 
-const TABS: { value: MomentValue; label: string; digit: string }[] = [
-  { value: "start", label: "Start", digit: "1" },
-  { value: "flow", label: "Flow", digit: "2" },
-  { value: "close", label: "Close", digit: "3" },
+const TABS: { value: MomentValue; label: string; keyHint: string }[] = [
+  { value: "start", label: "Start", keyHint: momentKeyLabel("switch-start") },
+  { value: "flow", label: "Flow", keyHint: momentKeyLabel("switch-flow") },
+  { value: "close", label: "Close", keyHint: momentKeyLabel("switch-close") },
 ];
 
 export function MomentSwitcher({ value, onChange }: MomentSwitcherProps) {
@@ -58,7 +59,7 @@ export function MomentSwitcher({ value, onChange }: MomentSwitcherProps) {
                   : "border-border/60 bg-black/5",
               )}
             >
-              {tab.digit}
+              {tab.keyHint}
             </kbd>
           </button>
         );
