@@ -107,8 +107,9 @@ describe("S9 golden-journey point 6a: sourced duration recalibration", () => {
     expect(card).toHaveTextContent(/run 1\.4x/);
     expect(card).toHaveTextContent(/completed sessions in this area/);
 
-    // Apply-on-accept resolves that card (decision recorded; mock write is a no-op).
-    fireEvent.click(within(card).getByRole("button", { name: /^Use \d+m$/ }));
+    // Deciding it records the decision and resolves that card (mock write is a
+    // no-op; nothing re-times the block — that's a documented follow-up).
+    fireEvent.click(within(card).getByRole("button", { name: "Sounds right" }));
     expect(screen.queryAllByTestId("proposal-recalibration")).toHaveLength(
       cards.length - 1,
     );

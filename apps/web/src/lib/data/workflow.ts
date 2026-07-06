@@ -799,10 +799,11 @@ export interface DurationRecalibrationDecisionInput {
 }
 
 /**
- * Record the user's decision on a sourced duration recalibration (S9,
- * apply-on-accept). Accept means the adjusted estimate was applied for this
- * proposal; dismiss keeps the original. Either way the decision is recorded
- * (NS-INV-3). Fire-and-forget.
+ * Record the user's decision on a sourced duration recalibration (S9). Accept
+ * means the user agrees the estimate should reflect their actuals; dismiss keeps
+ * the original. Either way ONLY the decision is recorded (NS-INV-3) — nothing
+ * re-times the block or writes a stored default (that lands with the future
+ * duration_profiles store). Fire-and-forget.
  */
 export function recordDurationRecalibrationDecision(
   client: MinimalSupabaseClient | null,
