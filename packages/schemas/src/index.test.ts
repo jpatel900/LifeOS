@@ -90,6 +90,19 @@ describe("CreateCaptureItemInputSchema", () => {
       "back to invoices",
     );
   });
+
+  it("accepts an optional client_capture_id for offline-queue sync", () => {
+    const result = CreateCaptureItemInputSchema.safeParse({
+      raw_text: "Buy milk",
+      client_capture_id: "queued-abc123",
+      area_id: null,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.client_capture_id : "").toBe(
+      "queued-abc123",
+    );
+  });
 });
 
 describe("CreateAreaInputSchema", () => {

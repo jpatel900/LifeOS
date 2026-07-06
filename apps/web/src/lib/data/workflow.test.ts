@@ -467,11 +467,46 @@ describe("workflow data provider", () => {
       area_id: null,
       raw_text: "Call dentist tomorrow",
       return_hook: null,
+      client_capture_id: null,
       capture_mode: "text",
       status: "new",
     });
     expect(result.provider).toBe("supabase");
     expect(result.capture.raw_text).toBe("Call dentist tomorrow");
+  });
+
+  it("forwards a client_capture_id for idempotent offline-queue sync", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: "550e8400-e29b-41d4-a716-446655440900",
+        user_id: "550e8400-e29b-41d4-a716-446655440001",
+        area_id: null,
+        raw_text: "Buy milk",
+        raw_audio_ref: null,
+        client_capture_id: "queued-abc123",
+        capture_mode: "text",
+        inferred_area_confidence: null,
+        status: "new",
+        created_at: "2026-07-06T00:00:00.000Z",
+      },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+    const getUser = vi.fn().mockResolvedValue({
+      data: { user: { id: "550e8400-e29b-41d4-a716-446655440001" } },
+      error: null,
+    });
+
+    await createCaptureItem(
+      { from, auth: { getUser } } as unknown as MinimalSupabaseClient,
+      { raw_text: "Buy milk", area_id: null, client_capture_id: "queued-abc123" },
+    );
+
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ client_capture_id: "queued-abc123" }),
+    );
   });
 
   it("keeps capture working in mock mode", async () => {

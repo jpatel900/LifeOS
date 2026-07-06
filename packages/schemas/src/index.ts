@@ -23,6 +23,8 @@ export * from "./phase2-mock-workflow";
 export const CreateCaptureItemInputSchema = z.object({
   raw_text: z.string().trim().min(1),
   return_hook: z.string().trim().nullable().optional(),
+  // FR-027 (F-G1a): client-generated id for idempotent offline-queue sync.
+  client_capture_id: z.string().trim().min(1).nullable().optional(),
   area_id: z.string().uuid().nullable(),
 });
 

@@ -328,7 +328,7 @@ const areaColumns =
   "id,user_id,name,slug,description,color,icon,sort_order,is_active,charter_text,charter_updated_at,created_at,updated_at";
 
 const captureColumns =
-  "id,user_id,area_id,raw_text,raw_audio_ref,return_hook,capture_mode,inferred_area_confidence,status,created_at";
+  "id,user_id,area_id,raw_text,raw_audio_ref,return_hook,client_capture_id,capture_mode,inferred_area_confidence,status,created_at";
 
 // S3 (#255): the person/commitment link columns are now selected so the accept
 // path can return them and S4 aging can read populated values. Additive — every
@@ -1483,6 +1483,7 @@ export async function createCaptureItem(
         raw_text: parsedInput.raw_text,
         raw_audio_ref: null,
         return_hook: parsedInput.return_hook ?? null,
+        client_capture_id: parsedInput.client_capture_id ?? null,
         capture_mode: "text",
         inferred_area_confidence: null,
         status: "new",
@@ -1510,6 +1511,7 @@ export async function createCaptureItem(
       area_id: parsedInput.area_id,
       raw_text: parsedInput.raw_text,
       return_hook: parsedInput.return_hook ?? null,
+      client_capture_id: parsedInput.client_capture_id ?? null,
       capture_mode: "text",
       status: "new",
     })
