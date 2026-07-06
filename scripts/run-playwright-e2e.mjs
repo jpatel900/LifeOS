@@ -217,7 +217,15 @@ async function main() {
   const testArgs = [playwrightCliPath, "test", ...process.argv.slice(2)];
   const serverProcess = spawn(process.execPath, serverArgs, {
     cwd: webDir,
-    env: { ...process.env, PORT: port },
+    env: {
+      ...process.env,
+      PORT: port,
+      // Moments pass P7b: the E2E lane serves the go-live config where `/` is
+      // the moments home. This is the CI server-start path (Playwright's own
+      // webServer is disabled here), so the flag must be set on THIS spawn;
+      // an explicit outer NEXT_PUBLIC_MOMENTS_HOME still wins if provided.
+      NEXT_PUBLIC_MOMENTS_HOME: process.env.NEXT_PUBLIC_MOMENTS_HOME ?? "true",
+    },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   });
