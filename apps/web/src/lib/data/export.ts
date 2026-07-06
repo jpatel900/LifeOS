@@ -14,6 +14,7 @@ export const USER_DATA_EXPORT_TABLES = [
   "calendar_blocks",
   "execution_sessions",
   "review_entries",
+  "win_records",
   "external_write_events",
   "suggestion_records",
   "override_records",
