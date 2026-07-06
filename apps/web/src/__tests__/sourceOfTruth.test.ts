@@ -342,23 +342,10 @@ describe("source-of-truth boundaries", () => {
     expect(globalsCss).toContain('.lifeos-cockpit[data-theme="light"]');
   });
 
-  it("keeps cockpit route components free of raw hex styling", () => {
-    const cockpitFiles = [
-      "apps/web/src/app/components/LifeOSCockpit.tsx",
-      "apps/web/src/app/components/CockpitRoute.tsx",
-      "apps/web/src/app/page.tsx",
-      "apps/web/src/app/capture/page.tsx",
-      "apps/web/src/app/triage/page.tsx",
-      "apps/web/src/app/calendar/page.tsx",
-      "apps/web/src/app/execute/page.tsx",
-      "apps/web/src/app/review/page.tsx",
-      "apps/web/src/app/health/page.tsx",
-    ];
-
-    for (const file of cockpitFiles) {
-      expect(readRepoFile(file)).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-    }
-  });
+  // Raw-hex styling coverage moved to the G-UX-3 guard in
+  // coherenceRegistry.test.ts, which scans a SUPERSET of these nine files
+  // (all app/components/** plus the seven cockpit route pages) with
+  // comment-stripping, so #NNN issue refs in comments no longer false-red.
 
   it("keeps cockpit header area edits on the persisted area path", () => {
     const cockpit = normalizeWhitespace(
