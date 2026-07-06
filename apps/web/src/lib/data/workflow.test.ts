@@ -4,6 +4,9 @@ import {
   applyTaskReviewTransition,
   createArea,
   createReviewEntry,
+  createWinRecord,
+  listWinHarvestCandidates,
+  listWinRecords,
   createTimeBlockProposal,
   createProject,
   createCaptureItem,
@@ -1790,5 +1793,162 @@ describe("workflow data provider", () => {
     expect(reviewResult.reviewEntry.summary_json).toEqual(
       reviewRow.summary_json,
     );
+  });
+
+  const winId = "550e8400-e29b-41d4-a716-446655440901";
+  const winRow = {
+    id: winId,
+    user_id: userId,
+    area_id: areaId,
+    source_task_id: taskId,
+    source_project_id: null,
+    title: "Shipped the onboarding flow",
+    detail: null,
+    occurred_at: "2026-05-08",
+    review_entry_id: reviewId,
+    created_at: "2026-05-08T18:00:00.000Z",
+  };
+
+  it("persists a user-confirmed win through Supabase", async () => {
+    const single = vi.fn().mockResolvedValue({ data: winRow, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    const result = await createWinRecord(authenticatedClient(from), {
+      area_id: areaId,
+      source_task_id: taskId,
+      title: "Shipped the onboarding flow",
+      occurred_at: "2026-05-08",
+      review_entry_id: reviewId,
+    });
+
+    expect(from).toHaveBeenCalledWith("win_records");
+    expect(insert).toHaveBeenCalledWith({
+      user_id: userId,
+      area_id: areaId,
+      source_task_id: taskId,
+      source_project_id: null,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurred_at: "2026-05-08",
+      review_entry_id: reviewId,
+    });
+    expect(result.provider).toBe("supabase");
+    expect(result.winRecord.title).toBe("Shipped the onboarding flow");
+  });
+
+  it("rejects a win with no source task or project", async () => {
+    await expect(
+      createWinRecord(null, {
+        area_id: areaId,
+        title: "Untethered win",
+        occurred_at: "2026-05-08",
+      }),
+    ).rejects.toThrow(/task or project/);
+  });
+
+  it("records a win in mock mode without a client", async () => {
+    const result = await createWinRecord(null, {
+      area_id: areaId,
+      source_project_id: "550e8400-e29b-41d4-a716-446655440111",
+      title: "Closed the quarter",
+      occurred_at: "2026-05-08",
+    });
+
+    expect(result.provider).toBe("mock");
+    expect(result.winRecord.source_project_id).toBe(
+      "550e8400-e29b-41d4-a716-446655440111",
+    );
+    expect(result.winRecord.source_task_id).toBeNull();
+  });
+
+  it("harvests done tasks and projects since the review, excluding already-harvested sources", async () => {
+    const doneTaskFresh = {
+      ...taskRow,
+      id: "550e8400-e29b-41d4-a716-446655440311",
+      title: "Fresh done task",
+      status: "done",
+      updated_at: "2026-05-09T10:00:00.000Z",
+    };
+    const doneTaskHarvested = {
+      ...taskRow,
+      id: "550e8400-e29b-41d4-a716-446655440312",
+      title: "Already harvested task",
+      status: "done",
+      updated_at: "2026-05-09T11:00:00.000Z",
+    };
+    const doneProject = {
+      id: "550e8400-e29b-41d4-a716-446655440411",
+      user_id: userId,
+      area_id: areaId,
+      title: "Launched project",
+      description: null,
+      status: "done",
+      created_at: "2026-05-01T00:00:00.000Z",
+      updated_at: "2026-05-09T12:00:00.000Z",
+    };
+
+    const from = vi.fn((table: string) => {
+      if (table === "win_records") {
+        return {
+          select: vi.fn().mockResolvedValue({
+            data: [
+              { source_task_id: doneTaskHarvested.id, source_project_id: null },
+            ],
+            error: null,
+          }),
+        };
+      }
+      const rows = table === "tasks" ? [doneTaskFresh, doneTaskHarvested] : [doneProject];
+      const order = vi.fn().mockResolvedValue({ data: rows, error: null });
+      const gte = vi.fn().mockReturnValue({ order });
+      const eq = vi.fn().mockReturnValue({ gte });
+      const select = vi.fn().mockReturnValue({ eq });
+      return { select };
+    });
+
+    const result = await listWinHarvestCandidates(
+      authenticatedClient(from as unknown as MinimalSupabaseClient["from"]),
+      "2026-05-08T00:00:00.000Z",
+    );
+
+    expect(result.provider).toBe("supabase");
+    expect(result.candidates).toEqual([
+      {
+        source_type: "task",
+        source_id: doneTaskFresh.id,
+        area_id: areaId,
+        title: "Fresh done task",
+        occurred_at: "2026-05-09",
+      },
+      {
+        source_type: "project",
+        source_id: doneProject.id,
+        area_id: areaId,
+        title: "Launched project",
+        occurred_at: "2026-05-09",
+      },
+    ]);
+  });
+
+  it("returns no harvest candidates in mock mode", async () => {
+    const result = await listWinHarvestCandidates(null, "2026-05-08");
+    expect(result.provider).toBe("mock");
+    expect(result.candidates).toEqual([]);
+  });
+
+  it("reads win records most-recent first through Supabase", async () => {
+    const order = vi.fn().mockResolvedValue({ data: [winRow], error: null });
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const result = await listWinRecords(authenticatedClient(from));
+
+    expect(from).toHaveBeenCalledWith("win_records");
+    expect(order).toHaveBeenCalledWith("occurred_at", { ascending: false });
+    expect(result.provider).toBe("supabase");
+    expect(result.winRecords).toHaveLength(1);
+    expect(result.winRecords[0].title).toBe("Shipped the onboarding flow");
   });
 });

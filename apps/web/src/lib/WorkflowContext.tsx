@@ -71,6 +71,7 @@ import {
   createCaptureItem,
   createExecutionSession,
   createReviewEntry,
+  createWinRecord,
   createTask,
   createTimeBlockProposal,
   editTimeBlockProposal,
@@ -346,6 +347,11 @@ interface WorkflowContextValue {
   deferTask: (taskId: string) => void;
   dropTask: (taskId: string) => void;
   saveReview: () => void;
+  confirmWin: (input: {
+    taskId: string;
+    title: string;
+    detail?: string | null;
+  }) => Promise<void>;
   clearWipRefusal: () => void;
   swapWipSlot: (slotTaskId: string) => void;
   resetWorkflow: () => void;
@@ -1655,6 +1661,48 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     await syncPersistedWorkflowRows(client);
   }
 
+  // S7 (#259): persist a user-confirmed win. Only ever called on explicit
+  // confirm (never on skip). Mirrors persistReviewEntry's local↔persisted id
+  // mapping and markLocalOnly fallback; in mock/preview mode the harvest UI
+  // holds the win locally and there is nothing to persist.
+  const confirmWin = useCallback(
+    async (input: { taskId: string; title: string; detail?: string | null }) => {
+      const title = input.title.trim();
+      if (title.length === 0) return;
+
+      const client = createSupabaseBrowserClient();
+      if (!client) return;
+
+      const task = stateRef.current.tasks.find((t) => t.id === input.taskId);
+      const persistedTaskId = persistedIdForLocalId(
+        input.taskId,
+        persistedTaskIdByLocalIdRef.current,
+      );
+      const persistedAreaId = task
+        ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
+        : null;
+
+      if (!persistedTaskId || !persistedAreaId) {
+        markLocalOnly("Win saved locally; account sync is pending.");
+        return;
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        await createWinRecord(client, {
+          area_id: persistedAreaId,
+          source_task_id: persistedTaskId,
+          title,
+          detail: input.detail ?? null,
+          occurred_at: today,
+        });
+      } catch {
+        markLocalOnly("Win saved locally; account sync is pending.");
+      }
+    },
+    [markLocalOnly],
+  );
+
   async function persistStartedSession(
     localSession: Phase2MockExecutionSession,
   ) {
@@ -2654,6 +2702,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         markPersistedSaveFailure(error);
       });
     },
+    confirmWin,
     clearWipRefusal: () =>
       applyWorkflowState(clearWipRefusal(stateRef.current)),
     swapWipSlot: (slotTaskId) => {

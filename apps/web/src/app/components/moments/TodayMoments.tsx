@@ -15,7 +15,7 @@ import { CaptureOverlay } from "./CaptureOverlay";
 import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
 import { StartMoment } from "./StartMoment";
 import { FlowMoment } from "./FlowMoment";
-import { CloseMoment } from "./CloseMoment";
+import { CloseMoment, type CloseWinVM } from "./CloseMoment";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 import { buildProgressionNodes } from "./progressionNodes";
@@ -165,6 +165,7 @@ export function TodayMoments({
     markSession,
     carryForwardTask,
     saveReview,
+    confirmWin,
     refreshPersistedWorkflow,
     promoteBacklogTask,
     deferTask,
@@ -292,6 +293,49 @@ export function TodayMoments({
       },
       action ? TOAST_WITH_ACTION_DURATION_MS : TOAST_DURATION_MS,
     );
+  }, []);
+
+  // S7 (#259) wins harvest. Candidate wins come from closeVM; confirm/skip
+  // decisions live here for the session. Confirm persists through the context
+  // (real client only; mock/preview stays local) and moves the candidate into
+  // the reading list; skip dismisses it and writes nothing.
+  const [confirmedWins, setConfirmedWins] = useState<CloseWinVM[]>([]);
+  const [skippedWinIds, setSkippedWinIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const confirmedWinIds = useMemo(
+    () => new Set(confirmedWins.map((win) => win.taskId)),
+    [confirmedWins],
+  );
+  const pendingWins = useMemo(
+    () =>
+      closeVM.winCandidates.filter(
+        (win) =>
+          !skippedWinIds.has(win.taskId) && !confirmedWinIds.has(win.taskId),
+      ),
+    [closeVM.winCandidates, skippedWinIds, confirmedWinIds],
+  );
+  const handleConfirmWin = useCallback(
+    (taskId: string, title: string) => {
+      const candidate = closeVM.winCandidates.find(
+        (win) => win.taskId === taskId,
+      );
+      if (!candidate || title.length === 0) return;
+      setConfirmedWins((prev) => [
+        ...prev,
+        { taskId, title, areaLabel: candidate.areaLabel },
+      ]);
+      void confirmWin({ taskId, title });
+      showToast("Win logged");
+    },
+    [closeVM.winCandidates, confirmWin, showToast],
+  );
+  const handleSkipWin = useCallback((taskId: string) => {
+    setSkippedWinIds((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
   }, []);
 
   const startFocus = useCallback(
@@ -683,11 +727,15 @@ export function TodayMoments({
           {moment === "close" ? (
             <CloseMoment
               vm={closeVM}
+              pendingWins={pendingWins}
+              confirmedWins={confirmedWins}
               onCloseDay={() => {
                 saveReview();
                 showToast("Day closed");
               }}
               onCarryForward={(taskId) => carryForwardTask(taskId)}
+              onConfirmWin={handleConfirmWin}
+              onSkipWin={handleSkipWin}
             />
           ) : null}
         </>

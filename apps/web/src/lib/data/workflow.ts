@@ -16,12 +16,14 @@ import {
   CreateProjectInputSchema,
   CreateCaptureItemInputSchema,
   CreateReviewEntryInputSchema,
+  CreateWinRecordInputSchema,
   CreateTaskInputSchema,
   ExecutionSessionSchema,
   MarkExecutionSessionInputSchema,
   META_LEARNING_EVENT_SCHEMA_VERSION_V2,
   ProjectSchema,
   ReviewEntrySchema,
+  WinRecordSchema,
   SoftDeleteAreaInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
@@ -40,11 +42,13 @@ import {
   type CreateProjectInput,
   type CreateCaptureItemInput,
   type CreateReviewEntryInput,
+  type CreateWinRecordInput,
   type CreateTaskInput,
   type ExecutionSession,
   type MarkExecutionSessionInput,
   type Project,
   type ReviewEntry,
+  type WinRecord,
   type SoftDeleteAreaInput,
   type Task,
   type TimeBlockProposal,
@@ -178,6 +182,33 @@ export interface ReviewEntryCreateResult {
   reviewEntry: ReviewEntry;
 }
 
+// S7 wins & evidence log (issue #259). A harvest candidate is a completed task
+// or project surfaced at review time; the user confirms/edits/skips it into a
+// win_record. occurred_at is a calendar date (YYYY-MM-DD) derived from the
+// source completion (updated_at), since neither table carries a completed_at.
+export interface WinHarvestCandidate {
+  source_type: "task" | "project";
+  source_id: string;
+  area_id: string;
+  title: string;
+  occurred_at: string;
+}
+
+export interface WinHarvestCandidatesResult {
+  provider: DataProvider;
+  candidates: WinHarvestCandidate[];
+}
+
+export interface WinRecordCreateResult {
+  provider: DataProvider;
+  winRecord: WinRecord;
+}
+
+export interface WinRecordsResult {
+  provider: DataProvider;
+  winRecords: WinRecord[];
+}
+
 export type ReviewTaskTargetStatus = Extract<
   Task["status"],
   "active" | "backlog" | "dropped"
@@ -304,6 +335,9 @@ const executionSessionColumns =
 const reviewEntryColumns =
   "id,user_id,area_id,review_type,period_start,period_end,summary_json,created_at";
 
+const winRecordColumns =
+  "id,user_id,area_id,source_task_id,source_project_id,title,detail,occurred_at,review_entry_id,created_at";
+
 const suggestionRecordColumns =
   "id,user_id,area_id,policy_identifier,schema_version,suggestion_type,subject_type,subject_id,suggestion_json,confidence,status,resolution_reason,decided_by,created_at,resolved_at";
 
@@ -385,6 +419,14 @@ function parseReviewEntry(row: unknown) {
 
 function parseReviewEntries(rows: unknown) {
   return ReviewEntrySchema.array().parse(normalizeSupabaseRows(rows));
+}
+
+function parseWinRecord(row: unknown) {
+  return WinRecordSchema.parse(normalizeSupabaseRow(row));
+}
+
+function parseWinRecords(rows: unknown) {
+  return WinRecordSchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseTasks(rows: unknown) {
@@ -2410,4 +2452,183 @@ export async function createReviewEntry(
     provider: "supabase",
     reviewEntry: parseReviewEntry(data),
   };
+}
+
+// Wins are only ever written on explicit user confirm (issue #259). No AI drafts
+// or auto-harvest here: this records a single user-confirmed win.
+export async function createWinRecord(
+  client: MinimalSupabaseClient | null,
+  input: CreateWinRecordInput,
+): Promise<WinRecordCreateResult> {
+  const parsedInput = CreateWinRecordInputSchema.parse(input);
+
+  if (!client) {
+    return {
+      provider: "mock",
+      winRecord: parseWinRecord({
+        id: crypto.randomUUID(),
+        user_id: mockUserId,
+        area_id: parsedInput.area_id,
+        source_task_id: parsedInput.source_task_id,
+        source_project_id: parsedInput.source_project_id,
+        title: parsedInput.title,
+        detail: parsedInput.detail,
+        occurred_at: parsedInput.occurred_at,
+        review_entry_id: parsedInput.review_entry_id,
+        created_at: new Date().toISOString(),
+      }),
+    };
+  }
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before recording wins.",
+  );
+
+  const query = client.from("win_records") as {
+    insert: (row: Record<string, unknown>) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+  const { data, error } = await query
+    .insert({
+      user_id: user.id,
+      area_id: parsedInput.area_id,
+      source_task_id: parsedInput.source_task_id,
+      source_project_id: parsedInput.source_project_id,
+      title: parsedInput.title,
+      detail: parsedInput.detail,
+      occurred_at: parsedInput.occurred_at,
+      review_entry_id: parsedInput.review_entry_id,
+    })
+    .select(winRecordColumns)
+    .single();
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    winRecord: parseWinRecord(data),
+  };
+}
+
+// Candidate wins for the weekly-review harvest step: tasks and projects the user
+// marked done since `since` (the review period start) that have not already been
+// harvested into a win_record. RLS bounds every read to the signed-in user.
+export async function listWinHarvestCandidates(
+  client: MinimalSupabaseClient | null,
+  since: string,
+): Promise<WinHarvestCandidatesResult> {
+  if (!client) {
+    return { provider: "mock", candidates: [] };
+  }
+
+  await requireSupabaseUser(client, "Sign in before harvesting wins.");
+
+  type DoneQuery = {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        gte: (
+          column: string,
+          value: string,
+        ) => {
+          order: (
+            column: string,
+            options: { ascending: boolean },
+          ) => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+  const tasksQuery = client.from("tasks") as DoneQuery;
+  const projectsQuery = client.from("projects") as DoneQuery;
+  const winsQuery = client.from("win_records") as {
+    select: (columns: string) => Promise<{ data: unknown; error: unknown }>;
+  };
+
+  const { data: tasks, error: tasksError } = await tasksQuery
+    .select(taskColumns)
+    .eq("status", "done")
+    .gte("updated_at", since)
+    .order("updated_at", { ascending: false });
+  if (tasksError) throw new Error(getSupabaseMessage(tasksError));
+
+  const { data: projects, error: projectsError } = await projectsQuery
+    .select(projectColumns)
+    .eq("status", "done")
+    .gte("updated_at", since)
+    .order("updated_at", { ascending: false });
+  if (projectsError) throw new Error(getSupabaseMessage(projectsError));
+
+  const { data: existingWins, error: winsError } = await winsQuery.select(
+    "source_task_id,source_project_id",
+  );
+  if (winsError) throw new Error(getSupabaseMessage(winsError));
+
+  const harvestedTaskIds = new Set<string>();
+  const harvestedProjectIds = new Set<string>();
+  for (const row of normalizeSupabaseRows(existingWins) as Array<
+    Record<string, unknown>
+  >) {
+    if (typeof row.source_task_id === "string")
+      harvestedTaskIds.add(row.source_task_id);
+    if (typeof row.source_project_id === "string")
+      harvestedProjectIds.add(row.source_project_id);
+  }
+
+  const toCalendarDate = (iso: string) => new Date(iso).toISOString().slice(0, 10);
+
+  const candidates: WinHarvestCandidate[] = [
+    ...parseTasks(tasks)
+      .filter((task) => !harvestedTaskIds.has(task.id))
+      .map((task) => ({
+        source_type: "task" as const,
+        source_id: task.id,
+        area_id: task.area_id,
+        title: task.title,
+        occurred_at: toCalendarDate(task.updated_at),
+      })),
+    ...ProjectSchema.array()
+      .parse(normalizeSupabaseRows(projects))
+      .filter((project) => !harvestedProjectIds.has(project.id))
+      .map((project) => ({
+        source_type: "project" as const,
+        source_id: project.id,
+        area_id: project.area_id,
+        title: project.title,
+        occurred_at: toCalendarDate(project.updated_at),
+      })),
+  ];
+
+  return { provider: "supabase", candidates };
+}
+
+// The wins reading section for weekly/monthly review: most-recent first.
+export async function listWinRecords(
+  client: MinimalSupabaseClient | null,
+): Promise<WinRecordsResult> {
+  if (!client) {
+    return { provider: "mock", winRecords: [] };
+  }
+
+  await requireSupabaseUser(client, "Sign in before loading wins.");
+
+  const query = client.from("win_records") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+  const { data, error } = await query
+    .select(winRecordColumns)
+    .order("occurred_at", { ascending: false });
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return { provider: "supabase", winRecords: parseWinRecords(data) };
 }

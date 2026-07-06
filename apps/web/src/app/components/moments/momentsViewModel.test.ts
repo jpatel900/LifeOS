@@ -655,6 +655,37 @@ describe("buildCloseVM", () => {
       why: "Oldest active commitment",
     });
   });
+
+  it("surfaces today's completed-task blocks as win candidates, deduped by task", () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t-win", title: "Shipped onboarding" })],
+      calendarBlocks: [
+        makeBlock({ id: "b-w1", task_id: "t-win", status: "completed" }),
+        makeBlock({ id: "b-w2", task_id: "t-win", status: "completed" }),
+        makeBlock({ id: "b-missed", task_id: "t-win", status: "missed" }),
+      ],
+    });
+
+    const vm = buildCloseVM(state, { now: NOW });
+    expect(vm.winCandidates).toHaveLength(1);
+    expect(vm.winCandidates[0]).toMatchObject({
+      taskId: "t-win",
+      title: "Shipped onboarding",
+    });
+    expect(typeof vm.winCandidates[0].areaLabel).toBe("string");
+  });
+
+  it("has no win candidates when nothing was completed today", () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Open task", status: "active" })],
+      calendarBlocks: [
+        makeBlock({ id: "b-missed", task_id: "t1", status: "missed" }),
+      ],
+    });
+
+    const vm = buildCloseVM(state, { now: NOW });
+    expect(vm.winCandidates).toEqual([]);
+  });
 });
 
 /**
