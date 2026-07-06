@@ -70,6 +70,7 @@ import {
   acceptTimeBlockProposal,
   applyTaskReviewTransition,
   createCaptureItem,
+  syncQueuedCapture,
   createExecutionSession,
   createReviewEntry,
   createWinRecord,
@@ -108,6 +109,13 @@ import type { PolicyChangeCandidate } from "./learning/overrideScan";
 import type { OverrideRecord } from "@lifeos/schemas";
 import { normalizePersonName, resolvePersonMention } from "./data/personLinks";
 import { createSupabaseBrowserClient } from "./supabase/browser";
+import {
+  clearQueue,
+  enqueueCapture,
+  listPendingCaptures,
+  markCaptureSynced,
+  pendingCaptureCount,
+} from "./capture/offlineQueue";
 import { isLifeOsOwnedGoogleEventIdShape } from "./cockpit/googleCalendarBridge";
 import type {
   Phase2MockCalendarBlock,
@@ -315,6 +323,12 @@ interface WorkflowContextValue {
   ) => void;
   captureParse: CaptureParseState;
   retryCaptureParseWithMock: () => void;
+  // FR-027 (F-G1a): number of raw captures saved offline and not yet synced to
+  // the spine (the queue-badge signal). Drains automatically on reconnect.
+  unsyncedCaptureCount: number;
+  // Purge device-local queued raw captures (call on logout — they are
+  // High-sensitivity and must not outlive the session on a shared device).
+  clearOfflineCaptures: () => Promise<void>;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
   acceptTaskDraft: (draftId: string) => void;
   backlogTaskDraft: (draftId: string) => void;
@@ -1143,6 +1157,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // S9 (#261): loaded override_records (learning history) + the set of policy
   // proposals the user has already decided this session (so a decided proposal
   // leaves the review surface without needing a reload).
+  const [unsyncedCaptureCount, setUnsyncedCaptureCount] = useState(0);
   const [overrideRecords, setOverrideRecords] = useState<OverrideRecord[]>([]);
   const [decidedPolicyKeys, setDecidedPolicyKeys] = useState<Set<string>>(
     () => new Set(),
@@ -2456,12 +2471,96 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
+  const refreshUnsyncedCount = useCallback(async () => {
+    try {
+      setUnsyncedCaptureCount(await pendingCaptureCount());
+    } catch {
+      // best-effort signal; a queue read failure must not break capture
+    }
+  }, []);
+
+  // Drain the offline queue to the spine when online. Idempotent (upsert on the
+  // client_capture_id unique index), fault-isolated per item, and a failed item
+  // stays queued for the next reconnect. Refreshes local rows after any sync so
+  // the newly-synced captures reach triage.
+  const syncOfflineQueue = useCallback(async () => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    const client = createSupabaseBrowserClient();
+    if (!client) return;
+
+    let pending;
+    try {
+      pending = await listPendingCaptures();
+    } catch {
+      return;
+    }
+    if (!pending.length) return;
+
+    let syncedAny = false;
+    for (const queued of pending) {
+      try {
+        await syncQueuedCapture(client, {
+          raw_text: queued.raw_text,
+          area_id: queued.area_id
+            ? persistedAreaIdForWorkflowId(
+                queued.area_id,
+                persistedAreasRef.current,
+              )
+            : null,
+          return_hook: queued.return_hook,
+          client_capture_id: queued.client_capture_id,
+        });
+        await markCaptureSynced(queued.client_capture_id);
+        syncedAny = true;
+      } catch {
+        // Leave it queued; the next reconnect retries. The idempotent upsert
+        // means a partially-applied drain never creates a duplicate.
+      }
+    }
+
+    await refreshUnsyncedCount();
+    if (syncedAny) {
+      await syncPersistedWorkflowRows(client);
+    }
+  }, [refreshUnsyncedCount, syncPersistedWorkflowRows]);
+
+  // Purge the device-local queue (logout — High-sensitivity raw captures).
+  const clearOfflineCaptures = useCallback(async () => {
+    await clearQueue();
+    await refreshUnsyncedCount();
+  }, [refreshUnsyncedCount]);
+
+  // Sync on mount and whenever connectivity returns.
+  useEffect(() => {
+    void refreshUnsyncedCount();
+    void syncOfflineQueue();
+    if (typeof window === "undefined") return;
+    const onOnline = () => void syncOfflineQueue();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [refreshUnsyncedCount, syncOfflineQueue]);
+
   function submitCaptureText(
     rawText: string,
     areaId: string | null,
     returnHook?: string | null,
   ) {
     if (captureParse.phase === "parsing") {
+      return;
+    }
+
+    // FR-027: offline → save the raw capture to the durable device queue with
+    // NO parse wait and end synchronously as saved; it syncs to the spine on
+    // reconnect (parse happens later at triage). We deliberately do NOT stage it
+    // into local captureItems — it would double-appear once the reconnect sync
+    // loads the server row. Offline scope is raw capture only (no offline triage).
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      void enqueueCapture({ rawText, areaId, returnHook: returnHook ?? null })
+        .then(() => refreshUnsyncedCount())
+        .catch(() =>
+          markLocalOnly("Capture could not be saved offline; please try again."),
+        );
       return;
     }
 
@@ -2661,6 +2760,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     submitCaptureText,
     captureParse,
     retryCaptureParseWithMock,
+    unsyncedCaptureCount,
+    clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),
     acceptTaskDraft: (draftId) =>
