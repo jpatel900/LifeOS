@@ -13,6 +13,7 @@ import {
   createTimeBlockProposal,
   createProject,
   createCaptureItem,
+  syncQueuedCapture,
   createExecutionSession,
   createTask,
   editTimeBlockProposal,
@@ -507,6 +508,47 @@ describe("workflow data provider", () => {
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({ client_capture_id: "queued-abc123" }),
     );
+  });
+
+  it("syncs a queued capture idempotently via upsert-ignore-duplicates", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({ upsert });
+    const getUser = vi.fn().mockResolvedValue({
+      data: { user: { id: "550e8400-e29b-41d4-a716-446655440001" } },
+      error: null,
+    });
+
+    const result = await syncQueuedCapture(
+      { from, auth: { getUser } } as unknown as MinimalSupabaseClient,
+      {
+        raw_text: "Buy milk",
+        area_id: null,
+        return_hook: null,
+        client_capture_id: "queued-abc123",
+      },
+    );
+
+    expect(result.provider).toBe("supabase");
+    expect(from).toHaveBeenCalledWith("capture_items");
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "550e8400-e29b-41d4-a716-446655440001",
+        raw_text: "Buy milk",
+        client_capture_id: "queued-abc123",
+        status: "new",
+      }),
+      { onConflict: "user_id,client_capture_id", ignoreDuplicates: true },
+    );
+  });
+
+  it("keeps queued-capture sync a no-op in mock mode", async () => {
+    const result = await syncQueuedCapture(null, {
+      raw_text: "Buy milk",
+      area_id: null,
+      return_hook: null,
+      client_capture_id: "queued-abc123",
+    });
+    expect(result.provider).toBe("mock");
   });
 
   it("keeps capture working in mock mode", async () => {

@@ -247,6 +247,15 @@ V1 default:
 - health incidents retained for debugging
 - external write logs retained for audit
 
+### 10.1 Device-local offline capture queue (FR-027)
+
+The FR-027 offline queue is a device-local IndexedDB store (`lifeos-capture-queue`) holding raw captures taken while offline until they sync to the spine. Because raw captures are **High** sensitivity:
+
+- an entry is **deleted from the device the moment it syncs** to the spine (`markCaptureSynced` on a successful, idempotent upsert) — the queue is a transient transport buffer, not a second store of record;
+- the queue **holds no OAuth tokens, no service keys, and opens no new write path** — it syncs through the same authenticated `capture_items` insert the web app uses (NS-INV-9 perimeter containment holds for offline-then-synced captures);
+- §6.4 prompt-injection containment applies unchanged to a capture that was queued offline and synced later (captured text is data, never instructions);
+- the queue is **purged on logout** (`clearOfflineCaptures`) so raw thoughts never outlive the session on a shared device.
+
 Future requirement:
 
 - export all user data

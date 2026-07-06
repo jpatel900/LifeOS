@@ -1528,6 +1528,56 @@ export async function createCaptureItem(
   };
 }
 
+export interface SyncQueuedCaptureInput {
+  raw_text: string;
+  area_id: string | null;
+  return_hook: string | null;
+  client_capture_id: string;
+}
+
+/**
+ * FR-027 (F-G1a): push one offline-queued raw capture to the spine on reconnect.
+ * Idempotent by construction — an upsert on the `(user_id, client_capture_id)`
+ * unique index with `ignoreDuplicates`, so a replayed sync (the queue drained
+ * twice, or a capture that already reached the server before) is a no-op rather
+ * than a duplicate row or a thrown unique-violation. Returns mock when Supabase
+ * is unconfigured (the queue simply stays local until sign-in).
+ */
+export async function syncQueuedCapture(
+  client: MinimalSupabaseClient | null,
+  input: SyncQueuedCaptureInput,
+): Promise<{ provider: "mock" | "supabase" }> {
+  if (!client) return { provider: "mock" };
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in to sync offline captures.",
+  );
+
+  const query = client.from("capture_items") as {
+    upsert: (
+      row: Record<string, unknown>,
+      options: { onConflict: string; ignoreDuplicates: boolean },
+    ) => PromiseLike<{ error: unknown }>;
+  };
+
+  const { error } = await query.upsert(
+    {
+      user_id: user.id,
+      area_id: input.area_id,
+      raw_text: input.raw_text,
+      return_hook: input.return_hook,
+      client_capture_id: input.client_capture_id,
+      capture_mode: "text",
+      status: "new",
+    },
+    { onConflict: "user_id,client_capture_id", ignoreDuplicates: true },
+  );
+
+  if (error) throw new Error(getSupabaseMessage(error));
+  return { provider: "supabase" };
+}
+
 export async function listCaptureItems(
   client: MinimalSupabaseClient | null,
 ): Promise<CaptureListResult> {
