@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { momentKeyLabel } from "@/lib/keys/keymap";
 import { useMomentKeyboard } from "./useMomentKeyboard";
 import { buildStartVM, buildFlowVM, buildCloseVM } from "./momentsViewModel";
 import type { FirstMoveVM } from "./momentsViewModel";
@@ -608,10 +609,26 @@ export function TodayMoments({
 
   const paletteActions = useMemo<CommandPaletteAction[]>(() => {
     const actions: CommandPaletteAction[] = [
-      { id: "switch-start", label: "Switch to Start", hint: "1" },
-      { id: "switch-flow", label: "Switch to Flow", hint: "2" },
-      { id: "switch-close", label: "Switch to Close", hint: "3" },
-      { id: "open-capture", label: "Open capture", hint: "C" },
+      {
+        id: "switch-start",
+        label: "Switch to Start",
+        hint: momentKeyLabel("switch-start"),
+      },
+      {
+        id: "switch-flow",
+        label: "Switch to Flow",
+        hint: momentKeyLabel("switch-flow"),
+      },
+      {
+        id: "switch-close",
+        label: "Switch to Close",
+        hint: momentKeyLabel("switch-close"),
+      },
+      {
+        id: "open-capture",
+        label: "Open capture",
+        hint: momentKeyLabel("open-capture"),
+      },
       { id: "open-triage", label: "Open triage" },
       { id: "open-plan", label: "Open plan" },
     ];
@@ -622,7 +639,7 @@ export function TodayMoments({
       actions.push({
         id: "focus-done",
         label: "Done — log it",
-        hint: "↵",
+        hint: momentKeyLabel("primary-action"),
       });
       actions.push({
         id: "focus-pause",
@@ -637,7 +654,11 @@ export function TodayMoments({
           : "Switch time display to countdown",
     });
     if (moment === "close") {
-      actions.push({ id: "close-day", label: "Close the day", hint: "↵" });
+      actions.push({
+        id: "close-day",
+        label: "Close the day",
+        hint: momentKeyLabel("primary-action"),
+      });
     }
     return actions;
   }, [
