@@ -16,6 +16,8 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     focusDegraded: false,
     focusItems: [],
     deferredItems: [],
+    staleProject: null,
+    recoveryNudge: null,
     ...overrides,
   };
 }
@@ -26,6 +28,7 @@ const NOOP_HANDLERS = {
   onSwap: vi.fn(),
   onOpenHealth: vi.fn(),
   onDrillPipeline: vi.fn(),
+  onOpenRecovery: vi.fn(),
 };
 
 describe("StartMoment — S5 focus budget (#257)", () => {
@@ -299,6 +302,130 @@ describe("StartMoment — S5 focus budget (#257)", () => {
       />,
     );
 
+    expect(screen.getByTestId("start-moment-empty")).toBeInTheDocument();
+  });
+});
+
+describe("StartMoment — S6 daily brief (#258)", () => {
+  it("omits the stale-project line entirely when staleProject is null", () => {
+    const vm = baseVM({ staleProject: null });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.queryByTestId("start-stale-project")).not.toBeInTheDocument();
+  });
+
+  it("renders a calm 'hasn't moved in N days' line when staleProject is present", () => {
+    const vm = baseVM({
+      staleProject: { id: "p1", name: "Q2 planning doc", ageDays: 12 },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const line = screen.getByTestId("start-stale-project");
+    expect(line).toBeInTheDocument();
+    expect(line.textContent).toContain("Hasn't moved in 12 days");
+    expect(line.textContent).toContain("Q2 planning doc");
+  });
+
+  it("omits the recovery-nudge card entirely when recoveryNudge is null", () => {
+    const vm = baseVM({ recoveryNudge: null });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("start-recovery-nudge"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the recovery-nudge card with --state-watch (never --state-risk) and a single forward action", () => {
+    const vm = baseVM({
+      recoveryNudge: { blockTitle: "Draft the proposal", taskId: "t1" },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const card = screen.getByTestId("start-recovery-nudge");
+    expect(card).toBeInTheDocument();
+    expect(card.textContent).toContain("Draft the proposal");
+    expect(card.getAttribute("style") ?? "").toContain("--state-watch");
+    expect(card.innerHTML).not.toContain("--state-risk");
+
+    expect(screen.getByTestId("start-recovery-nudge-open")).toBeInTheDocument();
+  });
+
+  it("recovery-nudge action calls onOpenRecovery with the task id and does not mutate any local state itself", () => {
+    const onOpenRecovery = vi.fn();
+    const vm = baseVM({
+      recoveryNudge: { blockTitle: "Draft the proposal", taskId: "t1" },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+        onOpenRecovery={onOpenRecovery}
+      />,
+    );
+
+    screen.getByTestId("start-recovery-nudge-open").click();
+    expect(onOpenRecovery).toHaveBeenCalledTimes(1);
+    expect(onOpenRecovery).toHaveBeenCalledWith("t1");
+  });
+
+  it("renders both sections together without interfering with the schedule/focus sections", () => {
+    const vm = baseVM({
+      staleProject: { id: "p1", name: "Side project", ageDays: 20 },
+      recoveryNudge: { blockTitle: "Review notes", taskId: "t2" },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-stale-project")).toBeInTheDocument();
+    expect(screen.getByTestId("start-recovery-nudge")).toBeInTheDocument();
     expect(screen.getByTestId("start-moment-empty")).toBeInTheDocument();
   });
 });

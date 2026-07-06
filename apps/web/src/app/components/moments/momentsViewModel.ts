@@ -2,6 +2,7 @@ import type { WorkflowState } from "@/lib/workflow";
 import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
+  Phase2MockProject,
   Phase2MockTask,
 } from "@/lib/types";
 import {
@@ -24,6 +25,17 @@ import {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_MINUTE = 60 * 1000;
+
+/**
+ * S6 (#258) stale-project threshold: a local constant, not the S4
+ * `agingRules.ts` waiting-on/commitment thresholds (that module is scoped to
+ * those two task-level signals specifically) and not a `global_defaults`
+ * read (no such reader exists for project staleness yet, and adding one is
+ * out of scope for a read-synthesis slice). "Stale" mirrors the same
+ * strict-greater-than-N-days idiom: a project exactly 7 days old is not yet
+ * stale.
+ */
+const STALE_PROJECT_THRESHOLD_DAYS = 7;
 
 const OPEN_TASK_STATUSES = new Set<Phase2MockTask["status"]>([
   "active",
@@ -98,6 +110,28 @@ export interface AreaHealthVM {
   note: string;
 }
 
+/**
+ * S6 (#258): the single stalest active project, or null when no active
+ * project exceeds `STALE_PROJECT_THRESHOLD_DAYS`. `ageDays` is floored, so
+ * "hasn't moved in N days" always reads as a whole, truthful number.
+ */
+export interface StaleProjectVM {
+  id: string;
+  name: string;
+  ageDays: number;
+}
+
+/**
+ * S6 (#258): a surfaced-not-applied nudge for a block missed on the prior
+ * calendar day. Never mutates on its own — the forward action routes to the
+ * existing Close-moment carry-forward surface (FR-012 mechanics), it does
+ * not call `carryForwardTask` from here.
+ */
+export interface RecoveryNudgeVM {
+  blockTitle: string;
+  taskId: string;
+}
+
 export interface StartVM {
   firstMove: FirstMoveVM | null;
   blocks: ScheduleBlockVM[];
@@ -121,6 +155,17 @@ export interface StartVM {
   focusDegraded: boolean;
   focusItems: FocusItemVM[];
   deferredItems: FocusItemVM[];
+  /**
+   * S6 (#258) daily-brief synthesis, pure over data earlier slices already
+   * created — no new fetch, no new write. `staleProject` is the single
+   * stalest active project (or null: no active project qualifies, or the
+   * `projects`/`tasks` signal is empty — both read as "omit the line", not
+   * an error). `recoveryNudge` is present only when yesterday had a missed
+   * calendar block with a linked task (or null otherwise); it is a plain
+   * surfaced suggestion, never auto-applied.
+   */
+  staleProject: StaleProjectVM | null;
+  recoveryNudge: RecoveryNudgeVM | null;
 }
 
 export interface FlowVM {
@@ -423,6 +468,97 @@ function buildAreaHealth(
   });
 }
 
+/**
+ * Last-activity timestamp for one project (S6, #258): the newer of the
+ * project's own `updated_at` and its linked tasks' `updated_at` (a task
+ * moving is real project activity even when the project row itself wasn't
+ * touched). Falls back to the project's `updated_at` alone when it has no
+ * linked tasks.
+ */
+function projectLastActivity(
+  project: Phase2MockProject,
+  tasks: readonly Phase2MockTask[],
+): number {
+  let latest = new Date(project.updated_at).getTime();
+  for (const task of tasks) {
+    if (task.project_id !== project.id) continue;
+    const taskUpdated = new Date(task.updated_at).getTime();
+    if (taskUpdated > latest) latest = taskUpdated;
+  }
+  return latest;
+}
+
+/**
+ * S6 (#258): the single stalest active project whose age strictly exceeds
+ * `STALE_PROJECT_THRESHOLD_DAYS`, or null when none qualifies. Scoped to
+ * `status === "active"` projects only — a paused/done/dropped/archived
+ * project reading "hasn't moved" would be misleading, not informative.
+ * Ties (identical age) break on `id` ascending for a deterministic pick.
+ */
+function deriveStaleProject(
+  state: WorkflowState,
+  now: Date,
+): StaleProjectVM | null {
+  const nowMs = now.getTime();
+
+  const candidates = state.projects
+    .filter((project) => project.status === "active")
+    .map((project) => {
+      const lastActivityMs = projectLastActivity(project, state.tasks);
+      const ageDays = Math.floor((nowMs - lastActivityMs) / MS_PER_DAY);
+      return { project, ageDays };
+    })
+    .filter(({ ageDays }) => ageDays > STALE_PROJECT_THRESHOLD_DAYS);
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => {
+    if (b.ageDays !== a.ageDays) return b.ageDays - a.ageDays;
+    return a.project.id.localeCompare(b.project.id);
+  });
+
+  const stalest = candidates[0];
+  return {
+    id: stalest.project.id,
+    name: stalest.project.title,
+    ageDays: stalest.ageDays,
+  };
+}
+
+/**
+ * S6 (#258) FR-012-grounded recovery nudge: surfaces (never applies) a
+ * missed block from the prior calendar day. Mirrors `buildCloseVM`'s
+ * carry-forward filter — a missed block with no linked `task_id` is skipped,
+ * same as there. Deterministic pick: earliest `start_at` among yesterday's
+ * qualifying missed blocks. Returns null when yesterday had no missed block
+ * with a task, which includes the common case of no prior-day data at all.
+ */
+function deriveRecoveryNudge(
+  state: WorkflowState,
+  now: Date,
+): RecoveryNudgeVM | null {
+  const yesterday = new Date(now.getTime() - MS_PER_DAY);
+
+  const missedYesterday = state.calendarBlocks
+    .filter(
+      (block) =>
+        block.status === "missed" &&
+        block.task_id !== null &&
+        isSameCalendarDay(block.start_at, yesterday),
+    )
+    .sort(
+      (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime(),
+    );
+
+  const first = missedYesterday[0];
+  if (!first || !first.task_id) return null;
+
+  return {
+    blockTitle: taskTitle(state, first.task_id),
+    taskId: first.task_id,
+  };
+}
+
 /** Start moment view model — today's schedule, first move, waiting-on, area health. */
 export function buildStartVM(
   state: WorkflowState,
@@ -457,6 +593,11 @@ export function buildStartVM(
     focusBudget,
   );
 
+  // S6 (#258): daily-brief synthesis over data earlier slices already built —
+  // no new fetch, no new write.
+  const staleProject = deriveStaleProject(state, now);
+  const recoveryNudge = deriveRecoveryNudge(state, now);
+
   return {
     firstMove,
     blocks,
@@ -471,6 +612,8 @@ export function buildStartVM(
     focusDegraded,
     focusItems,
     deferredItems,
+    staleProject,
+    recoveryNudge,
   };
 }
 

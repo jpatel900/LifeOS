@@ -657,6 +657,7 @@ export function TodayMoments({
               onOpenHealth={() => showToast("Area health is on the roadmap")}
               pipelineCounts={pipelineCounts}
               onDrillPipeline={handleDrillPipeline}
+              onOpenRecovery={() => setMoment("close")}
             />
           ) : null}
 
