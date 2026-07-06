@@ -38,10 +38,26 @@ export interface ParseCaptureAreaContext {
   charterText?: string | null;
 }
 
+/**
+ * S8 (#260): a per-area rollup registered as a context source. Long-horizon
+ * memory (approved weekly/monthly rollups) reaches prompts ONLY through this
+ * choke point — no consuming prompt call site changes (NS-INV-1). Absent/empty
+ * => no rollup block is emitted and the prompt stays byte-identical to the
+ * pre-rollup baseline.
+ */
+export interface RollupContext {
+  areaSlug: string;
+  periodType: "week" | "month";
+  periodLabel: string;
+  highlights: string[];
+  misses: string[];
+}
+
 export interface BuildParseCaptureMessagesInput {
   rawText: string;
   areaContext?: ParseCaptureAreaContext[];
   operatorProfile?: OperatorProfileContext | null;
+  rollupContext?: RollupContext[] | null;
 }
 
 export interface ParseCaptureMessage {
@@ -99,6 +115,7 @@ function trimmedOrNull(value: string | null | undefined): string | null {
 function buildPersonalizationLines(
   areaContext: ParseCaptureAreaContext[] | undefined,
   operatorProfile: OperatorProfileContext | null | undefined,
+  rollupContext: RollupContext[] | null | undefined,
 ): string[] {
   const lines: string[] = [];
 
@@ -137,6 +154,29 @@ function buildPersonalizationLines(
     }
   }
 
+  const rollups = (rollupContext ?? []).filter(
+    (rollup) =>
+      trimmedOrNull(rollup?.areaSlug) !== null &&
+      ((rollup?.highlights ?? []).length > 0 ||
+        (rollup?.misses ?? []).length > 0),
+  );
+
+  if (rollups.length > 0) {
+    lines.push("", "Recent rollups:");
+    for (const rollup of rollups) {
+      const parts: string[] = [];
+      if (rollup.highlights.length > 0) {
+        parts.push(`highlights: ${rollup.highlights.join("; ")}`);
+      }
+      if (rollup.misses.length > 0) {
+        parts.push(`misses: ${rollup.misses.join("; ")}`);
+      }
+      lines.push(
+        `- ${rollup.areaSlug} (${rollup.periodType} ${rollup.periodLabel}): ${parts.join(" | ")}`,
+      );
+    }
+  }
+
   return lines;
 }
 
@@ -160,7 +200,11 @@ export function buildParseCaptureMessages(
         "",
         "Raw capture:",
         input.rawText,
-        ...buildPersonalizationLines(input.areaContext, input.operatorProfile),
+        ...buildPersonalizationLines(
+          input.areaContext,
+          input.operatorProfile,
+          input.rollupContext,
+        ),
       ].join("\n"),
     },
   ];
