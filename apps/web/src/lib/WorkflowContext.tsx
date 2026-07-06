@@ -239,6 +239,8 @@ type WorkflowAction =
       type: "markSession";
       status: Phase2MockExecutionSession["status"];
       actualMinutes?: number;
+      notes?: string | null;
+      capOutcome?: Phase2MockExecutionSession["cap_outcome"];
     }
   | {
       type: "carryForwardTask";
@@ -338,6 +340,7 @@ interface WorkflowContextValue {
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
     notes?: string | null,
+    capOutcome?: Phase2MockExecutionSession["cap_outcome"],
   ) => void;
   carryForwardTask: (taskId: string) => void;
   deferTask: (taskId: string) => void;
@@ -655,6 +658,7 @@ function toWorkflowSession(
     productivity_rating: session.productivity_rating,
     status: sessionStatusFromOutcome(session),
     outcome: session.outcome,
+    cap_outcome: session.cap_outcome ?? null,
     notes: session.notes,
   };
 }
@@ -1032,6 +1036,8 @@ function workflowReducer(
     case "markSession":
       return markCurrentSession(state, action.status, {
         actualMinutes: action.actualMinutes,
+        notes: action.notes,
+        capOutcome: action.capOutcome,
       });
     case "carryForwardTask":
       return carryForwardTask(state, action.taskId);
@@ -1702,6 +1708,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
     notes?: string | null,
+    capOutcome?: Phase2MockExecutionSession["cap_outcome"],
   ) {
     const client = createSupabaseBrowserClient();
     const persistedSessionId = persistedIdForLocalId(
@@ -1741,6 +1748,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           : (actualMinutes ?? localSession.actual_minutes ?? 0),
       productivity_rating:
         status === "paused" ? null : status === "completed" ? 4 : 1,
+      cap_outcome: capOutcome ?? null,
       notes:
         notes !== undefined
           ? notes
@@ -2384,10 +2392,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
     notes?: string | null,
+    capOutcome?: Phase2MockExecutionSession["cap_outcome"],
   ) {
     const previous = stateRef.current;
     const localSession = previous.executionSessions[0];
-    const next = markCurrentSession(previous, status, { actualMinutes, notes });
+    const next = markCurrentSession(previous, status, {
+      actualMinutes,
+      notes,
+      capOutcome,
+    });
 
     applyWorkflowState(next);
     recordWipRefusalIfNew(previous, next);
@@ -2398,6 +2411,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         status,
         actualMinutes,
         notes,
+        capOutcome,
       ).catch((error) => {
         markPersistedSaveFailure(error);
       });

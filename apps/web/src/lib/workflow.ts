@@ -1448,6 +1448,7 @@ export function startExecutionSession(
     productivity_rating: null,
     status: "running",
     outcome: "partial",
+    cap_outcome: null,
     notes: null,
   };
 
@@ -1464,7 +1465,11 @@ export function startExecutionSession(
 export function markCurrentSession(
   state: WorkflowState,
   status: Phase2MockExecutionSession["status"],
-  options: { actualMinutes?: number; notes?: string | null } = {},
+  options: {
+    actualMinutes?: number;
+    notes?: string | null;
+    capOutcome?: Phase2MockExecutionSession["cap_outcome"];
+  } = {},
 ): WorkflowState {
   const current = state.executionSessions[0];
   if (!current) {
@@ -1490,6 +1495,7 @@ export function markCurrentSession(
             ...session,
             status,
             outcome,
+            cap_outcome: options.capOutcome ?? session.cap_outcome ?? null,
             actual_minutes:
               status === "paused"
                 ? session.actual_minutes

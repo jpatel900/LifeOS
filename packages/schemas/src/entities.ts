@@ -215,6 +215,11 @@ export const ExecutionSessionSchema = z.object({
   productivity_rating: z.number().int().nullable(),
   energy_rating: z.string().nullable(),
   outcome: z.enum(EXECUTION_SESSION_OUTCOMES),
+  cap_outcome: z
+    .enum(["cut_scope", "deferred"])
+    .nullable()
+    .optional()
+    .default(null),
   notes: z.string().nullable(),
   created_at: z.string().datetime(),
 });

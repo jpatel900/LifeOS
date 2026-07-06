@@ -256,6 +256,10 @@ export const MarkExecutionSessionInputSchema = z
       .nullish()
       .transform((value) => value ?? null),
     notes: optionalNullableTrimmedText,
+    cap_outcome: z
+      .enum(["cut_scope", "deferred"])
+      .nullish()
+      .transform((value) => value ?? null),
   })
   .superRefine((input, context) => {
     if (input.status === "paused") {

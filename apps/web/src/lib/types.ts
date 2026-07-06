@@ -50,6 +50,7 @@ export interface Phase2MockExecutionSession {
     | "distracted"
     | "blocked"
     | "skipped";
+  cap_outcome?: "cut_scope" | "deferred" | null;
   notes?: string | null;
 }
 

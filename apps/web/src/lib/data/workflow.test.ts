@@ -1529,10 +1529,64 @@ describe("workflow data provider", () => {
       p_distraction_minutes: 0,
       p_productivity_rating: 5,
       p_notes: "Finished with minor context switching.",
+      p_cap_outcome: null,
     });
     expect(result.session.outcome).toBe("completed");
     expect(result.block?.status).toBe("completed");
     expect(result.task?.status).toBe("done");
+  });
+
+  it("records DoD-cap outcomes on execution sessions", async () => {
+    const cappedSession = {
+      ...runningSessionRow,
+      outcome: "completed",
+      actual_minutes: 45,
+      productivity_rating: 4,
+      cap_outcome: "cut_scope",
+      notes: "dod_cap.v1 cut_scope: ship the smaller result.",
+    };
+    const sessionSingle = vi.fn().mockResolvedValue({
+      data: runningSessionRow,
+      error: null,
+    });
+    const sessionEq = vi.fn().mockReturnValue({ single: sessionSingle });
+    const sessionSelect = vi.fn().mockReturnValue({ eq: sessionEq });
+    const rpc = vi.fn().mockResolvedValue({
+      data: { session: cappedSession, block: null, task: null },
+      error: null,
+    });
+    const from = vi.fn((table: string) => {
+      if (table === "execution_sessions") {
+        return { select: sessionSelect };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const client = {
+      ...authenticatedClient(from),
+      rpc,
+    } as MinimalSupabaseClient;
+
+    const result = await markExecutionSession(client, sessionId, {
+      status: "completed",
+      outcome: "completed",
+      actual_minutes: 45,
+      productivity_rating: 4,
+      cap_outcome: "cut_scope",
+      notes: "dod_cap.v1 cut_scope: ship the smaller result.",
+    });
+
+    expect(rpc).toHaveBeenCalledWith("apply_execution_session_outcome", {
+      p_session_id: sessionId,
+      p_outcome: "completed",
+      p_actual_minutes: 45,
+      p_paused_minutes: 0,
+      p_distraction_minutes: 0,
+      p_productivity_rating: 4,
+      p_notes: "dod_cap.v1 cut_scope: ship the smaller result.",
+      p_cap_outcome: "cut_scope",
+    });
+    expect(result.session.cap_outcome).toBe("cut_scope");
   });
 
   it("marks missed execution sessions and updates the related block only", async () => {
@@ -1585,6 +1639,7 @@ describe("workflow data provider", () => {
       p_distraction_minutes: 0,
       p_productivity_rating: 2,
       p_notes: "Short attempt before interruption.",
+      p_cap_outcome: null,
     });
     expect(result.session.outcome).toBe("skipped");
     expect(result.block?.status).toBe("missed");
@@ -1683,7 +1738,9 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("supabase");
     expect(result.tasks).toEqual([taskRow]);
     expect(result.blocks).toEqual([blockRow]);
-    expect(result.sessions).toEqual([runningSessionRow]);
+    expect(result.sessions).toEqual([
+      { ...runningSessionRow, cap_outcome: null },
+    ]);
     expect(result.reviewEntries).toEqual([reviewRow]);
   });
 
