@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { CloseVM } from "./momentsViewModel";
+import type { CloseVM, RollupDraftVM } from "./momentsViewModel";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -26,20 +26,34 @@ export interface CloseMomentProps {
   // already confirmed into the evidence log this session (reading section).
   pendingWins: CloseWinVM[];
   confirmedWins: { title: string; areaLabel: string }[];
+  // S8: per-area weekly rollup drafts awaiting approve/dismiss, plus the rollups
+  // approved this session (the week-over-week readback, newest first).
+  pendingRollups: RollupDraftVM[];
+  approvedRollups: {
+    areaLabel: string;
+    periodLabel: string;
+    counts: Record<string, number>;
+  }[];
   onCloseDay(): void;
   onCarryForward(taskId: string): void;
   onConfirmWin(taskId: string, title: string): void;
   onSkipWin(taskId: string): void;
+  onApproveRollup(draft: RollupDraftVM): void;
+  onDismissRollup(areaId: string): void;
 }
 
 export function CloseMoment({
   vm,
   pendingWins,
   confirmedWins,
+  pendingRollups,
+  approvedRollups,
   onCloseDay,
   onCarryForward,
   onConfirmWin,
   onSkipWin,
+  onApproveRollup,
+  onDismissRollup,
 }: CloseMomentProps) {
   // Inline edits to a candidate's title before it is confirmed. Keyed by
   // taskId; absent means "use the candidate's original title".
@@ -160,6 +174,88 @@ export function CloseMoment({
                     <span className="min-w-0 truncate">{win.title}</span>
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground">
                       {win.areaLabel}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {pendingRollups.length > 0 || approvedRollups.length > 0 ? (
+        <Card className="workflow-support-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm tracking-tight">
+              Weekly rollup
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 pt-0">
+            {pendingRollups.map((draft) => (
+              <div
+                key={draft.areaId}
+                className="grid gap-2 rounded-md border border-border/50 p-3"
+                data-testid={`close-moment-rollup-${draft.areaId}`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-medium">{draft.areaLabel}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {draft.periodLabel}
+                  </span>
+                </div>
+                {draft.summary.highlights.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-foreground">Highlights:</span>{" "}
+                    {draft.summary.highlights.join("; ")}
+                  </p>
+                ) : null}
+                {draft.summary.misses.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-foreground">Misses:</span>{" "}
+                    {draft.summary.misses.join("; ")}
+                  </p>
+                ) : null}
+                <div className="flex items-center justify-end gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onDismissRollup(draft.areaId)}
+                    className="min-h-[44px] touch-manipulation"
+                    data-testid={`close-moment-rollup-dismiss-${draft.areaId}`}
+                  >
+                    Dismiss
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={() => onApproveRollup(draft)}
+                    className="min-h-[44px] touch-manipulation"
+                    data-testid={`close-moment-rollup-approve-${draft.areaId}`}
+                  >
+                    Approve rollup
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {approvedRollups.length > 0 ? (
+              <ul
+                className="grid gap-1 border-t border-border/50 pt-3"
+                data-testid="close-moment-rollups-approved"
+              >
+                {approvedRollups.map((rollup, index) => (
+                  <li
+                    key={`${rollup.areaLabel}-${rollup.periodLabel}-${index}`}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span aria-hidden className="text-emerald-500">
+                      ✓
+                    </span>
+                    <span className="min-w-0 truncate">{rollup.areaLabel}</span>
+                    <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {rollup.periodLabel}
                     </span>
                   </li>
                 ))}

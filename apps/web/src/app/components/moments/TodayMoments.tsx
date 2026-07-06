@@ -16,6 +16,7 @@ import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
 import { StartMoment } from "./StartMoment";
 import { FlowMoment } from "./FlowMoment";
 import { CloseMoment, type CloseWinVM } from "./CloseMoment";
+import type { RollupDraftVM } from "./momentsViewModel";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 import { buildProgressionNodes } from "./progressionNodes";
@@ -166,6 +167,7 @@ export function TodayMoments({
     carryForwardTask,
     saveReview,
     confirmWin,
+    confirmRollup,
     refreshPersistedWorkflow,
     promoteBacklogTask,
     deferTask,
@@ -334,6 +336,57 @@ export function TodayMoments({
     setSkippedWinIds((prev) => {
       const next = new Set(prev);
       next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  // S8 (#260) rollup approve/dismiss, keyed by area for the session. Approve
+  // persists through the context (real client only; mock/preview stays local)
+  // and moves the draft into the week-over-week readback; dismiss writes nothing.
+  const [approvedRollups, setApprovedRollups] = useState<
+    { areaId: string; areaLabel: string; periodLabel: string; counts: Record<string, number> }[]
+  >([]);
+  const [dismissedRollupAreaIds, setDismissedRollupAreaIds] = useState<
+    Set<string>
+  >(() => new Set());
+  const approvedRollupAreaIds = useMemo(
+    () => new Set(approvedRollups.map((rollup) => rollup.areaId)),
+    [approvedRollups],
+  );
+  const pendingRollups = useMemo(
+    () =>
+      closeVM.rollupDrafts.filter(
+        (draft) =>
+          !dismissedRollupAreaIds.has(draft.areaId) &&
+          !approvedRollupAreaIds.has(draft.areaId),
+      ),
+    [closeVM.rollupDrafts, dismissedRollupAreaIds, approvedRollupAreaIds],
+  );
+  const handleApproveRollup = useCallback(
+    (draft: RollupDraftVM) => {
+      setApprovedRollups((prev) => [
+        {
+          areaId: draft.areaId,
+          areaLabel: draft.areaLabel,
+          periodLabel: draft.periodLabel,
+          counts: draft.summary.counts,
+        },
+        ...prev,
+      ]);
+      void confirmRollup({
+        areaId: draft.areaId,
+        periodStart: draft.periodStart,
+        periodEnd: draft.periodEnd,
+        summary: draft.summary,
+      });
+      showToast("Rollup approved");
+    },
+    [confirmRollup, showToast],
+  );
+  const handleDismissRollup = useCallback((areaId: string) => {
+    setDismissedRollupAreaIds((prev) => {
+      const next = new Set(prev);
+      next.add(areaId);
       return next;
     });
   }, []);
@@ -729,6 +782,8 @@ export function TodayMoments({
               vm={closeVM}
               pendingWins={pendingWins}
               confirmedWins={confirmedWins}
+              pendingRollups={pendingRollups}
+              approvedRollups={approvedRollups}
               onCloseDay={() => {
                 saveReview();
                 showToast("Day closed");
@@ -736,6 +791,8 @@ export function TodayMoments({
               onCarryForward={(taskId) => carryForwardTask(taskId)}
               onConfirmWin={handleConfirmWin}
               onSkipWin={handleSkipWin}
+              onApproveRollup={handleApproveRollup}
+              onDismissRollup={handleDismissRollup}
             />
           ) : null}
         </>

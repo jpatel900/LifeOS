@@ -10,6 +10,8 @@ import {
   deriveFreeHoursFromBlocks,
   splitByFocusBudget,
 } from "@/lib/focus/dailyFocusBudget";
+import { buildWeeklyRollupDraft } from "@/lib/rollups/rollupDraft";
+import type { RollupSummaryContent } from "@lifeos/schemas";
 
 /**
  * Moments pass P1 — packet: structural moments (Start/Flow/Close cockpit).
@@ -178,6 +180,18 @@ export interface FlowVM {
   drift: { minutes: number; reason: string } | null;
 }
 
+// S8 (#260): a per-area weekly rollup draft composed from the last 7 days of
+// review activity, surfaced at close for the user to approve/dismiss. `summary`
+// is the exact shape that persists on approve.
+export interface RollupDraftVM {
+  areaId: string;
+  areaLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  summary: RollupSummaryContent;
+}
+
 export interface CloseVM {
   completedToday: number;
   missedToday: number;
@@ -186,6 +200,8 @@ export interface CloseVM {
   // S7 (#259): candidate wins to harvest at close — tasks completed today,
   // surfaced for the user to confirm/edit/skip into the evidence log.
   winCandidates: { taskId: string; title: string; areaLabel: string }[];
+  // S8 (#260): per-area weekly rollup drafts to approve/dismiss.
+  rollupDrafts: RollupDraftVM[];
 }
 
 interface NowOption {
@@ -714,11 +730,98 @@ export function buildCloseVM(
     });
   }
 
+  const rollupDrafts = buildWeeklyRollupDrafts(state, now);
+
   return {
     completedToday,
     missedToday,
     carryForward,
     tomorrowFirstMove,
     winCandidates,
+    rollupDrafts,
   };
+}
+
+const ROLLUP_WEEK_DAYS = 7;
+
+function toIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * One weekly rollup draft per area that had completed/missed blocks in the last
+ * 7 calendar days (ending on `now`). Pure derivation; the draft `summary` is the
+ * exact shape persisted on approve. Sorted by area label for determinism.
+ */
+function buildWeeklyRollupDrafts(
+  state: WorkflowState,
+  now: Date,
+): RollupDraftVM[] {
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - (ROLLUP_WEEK_DAYS - 1));
+  weekStart.setHours(0, 0, 0, 0);
+  const weekStartMs = weekStart.getTime();
+  const periodStart = toIsoDate(weekStart);
+  const periodEnd = toIsoDate(now);
+
+  interface AreaAgg {
+    completedTitles: string[];
+    missedTitles: string[];
+    completedBlocks: number;
+    missedBlocks: number;
+  }
+  const byArea = new Map<string, AreaAgg>();
+
+  for (const block of state.calendarBlocks) {
+    if (block.status !== "completed" && block.status !== "missed") continue;
+    if (new Date(block.start_at).getTime() < weekStartMs) continue;
+
+    const agg =
+      byArea.get(block.area_id) ??
+      ({
+        completedTitles: [],
+        missedTitles: [],
+        completedBlocks: 0,
+        missedBlocks: 0,
+      } satisfies AreaAgg);
+
+    const title = block.task_id
+      ? state.tasks.find((task) => task.id === block.task_id)?.title
+      : undefined;
+
+    if (block.status === "completed") {
+      agg.completedBlocks += 1;
+      if (title) agg.completedTitles.push(title);
+    } else {
+      agg.missedBlocks += 1;
+      if (title) agg.missedTitles.push(title);
+    }
+    byArea.set(block.area_id, agg);
+  }
+
+  const drafts: RollupDraftVM[] = [];
+  for (const [areaId, agg] of byArea) {
+    const summary: RollupSummaryContent = buildWeeklyRollupDraft({
+      winTitles: agg.completedTitles,
+      missedTitles: agg.missedTitles,
+      counts: {
+        wins: new Set(agg.completedTitles).size,
+        completedSessions: agg.completedBlocks,
+        missedSessions: agg.missedBlocks,
+      },
+    });
+    drafts.push({
+      areaId,
+      areaLabel: areaName(state.areas, areaId),
+      periodStart,
+      periodEnd,
+      periodLabel: `${periodStart} – ${periodEnd}`,
+      summary,
+    });
+  }
+
+  return drafts.sort((a, b) => a.areaLabel.localeCompare(b.areaLabel));
 }

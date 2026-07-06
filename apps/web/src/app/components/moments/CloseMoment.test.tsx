@@ -9,6 +9,7 @@ const baseVm: CloseVM = {
   carryForward: [],
   tomorrowFirstMove: null,
   winCandidates: [],
+  rollupDrafts: [],
 };
 
 const win: CloseWinVM = {
@@ -22,10 +23,18 @@ function renderClose(overrides: Partial<React.ComponentProps<typeof CloseMoment>
     vm: baseVm,
     pendingWins: [] as CloseWinVM[],
     confirmedWins: [] as { title: string; areaLabel: string }[],
+    pendingRollups: [] as React.ComponentProps<
+      typeof CloseMoment
+    >["pendingRollups"],
+    approvedRollups: [] as React.ComponentProps<
+      typeof CloseMoment
+    >["approvedRollups"],
     onCloseDay: vi.fn(),
     onCarryForward: vi.fn(),
     onConfirmWin: vi.fn(),
     onSkipWin: vi.fn(),
+    onApproveRollup: vi.fn(),
+    onDismissRollup: vi.fn(),
     ...overrides,
   };
   render(<CloseMoment {...props} />);
@@ -85,5 +94,63 @@ describe("CloseMoment — S7 wins harvest", () => {
       "Closed the quarter",
     );
     expect(screen.getByTestId("close-moment-wins-empty")).toBeInTheDocument();
+  });
+});
+
+const rollupDraft = {
+  areaId: "area-1",
+  areaLabel: "Main Job",
+  periodStart: "2026-05-04",
+  periodEnd: "2026-05-10",
+  periodLabel: "2026-05-04 – 2026-05-10",
+  summary: {
+    highlights: ["Shipped onboarding"],
+    misses: ["Skipped review"],
+    counts: { wins: 1, completed_sessions: 4, missed_sessions: 1 },
+  },
+};
+
+describe("CloseMoment — S8 rollup readback", () => {
+  it("hides the rollup card when there is nothing to approve or show", () => {
+    renderClose();
+    expect(screen.queryByTestId("close-moment-rollup-area-1")).toBeNull();
+    expect(screen.queryByTestId("close-moment-rollups-approved")).toBeNull();
+  });
+
+  it("renders a pending rollup draft with highlights and misses", () => {
+    renderClose({ pendingRollups: [rollupDraft] });
+    const card = screen.getByTestId("close-moment-rollup-area-1");
+    expect(card).toHaveTextContent("Main Job");
+    expect(card).toHaveTextContent("Shipped onboarding");
+    expect(card).toHaveTextContent("Skipped review");
+  });
+
+  it("approves a rollup draft", () => {
+    const props = renderClose({ pendingRollups: [rollupDraft] });
+    fireEvent.click(screen.getByTestId("close-moment-rollup-approve-area-1"));
+    expect(props.onApproveRollup).toHaveBeenCalledWith(rollupDraft);
+    expect(props.onDismissRollup).not.toHaveBeenCalled();
+  });
+
+  it("dismisses a rollup draft without approving (writes nothing)", () => {
+    const props = renderClose({ pendingRollups: [rollupDraft] });
+    fireEvent.click(screen.getByTestId("close-moment-rollup-dismiss-area-1"));
+    expect(props.onDismissRollup).toHaveBeenCalledWith("area-1");
+    expect(props.onApproveRollup).not.toHaveBeenCalled();
+  });
+
+  it("reads back approved rollups", () => {
+    renderClose({
+      approvedRollups: [
+        {
+          areaLabel: "Main Job",
+          periodLabel: "2026-05-04 – 2026-05-10",
+          counts: { wins: 1 },
+        },
+      ],
+    });
+    expect(
+      screen.getByTestId("close-moment-rollups-approved"),
+    ).toHaveTextContent("Main Job");
   });
 });

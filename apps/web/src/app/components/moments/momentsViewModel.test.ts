@@ -686,6 +686,57 @@ describe("buildCloseVM", () => {
     const vm = buildCloseVM(state, { now: NOW });
     expect(vm.winCandidates).toEqual([]);
   });
+
+  it("composes a per-area weekly rollup draft from the last 7 days", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({ id: "t-done", title: "Shipped onboarding" }),
+        makeTask({ id: "t-miss", title: "Skipped review", status: "active" }),
+      ],
+      calendarBlocks: [
+        makeBlock({ id: "b-done", task_id: "t-done", status: "completed" }),
+        makeBlock({
+          id: "b-miss",
+          task_id: "t-miss",
+          status: "missed",
+          start_at: daysBefore(2),
+          end_at: daysBefore(2),
+        }),
+        // Outside the 7-day window -> excluded.
+        makeBlock({
+          id: "b-old",
+          task_id: "t-done",
+          status: "completed",
+          start_at: daysBefore(30),
+          end_at: daysBefore(30),
+        }),
+      ],
+    });
+
+    const vm = buildCloseVM(state, { now: NOW });
+    expect(vm.rollupDrafts).toHaveLength(1);
+    const draft = vm.rollupDrafts[0];
+    expect(draft.summary.highlights).toEqual(["Shipped onboarding"]);
+    expect(draft.summary.misses).toEqual(["Skipped review"]);
+    expect(draft.summary.counts).toEqual({
+      wins: 1,
+      completed_sessions: 1,
+      missed_sessions: 1,
+    });
+    expect(draft.periodStart <= draft.periodEnd).toBe(true);
+  });
+
+  it("has no rollup drafts when no completed/missed blocks fall in the week", () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Open", status: "active" })],
+      calendarBlocks: [
+        makeBlock({ id: "b-sched", task_id: "t1", status: "scheduled" }),
+      ],
+    });
+
+    const vm = buildCloseVM(state, { now: NOW });
+    expect(vm.rollupDrafts).toEqual([]);
+  });
 });
 
 /**
