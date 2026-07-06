@@ -4,6 +4,7 @@ import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
   Phase2MockExecutionSession,
+  Phase2MockProject,
   Phase2MockTask,
 } from "@/lib/types";
 import { buildCloseVM, buildFlowVM, buildStartVM } from "./momentsViewModel";
@@ -56,6 +57,20 @@ function makeTask(
     updated_at: daysBefore(1),
     ...overrides,
   } as Phase2MockTask;
+}
+
+function makeProject(
+  overrides: Partial<Phase2MockProject> & { id: string; title: string },
+): Phase2MockProject {
+  return {
+    user_id: "user-1",
+    area_id: "area-1",
+    description: null,
+    status: "active",
+    created_at: daysBefore(100),
+    updated_at: daysBefore(1),
+    ...overrides,
+  } as Phase2MockProject;
 }
 
 function makeBlock(
@@ -861,5 +876,245 @@ describe("buildStartVM — S5 focus budget (#257)", () => {
     expect(vm.focusBudget).toBe(3);
     expect(vm.focusItems.map((item) => item.taskId)).toEqual(["t1"]);
     expect(vm.deferredItems).toEqual([]);
+  });
+});
+
+describe("buildStartVM — S6 stale project (#258)", () => {
+  it("null when no project exceeds the 7-day threshold", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({ id: "p1", title: "Fresh", updated_at: daysBefore(2) }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject).toBeNull();
+  });
+
+  it("null when projects list is empty (degraded/empty case, not an error)", () => {
+    const vm = buildStartVM(stateWith({}), { now: NOW });
+    expect(vm.staleProject).toBeNull();
+  });
+
+  it("an active project older than 7 days (by updated_at) surfaces with a floored ageDays", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({
+          id: "p1",
+          title: "Stale project",
+          updated_at: daysBefore(10),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject).toEqual({
+      id: "p1",
+      name: "Stale project",
+      ageDays: 10,
+    });
+  });
+
+  it("exactly 7 days old is NOT yet stale (strict greater-than)", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({
+          id: "p1",
+          title: "Borderline",
+          updated_at: daysBefore(7),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject).toBeNull();
+  });
+
+  it("picks the single stalest among multiple qualifying projects", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({
+          id: "p-medium",
+          title: "Medium stale",
+          updated_at: daysBefore(9),
+        }),
+        makeProject({
+          id: "p-stalest",
+          title: "Stalest",
+          updated_at: daysBefore(30),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject).toMatchObject({ id: "p-stalest", ageDays: 30 });
+  });
+
+  it("excludes non-active (paused/done/dropped/archived) projects even if old", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({
+          id: "p-done",
+          title: "Finished long ago",
+          status: "done",
+          updated_at: daysBefore(365),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject).toBeNull();
+  });
+
+  it("a linked task's more-recent updated_at counts as project activity (project not stale)", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({
+          id: "p1",
+          title: "Actually active",
+          updated_at: daysBefore(30),
+        }),
+      ],
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "Recent task",
+          project_id: "p1",
+          updated_at: daysBefore(1),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject).toBeNull();
+  });
+
+  it("ties break deterministically by id ascending", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({ id: "p-b", title: "B", updated_at: daysBefore(10) }),
+        makeProject({ id: "p-a", title: "A", updated_at: daysBefore(10) }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject?.id).toBe("p-a");
+  });
+});
+
+describe("buildStartVM — S6 recovery nudge (#258)", () => {
+  it("null when there is no calendar data at all", () => {
+    const vm = buildStartVM(stateWith({}), { now: NOW });
+    expect(vm.recoveryNudge).toBeNull();
+  });
+
+  it("null when yesterday had no missed block", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "b-yesterday-done",
+          status: "completed",
+          start_at: daysBefore(1),
+          end_at: daysBefore(1),
+          task_id: "t1",
+        }),
+      ],
+      tasks: [makeTask({ id: "t1", title: "Done yesterday" })],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.recoveryNudge).toBeNull();
+  });
+
+  it("null when the missed block is from today, not yesterday (buildCloseVM's own scope)", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "b-today-missed",
+          status: "missed",
+          start_at: atTodayHour(8),
+          end_at: atTodayHour(9),
+          task_id: "t1",
+        }),
+      ],
+      tasks: [makeTask({ id: "t1", title: "Missed today" })],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.recoveryNudge).toBeNull();
+  });
+
+  it("null when yesterday's missed block has no linked task_id (mirrors buildCloseVM's skip rule)", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "b-yesterday-missed-notask",
+          status: "missed",
+          start_at: daysBefore(1),
+          end_at: daysBefore(1),
+          task_id: null,
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.recoveryNudge).toBeNull();
+  });
+
+  it("surfaces a plain-language nudge for yesterday's missed block with a task, never mutating", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "b-yesterday-missed",
+          status: "missed",
+          start_at: daysBefore(1),
+          end_at: daysBefore(1),
+          task_id: "t1",
+        }),
+      ],
+      tasks: [makeTask({ id: "t1", title: "Draft the proposal" })],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.recoveryNudge).toEqual({
+      blockTitle: "Draft the proposal",
+      taskId: "t1",
+    });
+    // Surfaced only — the task/block status in state is untouched.
+    expect(
+      state.calendarBlocks.find((b) => b.id === "b-yesterday-missed")?.status,
+    ).toBe("missed");
+  });
+
+  it("picks the earliest of multiple qualifying missed blocks from yesterday", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "b-later",
+          status: "missed",
+          start_at: new Date(
+            new Date(daysBefore(1)).getTime() + 3 * 60 * 60 * 1000,
+          ).toISOString(),
+          end_at: new Date(
+            new Date(daysBefore(1)).getTime() + 4 * 60 * 60 * 1000,
+          ).toISOString(),
+          task_id: "t-later",
+        }),
+        makeBlock({
+          id: "b-earlier",
+          status: "missed",
+          start_at: daysBefore(1),
+          end_at: daysBefore(1),
+          task_id: "t-earlier",
+        }),
+      ],
+      tasks: [
+        makeTask({ id: "t-later", title: "Later task" }),
+        makeTask({ id: "t-earlier", title: "Earlier task" }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.recoveryNudge?.taskId).toBe("t-earlier");
   });
 });
