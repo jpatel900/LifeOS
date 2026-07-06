@@ -329,3 +329,116 @@ describe("coherence registry policy-id code sweep", () => {
     ).toEqual([]);
   });
 });
+
+// G-UX-3 — the C-0B token reconciliation, enforced (ADR 0004 §Decision R5).
+// Two color axes only: --area-accent* = area identity, the closed --state-*
+// set = state. No third vocabulary (the retired prototype --st-* set, or a raw
+// hex literal, would re-open the drift this guard exists to close). Component
+// and cockpit-route source must reference tokens, never raw colors.
+//
+// Scan set is a SUPERSET of the retired sourceOfTruth cockpit-hex guard: every
+// component under app/components/** PLUS the seven cockpit route pages it used
+// to cover, so net coverage never decreases. globals.css (the token DEFINITION
+// source) and lib/cockpit/accent.ts (its #ffffff/#000000 mix anchors are
+// asserted verbatim in sourceOfTruth.test.ts) are deliberately out of scope:
+// this guards token CONSUMERS, not the definitions.
+const UX_COMPONENT_SCAN_ROOT = "apps/web/src/app/components";
+const UX_ROUTE_PAGE_SCAN_FILES = [
+  "apps/web/src/app/page.tsx",
+  "apps/web/src/app/capture/page.tsx",
+  "apps/web/src/app/triage/page.tsx",
+  "apps/web/src/app/calendar/page.tsx",
+  "apps/web/src/app/execute/page.tsx",
+  "apps/web/src/app/review/page.tsx",
+  "apps/web/src/app/health/page.tsx",
+];
+const UX_TOKEN_SCAN_EXTENSIONS = new Set([".ts", ".tsx"]);
+const CANONICAL_STATE_TOKENS = new Set(["ok", "watch", "risk", "idle", "warn"]);
+
+function walkUxTokenScanFiles(relativePath: string): string[] {
+  return readdirSync(resolve(repoRoot, relativePath), {
+    withFileTypes: true,
+  }).flatMap((entry) => {
+    const nextRelativePath = `${relativePath}/${entry.name}`;
+
+    if (entry.isDirectory()) {
+      return walkUxTokenScanFiles(nextRelativePath);
+    }
+
+    if (
+      !entry.isFile() ||
+      !UX_TOKEN_SCAN_EXTENSIONS.has(extname(entry.name)) ||
+      /\.(?:test|spec)\.[^/]+$/.test(entry.name)
+    ) {
+      return [];
+    }
+
+    return [nextRelativePath];
+  });
+}
+
+function uxTokenScanFiles(): string[] {
+  return [
+    ...walkUxTokenScanFiles(UX_COMPONENT_SCAN_ROOT),
+    ...UX_ROUTE_PAGE_SCAN_FILES,
+  ].sort();
+}
+
+// Comment-stripping is the only robust disambiguation: content alone cannot
+// tell a 3-digit hex color (#abc) from an issue reference (#257) — both are
+// valid 3-hex. Real color literals live in code (style props, template
+// literals); issue refs live in comments. Strip comments, then scan. A residual
+// ref inside a code string is covered by the "write issue 261" comment
+// convention. Erring toward stripping only ever causes a false-negative (a
+// missed color in a contrived URL-bearing line), never a false CI red.
+function stripCommentsForTokenScan(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\/\/[^\n]*/g, " ");
+}
+
+describe("coherence UX grammar — color / state tokens (G-UX-3)", () => {
+  it("G-UX-3 — components and cockpit routes carry no raw hex color literals.", () => {
+    const offenders = uxTokenScanFiles().flatMap((file) => {
+      const stripped = stripCommentsForTokenScan(
+        readFileSync(resolve(repoRoot, file), "utf8"),
+      );
+
+      return (stripped.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []).map(
+        (hex) => `${file}: ${hex}`,
+      );
+    });
+
+    expect(
+      offenders,
+      [
+        "Raw hex color literals are forbidden in components / cockpit routes",
+        "(C-0B canon, ADR 0004 §Decision R5). Reference a token:",
+        "--area-accent* for area identity, the closed --state-* set for state.",
+        `Offenders: ${offenders.join(", ")}`,
+      ].join(" "),
+    ).toEqual([]);
+  });
+
+  it("G-UX-3 — state color is expressed only through the closed --state-* set.", () => {
+    const offenders = uxTokenScanFiles().flatMap((file) => {
+      const stripped = stripCommentsForTokenScan(
+        readFileSync(resolve(repoRoot, file), "utf8"),
+      );
+
+      return [...stripped.matchAll(/--state-([a-z][a-z-]*)/g)]
+        .map((match) => match[1])
+        .filter((name) => !CANONICAL_STATE_TOKENS.has(name))
+        .map((name) => `${file}: --state-${name}`);
+    });
+
+    expect(
+      offenders,
+      [
+        "Off-registry --state-* tokens (C-0B canon: the state axis is a CLOSED",
+        `set). Allowed: ${[...CANONICAL_STATE_TOKENS].join(", ")}.`,
+        `Offenders: ${offenders.join(", ")}`,
+      ].join(" "),
+    ).toEqual([]);
+  });
+});
