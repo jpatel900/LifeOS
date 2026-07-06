@@ -72,6 +72,22 @@ describe("TodayMoments", () => {
     vi.unstubAllEnvs();
     vi.useRealTimers();
     window.localStorage.clear();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("prefills the capture overlay from a share-target ?shared_text= param", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?shared_text=Remember%20the%20renewal",
+    );
+
+    renderToday();
+
+    const textarea = await screen.findByTestId("capture-overlay-textarea");
+    expect(textarea).toHaveValue("Remember the renewal");
+    // The param is stripped so a refresh doesn't reopen the overlay.
+    expect(window.location.search).toBe("");
   });
 
   it("switches moments via number keys and the MomentSwitcher", () => {

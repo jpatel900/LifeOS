@@ -263,6 +263,34 @@ export function TodayMoments({
     if (deepLink.sheet) setActiveSheet(deepLink.sheet);
   }, [deepLink, ritualActive, ritual.pending]);
 
+  // FR-027 (F-G1b) share target: text shared into the installed PWA lands on
+  // the moments home as ?shared_text=. Open the capture overlay prefilled with
+  // it exactly once (deferring to the re-entry ritual, same as deep links),
+  // then strip the param so a refresh doesn't reopen it.
+  const sharedTextAppliedRef = useRef(false);
+  useEffect(() => {
+    if (sharedTextAppliedRef.current) return;
+    if (ritualActive || ritual.pending) return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const shared = params.get("shared_text");
+    if (!shared) return;
+
+    sharedTextAppliedRef.current = true;
+    setCaptureDraft(shared);
+    writeStoredCaptureDraft(shared);
+    setCaptureOpen(true);
+
+    params.delete("shared_text");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+  }, [ritualActive, ritual.pending]);
+
   useEffect(() => {
     if (!session.running) return undefined;
     const id = setInterval(() => {

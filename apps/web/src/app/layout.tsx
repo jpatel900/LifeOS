@@ -6,6 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "LifeOS — Workflow Cockpit",
   description: "Area-scoped personal workflow cockpit",
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
