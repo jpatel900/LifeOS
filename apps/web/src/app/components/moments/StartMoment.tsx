@@ -1,5 +1,7 @@
 "use client";
 
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { FirstMoveCard, type FirstMoveCardMove } from "./FirstMoveCard";
 import { ScheduleList } from "./ScheduleList";
 import { SideRail } from "./SideRail";
@@ -28,6 +30,15 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * quiet note that a fixed default budget is in use, reusing the repo's
  * existing calm degraded-state phrasing (state the fallback plainly, keep
  * working — no guilt language).
+ *
+ * S6 (#258) daily brief additions — both purely additive, each independently
+ * absent when its signal doesn't apply (no guilt language, no dead ends):
+ * a one-line "hasn't moved in N days" note for `vm.staleProject` (omitted
+ * entirely when null), and a `--state-watch` (never `--state-risk`)
+ * recovery-nudge card for `vm.recoveryNudge` — a plain-language surfaced
+ * suggestion for a block missed yesterday. The card's single action routes
+ * to the existing Close-moment carry-forward surface (`onOpenRecovery`); it
+ * never mutates from here.
  */
 
 export interface StartMomentProps {
@@ -40,6 +51,7 @@ export interface StartMomentProps {
   onOpenHealth(): void;
   pipelineCounts: Record<string, number>;
   onDrillPipeline(stage: string): void;
+  onOpenRecovery(taskId: string): void;
 }
 
 export function StartMoment({
@@ -52,6 +64,7 @@ export function StartMoment({
   onOpenHealth,
   pipelineCounts,
   onDrillPipeline,
+  onOpenRecovery,
 }: StartMomentProps) {
   const cardMove: FirstMoveCardMove | null = vm.firstMove
     ? {
@@ -61,6 +74,8 @@ export function StartMoment({
         estMinutes: vm.firstMove.estMinutes,
       }
     : null;
+
+  const recoveryNudge = vm.recoveryNudge;
 
   return (
     <div className="grid gap-6" data-testid="start-moment">
@@ -113,6 +128,52 @@ export function StartMoment({
                 deferred={vm.deferredItems}
               />
             </section>
+          ) : null}
+
+          {recoveryNudge ? (
+            <Card
+              className="workflow-support-card relative overflow-hidden border-l-4 p-0"
+              style={{ borderLeftColor: "var(--state-watch)" }}
+              data-testid="start-recovery-nudge"
+            >
+              <CardContent className="grid gap-2 p-4 sm:p-5">
+                <p
+                  className="workflow-page-eyebrow m-0"
+                  style={{ color: "var(--state-watch)" }}
+                >
+                  Yesterday
+                </p>
+                <p className="text-sm">
+                  A block got missed yesterday:{" "}
+                  <span className="font-medium">
+                    {recoveryNudge.blockTitle}
+                  </span>
+                  .
+                </p>
+                <div className="mt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onOpenRecovery(recoveryNudge.taskId)}
+                    className="min-h-[44px] touch-manipulation"
+                    data-testid="start-recovery-nudge-open"
+                  >
+                    Review it in Close
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {vm.staleProject ? (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="start-stale-project"
+            >
+              Hasn&apos;t moved in {vm.staleProject.ageDays} days:{" "}
+              <span className="font-medium">{vm.staleProject.name}</span>
+            </p>
           ) : null}
 
           <section className="grid gap-3">
