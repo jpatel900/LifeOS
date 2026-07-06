@@ -27,6 +27,8 @@ import {
   recordPersonLinkRejection,
   recordPersonMentionProposal,
   recordRejectedTaskDraft,
+  recordPolicyProposalDecision,
+  recordDurationRecalibrationDecision,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   listAreas,
@@ -34,6 +36,7 @@ import {
   updateAreaColor,
   COMMITMENT_POLICY_ID,
   PERSON_LINK_POLICY_ID,
+  DURATION_RECALIBRATION_POLICY_ID,
   type MinimalSupabaseClient,
 } from "./workflow";
 
@@ -709,6 +712,120 @@ describe("workflow data provider", () => {
         area_id: null,
         draft_id: "task-draft-550e8400-e29b-41d4-a716-446655440901",
         title: "Mock rejected draft",
+      }),
+    ).not.toThrow();
+  });
+
+  it("records a policy-change proposal decision as a resolved suggestion", async () => {
+    const single = vi.fn().mockResolvedValue({ data: {}, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    recordPolicyProposalDecision(authenticatedClient(from), {
+      area_id: null,
+      policy_identifier: "planning.default_time_block",
+      decision: "accepted",
+      evidence: "overridden 3 of the last 5",
+      examined: 5,
+      override_count: 3,
+      latest_override_type: "edited",
+      resolved_at: "2026-07-06T12:00:00.000Z",
+    });
+
+    await vi.waitFor(() => {
+      expect(from).toHaveBeenCalledWith("suggestion_records");
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_identifier: "planning.default_time_block",
+          suggestion_type: "policy_change",
+          subject_type: "policy",
+          status: "accepted",
+          decided_by: "user",
+          resolved_at: "2026-07-06T12:00:00.000Z",
+        }),
+      );
+    });
+  });
+
+  it("records a declined policy proposal with rejected status", async () => {
+    const single = vi.fn().mockResolvedValue({ data: {}, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    recordPolicyProposalDecision(authenticatedClient(from), {
+      area_id: null,
+      policy_identifier: "planning.default_time_block",
+      decision: "declined",
+      evidence: "overridden 3 of the last 5",
+      examined: 5,
+      override_count: 3,
+      latest_override_type: "rejected",
+      resolved_at: "2026-07-06T12:00:00.000Z",
+    });
+
+    await vi.waitFor(() => {
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          suggestion_type: "policy_change",
+          status: "rejected",
+          decided_by: "user",
+        }),
+      );
+    });
+  });
+
+  it("records a duration-recalibration decision under the planning policy id", async () => {
+    const single = vi.fn().mockResolvedValue({ data: {}, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    recordDurationRecalibrationDecision(authenticatedClient(from), {
+      area_id: null,
+      decision: "accepted",
+      multiplier: 1.4,
+      sample_count: 3,
+      estimate_minutes: 60,
+      adjusted_minutes: 84,
+      resolved_at: "2026-07-06T12:00:00.000Z",
+    });
+
+    await vi.waitFor(() => {
+      expect(insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policy_identifier: DURATION_RECALIBRATION_POLICY_ID,
+          suggestion_type: "duration_recalibration",
+          status: "accepted",
+          decided_by: "user",
+        }),
+      );
+    });
+  });
+
+  it("skips S9 learning-decision writes in mock mode", () => {
+    expect(() =>
+      recordPolicyProposalDecision(null, {
+        area_id: null,
+        policy_identifier: "planning.default_time_block",
+        decision: "accepted",
+        evidence: "overridden 3 of the last 5",
+        examined: 5,
+        override_count: 3,
+        latest_override_type: "edited",
+        resolved_at: "2026-07-06T12:00:00.000Z",
+      }),
+    ).not.toThrow();
+    expect(() =>
+      recordDurationRecalibrationDecision(null, {
+        area_id: null,
+        decision: "dismissed",
+        multiplier: 1.4,
+        sample_count: 3,
+        estimate_minutes: 60,
+        adjusted_minutes: 84,
+        resolved_at: "2026-07-06T12:00:00.000Z",
       }),
     ).not.toThrow();
   });
