@@ -235,6 +235,19 @@ async function deleteWinByTitle(client: SupabaseClient, title: string) {
   }
 }
 
+async function deleteRollupByStart(client: SupabaseClient, periodStart: string) {
+  const { error } = await client
+    .from("rollup_summaries")
+    .delete()
+    .eq("period_start", periodStart);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up rollup '${periodStart}': ${error.message}`,
+    );
+  }
+}
+
 describeLocalRls("Phase 4A local Supabase RLS", () => {
   it("lets user A read own areas but not user B areas", async () => {
     const userAClient = await signIn(userA.email, userA.password);
@@ -394,6 +407,74 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       area_id: userB.areaId,
       title,
       occurred_at: "2026-05-08",
+    });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A access own rollup_summaries but not user B rollups", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const periodStart = "2026-05-04";
+    const summaryA = {
+      highlights: ["A win"],
+      misses: [],
+      counts: { wins: 1 },
+    };
+    const summaryB = {
+      highlights: ["B win"],
+      misses: [],
+      counts: { wins: 1 },
+    };
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("rollup_summaries")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          period_type: "week",
+          period_start: periodStart,
+          period_end: "2026-05-10",
+          summary: summaryA,
+        });
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("rollup_summaries")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          period_type: "week",
+          period_start: periodStart,
+          period_end: "2026-05-10",
+          summary: summaryB,
+        });
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("rollup_summaries")
+        .select("user_id,summary")
+        .eq("period_start", periodStart);
+
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([{ user_id: userA.id, summary: summaryA }]);
+    } finally {
+      await deleteRollupByStart(userAClient, periodStart);
+      await deleteRollupByStart(userBClient, periodStart);
+    }
+  });
+
+  it("prevents user A from inserting rollup_summaries for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+
+    const { error } = await userAClient.from("rollup_summaries").insert({
+      user_id: userB.id,
+      area_id: userB.areaId,
+      period_type: "week",
+      period_start: "2026-06-01",
+      period_end: "2026-06-07",
+      summary: { highlights: [], misses: [], counts: {} },
     });
 
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
