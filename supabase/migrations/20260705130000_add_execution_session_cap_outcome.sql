@@ -10,6 +10,15 @@ exception
   when duplicate_object then null;
 end $$;
 
+-- Drop the prior 7-arg overload (pre-cap_outcome). `create or replace` with a
+-- new arity creates a SECOND overload rather than replacing it, and because the
+-- new p_cap_outcome arg is defaulted, a 7-arg call becomes ambiguous ("could
+-- not choose the best candidate function"). Removing the old signature leaves
+-- exactly one function; 7-arg callers resolve to it with p_cap_outcome => null.
+drop function if exists public.apply_execution_session_outcome(
+  uuid, text, integer, integer, integer, integer, text
+);
+
 create or replace function public.apply_execution_session_outcome(
   p_session_id uuid,
   p_outcome text,
