@@ -173,6 +173,7 @@ export function TodayMoments({
     refreshPersistedWorkflow,
     promoteBacklogTask,
     deferTask,
+    unsyncedCaptureCount,
   } = useWorkflow();
 
   const ritual = useReEntryRitual({
@@ -856,6 +857,7 @@ export function TodayMoments({
       <CaptureAffordance
         disabled={captureParse.phase === "parsing"}
         onOpen={() => setCaptureOpen(true)}
+        unsyncedCount={unsyncedCaptureCount}
       />
 
       <CaptureOverlay

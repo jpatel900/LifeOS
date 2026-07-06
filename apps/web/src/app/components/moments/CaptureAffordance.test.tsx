@@ -41,4 +41,31 @@ describe("CaptureAffordance", () => {
     expect(button).toHaveClass("min-h-[44px]");
     expect(button).toHaveClass("touch-manipulation");
   });
+
+  // G1 floor follow-up: the offline-queue badge.
+  it("shows no queue badge when nothing is waiting to sync", () => {
+    const { unmount } = render(<CaptureAffordance onOpen={vi.fn()} />);
+    expect(screen.queryByTestId("capture-queue-badge")).toBeNull();
+    unmount();
+
+    render(<CaptureAffordance onOpen={vi.fn()} unsyncedCount={0} />);
+    expect(screen.queryByTestId("capture-queue-badge")).toBeNull();
+  });
+
+  it("surfaces the unsynced count with a colour-independent label", () => {
+    render(<CaptureAffordance onOpen={vi.fn()} unsyncedCount={3} />);
+    const badge = screen.getByTestId("capture-queue-badge");
+
+    expect(badge).toHaveTextContent("3");
+    expect(badge).toHaveTextContent("3 captures waiting to sync");
+    // stable-width digits so the count does not jitter as it changes
+    expect(badge).toHaveClass("tabular-nums");
+  });
+
+  it("uses the singular noun for a single pending capture", () => {
+    render(<CaptureAffordance onOpen={vi.fn()} unsyncedCount={1} />);
+    expect(screen.getByTestId("capture-queue-badge")).toHaveTextContent(
+      "1 capture waiting to sync",
+    );
+  });
 });
