@@ -28,7 +28,7 @@ import { HIT_TARGET_INVISIBLE, HIT_TARGET_MIN } from "./hitTarget";
 export interface CaptureOverlayProps {
   open: boolean;
   kinds: string[];
-  onSave(text: string, kind: string): void;
+  onSave(text: string, kind: string, returnHook: string | null): void;
   onClose(): void;
   initialText?: string;
   onDraftChange?(text: string): void;
@@ -44,6 +44,7 @@ export function CaptureOverlay({
 }: CaptureOverlayProps) {
   const [text, setText] = useState("");
   const [selectedKind, setSelectedKind] = useState(kinds[0] ?? "");
+  const [returnHook, setReturnHook] = useState("");
   const [restored, setRestored] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -60,6 +61,7 @@ export function CaptureOverlay({
       setSelectedKind(kinds[0] ?? "");
       const seeded = initialText ?? "";
       setText(seeded);
+      setReturnHook("");
       setRestored(seeded.length > 0);
       const id = requestAnimationFrame(() => {
         const el = textareaRef.current;
@@ -87,8 +89,9 @@ export function CaptureOverlay({
   function handleSave() {
     const trimmed = text.trim();
     if (!trimmed) return;
-    onSave(trimmed, selectedKind);
+    onSave(trimmed, selectedKind, returnHook.trim() || null);
     setText("");
+    setReturnHook("");
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -136,6 +139,17 @@ export function CaptureOverlay({
           placeholder="What's on your mind?"
           data-testid="capture-overlay-textarea"
         />
+
+        <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
+          Return hook
+          <input
+            value={returnHook}
+            onChange={(event) => setReturnHook(event.target.value)}
+            placeholder="What should you go back to afterward?"
+            className="min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            data-testid="capture-overlay-return-hook"
+          />
+        </label>
 
         {restored ? (
           <p

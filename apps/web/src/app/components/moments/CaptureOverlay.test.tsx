@@ -40,8 +40,31 @@ describe("CaptureOverlay", () => {
     fireEvent.change(textarea, { target: { value: "Buy milk" } });
     fireEvent.keyDown(textarea, { key: "Enter" });
 
-    expect(onSave).toHaveBeenCalledWith("Buy milk", "Note");
+    expect(onSave).toHaveBeenCalledWith("Buy milk", "Note", null);
     expect(textarea.value).toBe("");
+  });
+
+  it("saves the editable return hook with the capture", () => {
+    const onSave = vi.fn();
+    render(
+      <CaptureOverlay open kinds={KINDS} onSave={onSave} onClose={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+      target: { value: "Remember the renewal" },
+    });
+    fireEvent.change(screen.getByTestId("capture-overlay-return-hook"), {
+      target: { value: "finish weekly review" },
+    });
+    fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
+      key: "Enter",
+    });
+
+    expect(onSave).toHaveBeenCalledWith(
+      "Remember the renewal",
+      "Task",
+      "finish weekly review",
+    );
   });
 
   it("does not save on Shift+Enter", () => {

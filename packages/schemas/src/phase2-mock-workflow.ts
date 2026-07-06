@@ -13,6 +13,7 @@ export const Phase2CaptureItemSchema = z.object({
   user_id: z.string().min(1),
   area_id: z.string().min(1).nullable(),
   raw_text: z.string().min(1),
+  return_hook: z.string().nullable().optional(),
   capture_mode: z.literal("text"),
   inferred_area_confidence: z.number().min(0).max(1).nullable(),
   status: z.enum(["new", "parsed", "triage_required", "resolved", "archived"]),

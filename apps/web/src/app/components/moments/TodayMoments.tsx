@@ -162,6 +162,7 @@ export function TodayMoments({
     selectedAreaId,
     setSelectedAreaId,
     submitCaptureText,
+    captureParse,
     startTaskSession,
     markSession,
     carryForwardTask,
@@ -344,7 +345,12 @@ export function TodayMoments({
   // persists through the context (real client only; mock/preview stays local)
   // and moves the draft into the week-over-week readback; dismiss writes nothing.
   const [approvedRollups, setApprovedRollups] = useState<
-    { areaId: string; areaLabel: string; periodLabel: string; counts: Record<string, number> }[]
+    {
+      areaId: string;
+      areaLabel: string;
+      periodLabel: string;
+      counts: Record<string, number>;
+    }[]
   >([]);
   const [dismissedRollupAreaIds, setDismissedRollupAreaIds] = useState<
     Set<string>
@@ -798,7 +804,10 @@ export function TodayMoments({
         </>
       )}
 
-      <CaptureAffordance onOpen={() => setCaptureOpen(true)} />
+      <CaptureAffordance
+        disabled={captureParse.phase === "parsing"}
+        onOpen={() => setCaptureOpen(true)}
+      />
 
       <CaptureOverlay
         open={captureOpen}
@@ -808,8 +817,8 @@ export function TodayMoments({
           setCaptureDraft(text);
           writeStoredCaptureDraft(text);
         }}
-        onSave={(text) => {
-          submitCaptureText(text, selectedAreaId);
+        onSave={(text, _kind, returnHook) => {
+          submitCaptureText(text, selectedAreaId, returnHook);
           showToast("Captured");
           setCaptureOpen(false);
           // Clear the draft only after a successful save — Esc/close must

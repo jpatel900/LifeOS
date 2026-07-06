@@ -77,6 +77,19 @@ describe("CreateCaptureItemInputSchema", () => {
       "Call dentist tomorrow",
     );
   });
+
+  it("accepts an optional nullable return hook", () => {
+    const result = CreateCaptureItemInputSchema.safeParse({
+      raw_text: "Call dentist tomorrow",
+      return_hook: "  back to invoices  ",
+      area_id: null,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data.return_hook : "").toBe(
+      "back to invoices",
+    );
+  });
 });
 
 describe("CreateAreaInputSchema", () => {
