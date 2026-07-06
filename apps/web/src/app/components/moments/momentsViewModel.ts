@@ -183,6 +183,9 @@ export interface CloseVM {
   missedToday: number;
   carryForward: { taskId: string; title: string }[];
   tomorrowFirstMove: FirstMoveVM | null;
+  // S7 (#259): candidate wins to harvest at close — tasks completed today,
+  // surfaced for the user to confirm/edit/skip into the evidence log.
+  winCandidates: { taskId: string; title: string; areaLabel: string }[];
 }
 
 interface NowOption {
@@ -695,5 +698,27 @@ export function buildCloseVM(
     };
   })();
 
-  return { completedToday, missedToday, carryForward, tomorrowFirstMove };
+  const winCandidates: { taskId: string; title: string; areaLabel: string }[] =
+    [];
+  const winSeen = new Set<string>();
+  for (const block of todayBlocksRaw) {
+    if (block.status !== "completed" || !block.task_id) continue;
+    if (winSeen.has(block.task_id)) continue;
+    const task = state.tasks.find((t) => t.id === block.task_id);
+    if (!task) continue;
+    winSeen.add(block.task_id);
+    winCandidates.push({
+      taskId: task.id,
+      title: task.title,
+      areaLabel: areaName(state.areas, task.area_id),
+    });
+  }
+
+  return {
+    completedToday,
+    missedToday,
+    carryForward,
+    tomorrowFirstMove,
+    winCandidates,
+  };
 }
