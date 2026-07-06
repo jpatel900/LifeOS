@@ -9,6 +9,7 @@ const baseVm: CloseVM = {
   carryForward: [],
   tomorrowFirstMove: null,
   winCandidates: [],
+  rollupDrafts: [],
 };
 
 const win: CloseWinVM = {
