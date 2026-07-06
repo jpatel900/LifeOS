@@ -6,10 +6,10 @@
  * (the plan-stage proposal card and the review policy-proposal card). Keeps the
  * components dumb: they render what these functions return and never recompute.
  *
- * Nothing here mutates. Recalibration is APPLIED only when the user accepts a
- * proposal (call site records the override, NS-INV-3); policy proposals are
- * propose->approve only (the review card records the decision, never auto-applies
- * a default).
+ * Nothing here mutates. Both surfaces are display + recorded-decision: accepting
+ * a recalibration or a policy proposal writes a suggestion_record (NS-INV-3) and
+ * never re-times a block or changes a stored default. Actually applying an
+ * adjusted estimate to planning lands with the future duration_profiles store.
  */
 
 import type { OverrideRecord } from "@lifeos/schemas";

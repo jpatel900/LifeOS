@@ -1654,7 +1654,10 @@ function PlanView({
                       </p>
                     ) : null}
                     {/* S9 (issue 261): sourced duration recalibration from this
-                        area's real actuals — apply-on-accept, never auto. */}
+                        area's real actuals. Informational + records the user's
+                        decision (NS-INV-3); it never re-times this block or
+                        mutates a stored default (that lands with the future
+                        duration_profiles store). */}
                     {(() => {
                       const recal = recalibrationForProposal(
                         proposal.area_id,
@@ -1687,7 +1690,7 @@ function PlanView({
                               }
                               className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
                             >
-                              Use {recal.adjustedMinutes}m
+                              Sounds right
                             </button>
                             <button
                               type="button"
@@ -1703,7 +1706,7 @@ function PlanView({
                               }
                               className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-bold text-[var(--fnt)]"
                             >
-                              Keep {recal.estimateMinutes}m
+                              Dismiss
                             </button>
                           </div>
                         </div>
