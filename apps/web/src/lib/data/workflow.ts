@@ -26,6 +26,7 @@ import {
   ReviewEntrySchema,
   WinRecordSchema,
   RollupSummarySchema,
+  OverrideRecordSchema,
   SoftDeleteAreaInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
@@ -53,6 +54,7 @@ import {
   type ReviewEntry,
   type WinRecord,
   type RollupSummary,
+  type OverrideRecord,
   type SoftDeleteAreaInput,
   type Task,
   type TimeBlockProposal,
@@ -2743,5 +2745,42 @@ export async function listRollupSummaries(
   return {
     provider: "supabase",
     rollupSummaries: parseRollupSummaries(data),
+  };
+}
+
+export interface OverrideRecordsResult {
+  provider: DataProvider;
+  overrideRecords: OverrideRecord[];
+}
+
+// S9 (#261): read the user's override_records for the deterministic override-
+// pattern scan (learning-loop consumer). Read-only; most-recent first.
+export async function listOverrideRecords(
+  client: MinimalSupabaseClient | null,
+): Promise<OverrideRecordsResult> {
+  if (!client) {
+    return { provider: "mock", overrideRecords: [] };
+  }
+
+  await requireSupabaseUser(client, "Sign in before loading learning history.");
+
+  const query = client.from("override_records") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+  const { data, error } = await query
+    .select(overrideRecordColumns)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    overrideRecords: OverrideRecordSchema.array().parse(
+      normalizeSupabaseRows(data),
+    ),
   };
 }

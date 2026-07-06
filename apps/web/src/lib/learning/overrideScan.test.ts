@@ -18,7 +18,7 @@ function rec(
     user_id: "00000000-0000-4000-8000-000000000001",
     area_id: overrides.area_id ?? null,
     policy_identifier: overrides.policy,
-    schema_version: "2.0",
+    schema_version: "meta-learning-event-v2",
     suggestion_id: null,
     subject_type: "task",
     subject_id: "00000000-0000-4000-8000-000000000abc",

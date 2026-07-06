@@ -9,6 +9,7 @@ import {
   listWinRecords,
   createRollupSummary,
   listRollupSummaries,
+  listOverrideRecords,
   createTimeBlockProposal,
   createProject,
   createCaptureItem,
@@ -2042,5 +2043,42 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("supabase");
     expect(result.rollupSummaries).toHaveLength(1);
     expect(result.rollupSummaries[0].summary.counts.wins).toBe(1);
+  });
+
+  it("returns no override records in mock mode", async () => {
+    const result = await listOverrideRecords(null);
+    expect(result.provider).toBe("mock");
+    expect(result.overrideRecords).toEqual([]);
+  });
+
+  it("reads override records most-recent first through Supabase", async () => {
+    const overrideRow = {
+      id: "550e8400-e29b-41d4-a716-446655440b01",
+      user_id: userId,
+      area_id: areaId,
+      policy_identifier: "planning.default_time_block",
+      schema_version: "meta-learning-event-v2",
+      suggestion_id: null,
+      subject_type: "task",
+      subject_id: taskId,
+      override_type: "edited",
+      old_value_json: null,
+      new_value_json: null,
+      reason: null,
+      created_at: "2026-05-10T12:00:00.000Z",
+    };
+    const order = vi
+      .fn()
+      .mockResolvedValue({ data: [overrideRow], error: null });
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const result = await listOverrideRecords(authenticatedClient(from));
+
+    expect(from).toHaveBeenCalledWith("override_records");
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(result.provider).toBe("supabase");
+    expect(result.overrideRecords).toHaveLength(1);
+    expect(result.overrideRecords[0].override_type).toBe("edited");
   });
 });
