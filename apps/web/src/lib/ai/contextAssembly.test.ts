@@ -153,4 +153,47 @@ describe("contextAssembly parse prompt", () => {
       baselineMessages({ rawText })[0].content,
     );
   });
+
+  it("keeps parity when rollupContext is empty or has no highlights/misses", () => {
+    const rawText = "Log the standup notes.";
+    expect(
+      buildParseCaptureMessages({ rawText, rollupContext: [] }),
+    ).toEqual(baselineMessages({ rawText }));
+    expect(
+      buildParseCaptureMessages({
+        rawText,
+        rollupContext: [
+          {
+            areaSlug: "main-job",
+            periodType: "week",
+            periodLabel: "2026-05-01–2026-05-07",
+            highlights: [],
+            misses: [],
+          },
+        ],
+      }),
+    ).toEqual(baselineMessages({ rawText }));
+  });
+
+  it("injects approved rollups as a context source (S8 #260)", () => {
+    const rawText = "What should I focus on this week?";
+    const [, userMessage] = buildParseCaptureMessages({
+      rawText,
+      areaContext: areas,
+      rollupContext: [
+        {
+          areaSlug: "main-job",
+          periodType: "week",
+          periodLabel: "2026-05-01–2026-05-07",
+          highlights: ["Shipped the cockpit", "Cleared the triage backlog"],
+          misses: ["Skipped two deep-work mornings"],
+        },
+      ],
+    });
+
+    expect(userMessage.content).toContain("Recent rollups:");
+    expect(userMessage.content).toContain(
+      "- main-job (week 2026-05-01–2026-05-07): highlights: Shipped the cockpit; Cleared the triage backlog | misses: Skipped two deep-work mornings",
+    );
+  });
 });

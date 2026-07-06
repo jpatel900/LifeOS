@@ -1,6 +1,14 @@
 import { z } from "zod";
-import { CaptureItemSchema, type CaptureItem } from "./entities";
-import { EXECUTION_SESSION_OUTCOMES, REVIEW_TYPES } from "./constants";
+import {
+  CaptureItemSchema,
+  RollupSummaryContentSchema,
+  type CaptureItem,
+} from "./entities";
+import {
+  EXECUTION_SESSION_OUTCOMES,
+  REVIEW_TYPES,
+  ROLLUP_PERIOD_TYPES,
+} from "./constants";
 import { JsonValueSchema } from "./json";
 
 export * from "./constants";
@@ -336,6 +344,28 @@ export const CreateWinRecordInputSchema = z
   );
 
 export type CreateWinRecordInput = z.input<typeof CreateWinRecordInputSchema>;
+
+export const CreateRollupSummaryInputSchema = z
+  .object({
+    area_id: z.string().uuid(),
+    period_type: z.enum(ROLLUP_PERIOD_TYPES),
+    period_start: isoDate,
+    period_end: isoDate,
+    summary: RollupSummaryContentSchema,
+  })
+  .refine(
+    (input) =>
+      new Date(input.period_end).getTime() >=
+      new Date(input.period_start).getTime(),
+    {
+      message: "period_end must be on or after period_start",
+      path: ["period_end"],
+    },
+  );
+
+export type CreateRollupSummaryInput = z.input<
+  typeof CreateRollupSummaryInputSchema
+>;
 
 export const CaptureSchema = CaptureItemSchema;
 export type Capture = CaptureItem;

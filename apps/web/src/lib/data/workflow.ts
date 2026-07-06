@@ -17,6 +17,7 @@ import {
   CreateCaptureItemInputSchema,
   CreateReviewEntryInputSchema,
   CreateWinRecordInputSchema,
+  CreateRollupSummaryInputSchema,
   CreateTaskInputSchema,
   ExecutionSessionSchema,
   MarkExecutionSessionInputSchema,
@@ -24,6 +25,7 @@ import {
   ProjectSchema,
   ReviewEntrySchema,
   WinRecordSchema,
+  RollupSummarySchema,
   SoftDeleteAreaInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
@@ -43,12 +45,14 @@ import {
   type CreateCaptureItemInput,
   type CreateReviewEntryInput,
   type CreateWinRecordInput,
+  type CreateRollupSummaryInput,
   type CreateTaskInput,
   type ExecutionSession,
   type MarkExecutionSessionInput,
   type Project,
   type ReviewEntry,
   type WinRecord,
+  type RollupSummary,
   type SoftDeleteAreaInput,
   type Task,
   type TimeBlockProposal,
@@ -209,6 +213,16 @@ export interface WinRecordsResult {
   winRecords: WinRecord[];
 }
 
+export interface RollupSummaryCreateResult {
+  provider: DataProvider;
+  rollupSummary: RollupSummary;
+}
+
+export interface RollupSummariesResult {
+  provider: DataProvider;
+  rollupSummaries: RollupSummary[];
+}
+
 export type ReviewTaskTargetStatus = Extract<
   Task["status"],
   "active" | "backlog" | "dropped"
@@ -338,6 +352,9 @@ const reviewEntryColumns =
 const winRecordColumns =
   "id,user_id,area_id,source_task_id,source_project_id,title,detail,occurred_at,review_entry_id,created_at";
 
+const rollupSummaryColumns =
+  "id,user_id,area_id,period_type,period_start,period_end,summary,created_at";
+
 const suggestionRecordColumns =
   "id,user_id,area_id,policy_identifier,schema_version,suggestion_type,subject_type,subject_id,suggestion_json,confidence,status,resolution_reason,decided_by,created_at,resolved_at";
 
@@ -427,6 +444,14 @@ function parseWinRecord(row: unknown) {
 
 function parseWinRecords(rows: unknown) {
   return WinRecordSchema.array().parse(normalizeSupabaseRows(rows));
+}
+
+function parseRollupSummary(row: unknown) {
+  return RollupSummarySchema.parse(normalizeSupabaseRow(row));
+}
+
+function parseRollupSummaries(rows: unknown) {
+  return RollupSummarySchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseTasks(rows: unknown) {
@@ -2631,4 +2656,89 @@ export async function listWinRecords(
   if (error) throw new Error(getSupabaseMessage(error));
 
   return { provider: "supabase", winRecords: parseWinRecords(data) };
+}
+
+// S8 (#260): persist a user-APPROVED rollup (NS-INV-4 — drafts never reach
+// here; only an approved rollup is written). Weekly or monthly.
+export async function createRollupSummary(
+  client: MinimalSupabaseClient | null,
+  input: CreateRollupSummaryInput,
+): Promise<RollupSummaryCreateResult> {
+  const parsedInput = CreateRollupSummaryInputSchema.parse(input);
+
+  if (!client) {
+    return {
+      provider: "mock",
+      rollupSummary: parseRollupSummary({
+        id: crypto.randomUUID(),
+        user_id: mockUserId,
+        area_id: parsedInput.area_id,
+        period_type: parsedInput.period_type,
+        period_start: parsedInput.period_start,
+        period_end: parsedInput.period_end,
+        summary: parsedInput.summary,
+        created_at: new Date().toISOString(),
+      }),
+    };
+  }
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before saving rollups.",
+  );
+
+  const query = client.from("rollup_summaries") as {
+    insert: (row: Record<string, unknown>) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+  const { data, error } = await query
+    .insert({
+      user_id: user.id,
+      area_id: parsedInput.area_id,
+      period_type: parsedInput.period_type,
+      period_start: parsedInput.period_start,
+      period_end: parsedInput.period_end,
+      summary: parsedInput.summary,
+    })
+    .select(rollupSummaryColumns)
+    .single();
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    rollupSummary: parseRollupSummary(data),
+  };
+}
+
+// Approved rollups for the review reading section (week-vs-week / month-over-
+// month) and as the rollup context source (NS-INV-1). Most-recent first.
+export async function listRollupSummaries(
+  client: MinimalSupabaseClient | null,
+): Promise<RollupSummariesResult> {
+  if (!client) {
+    return { provider: "mock", rollupSummaries: [] };
+  }
+
+  await requireSupabaseUser(client, "Sign in before loading rollups.");
+
+  const query = client.from("rollup_summaries") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+  const { data, error } = await query
+    .select(rollupSummaryColumns)
+    .order("period_start", { ascending: false });
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    rollupSummaries: parseRollupSummaries(data),
+  };
 }

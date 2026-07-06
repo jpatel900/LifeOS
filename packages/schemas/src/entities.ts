@@ -16,6 +16,7 @@ import {
   HEALTH_CHECK_STATUSES,
   PROJECT_STATUSES,
   REVIEW_TYPES,
+  ROLLUP_PERIOD_TYPES,
   TASK_STATUSES,
   TIME_BLOCK_PROPOSAL_STATUSES,
 } from "./constants";
@@ -253,6 +254,30 @@ export const WinRecordSchema = z.object({
 });
 
 export type WinRecord = z.infer<typeof WinRecordSchema>;
+
+// S8 (#260): the strict rollup summary content (DATA_MODEL §5.7 `summary`
+// jsonb). Whether drafted by AI or composed deterministically from review
+// data, an approved rollup always validates against this shape.
+export const RollupSummaryContentSchema = z.object({
+  highlights: z.array(z.string()),
+  misses: z.array(z.string()),
+  counts: z.record(z.string(), z.number()),
+});
+
+export type RollupSummaryContent = z.infer<typeof RollupSummaryContentSchema>;
+
+export const RollupSummarySchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  area_id: z.string().uuid(),
+  period_type: z.enum(ROLLUP_PERIOD_TYPES),
+  period_start: isoDate,
+  period_end: isoDate,
+  summary: RollupSummaryContentSchema,
+  created_at: z.string().datetime(),
+});
+
+export type RollupSummary = z.infer<typeof RollupSummarySchema>;
 
 export const HealthCheckSchema = z.object({
   id: z.string().uuid(),

@@ -56,6 +56,8 @@ export const EXECUTION_SESSION_OUTCOMES = [
 
 export const REVIEW_TYPES = ["daily", "weekly"] as const;
 
+export const ROLLUP_PERIOD_TYPES = ["week", "month"] as const;
+
 export const HEALTH_CHECK_STATUSES = ["healthy", "watch", "critical"] as const;
 
 export const GOOGLE_CALENDAR_CONNECTION_STATUSES = [
