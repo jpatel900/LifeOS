@@ -4,8 +4,10 @@ import { expect, test, type Page } from "@playwright/test";
 
 const evidenceDir = path.join(process.cwd(), "test-results", "handoff-cockpit");
 
-const routes = [
-  ["today", "/"],
+// Moments pass P7b: `/` is the moments home; the seven-stage routes stay live
+// as demoted surfaces. The overflow sweep checks the moments home at `/` and
+// the cockpit chrome at each demoted stage route.
+const stageRoutes = [
   ["capture", "/capture"],
   ["triage", "/triage"],
   ["plan", "/calendar"],
@@ -49,12 +51,21 @@ async function expectCockpit(page: Page) {
   await expect(page.getByRole("button", { name: "Main Job" })).toBeVisible();
 }
 
-test("desktop cockpit renders every workflow route with no overflow", async ({
+async function expectMomentsHome(page: Page) {
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+}
+
+test("desktop home + every workflow route render with no overflow", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  for (const [stage, route] of routes) {
+  await page.goto("/");
+  await expectMomentsHome(page);
+  await expectNoHorizontalOverflow(page);
+  await captureEvidence(page, `desktop-today.png`);
+
+  for (const [stage, route] of stageRoutes) {
     await page.goto(route);
     await expectCockpit(page);
     await expectNoHorizontalOverflow(page);
@@ -62,12 +73,17 @@ test("desktop cockpit renders every workflow route with no overflow", async ({
   }
 });
 
-test("mobile cockpit renders every workflow route with no overflow", async ({
+test("mobile home + every workflow route render with no overflow", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
 
-  for (const [stage, route] of routes) {
+  await page.goto("/");
+  await expectMomentsHome(page);
+  await expectNoHorizontalOverflow(page);
+  await captureEvidence(page, `mobile-today.png`);
+
+  for (const [stage, route] of stageRoutes) {
     await page.goto(route);
     await expectCockpit(page);
     await expectNoHorizontalOverflow(page);
