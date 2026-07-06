@@ -317,5 +317,25 @@ export type CreateReviewEntryInput = z.input<
   typeof CreateReviewEntryInputSchema
 >;
 
+export const CreateWinRecordInputSchema = z
+  .object({
+    area_id: z.string().uuid(),
+    source_task_id: z.string().uuid().nullable().optional().default(null),
+    source_project_id: z.string().uuid().nullable().optional().default(null),
+    title: z.string().trim().min(1, "A win needs a title."),
+    detail: z.string().trim().min(1).nullable().optional().default(null),
+    occurred_at: isoDate,
+    review_entry_id: z.string().uuid().nullable().optional().default(null),
+  })
+  .refine(
+    (input) => input.source_task_id !== null || input.source_project_id !== null,
+    {
+      message: "A win must reference the task or project it came from.",
+      path: ["source_task_id"],
+    },
+  );
+
+export type CreateWinRecordInput = z.input<typeof CreateWinRecordInputSchema>;
+
 export const CaptureSchema = CaptureItemSchema;
 export type Capture = CaptureItem;

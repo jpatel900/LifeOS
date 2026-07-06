@@ -239,6 +239,21 @@ export const ReviewEntrySchema = z.object({
 
 export type ReviewEntry = z.infer<typeof ReviewEntrySchema>;
 
+export const WinRecordSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  area_id: z.string().uuid(),
+  source_task_id: z.string().uuid().nullable(),
+  source_project_id: z.string().uuid().nullable(),
+  title: z.string().min(1),
+  detail: z.string().nullable(),
+  occurred_at: isoDate,
+  review_entry_id: z.string().uuid().nullable(),
+  created_at: z.string().datetime(),
+});
+
+export type WinRecord = z.infer<typeof WinRecordSchema>;
+
 export const HealthCheckSchema = z.object({
   id: z.string().uuid(),
   user_id: z.string().uuid(),
