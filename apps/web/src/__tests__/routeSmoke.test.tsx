@@ -46,8 +46,16 @@ describe("handoff cockpit route provider wiring", () => {
     expect(shell.props.children).toBe(probe);
   });
 
+  // Post go-live (P7d), `/` renders the moments home; the demoted stage routes
+  // below still render the shared cockpit and stay wired through the provider.
+  it("renders / through the moments home", async () => {
+    renderThroughAppShell(<HomePage />, "/");
+
+    expect(await screen.findByTestId("today-moments")).toBeDefined();
+    expect(screen.queryByTestId("lifeos-cockpit")).toBeNull();
+  });
+
   it.each([
-    ["/", () => <HomePage />, "One move now"],
     ["/capture", () => <CapturePage />, "Save thought"],
     ["/triage", () => <TriagePage />, "Inbox clear"],
     ["/calendar", () => <CalendarPage />, "Hour rail"],

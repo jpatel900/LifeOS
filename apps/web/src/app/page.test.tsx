@@ -25,17 +25,17 @@ describe("HomePage route gate (P7a — NEXT_PUBLIC_MOMENTS_HOME)", () => {
     }
   });
 
-  it("renders the stage cockpit today grid when the flag is off (default)", () => {
+  it("renders the moments home by default (P7d go-live — flag unset)", () => {
     delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-    render(<HomePage />);
-    expect(screen.getByTestId("cockpit-route").textContent).toBe("today");
-    expect(screen.queryByTestId("today-moments-home")).toBeNull();
-  });
-
-  it("renders the moments home when the flag is on", () => {
-    process.env.NEXT_PUBLIC_MOMENTS_HOME = "true";
     render(<HomePage />);
     expect(screen.getByTestId("today-moments-home")).toBeTruthy();
     expect(screen.queryByTestId("cockpit-route")).toBeNull();
+  });
+
+  it('renders the stage cockpit today grid only when explicitly disabled ("false")', () => {
+    process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
+    render(<HomePage />);
+    expect(screen.getByTestId("cockpit-route").textContent).toBe("today");
+    expect(screen.queryByTestId("today-moments-home")).toBeNull();
   });
 });
