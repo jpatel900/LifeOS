@@ -34,6 +34,8 @@ import {
   type CaptureParseState,
   type WorkflowSyncStatus,
 } from "@/lib/WorkflowContext";
+import type { PolicyChangeCandidate } from "@/lib/learning/overrideScan";
+import type { ProposalRecalibrationVM } from "@/lib/learning/learningSurface";
 import { ACCENT_PALETTE, buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import {
   buildCockpitViewModel,
@@ -124,8 +126,17 @@ export function LifeOSCockpit({
     clearWipRefusal,
     swapWipSlot,
     markSession,
+    overridePolicyProposals,
+    decideOverridePolicyProposal,
+    recalibrationForProposal,
+    decideDurationRecalibration,
   } = useWorkflow();
   const [stage, setStage] = useState<CockpitStage>(initialStage);
+  // S9 (issue 261): proposals whose recalibration the user has decided this session,
+  // so the sourced adjustment card resolves once accepted/dismissed.
+  const [decidedRecalIds, setDecidedRecalIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [dark, setDark] = useState(true);
   const [captureText, setCaptureText] = useState("");
   const [isCaptureSaving, setIsCaptureSaving] = useState(false);
@@ -627,6 +638,14 @@ export function LifeOSCockpit({
               onUpdateFirstTinyStep={updateTaskFirstTinyStep}
               onExecute={() => navigate("execute")}
               onCapture={() => navigate("capture")}
+              recalibrationForProposal={recalibrationForProposal}
+              decidedRecalIds={decidedRecalIds}
+              onDecideRecalibration={(proposalId, input, decision) => {
+                decideDurationRecalibration(input, decision);
+                setDecidedRecalIds((current) =>
+                  new Set(current).add(proposalId),
+                );
+              }}
             />
           ) : null}
           {stage === "execute" ? (
@@ -647,6 +666,8 @@ export function LifeOSCockpit({
           {stage === "review" ? (
             <ReviewView
               vm={vm}
+              policyProposals={overridePolicyProposals}
+              onDecidePolicy={decideOverridePolicyProposal}
               onCarryForward={(taskId) => {
                 carryForwardTask(taskId);
                 navigate("plan");
@@ -1363,6 +1384,9 @@ function PlanView({
   onUpdateFirstTinyStep,
   onExecute,
   onCapture,
+  recalibrationForProposal,
+  decidedRecalIds,
+  onDecideRecalibration,
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
   selectedTaskId: string | null;
@@ -1377,6 +1401,16 @@ function PlanView({
   onUpdateFirstTinyStep: (taskId: string, firstTinyStep: string) => void;
   onExecute: () => void;
   onCapture: () => void;
+  recalibrationForProposal: (
+    areaId: string | null,
+    estimateMinutes: number,
+  ) => ProposalRecalibrationVM | null;
+  decidedRecalIds: Set<string>;
+  onDecideRecalibration: (
+    proposalId: string,
+    input: { areaId: string | null; recalibration: ProposalRecalibrationVM },
+    decision: "accepted" | "dismissed",
+  ) => void;
 }) {
   const onlyReadyTaskId = vm.today.length === 1 ? vm.today[0].id : null;
   const taskIdToPlace = selectedTaskId ?? onlyReadyTaskId;
@@ -1619,6 +1653,62 @@ function PlanView({
                         another one.
                       </p>
                     ) : null}
+                    {/* S9 (issue 261): sourced duration recalibration from this
+                        area's real actuals — apply-on-accept, never auto. */}
+                    {(() => {
+                      const recal = recalibrationForProposal(
+                        proposal.area_id,
+                        estimate(task),
+                      );
+                      if (!recal || decidedRecalIds.has(proposal.id))
+                        return null;
+                      return (
+                        <div
+                          data-testid="proposal-recalibration"
+                          className="mt-3 rounded-xl border border-[var(--ln)] bg-[var(--sf3)] px-3 py-2 text-sm"
+                        >
+                          <p className="font-semibold">{recal.label}</p>
+                          <p className="mono mt-1 text-[var(--fnt)]">
+                            Based on {recal.recalibration.sampleCount} completed
+                            sessions in this area.
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onDecideRecalibration(
+                                  proposal.id,
+                                  {
+                                    areaId: proposal.area_id,
+                                    recalibration: recal,
+                                  },
+                                  "accepted",
+                                )
+                              }
+                              className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                            >
+                              Use {recal.adjustedMinutes}m
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onDecideRecalibration(
+                                  proposal.id,
+                                  {
+                                    areaId: proposal.area_id,
+                                    recalibration: recal,
+                                  },
+                                  "dismissed",
+                                )
+                              }
+                              className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-bold text-[var(--fnt)]"
+                            >
+                              Keep {recal.estimateMinutes}m
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {task.first_tiny_step?.trim() ? (
                       <p className="mt-3 rounded-xl bg-[var(--acc-sf)] px-3 py-2 text-sm font-semibold text-[var(--acc2)]">
                         First move: {task.first_tiny_step}
@@ -1899,12 +1989,19 @@ function ExecuteView({
 
 function ReviewView({
   vm,
+  policyProposals,
+  onDecidePolicy,
   onCarryForward,
   onDefer,
   onDrop,
   onSave,
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
+  policyProposals: PolicyChangeCandidate[];
+  onDecidePolicy: (
+    candidate: PolicyChangeCandidate,
+    decision: "accepted" | "declined",
+  ) => void;
   onCarryForward: (taskId: string) => void;
   onDefer: (taskId: string) => void;
   onDrop: (taskId: string) => void;
@@ -2071,6 +2168,52 @@ function ReviewView({
                 className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-3"
               >
                 <p className="font-bold text-[var(--ink)]">{task.title}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {/* S9 (issue 261): override-pattern policy proposals — propose->approve.
+            Approving records the decision; nothing changes automatically. */}
+        {policyProposals.length ? (
+          <div className="mt-6 grid gap-3" data-testid="policy-proposals">
+            <h2 className="text-xl font-bold">Policy proposals</h2>
+            <p className="text-sm text-[var(--mut)]">
+              Patterns from your recent decisions. Approving records your call —
+              nothing changes automatically.
+            </p>
+            {policyProposals.map((candidate) => (
+              <div
+                key={`${candidate.policyIdentifier}-${candidate.areaId ?? "all"}`}
+                data-testid="policy-proposal"
+                className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-[var(--ink)]">
+                      {candidate.policyIdentifier}
+                    </p>
+                    <p className="text-sm text-[var(--mut)]">
+                      You {candidate.latestOverrideType} it —{" "}
+                      {candidate.evidence}.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onDecidePolicy(candidate, "accepted")}
+                      className="min-h-10 rounded-full bg-[var(--acc)] px-4 text-sm font-bold text-[var(--on-acc)]"
+                    >
+                      Approve change
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDecidePolicy(candidate, "declined")}
+                      className="min-h-10 rounded-full border border-[var(--ln2)] px-4 text-sm text-[var(--mut)]"
+                    >
+                      Keep as is
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
