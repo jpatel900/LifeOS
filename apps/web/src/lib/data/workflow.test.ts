@@ -7,6 +7,8 @@ import {
   createWinRecord,
   listWinHarvestCandidates,
   listWinRecords,
+  createRollupSummary,
+  listRollupSummaries,
   createTimeBlockProposal,
   createProject,
   createCaptureItem,
@@ -1950,5 +1952,91 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("supabase");
     expect(result.winRecords).toHaveLength(1);
     expect(result.winRecords[0].title).toBe("Shipped the onboarding flow");
+  });
+
+  const rollupRow = {
+    id: "550e8400-e29b-41d4-a716-446655440a01",
+    user_id: userId,
+    area_id: areaId,
+    period_type: "week",
+    period_start: "2026-05-04",
+    period_end: "2026-05-10",
+    summary: {
+      highlights: ["Shipped onboarding"],
+      misses: [],
+      counts: { wins: 1, completed_sessions: 4, missed_sessions: 0 },
+    },
+    created_at: "2026-05-10T18:00:00.000Z",
+  };
+
+  it("persists an approved weekly rollup through Supabase", async () => {
+    const single = vi.fn().mockResolvedValue({ data: rollupRow, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    const result = await createRollupSummary(authenticatedClient(from), {
+      area_id: areaId,
+      period_type: "week",
+      period_start: "2026-05-04",
+      period_end: "2026-05-10",
+      summary: rollupRow.summary,
+    });
+
+    expect(from).toHaveBeenCalledWith("rollup_summaries");
+    expect(insert).toHaveBeenCalledWith({
+      user_id: userId,
+      area_id: areaId,
+      period_type: "week",
+      period_start: "2026-05-04",
+      period_end: "2026-05-10",
+      summary: rollupRow.summary,
+    });
+    expect(result.provider).toBe("supabase");
+    expect(result.rollupSummary.period_type).toBe("week");
+  });
+
+  it("records an approved rollup in mock mode without a client", async () => {
+    const result = await createRollupSummary(null, {
+      area_id: areaId,
+      period_type: "month",
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      summary: {
+        highlights: ["Launched pricing"],
+        misses: [],
+        counts: { wins: 3 },
+      },
+    });
+
+    expect(result.provider).toBe("mock");
+    expect(result.rollupSummary.period_type).toBe("month");
+    expect(result.rollupSummary.summary.highlights).toEqual(["Launched pricing"]);
+  });
+
+  it("rejects a rollup whose period_end precedes period_start", async () => {
+    await expect(
+      createRollupSummary(null, {
+        area_id: areaId,
+        period_type: "week",
+        period_start: "2026-05-10",
+        period_end: "2026-05-04",
+        summary: { highlights: [], misses: [], counts: {} },
+      }),
+    ).rejects.toThrow(/period_end/);
+  });
+
+  it("reads rollups most-recent first through Supabase", async () => {
+    const order = vi.fn().mockResolvedValue({ data: [rollupRow], error: null });
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const result = await listRollupSummaries(authenticatedClient(from));
+
+    expect(from).toHaveBeenCalledWith("rollup_summaries");
+    expect(order).toHaveBeenCalledWith("period_start", { ascending: false });
+    expect(result.provider).toBe("supabase");
+    expect(result.rollupSummaries).toHaveLength(1);
+    expect(result.rollupSummaries[0].summary.counts.wins).toBe(1);
   });
 });
