@@ -28,6 +28,12 @@ export default defineConfig({
           url: baseURL,
           reuseExistingServer: !process.env.CI,
           timeout: 180_000,
+          // Moments pass P7b: the E2E lane runs the shipping go-live config —
+          // `/` is the moments home. The demoted stage routes (/capture,
+          // /triage, ...) stay live and their specs are unaffected. The code
+          // default (lib/flags.ts) stays OFF so prod is not flipped by merging
+          // this; the actual prod go-live is a separate env change (P7c).
+          env: { NEXT_PUBLIC_MOMENTS_HOME: "true" },
         },
       }),
 });
