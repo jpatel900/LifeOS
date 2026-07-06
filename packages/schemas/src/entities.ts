@@ -56,6 +56,7 @@ export const CaptureItemSchema = z.object({
   raw_text: z.string().min(1),
   raw_audio_ref: z.string().nullable(),
   return_hook: z.string().nullable().optional(),
+  client_capture_id: z.string().nullable().optional(),
   capture_mode: z.enum(AREA_CAPTURE_MODES),
   inferred_area_confidence: z.number().min(0).max(1).nullable(),
   status: z.enum(CAPTURE_ITEM_STATUSES),
