@@ -32,6 +32,10 @@ export interface CaptureOverlayProps {
   onClose(): void;
   initialText?: string;
   onDraftChange?(text: string): void;
+  // G1 floor follow-up: optional "save raw" action — persist the thought
+  // verbatim and skip the AI parse. Omitted => the button is not rendered, so
+  // standalone callers keep the parse-only behavior.
+  onSaveRaw?(text: string, kind: string, returnHook: string | null): void;
 }
 
 export function CaptureOverlay({
@@ -41,6 +45,7 @@ export function CaptureOverlay({
   onClose,
   initialText,
   onDraftChange,
+  onSaveRaw,
 }: CaptureOverlayProps) {
   const [text, setText] = useState("");
   const [selectedKind, setSelectedKind] = useState(kinds[0] ?? "");
@@ -90,6 +95,15 @@ export function CaptureOverlay({
     const trimmed = text.trim();
     if (!trimmed) return;
     onSave(trimmed, selectedKind, returnHook.trim() || null);
+    setText("");
+    setReturnHook("");
+  }
+
+  function handleSaveRaw() {
+    if (!onSaveRaw) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    onSaveRaw(trimmed, selectedKind, returnHook.trim() || null);
     setText("");
     setReturnHook("");
   }
@@ -187,21 +201,37 @@ export function CaptureOverlay({
           })}
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             Enter to save · Shift+Enter for a new line · Esc to close
           </p>
-          <button
-            type="button"
-            onClick={onClose}
-            className={cn(
-              HIT_TARGET_INVISIBLE,
-              "text-xs font-semibold text-muted-foreground hover:text-foreground",
-            )}
-            data-testid="capture-overlay-close"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-3">
+            {onSaveRaw ? (
+              <button
+                type="button"
+                onClick={handleSaveRaw}
+                className={cn(
+                  HIT_TARGET_INVISIBLE,
+                  "text-xs font-semibold text-muted-foreground hover:text-foreground",
+                )}
+                title="Save the thought verbatim, without AI parsing (parsed later at triage)"
+                data-testid="capture-overlay-save-raw"
+              >
+                Save raw
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className={cn(
+                HIT_TARGET_INVISIBLE,
+                "text-xs font-semibold text-muted-foreground hover:text-foreground",
+              )}
+              data-testid="capture-overlay-close"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

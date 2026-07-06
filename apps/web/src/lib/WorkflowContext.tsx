@@ -321,6 +321,13 @@ interface WorkflowContextValue {
     areaId: string | null,
     returnHook?: string | null,
   ) => void;
+  // G1 floor follow-up: persist the thought verbatim, skipping the AI parse
+  // (parsed later at triage). Same offline behavior as submitCaptureText.
+  submitCaptureRaw: (
+    rawText: string,
+    areaId: string | null,
+    returnHook?: string | null,
+  ) => void;
   captureParse: CaptureParseState;
   retryCaptureParseWithMock: () => void;
   // FR-027 (F-G1a): number of raw captures saved offline and not yet synced to
@@ -2541,35 +2548,33 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("online", onOnline);
   }, [refreshUnsyncedCount, syncOfflineQueue]);
 
-  function submitCaptureText(
+  // FR-027: offline → save the raw capture to the durable device queue with NO
+  // parse wait and end synchronously as saved; it syncs to the spine on reconnect
+  // (parse happens later at triage). We deliberately do NOT stage it into local
+  // captureItems — it would double-appear once the reconnect sync loads the
+  // server row. Offline scope is raw capture only (no offline triage).
+  function enqueueOfflineCapture(
     rawText: string,
     areaId: string | null,
     returnHook?: string | null,
   ) {
-    if (captureParse.phase === "parsing") {
-      return;
-    }
+    void enqueueCapture({ rawText, areaId, returnHook: returnHook ?? null })
+      .then(() => refreshUnsyncedCount())
+      .catch(() =>
+        markLocalOnly("Capture could not be saved offline; please try again."),
+      );
+  }
 
-    // FR-027: offline → save the raw capture to the durable device queue with
-    // NO parse wait and end synchronously as saved; it syncs to the spine on
-    // reconnect (parse happens later at triage). We deliberately do NOT stage it
-    // into local captureItems — it would double-appear once the reconnect sync
-    // loads the server row. Offline scope is raw capture only (no offline triage).
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      void enqueueCapture({ rawText, areaId, returnHook: returnHook ?? null })
-        .then(() => refreshUnsyncedCount())
-        .catch(() =>
-          markLocalOnly("Capture could not be saved offline; please try again."),
-        );
-      return;
-    }
-
+  // Stage + persist the raw capture item WITHOUT parsing it. Shared by the
+  // parse-and-save path (submitCaptureText) and the explicit save-raw path
+  // (submitCaptureRaw); the caller decides whether to parse the returned item.
+  function stageAndPersistRawCapture(
+    rawText: string,
+    areaId: string | null,
+    returnHook?: string | null,
+  ) {
     const previous = stateRef.current;
-    const next = submitRawCapture(previous, {
-      rawText,
-      areaId,
-      returnHook,
-    });
+    const next = submitRawCapture(previous, { rawText, areaId, returnHook });
     const localCapture = next.captureItems.find(
       (capture) =>
         !previous.captureItems.some((item) => item.id === capture.id),
@@ -2582,8 +2587,50 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       void persistCapture(localCapture).catch((error) => {
         markPersistedSaveFailure(error);
       });
+    }
+
+    return localCapture;
+  }
+
+  function submitCaptureText(
+    rawText: string,
+    areaId: string | null,
+    returnHook?: string | null,
+  ) {
+    if (captureParse.phase === "parsing") {
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      enqueueOfflineCapture(rawText, areaId, returnHook);
+      return;
+    }
+
+    const localCapture = stageAndPersistRawCapture(rawText, areaId, returnHook);
+    if (localCapture) {
       void parseCaptureIntoDrafts(localCapture, "auto");
     }
+  }
+
+  // G1 floor follow-up: explicit "save raw" — persist the thought verbatim and
+  // SKIP the AI parse. The raw capture item lands in the spine and is parsed
+  // later at triage, exactly like the offline→reconnect path. Gives the operator
+  // control (and speed: no parse wait) when a thought should not be auto-drafted.
+  function submitCaptureRaw(
+    rawText: string,
+    areaId: string | null,
+    returnHook?: string | null,
+  ) {
+    if (captureParse.phase === "parsing") {
+      return;
+    }
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      enqueueOfflineCapture(rawText, areaId, returnHook);
+      return;
+    }
+
+    stageAndPersistRawCapture(rawText, areaId, returnHook);
   }
 
   function retryCaptureParseWithMock() {
@@ -2758,6 +2805,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
     submitCaptureText,
+    submitCaptureRaw,
     captureParse,
     retryCaptureParseWithMock,
     unsyncedCaptureCount,
