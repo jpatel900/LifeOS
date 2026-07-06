@@ -641,3 +641,225 @@ describe("buildCloseVM", () => {
     });
   });
 });
+
+/**
+ * S5 (#257) — calendar-load-aware daily focus. `dailyFocusBudget.test.ts`
+ * unit-tests the pure rule (thresholds/degraded/split) directly; these
+ * tests cover the momentsViewModel integration: budget/degraded exposed on
+ * StartVM, and the focus/deferred item split wired to real state. Fixture
+ * blocks here use *local* hours (matching `deriveFreeHoursFromBlocks`'s
+ * 08:00-18:00 local working window) rather than this file's existing
+ * `atTodayHour` (UTC), so free-hour math is unambiguous regardless of the
+ * test runner's timezone.
+ */
+function atLocalHour(hour: number, minute = 0): string {
+  const d = new Date(NOW);
+  d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+}
+
+describe("buildStartVM — S5 focus budget (#257)", () => {
+  it("empty calendar -> budget 3, not degraded", () => {
+    const vm = buildStartVM(stateWith({}), { now: NOW });
+    expect(vm.focusBudget).toBe(3);
+    expect(vm.focusDegraded).toBe(false);
+  });
+
+  it("normal day (5 busy hours) -> budget 2", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "b1",
+          start_at: atLocalHour(9),
+          end_at: atLocalHour(10),
+        }),
+        makeBlock({
+          id: "b2",
+          start_at: atLocalHour(11),
+          end_at: atLocalHour(13),
+        }),
+        makeBlock({
+          id: "b3",
+          start_at: atLocalHour(15),
+          end_at: atLocalHour(17),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.focusBudget).toBe(2);
+    expect(vm.focusDegraded).toBe(false);
+  });
+
+  it("packed day (8 busy hours) -> budget 1", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "b1",
+          start_at: atLocalHour(8),
+          end_at: atLocalHour(12),
+        }),
+        makeBlock({
+          id: "b2",
+          start_at: atLocalHour(12),
+          end_at: atLocalHour(16),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.focusBudget).toBe(1);
+    expect(vm.focusDegraded).toBe(false);
+  });
+
+  it("degraded: calendarUnavailable -> DEFAULT_FOCUS_BUDGET and focusDegraded true", () => {
+    const vm = buildStartVM(stateWith({}), {
+      now: NOW,
+      calendarUnavailable: true,
+    });
+    expect(vm.focusDegraded).toBe(true);
+    expect(vm.focusBudget).toBe(2); // DEFAULT_FOCUS_BUDGET
+  });
+
+  it("focusItems[0] equals firstMove when firstMove is a task", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t-oldest",
+          title: "Oldest",
+          status: "active",
+          created_at: daysBefore(20),
+        }),
+        makeTask({
+          id: "t-newer",
+          title: "Newer",
+          status: "active",
+          created_at: daysBefore(2),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.firstMove).not.toBeNull();
+    expect(vm.focusItems[0]).toEqual(vm.firstMove);
+    expect(vm.focusItems.map((item) => item.taskId)).toEqual([
+      "t-oldest",
+      "t-newer",
+    ]);
+  });
+
+  it("focusItems[0] equals firstMove when firstMove comes from a now-block (task or not)", () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t-now", title: "Now task", status: "active" })],
+      calendarBlocks: [
+        makeBlock({
+          id: "b-now",
+          task_id: "t-now",
+          start_at: atTodayHour(11),
+          end_at: atTodayHour(13),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.firstMove).toMatchObject({ why: "Scheduled now" });
+    expect(vm.focusItems[0]).toEqual(vm.firstMove);
+  });
+
+  it("firstMove from a now-block with no linked task still heads focusItems, without duplicating any task", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({ id: "t-a", title: "Task A", status: "active" }),
+        makeTask({ id: "t-b", title: "Task B", status: "active" }),
+      ],
+      calendarBlocks: [
+        makeBlock({
+          id: "b-now",
+          task_id: null,
+          start_at: atTodayHour(11),
+          end_at: atTodayHour(13),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.firstMove).toMatchObject({ why: "Scheduled now", taskId: null });
+    expect(vm.focusItems[0]).toEqual(vm.firstMove);
+    // Both active tasks remain in the list once each (no dedup collision
+    // against a null taskId).
+    expect(vm.focusItems.map((item) => item.taskId)).toEqual([
+      null,
+      "t-a",
+      "t-b",
+    ]);
+  });
+
+  it("splits focusItems/deferredItems at the budget, preserving the deferred tail", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({
+          id: "t1",
+          title: "T1",
+          status: "active",
+          created_at: daysBefore(40),
+        }),
+        makeTask({
+          id: "t2",
+          title: "T2",
+          status: "active",
+          created_at: daysBefore(30),
+        }),
+        makeTask({
+          id: "t3",
+          title: "T3",
+          status: "active",
+          created_at: daysBefore(20),
+        }),
+        makeTask({
+          id: "t4",
+          title: "T4",
+          status: "active",
+          created_at: daysBefore(10),
+        }),
+      ],
+      // Packed day -> budget 1. Marked "completed" so neither block is
+      // picked up as firstMove (this fixture is isolated to the
+      // focus/deferred split, not firstMove-from-block precedence, which
+      // is covered separately above).
+      calendarBlocks: [
+        makeBlock({
+          id: "b1",
+          status: "completed",
+          start_at: atLocalHour(8),
+          end_at: atLocalHour(12),
+        }),
+        makeBlock({
+          id: "b2",
+          status: "completed",
+          start_at: atLocalHour(12),
+          end_at: atLocalHour(16),
+        }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.focusBudget).toBe(1);
+    expect(vm.focusItems.map((item) => item.taskId)).toEqual(["t1"]);
+    expect(vm.deferredItems.map((item) => item.taskId)).toEqual([
+      "t2",
+      "t3",
+      "t4",
+    ]);
+  });
+
+  it("deferredItems is empty when the ranked list is within budget", () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Only task", status: "active" })],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.focusBudget).toBe(3);
+    expect(vm.focusItems.map((item) => item.taskId)).toEqual(["t1"]);
+    expect(vm.deferredItems).toEqual([]);
+  });
+});
