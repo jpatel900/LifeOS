@@ -277,4 +277,67 @@ describe("CaptureOverlay", () => {
     expect(closeButton).toHaveClass("min-h-[44px]");
     expect(closeButton).toHaveClass("touch-manipulation");
   });
+
+  // G1 floor follow-up: the optional "save raw" action.
+  describe("save raw", () => {
+    it("does not render the save-raw button unless onSaveRaw is provided", () => {
+      render(
+        <CaptureOverlay open kinds={KINDS} onSave={vi.fn()} onClose={vi.fn()} />,
+      );
+      expect(
+        screen.queryByTestId("capture-overlay-save-raw"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("fires onSaveRaw with the trimmed text, kind, and hook, then clears", () => {
+      const onSave = vi.fn();
+      const onSaveRaw = vi.fn();
+      render(
+        <CaptureOverlay
+          open
+          kinds={KINDS}
+          onSave={onSave}
+          onSaveRaw={onSaveRaw}
+          onClose={vi.fn()}
+        />,
+      );
+
+      const textarea = screen.getByTestId(
+        "capture-overlay-textarea",
+      ) as HTMLTextAreaElement;
+      fireEvent.click(screen.getByTestId("capture-overlay-kind-Idea"));
+      fireEvent.change(textarea, { target: { value: "  loose thought  " } });
+      fireEvent.change(screen.getByTestId("capture-overlay-return-hook"), {
+        target: { value: "back to planning" },
+      });
+      fireEvent.click(screen.getByTestId("capture-overlay-save-raw"));
+
+      expect(onSaveRaw).toHaveBeenCalledWith(
+        "loose thought",
+        "Idea",
+        "back to planning",
+      );
+      // Save raw is the alternative to parse-and-save, not an addition to it.
+      expect(onSave).not.toHaveBeenCalled();
+      expect(textarea.value).toBe("");
+    });
+
+    it("does not fire onSaveRaw for empty or whitespace-only text", () => {
+      const onSaveRaw = vi.fn();
+      render(
+        <CaptureOverlay
+          open
+          kinds={KINDS}
+          onSave={vi.fn()}
+          onSaveRaw={onSaveRaw}
+          onClose={vi.fn()}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+        target: { value: "   " },
+      });
+      fireEvent.click(screen.getByTestId("capture-overlay-save-raw"));
+      expect(onSaveRaw).not.toHaveBeenCalled();
+    });
+  });
 });

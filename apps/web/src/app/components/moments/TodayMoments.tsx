@@ -163,6 +163,7 @@ export function TodayMoments({
     selectedAreaId,
     setSelectedAreaId,
     submitCaptureText,
+    submitCaptureRaw,
     captureParse,
     startTaskSession,
     markSession,
@@ -874,6 +875,13 @@ export function TodayMoments({
           setCaptureOpen(false);
           // Clear the draft only after a successful save — Esc/close must
           // preserve it, so this write happens nowhere else.
+          setCaptureDraft("");
+          writeStoredCaptureDraft("");
+        }}
+        onSaveRaw={(text, _kind, returnHook) => {
+          submitCaptureRaw(text, selectedAreaId, returnHook);
+          showToast("Saved raw");
+          setCaptureOpen(false);
           setCaptureDraft("");
           writeStoredCaptureDraft("");
         }}

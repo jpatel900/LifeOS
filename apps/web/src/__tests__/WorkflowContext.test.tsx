@@ -349,6 +349,51 @@ describe("WorkflowProvider storage fallback", () => {
     );
   });
 
+  it("submitCaptureRaw stages the capture but never parses it", async () => {
+    replaceSessionStorage({});
+
+    const fetchMock = vi.fn(
+      async () => ({ ok: true, json: async () => ({}) }) as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    function RawProbe() {
+      const { state, submitCaptureRaw } = useWorkflow();
+      return (
+        <div>
+          <span data-testid="capture-count">{state.captureItems.length}</span>
+          <span data-testid="draft-count">{state.taskDrafts.length}</span>
+          <button
+            type="button"
+            onClick={() => submitCaptureRaw("Buy milk", "area-main-job")}
+          >
+            Save raw
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <WorkflowProvider>
+        <RawProbe />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save raw" }));
+
+    // The raw capture is staged immediately...
+    await waitFor(() => {
+      expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+    });
+    // ...but it is never parsed: no draft appears and the parse route is
+    // never called (the operator parses it later at triage).
+    expect(screen.getByTestId("draft-count")).toHaveTextContent("0");
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/parse-capture",
+      expect.anything(),
+    );
+  });
+
   it("keeps raw capture visible without drafts when parsing fails", async () => {
     replaceSessionStorage({});
 
