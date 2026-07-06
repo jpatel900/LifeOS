@@ -1839,15 +1839,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   );
 
   // The sourced duration recalibration for a proposal in `areaId`, or null when
-  // the area's actuals don't justify one. Pure read over loaded session actuals.
+  // the area's actuals don't justify one. Reads the live reducer state (not
+  // stateRef, which lags a render behind) because this is called during render.
   const recalibrationForProposal = useCallback(
     (areaId: string | null, estimateMinutes: number) =>
       buildProposalRecalibration(
-        stateRef.current.executionSessions,
+        state.executionSessions,
         areaId,
         estimateMinutes,
       ),
-    [],
+    [state.executionSessions],
   );
 
   // Record the user's decision on a shown recalibration (apply-on-accept). The

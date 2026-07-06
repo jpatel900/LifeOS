@@ -1987,7 +1987,7 @@ function ExecuteView({
   );
 }
 
-function ReviewView({
+export function ReviewView({
   vm,
   policyProposals,
   onDecidePolicy,
