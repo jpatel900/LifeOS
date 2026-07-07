@@ -85,6 +85,7 @@ import {
   listPeople,
   listExecutionReviewItems,
   listOverrideRecords,
+  listSuggestionRecords,
   listPlanningItems,
   markExecutionSession,
   recordCommitmentProposal,
@@ -106,7 +107,7 @@ import {
   type ProposalRecalibrationVM,
 } from "./learning/learningSurface";
 import type { PolicyChangeCandidate } from "./learning/overrideScan";
-import type { OverrideRecord } from "@lifeos/schemas";
+import type { OverrideRecord, SuggestionRecord } from "@lifeos/schemas";
 import { normalizePersonName, resolvePersonMention } from "./data/personLinks";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import {
@@ -1146,6 +1147,31 @@ function loadStoredStateFromSession(): {
   }
 }
 
+// E2 (#261 follow-up): the stable (policy, area) key for a policy-change
+// proposal. Module-level so the persisted-decision seeding (in the load effect)
+// and the in-render policyProposalKey share ONE format — they must match or a
+// decided proposal would not stay suppressed across reloads.
+function policyDecisionKey(
+  policyIdentifier: string,
+  areaId: string | null,
+): string {
+  return `${policyIdentifier}::${areaId ?? ""}`;
+}
+
+// E2 (#261 follow-up): the (policy, area) keys the user has already decided,
+// derived from persisted `policy_change` suggestion_records. Every such record
+// IS a recorded decision (proposals are computed from override_records, never
+// persisted), so filtering by suggestion_type alone captures all decisions.
+export function decidedPolicyKeysFromSuggestionRecords(
+  records: SuggestionRecord[],
+): string[] {
+  return records
+    .filter((record) => record.suggestion_type === "policy_change")
+    .map((record) =>
+      policyDecisionKey(record.policy_identifier, record.area_id),
+    );
+}
+
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(
     workflowReducer,
@@ -1326,6 +1352,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => {
           // Non-fatal: the review surface simply shows no policy proposals.
+        });
+
+      // E2 (#261 follow-up): seed decidedPolicyKeys from prior-session decisions
+      // so an accepted/declined policy proposal stays hidden across reloads, not
+      // just within the session that decided it. Merge (never replace) so any
+      // decision made this session before the load resolves is preserved.
+      void listSuggestionRecords(client)
+        .then((result) => {
+          if (result.provider !== "supabase") return;
+          const decided = decidedPolicyKeysFromSuggestionRecords(
+            result.suggestionRecords,
+          );
+          if (decided.length === 0) return;
+          setDecidedPolicyKeys((current) => new Set([...current, ...decided]));
+        })
+        .catch(() => {
+          // Non-fatal: a decided proposal may reappear until it is re-decided.
         });
     },
     [buildDropLocalIds, markAccountSynced, markLocalOnly],
@@ -1829,7 +1872,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // S9 (#261): a stable key for a (policy, area) proposal so a decided proposal
   // is hidden without a reload. Mirrors the scan's grouping.
   const policyProposalKey = (candidate: PolicyChangeCandidate) =>
-    `${candidate.policyIdentifier}::${candidate.areaId ?? ""}`;
+    policyDecisionKey(candidate.policyIdentifier, candidate.areaId);
 
   // Override-pattern proposals still awaiting the user's decision this session.
   const overridePolicyProposals = buildPolicyProposals(overrideRecords).filter(

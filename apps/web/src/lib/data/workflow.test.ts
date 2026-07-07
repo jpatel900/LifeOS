@@ -10,6 +10,7 @@ import {
   createRollupSummary,
   listRollupSummaries,
   listOverrideRecords,
+  listSuggestionRecords,
   createTimeBlockProposal,
   createProject,
   createCaptureItem,
@@ -2274,5 +2275,44 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("supabase");
     expect(result.overrideRecords).toHaveLength(1);
     expect(result.overrideRecords[0].override_type).toBe("edited");
+  });
+
+  it("returns no suggestion records in mock mode", async () => {
+    const result = await listSuggestionRecords(null);
+    expect(result.provider).toBe("mock");
+    expect(result.suggestionRecords).toEqual([]);
+  });
+
+  it("reads suggestion records most-recent first through Supabase", async () => {
+    const suggestionRow = {
+      id: "550e8400-e29b-41d4-a716-446655440c01",
+      user_id: userId,
+      area_id: areaId,
+      policy_identifier: "planning.default_time_block",
+      schema_version: "meta-learning-event-v2",
+      suggestion_type: "policy_change",
+      subject_type: "policy",
+      subject_id: null,
+      suggestion_json: null,
+      confidence: null,
+      status: "accepted",
+      resolution_reason: null,
+      decided_by: "user",
+      created_at: "2026-05-11T12:00:00.000Z",
+      resolved_at: "2026-05-11T12:00:00.000Z",
+    };
+    const order = vi
+      .fn()
+      .mockResolvedValue({ data: [suggestionRow], error: null });
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const result = await listSuggestionRecords(authenticatedClient(from));
+
+    expect(from).toHaveBeenCalledWith("suggestion_records");
+    expect(order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(result.provider).toBe("supabase");
+    expect(result.suggestionRecords).toHaveLength(1);
+    expect(result.suggestionRecords[0].suggestion_type).toBe("policy_change");
   });
 });
