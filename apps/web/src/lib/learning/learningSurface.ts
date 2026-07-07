@@ -12,7 +12,7 @@
  * adjusted estimate to planning lands with the future duration_profiles store.
  */
 
-import type { OverrideRecord } from "@lifeos/schemas";
+import type { DurationProfile, OverrideRecord } from "@lifeos/schemas";
 import type { Phase2MockExecutionSession } from "../types";
 import {
   computeDurationRecalibration,
@@ -93,4 +93,53 @@ export function buildPolicyProposals(
   config: OverridePatternConfig = DEFAULT_OVERRIDE_PATTERN_CONFIG,
 ): PolicyChangeCandidate[] {
   return scanOverridePatterns(overrideRecords, config);
+}
+
+/**
+ * E1 (issue #456 follow-up) — the `task_type` a duration profile is stored under.
+ *
+ * The recalibration signal is inherently AREA-scoped: `execution_sessions` carry
+ * no task_type, so `computeDurationRecalibration` compares planned vs actual
+ * across the whole area. The evidence line the user accepts says "this AREA runs
+ * 1.4x" — so we apply under the SAME key we describe. A single fixed sentinel
+ * keeps `duration_profiles.task_type` populated (NOT NULL, §5.3 shape preserved)
+ * while behaving area-wide, and reserves room for a future task_type-aware
+ * computation without a schema change. Invariant: evidence-key == apply-key.
+ */
+export const AREA_DURATION_TASK_TYPE = "__area__" as const;
+
+/** The accepted multiplier + sample count stored for an area, or null. */
+export function durationProfileForArea(
+  profiles: DurationProfile[],
+  persistedAreaId: string | null,
+): DurationProfile | null {
+  if (!persistedAreaId) return null;
+  return (
+    profiles.find(
+      (profile) =>
+        profile.area_id === persistedAreaId &&
+        profile.task_type === AREA_DURATION_TASK_TYPE,
+    ) ?? null
+  );
+}
+
+/**
+ * The adjusted default duration for a task in `persistedAreaId`, applying the
+ * area's accepted recalibration multiplier to `estimateMinutes`. Null when no
+ * profile has been accepted for the area yet (planning uses the raw estimate) or
+ * the estimate is unusable. This is what "apply-on-accept" reads: once the user
+ * accepts a recalibration, future blocks in that area default to this value.
+ */
+export function applyStoredDuration(
+  profiles: DurationProfile[],
+  persistedAreaId: string | null,
+  estimateMinutes: number,
+): number | null {
+  const profile = durationProfileForArea(profiles, persistedAreaId);
+  if (!profile) return null;
+  if (!Number.isFinite(estimateMinutes) || estimateMinutes <= 0) return null;
+  return applyRecalibration(
+    estimateMinutes,
+    profile.estimate_stats_json.multiplier,
+  );
 }
