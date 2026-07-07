@@ -16,6 +16,7 @@ export const USER_DATA_EXPORT_TABLES = [
   "review_entries",
   "win_records",
   "rollup_summaries",
+  "duration_profiles",
   "external_write_events",
   "suggestion_records",
   "override_records",
