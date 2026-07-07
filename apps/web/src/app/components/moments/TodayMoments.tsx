@@ -18,6 +18,9 @@ import { StartMoment } from "./StartMoment";
 import { FlowMoment } from "./FlowMoment";
 import { CloseMoment, type CloseWinVM } from "./CloseMoment";
 import type { RollupDraftVM } from "./momentsViewModel";
+import type { RollupSummaryContent } from "@lifeos/schemas";
+import { requestRollupProse } from "@/lib/ai/rollupProseClient";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 import { buildProgressionNodes } from "./progressionNodes";
@@ -398,6 +401,73 @@ export function TodayMoments({
           !approvedRollupAreaIds.has(draft.areaId),
       ),
     [closeVM.rollupDrafts, dismissedRollupAreaIds, approvedRollupAreaIds],
+  );
+  // E3 (#260 follow-up): AI-prose enhancement for pending rollup drafts, keyed
+  // by area for the session. The server rephrases items 1:1 with counts held
+  // fixed; requestRollupProse falls back to the deterministic draft on any
+  // failure, so this is purely additive — the rollup always shows and stays
+  // approvable. Skipped entirely in demo/mock (no real account, no server key).
+  const [enhancedRollupSummaries, setEnhancedRollupSummaries] = useState<
+    Record<string, RollupSummaryContent>
+  >({});
+  // Areas already requested this session — a ref (not the state) so it can't be
+  // in the effect deps. Marking BEFORE the await dedupes across effect re-runs
+  // and prevents a second in-flight request per area (no duplicate AI calls /
+  // ai_call_traces rows).
+  const requestedRollupAreaIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const client = createSupabaseBrowserClient();
+    if (!client) {
+      return;
+    }
+    const toRequest = pendingRollups.filter(
+      (draft) => !requestedRollupAreaIdsRef.current.has(draft.areaId),
+    );
+    if (toRequest.length === 0) {
+      return;
+    }
+    for (const draft of toRequest) {
+      requestedRollupAreaIdsRef.current.add(draft.areaId);
+    }
+    let cancelled = false;
+    void (async () => {
+      const accessToken =
+        (await client.auth.getSession()).data.session?.access_token ?? null;
+      for (const draft of toRequest) {
+        if (cancelled) {
+          return;
+        }
+        const summary = await requestRollupProse(
+          {
+            areaLabel: draft.areaLabel,
+            periodType: "week",
+            periodLabel: draft.periodLabel,
+            draft: draft.summary,
+          },
+          { accessToken },
+        );
+        if (cancelled) {
+          return;
+        }
+        setEnhancedRollupSummaries((prev) =>
+          prev[draft.areaId] ? prev : { ...prev, [draft.areaId]: summary },
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingRollups]);
+  // Swap in the enhanced prose where it has resolved; the deterministic draft
+  // shows until then (and stays if enhancement failed). Approve persists exactly
+  // what is shown (counts are identical either way).
+  const displayedRollups = useMemo(
+    () =>
+      pendingRollups.map((draft) => {
+        const enhanced = enhancedRollupSummaries[draft.areaId];
+        return enhanced ? { ...draft, summary: enhanced } : draft;
+      }),
+    [pendingRollups, enhancedRollupSummaries],
   );
   const handleApproveRollup = useCallback(
     (draft: RollupDraftVM) => {
@@ -839,7 +909,7 @@ export function TodayMoments({
               vm={closeVM}
               pendingWins={pendingWins}
               confirmedWins={confirmedWins}
-              pendingRollups={pendingRollups}
+              pendingRollups={displayedRollups}
               approvedRollups={approvedRollups}
               onCloseDay={() => {
                 saveReview();
