@@ -30,6 +30,10 @@ on:
 
 permissions:
   contents: read
+  # To re-dispatch Migration Drift after a successful apply so it flips green,
+  # instead of leaving the transient red it shows on the same merge push (drift
+  # is ~5s and reads the ledger BEFORE this slower apply commits).
+  actions: write
 
 # Never let two applies overlap (two quick merges); do not cancel an in-flight
 # apply — a half-applied transaction is worse than a queued one.
@@ -53,6 +57,7 @@ jobs:
       - name: Apply pending migrations to production
         env:
           MIGRATOR_URL: ${{ secrets.SUPABASE_PROD_MIGRATOR_URL }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -100,6 +105,10 @@ jobs:
           fi
 
           # Transactional apply; ON_ERROR_STOP aborts (and rolls back) on any error.
+          # NOTE: the whole batch runs inside one begin;...commit; — a statement
+          # that cannot run in a transaction (e.g. `create index concurrently`)
+          # will fail the job. That's rare and additive; apply such a migration
+          # manually and record its ledger row, then this stays green.
           psql "$MIGRATOR_URL" -v ON_ERROR_STOP=1 -f /tmp/migration-apply.sql
 
           # Verify prod is now in sync with the repo.
@@ -113,3 +122,8 @@ jobs:
           fi
 
           echo "Production is now in sync with the repo migrations."
+
+          # Re-run the drift check so it flips GREEN now, instead of the stale RED
+          # it showed on this same push (it read the ledger before this commit).
+          gh workflow run migration-drift.yml \
+            || echo "::warning::Could not dispatch Migration Drift; it will confirm green on its next run."
