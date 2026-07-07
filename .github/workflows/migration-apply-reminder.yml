@@ -1,8 +1,8 @@
-# U2b (migration-drift prevention): when a PR ADDS a migration, remind that prod
-# migrations are manual and name the exact command to generate the apply SQL.
-# Informational only (a warning annotation + a job summary) — it is NOT a merge
-# gate: the human apply step is the real control, and this exists so a merged
-# migration can never again be forgotten (the C3/C4 gap).
+# U2b (migration-drift prevention): when a PR ADDS a migration, note how prod
+# apply happens. Since migration-apply.yml landed, a merged additive migration
+# AUTO-APPLIES to prod (zero-touch); this reminder points at that and names the
+# manual runbook only as the fallback (auto-apply secret absent, or the
+# destructive-statement guard halts). Informational only — not a merge gate.
 name: Migration Apply Reminder
 
 on:
@@ -30,11 +30,13 @@ jobs:
             echo "No newly-added migration files in this PR."
             exit 0
           fi
-          echo "::warning title=Prod migration apply required::This PR adds migration(s). Prod migrations are MANUAL (Vercel never pushes them). After merge, run 'pnpm drift:assemble <files>' and apply the output in the Supabase SQL Editor, then re-run Migration Drift."
+          echo "::warning title=Prod migration will auto-apply on merge::This PR adds migration(s). On merge, the Migration Apply workflow applies them to prod automatically (zero-touch) and Migration Drift confirms green. Watch both runs. Fallback if auto-apply is off/halted: 'pnpm drift:assemble <files>' → paste in the Supabase SQL Editor."
           {
-            echo "### ⚠️ This PR adds migrations — prod apply required on merge"
+            echo "### 🛠️ This PR adds migrations — auto-apply on merge"
             echo ""
-            echo "Prod migrations are **manual** — Vercel never pushes them. After this merges, generate the paste-ready apply SQL:"
+            echo "On merge, **Migration Apply** applies these to prod automatically (zero-touch), then **Migration Drift** confirms green. Watch both workflow runs after merge."
+            echo ""
+            echo "**Fallback** — only if auto-apply is disabled (secret absent) or halts (destructive-statement guard): generate the paste-ready SQL and apply it manually:"
             echo ""
             echo '```bash'
             printf 'pnpm drift:assemble \\\n'
@@ -44,5 +46,5 @@ jobs:
             printf '  --date=$(date +%%F)\n'
             echo '```'
             echo ""
-            echo "Paste the output into the Supabase SQL Editor and run it, then re-run the **Migration Drift** workflow until it reports green."
+            echo "Paste the output into the Supabase SQL Editor and run it, then re-run **Migration Drift** until green."
           } >> "$GITHUB_STEP_SUMMARY"

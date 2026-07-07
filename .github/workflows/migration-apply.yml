@@ -1,0 +1,115 @@
+# Auto-applies pending production migrations after they merge to main
+# (zero-touch), so the manual "assemble SQL + paste in the Supabase SQL editor"
+# runbook is no longer needed for the common additive case. Detection stays in
+# migration-drift.yml; THIS workflow is the applier.
+#
+# SAFETY RAILS (owner-approved graduation of the manual prod-DDL gate):
+#   * Additive-only: every migration on main is additive (NS-INV-2) and already
+#     passed the Migrations+RLS lane against real Postgres before it merged.
+#   * Destructive-statement guard: the job refuses to auto-apply if the assembled
+#     SQL contains drop table / drop column / truncate / delete from, and halts
+#     for manual review instead (drop function/trigger/policy — used by additive
+#     RPC-signature migrations — are allowed).
+#   * Idempotent: only versions missing from prod's ledger are applied, so a
+#     re-run (or a race) never double-applies.
+#   * Transactional + fail-loud: the assembled SQL is begin;...commit; applied
+#     with ON_ERROR_STOP=1, so any failure rolls back and the job goes RED.
+#     migration-drift.yml stays RED until prod is caught up — nothing is silent.
+#   * Requires a DDL-privileged secret SUPABASE_PROD_MIGRATOR_URL, DISTINCT from
+#     the read-only SUPABASE_PROD_DB_URL the drift check uses. Absent => skip
+#     (so the workflow is inert until the owner opts in by adding the secret).
+name: Migration Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two applies overlap (two quick merges); do not cancel an in-flight
+# apply — a half-applied transaction is worse than a queued one.
+concurrency:
+  group: migration-apply-prod
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply pending prod migrations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply pending migrations to production
+        env:
+          MIGRATOR_URL: ${{ secrets.SUPABASE_PROD_MIGRATOR_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${MIGRATOR_URL:-}" ]; then
+            echo "::warning::SUPABASE_PROD_MIGRATOR_URL secret is not set; skipping auto-apply (manual runbook still applies)."
+            exit 0
+          fi
+
+          local_versions=$(basename -s .sql supabase/migrations/*.sql | cut -d_ -f1 | sort)
+          remote_versions=$(psql "$MIGRATOR_URL" -tAc \
+            "select version from supabase_migrations.schema_migrations order by version" | sort)
+
+          missing=$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions") || true)
+
+          if [ -z "$missing" ]; then
+            echo "Production already has all $(printf '%s\n' "$local_versions" | wc -l) repo migrations. Nothing to apply."
+            exit 0
+          fi
+
+          echo "Missing migrations to apply:"
+          printf '  %s\n' "$missing"
+
+          files=()
+          for version in $missing; do
+            match=$(ls supabase/migrations/${version}_*.sql 2>/dev/null | head -1 || true)
+            if [ -z "$match" ]; then
+              echo "::error::No migration file found for missing version ${version}."
+              exit 1
+            fi
+            files+=("$match")
+          done
+
+          # Assemble one transaction (DDL + ledger insert) via the same script the
+          # manual runbook uses. Pure Node, no install needed.
+          node scripts/agent/assemble-migration-sql.mjs "${files[@]}" --date="$(date +%F)" > /tmp/migration-apply.sql
+
+          echo "----- assembled SQL -----"
+          cat /tmp/migration-apply.sql
+          echo "-------------------------"
+
+          # Destructive-statement guard: additive migrations never carry these.
+          if grep -iE 'drop[[:space:]]+table|drop[[:space:]]+column|truncate|delete[[:space:]]+from' /tmp/migration-apply.sql; then
+            echo "::error::Assembled SQL contains a destructive statement — refusing to auto-apply. Review and apply manually via the drift-response runbook."
+            exit 1
+          fi
+
+          # Transactional apply; ON_ERROR_STOP aborts (and rolls back) on any error.
+          psql "$MIGRATOR_URL" -v ON_ERROR_STOP=1 -f /tmp/migration-apply.sql
+
+          # Verify prod is now in sync with the repo.
+          remote_after=$(psql "$MIGRATOR_URL" -tAc \
+            "select version from supabase_migrations.schema_migrations order by version" | sort)
+          remaining=$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_after") || true)
+          if [ -n "$remaining" ]; then
+            echo "::error::Apply finished but production is still missing versions:"
+            printf '  %s\n' "$remaining"
+            exit 1
+          fi
+
+          echo "Production is now in sync with the repo migrations."
