@@ -1,0 +1,48 @@
+# U2b (migration-drift prevention): when a PR ADDS a migration, remind that prod
+# migrations are manual and name the exact command to generate the apply SQL.
+# Informational only (a warning annotation + a job summary) — it is NOT a merge
+# gate: the human apply step is the real control, and this exists so a merged
+# migration can never again be forgotten (the C3/C4 gap).
+name: Migration Apply Reminder
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+
+permissions:
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Flag added migrations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          added=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- 'supabase/migrations/**/*.sql' || true)
+          if [ -z "$added" ]; then
+            echo "No newly-added migration files in this PR."
+            exit 0
+          fi
+          echo "::warning title=Prod migration apply required::This PR adds migration(s). Prod migrations are MANUAL (Vercel never pushes them). After merge, run 'pnpm drift:assemble <files>' and apply the output in the Supabase SQL Editor, then re-run Migration Drift."
+          {
+            echo "### ⚠️ This PR adds migrations — prod apply required on merge"
+            echo ""
+            echo "Prod migrations are **manual** — Vercel never pushes them. After this merges, generate the paste-ready apply SQL:"
+            echo ""
+            echo '```bash'
+            printf 'pnpm drift:assemble \\\n'
+            for f in $added; do
+              printf '  %s \\\n' "$f"
+            done
+            printf '  --date=$(date +%%F)\n'
+            echo '```'
+            echo ""
+            echo "Paste the output into the Supabase SQL Editor and run it, then re-run the **Migration Drift** workflow until it reports green."
+          } >> "$GITHUB_STEP_SUMMARY"
