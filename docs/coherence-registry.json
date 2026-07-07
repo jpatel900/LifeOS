@@ -446,6 +446,11 @@
       "id": "parse_capture.v3",
       "fr": "FR-005",
       "note": "Parse-capture prompt contract version used by the AI context assembly path."
+    },
+    {
+      "id": "rollup_prose.v1",
+      "fr": "FR-005",
+      "note": "Rollup-prose enhancement prompt contract version used by the AI context assembly path (E3)."
     }
   ]
 }
