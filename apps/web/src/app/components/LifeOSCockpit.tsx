@@ -79,6 +79,22 @@ function estimate(task: { estimated_minutes_high: number | null }) {
   return task.estimated_minutes_high ?? 45;
 }
 
+// The scheduled length of a proposal in whole minutes (E1: apply-on-accept
+// retimes proposed_end, so this reflects the adjusted duration once applied).
+function proposalMinutes(proposal: {
+  proposed_start: string;
+  proposed_end: string;
+}) {
+  return Math.max(
+    1,
+    Math.round(
+      (new Date(proposal.proposed_end).getTime() -
+        new Date(proposal.proposed_start).getTime()) /
+        60000,
+    ),
+  );
+}
+
 function ringStyle(value: number, total: number, radius: number) {
   const dash = 2 * Math.PI * radius;
   const safeTotal = Math.max(total, 1);
@@ -129,6 +145,7 @@ export function LifeOSCockpit({
     overridePolicyProposals,
     decideOverridePolicyProposal,
     recalibrationForProposal,
+    appliedDurationForArea,
     decideDurationRecalibration,
   } = useWorkflow();
   const [stage, setStage] = useState<CockpitStage>(initialStage);
@@ -399,8 +416,12 @@ export function LifeOSCockpit({
 
   function createProposalForSelectedTask(taskId: string, hour: number) {
     const task = state.tasks.find((item) => item.id === taskId);
-    const minutes =
+    const baseMinutes =
       task?.estimated_minutes_high ?? task?.estimated_minutes_low ?? 45;
+    // E1 apply-on-accept: if the user has accepted a recalibration for this
+    // area, new blocks default to the adjusted duration.
+    const minutes =
+      appliedDurationForArea(task?.area_id ?? null, baseMinutes) ?? baseMinutes;
     const start = new Date();
     start.setHours(hour, 0, 0, 0);
     const end = new Date(start.getTime() + minutes * 60 * 1000);
@@ -639,6 +660,7 @@ export function LifeOSCockpit({
               onExecute={() => navigate("execute")}
               onCapture={() => navigate("capture")}
               recalibrationForProposal={recalibrationForProposal}
+              appliedDurationForArea={appliedDurationForArea}
               decidedRecalIds={decidedRecalIds}
               onDecideRecalibration={(proposalId, input, decision) => {
                 decideDurationRecalibration(input, decision);
@@ -1385,6 +1407,7 @@ function PlanView({
   onExecute,
   onCapture,
   recalibrationForProposal,
+  appliedDurationForArea,
   decidedRecalIds,
   onDecideRecalibration,
 }: {
@@ -1405,10 +1428,19 @@ function PlanView({
     areaId: string | null,
     estimateMinutes: number,
   ) => ProposalRecalibrationVM | null;
+  appliedDurationForArea: (
+    areaId: string | null,
+    estimateMinutes: number,
+  ) => number | null;
   decidedRecalIds: Set<string>;
   onDecideRecalibration: (
     proposalId: string,
-    input: { areaId: string | null; recalibration: ProposalRecalibrationVM },
+    input: {
+      proposalId: string;
+      proposedStart: string;
+      areaId: string | null;
+      recalibration: ProposalRecalibrationVM;
+    },
     decision: "accepted" | "dismissed",
   ) => void;
 }) {
@@ -1619,8 +1651,12 @@ function PlanView({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-bold">{task.title}</p>
-                        <p className="mono mt-1 text-sm text-[var(--fnt)]">
-                          {formatHour(hour)} · {proposal.status}
+                        <p
+                          data-testid="proposal-duration"
+                          className="mono mt-1 text-sm text-[var(--fnt)]"
+                        >
+                          {formatHour(hour)} · {proposalMinutes(proposal)}m ·{" "}
+                          {proposal.status}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1653,11 +1689,12 @@ function PlanView({
                         another one.
                       </p>
                     ) : null}
-                    {/* S9 (issue 261): sourced duration recalibration from this
-                        area's real actuals. Informational + records the user's
-                        decision (NS-INV-3); it never re-times this block or
-                        mutates a stored default (that lands with the future
-                        duration_profiles store). */}
+                    {/* E1 (issue 456): sourced duration recalibration from this
+                        area's real actuals. Accepting APPLIES it — records the
+                        decision (NS-INV-3), retimes this pending block to the
+                        adjusted duration now, and stores a per-area profile so
+                        future blocks in the area default to it (the card then
+                        stops re-nagging). Keep keeps the original estimate. */}
                     {(() => {
                       const recal = recalibrationForProposal(
                         proposal.area_id,
@@ -1665,6 +1702,12 @@ function PlanView({
                       );
                       if (!recal || decidedRecalIds.has(proposal.id))
                         return null;
+                      const decideInput = {
+                        proposalId: proposal.id,
+                        proposedStart: proposal.proposed_start,
+                        areaId: proposal.area_id,
+                        recalibration: recal,
+                      };
                       return (
                         <div
                           data-testid="proposal-recalibration"
@@ -1681,32 +1724,26 @@ function PlanView({
                               onClick={() =>
                                 onDecideRecalibration(
                                   proposal.id,
-                                  {
-                                    areaId: proposal.area_id,
-                                    recalibration: recal,
-                                  },
+                                  decideInput,
                                   "accepted",
                                 )
                               }
                               className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
                             >
-                              Sounds right
+                              Use {recal.adjustedMinutes}m
                             </button>
                             <button
                               type="button"
                               onClick={() =>
                                 onDecideRecalibration(
                                   proposal.id,
-                                  {
-                                    areaId: proposal.area_id,
-                                    recalibration: recal,
-                                  },
+                                  decideInput,
                                   "dismissed",
                                 )
                               }
                               className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-bold text-[var(--fnt)]"
                             >
-                              Dismiss
+                              Keep {recal.estimateMinutes}m
                             </button>
                           </div>
                         </div>
