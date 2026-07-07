@@ -56,6 +56,14 @@ Entry format: Situation / Move / Why it worked / Evidence / Reuse trigger.
 - **Evidence:** PR #361; the `429` log line of 2026-07-05.
 - **Reuse trigger:** Any catch-and-degrade path — the degrade may be silent for the user, never for the operator.
 
+## Generate + flag, don't rely on remembering (manual prod-apply gate)
+
+- **Situation:** Prod migrations are manual (Vercel never pushes them); the apply step relied on a human remembering to hand-assemble apply SQL at merge time — and a merge dropped it, leaving prod two days behind (see FAILURES: the C3/C4 gap).
+- **Move:** Keep the human gate on prod DDL, but remove the remembering — a one-command generator (`pnpm drift:assemble`) that turns merged migration files into exact paste-ready SQL, a PR check that flags any migration-adding PR with that command, and a `pnpm status` line that surfaces a RED drift with the fix.
+- **Why it worked:** The gap was never "the SQL was wrong" — the Migrations+RLS lane already proves correctness. It was "nobody generated or remembered it." Automating generation + surfacing (not application) closes the gap without weakening human control over irreversible prod DDL.
+- **Evidence:** PR #453 (assembler, Codex) + the U2b integration; the generator reproduced the owner's hand-assembled `drift-fix-c3-c4` ledger byte-for-byte.
+- **Reuse trigger:** Any manual, easy-to-forget step gated behind a human — generate the artifact and surface the reminder; keep the gate, kill the remembering.
+
 ---
 
 _Seeded 2026-07-05 from the first-prod-smoke + delegation-lane session._

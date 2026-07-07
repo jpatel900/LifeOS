@@ -290,15 +290,78 @@ function printMainHealth() {
   return { runs };
 }
 
+// U2b: surface Migration Drift prominently in the owner queue. Prod migrations
+// are manual (Vercel never pushes them), so a RED drift means prod is behind
+// main. We can't reach prod from here, but we can name the run and the exact
+// `pnpm drift:assemble` command that turns a merged migration into apply SQL.
+function printMigrationDrift() {
+  section("MIGRATION DRIFT");
+  try {
+    const runs = ghJson([
+      "run",
+      "list",
+      "--workflow",
+      "migration-drift.yml",
+      "--limit",
+      "1",
+      "--json",
+      "conclusion,status,createdAt,databaseId",
+    ]);
+
+    if (runs.length === 0) {
+      console.log("No Migration Drift runs found.");
+      return { red: false };
+    }
+
+    const run = runs[0];
+    const conclusion =
+      run.status === "completed" ? (run.conclusion ?? "unknown") : run.status;
+    const red =
+      run.status === "completed" &&
+      conclusion !== "success" &&
+      conclusion !== "skipped";
+
+    console.log(
+      `Migration Drift: ${red ? "RED" : conclusion} (${ageFromNow(run.createdAt)} ago, run ${run.databaseId})`,
+    );
+
+    if (red) {
+      console.log(
+        "  Prod is behind main. The failing run names the missing versions; generate apply SQL:",
+      );
+      console.log(
+        "    pnpm drift:assemble supabase/migrations/<version>_<name>.sql [...] --date=$(date +%F)",
+      );
+      console.log(
+        "  Run the output in the Supabase SQL Editor, then re-run Migration Drift until green.",
+      );
+    }
+
+    return { red };
+  } catch (err) {
+    console.log(
+      `Migration Drift: could not read run status (${err.message.split("\n")[0]})`,
+    );
+    return { red: false };
+  }
+}
+
 function printSuggestedActions({
   prs,
   pipelineEntries,
   epics,
   runs,
   manifest,
+  driftRed,
 }) {
   section("SUGGESTED NEXT ACTIONS");
   const actions = [];
+
+  if (driftRed) {
+    actions.push(
+      "apply pending prod migrations (Migration Drift RED): pnpm drift:assemble <files> -> Supabase SQL Editor -> re-run Migration Drift",
+    );
+  }
 
   for (const pr of prs) {
     if (pr.awaiting) {
@@ -386,8 +449,22 @@ function main() {
     console.log(`MAIN HEALTH: error: ${err.message.split("\n")[0]}`);
   }
 
+  let driftRed = false;
   try {
-    printSuggestedActions({ prs, pipelineEntries, epics, runs, manifest });
+    ({ red: driftRed } = printMigrationDrift());
+  } catch (err) {
+    console.log(`MIGRATION DRIFT: error: ${err.message.split("\n")[0]}`);
+  }
+
+  try {
+    printSuggestedActions({
+      prs,
+      pipelineEntries,
+      epics,
+      runs,
+      manifest,
+      driftRed,
+    });
   } catch (err) {
     console.log(`SUGGESTED NEXT ACTIONS: error: ${err.message.split("\n")[0]}`);
   }
