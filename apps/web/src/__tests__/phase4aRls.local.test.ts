@@ -235,7 +235,10 @@ async function deleteWinByTitle(client: SupabaseClient, title: string) {
   }
 }
 
-async function deleteRollupByStart(client: SupabaseClient, periodStart: string) {
+async function deleteRollupByStart(
+  client: SupabaseClient,
+  periodStart: string,
+) {
   const { error } = await client
     .from("rollup_summaries")
     .delete()
@@ -244,6 +247,22 @@ async function deleteRollupByStart(client: SupabaseClient, periodStart: string) 
   if (error) {
     throw new Error(
       `Could not clean up rollup '${periodStart}': ${error.message}`,
+    );
+  }
+}
+
+async function deleteDurationProfileByTaskType(
+  client: SupabaseClient,
+  taskType: string,
+) {
+  const { error } = await client
+    .from("duration_profiles")
+    .delete()
+    .eq("task_type", taskType);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up duration profile '${taskType}': ${error.message}`,
     );
   }
 }
@@ -462,6 +481,62 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     } finally {
       await deleteRollupByStart(userAClient, periodStart);
       await deleteRollupByStart(userBClient, periodStart);
+    }
+  });
+
+  it("lets user A access own duration_profiles but not user B profiles", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const taskType = `rls-duration-${Date.now()}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("duration_profiles")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_type: taskType,
+          estimate_stats_json: { multiplier: 1.2, sample_count: 3 },
+          sample_count: 3,
+        });
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("duration_profiles")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          task_type: taskType,
+          estimate_stats_json: { multiplier: 0.8, sample_count: 2 },
+          sample_count: 2,
+        });
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("duration_profiles")
+        .select("user_id,estimate_stats_json")
+        .eq("task_type", taskType);
+
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        {
+          user_id: userA.id,
+          estimate_stats_json: { multiplier: 1.2, sample_count: 3 },
+        },
+      ]);
+
+      const { data: updateFromB, error: updateBError } = await userBClient
+        .from("duration_profiles")
+        .update({ sample_count: 4 })
+        .eq("user_id", userA.id)
+        .eq("task_type", taskType)
+        .select("user_id,sample_count");
+
+      expect(updateBError).toBeNull();
+      expect(updateFromB).toEqual([]);
+    } finally {
+      await deleteDurationProfileByTaskType(userAClient, taskType);
+      await deleteDurationProfileByTaskType(userBClient, taskType);
     }
   });
 
