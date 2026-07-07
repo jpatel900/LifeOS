@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "status": "node scripts/agent/status.mjs",
-    "coherence:map": "node scripts/coherence-map.mjs"
+    "coherence:map": "node scripts/coherence-map.mjs",
+    "drift:assemble": "node scripts/agent/assemble-migration-sql.mjs"
   },
   "devDependencies": {
     "prettier": "^3.5.0",
