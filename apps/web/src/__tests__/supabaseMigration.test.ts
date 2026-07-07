@@ -255,6 +255,51 @@ describe("Supabase local database scaffold", () => {
     );
   });
 
+  it("adds duration_profiles with same-user area FK, RLS, grants, and last-updated trigger", () => {
+    const sql = normalizeWhitespace(loadAllMigrations());
+
+    expect(sql).toContain("create table public.duration_profiles");
+    expect(sql).toContain(
+      "constraint duration_profiles_sample_count_check check (sample_count >= 1)",
+    );
+    expect(sql).toContain(
+      "constraint duration_profiles_area_task_key unique (user_id, area_id, task_type)",
+    );
+    expect(sql).toContain(
+      "constraint duration_profiles_area_fk foreign key (area_id, user_id) references public.areas (id, user_id) on delete restrict",
+    );
+    expect(sql).toContain(
+      "create index duration_profiles_user_id_idx on public.duration_profiles (user_id)",
+    );
+    expect(sql).toContain(
+      "create index duration_profiles_user_area_task_idx on public.duration_profiles (user_id, area_id, task_type)",
+    );
+    expect(sql).toContain(
+      "alter table public.duration_profiles enable row level security",
+    );
+    expect(sql).toContain(
+      "create policy duration_profiles_select_own on public.duration_profiles for select to authenticated using ((select auth.uid()) = user_id)",
+    );
+    expect(sql).toContain(
+      "create policy duration_profiles_insert_own on public.duration_profiles for insert to authenticated with check ((select auth.uid()) = user_id)",
+    );
+    expect(sql).toContain(
+      "create policy duration_profiles_update_own on public.duration_profiles for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id)",
+    );
+    expect(sql).toContain(
+      "create policy duration_profiles_delete_own on public.duration_profiles for delete to authenticated using ((select auth.uid()) = user_id)",
+    );
+    expect(sql).toContain(
+      "grant select, insert, update, delete on table public.duration_profiles to authenticated",
+    );
+    expect(sql).toContain(
+      "create or replace function public.set_last_updated_at()",
+    );
+    expect(sql).toContain(
+      "create trigger duration_profiles_set_last_updated_at before insert or update on public.duration_profiles for each row execute function public.set_last_updated_at()",
+    );
+  });
+
   it("has no duplicate leading timestamps across migration filenames", () => {
     const filenames = loadMigrationFilenames();
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  CreateDurationProfileInputSchema,
   CreateOverrideRecordInputSchema,
   CreateSuggestionRecordInputSchema,
   META_LEARNING_EVENT_SCHEMA_VERSION,
   META_LEARNING_EVENT_SCHEMA_VERSION_V2,
+  DurationProfileSchema,
   OverrideRecordSchema,
   SuggestionRecordSchema,
 } from "./meta-learning";
@@ -43,6 +45,29 @@ describe("meta-learning record schemas", () => {
         suggestion_type: "time_block_proposal",
         subject_type: "time_block_proposal",
         suggestion_json: {},
+      }),
+    ).toThrow();
+  });
+
+  it("validates duration profile rows and inputs", () => {
+    expect(
+      DurationProfileSchema.parse({
+        id: "550e8400-e29b-41d4-a716-446655440010",
+        user_id: base.user_id,
+        area_id: base.area_id,
+        task_type: "deep_work",
+        estimate_stats_json: { multiplier: 1.25, sample_count: 3 },
+        sample_count: 3,
+        last_updated_at: "2026-07-07T12:00:00.000Z",
+      }).estimate_stats_json.multiplier,
+    ).toBe(1.25);
+
+    expect(() =>
+      CreateDurationProfileInputSchema.parse({
+        area_id: base.area_id,
+        task_type: "deep_work",
+        estimate_stats: { multiplier: 0, sample_count: 0 },
+        sample_count: 0,
       }),
     ).toThrow();
   });

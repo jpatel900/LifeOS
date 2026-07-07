@@ -8,6 +8,7 @@ import {
   CreateAreaInputSchema,
   CreateExecutionSessionInputSchema,
   CreateGoogleCalendarEventInputSchema,
+  CreateDurationProfileInputSchema,
   CreateOverrideRecordInputSchema,
   CreateSuggestionRecordInputSchema,
   CreateTimeBlockProposalInputSchema,
@@ -26,6 +27,7 @@ import {
   ReviewEntrySchema,
   WinRecordSchema,
   RollupSummarySchema,
+  DurationProfileSchema,
   OverrideRecordSchema,
   SuggestionRecordSchema,
   SoftDeleteAreaInputSchema,
@@ -38,6 +40,7 @@ import {
   type CreateAreaInput,
   type CreateExecutionSessionInput,
   type CreateGoogleCalendarEventInput,
+  type CreateDurationProfileInput,
   type CreateOverrideRecordInput,
   type CreateSuggestionRecordInput,
   type CreateTimeBlockProposalInput,
@@ -55,6 +58,7 @@ import {
   type ReviewEntry,
   type WinRecord,
   type RollupSummary,
+  type DurationProfile,
   type OverrideRecord,
   type SuggestionRecord,
   type SoftDeleteAreaInput,
@@ -227,6 +231,16 @@ export interface RollupSummariesResult {
   rollupSummaries: RollupSummary[];
 }
 
+export interface DurationProfileUpsertResult {
+  provider: DataProvider;
+  durationProfile: DurationProfile;
+}
+
+export interface DurationProfilesResult {
+  provider: DataProvider;
+  durationProfiles: DurationProfile[];
+}
+
 export type ReviewTaskTargetStatus = Extract<
   Task["status"],
   "active" | "backlog" | "dropped"
@@ -362,6 +376,9 @@ const rollupSummaryColumns =
 const suggestionRecordColumns =
   "id,user_id,area_id,policy_identifier,schema_version,suggestion_type,subject_type,subject_id,suggestion_json,confidence,status,resolution_reason,decided_by,created_at,resolved_at";
 
+const durationProfileColumns =
+  "id,user_id,area_id,task_type,estimate_stats_json,sample_count,last_updated_at";
+
 const overrideRecordColumns =
   "id,user_id,area_id,policy_identifier,schema_version,suggestion_id,subject_type,subject_id,override_type,old_value_json,new_value_json,reason,created_at";
 
@@ -456,6 +473,14 @@ function parseRollupSummary(row: unknown) {
 
 function parseRollupSummaries(rows: unknown) {
   return RollupSummarySchema.array().parse(normalizeSupabaseRows(rows));
+}
+
+function parseDurationProfile(row: unknown) {
+  return DurationProfileSchema.parse(normalizeSupabaseRow(row));
+}
+
+function parseDurationProfiles(rows: unknown) {
+  return DurationProfileSchema.array().parse(normalizeSupabaseRows(rows));
 }
 
 function parseTasks(rows: unknown) {
@@ -2889,6 +2914,94 @@ export async function listRollupSummaries(
   return {
     provider: "supabase",
     rollupSummaries: parseRollupSummaries(data),
+  };
+}
+
+export async function listDurationProfiles(
+  client: MinimalSupabaseClient | null,
+): Promise<DurationProfilesResult> {
+  if (!client) {
+    return { provider: "mock", durationProfiles: [] };
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before loading duration profiles.",
+  );
+
+  const query = client.from("duration_profiles") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+  const { data, error } = await query
+    .select(durationProfileColumns)
+    .order("last_updated_at", { ascending: false });
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    durationProfiles: parseDurationProfiles(data),
+  };
+}
+
+export async function upsertDurationProfile(
+  client: MinimalSupabaseClient | null,
+  input: CreateDurationProfileInput,
+): Promise<DurationProfileUpsertResult> {
+  const parsedInput = CreateDurationProfileInputSchema.parse(input);
+
+  if (!client) {
+    return {
+      provider: "mock",
+      durationProfile: parseDurationProfile({
+        id: crypto.randomUUID(),
+        user_id: mockUserId,
+        area_id: parsedInput.area_id,
+        task_type: parsedInput.task_type,
+        estimate_stats_json: parsedInput.estimate_stats,
+        sample_count: parsedInput.sample_count,
+        last_updated_at: new Date().toISOString(),
+      }),
+    };
+  }
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before saving duration profiles.",
+  );
+
+  const query = client.from("duration_profiles") as {
+    upsert: (
+      row: Record<string, unknown>,
+      options: { onConflict: string },
+    ) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: unknown; error: unknown }>;
+      };
+    };
+  };
+  const { data, error } = await query
+    .upsert(
+      {
+        user_id: user.id,
+        area_id: parsedInput.area_id,
+        task_type: parsedInput.task_type,
+        estimate_stats_json: parsedInput.estimate_stats,
+        sample_count: parsedInput.sample_count,
+      },
+      { onConflict: "user_id,area_id,task_type" },
+    )
+    .select(durationProfileColumns)
+    .single();
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    durationProfile: parseDurationProfile(data),
   };
 }
 

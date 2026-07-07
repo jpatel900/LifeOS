@@ -9,6 +9,8 @@ import {
   listWinRecords,
   createRollupSummary,
   listRollupSummaries,
+  listDurationProfiles,
+  upsertDurationProfile,
   listOverrideRecords,
   listSuggestionRecords,
   createTimeBlockProposal,
@@ -503,7 +505,11 @@ describe("workflow data provider", () => {
 
     await createCaptureItem(
       { from, auth: { getUser } } as unknown as MinimalSupabaseClient,
-      { raw_text: "Buy milk", area_id: null, client_capture_id: "queued-abc123" },
+      {
+        raw_text: "Buy milk",
+        area_id: null,
+        client_capture_id: "queued-abc123",
+      },
     );
 
     expect(insert).toHaveBeenCalledWith(
@@ -2238,6 +2244,68 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("supabase");
     expect(result.rollupSummaries).toHaveLength(1);
     expect(result.rollupSummaries[0].summary.counts.wins).toBe(1);
+  });
+
+  const durationProfileRow = {
+    id: "550e8400-e29b-41d4-a716-446655440d01",
+    user_id: userId,
+    area_id: areaId,
+    task_type: "deep_work",
+    estimate_stats_json: { multiplier: 1.2, sample_count: 3 },
+    sample_count: 3,
+    last_updated_at: "2026-07-07T12:00:00.000Z",
+  };
+
+  it("returns no duration profiles in mock mode", async () => {
+    const result = await listDurationProfiles(null);
+    expect(result.provider).toBe("mock");
+    expect(result.durationProfiles).toEqual([]);
+  });
+
+  it("reads duration profiles most-recent first through Supabase", async () => {
+    const order = vi
+      .fn()
+      .mockResolvedValue({ data: [durationProfileRow], error: null });
+    const select = vi.fn().mockReturnValue({ order });
+    const from = vi.fn().mockReturnValue({ select });
+
+    const result = await listDurationProfiles(authenticatedClient(from));
+
+    expect(from).toHaveBeenCalledWith("duration_profiles");
+    expect(order).toHaveBeenCalledWith("last_updated_at", { ascending: false });
+    expect(result.provider).toBe("supabase");
+    expect(result.durationProfiles).toHaveLength(1);
+    expect(result.durationProfiles[0].estimate_stats_json.multiplier).toBe(1.2);
+  });
+
+  it("upserts duration profiles through Supabase with the area task conflict key", async () => {
+    const single = vi
+      .fn()
+      .mockResolvedValue({ data: durationProfileRow, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const upsert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const result = await upsertDurationProfile(authenticatedClient(from), {
+      area_id: areaId,
+      task_type: "deep_work",
+      estimate_stats: { multiplier: 1.2, sample_count: 3 },
+      sample_count: 3,
+    });
+
+    expect(from).toHaveBeenCalledWith("duration_profiles");
+    expect(upsert).toHaveBeenCalledWith(
+      {
+        user_id: userId,
+        area_id: areaId,
+        task_type: "deep_work",
+        estimate_stats_json: { multiplier: 1.2, sample_count: 3 },
+        sample_count: 3,
+      },
+      { onConflict: "user_id,area_id,task_type" },
+    );
+    expect(result.provider).toBe("supabase");
+    expect(result.durationProfile.task_type).toBe("deep_work");
   });
 
   it("returns no override records in mock mode", async () => {
