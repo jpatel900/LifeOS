@@ -27,6 +27,7 @@ import {
   WinRecordSchema,
   RollupSummarySchema,
   OverrideRecordSchema,
+  SuggestionRecordSchema,
   SoftDeleteAreaInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
@@ -55,6 +56,7 @@ import {
   type WinRecord,
   type RollupSummary,
   type OverrideRecord,
+  type SuggestionRecord,
   type SoftDeleteAreaInput,
   type Task,
   type TimeBlockProposal,
@@ -2922,6 +2924,45 @@ export async function listOverrideRecords(
   return {
     provider: "supabase",
     overrideRecords: OverrideRecordSchema.array().parse(
+      normalizeSupabaseRows(data),
+    ),
+  };
+}
+
+export interface SuggestionRecordsResult {
+  provider: DataProvider;
+  suggestionRecords: SuggestionRecord[];
+}
+
+// E2 (#261 follow-up): read the user's suggestion_records so a decision recorded
+// in a prior session (e.g. a policy_change accept/decline) keeps its proposal
+// suppressed across reloads — not just within the session that made it.
+// Read-only; most-recent first.
+export async function listSuggestionRecords(
+  client: MinimalSupabaseClient | null,
+): Promise<SuggestionRecordsResult> {
+  if (!client) {
+    return { provider: "mock", suggestionRecords: [] };
+  }
+
+  await requireSupabaseUser(client, "Sign in before loading learning history.");
+
+  const query = client.from("suggestion_records") as {
+    select: (columns: string) => {
+      order: (
+        column: string,
+        options: { ascending: boolean },
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+  const { data, error } = await query
+    .select(suggestionRecordColumns)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(getSupabaseMessage(error));
+
+  return {
+    provider: "supabase",
+    suggestionRecords: SuggestionRecordSchema.array().parse(
       normalizeSupabaseRows(data),
     ),
   };
