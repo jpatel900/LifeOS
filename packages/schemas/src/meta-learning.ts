@@ -90,6 +90,36 @@ export type CreateSuggestionRecordInput = z.input<
   typeof CreateSuggestionRecordInputSchema
 >;
 
+export const DurationEstimateStatsSchema = z.object({
+  multiplier: z.number().positive(),
+  sample_count: z.number().int().min(1),
+});
+
+export type DurationEstimateStats = z.infer<typeof DurationEstimateStatsSchema>;
+
+export const DurationProfileSchema = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().uuid(),
+  area_id: z.string().uuid(),
+  task_type: z.string().min(1),
+  estimate_stats_json: DurationEstimateStatsSchema,
+  sample_count: z.number().int().min(1),
+  last_updated_at: z.string().datetime(),
+});
+
+export type DurationProfile = z.infer<typeof DurationProfileSchema>;
+
+export const CreateDurationProfileInputSchema = z.object({
+  area_id: z.string().uuid(),
+  task_type: z.string().min(1),
+  estimate_stats: DurationEstimateStatsSchema,
+  sample_count: z.number().int().min(1),
+});
+
+export type CreateDurationProfileInput = z.infer<
+  typeof CreateDurationProfileInputSchema
+>;
+
 export const OverrideRecordSchema = z.object({
   id: z.string().uuid(),
   user_id: z.string().uuid(),
