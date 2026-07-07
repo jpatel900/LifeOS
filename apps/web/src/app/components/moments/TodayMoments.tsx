@@ -410,18 +410,32 @@ export function TodayMoments({
   const [enhancedRollupSummaries, setEnhancedRollupSummaries] = useState<
     Record<string, RollupSummaryContent>
   >({});
+  // Areas already requested this session — a ref (not the state) so it can't be
+  // in the effect deps. Marking BEFORE the await dedupes across effect re-runs
+  // and prevents a second in-flight request per area (no duplicate AI calls /
+  // ai_call_traces rows).
+  const requestedRollupAreaIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const client = createSupabaseBrowserClient();
     if (!client) {
       return;
     }
+    const toRequest = pendingRollups.filter(
+      (draft) => !requestedRollupAreaIdsRef.current.has(draft.areaId),
+    );
+    if (toRequest.length === 0) {
+      return;
+    }
+    for (const draft of toRequest) {
+      requestedRollupAreaIdsRef.current.add(draft.areaId);
+    }
     let cancelled = false;
     void (async () => {
       const accessToken =
         (await client.auth.getSession()).data.session?.access_token ?? null;
-      for (const draft of pendingRollups) {
-        if (cancelled || enhancedRollupSummaries[draft.areaId]) {
-          continue;
+      for (const draft of toRequest) {
+        if (cancelled) {
+          return;
         }
         const summary = await requestRollupProse(
           {
@@ -443,7 +457,7 @@ export function TodayMoments({
     return () => {
       cancelled = true;
     };
-  }, [pendingRollups, enhancedRollupSummaries]);
+  }, [pendingRollups]);
   // Swap in the enhanced prose where it has resolved; the deterministic draft
   // shows until then (and stays if enhancement failed). Approve persists exactly
   // what is shown (counts are identical either way).
