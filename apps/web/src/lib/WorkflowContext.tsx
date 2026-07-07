@@ -86,6 +86,8 @@ import {
   listExecutionReviewItems,
   listOverrideRecords,
   listSuggestionRecords,
+  listDurationProfiles,
+  upsertDurationProfile,
   listPlanningItems,
   markExecutionSession,
   recordCommitmentProposal,
@@ -102,12 +104,19 @@ import {
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
 import {
+  AREA_DURATION_TASK_TYPE,
+  applyStoredDuration,
   buildPolicyProposals,
   buildProposalRecalibration,
+  durationProfileForArea,
   type ProposalRecalibrationVM,
 } from "./learning/learningSurface";
 import type { PolicyChangeCandidate } from "./learning/overrideScan";
-import type { OverrideRecord, SuggestionRecord } from "@lifeos/schemas";
+import type {
+  DurationProfile,
+  OverrideRecord,
+  SuggestionRecord,
+} from "@lifeos/schemas";
 import { normalizePersonName, resolvePersonMention } from "./data/personLinks";
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import {
@@ -408,8 +417,20 @@ interface WorkflowContextValue {
     areaId: string | null,
     estimateMinutes: number,
   ) => ProposalRecalibrationVM | null;
+  // The adjusted default duration for a task in `areaId` once its recalibration
+  // has been accepted, or null (planning uses the raw estimate). Apply-on-accept
+  // read side.
+  appliedDurationForArea: (
+    areaId: string | null,
+    estimateMinutes: number,
+  ) => number | null;
   decideDurationRecalibration: (
-    input: { areaId: string | null; recalibration: ProposalRecalibrationVM },
+    input: {
+      proposalId: string;
+      proposedStart: string;
+      areaId: string | null;
+      recalibration: ProposalRecalibrationVM;
+    },
     decision: "accepted" | "dismissed",
   ) => void;
   clearWipRefusal: () => void;
@@ -534,6 +555,11 @@ function isUuid(value: string | null | undefined) {
     ),
   );
 }
+
+// Placeholder user id for an optimistically-constructed local duration profile;
+// the real row's user_id is set server-side from auth (never sent from the
+// client), so this value is never persisted.
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 function mergePersistedRows<T extends { id: string }>(
   persistedRows: T[],
@@ -1192,6 +1218,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // leaves the review surface without needing a reload).
   const [unsyncedCaptureCount, setUnsyncedCaptureCount] = useState(0);
   const [overrideRecords, setOverrideRecords] = useState<OverrideRecord[]>([]);
+  // E1 (#456): accepted per-area duration profiles. Once the user accepts a
+  // recalibration, its multiplier is stored here and future proposals in that
+  // area default to the adjusted duration. Supabase-only (mock/demo defaults to
+  // an empty list); loaded failure-isolated below.
+  const [durationProfiles, setDurationProfiles] = useState<DurationProfile[]>(
+    [],
+  );
   const [decidedPolicyKeys, setDecidedPolicyKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1352,6 +1385,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => {
           // Non-fatal: the review surface simply shows no policy proposals.
+        });
+
+      // E1 (#456): load accepted duration profiles so planning defaults to the
+      // adjusted duration in areas the user has recalibrated. Failure-isolated
+      // like the override load — a missing read just means planning falls back
+      // to raw estimates.
+      void listDurationProfiles(client)
+        .then((result) => {
+          if (result.provider === "supabase") {
+            setDurationProfiles(result.durationProfiles);
+          }
+        })
+        .catch(() => {
+          // Non-fatal: proposals default to the raw estimate.
         });
 
       // E2 (#261 follow-up): seed decidedPolicyKeys from prior-session decisions
@@ -1903,27 +1950,62 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // The adjusted default duration for a task in `areaId`, once the user has
+  // accepted a recalibration for that area — else null (planning uses the raw
+  // estimate). Maps the workflow area id to its persisted id (profiles are keyed
+  // by the persisted area) before the lookup. This is the read side of
+  // apply-on-accept: proposals default to this value.
+  const appliedDurationForArea = useCallback(
+    (areaId: string | null, estimateMinutes: number) =>
+      applyStoredDuration(
+        durationProfiles,
+        areaId
+          ? persistedAreaIdForWorkflowId(areaId, persistedAreasRef.current)
+          : null,
+        estimateMinutes,
+      ),
+    [durationProfiles],
+  );
+
   // The sourced duration recalibration for a proposal in `areaId`, or null when
-  // the area's actuals don't justify one. Reads the live reducer state (not
+  // the area's actuals don't justify one — OR when the user has already accepted
+  // a recalibration for this area (the multiplier is applied now, so the card
+  // stops nagging; E2-style suppression). Reads the live reducer state (not
   // stateRef, which lags a render behind) because this is called during render.
   const recalibrationForProposal = useCallback(
-    (areaId: string | null, estimateMinutes: number) =>
-      buildProposalRecalibration(
+    (areaId: string | null, estimateMinutes: number) => {
+      const persistedAreaId = areaId
+        ? persistedAreaIdForWorkflowId(areaId, persistedAreasRef.current)
+        : null;
+      if (durationProfileForArea(durationProfiles, persistedAreaId)) return null;
+      return buildProposalRecalibration(
         state.executionSessions,
         areaId,
         estimateMinutes,
-      ),
-    [state.executionSessions],
+      );
+    },
+    [state.executionSessions, durationProfiles],
   );
 
-  // Record the user's decision on a shown recalibration (apply-on-accept). The
-  // adjusted estimate is what the user accepts; dismiss keeps the original.
-  const decideDurationRecalibration = useCallback(
-    (
-      input: { areaId: string | null; recalibration: ProposalRecalibrationVM },
-      decision: "accepted" | "dismissed",
-    ) => {
-      recordDurationRecalibrationDecision(createSupabaseBrowserClient(), {
+  // Decide a shown recalibration. On accept it ACTS: (1) records the decision
+  // (NS-INV-3), (2) persists a per-area duration profile so future proposals in
+  // the area default to the adjusted duration, and (3) retimes THIS pending
+  // proposal to the adjusted duration immediately (it has no block yet — the
+  // card only renders on proposed/edited proposals — so this is a purely local
+  // timing edit, no scheduled/Google-backed block to touch). Dismiss records the
+  // decision and changes nothing. A plain handler (not useCallback) — it fires on
+  // click, never during render, and reuses the render-recreated persist helpers.
+  const decideDurationRecalibration = (
+    input: {
+      proposalId: string;
+      proposedStart: string;
+      areaId: string | null;
+      recalibration: ProposalRecalibrationVM;
+    },
+    decision: "accepted" | "dismissed",
+  ) => {
+      const client = createSupabaseBrowserClient();
+      recordDurationRecalibrationDecision(client, {
         area_id: input.areaId,
         decision,
         multiplier: input.recalibration.recalibration.multiplier,
@@ -1932,9 +2014,77 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         adjusted_minutes: input.recalibration.adjustedMinutes,
         resolved_at: new Date().toISOString(),
       });
-    },
-    [],
-  );
+
+      if (decision !== "accepted") return;
+
+      const multiplier = input.recalibration.recalibration.multiplier;
+      const sampleCount = input.recalibration.recalibration.sampleCount;
+      const persistedAreaId = input.areaId
+        ? persistedAreaIdForWorkflowId(input.areaId, persistedAreasRef.current)
+        : null;
+
+      // Persist + optimistically apply the area profile so the suppression and
+      // future-proposal default take effect immediately. Only a real persisted
+      // area id can back the FK; demo/unmapped areas still retime locally below.
+      if (persistedAreaId && isUuid(persistedAreaId)) {
+        setDurationProfiles((current) => {
+          const rest = current.filter(
+            (profile) =>
+              !(
+                profile.area_id === persistedAreaId &&
+                profile.task_type === AREA_DURATION_TASK_TYPE
+              ),
+          );
+          return [
+            ...rest,
+            {
+              id: crypto.randomUUID(),
+              user_id: NIL_UUID,
+              area_id: persistedAreaId,
+              task_type: AREA_DURATION_TASK_TYPE,
+              estimate_stats_json: { multiplier, sample_count: sampleCount },
+              sample_count: sampleCount,
+              last_updated_at: new Date().toISOString(),
+            },
+          ];
+        });
+        if (client) {
+          void upsertDurationProfile(client, {
+            area_id: persistedAreaId,
+            task_type: AREA_DURATION_TASK_TYPE,
+            estimate_stats: { multiplier, sample_count: sampleCount },
+            sample_count: sampleCount,
+          }).catch(() => {
+            // Non-fatal: the profile stays applied locally this session and is
+            // re-derived from actuals next time; a write failure never blocks.
+          });
+        }
+      }
+
+      // Retime this pending proposal to the adjusted duration now (immediate
+      // "act for me"), reusing the proven edit-timing path.
+      const previous = stateRef.current;
+      const proposedEnd = new Date(
+        new Date(input.proposedStart).getTime() +
+          input.recalibration.adjustedMinutes * 60 * 1000,
+      ).toISOString();
+      const next = updateProposal(previous, input.proposalId, {
+        proposed_start: input.proposedStart,
+        proposed_end: proposedEnd,
+        rationale: `Sized to your area actuals (${multiplier}x).`,
+      });
+      if (next === previous) return;
+      applyWorkflowState(next);
+      const editedProposal =
+        next.timeBlockProposals.find(
+          (proposal) => proposal.id === input.proposalId,
+        ) ?? null;
+      if (editedProposal) {
+        void persistEditedLocalProposal(editedProposal).catch((error) => {
+          markPersistedSaveFailure(error);
+        });
+      }
+    };
 
   async function persistStartedSession(
     localSession: Phase2MockExecutionSession,
@@ -3079,6 +3229,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     overridePolicyProposals,
     decideOverridePolicyProposal,
     recalibrationForProposal,
+    appliedDurationForArea,
     decideDurationRecalibration,
     clearWipRefusal: () =>
       applyWorkflowState(clearWipRefusal(stateRef.current)),

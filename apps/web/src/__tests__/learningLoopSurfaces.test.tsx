@@ -107,12 +107,22 @@ describe("S9 golden-journey point 6a: sourced duration recalibration", () => {
     expect(card).toHaveTextContent(/run 1\.4x/);
     expect(card).toHaveTextContent(/completed sessions in this area/);
 
-    // Deciding it records the decision and resolves that card (mock write is a
-    // no-op; nothing re-times the block — that's a documented follow-up).
-    fireEvent.click(within(card).getByRole("button", { name: "Sounds right" }));
-    expect(screen.queryAllByTestId("proposal-recalibration")).toHaveLength(
-      cards.length - 1,
-    );
+    // E1 apply-on-accept: the accept button offers the adjusted duration.
+    const useButton = within(card).getByRole("button", {
+      name: /^Use \d+m$/,
+    });
+    const adjusted = Number(useButton.textContent!.match(/(\d+)m/)![1]);
+    fireEvent.click(useButton);
+
+    // Accepting APPLIES: the card resolves and the proposal is retimed to the
+    // adjusted duration (not theater — the block now shows the new length).
+    expect(
+      screen.queryAllByTestId("proposal-recalibration").length,
+    ).toBeLessThan(cards.length);
+    const durations = screen.getAllByTestId("proposal-duration");
+    expect(
+      durations.some((el) => el.textContent?.includes(`${adjusted}m`)),
+    ).toBe(true);
   });
 
   it("shows no recalibration when the area lacks enough actuals", async () => {

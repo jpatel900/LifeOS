@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { OverrideRecord } from "@lifeos/schemas";
+import type { DurationProfile, OverrideRecord } from "@lifeos/schemas";
 import type { Phase2MockExecutionSession } from "../types";
 import {
+  AREA_DURATION_TASK_TYPE,
+  applyStoredDuration,
   buildPolicyProposals,
   buildProposalRecalibration,
+  durationProfileForArea,
 } from "./learningSurface";
 
 let seq = 0;
@@ -117,5 +120,54 @@ describe("buildPolicyProposals", () => {
 
   it("returns nothing when there is no override pattern", () => {
     expect(buildPolicyProposals([])).toEqual([]);
+  });
+});
+
+function durationProfile(
+  areaId: string,
+  multiplier: number,
+  sampleCount = 3,
+  taskType: string = AREA_DURATION_TASK_TYPE,
+): DurationProfile {
+  return {
+    id: "00000000-0000-4000-8000-0000000000d1",
+    user_id: "00000000-0000-4000-8000-000000000001",
+    area_id: areaId,
+    task_type: taskType,
+    estimate_stats_json: { multiplier, sample_count: sampleCount },
+    sample_count: sampleCount,
+    last_updated_at: "2026-07-07T12:00:00.000Z",
+  };
+}
+
+describe("durationProfileForArea / applyStoredDuration", () => {
+  const areaId = "00000000-0000-4000-8000-00000000aaaa";
+
+  it("finds the area's profile stored under the area sentinel", () => {
+    const profiles = [durationProfile(areaId, 1.4)];
+    expect(durationProfileForArea(profiles, areaId)).toBe(profiles[0]);
+  });
+
+  it("ignores a profile stored under a non-sentinel task_type", () => {
+    const profiles = [durationProfile(areaId, 1.4, 3, "deep_work")];
+    expect(durationProfileForArea(profiles, areaId)).toBeNull();
+    expect(applyStoredDuration(profiles, areaId, 60)).toBeNull();
+  });
+
+  it("applies the stored multiplier to the estimate (evidence-key == apply-key)", () => {
+    const profiles = [durationProfile(areaId, 1.4)];
+    // 60m estimate, area runs 1.4x -> 84m default.
+    expect(applyStoredDuration(profiles, areaId, 60)).toBe(84);
+  });
+
+  it("is null when no profile has been accepted for the area", () => {
+    expect(applyStoredDuration([], areaId, 60)).toBeNull();
+    expect(durationProfileForArea([], areaId)).toBeNull();
+  });
+
+  it("is null for a null area or a non-positive estimate", () => {
+    const profiles = [durationProfile(areaId, 1.4)];
+    expect(applyStoredDuration(profiles, null, 60)).toBeNull();
+    expect(applyStoredDuration(profiles, areaId, 0)).toBeNull();
   });
 });
