@@ -87,10 +87,47 @@ function createTableBlocks(sql: string): CreateTableBlock[] {
   return blocks;
 }
 
-function tablesDeclaringCreatedAt(sql: string): string[] {
+function tablesWithCreatedAtInCreateBlock(sql: string): string[] {
   return createTableBlocks(sql)
     .filter(({ body }) => /\bcreated_at\b/i.test(body))
     .map(({ name }) => name);
+}
+
+// Tables that gain a `created_at` column later via
+// `alter table public.<name> ... add column [if not exists] created_at ...`.
+// Scanned per-statement (split on `;`) so a covering trigger added in a
+// different migration still counts, and so multi-column ALTERs (created_at not
+// first) are still detected — `add column created_at` is a substring either
+// way. The repo is additive-only (NS-INV-2), so a later column drop is not
+// modelled. Without this, a future ALTER-added created_at would slip the
+// create-table-only scan and reintroduce a client-forgeable timestamp.
+function tablesAddingCreatedAtViaAlter(sql: string): string[] {
+  const names = new Set<string>();
+
+  for (const rawStatement of sql.split(";")) {
+    const statement = normalizeWhitespace(rawStatement).toLowerCase();
+    const nameMatch = statement.match(
+      /alter table (?:if exists )?(?:only )?public\.([a-z0-9_]+)\b/,
+    );
+
+    if (
+      nameMatch &&
+      /\badd column (?:if not exists )?created_at\b/.test(statement)
+    ) {
+      names.add(nameMatch[1]);
+    }
+  }
+
+  return [...names];
+}
+
+function tablesDeclaringCreatedAt(sql: string): string[] {
+  return [
+    ...new Set([
+      ...tablesWithCreatedAtInCreateBlock(sql),
+      ...tablesAddingCreatedAtViaAlter(sql),
+    ]),
+  ];
 }
 
 // Names of tables that declare a `created_at` column but lack a covering
@@ -160,6 +197,37 @@ describe("server-authoritative created_at coverage", () => {
       create trigger covered_x_set_server_created_at
         before insert on public.covered_x
         for each row execute function public.set_server_created_at();
+    `;
+
+    expect(uncoveredCreatedAtTables(covered)).toEqual([]);
+  });
+
+  it("has teeth for an ALTER-added created_at: reports it uncovered (negative control)", () => {
+    // A created_at introduced later on an existing table must ALSO be covered —
+    // the create-table scan alone would miss this.
+    const forged = `
+      create table public.altered_x (
+        id uuid primary key,
+        user_id uuid not null
+      );
+      alter table public.altered_x
+        add column created_at timestamptz not null default now();
+    `;
+
+    expect(uncoveredCreatedAtTables(forged)).toEqual(["altered_x"]);
+  });
+
+  it("accepts an ALTER-added created_at with a covering trigger, even as a non-first column", () => {
+    const covered = `
+      create table public.altered_ok (
+        id uuid primary key
+      );
+      alter table public.altered_ok
+        add column note text,
+        add column created_at timestamptz not null default now();
+      create trigger altered_ok_set_server_created_at
+        before insert on public.altered_ok
+        for each row execute function public.set_server_row_timestamps();
     `;
 
     expect(uncoveredCreatedAtTables(covered)).toEqual([]);
