@@ -68,6 +68,14 @@ function renderSheet(open = true) {
 
 describe("TriageSheet", () => {
   beforeEach(() => {
+    // WorkflowProvider persists its state to sessionStorage (WorkflowContext
+    // STORAGE_KEY) and re-reads it at init. Within one test file all tests
+    // share the jsdom sessionStorage, so a draft one test seeds leaks into the
+    // next test's provider at mount. Reset before AND after every test so each
+    // one starts from the clean demo seed and can't inherit a sibling's draft
+    // (this is what flaked the "All areas" scoping test under full-suite load —
+    // it inherited a leaked draft and saw 2 items instead of 1).
+    window.sessionStorage.clear();
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
   });
@@ -75,6 +83,7 @@ describe("TriageSheet", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    window.sessionStorage.clear();
   });
 
   it("renders nothing when closed", () => {
@@ -131,12 +140,9 @@ describe("TriageSheet", () => {
 
   // SP-9: the accept/reject actions and the "open full view" link reach a
   // >=44px effective hit area and drop the 300ms double-tap delay on
-  // coarse pointers. Clears sessionStorage before AND after so this
-  // test's seeded draft can never leak into a sibling test in this file
-  // (WorkflowProvider persists to sessionStorage across renders within
-  // the same test file/jsdom instance).
+  // coarse pointers. (sessionStorage isolation is handled at the describe
+  // level — see beforeEach/afterEach.)
   it("accept/reject buttons and the open-full link carry hit-area and touch-manipulation utilities", async () => {
-    window.sessionStorage.clear();
     const restoreFetch = stubParseCaptureFetch();
     renderSheet(true);
 
@@ -159,7 +165,6 @@ describe("TriageSheet", () => {
     expect(openFull).toHaveClass("touch-manipulation");
 
     restoreFetch();
-    window.sessionStorage.clear();
   });
 
   it("in 'All areas' mode (selectedAreaId=null), scopes to the first area — matching the badge's activeArea-fallback resolution — so a second area's draft is not shown", async () => {
