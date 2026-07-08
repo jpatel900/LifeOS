@@ -437,7 +437,7 @@ export function TodayMoments({
         if (cancelled) {
           return;
         }
-        const summary = await requestRollupProse(
+        const result = await requestRollupProse(
           {
             areaLabel: draft.areaLabel,
             periodType: "week",
@@ -449,8 +449,17 @@ export function TodayMoments({
         if (cancelled) {
           return;
         }
+        // Only record — and badge as "AI-polished" — a genuinely AI-generated
+        // summary. On any deterministic fallback the card stays as-is with no
+        // provenance flag (the area is still marked requested, so we don't
+        // re-hit a degraded endpoint every render).
+        if (!result.enhanced) {
+          continue;
+        }
         setEnhancedRollupSummaries((prev) =>
-          prev[draft.areaId] ? prev : { ...prev, [draft.areaId]: summary },
+          prev[draft.areaId]
+            ? prev
+            : { ...prev, [draft.areaId]: result.summary },
         );
       }
     })();
@@ -458,16 +467,31 @@ export function TodayMoments({
       cancelled = true;
     };
   }, [pendingRollups]);
-  // Swap in the enhanced prose where it has resolved; the deterministic draft
-  // shows until then (and stays if enhancement failed). Approve persists exactly
-  // what is shown (counts are identical either way).
+  // E3 provenance: areas where the user chose to keep the deterministic wording
+  // over the AI-polished version this session. Approve persists exactly what is
+  // displayed, so toggling here also decides which version is recorded.
+  const [keptOriginalRollupAreaIds, setKeptOriginalRollupAreaIds] = useState<
+    Set<string>
+  >(() => new Set());
+  // Swap in the enhanced prose where it has resolved (unless the user kept the
+  // original); the deterministic draft shows until then (and stays if
+  // enhancement failed). `enhanced` = the displayed summary is AI-reworded;
+  // `hasEnhancement` = an AI alternative exists (a toggle is available). Approve
+  // persists exactly what is shown (counts are identical either way).
   const displayedRollups = useMemo(
     () =>
       pendingRollups.map((draft) => {
         const enhanced = enhancedRollupSummaries[draft.areaId];
-        return enhanced ? { ...draft, summary: enhanced } : draft;
+        const showingProse =
+          Boolean(enhanced) && !keptOriginalRollupAreaIds.has(draft.areaId);
+        return {
+          ...draft,
+          summary: showingProse && enhanced ? enhanced : draft.summary,
+          enhanced: showingProse,
+          hasEnhancement: Boolean(enhanced),
+        };
       }),
-    [pendingRollups, enhancedRollupSummaries],
+    [pendingRollups, enhancedRollupSummaries, keptOriginalRollupAreaIds],
   );
   const handleApproveRollup = useCallback(
     (draft: RollupDraftVM) => {
@@ -494,6 +518,17 @@ export function TodayMoments({
     setDismissedRollupAreaIds((prev) => {
       const next = new Set(prev);
       next.add(areaId);
+      return next;
+    });
+  }, []);
+  const handleToggleRollupProse = useCallback((areaId: string) => {
+    setKeptOriginalRollupAreaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(areaId)) {
+        next.delete(areaId);
+      } else {
+        next.add(areaId);
+      }
       return next;
     });
   }, []);
@@ -920,6 +955,7 @@ export function TodayMoments({
               onSkipWin={handleSkipWin}
               onApproveRollup={handleApproveRollup}
               onDismissRollup={handleDismissRollup}
+              onToggleRollupProse={handleToggleRollupProse}
             />
           ) : null}
         </>
