@@ -35,6 +35,7 @@ function renderClose(overrides: Partial<React.ComponentProps<typeof CloseMoment>
     onSkipWin: vi.fn(),
     onApproveRollup: vi.fn(),
     onDismissRollup: vi.fn(),
+    onToggleRollupProse: vi.fn(),
     ...overrides,
   };
   render(<CloseMoment {...props} />);
@@ -152,5 +153,39 @@ describe("CloseMoment — S8 rollup readback", () => {
     expect(
       screen.getByTestId("close-moment-rollups-approved"),
     ).toHaveTextContent("Main Job");
+  });
+
+  it("shows no AI provenance affordance for a deterministic draft", () => {
+    renderClose({ pendingRollups: [rollupDraft] });
+    expect(screen.queryByTestId("close-moment-rollup-aiflag-area-1")).toBeNull();
+    expect(
+      screen.queryByTestId("close-moment-rollup-toggleprose-area-1"),
+    ).toBeNull();
+  });
+
+  it("flags AI-polished prose and offers to keep the original", () => {
+    const props = renderClose({
+      pendingRollups: [{ ...rollupDraft, enhanced: true, hasEnhancement: true }],
+    });
+    expect(
+      screen.getByTestId("close-moment-rollup-aiflag-area-1"),
+    ).toHaveTextContent("AI-polished");
+
+    const toggle = screen.getByTestId("close-moment-rollup-toggleprose-area-1");
+    expect(toggle).toHaveTextContent("Keep original");
+    fireEvent.click(toggle);
+    expect(props.onToggleRollupProse).toHaveBeenCalledWith("area-1");
+  });
+
+  it("hides the flag and offers the AI version once the original is kept", () => {
+    renderClose({
+      pendingRollups: [
+        { ...rollupDraft, enhanced: false, hasEnhancement: true },
+      ],
+    });
+    expect(screen.queryByTestId("close-moment-rollup-aiflag-area-1")).toBeNull();
+    expect(
+      screen.getByTestId("close-moment-rollup-toggleprose-area-1"),
+    ).toHaveTextContent("Use AI version");
   });
 });

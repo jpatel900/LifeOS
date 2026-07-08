@@ -27,8 +27,13 @@ export interface CloseMomentProps {
   pendingWins: CloseWinVM[];
   confirmedWins: { title: string; areaLabel: string }[];
   // S8: per-area weekly rollup drafts awaiting approve/dismiss, plus the rollups
-  // approved this session (the week-over-week readback, newest first).
-  pendingRollups: RollupDraftVM[];
+  // approved this session (the week-over-week readback, newest first). E3
+  // provenance flags are display-only: `enhanced` = the shown summary is
+  // AI-reworded; `hasEnhancement` = an AI alternative exists (toggle available).
+  pendingRollups: (RollupDraftVM & {
+    enhanced?: boolean;
+    hasEnhancement?: boolean;
+  })[];
   approvedRollups: {
     areaLabel: string;
     periodLabel: string;
@@ -40,6 +45,9 @@ export interface CloseMomentProps {
   onSkipWin(taskId: string): void;
   onApproveRollup(draft: RollupDraftVM): void;
   onDismissRollup(areaId: string): void;
+  // E3: swap a rollup between its AI-polished prose and the deterministic
+  // original (session-local). Optional — mock/preview may omit it.
+  onToggleRollupProse?(areaId: string): void;
 }
 
 export function CloseMoment({
@@ -54,6 +62,7 @@ export function CloseMoment({
   onSkipWin,
   onApproveRollup,
   onDismissRollup,
+  onToggleRollupProse,
 }: CloseMomentProps) {
   // Inline edits to a candidate's title before it is confirmed. Keyed by
   // taskId; absent means "use the candidate's original title".
@@ -198,7 +207,20 @@ export function CloseMoment({
                 data-testid={`close-moment-rollup-${draft.areaId}`}
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm font-medium">{draft.areaLabel}</span>
+                  <span className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {draft.areaLabel}
+                    </span>
+                    {draft.enhanced ? (
+                      <span
+                        className="rounded border border-border/60 px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+                        title="Reworded by AI — approve only if it still matches what happened."
+                        data-testid={`close-moment-rollup-aiflag-${draft.areaId}`}
+                      >
+                        AI-polished
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {draft.periodLabel}
                   </span>
@@ -216,6 +238,18 @@ export function CloseMoment({
                   </p>
                 ) : null}
                 <div className="flex items-center justify-end gap-1">
+                  {draft.hasEnhancement && onToggleRollupProse ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onToggleRollupProse(draft.areaId)}
+                      className="mr-auto min-h-[44px] touch-manipulation text-xs text-muted-foreground"
+                      data-testid={`close-moment-rollup-toggleprose-${draft.areaId}`}
+                    >
+                      {draft.enhanced ? "Keep original" : "Use AI version"}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="ghost"
