@@ -23,28 +23,44 @@ function jsonResponse(body: unknown, ok = true): Response {
 }
 
 describe("requestRollupProse", () => {
-  it("returns the enhanced summary when the server replies faithfully", async () => {
+  it("returns the enhanced summary, flagged as AI, when the server replies faithfully", async () => {
     const enhanced: RollupSummaryContent = {
       highlights: ["Shipped a parser fix 🎉", "Cleared 3 stale tasks"],
       misses: ["Missed Tuesday's review"],
       counts: draft.counts,
     };
     const fetchImpl = vi.fn(async () =>
-      jsonResponse({ ok: true, summary: enhanced }),
+      jsonResponse({ ok: true, source: "ai", summary: enhanced }),
     );
     const result = await requestRollupProse(input, { fetchImpl });
-    expect(result).toEqual(enhanced);
+    expect(result).toEqual({ summary: enhanced, enhanced: true });
+  });
+
+  it("does NOT flag a deterministic server fallback as AI (source deterministic)", async () => {
+    // The server echoes the draft with source "deterministic" when it degrades
+    // (no key / outage / unfaithful). The card must show it WITHOUT the badge.
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ ok: true, source: "deterministic", summary: draft }),
+    );
+    expect(await requestRollupProse(input, { fetchImpl })).toEqual({
+      summary: draft,
+      enhanced: false,
+    });
   });
 
   it("falls back to the draft on a non-OK response", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({}, false));
-    expect(await requestRollupProse(input, { fetchImpl })).toEqual(draft);
+    expect(await requestRollupProse(input, { fetchImpl })).toEqual({
+      summary: draft,
+      enhanced: false,
+    });
   });
 
   it("falls back when the server drops/adds an item (count mismatch)", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
         ok: true,
+        source: "ai",
         summary: {
           highlights: ["only one"], // draft had 2
           misses: ["Missed Tuesday's review"],
@@ -52,19 +68,25 @@ describe("requestRollupProse", () => {
         },
       }),
     );
-    expect(await requestRollupProse(input, { fetchImpl })).toEqual(draft);
+    expect(await requestRollupProse(input, { fetchImpl })).toEqual({
+      summary: draft,
+      enhanced: false,
+    });
   });
 
   it("falls back when fetch throws (network error)", async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error("network down");
     });
-    expect(await requestRollupProse(input, { fetchImpl })).toEqual(draft);
+    expect(await requestRollupProse(input, { fetchImpl })).toEqual({
+      summary: draft,
+      enhanced: false,
+    });
   });
 
   it("sends the bearer token when provided", async () => {
     const fetchImpl = vi.fn(async () =>
-      jsonResponse({ ok: true, summary: draft }),
+      jsonResponse({ ok: true, source: "ai", summary: draft }),
     );
     await requestRollupProse(input, { fetchImpl, accessToken: "tok" });
     const [, init] = fetchImpl.mock.calls[0] as unknown as [

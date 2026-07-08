@@ -437,7 +437,7 @@ export function TodayMoments({
         if (cancelled) {
           return;
         }
-        const summary = await requestRollupProse(
+        const result = await requestRollupProse(
           {
             areaLabel: draft.areaLabel,
             periodType: "week",
@@ -449,8 +449,17 @@ export function TodayMoments({
         if (cancelled) {
           return;
         }
+        // Only record — and badge as "AI-polished" — a genuinely AI-generated
+        // summary. On any deterministic fallback the card stays as-is with no
+        // provenance flag (the area is still marked requested, so we don't
+        // re-hit a degraded endpoint every render).
+        if (!result.enhanced) {
+          continue;
+        }
         setEnhancedRollupSummaries((prev) =>
-          prev[draft.areaId] ? prev : { ...prev, [draft.areaId]: summary },
+          prev[draft.areaId]
+            ? prev
+            : { ...prev, [draft.areaId]: result.summary },
         );
       }
     })();
