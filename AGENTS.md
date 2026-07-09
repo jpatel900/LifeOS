@@ -49,6 +49,7 @@ Do not change RLS policies, OAuth scopes, calendar write logic, service-role usa
 12. Never edit the primary checkout's working tree directly: concurrent agents switch its branches mid-session. All implementation work happens in a dedicated `git worktree`; commit by explicit pathspec and check `git branch --show-current` immediately before every commit.
 13. The repository is public: never write production identifiers (user or row UUIDs, project IDs, tokens), capture text, or personal life details into issues, PR bodies, commit messages, or docs. Reference production evidence abstractly ("the affected block rows") and keep concrete IDs in local session context only.
 14. Claim before building: before implementing anything scoped to an issue, check the issue for an assignee, the `agent:claimed` label, or an open PR referencing it — if any exist, do not start. Otherwise claim it (label or assignee, or a "claiming" comment for ad-hoc sessions) before writing code. Feature work with no tracking issue gets one first. Overlapping unclaimed work was the root cause of the 2026-07-03/04 duplicate-implementation conflicts.
+15. Verified claims only: a completion report may state that behavior works only with the verifying evidence attached — the exact command run and the observed output (the literal "Tests N passed | 0 failed" line, the HTTP response, the query result). "Should work", "likely works", "probably fine", and reasoning-from-code-alone are banned in completion reports; anything not verified goes in an explicit UNVERIFIED list with the reason it could not be verified and the exact test that would verify it. Every completion report ends with a SELF-AUDIT block: (a) each deliverable claim mapped to its evidence or marked UNVERIFIED, (b) gaps — what this task did not cover or nearly got wrong, (c) one concrete improvement for the next similar run.
 
 ## Skill routing
 
@@ -75,7 +76,7 @@ Avoid unrelated communication suites, design marketplaces, mobile/native stacks,
 
 ## Validation expectations
 
-Run the smallest focused checks while iterating, then the required final checks for the touched surface. Default final sequence for code changes is `pnpm format:check`, `pnpm lint`, `pnpm type-check`, `pnpm test`, and `pnpm build`; docs-only changes must at least run the doc/guard tests plus formatting. DB/RLS changes require local Supabase/RLS validation with two users. UI behavior changes require focused browser/E2E proof. Report exact commands, failures, skips, limitations, risks, and rollback notes.
+Run the smallest focused checks while iterating, then the required final checks for the touched surface. Default final sequence for code changes is `pnpm format:check`, `pnpm lint`, `pnpm type-check`, `pnpm test`, and `pnpm build`; docs-only changes must at least run the doc/guard tests plus formatting. DB/RLS changes require local Supabase/RLS validation with two users. UI behavior changes require focused browser/E2E proof. Report exact commands, failures, skips, limitations, risks, and rollback notes. Per rule 15, every "it works" claim needs its evidence inline, and the report ends with the SELF-AUDIT block (claims→evidence, UNVERIFIED list, gaps, one improvement).
 
 ## PR requirements
 
