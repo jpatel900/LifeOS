@@ -7,7 +7,7 @@ description: Use when the Migration Drift workflow is red (production Supabase m
 
 ## Overview / purpose
 
-The `Migration Drift` workflow (`.github/workflows/migration-drift.yml`) compares `supabase/migrations/*.sql` versions on `main` against `supabase_migrations.schema_migrations` in production (project `vpjmltajbaqxwunjjgtq`). Red means production is missing one or more repo migrations: the deployed app may call functions, tables, or columns that do not exist, and the failure mode is usually silent UI breakage (see KNOWN_ISSUES row 11, resolved 2026-07-04). This skill turns the alarm into an applied fix.
+The `Migration Drift` workflow (`.github/workflows/migration-drift.yml`) compares `supabase/migrations/*.sql` versions on `main` against `supabase_migrations.schema_migrations` in production (project `<prod-project-ref>` — get the ref from the Supabase dashboard). Red means production is missing one or more repo migrations: the deployed app may call functions, tables, or columns that do not exist, and the failure mode is usually silent UI breakage (see KNOWN_ISSUES row 11, resolved 2026-07-04). This skill turns the alarm into an applied fix.
 
 ## When to use
 
