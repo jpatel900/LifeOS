@@ -31,20 +31,27 @@
 #
 # Secret-safety note (jpatel900/LifeOS is a PUBLIC repo, so any uploaded
 # artifact is publicly downloadable): apps/web/tests/smoke/helpers/smoke.ts
-# logs in via `page.locator("#password").fill(env.password)`, and the smoke
-# config sets `trace: "retain-on-failure"` -- a Playwright trace records
-# fill-action values, so a retained trace would embed the plaintext
-# SMOKE_PASSWORD. This workflow passes `--trace off` on the CLI (forwarded by
-# run-prod-smoke.mjs's `...process.argv.slice(2)` straight to the Playwright
-# CLI) to suppress trace capture for this run ONLY, without editing
-# playwright.smoke.config.ts. Failure screenshots (`only-on-failure`) are
-# still produced and uploaded: a `type=password` field renders masked dots
-# in a screenshot, so it cannot leak the password. Also passes
-# `--reporter=list,html` so the config's default `list` reporter (no report
-# directory) is supplemented with a real HTML report to satisfy "upload the
-# Playwright report" without touching the shared config. Residual: if the
-# LOGIN leg itself fails, its failure screenshot shows SMOKE_EMAIL typed
-# into the visible email field (password field stays masked either way).
+# logs in via `page.locator("#password").fill(env.password)`, and with
+# artifacts enabled the smoke config uses `trace: "retain-on-failure"` -- a
+# Playwright trace records fill-action values, so a retained trace would
+# embed the plaintext SMOKE_PASSWORD. This workflow passes `--trace off` on
+# the CLI (forwarded by run-prod-smoke.mjs's `...process.argv.slice(2)`
+# straight to the Playwright CLI), which OVERRIDES the config so trace
+# capture stays off for this run no matter what. KEEP `--trace off` -- it is
+# the line that keeps the password out of public artifacts.
+#
+# Artifact posture (owner-ratified 2026-07-09): playwright.smoke.config.ts
+# defaults trace/screenshot to off (PR #471) so ad-hoc smoke runs capture
+# nothing; THIS workflow opts back in via SMOKE_CAPTURE_ARTIFACTS=1 so
+# failure screenshots and the HTML report exist to upload. The owner accepts
+# that these failure artifacts (from a dedicated smoke account, not a
+# personal account) are publicly downloadable. A `type=password` field
+# renders masked dots in a screenshot, so it cannot leak the password. Also
+# passes `--reporter=list,html` so the config's default `list` reporter (no
+# report directory) is supplemented with a real HTML report to satisfy
+# "upload the Playwright report" without touching the shared config.
+# Residual: if the LOGIN leg itself fails, its failure screenshot shows
+# SMOKE_EMAIL typed into the visible email field (password stays masked).
 name: Weekly Prod Smoke
 
 on:
@@ -110,6 +117,10 @@ jobs:
           # demo-mode journey, authenticated legs skip with a clear message.
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Opt back in to failure screenshots + HTML report for THIS run
+          # (config default is off since PR #471). Trace stays off regardless
+          # via the CLI `--trace off` below -- see the secret-safety note.
+          SMOKE_CAPTURE_ARTIFACTS: "1"
         run: |
           if [ -z "$SMOKE_BASE_URL" ]; then
             echo "::warning::SMOKE_BASE_URL secret is not set; skipping the weekly prod smoke."
