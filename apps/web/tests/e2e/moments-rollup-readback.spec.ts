@@ -146,8 +146,8 @@ test.describe("moments rollup readback (/moments-preview, #260)", () => {
     await expect(
       page.getByTestId(`close-moment-rollup-${AREA_ID}`),
     ).toHaveCount(0);
-    await expect(
-      page.getByTestId("close-moment-rollups-approved"),
-    ).toHaveCount(0);
+    await expect(page.getByTestId("close-moment-rollups-approved")).toHaveCount(
+      0,
+    );
   });
 });

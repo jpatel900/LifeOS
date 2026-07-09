@@ -7,18 +7,20 @@ description: "Use when running, serving, deploying, or operating software: 'star
 
 Operating discipline for agents that run things. The characteristic agent failures here are: starting a server in the foreground and wedging the session; killing a process it didn't start; re-running a writing command twice and corrupting state; deploying with no written rollback; and leaving orphan processes for the next session to trip over. Every rule below exists to prevent one of those.
 
-**Jargon:** *artifact* = any file produced by running (builds, logs, generated data). *Orphan* = a process left running after the session that started it ended. *Idempotent* = safe to run twice; the second run changes nothing.
+**Jargon:** _artifact_ = any file produced by running (builds, logs, generated data). _Orphan_ = a process left running after the session that started it ended. _Idempotent_ = safe to run twice; the second run changes nothing.
 
 ## When to use / when NOT to use
 
 **Use when:**
+
 - Running any project command whose behavior you haven't confirmed (first §1).
 - Starting/stopping servers, watchers, or anything long-running.
 - Deploying, or preparing to.
 - Cleaning up processes, ports, or artifacts.
 
 **Do NOT use for:**
-- Whether a deploy/destructive action is *permitted* and who approves it → `agentic-change-control` (deploys are gated there; this skill is the mechanics).
+
+- Whether a deploy/destructive action is _permitted_ and who approves it → `agentic-change-control` (deploys are gated there; this skill is the mechanics).
 - Toolchain/env setup and "wrong version" problems → `agentic-config-and-environment`.
 - Diagnosing why the run fails → `agentic-debugging-playbook`.
 
@@ -63,6 +65,7 @@ Start-Sleep 2; Get-Content server.log -Tail 20
 # Who owns the port? (run BEFORE binding and BEFORE killing)
 lsof -i :3000 -sTCP:LISTEN 2>/dev/null || ss -ltnp 2>/dev/null | grep :3000   # Linux/macOS
 ```
+
 ```powershell
 Get-NetTCPConnection -LocalPort 3000 -State Listen | ForEach-Object { Get-Process -Id $_.OwningProcess }
 ```
@@ -79,9 +82,10 @@ Get-NetTCPConnection -LocalPort 3000 -State Listen | ForEach-Object { Get-Proces
 
 ## 4. Deploy discipline
 
-Deploy *permission* is a change-control question (rung 1–2 of the ladder — human-gated; see `agentic-change-control`). Deploy *mechanics*, once authorized:
+Deploy _permission_ is a change-control question (rung 1–2 of the ladder — human-gated; see `agentic-change-control`). Deploy _mechanics_, once authorized:
 
 **Pre-deploy checklist (hard rule — all boxes, every time):**
+
 - [ ] CI green on the exact commit being deployed (not "the branch, roughly").
 - [ ] Migrations: known, ordered, tested against a prod-like copy; reversible or explicitly flagged one-way.
 - [ ] Feature-flag state at deploy time is written down (which flags, which values).
@@ -98,10 +102,11 @@ Before ending any session that leaves things running, write (in the task notes, 
 
 ```markdown
 ## Running state handoff (<date>)
+
 - Process: <what> — PID <n> / container <id>, started by me, logs at <path>
-- Stop: <exact command>   Safe to kill: <yes/no + why>
+- Stop: <exact command> Safe to kill: <yes/no + why>
 - Ports in use: <list>
-- Temp/scratch artifacts worth keeping: <paths + why>   Safe to delete: <paths>
+- Temp/scratch artifacts worth keeping: <paths + why> Safe to delete: <paths>
 - NOT mine (observed, untouched): <anything you noticed but do not own>
 ```
 
@@ -112,6 +117,7 @@ The next session (or human) must be able to tear everything down from this note 
 Authored 2026-07-02. Rules labeled per house convention: **hard rule** (violation is an incident), **default** (deviate with stated reason). The port/process commands were chosen for portability across Linux/macOS (`lsof`/`ss`) and Windows PowerShell (`Get-NetTCPConnection`); `lsof` is absent on some minimal Linux images — `ss` is the fallback shown.
 
 **Volatile facts, re-verify if this file is old:**
+
 - `lsof`/`ss`/`Get-NetTCPConnection` flag shapes: `lsof -h`, `ss -h`, `Get-Help Get-NetTCPConnection`.
 - `Start-Process` redirect parameter names: `Get-Help Start-Process -Parameter *`.
 - Agent tools' native background-process facilities change fast — re-check your tool's docs before preferring the portable fallback.

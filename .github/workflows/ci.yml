@@ -80,10 +80,7 @@ jobs:
         run: pnpm build
 
       - name: Check formatting
-        run: |
-          if ! pnpm format:check; then
-            echo "::warning::pnpm format:check failed. Formatting drift is non-blocking in this workflow."
-          fi
+        run: pnpm format:check
 
   e2e:
     name: Playwright E2E
@@ -152,7 +149,9 @@ jobs:
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # pinned for reproducibility — bump deliberately (was `latest`, which
+          # let CI silently pick up upstream CLI changes on every run)
+          version: 2.109.1
 
       - name: Start local Supabase stack
         run: supabase start

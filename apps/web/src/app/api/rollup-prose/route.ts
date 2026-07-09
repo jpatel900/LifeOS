@@ -14,7 +14,9 @@ function readBearerToken(request: Request) {
 }
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
 }
 
 function parseRequestBody(body: unknown) {

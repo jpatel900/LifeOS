@@ -18,7 +18,9 @@ function makeClient(options: {
     client: {
       auth: {
         getUser: vi.fn(async () => ({
-          data: { user: options.user === undefined ? { id: "user-a" } : options.user },
+          data: {
+            user: options.user === undefined ? { id: "user-a" } : options.user,
+          },
           error: options.userError ?? null,
         })),
       },
@@ -110,7 +112,9 @@ describe("recordAiCallTrace", () => {
     );
 
     expect(insert).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ai_call_traces"));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("ai_call_traces"),
+    );
   });
 
   it("degrades silently when Supabase is not configured (null client)", async () => {
@@ -139,7 +143,9 @@ describe("recordAiCallTrace", () => {
     });
 
     expect(insert).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("ai_call_traces"));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("ai_call_traces"),
+    );
   });
 
   it("warns but never throws when the insert returns an error", async () => {

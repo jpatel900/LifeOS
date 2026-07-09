@@ -125,7 +125,9 @@ test.describe("moments wins harvest (/moments-preview, #259)", () => {
     await expect(page.getByTestId("close-moment-wins-confirmed")).toContainText(
       "Shipped onboarding flow v2",
     );
-    await expect(page.getByTestId(`close-moment-win-${TASK_ID}`)).toHaveCount(0);
+    await expect(page.getByTestId(`close-moment-win-${TASK_ID}`)).toHaveCount(
+      0,
+    );
     await expect(page.getByTestId("close-moment-wins-empty")).toBeVisible();
   });
 
@@ -137,8 +139,12 @@ test.describe("moments wins harvest (/moments-preview, #259)", () => {
 
     // Nothing logged: the candidate is gone and no confirmed win exists. With
     // neither pending nor confirmed wins, the whole wins card is hidden.
-    await expect(page.getByTestId(`close-moment-win-${TASK_ID}`)).toHaveCount(0);
-    await expect(page.getByTestId("close-moment-wins-confirmed")).toHaveCount(0);
+    await expect(page.getByTestId(`close-moment-win-${TASK_ID}`)).toHaveCount(
+      0,
+    );
+    await expect(page.getByTestId("close-moment-wins-confirmed")).toHaveCount(
+      0,
+    );
     await expect(page.getByTestId("close-moment-wins-pending")).toHaveCount(0);
   });
 });

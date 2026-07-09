@@ -2,10 +2,15 @@
 # outrunning the production database, which only changes via a manual
 # `supabase db push`. Detection only — it never applies DDL to production.
 #
-# Requires one repository secret to do real work, otherwise it skips with a
-# warning: SUPABASE_PROD_DB_URL — a Postgres connection string for the prod
-# project (Supabase dashboard -> Connect -> Session pooler). Prefer a
-# read-only role; the job only reads supabase_migrations.schema_migrations.
+# Requires one repository secret to do real work: SUPABASE_PROD_DB_URL — a
+# Postgres connection string for the prod project (Supabase dashboard ->
+# Connect -> Session pooler). Prefer a read-only role; the job only reads
+# supabase_migrations.schema_migrations.
+#
+# A missing secret FAILS the check on push-to-main (and on the migration-apply
+# re-dispatch) — this guard must not be silently disarmable by an unset
+# secret. The only way to skip is an explicit manual workflow_dispatch with
+# allow_skip=true.
 name: Migration Drift
 
 # Runs on every push to main (not just migration paths) so an unresolved red
@@ -15,6 +20,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      allow_skip:
+        description: "Skip the check if SUPABASE_PROD_DB_URL is unset (manual dispatch only; never honored on push)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -30,10 +41,17 @@ jobs:
       - name: Compare repo migrations against production
         env:
           PROD_DB_URL: ${{ secrets.SUPABASE_PROD_DB_URL }}
+          EVENT_NAME: ${{ github.event_name }}
+          ALLOW_SKIP: ${{ github.event.inputs.allow_skip }}
         run: |
           if [ -z "$PROD_DB_URL" ]; then
-            echo "::warning::SUPABASE_PROD_DB_URL secret is not set; skipping the drift check."
-            exit 0
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$ALLOW_SKIP" = "true" ]; then
+              echo "::warning::SUPABASE_PROD_DB_URL secret is not set; skipping the drift check (allow_skip=true on manual dispatch)."
+              exit 0
+            fi
+
+            echo "::error::SUPABASE_PROD_DB_URL secret is not set, so the migration drift guard is disarmed. This check must not silently pass — set the secret, or if this is a deliberate manual skip, re-run via workflow_dispatch with allow_skip=true."
+            exit 1
           fi
 
           local_versions=$(basename -s .sql supabase/migrations/*.sql | cut -d_ -f1 | sort)

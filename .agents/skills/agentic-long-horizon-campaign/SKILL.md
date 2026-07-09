@@ -7,20 +7,20 @@ description: "Use when a hard problem will span multiple sessions, agents, or co
 
 The executable campaign method for problems too big for one session. The core failure mode of long-horizon agentic work is drift: each new session (or post-compaction continuation) reconstructs the problem from partial memory, re-fights settled battles, and silently changes the goal. The countermeasure is a single in-repo state file — `CAMPAIGN.md` — that is more authoritative than any session's memory, plus a re-entry protocol that forces re-verification before continuation, and gates that make progress falsifiable. A campaign is finished when its success criterion (fixed at the start) is demonstrated, never when the work "feels done".
 
-**Jargon defined once:** *Session* = one continuous run of an agent with one context window. *Compaction* = the agent tool summarizing/truncating its own context mid-session; treat post-compaction as a new session. *Gate* = a checkpoint whose passage requires reproducing a specific, pre-declared observation. *Drift* = any divergence between what is being worked on and what the campaign doc says should be worked on.
+**Jargon defined once:** _Session_ = one continuous run of an agent with one context window. _Compaction_ = the agent tool summarizing/truncating its own context mid-session; treat post-compaction as a new session. _Gate_ = a checkpoint whose passage requires reproducing a specific, pre-declared observation. _Drift_ = any divergence between what is being worked on and what the campaign doc says should be worked on.
 
 ## When to use / when NOT to use
 
-| Situation | Verdict |
-|---|---|
-| Task will plausibly span >1 session or >1 agent | USE — start a campaign before writing code |
-| You just entered a repo containing `CAMPAIGN.md` | USE — run the re-entry protocol below |
-| Context was compacted mid-task and continuation feels fuzzy | USE — treat as cold re-entry |
-| A bug you expect to fix within this session | DO NOT — use **agentic-debugging-playbook** |
-| Recording *why* a past approach failed, for posterity beyond one campaign | DO NOT duplicate — the project-wide chronicle belongs to **agentic-failure-archaeology**; the campaign's wrong-paths section covers only this campaign |
-| Deciding how the finished result merges into the codebase | Not here — **agentic-change-control** owns merge gating; this skill only says results must go through it |
-| Defining what counts as proof at the final gate | Thresholds and evidence standards live in **agentic-validation-and-qa** |
-| First contact with an unfamiliar repo | Do **agentic-project-onboarding** first, then start the campaign |
+| Situation                                                                 | Verdict                                                                                                                                                |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Task will plausibly span >1 session or >1 agent                           | USE — start a campaign before writing code                                                                                                             |
+| You just entered a repo containing `CAMPAIGN.md`                          | USE — run the re-entry protocol below                                                                                                                  |
+| Context was compacted mid-task and continuation feels fuzzy               | USE — treat as cold re-entry                                                                                                                           |
+| A bug you expect to fix within this session                               | DO NOT — use **agentic-debugging-playbook**                                                                                                            |
+| Recording _why_ a past approach failed, for posterity beyond one campaign | DO NOT duplicate — the project-wide chronicle belongs to **agentic-failure-archaeology**; the campaign's wrong-paths section covers only this campaign |
+| Deciding how the finished result merges into the codebase                 | Not here — **agentic-change-control** owns merge gating; this skill only says results must go through it                                               |
+| Defining what counts as proof at the final gate                           | Thresholds and evidence standards live in **agentic-validation-and-qa**                                                                                |
+| First contact with an unfamiliar repo                                     | Do **agentic-project-onboarding** first, then start the campaign                                                                                       |
 
 Heuristic (default, not hard rule): if you estimate the task at more than ~2 hours of agent work or more than ~3 distinct phases, open a campaign. The cost of an unnecessary CAMPAIGN.md is minutes; the cost of a lost session is the session.
 
@@ -34,6 +34,7 @@ Do this BEFORE any implementation work:
    # bash
    test -f CAMPAIGN.md && echo "CAMPAIGN EXISTS - run re-entry protocol instead" || touch CAMPAIGN.md
    ```
+
    ```powershell
    # PowerShell
    if (Test-Path CAMPAIGN.md) { "CAMPAIGN EXISTS - run re-entry protocol instead" } else { New-Item -ItemType File CAMPAIGN.md }
@@ -55,14 +56,14 @@ Do this BEFORE any implementation work:
 
 `CAMPAIGN.md` has exactly these six sections. Full template in section 7.
 
-| Section | Rule |
-|---|---|
-| **Objective** | One sentence + the measurable success criterion + the exact command that checks it. Frozen after day one; changing it requires a dated decision-log entry explaining why. |
-| **Solution menu** | Ranked candidate approaches, each with its proof obligation (section 4). |
-| **Phases** | Numbered. Each phase = exact commands + EXPECTED observation at the gate + branch instructions ("if you see X instead of Y → go to phase N / stop and record"). |
-| **Current state** | Updated at EVERY session end (section 5). Contains re-verification commands. |
-| **Decision log** | Dated, append-only. Never edit or delete old entries; append corrections. |
-| **Wrong paths** | Fenced-off list: what was attempted, why it failed (with evidence), and "do not retry without new evidence". |
+| Section           | Rule                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Objective**     | One sentence + the measurable success criterion + the exact command that checks it. Frozen after day one; changing it requires a dated decision-log entry explaining why. |
+| **Solution menu** | Ranked candidate approaches, each with its proof obligation (section 4).                                                                                                  |
+| **Phases**        | Numbered. Each phase = exact commands + EXPECTED observation at the gate + branch instructions ("if you see X instead of Y → go to phase N / stop and record").           |
+| **Current state** | Updated at EVERY session end (section 5). Contains re-verification commands.                                                                                              |
+| **Decision log**  | Dated, append-only. Never edit or delete old entries; append corrections.                                                                                                 |
+| **Wrong paths**   | Fenced-off list: what was attempted, why it failed (with evidence), and "do not retry without new evidence".                                                              |
 
 Hard rules:
 
@@ -72,7 +73,7 @@ Hard rules:
 
 ## 3. Gate discipline
 
-A *gate* is the exit condition of a phase. Rules (all hard):
+A _gate_ is the exit condition of a phase. Rules (all hard):
 
 1. A phase is passed ONLY when its pre-declared expected observation is **reproduced and pasted** into the decision log, with date and the command that produced it.
 2. **No skipping gates because "it's probably fine".** If the gate command is expensive, that was a design error in the phase — split the phase, don't skip the gate.
@@ -94,16 +95,16 @@ IF anything else -> STOP. Paste output into decision log. Do not proceed.
 
 Before implementing anything, enumerate the candidate approaches in the campaign doc:
 
-| Rank | Approach | Proof obligation (what must be demonstrated BEFORE adopting it) | Status |
-|---|---|---|---|
-| 1 | `<approach>` | `<e.g. "spike shows round-trip on 3 fixture files">` | active |
-| 2 | `<approach>` | `<...>` | untried |
-| 3 | `<approach>` | `<...>` | untried |
+| Rank | Approach     | Proof obligation (what must be demonstrated BEFORE adopting it) | Status  |
+| ---- | ------------ | --------------------------------------------------------------- | ------- |
+| 1    | `<approach>` | `<e.g. "spike shows round-trip on 3 fixture files">`            | active  |
+| 2    | `<approach>` | `<...>`                                                         | untried |
+| 3    | `<approach>` | `<...>`                                                         | untried |
 
 Rules:
 
 - **Work the top-ranked approach to its gate before touching the second.** Parallel half-attempts are how campaigns produce three broken branches and no knowledge.
-- An approach's *proof obligation* is a small demonstration that the approach can work at all — a spike, a minimal repro of the key mechanism (**agentic-proof-and-analysis-toolkit** has the recipes). Adopting an approach without meeting its proof obligation is a recorded decision, not a default.
+- An approach's _proof obligation_ is a small demonstration that the approach can work at all — a spike, a minimal repro of the key mechanism (**agentic-proof-and-analysis-toolkit** has the recipes). Adopting an approach without meeting its proof obligation is a recorded decision, not a default.
 - When an approach fails: move it to **Wrong paths** with the evidence, promote the next candidate, log the decision. Never delete it from the menu — mark it `failed → see wrong paths`.
 - Re-ranking the menu is allowed any time, with a dated log entry stating the new evidence that justified it.
 
@@ -165,11 +166,13 @@ Copy this verbatim into a new campaign and replace placeholders. Discovery comma
 
 ````markdown
 # CAMPAIGN: <short-name>
-STATUS: OPEN            <!-- OPEN | CLOSED (success) | CLOSED (abandoned) -->
-OPENED: <YYYY-MM-DD>    OWNER: <human or team who arbitrates scope changes>
+
+STATUS: OPEN <!-- OPEN | CLOSED (success) | CLOSED (abandoned) -->
+OPENED: <YYYY-MM-DD> OWNER: <human or team who arbitrates scope changes>
 BRANCH: campaign/<short-name>
 
 ## Objective
+
 <One sentence: what this campaign delivers.>
 SUCCESS CRITERION (frozen <YYYY-MM-DD>):
   <measurable statement, e.g. "all 14 files under fixtures/ produce zero
@@ -178,39 +181,47 @@ CHECK COMMAND:
   <exact command, e.g. `<test-runner> --suite golden` — must exit 0>
 
 ## Solution menu
-| Rank | Approach | Proof obligation | Status |
-|---|---|---|---|
-| 1 | <approach A> | <spike/demo required before adopting> | active |
-| 2 | <approach B> | <...> | untried |
+
+| Rank | Approach     | Proof obligation                      | Status  |
+| ---- | ------------ | ------------------------------------- | ------- |
+| 1    | <approach A> | <spike/demo required before adopting> | active  |
+| 2    | <approach B> | <...>                                 | untried |
 
 ## Phases
+
 ### Phase 1: <name>
+
 DO:
-  <exact command or exact edit, one per line>
+<exact command or exact edit, one per line>
 GATE: run `<command>`
 EXPECT: <specific output/observation>
-IF EXPECTED       -> log it, go to Phase 2
-IF <symptom>      -> go to Phase <N> (<diagnosis>)
-IF anything else  -> STOP, paste output to decision log
+IF EXPECTED -> log it, go to Phase 2
+IF <symptom> -> go to Phase <N> (<diagnosis>)
+IF anything else -> STOP, paste output to decision log
 
 ### Phase 2: <name>
+
 ...
 
 ### Phase FINAL: demonstrate success criterion
+
 GATE: run the CHECK COMMAND from Objective
 EXPECT: <the frozen criterion, verbatim>
-IF EXPECTED       -> proceed to promotion (agentic-change-control)
-IF anything else  -> STOP, log, re-plan
+IF EXPECTED -> proceed to promotion (agentic-change-control)
+IF anything else -> STOP, log, re-plan
 
-## Current state  <!-- OVERWRITE at every session end; everything else is append-only -->
-AS OF: <YYYY-MM-DD HH:MM UTC>   ACTIVE PHASE: <n>
+## Current state <!-- OVERWRITE at every session end; everything else is append-only -->
+
+AS OF: <YYYY-MM-DD HH:MM UTC> ACTIVE PHASE: <n>
 CLAIMS (re-verify each on re-entry):
-  - <claim>            | verify: `<command>` | expect: <observation>
-  - <claim>            | verify: `<command>` | expect: <observation>
-LOOSE ENDS: <stashes, untracked files, or "none">
-NEXT ACTION: <exact command or exact edit target>
 
-## Decision log  <!-- append-only, never edit past entries -->
+- <claim> | verify: `<command>` | expect: <observation>
+- <claim> | verify: `<command>` | expect: <observation>
+  LOOSE ENDS: <stashes, untracked files, or "none">
+  NEXT ACTION: <exact command or exact edit target>
+
+## Decision log <!-- append-only, never edit past entries -->
+
 - <YYYY-MM-DD> Campaign opened. Criterion frozen as above.
 - <YYYY-MM-DD> Phase 1 gate PASSED. Output:
   ```
@@ -218,7 +229,8 @@ NEXT ACTION: <exact command or exact edit target>
   ```
 - <YYYY-MM-DD> <decision + evidence>
 
-## Wrong paths  <!-- append-only; do not retry without new evidence -->
+## Wrong paths <!-- append-only; do not retry without new evidence -->
+
 - <approach/tactic>: attempted <date>. Failed because <evidence, pasted or
   linked>. DO NOT RETRY unless <what new evidence would justify retrying>.
 ````

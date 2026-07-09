@@ -282,7 +282,12 @@ describe("CaptureOverlay", () => {
   describe("save raw", () => {
     it("does not render the save-raw button unless onSaveRaw is provided", () => {
       render(
-        <CaptureOverlay open kinds={KINDS} onSave={vi.fn()} onClose={vi.fn()} />,
+        <CaptureOverlay
+          open
+          kinds={KINDS}
+          onSave={vi.fn()}
+          onClose={vi.fn()}
+        />,
       );
       expect(
         screen.queryByTestId("capture-overlay-save-raw"),

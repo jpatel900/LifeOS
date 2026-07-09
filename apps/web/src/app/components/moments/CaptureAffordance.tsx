@@ -56,8 +56,8 @@ export function CaptureAffordance({
         >
           <span aria-hidden="true">{unsyncedCount}</span>
           <span className="sr-only">
-            {unsyncedCount} {unsyncedCount === 1 ? "capture" : "captures"} waiting
-            to sync
+            {unsyncedCount} {unsyncedCount === 1 ? "capture" : "captures"}{" "}
+            waiting to sync
           </span>
         </span>
       ) : null}

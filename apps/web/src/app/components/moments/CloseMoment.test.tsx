@@ -18,7 +18,9 @@ const win: CloseWinVM = {
   areaLabel: "Main Job",
 };
 
-function renderClose(overrides: Partial<React.ComponentProps<typeof CloseMoment>> = {}) {
+function renderClose(
+  overrides: Partial<React.ComponentProps<typeof CloseMoment>> = {},
+) {
   const props = {
     vm: baseVm,
     pendingWins: [] as CloseWinVM[],
@@ -157,7 +159,9 @@ describe("CloseMoment — S8 rollup readback", () => {
 
   it("shows no AI provenance affordance for a deterministic draft", () => {
     renderClose({ pendingRollups: [rollupDraft] });
-    expect(screen.queryByTestId("close-moment-rollup-aiflag-area-1")).toBeNull();
+    expect(
+      screen.queryByTestId("close-moment-rollup-aiflag-area-1"),
+    ).toBeNull();
     expect(
       screen.queryByTestId("close-moment-rollup-toggleprose-area-1"),
     ).toBeNull();
@@ -165,7 +169,9 @@ describe("CloseMoment — S8 rollup readback", () => {
 
   it("flags AI-polished prose and offers to keep the original", () => {
     const props = renderClose({
-      pendingRollups: [{ ...rollupDraft, enhanced: true, hasEnhancement: true }],
+      pendingRollups: [
+        { ...rollupDraft, enhanced: true, hasEnhancement: true },
+      ],
     });
     expect(
       screen.getByTestId("close-moment-rollup-aiflag-area-1"),
@@ -183,7 +189,9 @@ describe("CloseMoment — S8 rollup readback", () => {
         { ...rollupDraft, enhanced: false, hasEnhancement: true },
       ],
     });
-    expect(screen.queryByTestId("close-moment-rollup-aiflag-area-1")).toBeNull();
+    expect(
+      screen.queryByTestId("close-moment-rollup-aiflag-area-1"),
+    ).toBeNull();
     expect(
       screen.getByTestId("close-moment-rollup-toggleprose-area-1"),
     ).toHaveTextContent("Use AI version");

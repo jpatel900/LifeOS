@@ -1,9 +1,4 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarPage from "../app/calendar/page";
 import { ReviewView } from "../app/components/LifeOSCockpit";
@@ -56,9 +51,7 @@ function overRunSession(
 
 // A seeded state with one active task (given a launch step so the proposal
 // gate opens), a proposal for it in GOLDEN_AREA_ID, and the given sessions.
-function seedWithProposal(
-  sessions: Phase2MockExecutionSession[],
-): void {
+function seedWithProposal(sessions: Phase2MockExecutionSession[]): void {
   let state = workflowSeed();
   state = captureWorkflow(state, "Draft the quarterly plan review.");
   state = acceptLatestDraft(state);
@@ -177,7 +170,9 @@ describe("S9 golden-journey point 6b: override-pattern policy proposal", () => {
     expect(card).toHaveTextContent("planning.default_time_block");
     expect(card).toHaveTextContent("overridden 3 of the last 5");
 
-    fireEvent.click(within(card).getByRole("button", { name: "Approve change" }));
+    fireEvent.click(
+      within(card).getByRole("button", { name: "Approve change" }),
+    );
     expect(onDecidePolicy).toHaveBeenCalledWith(candidate, "accepted");
   });
 

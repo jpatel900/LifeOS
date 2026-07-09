@@ -686,7 +686,7 @@ jobs:
               '- `pnpm type-check`: passed',
               '- `pnpm test`: passed',
               '- `pnpm build`: passed',
-              `- \`pnpm format:check\`: ${process.env.FORMAT_STATUS === 'passed' ? 'passed' : 'warning-only failure (matched CI behavior)'}`,
+              `- \`pnpm format:check\`: ${process.env.FORMAT_STATUS === 'passed' ? 'passed' : 'warning-only failure in this autofix workflow (main CI now blocks on this check; see chore/ci-cost-hardening)'}`,
               '- `git diff --check`: passed',
             ];
 

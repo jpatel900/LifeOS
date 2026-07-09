@@ -123,7 +123,9 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
   const recalCard = page.getByTestId("proposal-recalibration");
   if ((await recalCard.count()) > 0) {
     await expect(recalCard.first()).toBeVisible();
-    console.log("[smoke] PASS S9 6a: recalibration surface present + rendered.");
+    console.log(
+      "[smoke] PASS S9 6a: recalibration surface present + rendered.",
+    );
   } else {
     console.log(
       "[smoke] S9 6a: no recalibration history on this account (expected on a fresh journey).",
@@ -177,7 +179,9 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
   const policySurface = page.getByTestId("policy-proposals");
   if ((await policySurface.count()) > 0) {
     await expect(policySurface.first()).toBeVisible();
-    console.log("[smoke] PASS S9 6b: policy-proposal surface present + rendered.");
+    console.log(
+      "[smoke] PASS S9 6b: policy-proposal surface present + rendered.",
+    );
   } else {
     console.log(
       "[smoke] S9 6b: no override-pattern proposals on this account (expected on a fresh journey).",

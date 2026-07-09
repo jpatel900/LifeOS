@@ -308,6 +308,10 @@ Do not treat the deployment as production-ready if any of these happen:
 - service-role or provider secrets appear in client-visible output
 - `/health` hides real auth/data-read failure behind misleading healthy copy
 
+## 6a. Docs-only build skip
+
+`apps/web/vercel.json`'s `ignoreCommand` (`bash ../../scripts/vercel-ignore-build.sh`, run from Vercel's configured Root Directory `apps/web`) skips the Vercel build when every file in a push matches `docs/**`, root-level `*.md`, `.agents/**`, or `.github/**` — anything under `apps/**`/`packages/**`/`supabase/**` or root config always builds. Vercel only honors `ignoreCommand` if the project's dashboard settings don't override it, so confirm after merge by pushing a docs-only change and checking that no build fires. If the Root Directory setting ever changes from `apps/web`, `vercel.json` and the relative path to the script must move with it.
+
 ## 6. Fast rollback
 
 If the deployment is bad:

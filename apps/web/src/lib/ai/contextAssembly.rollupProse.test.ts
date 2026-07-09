@@ -40,7 +40,9 @@ describe("buildRollupProseMessages", () => {
     expect(user.content).toContain("- Shipped the parser fix");
     expect(user.content).toContain("- Skipped the Tuesday review block");
     // Tells the model exactly how many to return (structural 1:1 hint).
-    expect(user.content).toMatch(/Highlights \(rephrase each; return exactly 2\)/);
+    expect(user.content).toMatch(
+      /Highlights \(rephrase each; return exactly 2\)/,
+    );
     expect(user.content).toMatch(/Misses \(rephrase each; return exactly 1\)/);
   });
 

@@ -1977,7 +1977,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const persistedAreaId = areaId
         ? persistedAreaIdForWorkflowId(areaId, persistedAreasRef.current)
         : null;
-      if (durationProfileForArea(durationProfiles, persistedAreaId)) return null;
+      if (durationProfileForArea(durationProfiles, persistedAreaId))
+        return null;
       return buildProposalRecalibration(
         state.executionSessions,
         areaId,
@@ -2004,87 +2005,87 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     decision: "accepted" | "dismissed",
   ) => {
-      const client = createSupabaseBrowserClient();
-      recordDurationRecalibrationDecision(client, {
-        area_id: input.areaId,
-        decision,
-        multiplier: input.recalibration.recalibration.multiplier,
-        sample_count: input.recalibration.recalibration.sampleCount,
-        estimate_minutes: input.recalibration.estimateMinutes,
-        adjusted_minutes: input.recalibration.adjustedMinutes,
-        resolved_at: new Date().toISOString(),
-      });
+    const client = createSupabaseBrowserClient();
+    recordDurationRecalibrationDecision(client, {
+      area_id: input.areaId,
+      decision,
+      multiplier: input.recalibration.recalibration.multiplier,
+      sample_count: input.recalibration.recalibration.sampleCount,
+      estimate_minutes: input.recalibration.estimateMinutes,
+      adjusted_minutes: input.recalibration.adjustedMinutes,
+      resolved_at: new Date().toISOString(),
+    });
 
-      if (decision !== "accepted") return;
+    if (decision !== "accepted") return;
 
-      const multiplier = input.recalibration.recalibration.multiplier;
-      const sampleCount = input.recalibration.recalibration.sampleCount;
-      const persistedAreaId = input.areaId
-        ? persistedAreaIdForWorkflowId(input.areaId, persistedAreasRef.current)
-        : null;
+    const multiplier = input.recalibration.recalibration.multiplier;
+    const sampleCount = input.recalibration.recalibration.sampleCount;
+    const persistedAreaId = input.areaId
+      ? persistedAreaIdForWorkflowId(input.areaId, persistedAreasRef.current)
+      : null;
 
-      // Persist + optimistically apply the area profile so the suppression and
-      // future-proposal default take effect immediately. Only a real persisted
-      // area id can back the FK; demo/unmapped areas still retime locally below.
-      if (persistedAreaId && isUuid(persistedAreaId)) {
-        setDurationProfiles((current) => {
-          const rest = current.filter(
-            (profile) =>
-              !(
-                profile.area_id === persistedAreaId &&
-                profile.task_type === AREA_DURATION_TASK_TYPE
-              ),
-          );
-          return [
-            ...rest,
-            {
-              id: crypto.randomUUID(),
-              user_id: NIL_UUID,
-              area_id: persistedAreaId,
-              task_type: AREA_DURATION_TASK_TYPE,
-              estimate_stats_json: { multiplier, sample_count: sampleCount },
-              sample_count: sampleCount,
-              last_updated_at: new Date().toISOString(),
-            },
-          ];
-        });
-        if (client) {
-          void upsertDurationProfile(client, {
+    // Persist + optimistically apply the area profile so the suppression and
+    // future-proposal default take effect immediately. Only a real persisted
+    // area id can back the FK; demo/unmapped areas still retime locally below.
+    if (persistedAreaId && isUuid(persistedAreaId)) {
+      setDurationProfiles((current) => {
+        const rest = current.filter(
+          (profile) =>
+            !(
+              profile.area_id === persistedAreaId &&
+              profile.task_type === AREA_DURATION_TASK_TYPE
+            ),
+        );
+        return [
+          ...rest,
+          {
+            id: crypto.randomUUID(),
+            user_id: NIL_UUID,
             area_id: persistedAreaId,
             task_type: AREA_DURATION_TASK_TYPE,
-            estimate_stats: { multiplier, sample_count: sampleCount },
+            estimate_stats_json: { multiplier, sample_count: sampleCount },
             sample_count: sampleCount,
-          }).catch(() => {
-            // Non-fatal: the profile stays applied locally this session and is
-            // re-derived from actuals next time; a write failure never blocks.
-          });
-        }
-      }
-
-      // Retime this pending proposal to the adjusted duration now (immediate
-      // "act for me"), reusing the proven edit-timing path.
-      const previous = stateRef.current;
-      const proposedEnd = new Date(
-        new Date(input.proposedStart).getTime() +
-          input.recalibration.adjustedMinutes * 60 * 1000,
-      ).toISOString();
-      const next = updateProposal(previous, input.proposalId, {
-        proposed_start: input.proposedStart,
-        proposed_end: proposedEnd,
-        rationale: `Sized to your area actuals (${multiplier}x).`,
+            last_updated_at: new Date().toISOString(),
+          },
+        ];
       });
-      if (next === previous) return;
-      applyWorkflowState(next);
-      const editedProposal =
-        next.timeBlockProposals.find(
-          (proposal) => proposal.id === input.proposalId,
-        ) ?? null;
-      if (editedProposal) {
-        void persistEditedLocalProposal(editedProposal).catch((error) => {
-          markPersistedSaveFailure(error);
+      if (client) {
+        void upsertDurationProfile(client, {
+          area_id: persistedAreaId,
+          task_type: AREA_DURATION_TASK_TYPE,
+          estimate_stats: { multiplier, sample_count: sampleCount },
+          sample_count: sampleCount,
+        }).catch(() => {
+          // Non-fatal: the profile stays applied locally this session and is
+          // re-derived from actuals next time; a write failure never blocks.
         });
       }
-    };
+    }
+
+    // Retime this pending proposal to the adjusted duration now (immediate
+    // "act for me"), reusing the proven edit-timing path.
+    const previous = stateRef.current;
+    const proposedEnd = new Date(
+      new Date(input.proposedStart).getTime() +
+        input.recalibration.adjustedMinutes * 60 * 1000,
+    ).toISOString();
+    const next = updateProposal(previous, input.proposalId, {
+      proposed_start: input.proposedStart,
+      proposed_end: proposedEnd,
+      rationale: `Sized to your area actuals (${multiplier}x).`,
+    });
+    if (next === previous) return;
+    applyWorkflowState(next);
+    const editedProposal =
+      next.timeBlockProposals.find(
+        (proposal) => proposal.id === input.proposalId,
+      ) ?? null;
+    if (editedProposal) {
+      void persistEditedLocalProposal(editedProposal).catch((error) => {
+        markPersistedSaveFailure(error);
+      });
+    }
+  };
 
   async function persistStartedSession(
     localSession: Phase2MockExecutionSession,

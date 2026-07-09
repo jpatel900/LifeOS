@@ -156,9 +156,9 @@ describe("contextAssembly parse prompt", () => {
 
   it("keeps parity when rollupContext is empty or has no highlights/misses", () => {
     const rawText = "Log the standup notes.";
-    expect(
-      buildParseCaptureMessages({ rawText, rollupContext: [] }),
-    ).toEqual(baselineMessages({ rawText }));
+    expect(buildParseCaptureMessages({ rawText, rollupContext: [] })).toEqual(
+      baselineMessages({ rawText }),
+    );
     expect(
       buildParseCaptureMessages({
         rawText,

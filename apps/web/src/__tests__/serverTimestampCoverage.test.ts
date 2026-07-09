@@ -31,7 +31,11 @@ const EXPECTED_CREATED_AT_TABLES = [
 
 // Tables that intentionally use a different clock column (no created_at), so
 // they are correctly outside the invariant above.
-const EXEMPT_TABLES = ["duration_profiles", "health_checks", "health_incidents"];
+const EXEMPT_TABLES = [
+  "duration_profiles",
+  "health_checks",
+  "health_incidents",
+];
 
 function loadAllMigrationsSql(): string {
   return readdirSync(migrationsDir)

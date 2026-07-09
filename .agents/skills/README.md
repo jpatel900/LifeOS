@@ -57,12 +57,3 @@ Third-party skills remain under their upstream repos' licenses.
 - **superpowers**: finishing-a-development-branch, receiving-code-review, requesting-code-review, systematic-debugging, verification-before-completion, writing-skills
 
 <!-- vendored-skills:end -->
-
-
-
-
-
-
-
-
-
