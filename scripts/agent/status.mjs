@@ -561,6 +561,83 @@ function mapIssueForHtml(issue) {
   };
 }
 
+// Full-map view: every issue (open + closed), used for the filterable
+// "whole body of work" tab. Separate from mapIssueForHtml (open-only, used by
+// the "Now" owner-queue lanes) because the full map needs state/closedAt too.
+function mapAllIssueForHtml(issue) {
+  return {
+    number: issue.number,
+    title: issue.title,
+    state: issue.state,
+    labels: (issue.labels ?? []).map((l) => l.name),
+    url: issue.url,
+    createdAt: issue.createdAt ?? null,
+    closedAt: issue.closedAt ?? null,
+  };
+}
+
+function computeAllIssues() {
+  const issues = ghJson([
+    "issue",
+    "list",
+    "--state",
+    "all",
+    "--json",
+    "number,title,state,labels,closedAt,createdAt,url",
+    "--limit",
+    "300",
+  ]);
+  return issues.map(mapAllIssueForHtml);
+}
+
+// Full-map "Plans & ideas" section: git-tracked .md files in the planning /
+// vision docs dirs, plus their first "STATUS:" line if they carry one
+// (several completed plans are headed "STATUS: COMPLETE -- ..."). Pure
+// filesystem + git ls-files -- no `gh` dependency, so this still works when
+// GitHub is unreachable.
+const PLAN_DOC_DIRS = ["docs/implementation-planning", "docs/vision"];
+
+function gatherPlansAndIdeas() {
+  const items = [];
+  for (const dir of PLAN_DOC_DIRS) {
+    let relPaths = [];
+    try {
+      const output = execFileSync("git", ["ls-files", dir], {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+      });
+      relPaths = output
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.endsWith(".md"));
+    } catch (err) {
+      items.push({ path: dir, error: err.message.split("\n")[0] });
+      continue;
+    }
+
+    for (const relPath of relPaths) {
+      let status = null;
+      try {
+        const content = readFileSync(path.join(REPO_ROOT, relPath), "utf8");
+        const firstLine = (content.split("\n")[0] ?? "").trim();
+        if (firstLine.startsWith("STATUS:")) {
+          status = firstLine.slice("STATUS:".length).trim();
+        }
+      } catch {
+        // File listed by git but unreadable (rare); still list the path with
+        // no status rather than dropping it.
+      }
+      items.push({
+        path: relPath,
+        status,
+        complete: status != null && /complete/i.test(status),
+        url: `https://github.com/jpatel900/LifeOS/blob/main/${relPath}`,
+      });
+    }
+  }
+  return items;
+}
+
 function gatherHtmlStatusData() {
   const generatedAt = new Date().toISOString();
   const data = {
@@ -574,12 +651,24 @@ function gatherHtmlStatusData() {
     issuesError: null,
     workflows: [],
     mainFreshness: gatherMainFreshness(),
+    allIssues: [],
+    allIssuesError: null,
+    plans: [],
+    plansError: null,
   };
+
+  // Filesystem-only; doesn't need `gh`, so gather it before the auth gate.
+  try {
+    data.plans = gatherPlansAndIdeas();
+  } catch (err) {
+    data.plansError = err.message.split("\n")[0];
+  }
 
   const auth = checkGhAvailable();
   if (!auth.ok) {
     data.ghAvailable = false;
     data.ghError = auth.message;
+    data.allIssuesError = auth.message;
     data.ownerQueue.push(
       "GitHub data unavailable -- owner queue could not be computed.",
     );
@@ -628,6 +717,12 @@ function gatherHtmlStatusData() {
   } else {
     data.lanes.mode = "open";
     data.lanes.groups.open = issues.map(mapIssueForHtml);
+  }
+
+  try {
+    data.allIssues = computeAllIssues();
+  } catch (err) {
+    data.allIssuesError = err.message.split("\n")[0];
   }
 
   data.workflows = KEY_WORKFLOWS.map(({ file, label }) =>
@@ -712,6 +807,78 @@ function renderIssueCards(issues) {
     .join("\n");
 }
 
+function issueStateBadge(state) {
+  return state === "OPEN"
+    ? '<span class="badge badge-open">open</span>'
+    : '<span class="badge badge-closed">closed</span>';
+}
+
+// Full-map view: every issue (open + closed) as a filterable row. Each row
+// carries data-state / data-labels / data-title attributes that the inline
+// client-side filter script reads -- no re-render, no framework.
+function renderFullIssueRows(issues) {
+  if (!issues || issues.length === 0) {
+    return '<p class="dim">No issues found.</p>';
+  }
+  return issues
+    .map((issue) => {
+      const stateLower = issue.state === "OPEN" ? "open" : "closed";
+      const labels = issue.labels ?? [];
+      const meta =
+        stateLower === "open"
+          ? issue.createdAt
+            ? `opened ${ageFromNow(issue.createdAt)} ago`
+            : ""
+          : issue.closedAt
+            ? `closed ${ageFromNow(issue.closedAt)} ago`
+            : "";
+      return `<div class="issue-row${stateLower === "closed" ? " issue-closed" : ""}" data-state="${stateLower}" data-labels="${escapeHtml(labels.join(","))}" data-title="${escapeHtml(issue.title.toLowerCase())}">
+        <b><a href="${escapeHtml(issue.url ?? "#")}">#${issue.number}</a> ${escapeHtml(issue.title)}</b>
+        ${issueStateBadge(issue.state)}
+        <span class="dim">${labels.map(escapeHtml).join(", ") || "no labels"}${meta ? ` &middot; ${escapeHtml(meta)}` : ""}</span>
+      </div>`;
+    })
+    .join("\n");
+}
+
+function collectLabelSet(issues) {
+  const set = new Set();
+  for (const issue of issues ?? []) {
+    for (const label of issue.labels ?? []) {
+      set.add(label);
+    }
+  }
+  return [...set].sort();
+}
+
+function renderLabelChips(labels) {
+  if (labels.length === 0) return "";
+  return labels
+    .map(
+      (label) =>
+        `<button type="button" class="chip label-chip" data-label="${escapeHtml(label)}">${escapeHtml(label)}</button>`,
+    )
+    .join("\n");
+}
+
+function renderPlansList(plans) {
+  if (!plans || plans.length === 0) {
+    return '<p class="dim">No plans found.</p>';
+  }
+  return plans
+    .map((plan) => {
+      if (plan.error) {
+        return `<div class="plan-row dim">${escapeHtml(plan.path)}: ${escapeHtml(plan.error)}</div>`;
+      }
+      const cls = plan.complete ? "plan-row plan-complete" : "plan-row";
+      return `<div class="${cls}">
+        <b><a href="${escapeHtml(plan.url)}">${escapeHtml(plan.path)}</a></b>
+        ${plan.status ? `<span class="dim">${escapeHtml(plan.status)}</span>` : '<span class="dim">no STATUS line</span>'}
+      </div>`;
+    })
+    .join("\n");
+}
+
 // Pure: string-building only, no I/O. Takes the shape produced by
 // gatherHtmlStatusData() (or an equivalent fixture in tests).
 function renderStatusHtml(data) {
@@ -793,6 +960,37 @@ function renderStatusHtml(data) {
             }`
           : " (origin/main ref not available locally)"
       }</p>`;
+
+  const allIssues = data.allIssues ?? [];
+  const openCount = allIssues.filter((i) => i.state === "OPEN").length;
+  const closedCount = allIssues.filter((i) => i.state !== "OPEN").length;
+  const labelSet = collectLabelSet(allIssues);
+
+  const fullMapIssuesHtml =
+    data.allIssuesError != null
+      ? `<p class="dim">Issue data unavailable: ${escapeHtml(data.allIssuesError)}</p>`
+      : `<div class="filter-bar">
+          <div class="chip-row">
+            <button type="button" class="chip status-chip active" data-status="open">Open</button>
+            <button type="button" class="chip status-chip" data-status="closed">Closed</button>
+            <button type="button" class="chip status-chip" data-status="all">All</button>
+          </div>
+          <div class="chip-row">${renderLabelChips(labelSet)}</div>
+          <input type="text" id="issueSearch" class="text-filter" placeholder="Filter by title..." />
+        </div>
+        <div id="issuesList">
+          ${renderFullIssueRows(allIssues)}
+        </div>`;
+
+  const fullMapHtml = `<section>
+      <h2 class="section-title">All issues (${openCount} open / ${closedCount} closed)</h2>
+      ${fullMapIssuesHtml}
+    </section>
+
+    <section>
+      <h2 class="section-title">Plans &amp; ideas</h2>
+      ${data.plansError != null ? `<p class="dim">Plans data unavailable: ${escapeHtml(data.plansError)}</p>` : renderPlansList(data.plans)}
+    </section>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -916,44 +1114,203 @@ function renderStatusHtml(data) {
         font-size: 13px;
       }
       section h2.section-title { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
+      .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+      .tab-btn {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--dim);
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .tab-btn.active { color: var(--text); border-color: #7dd3fc; background: rgba(125, 211, 252, 0.1); }
+      .hidden { display: none !important; }
+      .filter-bar { max-width: 1100px; margin-bottom: 14px; }
+      .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+      .chip {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--dim);
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .chip.active { color: var(--text); border-color: var(--green); background: rgba(74, 222, 128, 0.12); }
+      .text-filter {
+        width: 100%;
+        max-width: 320px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font: inherit;
+      }
+      .issue-row {
+        border-left: 3px solid var(--line);
+        padding: 6px 12px;
+        margin: 8px 0;
+        border-radius: 0 8px 8px 0;
+        background: rgba(255, 255, 255, 0.02);
+        max-width: 1100px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+      .issue-row b { flex-basis: 100%; font-size: 14px; }
+      .issue-row b a { color: var(--text); }
+      .issue-closed { opacity: 0.55; }
+      .badge-open { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+      .badge-closed { background: rgba(139, 147, 165, 0.15); color: var(--dim); }
+      .plan-row {
+        border-left: 3px solid var(--line);
+        padding: 6px 12px;
+        margin: 8px 0;
+        border-radius: 0 8px 8px 0;
+        background: rgba(255, 255, 255, 0.02);
+        max-width: 1100px;
+      }
+      .plan-row b a { color: var(--text); }
+      .plan-complete { opacity: 0.55; }
     </style>
   </head>
   <body>
     <h1>LifeOS Work Map</h1>
     <div class="sub">generated ${generatedLabel} from live GitHub state</div>
 
-    ${ghUnavailableSection}
-
-    <div class="owner-queue">
-      <h2>Owner Queue</h2>
-      <ul>${ownerQueueItems}</ul>
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-view="view-now">Now</button>
+      <button type="button" class="tab-btn" data-view="view-full">Full map</button>
     </div>
 
-    <div class="grid">
-      ${lanesHtml}
-    </div>
+    <div class="view" id="view-now">
+      ${ghUnavailableSection}
 
-    <section>
-      <h2 class="section-title">Open PRs</h2>
-      <table>
-        <thead><tr><th>PR</th><th>Title</th><th>Author</th><th>CI</th><th>State</th></tr></thead>
-        <tbody>
-          ${prRows}
-        </tbody>
-      </table>
-    </section>
-
-    <section>
-      <h2 class="section-title">Workflow health</h2>
-      <div class="wf-row">
-        ${workflowRows}
+      <div class="owner-queue">
+        <h2>Owner Queue</h2>
+        <ul>${ownerQueueItems}</ul>
       </div>
-    </section>
 
-    <section>
-      <h2 class="section-title">Repo freshness</h2>
-      ${freshnessHtml}
-    </section>
+      <div class="grid">
+        ${lanesHtml}
+      </div>
+
+      <section>
+        <h2 class="section-title">Open PRs</h2>
+        <table>
+          <thead><tr><th>PR</th><th>Title</th><th>Author</th><th>CI</th><th>State</th></tr></thead>
+          <tbody>
+            ${prRows}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2 class="section-title">Workflow health</h2>
+        <div class="wf-row">
+          ${workflowRows}
+        </div>
+      </section>
+
+      <section>
+        <h2 class="section-title">Repo freshness</h2>
+        ${freshnessHtml}
+      </section>
+    </div>
+
+    <div class="view hidden" id="view-full">
+      ${fullMapHtml}
+    </div>
+
+    <script>
+      (function () {
+        function all(sel) {
+          return Array.prototype.slice.call(document.querySelectorAll(sel));
+        }
+
+        all(".tab-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            all(".tab-btn").forEach(function (b) {
+              b.classList.remove("active");
+            });
+            btn.classList.add("active");
+            all(".view").forEach(function (v) {
+              v.classList.add("hidden");
+            });
+            var target = document.getElementById(btn.dataset.view);
+            if (target) target.classList.remove("hidden");
+          });
+        });
+
+        var filterState = { status: "open", labels: [], text: "" };
+
+        function applyIssueFilters() {
+          all("#issuesList .issue-row").forEach(function (row) {
+            var show = true;
+            var rowState = row.dataset.state;
+            var rowLabels = (row.dataset.labels || "")
+              .split(",")
+              .filter(Boolean);
+            var title = row.dataset.title || "";
+
+            if (filterState.status !== "all" && rowState !== filterState.status) {
+              show = false;
+            }
+            if (show && filterState.labels.length > 0) {
+              var hasLabel = rowLabels.some(function (l) {
+                return filterState.labels.indexOf(l) !== -1;
+              });
+              if (!hasLabel) show = false;
+            }
+            if (show && filterState.text && title.indexOf(filterState.text) === -1) {
+              show = false;
+            }
+
+            row.classList.toggle("hidden", !show);
+          });
+        }
+
+        all(".status-chip").forEach(function (chip) {
+          chip.addEventListener("click", function () {
+            all(".status-chip").forEach(function (c) {
+              c.classList.remove("active");
+            });
+            chip.classList.add("active");
+            filterState.status = chip.dataset.status;
+            applyIssueFilters();
+          });
+        });
+
+        all(".label-chip").forEach(function (chip) {
+          chip.addEventListener("click", function () {
+            var label = chip.dataset.label;
+            var idx = filterState.labels.indexOf(label);
+            if (idx === -1) {
+              filterState.labels.push(label);
+              chip.classList.add("active");
+            } else {
+              filterState.labels.splice(idx, 1);
+              chip.classList.remove("active");
+            }
+            applyIssueFilters();
+          });
+        });
+
+        var searchInput = document.getElementById("issueSearch");
+        if (searchInput) {
+          searchInput.addEventListener("input", function () {
+            filterState.text = searchInput.value.toLowerCase();
+            applyIssueFilters();
+          });
+        }
+
+        applyIssueFilters();
+      })();
+    </script>
   </body>
 </html>
 `;
@@ -1094,7 +1451,9 @@ export {
   computeMainHealthRuns,
   computeMigrationDrift,
   computeWorkflowHealth,
+  computeAllIssues,
   gatherMainFreshness,
+  gatherPlansAndIdeas,
   gatherHtmlStatusData,
   renderStatusHtml,
   escapeHtml,
