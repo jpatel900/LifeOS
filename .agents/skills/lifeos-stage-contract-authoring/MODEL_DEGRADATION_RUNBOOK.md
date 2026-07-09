@@ -4,12 +4,12 @@ What changes when the strongest available model tier drops (e.g., Fable-class un
 
 ## Tier roles
 
-| Role | Frontier available | Degraded (Opus-4.8 / GPT-5.5 class) |
-| --- | --- | --- |
+| Role                                  | Frontier available                             | Degraded (Opus-4.8 / GPT-5.5 class)                                                                                                                                                                                       |
+| ------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Stage contract authoring (S0 content) | One model authors from SKILL.md + STAGE_BRIEFS | Author from TEMPLATES.md skeletons + STAGE_BRIEFS; **cross-model review mandatory** (one model authors, a different-vendor model red-teams against the brief + checklist); **owner review gate reactivates** on the S0 PR |
-| Slice implementation | Codex-class via relay (unchanged) | Unchanged — slices are already written to be executed mechanically |
-| Merge review | Driver per CONTRACT_REVIEW_CHECKLIST | Same checklist, plus: any checklist item the reviewer marks "uncertain" = FAIL-and-escalate (uncertainty never merges) |
-| Judgment escalation | Rare | Owner becomes the tie-breaker for every STOP; expect more STOPs — that is the system working, not failing |
+| Slice implementation                  | Codex-class via relay (unchanged)              | Unchanged — slices are already written to be executed mechanically                                                                                                                                                        |
+| Merge review                          | Driver per CONTRACT_REVIEW_CHECKLIST           | Same checklist, plus: any checklist item the reviewer marks "uncertain" = FAIL-and-escalate (uncertainty never merges)                                                                                                    |
+| Judgment escalation                   | Rare                                           | Owner becomes the tie-breaker for every STOP; expect more STOPs — that is the system working, not failing                                                                                                                 |
 
 ## Gates that reactivate or tighten under degradation
 

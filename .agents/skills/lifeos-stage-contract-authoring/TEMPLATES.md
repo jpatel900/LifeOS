@@ -9,35 +9,43 @@ Fill-in-the-blanks skeletons. The canonical worked examples are LIVE artifacts: 
 Gate: <owner review | Claude fidelity review per epic decision log>.**
 
 ## Context
+
 <2-4 sentences: what the stage adds; cite ADR 0002 D3 row and NS-INV-2.>
 
 ## Scope (binding)
+
 Docs only: docs/REQUIREMENTS.md, docs/DATA_MODEL.md, docs/ENGINEERING_INVARIANTS.md, docs/UX_FLOWS.md.
 MUST NOT touch: code, migrations, prompts, tests other than doc-guard expectations.
 
 ## Tasks
+
 1. Integrate Appendix A (FR text) into REQUIREMENTS.md section 2, matching existing FR format.
 2. Integrate Appendix B (target schema shapes) into DATA_MODEL.md.
 3. Record Appendix C invariant notes in ENGINEERING_INVARIANTS.md with enforcement points.
 4. Add Appendix D flow notes to UX_FLOWS.md at flow level.
 
 ## Acceptance criteria
+
 - All FRs + shapes internally consistent and consistent with ADR 0002; doc-guard tests pass;
   no code changes; gate reviewer approval on the PR.
 
 ## Appendix A - draft requirement text (integrate, do not invent alternatives)
+
 <One FR-XXX block per feature. Each block: **MUST** list, **SHOULD** list, **NON-GOALS** list.
 Every MUST is testable. Every threshold is a NUMBER, never "reasonable" or "appropriate".>
 
 ## Appendix B - target schema shapes (column level; later slices ADD only)
+
 <One block per table/column-set, tagged with the slice that implements it:
 name, columns with types and nullability, FKs, uniques, RLS note, export note.
 Pin every module path. Pin every constant.>
 
 ## Appendix C - invariants to record
+
 <Cite NS-INV IDs affected; name the guard test that enforces each.>
 
 ## Appendix D - UX flow notes
+
 <Flow-level only; respect mobile surface budget doctrine.>
 
 map_view: <hosting moment / state tokens / collapsed+expanded representation>
@@ -64,15 +72,19 @@ Required sections IN ORDER — the relay workflow and driver parse some headings
 **Stage <N> (epic #<E>) - slice <i> of <K>. Depends: <predecessor> merged. Sequential relay per NS-INV-6.**
 
 ## Context
+
 <2-3 sentences; cite the S0 appendix section this slice implements.>
 
 ## Scope (binding)
+
 MAY touch: <explicit path list>. MUST NOT touch: <explicit path list — always include: pipeline scripts, ci.yml, unrelated prompts>.
 
 ## Tasks
-<Numbered, mechanical, each verifiable. Cite exact file paths from S0. Include the RLS-test-location rule verbatim when schema is touched (live-DB RLS tests go INSIDE apps/web/src/__tests__/phase4aRls.local.test.ts).>
+
+<Numbered, mechanical, each verifiable. Cite exact file paths from S0. Include the RLS-test-location rule verbatim when schema is touched (live-DB RLS tests go INSIDE apps/web/src/**tests**/phase4aRls.local.test.ts).>
 
 ## Acceptance criteria
+
 <Each criterion machine-checkable or observable in CI. Name the test files/specs. End with: "Zero user-visible change" when true.>
 ```
 

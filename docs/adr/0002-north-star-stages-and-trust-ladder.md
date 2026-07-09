@@ -19,13 +19,13 @@ This ADR freezes the staging, the autonomy model, and the forward-compatibility 
 
 Jarvis is a trust gradient, not a feature list. Every AI-initiated action class moves through these rungs, in order, and only on evidence:
 
-| Rung | Behavior | Graduation evidence |
-| --- | --- | --- |
-| L0 | AI silent; rule-based only | — |
-| L1 | AI proposes; user approves each instance | default for all new AI judgment surfaces |
-| L2 | AI proposes with pre-filled default; one-tap approve | sustained approval rate on `user_decisions` / `override_records` data |
-| L3 | Auto-execute reversible actions with undo + audit + digest | ~zero override rate over a meaningful decision count, per action class |
-| never | Irreversible/external destructive actions never pass L2 | — |
+| Rung  | Behavior                                                   | Graduation evidence                                                    |
+| ----- | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| L0    | AI silent; rule-based only                                 | —                                                                      |
+| L1    | AI proposes; user approves each instance                   | default for all new AI judgment surfaces                               |
+| L2    | AI proposes with pre-filled default; one-tap approve       | sustained approval rate on `user_decisions` / `override_records` data  |
+| L3    | Auto-execute reversible actions with undo + audit + digest | ~zero override rate over a meaningful decision count, per action class |
+| never | Irreversible/external destructive actions never pass L2    | —                                                                      |
 
 Graduations are per **action class**, recorded as dated decisions in the governing epic (or a follow-up ADR), justified by decision data the system itself collected. No slice may ship at L2+ on day one.
 
@@ -39,13 +39,13 @@ LifeOS is the **spine**: the sole holder of action truth and approval gates. Eve
 
 ### D3. Staged roadmap
 
-| Stage | Name | Contents (summary) | Entry gate |
-| --- | --- | --- | --- |
-| 0 | Cockpit (built) | capture→triage→plan→execute→review, approval-gated calendar, health, audit | — |
-| 1 | Chief-of-staff nouns | people + commitments + waiting-on aging; Area Charters + Operator Profile; calendar-load-aware daily focus; daily brief; wins log; rollup summaries; learning-loop consumer v1 | epic #243 CLOSED |
-| 2 | Memory & knowledge | Notion one-way migration; knowledge–action links; SQL-based "ask your cockpit"; playbook detection | Stage 1 usage gate |
-| 3 | Perimeter senses & hands | perimeter capture channels; consent-based meeting capture; staged external writes (draft-for-approval messages) | Stage 2 usage gate |
-| 4 | Earned autonomy | L3 graduations for proven action classes | per-class evidence (D1) |
+| Stage | Name                     | Contents (summary)                                                                                                                                                             | Entry gate              |
+| ----- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| 0     | Cockpit (built)          | capture→triage→plan→execute→review, approval-gated calendar, health, audit                                                                                                     | —                       |
+| 1     | Chief-of-staff nouns     | people + commitments + waiting-on aging; Area Charters + Operator Profile; calendar-load-aware daily focus; daily brief; wins log; rollup summaries; learning-loop consumer v1 | epic #243 CLOSED        |
+| 2     | Memory & knowledge       | Notion one-way migration; knowledge–action links; SQL-based "ask your cockpit"; playbook detection                                                                             | Stage 1 usage gate      |
+| 3     | Perimeter senses & hands | perimeter capture channels; consent-based meeting capture; staged external writes (draft-for-approval messages)                                                                | Stage 2 usage gate      |
+| 4     | Earned autonomy          | L3 graduations for proven action classes                                                                                                                                       | per-class evidence (D1) |
 
 **Usage gate**: a stage's features must show up in the owner's real weekly usage (measured from the system's own data) before the next stage may start. Building ahead of habit is prohibited — the system must never become the hobby.
 

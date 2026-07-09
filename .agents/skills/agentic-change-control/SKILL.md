@@ -10,6 +10,7 @@ How changes get classified and gated in an agent-driven project. The core discip
 ## When to use / when NOT to use
 
 **Use when:**
+
 - You are about to make ANY change and have not classified its reversibility.
 - You are deciding whether an action needs human approval before executing.
 - You are about to run something destructive or external: delete, force-push, publish, deploy, send.
@@ -17,6 +18,7 @@ How changes get classified and gated in an agent-driven project. The core discip
 - A check/hook/test is failing and you feel the pull to bypass it.
 
 **Do NOT use for:**
+
 - How to diagnose WHY a test or check is failing -> `agentic-debugging-playbook`.
 - What counts as evidence that a change works, acceptance thresholds -> `agentic-validation-and-qa`.
 - Pre-change reconnaissance of an unfamiliar repo -> `agentic-project-onboarding`.
@@ -26,25 +28,26 @@ How changes get classified and gated in an agent-driven project. The core discip
 ## 1. Door classification (do this BEFORE the change)
 
 **Definitions:**
+
 - **Two-way door**: reversible, cheap to undo, blast radius contained to the repo/branch. Wrong? `git revert` or delete the branch, nobody outside noticed.
 - **One-way door**: destructive, external, or expensive to revert. Wrong? You are writing an incident report, apologizing to someone, or restoring from backup.
 
 The test is not "can it theoretically be undone" — it is "what does undo actually cost, and who outside this working tree is affected."
 
-| Change | Door | Why |
-|---|---|---|
-| Edit source on a feature branch | Two-way | `git revert` / branch delete |
-| Add a test, refactor, rename within repo | Two-way | Same |
-| Commit to a local branch | Two-way | `git reset`, reflog keeps ~90 days |
-| Merge to the default branch | Boundary | Revertable, but others build on it immediately |
-| Schema migration on a shared DB | One-way | Data loss on rollback; others depend on schema |
-| `rm -rf` / deleting files outside git tracking | One-way | No reflog for untracked files |
-| Force-push to a shared branch | One-way | Rewrites history others have pulled |
-| Publishing a package (npm/PyPI/crates) | One-way | Registries forbid or restrict unpublish |
-| Prod deploy | One-way | External users see it; rollback is an operation, not an undo |
-| Sending anything outside the repo (email, Slack, API call with side effects, GitHub comment) | One-way | Cannot unsend |
-| Deleting branches/tags on the remote | One-way | Others may reference them |
-| Rotating/revoking credentials | One-way | Breaks consumers instantly |
+| Change                                                                                       | Door     | Why                                                          |
+| -------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------ |
+| Edit source on a feature branch                                                              | Two-way  | `git revert` / branch delete                                 |
+| Add a test, refactor, rename within repo                                                     | Two-way  | Same                                                         |
+| Commit to a local branch                                                                     | Two-way  | `git reset`, reflog keeps ~90 days                           |
+| Merge to the default branch                                                                  | Boundary | Revertable, but others build on it immediately               |
+| Schema migration on a shared DB                                                              | One-way  | Data loss on rollback; others depend on schema               |
+| `rm -rf` / deleting files outside git tracking                                               | One-way  | No reflog for untracked files                                |
+| Force-push to a shared branch                                                                | One-way  | Rewrites history others have pulled                          |
+| Publishing a package (npm/PyPI/crates)                                                       | One-way  | Registries forbid or restrict unpublish                      |
+| Prod deploy                                                                                  | One-way  | External users see it; rollback is an operation, not an undo |
+| Sending anything outside the repo (email, Slack, API call with side effects, GitHub comment) | One-way  | Cannot unsend                                                |
+| Deleting branches/tags on the remote                                                         | One-way  | Others may reference them                                    |
+| Rotating/revoking credentials                                                                | One-way  | Breaks consumers instantly                                   |
 
 **Hard rule:** if you cannot confidently classify a change, treat it as one-way and escalate. Misclassifying one-way as two-way is the expensive error; the reverse just costs a question.
 
@@ -69,11 +72,11 @@ PowerShell variant of the last line: `git log --format='%an' "origin/$(git branc
 
 Every CLASS of change (not every individual change) sits at one rung:
 
-| Rung | Meaning | Example classes typically here |
-|---|---|---|
-| 1. Propose only | Agent describes the change; human executes it | Prod deploys, migrations, anything external |
-| 2. Human approve | Agent prepares the change fully; human says go | Merges, dependency upgrades, config changes |
-| 3. Auto-execute | Agent does it and reports after | Feature-branch commits, test additions, docs |
+| Rung             | Meaning                                        | Example classes typically here               |
+| ---------------- | ---------------------------------------------- | -------------------------------------------- |
+| 1. Propose only  | Agent describes the change; human executes it  | Prod deploys, migrations, anything external  |
+| 2. Human approve | Agent prepares the change fully; human says go | Merges, dependency upgrades, config changes  |
+| 3. Auto-execute  | Agent does it and reports after                | Feature-branch commits, test additions, docs |
 
 **Graduation rule (hard rule):** a change class moves DOWN the ladder (toward auto-execute) only on accumulated evidence — a run of N consecutive instances with near-zero human overrides and zero resulting defects, where N and the window are agreed in advance (default candidate: 20 instances or 4 weeks, whichever is longer). It never graduates because approval is annoying, the human is busy, or a deadline looms. Convenience-driven graduation is how automation eats a gate.
 
@@ -97,16 +100,16 @@ Every CLASS of change (not every individual change) sits at one rung:
 
 Each row is a hard rule. The incident column is the archetype — the generic shape of the disaster that made the rule, seen across many projects.
 
-| Never | Rationale | Archetypal incident |
-|---|---|---|
-| Force-push a shared branch | Rewrites history others have based work on; their next pull silently orphans commits | Agent "cleans up" main after a botched merge; three collaborators lose a day reconciling; one lost commit is only found via someone's local reflog |
-| Skip hooks (`--no-verify`, `SKIP=...`, disabling pre-commit) | Hooks are a gate someone installed on purpose; bypassing converts their guarantee into a lie | Agent bypasses a lint hook "just to commit WIP"; the hook was also the secret-scanner; a credential lands in history and must be rotated + history rewritten |
-| Bypass or silence a failing check to merge | The check is red because something is wrong or the check is wrong — both need a human decision, not suppression | Flaky test gets `skip`ped to unblock a release; it was flaking because of a real race; the race ships |
-| Edit generated files | The generator wins the next run; your edit silently vanishes, or worse, half-persists | Agent hand-patches a generated API client; next codegen run reverts it; the bug "comes back from the dead" two weeks later and burns a full re-debugging session |
-| Widen scope silently mid-task | Reviewer approved task X; unrequested Y rides in under X's review; accountability breaks | "While fixing the typo I also refactored the auth module" — the refactor had a bug, the reviewer never really looked, and the PR title said "fix typo" |
-| Merge red CI | Red means unknown state; merging converts your unknown into everyone's unknown | "It's just the flaky suite" merged on a Friday; it was not the flaky suite |
-| "Fix" a test to pass without understanding why it failed | The test encoded an intention; changing the assertion to match observed behavior deletes the intention | Agent updates an expected value to whatever the code now returns; the code was wrong; the test now certifies the bug (see `agentic-validation-and-qa` for anti-test-gaming) |
-| Automate past a designated human gate | The gate exists because someone decided this action needs judgment; speed is not a counter-argument | Agent scripts around an approval step "since it always gets approved anyway"; the one time it mattered, nobody was looking |
+| Never                                                        | Rationale                                                                                                       | Archetypal incident                                                                                                                                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Force-push a shared branch                                   | Rewrites history others have based work on; their next pull silently orphans commits                            | Agent "cleans up" main after a botched merge; three collaborators lose a day reconciling; one lost commit is only found via someone's local reflog                          |
+| Skip hooks (`--no-verify`, `SKIP=...`, disabling pre-commit) | Hooks are a gate someone installed on purpose; bypassing converts their guarantee into a lie                    | Agent bypasses a lint hook "just to commit WIP"; the hook was also the secret-scanner; a credential lands in history and must be rotated + history rewritten                |
+| Bypass or silence a failing check to merge                   | The check is red because something is wrong or the check is wrong — both need a human decision, not suppression | Flaky test gets `skip`ped to unblock a release; it was flaking because of a real race; the race ships                                                                       |
+| Edit generated files                                         | The generator wins the next run; your edit silently vanishes, or worse, half-persists                           | Agent hand-patches a generated API client; next codegen run reverts it; the bug "comes back from the dead" two weeks later and burns a full re-debugging session            |
+| Widen scope silently mid-task                                | Reviewer approved task X; unrequested Y rides in under X's review; accountability breaks                        | "While fixing the typo I also refactored the auth module" — the refactor had a bug, the reviewer never really looked, and the PR title said "fix typo"                      |
+| Merge red CI                                                 | Red means unknown state; merging converts your unknown into everyone's unknown                                  | "It's just the flaky suite" merged on a Friday; it was not the flaky suite                                                                                                  |
+| "Fix" a test to pass without understanding why it failed     | The test encoded an intention; changing the assertion to match observed behavior deletes the intention          | Agent updates an expected value to whatever the code now returns; the code was wrong; the test now certifies the bug (see `agentic-validation-and-qa` for anti-test-gaming) |
+| Automate past a designated human gate                        | The gate exists because someone decided this action needs judgment; speed is not a counter-argument             | Agent scripts around an approval step "since it always gets approved anyway"; the one time it mattered, nobody was looking                                                  |
 
 **Finding the gates and generated files in an unfamiliar repo:**
 
@@ -131,7 +134,7 @@ Agent-authored PRs get skimmed, not read, unless you force reviewability. Defaul
 
 **Small diffs.** One logical change per PR. Candidate ceiling: ~400 changed lines; past that, reviewers approve on vibes. Check yourself: `git diff --stat <base>...HEAD | tail -1` (find the base: `git remote show origin | grep "HEAD branch"`; PowerShell: `git remote show origin | Select-String "HEAD branch"`). If the diff mixes a refactor with a behavior change, split it — refactor PR first, behavior PR on top.
 
-**PR body states what was verified and HOW.** Not "tests pass" but the literal command and its observed result. The PR description *template* has one home: `agentic-docs-and-writing` §5 — use it. This skill adds two mandatory policy requirements on top of that template:
+**PR body states what was verified and HOW.** Not "tests pass" but the literal command and its observed result. The PR description _template_ has one home: `agentic-docs-and-writing` §5 — use it. This skill adds two mandatory policy requirements on top of that template:
 
 1. A **"NOT verified:"** line — what you did not check, stated plainly. An agent that never states what it didn't check is either omniscient or hiding something, and reviewers know which.
 2. A **reversibility classification** in the Risk & rollback section — two-way or one-way door per §1 of this skill, with the revert procedure.
@@ -154,6 +157,7 @@ Example of the two additions: `NOT verified: behavior under concurrent writes (o
 Authored 2026-07-02, from cross-project experience running agent-driven development; the door/ladder model and non-negotiables are distilled practice, not standards documents. Labels used throughout: **hard rule** (violation is an incident), **default** (deviate with stated reason), **candidate practice** (plausible, not yet evidence-backed — e.g. the N=20 graduation window and the ~400-line PR ceiling).
 
 **Volatile facts, re-verify if this file is old:**
+
 - `gh` CLI subcommand shapes (`gh pr checks`, `gh api`, `gh run list`) — as of 2026-07-02. Re-verify: `gh pr checks --help; gh run list --help`.
 - Git reflog retention default (~90 days) — re-verify: `git config --get gc.reflogExpire` (empty = default 90 days).
 - `--force-with-lease` semantics — re-verify: `git push --help` (search "force-with-lease").

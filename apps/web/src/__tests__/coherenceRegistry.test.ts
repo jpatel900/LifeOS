@@ -392,9 +392,7 @@ function uxTokenScanFiles(): string[] {
 // convention. Erring toward stripping only ever causes a false-negative (a
 // missed color in a contrived URL-bearing line), never a false CI red.
 function stripCommentsForTokenScan(source: string): string {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/\/\/[^\n]*/g, " ");
+  return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
 }
 
 describe("coherence UX grammar — color / state tokens (G-UX-3)", () => {

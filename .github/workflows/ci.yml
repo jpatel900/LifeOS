@@ -80,10 +80,7 @@ jobs:
         run: pnpm build
 
       - name: Check formatting
-        run: |
-          if ! pnpm format:check; then
-            echo "::warning::pnpm format:check failed. Formatting drift is non-blocking in this workflow."
-          fi
+        run: pnpm format:check
 
   e2e:
     name: Playwright E2E

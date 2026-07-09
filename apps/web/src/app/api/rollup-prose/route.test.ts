@@ -37,7 +37,10 @@ const validBody = {
 describe("POST /api/rollup-prose", () => {
   it("returns the enhanced summary and passes the bearer token to the service", async () => {
     const enhanced = { ...draft, highlights: ["Shipped a parser fix 🎉"] };
-    enhanceRollupProse.mockResolvedValueOnce({ source: "ai", summary: enhanced });
+    enhanceRollupProse.mockResolvedValueOnce({
+      source: "ai",
+      summary: enhanced,
+    });
 
     const response = await POST(postRequest(validBody, "tok"));
     const json = await response.json();

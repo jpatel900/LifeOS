@@ -26,7 +26,9 @@ function rec(
     old_value_json: null,
     new_value_json: null,
     reason: null,
-    created_at: overrides.created_at ?? `2026-05-${String(seq).padStart(2, "0")}T12:00:00.000Z`,
+    created_at:
+      overrides.created_at ??
+      `2026-05-${String(seq).padStart(2, "0")}T12:00:00.000Z`,
   };
 }
 
@@ -62,15 +64,47 @@ describe("scanOverridePatterns", () => {
   it("only counts the most recent M decisions, ignoring older overrides", () => {
     const records = [
       // 4 old overrides (outside the window of 5 once newer accepts arrive)
-      rec({ policy: "p", type: "edited", created_at: "2026-05-01T00:00:00.000Z" }),
-      rec({ policy: "p", type: "edited", created_at: "2026-05-02T00:00:00.000Z" }),
-      rec({ policy: "p", type: "edited", created_at: "2026-05-03T00:00:00.000Z" }),
+      rec({
+        policy: "p",
+        type: "edited",
+        created_at: "2026-05-01T00:00:00.000Z",
+      }),
+      rec({
+        policy: "p",
+        type: "edited",
+        created_at: "2026-05-02T00:00:00.000Z",
+      }),
+      rec({
+        policy: "p",
+        type: "edited",
+        created_at: "2026-05-03T00:00:00.000Z",
+      }),
       // 5 recent acceptances
-      rec({ policy: "p", type: "accepted", created_at: "2026-05-10T00:00:00.000Z" }),
-      rec({ policy: "p", type: "accepted", created_at: "2026-05-11T00:00:00.000Z" }),
-      rec({ policy: "p", type: "accepted", created_at: "2026-05-12T00:00:00.000Z" }),
-      rec({ policy: "p", type: "accepted", created_at: "2026-05-13T00:00:00.000Z" }),
-      rec({ policy: "p", type: "accepted", created_at: "2026-05-14T00:00:00.000Z" }),
+      rec({
+        policy: "p",
+        type: "accepted",
+        created_at: "2026-05-10T00:00:00.000Z",
+      }),
+      rec({
+        policy: "p",
+        type: "accepted",
+        created_at: "2026-05-11T00:00:00.000Z",
+      }),
+      rec({
+        policy: "p",
+        type: "accepted",
+        created_at: "2026-05-12T00:00:00.000Z",
+      }),
+      rec({
+        policy: "p",
+        type: "accepted",
+        created_at: "2026-05-13T00:00:00.000Z",
+      }),
+      rec({
+        policy: "p",
+        type: "accepted",
+        created_at: "2026-05-14T00:00:00.000Z",
+      }),
     ];
 
     expect(scanOverridePatterns(records)).toEqual([]);

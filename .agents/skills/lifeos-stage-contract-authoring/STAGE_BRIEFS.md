@@ -24,6 +24,7 @@ Durable judgment that spans stages. A boundary contract in any stage below must 
 **Goal restated:** LifeOS becomes the single home for knowledge that changes action; everything else is archived, not imported.
 
 **Hard constraints**
+
 1. Notion migration is one-way and one-time, executed in user-approved batches (propose bucket assignment -> user approves -> import). No sync daemon, no webhook, no re-import job. After migration, Notion is cold archive.
 2. Four-bucket rubric with decision rules:
    - ACTION TRUTH (open tasks/projects/commitments) -> LifeOS tables. Decision rule: would the user act on this in the next 90 days? Item-level user confirmation required for anything imported as actionable.
@@ -40,6 +41,7 @@ Durable judgment that spans stages. A boundary contract in any stage below must 
 **Anti-patterns (named so they can be refused):** bidirectional sync; auto-import without item-level approval for actionables; importing the 2024 dead layer "for completeness"; embedding search "just for retrieval"; a background job that watches Notion.
 
 **Vision-harvest candidates (2026-07-05, evidence-gated — not commitments):**
+
 - **Triggers** (context-conditioned prospective memory: "when X, then Y"). v1 matching is deterministic only (person / area-event / date-window); surfaces at I1; unfired → composted quietly. Strongest Stage 2 candidate — composes with people (S3) + charters. NEVER AI-invented triggers or push delivery in v1; an expired trigger is a held thought, not a missed commitment.
 - **Mirror v1** (dyad vital signs): four gauges only — capture inflow vs completion outflow, override-rate trend per policy class, re-entry latency, build:use ratio. Map-rendered, one glance. Gauges describe the SYSTEM's health, never shame the person. Instruments the usage gates that stage progression already depends on; makes one-in-one-out data-enforceable (unused surface → auto-drafted demotion proposal, hide not delete).
 - **Rehearsal** (what-if ripple): deterministic only — a hypothetical commitment recomputes focus budgets + load rule + aging impacts, rendered as a diff on the week. No AI. Natural home of the one-in-one-out rule at decision time; supports saying no by showing the cost.
@@ -55,6 +57,7 @@ Durable judgment that spans stages. A boundary contract in any stage below must 
 **Goal restated:** LifeOS gains ears (capture channels, meeting capture) and hands (drafted external messages) without widening the trust boundary by one millimeter.
 
 **Hard constraints**
+
 1. Perimeter capture channels (Hermes-class gateway, messaging bridges) may do exactly one thing: POST raw text to the capture endpoint with a dedicated scoped credential. No read API, no other write, no OAuth tokens of the user's services, rate-limited, and the channel adapter never runs in-process with the spine (NS-INV-9). All perimeter input is hostile by assumption and lands as an untrusted capture item in triage — this containment is the load-bearing property; preserve it over any convenience.
 2. Meeting capture is consent-based and session-explicit: a visible per-meeting consent action creates the capture session; no ambient/always-on recording. Transcripts enter the same untrusted capture pipeline; commitments extracted from them follow the Stage 1 person-approval flow.
 3. External writes beyond calendar (email/message drafts) generalize the existing calendar gate pattern: AI produces a DRAFT persisted as a proposal; sending requires explicit per-item user approval; every send is audit-logged with full content hash; recipients/channels come from an owner-maintained allowlist. Start at trust-ladder L1; L2 requires the D1 evidence bar per action class.
@@ -65,6 +68,7 @@ Durable judgment that spans stages. A boundary contract in any stage below must 
 **Anti-patterns:** webhook receivers with write authority; giving the gateway a Google token "temporarily"; auto-send after N approvals without a D1 graduation decision; ambient transcription; treating perimeter input as trusted because it came from the owner's own phone number (spoofable).
 
 **Vision-harvest additions (2026-07-05):**
+
 - **INV-8 is a hard prerequisite here.** No Stage 3 channel opens until the hostile-capture fixtures (capture-is-data-not-instructions) are wired. A life-system is the highest-value injection target that will ever exist; the containment property in constraint 1 is only real once tested.
 - **Hermes profile export** is a filtered slice of the FR-038 Life Archive format (one-way, versioned), never bespoke and never DB access. Add one-way "focus block started/ended" events to the eventual contract so body-doubling presence needs zero LifeOS read access. Hermes inherits interruption rights from FR-032.
 - **Body-as-weather:** wearable/sleep data (if ever) enters as one-way capture rendered as a day-condition (clear / low), which the focus proposal reads (a low day proposes the 2-minute versions and one item). NEVER scores, streaks, optimization, or health advice (permanent non-goal). Weather removes blame: you dress for it, you don't argue with it.
@@ -78,6 +82,7 @@ Durable judgment that spans stages. A boundary contract in any stage below must 
 **Goal restated:** specific, registered action classes graduate to auto-execution because the system's own decision data proves the user always approves them — and they demote themselves the moment that stops being true.
 
 **Hard constraints**
+
 1. An ACTION CLASS REGISTRY (table) is the unit of graduation: each class names its action shape, reversibility, evidence query, current rung (D1 ladder), and graduation/demotion history. No registry row, no autonomy.
 2. **Shadow-mode rehearsal is a mandatory rung between L2 and L3.** While a class is graduation-candidate, the system silently computes what it WOULD have done for each real situation and logs it (shadow_decision alongside the user's actual decision — a log table, zero user-facing behavior, zero writes). Graduation requires shadow-agreement: the system's shadow decisions matched the user's actual choices >= 98% over a minimum of 20 real situations. This is a stronger claim than approval rate (approval measures whether the user rubber-stamps proposals; shadow-agreement measures whether the system independently decides AS the user for that class). Shadow logs are per-class, instrumented like everything else, and pruned after graduation or class retirement.
 3. Graduation to L3 requires ALL of: a minimum decision count on that exact class (default >= 50, owner-tunable), approval rate >= 98%, shadow-agreement >= 98% over >= 20 shadow-logged situations (constraint 2), zero overrides in the most recent 20 decisions, the action is reversible with a working one-tap undo, and an explicit owner countersign recorded on the registry row. Evidence is computed by SQL over user_decisions / override_records / shadow logs — never asserted by a model.
@@ -91,6 +96,7 @@ Durable judgment that spans stages. A boundary contract in any stage below must 
 **Anti-patterns:** bundling classes to pool evidence; model-asserted ("it seems safe") graduation; grace periods after overrides; L3 without undo; treating digest fatigue as a reason to stop reporting.
 
 **Vision-harvest additions (2026-07-05):**
+
 - **First intended graduation is triage.** High-confidence capture classes (clean parse into a known area with known shape) are the earliest, highest-volume, fully-reversible, richly-instrumented (#312) class — the intended first L2 graduation: born-triaged with undo, inbox demoted to an exception queue. Name it as the reference case for the registry.
 - **Trust-repair ritual.** Any trust incident (a bad autonomous action, unrepaired) drops the affected class TWO rungs, requires double the evidence to re-graduate, and writes a FAILURES entry — product incidents chronicle too, not only pipeline ones. Silent trust death is the terminal dyad failure; the repair must be as explicit as the graduation.
 - **Shadow-mode generalizes to interruption.** Before an initiative class graduates to I2/I3, rehearse it silently (log would-have-interjected, measure would-have-been-welcome via next-action data) — the same shadow-agreement bar as autonomy, applied to speaking.

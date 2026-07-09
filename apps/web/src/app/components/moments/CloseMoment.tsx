@@ -67,8 +67,7 @@ export function CloseMoment({
   // Inline edits to a candidate's title before it is confirmed. Keyed by
   // taskId; absent means "use the candidate's original title".
   const [editedTitles, setEditedTitles] = useState<Record<string, string>>({});
-  const titleFor = (win: CloseWinVM) =>
-    editedTitles[win.taskId] ?? win.title;
+  const titleFor = (win: CloseWinVM) => editedTitles[win.taskId] ?? win.title;
 
   return (
     <div className="grid gap-6" data-testid="close-moment">
@@ -113,7 +112,10 @@ export function CloseMoment({
                 Every win today is logged.
               </p>
             ) : (
-              <ul className="grid gap-3" data-testid="close-moment-wins-pending">
+              <ul
+                className="grid gap-3"
+                data-testid="close-moment-wins-pending"
+              >
                 {pendingWins.map((win) => (
                   <li
                     key={win.taskId}

@@ -7,3 +7,8 @@ coverage
 supabase/**/*.sql
 supabase/config.toml
 pnpm-lock.yaml
+# Vendored/exported design-tool output and a scratch prototype workshop page —
+# not hand-authored source; reformatting would rewrite generated structure
+# wholesale rather than fix real drift. See PR for chore/ci-cost-hardening.
+design_handoff_lifeos/**
+docs/implementation-planning/ui-handoff-conflicts/**

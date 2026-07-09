@@ -5,15 +5,16 @@ description: "Use when a belief needs converting into a demonstration: 'prove wh
 
 # Agentic Proof and Analysis Toolkit
 
-The analysis methods that turn "I think" into "I showed". Each recipe below states when to use it, the steps, a worked micro-example, and — critically — **what the result does and does not prove**, because over-reading a result is how plausible-but-wrong conclusions get laundered into fact. `agentic-debugging-playbook` decides *what* to investigate; this skill supplies the *instruments of proof*; `agentic-research-methodology` governs the full lifecycle when the question is bigger than one session.
+The analysis methods that turn "I think" into "I showed". Each recipe below states when to use it, the steps, a worked micro-example, and — critically — **what the result does and does not prove**, because over-reading a result is how plausible-but-wrong conclusions get laundered into fact. `agentic-debugging-playbook` decides _what_ to investigate; this skill supplies the _instruments of proof_; `agentic-research-methodology` governs the full lifecycle when the question is bigger than one session.
 
-**Jargon:** an *oracle* is anything that can tell you whether an output is correct. A *repro* is a reliable failure trigger. *n=1* means a conclusion drawn from a single run.
+**Jargon:** an _oracle_ is anything that can tell you whether an output is correct. A _repro_ is a reliable failure trigger. _n=1_ means a conclusion drawn from a single run.
 
 ## When to use / when NOT to use
 
 **Use when:** any load-bearing claim rests on belief, memory, or plausibility instead of a demonstration you can paste.
 
 **Do NOT use for:**
+
 - Choosing hypotheses and triaging symptoms → `agentic-debugging-playbook`.
 - Measurement mechanics (timing methodology, env snapshots, log mining) → `agentic-diagnostics-and-tooling`.
 - Whether the evidence clears the bar to ship → `agentic-validation-and-qa`.
@@ -23,11 +24,11 @@ The analysis methods that turn "I think" into "I showed". Each recipe below stat
 
 **When:** any failure whose trigger conditions are unclear; mandatory before reporting a bug upstream.
 
-**Steps:** (1) Capture a full failing case. (2) Delete/stub half of it — half the input, half the config, half the code path. (3) Still fails → keep the half, recurse. Recovers → restore, halve the *other* dimension. (4) Stop when removing anything makes the failure vanish. That object — often shockingly small — is the minimal repro.
+**Steps:** (1) Capture a full failing case. (2) Delete/stub half of it — half the input, half the config, half the code path. (3) Still fails → keep the half, recurse. Recovers → restore, halve the _other_ dimension. (4) Stop when removing anything makes the failure vanish. That object — often shockingly small — is the minimal repro.
 
 **Micro-example:** a 400-line config crashes the loader. Halve to lines 1–200: still crashes. Halve again: 1–100 passes, 101–200 crashes. Three more halvings: a single duplicate key on line 137. Total: ~8 runs instead of reading 400 lines.
 
-**Proves / doesn't:** the repro IS the specification of the bug — the set of conditions actually required. It does *not* prove the mechanism; it hands you a small enough object that the mechanism becomes readable. Automatable for input files with `git bisect`-style scripting or delta-debugging tools where available.
+**Proves / doesn't:** the repro IS the specification of the bug — the set of conditions actually required. It does _not_ prove the mechanism; it hands you a small enough object that the mechanism becomes readable. Automatable for input files with `git bisect`-style scripting or delta-debugging tools where available.
 
 ## 2. Bisection
 
@@ -53,15 +54,15 @@ git bisect reset
 
 **Micro-example:** suite green at `v2.1`, red on `main`, 160 commits between. `git bisect run npm test` → 8 automated checkouts → first bad commit is a dependency bump. Now diff the lockfile at that commit, per `agentic-debugging-playbook`.
 
-**Proves / doesn't:** identifies the commit that *first exposes* the failure — which is not always the commit that *contains* the defect (a latent bug can be exposed by an innocent change). Requires: the failure is deterministic under your test command (flaky failures bisect to random commits — stabilize first), and each bisected commit builds (use exit 125 to skip). Bisect non-git spaces the same way: binary-search a config value, an input size, a dependency version list.
+**Proves / doesn't:** identifies the commit that _first exposes_ the failure — which is not always the commit that _contains_ the defect (a latent bug can be exposed by an innocent change). Requires: the failure is deterministic under your test command (flaky failures bisect to random commits — stabilize first), and each bisected commit builds (use exit 125 to skip). Bisect non-git spaces the same way: binary-search a config value, an input size, a dependency version list.
 
 ## 3. Differential testing
 
-**When:** you have two things that *should* agree — old vs new implementation, v1 vs v2 of a dependency, this machine vs CI, the optimized vs naive path. The cheapest oracle that exists: you don't need to know the *right* answer, only that the two answers must match.
+**When:** you have two things that _should_ agree — old vs new implementation, v1 vs v2 of a dependency, this machine vs CI, the optimized vs naive path. The cheapest oracle that exists: you don't need to know the _right_ answer, only that the two answers must match.
 
 **Steps:** (1) Fix identical inputs (same seed, same fixtures). (2) Run both sides, capture to files. (3) `diff` (strip timestamps/ids first). (4) Any mismatch: minimize it with §1, then decide which side is wrong — do not assume the new side.
 
-**Micro-example:** refactoring a date parser. Feed both parsers the same 10k lines: `old < cases.txt > old.out; new < cases.txt > new.out; diff old.out new.out`. Three mismatches; two are bugs in the *old* parser (document them — behavior change!), one in the new. Ship with all three recorded.
+**Micro-example:** refactoring a date parser. Feed both parsers the same 10k lines: `old < cases.txt > old.out; new < cases.txt > new.out; diff old.out new.out`. Three mismatches; two are bugs in the _old_ parser (document them — behavior change!), one in the new. Ship with all three recorded.
 
 **Proves / doesn't:** agreement on the tested inputs only — coverage is everything. It cannot catch a bug both sides share. Property-based extension: instead of fixed cases, state an invariant ("decode(encode(x)) == x") and generate inputs; a generator finds cases you wouldn't write.
 
@@ -73,7 +74,7 @@ git bisect reset
 
 **Micro-example:** "IDs in this table are unique." Add a temporary assert (or one SQL check: `SELECT id, COUNT(*) FROM t GROUP BY id HAVING COUNT(*) > 1;`). It returns rows. The "impossible" duplicate — not the downstream symptom you were chasing — is the bug.
 
-**Proves / doesn't:** holds *over the workload you ran*, nothing stronger. An invariant worth checking twice is worth encoding permanently (golden suite candidate → `agentic-validation-and-qa`).
+**Proves / doesn't:** holds _over the workload you ran_, nothing stronger. An invariant worth checking twice is worth encoding permanently (golden suite candidate → `agentic-validation-and-qa`).
 
 ## 5. Back-of-envelope (Fermi) analysis
 
@@ -83,7 +84,7 @@ git bisect reset
 
 **The rule that makes this a proof tool:** if measurement and estimate disagree by ~10× or more, **the model is wrong, and that is the finding** — either your understanding of the system is broken (common: something runs N times more often than you think) or the measurement is (also common). Do not "fix" anything until the estimate and the measurement reconcile.
 
-**Micro-example:** "the nightly job is slow because of the API calls." Estimate: 5k records × 1 call × ~100 ms ≈ 8 min. Measured: 4 hours — 30× off. The model is wrong: instrument (per `agentic-diagnostics-and-tooling`) and find the call count is 5k × 40 due to an N+1 pattern. The fix is batching, and the *proof* is that the reconciled model now predicts the measured time.
+**Micro-example:** "the nightly job is slow because of the API calls." Estimate: 5k records × 1 call × ~100 ms ≈ 8 min. Measured: 4 hours — 30× off. The model is wrong: instrument (per `agentic-diagnostics-and-tooling`) and find the call count is 5k × 40 due to an N+1 pattern. The fix is batching, and the _proof_ is that the reconciled model now predicts the measured time.
 
 **Proves / doesn't:** magnitude sanity only — never fine differences. Its power is vetoing wrong mechanisms cheaply and catching miscounts.
 
@@ -97,7 +98,7 @@ git bisect reset
 
 ## 7. Refutation-first (the habit that keeps the rest honest)
 
-Given any hypothesis you *like*, design the experiment that would **disprove** it, and run that first. Confirmation is what's left standing after a sincere attempt to kill. Agents (and humans) drift toward running the experiment their favorite hypothesis predicts it will pass — the two dead-hypothesis escalation rule in `agentic-debugging-playbook` and the assigned-adversary protocol in `agentic-research-methodology` are institutionalized versions of this habit. Practical form: before running any confirming experiment, write one sentence — "if <hypothesis> is false, the cheapest way to expose that is <experiment>" — and run that instead.
+Given any hypothesis you _like_, design the experiment that would **disprove** it, and run that first. Confirmation is what's left standing after a sincere attempt to kill. Agents (and humans) drift toward running the experiment their favorite hypothesis predicts it will pass — the two dead-hypothesis escalation rule in `agentic-debugging-playbook` and the assigned-adversary protocol in `agentic-research-methodology` are institutionalized versions of this habit. Practical form: before running any confirming experiment, write one sentence — "if <hypothesis> is false, the cheapest way to expose that is <experiment>" — and run that instead.
 
 ## 8. Statistical minimums (hard rules for agents)
 
@@ -112,6 +113,7 @@ Given any hypothesis you *like*, design the experiment that would **disprove** i
 Authored 2026-07-02. Recipes are standard first-principles methods stated in their cross-project form; micro-examples are archetypes, not citations to a specific repo. Labels: **hard rule** where marked; everything else is a default recipe — adapt steps, never skip the "what it doesn't prove" caveat.
 
 **Volatile facts, re-verify if this file is old:**
+
 - `git bisect run` exit-code contract (0 good / 125 skip / 1–127 bad): `git bisect --help`, section "bisect run".
 - The SQL duplicate-check syntax is ANSI and portable; verify against your dialect anyway.
 - Sibling skills referenced: `agentic-debugging-playbook`, `agentic-diagnostics-and-tooling`, `agentic-validation-and-qa`, `agentic-research-methodology`, `agentic-failure-archaeology` — re-verify against the library index.
