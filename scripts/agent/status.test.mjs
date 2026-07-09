@@ -15,8 +15,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  buildGateQueues,
   buildSuggestedActions,
   escapeHtml,
+  extractCheckboxGateItems,
+  formatGateItem,
   parseArgs,
   renderStatusHtml,
 } from "./status.mjs";
@@ -136,6 +139,8 @@ function baseFixture(overrides = {}) {
     allIssuesError: null,
     plans: [],
     plansError: null,
+    agentPickupQueue: [],
+    gateItemsError: null,
     ...overrides,
   };
 }
@@ -413,4 +418,163 @@ test("renderStatusHtml: degraded plans section renders an honest unavailable mes
     baseFixture({ plansError: "git ls-files failed" }),
   );
   assert.match(html, /Plans data unavailable: git ls-files failed/);
+});
+
+// ---------------------------------------------------------------------------
+// OWNER-GATE / AGENT-TODO mechanical triage collector
+// ---------------------------------------------------------------------------
+
+const ISSUE_SOURCE = {
+  type: "issue",
+  number: 10,
+  title: "Some issue",
+  url: "https://github.com/jpatel900/LifeOS/issues/10",
+};
+
+test("extractCheckboxGateItems: finds an unchecked OWNER-GATE line", () => {
+  const body = [
+    "Follow-ups:",
+    "- [ ] OWNER-GATE: set the SUPABASE_PROD_MIGRATOR_URL secret",
+  ].join("\n");
+  const items = extractCheckboxGateItems(body, ISSUE_SOURCE);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, "owner-gate");
+  assert.match(items[0].text, /OWNER-GATE: set the SUPABASE/);
+});
+
+test("extractCheckboxGateItems: finds an unchecked AGENT-TODO line", () => {
+  const body = "- [ ] AGENT-TODO: add a guard test for the new export table";
+  const items = extractCheckboxGateItems(body, ISSUE_SOURCE);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, "agent-todo");
+});
+
+test("extractCheckboxGateItems: excludes checked [x] boxes", () => {
+  const body = [
+    "- [x] OWNER-GATE: already done, should not appear",
+    "- [X] AGENT-TODO: also done, capital X should not appear",
+  ].join("\n");
+  const items = extractCheckboxGateItems(body, ISSUE_SOURCE);
+  assert.deepEqual(items, []);
+});
+
+test("extractCheckboxGateItems: legacy-untagged heuristic matches unchecked lines containing 'Owner'", () => {
+  const body = "- [ ] Owner: decide whether to enable the flag";
+  const items = extractCheckboxGateItems(body, ISSUE_SOURCE);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].kind, "legacy-owner");
+});
+
+test("extractCheckboxGateItems: ignores unchecked lines with no marker and no 'owner' word", () => {
+  const body = "- [ ] just a plain todo with no tag or relevant mention";
+  const items = extractCheckboxGateItems(body, ISSUE_SOURCE);
+  assert.deepEqual(items, []);
+});
+
+test("extractCheckboxGateItems: degrades on a missing/non-string body instead of throwing", () => {
+  assert.deepEqual(extractCheckboxGateItems(undefined, ISSUE_SOURCE), []);
+  assert.deepEqual(extractCheckboxGateItems(null, ISSUE_SOURCE), []);
+});
+
+test("formatGateItem: strips the marker and builds a linked source label", () => {
+  const formatted = formatGateItem({
+    text: "OWNER-GATE: decide the rollout date",
+    kind: "owner-gate",
+    source: {
+      type: "pr",
+      number: 472,
+      title: "chore(ci): ...",
+      url: "https://github.com/jpatel900/LifeOS/pull/472",
+    },
+  });
+  assert.equal(formatted.text, "decide the rollout date");
+  assert.equal(formatted.refLabel, "PR #472");
+  assert.equal(formatted.url, "https://github.com/jpatel900/LifeOS/pull/472");
+});
+
+test("formatGateItem: labels legacy-untagged items clearly", () => {
+  const formatted = formatGateItem({
+    text: "Owner: decide whether to enable the flag",
+    kind: "legacy-owner",
+    source: ISSUE_SOURCE,
+  });
+  assert.match(formatted.text, /^untagged \(legacy\): /);
+});
+
+test("buildGateQueues: routes owner-gate and legacy-owner into ownerItems, agent-todo into agentItems", () => {
+  const items = [
+    { text: "OWNER-GATE: a", kind: "owner-gate", source: ISSUE_SOURCE },
+    { text: "AGENT-TODO: b", kind: "agent-todo", source: ISSUE_SOURCE },
+    { text: "Owner: c", kind: "legacy-owner", source: ISSUE_SOURCE },
+  ];
+  const { ownerItems, agentItems } = buildGateQueues(items);
+  assert.equal(ownerItems.length, 2);
+  assert.equal(agentItems.length, 1);
+  assert.equal(agentItems[0].text, "b");
+});
+
+test("renderStatusHtml: OWNER-GATE queue item renders in the owner queue with a linked source", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      ownerQueue: [
+        {
+          text: "decide the rollout date",
+          refLabel: "PR #472",
+          url: "https://github.com/jpatel900/LifeOS/pull/472",
+        },
+      ],
+    }),
+  );
+  assert.match(html, /decide the rollout date/);
+  assert.match(
+    html,
+    /<a href="https:\/\/github\.com\/jpatel900\/LifeOS\/pull\/472">PR #472<\/a>/,
+  );
+});
+
+test("renderStatusHtml: legacy-untagged owner queue item is labelled as such", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      ownerQueue: [
+        {
+          text: "untagged (legacy): decide whether to enable the flag",
+          refLabel: "PR #471",
+          url: "https://github.com/jpatel900/LifeOS/pull/471",
+        },
+      ],
+    }),
+  );
+  assert.match(html, /untagged \(legacy\): decide whether to enable the flag/);
+});
+
+test("renderStatusHtml: AGENT-TODO items render in the new Agent pickup queue section", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      agentPickupQueue: [
+        {
+          text: "add a guard test for the new export table",
+          refLabel: "Issue #10",
+          url: "https://github.com/jpatel900/LifeOS/issues/10",
+        },
+      ],
+    }),
+  );
+  assert.match(html, /Agent pickup queue/);
+  assert.match(html, /add a guard test for the new export table/);
+  assert.match(
+    html,
+    /<a href="https:\/\/github\.com\/jpatel900\/LifeOS\/issues\/10">Issue #10<\/a>/,
+  );
+});
+
+test("renderStatusHtml: Agent pickup queue empty state when nothing is agent-doable", () => {
+  const html = renderStatusHtml(baseFixture());
+  assert.match(html, /Nothing pre-classified as agent-doable right now\./);
+});
+
+test("renderStatusHtml: degraded gate-item scan renders an honest message instead of throwing", () => {
+  const html = renderStatusHtml(
+    baseFixture({ gateItemsError: "open issues: gh: rate limited" }),
+  );
+  assert.match(html, /Gate item scan degraded: open issues: gh: rate limited/);
 });

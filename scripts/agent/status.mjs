@@ -388,6 +388,166 @@ function printMigrationDrift() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// OWNER-GATE / AGENT-TODO mechanical triage collector (AGENTS.md rule 15).
+//
+// Agent-authored PRs/issues leave follow-up items as checkbox lines tagged
+// `OWNER-GATE:` or `AGENT-TODO:`. This scans open issues, open PRs, and the
+// last 20 merged PRs for unchecked (`- [ ]`) lines carrying either marker
+// (checked `[x]` boxes are excluded -- they're resolved), plus a labelled
+// "untagged (legacy)" heuristic for older bodies written before the
+// convention existed (any unchecked line containing the word "Owner").
+// ---------------------------------------------------------------------------
+
+// Pure: parses one issue/PR body into tagged gate items. No I/O.
+function extractCheckboxGateItems(body, source) {
+  if (typeof body !== "string" || body.length === 0) {
+    return [];
+  }
+  const items = [];
+  for (const line of body.split("\n")) {
+    const match = line.match(/^\s*-\s*\[ \]\s*(.+)$/);
+    if (!match) continue;
+    const text = match[1].trim();
+    let kind = null;
+    if (/OWNER-GATE:/.test(text)) {
+      kind = "owner-gate";
+    } else if (/AGENT-TODO:/.test(text)) {
+      kind = "agent-todo";
+    } else if (/\bowner\b/i.test(text)) {
+      kind = "legacy-owner";
+    }
+    if (kind) {
+      items.push({ text, kind, source });
+    }
+  }
+  return items;
+}
+
+// Gather step: shells out to `gh` for the three body sources. Each source is
+// wrapped independently so one failing call (e.g. rate limit) still leaves
+// the other two usable -- degrades gracefully rather than dropping everything.
+function computeGateItems() {
+  const items = [];
+  const errors = [];
+
+  try {
+    const issues = ghJson([
+      "issue",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,url",
+      "--limit",
+      "200",
+    ]);
+    for (const issue of issues) {
+      items.push(
+        ...extractCheckboxGateItems(issue.body, {
+          type: "issue",
+          number: issue.number,
+          title: issue.title,
+          url: issue.url,
+        }),
+      );
+    }
+  } catch (err) {
+    errors.push(`open issues: ${err.message.split("\n")[0]}`);
+  }
+
+  try {
+    const openPrs = ghJson([
+      "pr",
+      "list",
+      "--state",
+      "open",
+      "--json",
+      "number,title,body,url",
+      "--limit",
+      "50",
+    ]);
+    for (const pr of openPrs) {
+      items.push(
+        ...extractCheckboxGateItems(pr.body, {
+          type: "pr",
+          number: pr.number,
+          title: pr.title,
+          url: pr.url,
+        }),
+      );
+    }
+  } catch (err) {
+    errors.push(`open PRs: ${err.message.split("\n")[0]}`);
+  }
+
+  try {
+    const mergedPrs = ghJson([
+      "pr",
+      "list",
+      "--state",
+      "merged",
+      "--limit",
+      "20",
+      "--json",
+      "number,title,body,url",
+    ]);
+    for (const pr of mergedPrs) {
+      items.push(
+        ...extractCheckboxGateItems(pr.body, {
+          type: "pr",
+          number: pr.number,
+          title: pr.title,
+          url: pr.url,
+        }),
+      );
+    }
+  } catch (err) {
+    errors.push(`merged PRs (last 20): ${err.message.split("\n")[0]}`);
+  }
+
+  return { items, errors };
+}
+
+// Pure: strips the marker, labels legacy-untagged items, and derives the
+// source PR/issue link. Shared by text and HTML rendering.
+function formatGateItem(item) {
+  const cleaned = item.text
+    .replace(/^(OWNER-GATE:|AGENT-TODO:)\s*/i, "")
+    .trim();
+  const refLabel = `${item.source.type === "issue" ? "Issue" : "PR"} #${item.source.number}`;
+  const prefix = item.kind === "legacy-owner" ? "untagged (legacy): " : "";
+  return { text: `${prefix}${cleaned}`, refLabel, url: item.source.url };
+}
+
+// Pure: splits already-extracted gate items into the owner queue (OWNER-GATE
+// + legacy-untagged) and the agent pickup queue (AGENT-TODO). No I/O.
+function buildGateQueues(items) {
+  const ownerItems = items
+    .filter(
+      (item) => item.kind === "owner-gate" || item.kind === "legacy-owner",
+    )
+    .map(formatGateItem);
+  const agentItems = items
+    .filter((item) => item.kind === "agent-todo")
+    .map(formatGateItem);
+  return { ownerItems, agentItems };
+}
+
+function printAgentPickupQueue(items, errors = []) {
+  section("AGENT PICKUP QUEUE");
+  if (errors.length > 0) {
+    console.log(`gate item scan degraded: ${errors.join("; ")}`);
+  }
+  if (items.length === 0) {
+    console.log("none");
+    return;
+  }
+  for (const item of items) {
+    console.log(`- ${item.text} (${item.refLabel})`);
+  }
+}
+
 // Pure: builds the "what does the owner need to click next" list from
 // already-gathered data. No I/O -- unit-testable with fixtures.
 function buildSuggestedActions({
@@ -437,9 +597,9 @@ function buildSuggestedActions({
   return actions;
 }
 
-function printSuggestedActions(args) {
+function printSuggestedActions(args, gateQueueLines = []) {
   section("SUGGESTED NEXT ACTIONS");
-  const actions = buildSuggestedActions(args);
+  const actions = [...buildSuggestedActions(args), ...gateQueueLines];
 
   if (actions.length === 0) {
     console.log("none");
@@ -655,6 +815,8 @@ function gatherHtmlStatusData() {
     allIssuesError: null,
     plans: [],
     plansError: null,
+    agentPickupQueue: [],
+    gateItemsError: null,
   };
 
   // Filesystem-only; doesn't need `gh`, so gather it before the auth gate.
@@ -723,6 +885,18 @@ function gatherHtmlStatusData() {
     data.allIssues = computeAllIssues();
   } catch (err) {
     data.allIssuesError = err.message.split("\n")[0];
+  }
+
+  try {
+    const { items, errors } = computeGateItems();
+    const { ownerItems, agentItems } = buildGateQueues(items);
+    data.ownerQueue.push(...ownerItems);
+    data.agentPickupQueue = agentItems;
+    if (errors.length > 0) {
+      data.gateItemsError = errors.join("; ");
+    }
+  } catch (err) {
+    data.gateItemsError = err.message.split("\n")[0];
   }
 
   data.workflows = KEY_WORKFLOWS.map(({ file, label }) =>
@@ -892,12 +1066,40 @@ function renderStatusHtml(data) {
       </div>`
     : "";
 
+  // ownerQueue holds two shapes: plain strings from buildSuggestedActions
+  // (merge/close/investigate actions) and gate-item objects from
+  // buildGateQueues ({ text, refLabel, url }) that carry a linked source.
+  const renderOwnerQueueItem = (item) => {
+    if (typeof item === "string") {
+      return `<li>${escapeHtml(item)}</li>`;
+    }
+    const link = item.refLabel
+      ? ` &mdash; <a href="${escapeHtml(item.url ?? "#")}">${escapeHtml(item.refLabel)}</a>`
+      : "";
+    return `<li>${escapeHtml(item.text)}${link}</li>`;
+  };
+
   const ownerQueueItems =
     data.ownerQueue.length === 0
       ? "<li>Nothing waiting on you right now.</li>"
-      : data.ownerQueue
-          .map((item) => `<li>${escapeHtml(item)}</li>`)
+      : data.ownerQueue.map(renderOwnerQueueItem).join("\n");
+
+  const agentPickupQueue = data.agentPickupQueue ?? [];
+  const agentPickupItems =
+    agentPickupQueue.length === 0
+      ? '<li class="dim">Nothing pre-classified as agent-doable right now.</li>'
+      : agentPickupQueue
+          .map((item) => {
+            const link = item.refLabel
+              ? ` &mdash; <a href="${escapeHtml(item.url ?? "#")}">${escapeHtml(item.refLabel)}</a>`
+              : "";
+            return `<li>${escapeHtml(item.text)}${link}</li>`;
+          })
           .join("\n");
+  const agentPickupErrorHtml =
+    data.gateItemsError != null
+      ? `<p class="dim">Gate item scan degraded: ${escapeHtml(data.gateItemsError)}</p>`
+      : "";
 
   const prRows =
     data.prsError != null
@@ -1038,6 +1240,22 @@ function renderStatusHtml(data) {
       }
       .owner-queue ul { margin: 0; padding-left: 20px; }
       .owner-queue li { margin: 4px 0; }
+      .agent-queue {
+        border: 2px solid var(--usability);
+        border-radius: 12px;
+        background: rgba(96, 165, 250, 0.08);
+        padding: 16px 18px;
+        margin-bottom: 20px;
+        max-width: 1100px;
+      }
+      .agent-queue h2 {
+        margin: 0 0 10px;
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .agent-queue ul { margin: 0; padding-left: 20px; }
+      .agent-queue li { margin: 4px 0; }
       .grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -1193,6 +1411,12 @@ function renderStatusHtml(data) {
       <div class="owner-queue">
         <h2>Owner Queue</h2>
         <ul>${ownerQueueItems}</ul>
+      </div>
+
+      <div class="agent-queue">
+        <h2>Agent pickup queue</h2>
+        ${agentPickupErrorHtml}
+        <ul>${agentPickupItems}</ul>
       </div>
 
       <div class="grid">
@@ -1372,17 +1596,38 @@ function main() {
     console.log(`MIGRATION DRIFT: error: ${err.message.split("\n")[0]}`);
   }
 
+  let ownerGateItems = [];
+  let agentPickupItems = [];
+  let gateErrors = [];
   try {
-    printSuggestedActions({
-      prs,
-      pipelineEntries,
-      epics,
-      runs,
-      manifest,
-      driftRed,
-    });
+    const { items, errors } = computeGateItems();
+    gateErrors = errors;
+    ({ ownerItems: ownerGateItems, agentItems: agentPickupItems } =
+      buildGateQueues(items));
+  } catch (err) {
+    gateErrors = [err.message.split("\n")[0]];
+  }
+
+  try {
+    printSuggestedActions(
+      {
+        prs,
+        pipelineEntries,
+        epics,
+        runs,
+        manifest,
+        driftRed,
+      },
+      ownerGateItems.map((item) => `${item.text} (${item.refLabel})`),
+    );
   } catch (err) {
     console.log(`SUGGESTED NEXT ACTIONS: error: ${err.message.split("\n")[0]}`);
+  }
+
+  try {
+    printAgentPickupQueue(agentPickupItems, gateErrors);
+  } catch (err) {
+    console.log(`AGENT PICKUP QUEUE: error: ${err.message.split("\n")[0]}`);
   }
 
   console.log("");
@@ -1458,4 +1703,7 @@ export {
   renderStatusHtml,
   escapeHtml,
   parseArgs,
+  extractCheckboxGateItems,
+  buildGateQueues,
+  formatGateItem,
 };
