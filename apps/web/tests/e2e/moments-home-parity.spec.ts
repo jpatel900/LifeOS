@@ -81,3 +81,42 @@ test.describe("moments home parity (/moments-preview)", () => {
     await expect(page.getByTestId("start-moment")).toBeVisible();
   });
 });
+
+// Layout regression guard (moments-home shell fix): the live `/` route
+// (NEXT_PUBLIC_MOMENTS_HOME=true in this project's webServer config, see
+// playwright.config.ts) rendered the moments home with no page shell —
+// content sat flush against the viewport edges (zero left/right padding) and
+// the StartMoment/CloseMoment two-column grids (main column + 20rem side
+// rail) had no max-width container to bound them, so long real-world content
+// in the side rail could push past the right edge (the scrollWidth check
+// alone under empty/seeded demo data does not reproduce that — the flush
+// edges do, and are what MomentsHomeShell's padding fixes). Two assertions:
+// (1) scrollWidth never exceeds the viewport width — the direct overflow
+// symptom, +1px tolerance for scrollbar/rounding; (2) the moments-home root
+// has visible left/right padding (its bounding box does not start at x=0 nor
+// end at the viewport's right edge) — the edge-flush symptom, which fails
+// against the unfixed page.tsx even with the empty demo-mode dataset.
+test.describe("moments home layout (/) has no horizontal overflow", () => {
+  for (const width of [375, 1280]) {
+    test(`scrollWidth <= viewport width and content is inset from the edges at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      const root = page.getByTestId("today-moments");
+      await expect(root).toBeVisible();
+
+      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+      expect(scrollWidth).toBeLessThanOrEqual(width + 1);
+
+      const box = await root.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThan(0);
+      expect(box!.x + box!.width).toBeLessThan(width);
+    });
+  }
+});
