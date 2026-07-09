@@ -22,6 +22,7 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "AGENTS.md",
   "CLAUDE.md",
   "README.md",
+  "SECURITY.md",
   "PRODUCT.md",
   "BUILD_BACKLOG.md",
   "EXTRA_INFO_AND_RULES.md",

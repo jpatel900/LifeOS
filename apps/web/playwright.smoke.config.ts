@@ -16,6 +16,12 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * Safety posture is enforced in the specs, not here: the default run asserts
  * up to the approval gate and performs no real external calendar write.
+ *
+ * Artifacts (trace/screenshot) are OFF by default and opt-in only, because a
+ * failure trace can capture real personal task content, and this repo's CI
+ * artifacts are publicly downloadable (public repo). Set
+ * `SMOKE_CAPTURE_ARTIFACTS=1` to retain them on failure when debugging — see
+ * docs/VERCEL_PRODUCTION_CHECKLIST.md.
  */
 const baseURL = process.env.SMOKE_BASE_URL?.trim();
 
@@ -26,6 +32,8 @@ if (!baseURL) {
   );
 }
 
+const captureArtifacts = process.env.SMOKE_CAPTURE_ARTIFACTS === "1";
+
 export default defineConfig({
   testDir: "./tests/smoke",
   fullyParallel: false,
@@ -35,8 +43,8 @@ export default defineConfig({
   timeout: 120_000,
   use: {
     baseURL,
-    trace: "retain-on-failure",
-    screenshot: "only-on-failure",
+    trace: captureArtifacts ? "retain-on-failure" : "off",
+    screenshot: captureArtifacts ? "only-on-failure" : "off",
     // Never treat prod TLS/self-signed quirks as a test crash.
     ignoreHTTPSErrors: true,
   },
