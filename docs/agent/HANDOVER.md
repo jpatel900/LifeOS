@@ -14,7 +14,8 @@ You are taking over an autonomous, dual-lane (Claude + Codex) build program on *
 ## 0. Repo & orientation
 
 - **Path:** `D:\OneDrive - Seneca\ContentFolder\AI\Codex\LifeOS` (GitHub `jpatel900/LifeOS`). Windows.
-- **First actions:** `cd` in → `git checkout main && git pull --ff-only` → `gh pr list` → read memory `C:\Users\jaypa\.claude\projects\C--Users-jaypa\memory\lifeos-agent-pipeline.md` (the **2026-07-08/09 SESSION 9** block is authoritative; also read **SESSION 4 FINAL → STANDING LESSONS**) and `lifeos-dual-critical-path.md` (stable priority contract).
+- **First actions:** `cd` in → `git checkout main && git pull --ff-only` → `gh pr list` → run `node scripts/agent/status.mjs` → read memory `C:\Users\jaypa\.claude\projects\C--Users-jaypa\memory\lifeos-agent-pipeline.md` (the **2026-07-08/09 SESSION 9** block is authoritative; also read **SESSION 4 FINAL → STANDING LESSONS**) and `lifeos-dual-critical-path.md` (stable priority contract).
+- **Default work source:** `status.mjs`'s **Agent pickup queue** section (checkbox items tagged `AGENT-TODO:` per AGENTS.md rule 15) is pre-classified as agent-doable. When no higher-priority directive from this handover applies, work that queue next — do not re-triage those items or second-guess the marker.
 - **Branch discipline (binding):** create branches as a **standalone** command and verify `git branch --show-current` before every commit. A compound `test … && git checkout -b` SHORT-CIRCUITS on main and commits ON main.
 - **Canonical surfaces:** Work map `C:\Users\jaypa\LifeOS-work-map.html` (keep current — owner is map-first; the status-log footer is now a collapsible `<details>` — edit inside `.log-body`). Priority contract `docs/implementation-planning/plan-dual-critical-path.md`. Plans/vision now live in `docs/implementation-planning/` and `docs/vision/` in this repo (see doc index below); SQL drift-fix scripts remain in `C:\Users\jaypa\LifeOS-plans\`.
 
