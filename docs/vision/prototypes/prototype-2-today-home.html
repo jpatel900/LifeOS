@@ -1,1185 +1,2711 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="dark" data-area="all" data-time="countdown">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LifeOS — Today</title>
-<style>
-  /* ============================================================
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LifeOS — Today</title>
+    <style>
+      /* ============================================================
      THEME TOKENS
      Two color axes, kept deliberately distinct:
        --accent    → AREA / brand identity (retints whole UI on scope)
        --st-*      → STATE (green/amber/red) — sparse, reserved, semantic
      Theme (dark default / light) swaps the neutral palette only.
      ============================================================ */
-  :root {
-    --radius: 16px;
-    --radius-sm: 10px;
-    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-    --ease: cubic-bezier(.22,.61,.36,1);
-  }
+      :root {
+        --radius: 16px;
+        --radius-sm: 10px;
+        --font:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+          sans-serif;
+        --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+      }
 
-  /* ---- DARK (default) ---- */
-  html[data-theme="dark"] {
-    --bg: #14151a;
-    --bg-2: #191b22;
-    --surface: #1e2028;
-    --surface-2: #24262f;
-    --ink: #eef0f4;
-    --ink-soft: #a6a9b4;
-    --ink-faint: #6f727d;
-    --line: #2a2c36;
-    --line-strong: #363945;
-    --st-green: #46c08a;
-    --st-amber: #e0a94a;
-    --st-red: #e56b64;
-    --st-green-bg: rgba(70,192,138,.14);
-    --st-amber-bg: rgba(224,169,74,.14);
-    --st-red-bg: rgba(229,107,100,.14);
-    --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 1px 1px rgba(0,0,0,.25);
-    --shadow-lg: 0 24px 60px rgba(0,0,0,.55), 0 4px 12px rgba(0,0,0,.35);
-    --scrim: rgba(5,6,9,.55);
-    --glow: .34;
-  }
-  /* ---- LIGHT ---- */
-  html[data-theme="light"] {
-    --bg: #f7f6f3;
-    --bg-2: #efeee9;
-    --surface: #ffffff;
-    --surface-2: #f4f3ef;
-    --ink: #1d1c1a;
-    --ink-soft: #6b6862;
-    --ink-faint: #a3a09a;
-    --line: #ecebe6;
-    --line-strong: #e0ded7;
-    --st-green: #2f9e6f;
-    --st-amber: #c98a2b;
-    --st-red: #cf5a54;
-    --st-green-bg: #eaf5ef;
-    --st-amber-bg: #f8efdd;
-    --st-red-bg: #f9ebea;
-    --shadow-sm: 0 1px 2px rgba(30,28,24,.05), 0 1px 1px rgba(30,28,24,.03);
-    --shadow-lg: 0 24px 60px rgba(30,28,24,.14), 0 4px 12px rgba(30,28,24,.06);
-    --scrim: rgba(29,28,26,.28);
-    --glow: .22;
-  }
+      /* ---- DARK (default) ---- */
+      html[data-theme="dark"] {
+        --bg: #14151a;
+        --bg-2: #191b22;
+        --surface: #1e2028;
+        --surface-2: #24262f;
+        --ink: #eef0f4;
+        --ink-soft: #a6a9b4;
+        --ink-faint: #6f727d;
+        --line: #2a2c36;
+        --line-strong: #363945;
+        --st-green: #46c08a;
+        --st-amber: #e0a94a;
+        --st-red: #e56b64;
+        --st-green-bg: rgba(70, 192, 138, 0.14);
+        --st-amber-bg: rgba(224, 169, 74, 0.14);
+        --st-red-bg: rgba(229, 107, 100, 0.14);
+        --shadow-sm:
+          0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.25);
+        --shadow-lg:
+          0 24px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+        --scrim: rgba(5, 6, 9, 0.55);
+        --glow: 0.34;
+      }
+      /* ---- LIGHT ---- */
+      html[data-theme="light"] {
+        --bg: #f7f6f3;
+        --bg-2: #efeee9;
+        --surface: #ffffff;
+        --surface-2: #f4f3ef;
+        --ink: #1d1c1a;
+        --ink-soft: #6b6862;
+        --ink-faint: #a3a09a;
+        --line: #ecebe6;
+        --line-strong: #e0ded7;
+        --st-green: #2f9e6f;
+        --st-amber: #c98a2b;
+        --st-red: #cf5a54;
+        --st-green-bg: #eaf5ef;
+        --st-amber-bg: #f8efdd;
+        --st-red-bg: #f9ebea;
+        --shadow-sm:
+          0 1px 2px rgba(30, 28, 24, 0.05), 0 1px 1px rgba(30, 28, 24, 0.03);
+        --shadow-lg:
+          0 24px 60px rgba(30, 28, 24, 0.14), 0 4px 12px rgba(30, 28, 24, 0.06);
+        --scrim: rgba(29, 28, 26, 0.28);
+        --glow: 0.22;
+      }
 
-  /* ---- ACCENT = AREA identity. All = brand-neutral. ----
+      /* ---- ACCENT = AREA identity. All = brand-neutral. ----
      Scoping to an area sets --accent + --accent-rgb on <html data-area>. */
-  html[data-area="all"]     { --accent: #6d8bff; --accent-rgb: 109,139,255; }
-  html[data-area="product"] { --accent: #6d8bff; --accent-rgb: 109,139,255; }
-  html[data-area="finance"] { --accent: #46c08a; --accent-rgb: 70,192,138; }
-  html[data-area="health"]  { --accent: #e06fae; --accent-rgb: 224,111,174; }
-  html[data-area="admin"]   { --accent: #e0a94a; --accent-rgb: 224,169,74; }
-  html[data-area="rel"]     { --accent: #b07cf0; --accent-rgb: 176,124,240; }
+      html[data-area="all"] {
+        --accent: #6d8bff;
+        --accent-rgb: 109, 139, 255;
+      }
+      html[data-area="product"] {
+        --accent: #6d8bff;
+        --accent-rgb: 109, 139, 255;
+      }
+      html[data-area="finance"] {
+        --accent: #46c08a;
+        --accent-rgb: 70, 192, 138;
+      }
+      html[data-area="health"] {
+        --accent: #e06fae;
+        --accent-rgb: 224, 111, 174;
+      }
+      html[data-area="admin"] {
+        --accent: #e0a94a;
+        --accent-rgb: 224, 169, 74;
+      }
+      html[data-area="rel"] {
+        --accent: #b07cf0;
+        --accent-rgb: 176, 124, 240;
+      }
 
-  /* derived accent surfaces (theme-independent — driven by rgb) */
-  :root {
-    --accent-soft: rgba(var(--accent-rgb), .16);
-    --accent-line: rgba(var(--accent-rgb), .34);
-    --accent-ink:  var(--accent);
-  }
+      /* derived accent surfaces (theme-independent — driven by rgb) */
+      :root {
+        --accent-soft: rgba(var(--accent-rgb), 0.16);
+        --accent-line: rgba(var(--accent-rgb), 0.34);
+        --accent-ink: var(--accent);
+      }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
-    font-family: var(--font);
-    background:
-      radial-gradient(1100px 520px at 82% -8%, rgba(var(--accent-rgb), .10), transparent 60%),
-      var(--bg);
-    color: var(--ink);
-    -webkit-font-smoothing: antialiased;
-    line-height: 1.45;
-    overflow-x: hidden;
-    transition: background-color .35s var(--ease), color .35s var(--ease);
-  }
-  ::selection { background: var(--accent-soft); }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family: var(--font);
+        background:
+          radial-gradient(
+            1100px 520px at 82% -8%,
+            rgba(var(--accent-rgb), 0.1),
+            transparent 60%
+          ),
+          var(--bg);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.45;
+        overflow-x: hidden;
+        transition:
+          background-color 0.35s var(--ease),
+          color 0.35s var(--ease);
+      }
+      ::selection {
+        background: var(--accent-soft);
+      }
 
-  /* ---------- shell ---------- */
-  .shell { max-width: 1120px; margin: 0 auto; padding: 34px 32px 130px; }
+      /* ---------- shell ---------- */
+      .shell {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 34px 32px 130px;
+      }
 
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 16px; margin-bottom: 30px; flex-wrap: wrap;
-  }
-  .brand { display: flex; align-items: baseline; gap: 14px; }
-  .brand .mark {
-    font-size: 13px; font-weight: 600; letter-spacing: .14em;
-    text-transform: uppercase; color: var(--ink-faint);
-  }
-  .brand .mark b { color: var(--accent); transition: color .35s var(--ease); }
-  .datestr { font-size: 13px; color: var(--ink-soft); }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+      }
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+      }
+      .brand .mark {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+      .brand .mark b {
+        color: var(--accent);
+        transition: color 0.35s var(--ease);
+      }
+      .datestr {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
 
-  .topctl { display:flex; align-items:center; gap: 10px; flex-wrap: wrap; }
+      .topctl {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
 
-  /* segmented control (reused) */
-  .seg { display: flex; gap: 3px; background: var(--surface);
-    border: 1px solid var(--line); border-radius: 999px; padding: 3px;
-    box-shadow: var(--shadow-sm); }
-  .seg button {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 12.5px; font-weight: 500; color: var(--ink-soft);
-    padding: 6px 13px; border-radius: 999px; cursor: pointer;
-    border: none; background: transparent; font-family: inherit;
-    transition: color .16s, background .22s var(--ease);
-  }
-  .seg button .k {
-    font-size: 10px; color: var(--ink-faint); border: 1px solid var(--line-strong);
-    border-radius: 5px; padding: 1px 5px; font-weight: 600;
-  }
-  .seg button:hover { color: var(--ink); }
-  .seg button.active { background: var(--accent); color: #fff; }
-  .seg button.active .k { color: rgba(255,255,255,.7); border-color: rgba(255,255,255,.3); }
+      /* segmented control (reused) */
+      .seg {
+        display: flex;
+        gap: 3px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px;
+        box-shadow: var(--shadow-sm);
+      }
+      .seg button {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--ink-soft);
+        padding: 6px 13px;
+        border-radius: 999px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        transition:
+          color 0.16s,
+          background 0.22s var(--ease);
+      }
+      .seg button .k {
+        font-size: 10px;
+        color: var(--ink-faint);
+        border: 1px solid var(--line-strong);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-weight: 600;
+      }
+      .seg button:hover {
+        color: var(--ink);
+      }
+      .seg button.active {
+        background: var(--accent);
+        color: #fff;
+      }
+      .seg button.active .k {
+        color: rgba(255, 255, 255, 0.7);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
 
-  /* icon toggle button (theme, time) */
-  .iconbtn {
-    display:flex; align-items:center; gap:7px; height: 34px; padding: 0 13px;
-    background: var(--surface); border:1px solid var(--line); border-radius: 999px;
-    color: var(--ink-soft); font-family: inherit; font-size: 12.5px; font-weight:500;
-    cursor: pointer; box-shadow: var(--shadow-sm); transition: color .16s, border-color .16s;
-  }
-  .iconbtn:hover { color: var(--ink); border-color: var(--line-strong); }
-  .iconbtn .k { font-size:10px; color: var(--ink-faint); border:1px solid var(--line-strong);
-    border-radius:5px; padding:1px 5px; font-weight:600; }
-  .iconbtn .gl { font-size: 14px; line-height:1; }
+      /* icon toggle button (theme, time) */
+      .iconbtn {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        height: 34px;
+        padding: 0 13px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink-soft);
+        font-family: inherit;
+        font-size: 12.5px;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+        transition:
+          color 0.16s,
+          border-color 0.16s;
+      }
+      .iconbtn:hover {
+        color: var(--ink);
+        border-color: var(--line-strong);
+      }
+      .iconbtn .k {
+        font-size: 10px;
+        color: var(--ink-faint);
+        border: 1px solid var(--line-strong);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-weight: 600;
+      }
+      .iconbtn .gl {
+        font-size: 14px;
+        line-height: 1;
+      }
 
-  /* area scope selector — swatch dot + name */
-  .areapick { position: relative; }
-  .areapick > .cur {
-    display:flex; align-items:center; gap:9px; height: 34px; padding: 0 12px 0 11px;
-    background: var(--surface); border:1px solid var(--line); border-radius: 999px;
-    color: var(--ink); font-family: inherit; font-size: 12.5px; font-weight:600;
-    cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color .16s;
-  }
-  .areapick > .cur:hover { border-color: var(--accent-line); }
-  .areapick > .cur .sw { width:11px; height:11px; border-radius:50%; background: var(--accent);
-    box-shadow: 0 0 0 4px var(--accent-soft); transition: background .3s var(--ease); }
-  .areapick > .cur .k { font-size:10px; color: var(--ink-faint); border:1px solid var(--line-strong);
-    border-radius:5px; padding:1px 5px; font-weight:600; margin-left:2px; }
-  .areamenu {
-    position:absolute; right:0; top: calc(100% + 8px); z-index: 30;
-    background: var(--surface); border:1px solid var(--line-strong); border-radius: 14px;
-    box-shadow: var(--shadow-lg); padding: 6px; min-width: 210px;
-    opacity:0; transform: translateY(-6px) scale(.98); pointer-events:none;
-    transition: opacity .16s var(--ease), transform .16s var(--ease);
-  }
-  .areamenu.open { opacity:1; transform:none; pointer-events:auto; }
-  .areamenu .opt {
-    display:flex; align-items:center; gap:10px; padding: 9px 11px; border-radius: 9px;
-    cursor:pointer; font-size: 13.5px; color: var(--ink);
-  }
-  .areamenu .opt:hover { background: var(--surface-2); }
-  .areamenu .opt.sel { background: var(--accent-soft); }
-  .areamenu .opt .sw { width:10px; height:10px; border-radius:50%; flex:none; }
-  .areamenu .opt .nm { flex:1; }
-  .areamenu .opt .ct { font-size: 11.5px; color: var(--ink-faint); }
+      /* area scope selector — swatch dot + name */
+      .areapick {
+        position: relative;
+      }
+      .areapick > .cur {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: 34px;
+        padding: 0 12px 0 11px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+        font-family: inherit;
+        font-size: 12.5px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: var(--shadow-sm);
+        transition: border-color 0.16s;
+      }
+      .areapick > .cur:hover {
+        border-color: var(--accent-line);
+      }
+      .areapick > .cur .sw {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+        transition: background 0.3s var(--ease);
+      }
+      .areapick > .cur .k {
+        font-size: 10px;
+        color: var(--ink-faint);
+        border: 1px solid var(--line-strong);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-weight: 600;
+        margin-left: 2px;
+      }
+      .areamenu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 8px);
+        z-index: 30;
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 14px;
+        box-shadow: var(--shadow-lg);
+        padding: 6px;
+        min-width: 210px;
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+        pointer-events: none;
+        transition:
+          opacity 0.16s var(--ease),
+          transform 0.16s var(--ease);
+      }
+      .areamenu.open {
+        opacity: 1;
+        transform: none;
+        pointer-events: auto;
+      }
+      .areamenu .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        cursor: pointer;
+        font-size: 13.5px;
+        color: var(--ink);
+      }
+      .areamenu .opt:hover {
+        background: var(--surface-2);
+      }
+      .areamenu .opt.sel {
+        background: var(--accent-soft);
+      }
+      .areamenu .opt .sw {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .areamenu .opt .nm {
+        flex: 1;
+      }
+      .areamenu .opt .ct {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
 
-  /* ---------- header line ---------- */
-  .greeting { margin-bottom: 4px; }
-  .greeting h1 { font-size: 30px; font-weight: 620; letter-spacing: -.02em; }
-  .subline { font-size: 15px; color: var(--ink-soft); margin-bottom: 22px; max-width: 62ch; }
-  .subline b { color: var(--ink); font-weight: 600; }
-  .subline .scoped-note { color: var(--accent); font-weight:600; }
+      /* ---------- header line ---------- */
+      .greeting {
+        margin-bottom: 4px;
+      }
+      .greeting h1 {
+        font-size: 30px;
+        font-weight: 620;
+        letter-spacing: -0.02em;
+      }
+      .subline {
+        font-size: 15px;
+        color: var(--ink-soft);
+        margin-bottom: 22px;
+        max-width: 62ch;
+      }
+      .subline b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .subline .scoped-note {
+        color: var(--accent);
+        font-weight: 600;
+      }
 
-  /* ---------- PIPELINE OVERVIEW (compact) ---------- */
-  .pipe {
-    display:flex; align-items:stretch; gap: 0; background: var(--surface);
-    border:1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-sm);
-    padding: 4px; margin-bottom: 26px; overflow: hidden;
-  }
-  .pstep {
-    flex:1; display:flex; flex-direction:column; gap:3px; padding: 11px 14px;
-    border-radius: 11px; cursor: pointer; position: relative;
-    transition: background .2s var(--ease);
-    border: none; background: transparent; font-family: inherit; text-align:left;
-  }
-  .pstep + .pstep::before {
-    content:"›"; position:absolute; left:-3px; top:50%; transform: translateY(-50%);
-    color: var(--ink-faint); font-size: 14px;
-  }
-  .pstep:hover { background: var(--surface-2); }
-  .pstep.active { background: var(--accent-soft); }
-  .pstep .pnum {
-    font-size: 21px; font-weight: 650; letter-spacing:-.02em; line-height:1;
-    font-variant-numeric: tabular-nums; color: var(--ink);
-    display:flex; align-items:baseline; gap:6px;
-  }
-  .pstep.active .pnum { color: var(--accent); }
-  .pstep .pnum .delta { font-size: 11px; font-weight:600; }
-  .pstep .delta.up { color: var(--st-amber); }
-  .pstep .delta.dn { color: var(--st-green); }
-  .pstep .plabel { font-size: 11.5px; color: var(--ink-soft); font-weight:500; }
-  .pstep .pbar { height: 3px; border-radius: 3px; margin-top:4px; background: var(--line);
-    overflow:hidden; }
-  .pstep .pbar > i { display:block; height:100%; background: var(--accent); border-radius:3px;
-    transform-origin:left; transform: scaleX(var(--f,0)); transition: transform .6s var(--ease); }
-  .pipe-drill {
-    font-size: 12.5px; color: var(--ink-soft); padding: 0 8px 10px; margin-top:-14px;
-    max-height:0; overflow:hidden; opacity:0;
-    transition: max-height .28s var(--ease), opacity .2s var(--ease), padding .28s var(--ease);
-  }
-  .pipe-drill.open { max-height: 120px; opacity:1; padding: 12px 14px 14px; margin-top:0; }
-  .pipe-drill .dl-row { display:flex; align-items:center; gap:10px; padding:5px 0; }
-  .pipe-drill .dl-row .dot { width:6px; height:6px; border-radius:50%; background: var(--accent); flex:none; }
-  .pipe-drill b { color: var(--ink); }
+      /* ---------- PIPELINE OVERVIEW (compact) ---------- */
+      .pipe {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--shadow-sm);
+        padding: 4px;
+        margin-bottom: 26px;
+        overflow: hidden;
+      }
+      .pstep {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 11px 14px;
+        border-radius: 11px;
+        cursor: pointer;
+        position: relative;
+        transition: background 0.2s var(--ease);
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        text-align: left;
+      }
+      .pstep + .pstep::before {
+        content: "›";
+        position: absolute;
+        left: -3px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--ink-faint);
+        font-size: 14px;
+      }
+      .pstep:hover {
+        background: var(--surface-2);
+      }
+      .pstep.active {
+        background: var(--accent-soft);
+      }
+      .pstep .pnum {
+        font-size: 21px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        color: var(--ink);
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+      }
+      .pstep.active .pnum {
+        color: var(--accent);
+      }
+      .pstep .pnum .delta {
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .pstep .delta.up {
+        color: var(--st-amber);
+      }
+      .pstep .delta.dn {
+        color: var(--st-green);
+      }
+      .pstep .plabel {
+        font-size: 11.5px;
+        color: var(--ink-soft);
+        font-weight: 500;
+      }
+      .pstep .pbar {
+        height: 3px;
+        border-radius: 3px;
+        margin-top: 4px;
+        background: var(--line);
+        overflow: hidden;
+      }
+      .pstep .pbar > i {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+        border-radius: 3px;
+        transform-origin: left;
+        transform: scaleX(var(--f, 0));
+        transition: transform 0.6s var(--ease);
+      }
+      .pipe-drill {
+        font-size: 12.5px;
+        color: var(--ink-soft);
+        padding: 0 8px 10px;
+        margin-top: -14px;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition:
+          max-height 0.28s var(--ease),
+          opacity 0.2s var(--ease),
+          padding 0.28s var(--ease);
+      }
+      .pipe-drill.open {
+        max-height: 120px;
+        opacity: 1;
+        padding: 12px 14px 14px;
+        margin-top: 0;
+      }
+      .pipe-drill .dl-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 0;
+      }
+      .pipe-drill .dl-row .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        flex: none;
+      }
+      .pipe-drill b {
+        color: var(--ink);
+      }
 
-  /* ---------- layout grid ---------- */
-  .grid { display: grid; grid-template-columns: 1fr 312px; gap: 26px; align-items: start; }
-  @media (max-width: 900px){ .grid { grid-template-columns: 1fr; } }
+      /* ---------- layout grid ---------- */
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 312px;
+        gap: 26px;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
 
-  /* ============================================================
+      /* ============================================================
      FIRST MOVE  +  PROGRESSION RAIL (map-peek)
      Collapsed = one 2-min CTA. Expand = full game-style node rail.
      ============================================================ */
-  .firstmove {
-    position: relative; background: var(--surface); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 26px 28px 22px;
-    box-shadow: var(--shadow-sm); overflow: hidden;
-    transition: border-color .3s var(--ease);
-  }
-  .firstmove::before {
-    content:""; position: absolute; left:0; top:0; bottom:0; width: 4px;
-    background: var(--accent); transition: background .3s var(--ease);
-  }
-  .fm-eyebrow { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
-  .chip-area {
-    display:inline-flex; align-items:center; gap:7px;
-    font-size: 12px; font-weight:600; color: var(--ink-soft);
-    background: var(--surface-2); border:1px solid var(--line);
-    padding: 4px 11px 4px 9px; border-radius: 999px;
-  }
-  .chip-area .sw { width:8px; height:8px; border-radius:50%; flex:none; }
-  .tag-2min {
-    font-size: 11px; font-weight: 600; letter-spacing:.08em; text-transform: uppercase;
-    color: #fff; background: var(--accent);
-    padding: 4px 10px; border-radius: 999px; transition: background .3s var(--ease);
-  }
-  .fm-title { font-size: 22px; font-weight: 600; letter-spacing:-.01em; margin-bottom: 8px; }
-  .fm-why { font-size: 14px; color: var(--ink-soft); margin-bottom: 20px; max-width: 48ch; }
-  .fm-actions { display:flex; align-items:center; gap: 10px; flex-wrap:wrap; }
-  .btn-primary {
-    display:inline-flex; align-items:center; gap:10px;
-    background: var(--accent); color:#fff; font-family:inherit;
-    font-size: 15px; font-weight: 600; border:none; cursor:pointer;
-    padding: 12px 20px; border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(var(--accent-rgb), var(--glow));
-    transition: transform .1s var(--ease), box-shadow .18s, background .3s var(--ease);
-  }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(var(--accent-rgb), calc(var(--glow) + .08)); }
-  .btn-primary:active { transform: translateY(0) scale(.985); }
-  .btn-primary .k { font-size:11px; background: rgba(255,255,255,.2); padding:2px 6px; border-radius:5px; }
-  .btn-ghost {
-    background: transparent; border:none; color: var(--ink-soft);
-    font-family:inherit; font-size: 13px; cursor:pointer; padding: 8px 6px;
-    border-radius: 8px; transition: color .14s;
-  }
-  .btn-ghost:hover { color: var(--ink); }
-  .fm-map-toggle {
-    margin-left:auto; display:inline-flex; align-items:center; gap:8px;
-    font-size:12.5px; color: var(--ink-soft); background: transparent;
-    border:1px solid var(--line); border-radius: 999px; padding: 7px 12px;
-    cursor:pointer; font-family:inherit; transition: color .14s, border-color .14s, background .2s;
-  }
-  .fm-map-toggle:hover { color: var(--ink); border-color: var(--accent-line); }
-  .fm-map-toggle .k { font-size:10px; color: var(--ink-faint); border:1px solid var(--line-strong);
-    border-radius:5px; padding:1px 5px; font-weight:600; }
-  .fm-map-toggle .chev { transition: transform .28s var(--ease); display:inline-block; }
-  .firstmove.mapopen .fm-map-toggle .chev { transform: rotate(180deg); }
+      .firstmove {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 26px 28px 22px;
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+        transition: border-color 0.3s var(--ease);
+      }
+      .firstmove::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--accent);
+        transition: background 0.3s var(--ease);
+      }
+      .fm-eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .chip-area {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink-soft);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        padding: 4px 11px 4px 9px;
+        border-radius: 999px;
+      }
+      .chip-area .sw {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .tag-2min {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #fff;
+        background: var(--accent);
+        padding: 4px 10px;
+        border-radius: 999px;
+        transition: background 0.3s var(--ease);
+      }
+      .fm-title {
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-bottom: 8px;
+      }
+      .fm-why {
+        font-size: 14px;
+        color: var(--ink-soft);
+        margin-bottom: 20px;
+        max-width: 48ch;
+      }
+      .fm-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--accent);
+        color: #fff;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        padding: 12px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(var(--accent-rgb), var(--glow));
+        transition:
+          transform 0.1s var(--ease),
+          box-shadow 0.18s,
+          background 0.3s var(--ease);
+      }
+      .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 22px rgba(var(--accent-rgb), calc(var(--glow) + 0.08));
+      }
+      .btn-primary:active {
+        transform: translateY(0) scale(0.985);
+      }
+      .btn-primary .k {
+        font-size: 11px;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 2px 6px;
+        border-radius: 5px;
+      }
+      .btn-ghost {
+        background: transparent;
+        border: none;
+        color: var(--ink-soft);
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 8px 6px;
+        border-radius: 8px;
+        transition: color 0.14s;
+      }
+      .btn-ghost:hover {
+        color: var(--ink);
+      }
+      .fm-map-toggle {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--ink-soft);
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 7px 12px;
+        cursor: pointer;
+        font-family: inherit;
+        transition:
+          color 0.14s,
+          border-color 0.14s,
+          background 0.2s;
+      }
+      .fm-map-toggle:hover {
+        color: var(--ink);
+        border-color: var(--accent-line);
+      }
+      .fm-map-toggle .k {
+        font-size: 10px;
+        color: var(--ink-faint);
+        border: 1px solid var(--line-strong);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-weight: 600;
+      }
+      .fm-map-toggle .chev {
+        transition: transform 0.28s var(--ease);
+        display: inline-block;
+      }
+      .firstmove.mapopen .fm-map-toggle .chev {
+        transform: rotate(180deg);
+      }
 
-  /* the rail itself */
-  .rail-wrap {
-    max-height: 0; overflow: hidden; opacity: 0;
-    transition: max-height .42s var(--ease), opacity .3s var(--ease), margin .3s var(--ease);
-  }
-  .firstmove.mapopen .rail-wrap { max-height: 340px; opacity:1; margin-top: 22px; }
-  .rail-head { font-size: 11.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
-    color: var(--ink-faint); margin-bottom: 16px; display:flex; align-items:center; gap:8px; }
-  .rail-head .ai { color: var(--accent); }
-  .prograil {
-    position: relative; display:flex; align-items:flex-start; gap: 0;
-    padding: 4px 2px 2px;
-  }
-  .node {
-    position: relative; flex:1; display:flex; flex-direction:column; align-items:center;
-    gap: 9px; padding-top: 4px; min-width:0;
-  }
-  /* connector line between nodes */
-  .node::after {
-    content:""; position:absolute; top: 13px; left: 50%; width: 100%; height: 2px;
-    background: var(--line-strong); z-index:0;
-  }
-  .node:last-child::after { display:none; }
-  .node.done::after, .node.current::after { background: var(--accent); }
-  .node.tail::after { background: transparent;
-    background-image: linear-gradient(90deg, var(--line-strong) 55%, transparent 0);
-    background-size: 8px 2px; background-repeat: repeat-x; }
-  .ndot {
-    width: 26px; height: 26px; border-radius: 50%; flex:none; z-index:1;
-    display:flex; align-items:center; justify-content:center;
-    font-size: 12px; font-weight: 700; color: var(--ink-faint);
-    background: var(--surface); border: 2px solid var(--line-strong);
-    transition: transform .3s var(--ease), background .3s var(--ease),
-                border-color .3s var(--ease), color .3s var(--ease), box-shadow .3s var(--ease);
-  }
-  .node.done .ndot { background: var(--accent); border-color: var(--accent); color:#fff; }
-  .node.current .ndot {
-    border-color: var(--accent); color: var(--accent);
-    box-shadow: 0 0 0 5px var(--accent-soft);
-    animation: pulse 2.4s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%,100% { box-shadow: 0 0 0 5px var(--accent-soft); }
-    50%     { box-shadow: 0 0 0 8px rgba(var(--accent-rgb), .05); }
-  }
-  .node.tail .ndot { border-style: dashed; background: transparent; }
-  .node.next .ndot { border-color: var(--accent-line); color: var(--accent); }
-  .node .nlbl { font-size: 11.5px; text-align:center; color: var(--ink-soft); line-height:1.3;
-    max-width: 15ch; }
-  .node.current .nlbl { color: var(--ink); font-weight:600; }
-  .node.done .nlbl { color: var(--ink-faint); }
-  .node.tail .nlbl { color: var(--ink-faint); font-style: italic; }
-  .node .ntag { font-size: 9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
-    color: var(--accent); }
-  .node.done .ntag { color: var(--st-green); }
-  /* node-complete celebration */
-  @keyframes nodepop {
-    0% { transform: scale(1); }
-    40% { transform: scale(1.35); }
-    100% { transform: scale(1); }
-  }
-  .ndot.celebrate { animation: nodepop .5s var(--ease); }
-  .spark {
-    position:absolute; top: 13px; left:50%; width:8px; height:8px; border-radius:50%;
-    background: var(--accent); pointer-events:none; opacity:0;
-  }
-  .spark.go { animation: sparkfly .6s var(--ease) forwards; }
-  @keyframes sparkfly {
-    0% { opacity:1; transform: translate(-50%,-50%) scale(.4); }
-    100% { opacity:0; transform: translate(-50%,-160%) scale(1.6); }
-  }
+      /* the rail itself */
+      .rail-wrap {
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition:
+          max-height 0.42s var(--ease),
+          opacity 0.3s var(--ease),
+          margin 0.3s var(--ease);
+      }
+      .firstmove.mapopen .rail-wrap {
+        max-height: 340px;
+        opacity: 1;
+        margin-top: 22px;
+      }
+      .rail-head {
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .rail-head .ai {
+        color: var(--accent);
+      }
+      .prograil {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 0;
+        padding: 4px 2px 2px;
+      }
+      .node {
+        position: relative;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 9px;
+        padding-top: 4px;
+        min-width: 0;
+      }
+      /* connector line between nodes */
+      .node::after {
+        content: "";
+        position: absolute;
+        top: 13px;
+        left: 50%;
+        width: 100%;
+        height: 2px;
+        background: var(--line-strong);
+        z-index: 0;
+      }
+      .node:last-child::after {
+        display: none;
+      }
+      .node.done::after,
+      .node.current::after {
+        background: var(--accent);
+      }
+      .node.tail::after {
+        background: transparent;
+        background-image: linear-gradient(
+          90deg,
+          var(--line-strong) 55%,
+          transparent 0
+        );
+        background-size: 8px 2px;
+        background-repeat: repeat-x;
+      }
+      .ndot {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        flex: none;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ink-faint);
+        background: var(--surface);
+        border: 2px solid var(--line-strong);
+        transition:
+          transform 0.3s var(--ease),
+          background 0.3s var(--ease),
+          border-color 0.3s var(--ease),
+          color 0.3s var(--ease),
+          box-shadow 0.3s var(--ease);
+      }
+      .node.done .ndot {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .node.current .ndot {
+        border-color: var(--accent);
+        color: var(--accent);
+        box-shadow: 0 0 0 5px var(--accent-soft);
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 5px var(--accent-soft);
+        }
+        50% {
+          box-shadow: 0 0 0 8px rgba(var(--accent-rgb), 0.05);
+        }
+      }
+      .node.tail .ndot {
+        border-style: dashed;
+        background: transparent;
+      }
+      .node.next .ndot {
+        border-color: var(--accent-line);
+        color: var(--accent);
+      }
+      .node .nlbl {
+        font-size: 11.5px;
+        text-align: center;
+        color: var(--ink-soft);
+        line-height: 1.3;
+        max-width: 15ch;
+      }
+      .node.current .nlbl {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .node.done .nlbl {
+        color: var(--ink-faint);
+      }
+      .node.tail .nlbl {
+        color: var(--ink-faint);
+        font-style: italic;
+      }
+      .node .ntag {
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .node.done .ntag {
+        color: var(--st-green);
+      }
+      /* node-complete celebration */
+      @keyframes nodepop {
+        0% {
+          transform: scale(1);
+        }
+        40% {
+          transform: scale(1.35);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+      .ndot.celebrate {
+        animation: nodepop 0.5s var(--ease);
+      }
+      .spark {
+        position: absolute;
+        top: 13px;
+        left: 50%;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        pointer-events: none;
+        opacity: 0;
+      }
+      .spark.go {
+        animation: sparkfly 0.6s var(--ease) forwards;
+      }
+      @keyframes sparkfly {
+        0% {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(0.4);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -160%) scale(1.6);
+        }
+      }
 
-  /* ---------- schedule ---------- */
-  .section-h {
-    display:flex; align-items:baseline; justify-content:space-between;
-    margin: 30px 4px 12px;
-  }
-  .section-h h2 { font-size: 12.5px; font-weight: 600; letter-spacing:.06em;
-    text-transform: uppercase; color: var(--ink-faint); }
-  .section-h .hint { font-size: 12px; color: var(--ink-faint); }
+      /* ---------- schedule ---------- */
+      .section-h {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin: 30px 4px 12px;
+      }
+      .section-h h2 {
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+      .section-h .hint {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
 
-  .sched { background: var(--surface); border:1px solid var(--line);
-    border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow:hidden; }
-  .block {
-    display:flex; align-items:center; gap:14px; padding: 14px 18px;
-    border-bottom: 1px solid var(--line); position:relative;
-    transition: background .2s var(--ease);
-  }
-  .block:last-child { border-bottom: none; }
-  .block .cd { min-width: 96px; text-align:right; font-variant-numeric: tabular-nums; }
-  .block .cd .big { font-size: 14.5px; font-weight:600; letter-spacing:-.01em; }
-  .block .cd .lbl { font-size: 11px; color: var(--ink-faint); }
-  /* left status shape carries state without words */
-  .block .shape { width: 10px; height:10px; flex:none; border-radius:50%;
-    background: var(--line-strong); border: 2px solid transparent; }
-  .block.now .shape { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft);
-    animation: pulse 2.4s ease-in-out infinite; }
-  .block.done .shape { background: transparent; border-color: var(--st-green);
-    position:relative; }
-  .block.done .shape::after { content:"✓"; position:absolute; inset:-2px; font-size:8px;
-    color: var(--st-green); display:flex; align-items:center; justify-content:center; }
-  .block.free .shape { background: transparent; border: 2px dashed var(--line-strong); }
-  .block .body { flex:1; min-width:0; }
-  .block .body .t { font-size: 14.5px; font-weight: 500; }
-  .block .body .m { font-size: 12px; color: var(--ink-faint); }
-  .block.now { background: linear-gradient(90deg, var(--accent-soft), transparent 62%); }
-  .block.now .body .t { color: var(--accent); }
-  .block.done .body .t { color: var(--ink-faint); text-decoration: line-through; }
-  .block.done .cd .big { color: var(--ink-faint); }
-  .pill { font-size: 11px; font-weight:600; padding: 3px 9px; border-radius: 999px; }
-  .pill.now { background: var(--accent); color:#fff; }
-  .pill.free { background: var(--st-green-bg); color: var(--st-green); }
+      .sched {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+      }
+      .block {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line);
+        position: relative;
+        transition: background 0.2s var(--ease);
+      }
+      .block:last-child {
+        border-bottom: none;
+      }
+      .block .cd {
+        min-width: 96px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .block .cd .big {
+        font-size: 14.5px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .block .cd .lbl {
+        font-size: 11px;
+        color: var(--ink-faint);
+      }
+      /* left status shape carries state without words */
+      .block .shape {
+        width: 10px;
+        height: 10px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--line-strong);
+        border: 2px solid transparent;
+      }
+      .block.now .shape {
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      .block.done .shape {
+        background: transparent;
+        border-color: var(--st-green);
+        position: relative;
+      }
+      .block.done .shape::after {
+        content: "✓";
+        position: absolute;
+        inset: -2px;
+        font-size: 8px;
+        color: var(--st-green);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .block.free .shape {
+        background: transparent;
+        border: 2px dashed var(--line-strong);
+      }
+      .block .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .block .body .t {
+        font-size: 14.5px;
+        font-weight: 500;
+      }
+      .block .body .m {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+      .block.now {
+        background: linear-gradient(90deg, var(--accent-soft), transparent 62%);
+      }
+      .block.now .body .t {
+        color: var(--accent);
+      }
+      .block.done .body .t {
+        color: var(--ink-faint);
+        text-decoration: line-through;
+      }
+      .block.done .cd .big {
+        color: var(--ink-faint);
+      }
+      .pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 999px;
+      }
+      .pill.now {
+        background: var(--accent);
+        color: #fff;
+      }
+      .pill.free {
+        background: var(--st-green-bg);
+        color: var(--st-green);
+      }
 
-  /* area filter dim: blocks not in scope fade */
-  .block.out-of-scope { opacity: .34; filter: saturate(.4); }
+      /* area filter dim: blocks not in scope fade */
+      .block.out-of-scope {
+        opacity: 0.34;
+        filter: saturate(0.4);
+      }
 
-  /* ---------- side rail ---------- */
-  .rail { display:flex; flex-direction:column; gap: 18px; }
-  .card { background: var(--surface); border:1px solid var(--line);
-    border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 17px 17px 15px; }
-  .card h3 { font-size: 11.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
-    color: var(--ink-faint); margin-bottom: 13px; display:flex; justify-content:space-between;
-    align-items:center; }
-  .card h3 .count { color: var(--ink-soft); font-weight:600;
-    background: var(--surface-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+      /* ---------- side rail ---------- */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 17px 17px 15px;
+      }
+      .card h3 {
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 13px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .card h3 .count {
+        color: var(--ink-soft);
+        font-weight: 600;
+        background: var(--surface-2);
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 11px;
+      }
 
-  /* collapsible card body */
-  .card.collapsible h3 { cursor: pointer; }
-  .card.collapsible h3 .chev { font-size:11px; color: var(--ink-faint); transition: transform .25s var(--ease); }
-  .card.collapsible.collapsed h3 .chev { transform: rotate(-90deg); }
-  .card .cbody { transition: max-height .3s var(--ease), opacity .22s var(--ease); overflow:hidden; }
-  .card.collapsible.collapsed .cbody { max-height:0 !important; opacity:0; }
+      /* collapsible card body */
+      .card.collapsible h3 {
+        cursor: pointer;
+      }
+      .card.collapsible h3 .chev {
+        font-size: 11px;
+        color: var(--ink-faint);
+        transition: transform 0.25s var(--ease);
+      }
+      .card.collapsible.collapsed h3 .chev {
+        transform: rotate(-90deg);
+      }
+      .card .cbody {
+        transition:
+          max-height 0.3s var(--ease),
+          opacity 0.22s var(--ease);
+        overflow: hidden;
+      }
+      .card.collapsible.collapsed .cbody {
+        max-height: 0 !important;
+        opacity: 0;
+      }
 
-  /* waiting-on with aging shape */
-  .wait { display:flex; align-items:center; gap:11px; padding: 8px 0; border-bottom:1px solid var(--line); }
-  .wait:last-child { border-bottom:none; padding-bottom:0; }
-  .wait:first-of-type { padding-top:0; }
-  .av { width: 30px; height:30px; border-radius:50%; flex:none;
-    display:flex; align-items:center; justify-content:center;
-    font-size: 12px; font-weight:600; color:#fff; }
-  .wait .who { flex:1; min-width:0; }
-  .wait .who .n { font-size: 13.5px; font-weight:500; }
-  .wait .who .w { font-size: 11.5px; color: var(--ink-faint); white-space:nowrap;
-    overflow:hidden; text-overflow:ellipsis; }
-  /* aging bar: length + color encode staleness at a glance */
-  .wait .age { flex:none; text-align:right; }
-  .wait .age .d { font-size: 13px; font-weight:700; font-variant-numeric:tabular-nums; }
-  .wait .age .u { font-size: 9.5px; color: var(--ink-faint); font-weight:500; display:block; }
-  .wait .age .bar { width: 44px; height:4px; border-radius:3px; background: var(--line); margin-top:3px; overflow:hidden; }
-  .wait .age .bar > i { display:block; height:100%; border-radius:3px; }
-  .age.fresh .d { color: var(--ink-soft); }        .age.fresh .bar > i { background: var(--st-green); width:20%; }
-  .age.warn  .d { color: var(--st-amber); }         .age.warn  .bar > i { background: var(--st-amber); width:55%; }
-  .age.late  .d { color: var(--st-red); }           .age.late  .bar > i { background: var(--st-red);  width:92%; }
+      /* waiting-on with aging shape */
+      .wait {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .wait:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .wait:first-of-type {
+        padding-top: 0;
+      }
+      .av {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: #fff;
+      }
+      .wait .who {
+        flex: 1;
+        min-width: 0;
+      }
+      .wait .who .n {
+        font-size: 13.5px;
+        font-weight: 500;
+      }
+      .wait .who .w {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      /* aging bar: length + color encode staleness at a glance */
+      .wait .age {
+        flex: none;
+        text-align: right;
+      }
+      .wait .age .d {
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .wait .age .u {
+        font-size: 9.5px;
+        color: var(--ink-faint);
+        font-weight: 500;
+        display: block;
+      }
+      .wait .age .bar {
+        width: 44px;
+        height: 4px;
+        border-radius: 3px;
+        background: var(--line);
+        margin-top: 3px;
+        overflow: hidden;
+      }
+      .wait .age .bar > i {
+        display: block;
+        height: 100%;
+        border-radius: 3px;
+      }
+      .age.fresh .d {
+        color: var(--ink-soft);
+      }
+      .age.fresh .bar > i {
+        background: var(--st-green);
+        width: 20%;
+      }
+      .age.warn .d {
+        color: var(--st-amber);
+      }
+      .age.warn .bar > i {
+        background: var(--st-amber);
+        width: 55%;
+      }
+      .age.late .d {
+        color: var(--st-red);
+      }
+      .age.late .bar > i {
+        background: var(--st-red);
+        width: 92%;
+      }
 
-  /* area health dots */
-  .health { display:flex; flex-direction:column; gap: 10px; }
-  .area-row { display:flex; align-items:center; gap: 11px; cursor: pointer; padding: 3px 4px;
-    margin: -3px -4px; border-radius: 8px; transition: background .16s; }
-  .area-row:hover { background: var(--surface-2); }
-  .area-row .adot { width:9px; height:9px; border-radius:50%; flex:none; }
-  .area-row .aswatch { width:9px; height:9px; border-radius:50%; flex:none; }
-  .adot.ok { background: var(--st-green); }
-  .adot.watch { background: var(--st-amber); }
-  .adot.risk { background: var(--st-red); }
-  .adot.idle { background: var(--line-strong); }
-  .area-row .an { font-size: 13.5px; flex:1; }
-  .area-row .as { font-size: 11.5px; color: var(--ink-faint); }
+      /* area health dots */
+      .health {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .area-row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        cursor: pointer;
+        padding: 3px 4px;
+        margin: -3px -4px;
+        border-radius: 8px;
+        transition: background 0.16s;
+      }
+      .area-row:hover {
+        background: var(--surface-2);
+      }
+      .area-row .adot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .area-row .aswatch {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .adot.ok {
+        background: var(--st-green);
+      }
+      .adot.watch {
+        background: var(--st-amber);
+      }
+      .adot.risk {
+        background: var(--st-red);
+      }
+      .adot.idle {
+        background: var(--line-strong);
+      }
+      .area-row .an {
+        font-size: 13.5px;
+        flex: 1;
+      }
+      .area-row .as {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
 
-  /* what's protected (guardrail replacement) */
-  .protect {
-    display:flex; align-items:center; gap: 13px;
-    background: var(--st-green-bg); border:1px solid transparent; border-radius: var(--radius-sm);
-    padding: 13px 15px;
-  }
-  .protect .shield { width: 34px; height:34px; border-radius:9px; flex:none;
-    display:flex; align-items:center; justify-content:center; font-size:17px;
-    background: var(--surface); color: var(--st-green); }
-  .protect .pt { font-size: 13.5px; font-weight:600; color: var(--ink); }
-  .protect .pm { font-size: 12px; color: var(--ink-soft); }
+      /* what's protected (guardrail replacement) */
+      .protect {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        background: var(--st-green-bg);
+        border: 1px solid transparent;
+        border-radius: var(--radius-sm);
+        padding: 13px 15px;
+      }
+      .protect .shield {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        background: var(--surface);
+        color: var(--st-green);
+      }
+      .protect .pt {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .protect .pm {
+        font-size: 12px;
+        color: var(--ink-soft);
+      }
 
-  /* ---------- capture bar ---------- */
-  .capbar {
-    position: fixed; left:50%; bottom: 24px; transform: translateX(-50%);
-    display:flex; align-items:center; gap: 12px;
-    background: var(--surface); border:1px solid var(--line-strong);
-    border-radius: 999px; padding: 9px 10px 9px 18px; box-shadow: var(--shadow-lg);
-    z-index: 40;
-  }
-  .capbar .lead { font-size: 13px; color: var(--ink-soft); }
-  .capbar .lead b { color: var(--ink); }
-  .capbar kbd {
-    font-family: var(--font); font-size: 12px; font-weight:600;
-    background: var(--accent); color:#fff; border-radius:7px; padding: 4px 9px;
-    transition: background .3s var(--ease);
-  }
+      /* ---------- capture bar ---------- */
+      .capbar {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        padding: 9px 10px 9px 18px;
+        box-shadow: var(--shadow-lg);
+        z-index: 40;
+      }
+      .capbar .lead {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+      .capbar .lead b {
+        color: var(--ink);
+      }
+      .capbar kbd {
+        font-family: var(--font);
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--accent);
+        color: #fff;
+        border-radius: 7px;
+        padding: 4px 9px;
+        transition: background 0.3s var(--ease);
+      }
 
-  /* ---------- capture overlay ---------- */
-  .scrim {
-    position: fixed; inset:0; background: var(--scrim);
-    backdrop-filter: blur(3px); opacity:0; pointer-events:none;
-    transition: opacity .16s; z-index: 50;
-  }
-  .scrim.open { opacity:1; pointer-events:auto; }
-  .capture {
-    position: fixed; left:50%; top: 22%; transform: translate(-50%, -8px) scale(.98);
-    width: min(560px, 92vw); background: var(--surface);
-    border:1px solid var(--line-strong); border-radius: 18px;
-    box-shadow: var(--shadow-lg); z-index: 60; opacity:0; pointer-events:none;
-    transition: opacity .16s var(--ease), transform .16s var(--ease); overflow:hidden;
-  }
-  .capture.open { opacity:1; pointer-events:auto; transform: translate(-50%,0) scale(1); }
-  .capture .cap-in {
-    width:100%; border:none; outline:none; font-family:inherit;
-    font-size: 19px; padding: 22px 24px 16px; color: var(--ink); background:transparent;
-  }
-  .capture .cap-in::placeholder { color: var(--ink-faint); }
-  .capture .cap-foot {
-    display:flex; align-items:center; gap: 8px; padding: 12px 20px;
-    border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-faint);
-  }
-  .capture .cap-foot .chip {
-    font-size:11.5px; color: var(--ink-soft); background: var(--surface-2);
-    border:1px solid var(--line); border-radius:999px; padding: 4px 11px; cursor:pointer;
-    transition: background .16s, color .16s;
-  }
-  .capture .cap-foot .chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
-  .capture .cap-foot .save { margin-left:auto; color: var(--ink-soft); }
-  .capture .cap-foot .save kbd { background: var(--surface-2); color: var(--ink-soft);
-    padding:2px 7px; border-radius:5px; font-family:inherit; font-weight:600; }
+      /* ---------- capture overlay ---------- */
+      .scrim {
+        position: fixed;
+        inset: 0;
+        background: var(--scrim);
+        backdrop-filter: blur(3px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.16s;
+        z-index: 50;
+      }
+      .scrim.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .capture {
+        position: fixed;
+        left: 50%;
+        top: 22%;
+        transform: translate(-50%, -8px) scale(0.98);
+        width: min(560px, 92vw);
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 18px;
+        box-shadow: var(--shadow-lg);
+        z-index: 60;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.16s var(--ease),
+          transform 0.16s var(--ease);
+        overflow: hidden;
+      }
+      .capture.open {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, 0) scale(1);
+      }
+      .capture .cap-in {
+        width: 100%;
+        border: none;
+        outline: none;
+        font-family: inherit;
+        font-size: 19px;
+        padding: 22px 24px 16px;
+        color: var(--ink);
+        background: transparent;
+      }
+      .capture .cap-in::placeholder {
+        color: var(--ink-faint);
+      }
+      .capture .cap-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+      .capture .cap-foot .chip {
+        font-size: 11.5px;
+        color: var(--ink-soft);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 11px;
+        cursor: pointer;
+        transition:
+          background 0.16s,
+          color 0.16s;
+      }
+      .capture .cap-foot .chip.on {
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-color: transparent;
+      }
+      .capture .cap-foot .save {
+        margin-left: auto;
+        color: var(--ink-soft);
+      }
+      .capture .cap-foot .save kbd {
+        background: var(--surface-2);
+        color: var(--ink-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-family: inherit;
+        font-weight: 600;
+      }
 
-  /* toast */
-  .toast {
-    position: fixed; left:50%; bottom: 90px; transform: translate(-50%, 10px);
-    background: var(--surface); color: var(--ink); font-size: 13.5px; font-weight:500;
-    padding: 11px 18px; border-radius: 999px; box-shadow: var(--shadow-lg);
-    border: 1px solid var(--line-strong);
-    opacity:0; pointer-events:none; transition: opacity .22s, transform .22s var(--ease); z-index: 70;
-    display:flex; align-items:center; gap:10px;
-  }
-  .toast.show { opacity:1; transform: translate(-50%,0); }
-  .toast .ok { color: var(--st-green); font-weight:700; }
+      /* toast */
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 90px;
+        transform: translate(-50%, 10px);
+        background: var(--surface);
+        color: var(--ink);
+        font-size: 13.5px;
+        font-weight: 500;
+        padding: 11px 18px;
+        border-radius: 999px;
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--line-strong);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.22s,
+          transform 0.22s var(--ease);
+        z-index: 70;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      .toast .ok {
+        color: var(--st-green);
+        font-weight: 700;
+      }
 
-  /* recovery banner (Flow) — plain-language drift recovery */
-  .recover {
-    background: var(--st-amber-bg);
-    border: 1px solid transparent; border-radius: var(--radius);
-    padding: 17px 20px; box-shadow: var(--shadow-sm); margin-bottom: 20px;
-    display:flex; align-items:center; gap:16px;
-  }
-  .recover .ic { width:38px; height:38px; border-radius:10px; background: var(--surface);
-    display:flex; align-items:center; justify-content:center; font-size:19px; flex:none;
-    color: var(--st-amber); }
-  .recover .rbody { flex:1; }
-  .recover .rbody .rt { font-size: 15px; font-weight:600; color: var(--ink); }
-  .recover .rbody .rm { font-size: 13px; color: var(--ink-soft); }
-  .recover .btn-amber {
-    background: var(--st-amber); color:#231a06; border:none; font-family:inherit;
-    font-size: 13.5px; font-weight:600; padding: 10px 16px; border-radius:10px; cursor:pointer;
-    transition: transform .1s var(--ease); white-space:nowrap;
-  }
-  .recover .btn-amber:hover { transform: translateY(-1px); }
+      /* recovery banner (Flow) — plain-language drift recovery */
+      .recover {
+        background: var(--st-amber-bg);
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+        padding: 17px 20px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .recover .ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: var(--surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        flex: none;
+        color: var(--st-amber);
+      }
+      .recover .rbody {
+        flex: 1;
+      }
+      .recover .rbody .rt {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .recover .rbody .rm {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+      .recover .btn-amber {
+        background: var(--st-amber);
+        color: #231a06;
+        border: none;
+        font-family: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: transform 0.1s var(--ease);
+        white-space: nowrap;
+      }
+      .recover .btn-amber:hover {
+        transform: translateY(-1px);
+      }
 
-  /* moment view visibility */
-  [data-view] { display:none; }
-  [data-view].shown { display:block; animation: rise .26s var(--ease); }
-  @keyframes rise { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+      /* moment view visibility */
+      [data-view] {
+        display: none;
+      }
+      [data-view].shown {
+        display: block;
+        animation: rise 0.26s var(--ease);
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
 
-  /* flow: current block hero */
-  .flowhero {
-    background: var(--surface); border:1px solid var(--line); border-radius: var(--radius);
-    box-shadow: var(--shadow-sm); padding: 32px; text-align:center; position:relative; overflow:hidden;
-  }
-  .flowhero::before { content:""; position:absolute; left:0; right:0; top:0; height:3px; background: var(--accent); }
-  .flowhero .fh-tag { font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
-    color: var(--accent); }
-  .flowhero .fh-title { font-size: 25px; font-weight:640; letter-spacing:-.015em; margin: 8px 0 20px; }
-  .flowhero .ring { font-size: 54px; font-weight:640; letter-spacing:-.03em; font-variant-numeric: tabular-nums;
-    color: var(--ink); }
-  .flowhero .ring.warn { color: var(--st-amber); }
-  .flowhero .ring-lbl { font-size: 13px; color: var(--ink-faint); margin-top:2px; }
-  .flowhero .fh-actions { display:flex; gap:12px; justify-content:center; margin-top: 26px; flex-wrap:wrap; }
+      /* flow: current block hero */
+      .flowhero {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 32px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+      .flowhero::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 3px;
+        background: var(--accent);
+      }
+      .flowhero .fh-tag {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .flowhero .fh-title {
+        font-size: 25px;
+        font-weight: 640;
+        letter-spacing: -0.015em;
+        margin: 8px 0 20px;
+      }
+      .flowhero .ring {
+        font-size: 54px;
+        font-weight: 640;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+        color: var(--ink);
+      }
+      .flowhero .ring.warn {
+        color: var(--st-amber);
+      }
+      .flowhero .ring-lbl {
+        font-size: 13px;
+        color: var(--ink-faint);
+        margin-top: 2px;
+      }
+      .flowhero .fh-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 26px;
+        flex-wrap: wrap;
+      }
 
-  /* close: summary */
-  .closehero { background: var(--surface); border:1px solid var(--line); border-radius: var(--radius);
-    box-shadow: var(--shadow-sm); padding: 30px; }
-  .closehero .ch-h { font-size: 22px; font-weight:620; letter-spacing:-.01em; margin-bottom: 4px; }
-  .closehero .ch-sub { font-size:14px; color: var(--ink-soft); margin-bottom: 24px; }
-  .stat-row { display:flex; gap: 14px; margin-bottom: 24px; }
-  .stat { flex:1; background: var(--bg-2); border:1px solid var(--line); border-radius: var(--radius-sm);
-    padding: 14px 16px; }
-  .stat .sv { font-size: 24px; font-weight:640; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
-  .stat .sl { font-size: 12px; color: var(--ink-faint); }
-  .carry { display:flex; align-items:center; gap:12px; padding: 11px 0; border-top:1px solid var(--line); }
-  .carry:last-child { border-bottom: 1px solid var(--line); }
-  .carry .cbx { width:18px; height:18px; border-radius:6px; border:2px solid var(--line-strong); flex:none;
-    cursor:pointer; transition: background .16s, border-color .16s; display:flex; align-items:center;
-    justify-content:center; color:#fff; font-size:11px; }
-  .carry .cbx.on { background: var(--accent); border-color: var(--accent); }
-  .carry .ct { flex:1; font-size:14px; }
-  .carry .cmeta { font-size:12px; color: var(--ink-faint); }
+      /* close: summary */
+      .closehero {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 30px;
+      }
+      .closehero .ch-h {
+        font-size: 22px;
+        font-weight: 620;
+        letter-spacing: -0.01em;
+        margin-bottom: 4px;
+      }
+      .closehero .ch-sub {
+        font-size: 14px;
+        color: var(--ink-soft);
+        margin-bottom: 24px;
+      }
+      .stat-row {
+        display: flex;
+        gap: 14px;
+        margin-bottom: 24px;
+      }
+      .stat {
+        flex: 1;
+        background: var(--bg-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 14px 16px;
+      }
+      .stat .sv {
+        font-size: 24px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat .sl {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+      .carry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 0;
+        border-top: 1px solid var(--line);
+      }
+      .carry:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+      .carry .cbx {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        border: 2px solid var(--line-strong);
+        flex: none;
+        cursor: pointer;
+        transition:
+          background 0.16s,
+          border-color 0.16s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 11px;
+      }
+      .carry .cbx.on {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .carry .ct {
+        flex: 1;
+        font-size: 14px;
+      }
+      .carry .cmeta {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
 
-  /* keyboard cheat (bottom-left) */
-  .kbdhelp { position: fixed; left: 20px; bottom: 22px; font-size: 11px; color: var(--ink-faint);
-    z-index: 40; display:flex; gap:12px; align-items:center; }
-  .kbdhelp kbd { font-family:var(--font); background: var(--surface); border:1px solid var(--line);
-    border-radius:5px; padding:1px 5px; font-weight:600; color: var(--ink-soft); }
-  @media (max-width: 720px){ .kbdhelp { display:none; } }
-</style>
-</head>
-<body>
-
-<div class="shell">
-  <div class="topbar">
-    <div class="brand">
-      <span class="mark">Life<b>OS</b> · Today</span>
-      <span class="datestr" id="datestr">Saturday, July 4</span>
-    </div>
-    <div class="topctl">
-      <!-- moment switcher -->
-      <div class="seg" role="tablist" id="moments">
-        <button class="active" data-goto="start"><span>Start</span><span class="k">1</span></button>
-        <button data-goto="flow"><span>Flow</span><span class="k">2</span></button>
-        <button data-goto="close"><span>Close</span><span class="k">3</span></button>
-      </div>
-      <!-- area scope -->
-      <div class="areapick" id="areapick">
-        <button class="cur" id="areaCur"><span class="sw"></span><span id="areaName">All areas</span><span class="k">A</span></button>
-        <div class="areamenu" id="areamenu">
-          <div class="opt sel" data-area="all"><span class="sw" style="background:#6d8bff"></span><span class="nm">All areas</span><span class="ct">everything</span></div>
-          <div class="opt" data-area="product"><span class="sw" style="background:#6d8bff"></span><span class="nm">Product</span><span class="ct">moving</span></div>
-          <div class="opt" data-area="finance"><span class="sw" style="background:#46c08a"></span><span class="nm">Finance</span><span class="ct">Q2 pending</span></div>
-          <div class="opt" data-area="health"><span class="sw" style="background:#e06fae"></span><span class="nm">Health</span><span class="ct">on track</span></div>
-          <div class="opt" data-area="admin"><span class="sw" style="background:#e0a94a"></span><span class="nm">Admin</span><span class="ct">2 overdue</span></div>
-          <div class="opt" data-area="rel"><span class="sw" style="background:#b07cf0"></span><span class="nm">Relationships</span><span class="ct">quiet</span></div>
+      /* keyboard cheat (bottom-left) */
+      .kbdhelp {
+        position: fixed;
+        left: 20px;
+        bottom: 22px;
+        font-size: 11px;
+        color: var(--ink-faint);
+        z-index: 40;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .kbdhelp kbd {
+        font-family: var(--font);
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-weight: 600;
+        color: var(--ink-soft);
+      }
+      @media (max-width: 720px) {
+        .kbdhelp {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topbar">
+        <div class="brand">
+          <span class="mark">Life<b>OS</b> · Today</span>
+          <span class="datestr" id="datestr">Saturday, July 4</span>
         </div>
-      </div>
-      <!-- time format -->
-      <button class="iconbtn" id="timeBtn" title="Toggle countdown / clock">
-        <span class="gl" id="timeGl">⏳</span><span id="timeLbl">Countdown</span><span class="k">T</span>
-      </button>
-      <!-- theme -->
-      <button class="iconbtn" id="themeBtn" title="Toggle dark / light">
-        <span class="gl" id="themeGl">☾</span><span class="k">D</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- ============ START ============ -->
-  <div data-view="start" class="shown">
-    <div class="greeting"><h1 id="hello">Good morning, Jay.</h1></div>
-    <div class="subline" id="startSub">One clear block ahead of the noon call. <b>3 hours</b> of focus available — enough for the thing that actually matters.</div>
-
-    <!-- PIPELINE OVERVIEW (compact) -->
-    <div class="pipe" id="pipe">
-      <button class="pstep" data-step="capture"><span class="pnum">7 <span class="delta dn">−3</span></span><span class="plabel">Capture</span><span class="pbar"><i style="--f:.4"></i></span></button>
-      <button class="pstep" data-step="triage"><span class="pnum">12 <span class="delta up">+5</span></span><span class="plabel">Triage</span><span class="pbar"><i style="--f:.7"></i></span></button>
-      <button class="pstep active" data-step="plan"><span class="pnum">4</span><span class="plabel">Plan</span><span class="pbar"><i style="--f:.25"></i></span></button>
-      <button class="pstep" data-step="execute"><span class="pnum">3</span><span class="plabel">Execute</span><span class="pbar"><i style="--f:.2"></i></span></button>
-      <button class="pstep" data-step="review"><span class="pnum">6</span><span class="plabel">Review</span><span class="pbar"><i style="--f:.5"></i></span></button>
-    </div>
-    <div class="pipe-drill" id="pipeDrill"></div>
-
-    <div class="grid">
-      <div>
-        <!-- FIRST MOVE + PROGRESSION RAIL (map-peek) -->
-        <div class="firstmove" id="firstmove">
-          <div class="fm-eyebrow">
-            <span class="tag-2min">First move · 2 min</span>
-            <span class="chip-area"><span class="sw" style="background:#6d8bff"></span>Product · Structural pass</span>
-          </div>
-          <div class="fm-title">Open the prototype and write the one sentence you're testing.</div>
-          <div class="fm-why">Just the sentence — not the build. Starting is the whole job right now; the map below handles the rest.</div>
-          <div class="fm-actions">
-            <button class="btn-primary" id="startBtn">Start now <span class="k">↵</span></button>
-            <button class="btn-ghost" data-toast="Pushed 10 min — I'll nudge you.">Snooze 10m</button>
-            <button class="btn-ghost" data-toast="Swapped. Picking the next-best 2-minute move.">Not this →</button>
-            <button class="fm-map-toggle" id="mapToggle">
-              <span id="mapToggleLbl">See the map</span><span class="chev">⌄</span><span class="k">M</span>
+        <div class="topctl">
+          <!-- moment switcher -->
+          <div class="seg" role="tablist" id="moments">
+            <button class="active" data-goto="start">
+              <span>Start</span><span class="k">1</span>
+            </button>
+            <button data-goto="flow">
+              <span>Flow</span><span class="k">2</span>
+            </button>
+            <button data-goto="close">
+              <span>Close</span><span class="k">3</span>
             </button>
           </div>
+          <!-- area scope -->
+          <div class="areapick" id="areapick">
+            <button class="cur" id="areaCur">
+              <span class="sw"></span><span id="areaName">All areas</span
+              ><span class="k">A</span>
+            </button>
+            <div class="areamenu" id="areamenu">
+              <div class="opt sel" data-area="all">
+                <span class="sw" style="background: #6d8bff"></span
+                ><span class="nm">All areas</span
+                ><span class="ct">everything</span>
+              </div>
+              <div class="opt" data-area="product">
+                <span class="sw" style="background: #6d8bff"></span
+                ><span class="nm">Product</span><span class="ct">moving</span>
+              </div>
+              <div class="opt" data-area="finance">
+                <span class="sw" style="background: #46c08a"></span
+                ><span class="nm">Finance</span
+                ><span class="ct">Q2 pending</span>
+              </div>
+              <div class="opt" data-area="health">
+                <span class="sw" style="background: #e06fae"></span
+                ><span class="nm">Health</span><span class="ct">on track</span>
+              </div>
+              <div class="opt" data-area="admin">
+                <span class="sw" style="background: #e0a94a"></span
+                ><span class="nm">Admin</span><span class="ct">2 overdue</span>
+              </div>
+              <div class="opt" data-area="rel">
+                <span class="sw" style="background: #b07cf0"></span
+                ><span class="nm">Relationships</span
+                ><span class="ct">quiet</span>
+              </div>
+            </div>
+          </div>
+          <!-- time format -->
+          <button class="iconbtn" id="timeBtn" title="Toggle countdown / clock">
+            <span class="gl" id="timeGl">⏳</span
+            ><span id="timeLbl">Countdown</span><span class="k">T</span>
+          </button>
+          <!-- theme -->
+          <button class="iconbtn" id="themeBtn" title="Toggle dark / light">
+            <span class="gl" id="themeGl">☾</span><span class="k">D</span>
+          </button>
+        </div>
+      </div>
 
-          <!-- the AI-drafted breakdown as a game-style progression rail -->
-          <div class="rail-wrap" id="railWrap">
-            <div class="rail-head"><span class="ai">✦ AI-drafted</span> lay-of-the-land · 5 nodes · you're on node 3</div>
-            <div class="prograil" id="prograil">
-              <div class="node done" data-node="0">
-                <div class="ndot">✓</div>
-                <div class="ntag">2-min move</div>
-                <div class="nlbl">Write the test sentence</div>
+      <!-- ============ START ============ -->
+      <div data-view="start" class="shown">
+        <div class="greeting"><h1 id="hello">Good morning, Jay.</h1></div>
+        <div class="subline" id="startSub">
+          One clear block ahead of the noon call. <b>3 hours</b> of focus
+          available — enough for the thing that actually matters.
+        </div>
+
+        <!-- PIPELINE OVERVIEW (compact) -->
+        <div class="pipe" id="pipe">
+          <button class="pstep" data-step="capture">
+            <span class="pnum">7 <span class="delta dn">−3</span></span
+            ><span class="plabel">Capture</span
+            ><span class="pbar"><i style="--f: 0.4"></i></span>
+          </button>
+          <button class="pstep" data-step="triage">
+            <span class="pnum">12 <span class="delta up">+5</span></span
+            ><span class="plabel">Triage</span
+            ><span class="pbar"><i style="--f: 0.7"></i></span>
+          </button>
+          <button class="pstep active" data-step="plan">
+            <span class="pnum">4</span><span class="plabel">Plan</span
+            ><span class="pbar"><i style="--f: 0.25"></i></span>
+          </button>
+          <button class="pstep" data-step="execute">
+            <span class="pnum">3</span><span class="plabel">Execute</span
+            ><span class="pbar"><i style="--f: 0.2"></i></span>
+          </button>
+          <button class="pstep" data-step="review">
+            <span class="pnum">6</span><span class="plabel">Review</span
+            ><span class="pbar"><i style="--f: 0.5"></i></span>
+          </button>
+        </div>
+        <div class="pipe-drill" id="pipeDrill"></div>
+
+        <div class="grid">
+          <div>
+            <!-- FIRST MOVE + PROGRESSION RAIL (map-peek) -->
+            <div class="firstmove" id="firstmove">
+              <div class="fm-eyebrow">
+                <span class="tag-2min">First move · 2 min</span>
+                <span class="chip-area"
+                  ><span class="sw" style="background: #6d8bff"></span>Product ·
+                  Structural pass</span
+                >
               </div>
-              <div class="node done" data-node="1">
-                <div class="ndot">✓</div>
-                <div class="ntag">done</div>
-                <div class="nlbl">Sketch the 3 moments on paper</div>
+              <div class="fm-title">
+                Open the prototype and write the one sentence you're testing.
               </div>
-              <div class="node current" data-node="2">
-                <div class="ndot">3</div>
-                <div class="ntag">you're here</div>
-                <div class="nlbl">Build the Start view shell</div>
+              <div class="fm-why">
+                Just the sentence — not the build. Starting is the whole job
+                right now; the map below handles the rest.
               </div>
-              <div class="node next" data-node="3">
-                <div class="ndot">4</div>
-                <div class="ntag">next</div>
-                <div class="nlbl">Wire the capture overlay</div>
+              <div class="fm-actions">
+                <button class="btn-primary" id="startBtn">
+                  Start now <span class="k">↵</span>
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Pushed 10 min — I'll nudge you."
+                >
+                  Snooze 10m
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Swapped. Picking the next-best 2-minute move."
+                >
+                  Not this →
+                </button>
+                <button class="fm-map-toggle" id="mapToggle">
+                  <span id="mapToggleLbl">See the map</span
+                  ><span class="chev">⌄</span><span class="k">M</span>
+                </button>
               </div>
-              <div class="node tail" data-node="4">
-                <div class="ndot">5</div>
-                <div class="ntag">maybe</div>
-                <div class="nlbl">Add the progression rail</div>
+
+              <!-- the AI-drafted breakdown as a game-style progression rail -->
+              <div class="rail-wrap" id="railWrap">
+                <div class="rail-head">
+                  <span class="ai">✦ AI-drafted</span> lay-of-the-land · 5 nodes
+                  · you're on node 3
+                </div>
+                <div class="prograil" id="prograil">
+                  <div class="node done" data-node="0">
+                    <div class="ndot">✓</div>
+                    <div class="ntag">2-min move</div>
+                    <div class="nlbl">Write the test sentence</div>
+                  </div>
+                  <div class="node done" data-node="1">
+                    <div class="ndot">✓</div>
+                    <div class="ntag">done</div>
+                    <div class="nlbl">Sketch the 3 moments on paper</div>
+                  </div>
+                  <div class="node current" data-node="2">
+                    <div class="ndot">3</div>
+                    <div class="ntag">you're here</div>
+                    <div class="nlbl">Build the Start view shell</div>
+                  </div>
+                  <div class="node next" data-node="3">
+                    <div class="ndot">4</div>
+                    <div class="ntag">next</div>
+                    <div class="nlbl">Wire the capture overlay</div>
+                  </div>
+                  <div class="node tail" data-node="4">
+                    <div class="ndot">5</div>
+                    <div class="ntag">maybe</div>
+                    <div class="nlbl">Add the progression rail</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- schedule -->
+            <div class="section-h">
+              <h2>Ahead of you</h2>
+              <span class="hint" id="schedHint">times shown as countdowns</span>
+            </div>
+            <div class="sched" id="sched">
+              <div class="block done" data-area="product">
+                <div class="cd">
+                  <div class="big" data-abs="7:10a" data-until="done">done</div>
+                  <div class="lbl">7:10a</div>
+                </div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Coffee &amp; inbox skim</div>
+                  <div class="m">cleared · nothing urgent</div>
+                </div>
+              </div>
+              <div class="block now" data-area="product">
+                <div class="cd">
+                  <div class="big" data-until="now" data-abs="now">now</div>
+                  <div class="lbl" data-endlbl>until 11:30</div>
+                </div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Deep block — moments prototype</div>
+                  <div class="m">your protected focus window</div>
+                </div>
+                <span class="pill now" data-remain="11:30">2h 58m left</span>
+              </div>
+              <div class="block" data-area="product">
+                <div class="cd">
+                  <div class="big" data-until="12:00" data-abs="12:00p">
+                    in 3h 28m
+                  </div>
+                  <div class="lbl">12:00p</div>
+                </div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Call — Priya (roadmap sync)</div>
+                  <div class="m">30 min · she owns the review gate</div>
+                </div>
+              </div>
+              <div class="block" data-area="finance">
+                <div class="cd">
+                  <div class="big" data-until="13:30" data-abs="1:30p">
+                    in 4h 58m
+                  </div>
+                  <div class="lbl">1:30p</div>
+                </div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Review Q2 numbers with Ava</div>
+                  <div class="m">Finance · 20 min</div>
+                </div>
+              </div>
+              <div class="block free" data-area="all">
+                <div class="cd">
+                  <div class="big" data-until="15:00" data-abs="3:00p">
+                    in 6h 28m
+                  </div>
+                  <div class="lbl">3:00p</div>
+                </div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Open — no plan yet</div>
+                  <div class="m">protect it or let it fill</div>
+                </div>
+                <span class="pill free">free</span>
+              </div>
+              <div class="block" data-area="all">
+                <div class="cd">
+                  <div class="big" data-until="17:30" data-abs="5:30p">
+                    in 8h 58m
+                  </div>
+                  <div class="lbl">5:30p</div>
+                </div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Close the day</div>
+                  <div class="m">2-minute shutdown review</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- side rail -->
+          <div class="rail">
+            <div class="card collapsible" data-card>
+              <h3 data-toggle>
+                Waiting on
+                <span style="display: flex; gap: 8px; align-items: center"
+                  ><span class="count">4</span><span class="chev">⌄</span></span
+                >
+              </h3>
+              <div class="cbody" style="max-height: 400px">
+                <div class="wait" data-area="product">
+                  <div class="av" style="background: #c0603f">DR</div>
+                  <div class="who">
+                    <div class="n">Dana R.</div>
+                    <div class="w">design sign-off · PR #343</div>
+                  </div>
+                  <div class="age late">
+                    <span class="d">6</span><span class="u">days</span
+                    ><span class="bar"><i></i></span>
+                  </div>
+                </div>
+                <div class="wait" data-area="finance">
+                  <div class="av" style="background: #46c08a">MK</div>
+                  <div class="who">
+                    <div class="n">Marcus K.</div>
+                    <div class="w">Stripe access grant</div>
+                  </div>
+                  <div class="age warn">
+                    <span class="d">3</span><span class="u">days</span
+                    ><span class="bar"><i></i></span>
+                  </div>
+                </div>
+                <div class="wait" data-area="product">
+                  <div class="av" style="background: #6d8bff">SL</div>
+                  <div class="who">
+                    <div class="n">Sam L.</div>
+                    <div class="w">reply · contractor scope</div>
+                  </div>
+                  <div class="age warn">
+                    <span class="d">2</span><span class="u">days</span
+                    ><span class="bar"><i></i></span>
+                  </div>
+                </div>
+                <div class="wait" data-area="finance">
+                  <div class="av" style="background: #b07cf0">AV</div>
+                  <div class="who">
+                    <div class="n">Ava (accountant)</div>
+                    <div class="w">Q2 numbers back</div>
+                  </div>
+                  <div class="age fresh">
+                    <span class="d">1</span><span class="u">day</span
+                    ><span class="bar"><i></i></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Areas</h3>
+              <div class="health" id="healthList">
+                <div class="area-row" data-area="product">
+                  <span class="aswatch" style="background: #6d8bff"></span
+                  ><span class="adot ok"></span><span class="an">Product</span
+                  ><span class="as">moving</span>
+                </div>
+                <div class="area-row" data-area="finance">
+                  <span class="aswatch" style="background: #46c08a"></span
+                  ><span class="adot watch"></span
+                  ><span class="an">Finance</span
+                  ><span class="as">Q2 pending</span>
+                </div>
+                <div class="area-row" data-area="health">
+                  <span class="aswatch" style="background: #e06fae"></span
+                  ><span class="adot ok"></span><span class="an">Health</span
+                  ><span class="as">on track</span>
+                </div>
+                <div class="area-row" data-area="admin">
+                  <span class="aswatch" style="background: #e0a94a"></span
+                  ><span class="adot risk"></span><span class="an">Admin</span
+                  ><span class="as">2 overdue</span>
+                </div>
+                <div class="area-row" data-area="rel">
+                  <span class="aswatch" style="background: #b07cf0"></span
+                  ><span class="adot idle"></span
+                  ><span class="an">Relationships</span
+                  ><span class="as">quiet</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- schedule -->
-        <div class="section-h">
-          <h2>Ahead of you</h2>
-          <span class="hint" id="schedHint">times shown as countdowns</span>
+      <!-- ============ FLOW ============ -->
+      <div data-view="flow">
+        <div class="greeting"><h1>In flow.</h1></div>
+        <div class="subline">
+          One block. Everything else is waiting and it can keep waiting.
         </div>
-        <div class="sched" id="sched">
-          <div class="block done" data-area="product">
-            <div class="cd"><div class="big" data-abs="7:10a" data-until="done">done</div><div class="lbl">7:10a</div></div>
-            <span class="shape"></span>
-            <div class="body"><div class="t">Coffee &amp; inbox skim</div><div class="m">cleared · nothing urgent</div></div>
+
+        <div class="grid">
+          <div>
+            <!-- derailment always renders a recovery proposal (UX-INV-3) — plain language -->
+            <div class="recover">
+              <div class="ic">↩</div>
+              <div class="rbody">
+                <div class="rt">
+                  You slipped away for ~12 minutes. That's normal.
+                </div>
+                <div class="rm">
+                  Want back in? I'll trim the target so it still finishes before
+                  your 12:00 call.
+                </div>
+              </div>
+              <button
+                class="btn-amber"
+                data-toast="Back in. Target trimmed to fit 11:30."
+              >
+                Get back in
+              </button>
+            </div>
+
+            <div class="flowhero">
+              <div class="fh-tag">Current block · deep work</div>
+              <div class="fh-title">Moments prototype — the Start view</div>
+              <div class="ring warn">01:47:22</div>
+              <div class="ring-lbl">remaining — a budget, not a clock</div>
+              <div class="fh-actions">
+                <button class="btn-primary" id="flowDone">
+                  Done — log it <span class="k">↵</span>
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Paused. Timer holds; nothing lost."
+                >
+                  Pause
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Extended 25 min. Call still protected."
+                >
+                  +25 min
+                </button>
+              </div>
+            </div>
+
+            <div class="section-h">
+              <h2>Parked while you work</h2>
+              <span class="hint">press C to add without leaving</span>
+            </div>
+            <div class="sched">
+              <div class="block">
+                <div class="cd"><div class="big">later</div></div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Reply to Sam — contractor scope</div>
+                  <div class="m">captured 9:14a · not now</div>
+                </div>
+              </div>
+              <div class="block">
+                <div class="cd"><div class="big">later</div></div>
+                <span class="shape"></span>
+                <div class="body">
+                  <div class="t">Idea: countdown color at 10-min mark</div>
+                  <div class="m">captured 9:31a · not now</div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="block now" data-area="product">
-            <div class="cd"><div class="big" data-until="now" data-abs="now">now</div><div class="lbl" data-endlbl>until 11:30</div></div>
-            <span class="shape"></span>
-            <div class="body"><div class="t">Deep block — moments prototype</div><div class="m">your protected focus window</div></div>
-            <span class="pill now" data-remain="11:30">2h 58m left</span>
-          </div>
-          <div class="block" data-area="product">
-            <div class="cd"><div class="big" data-until="12:00" data-abs="12:00p">in 3h 28m</div><div class="lbl">12:00p</div></div>
-            <span class="shape"></span>
-            <div class="body"><div class="t">Call — Priya (roadmap sync)</div><div class="m">30 min · she owns the review gate</div></div>
-          </div>
-          <div class="block" data-area="finance">
-            <div class="cd"><div class="big" data-until="13:30" data-abs="1:30p">in 4h 58m</div><div class="lbl">1:30p</div></div>
-            <span class="shape"></span>
-            <div class="body"><div class="t">Review Q2 numbers with Ava</div><div class="m">Finance · 20 min</div></div>
-          </div>
-          <div class="block free" data-area="all">
-            <div class="cd"><div class="big" data-until="15:00" data-abs="3:00p">in 6h 28m</div><div class="lbl">3:00p</div></div>
-            <span class="shape"></span>
-            <div class="body"><div class="t">Open — no plan yet</div><div class="m">protect it or let it fill</div></div>
-            <span class="pill free">free</span>
-          </div>
-          <div class="block" data-area="all">
-            <div class="cd"><div class="big" data-until="17:30" data-abs="5:30p">in 8h 58m</div><div class="lbl">5:30p</div></div>
-            <span class="shape"></span>
-            <div class="body"><div class="t">Close the day</div><div class="m">2-minute shutdown review</div></div>
+
+          <div class="rail">
+            <div class="card">
+              <h3>Next up</h3>
+              <div class="wait">
+                <div class="av" style="background: #6d8bff">▶</div>
+                <div class="who">
+                  <div class="n">Call — Priya</div>
+                  <div class="w">roadmap sync · 30m</div>
+                </div>
+                <div class="age fresh">
+                  <span class="d">3h</span><span class="u">left</span>
+                </div>
+              </div>
+            </div>
+            <!-- guardrail REPLACEMENT: plain-language "What's protected" -->
+            <div class="card">
+              <h3>What's protected right now</h3>
+              <div class="protect">
+                <div class="shield">🛡</div>
+                <div>
+                  <div class="pt">This block is held until 11:30.</div>
+                  <div class="pm">
+                    Notifications muted · calls will roll to voicemail · Priya
+                    knows.
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- side rail -->
-      <div class="rail">
-        <div class="card collapsible" data-card>
-          <h3 data-toggle>Waiting on <span style="display:flex; gap:8px; align-items:center;"><span class="count">4</span><span class="chev">⌄</span></span></h3>
-          <div class="cbody" style="max-height:400px">
-          <div class="wait" data-area="product">
-            <div class="av" style="background:#c0603f">DR</div>
-            <div class="who"><div class="n">Dana R.</div><div class="w">design sign-off · PR #343</div></div>
-            <div class="age late"><span class="d">6</span><span class="u">days</span><span class="bar"><i></i></span></div>
-          </div>
-          <div class="wait" data-area="finance">
-            <div class="av" style="background:#46c08a">MK</div>
-            <div class="who"><div class="n">Marcus K.</div><div class="w">Stripe access grant</div></div>
-            <div class="age warn"><span class="d">3</span><span class="u">days</span><span class="bar"><i></i></span></div>
-          </div>
-          <div class="wait" data-area="product">
-            <div class="av" style="background:#6d8bff">SL</div>
-            <div class="who"><div class="n">Sam L.</div><div class="w">reply · contractor scope</div></div>
-            <div class="age warn"><span class="d">2</span><span class="u">days</span><span class="bar"><i></i></span></div>
-          </div>
-          <div class="wait" data-area="finance">
-            <div class="av" style="background:#b07cf0">AV</div>
-            <div class="who"><div class="n">Ava (accountant)</div><div class="w">Q2 numbers back</div></div>
-            <div class="age fresh"><span class="d">1</span><span class="u">day</span><span class="bar"><i></i></span></div>
-          </div>
-          </div>
-        </div>
+      <!-- ============ CLOSE ============ -->
+      <div data-view="close">
+        <div class="greeting"><h1>Close the day.</h1></div>
+        <div class="subline">Two minutes. Then you're actually off.</div>
 
-        <div class="card">
-          <h3>Areas</h3>
-          <div class="health" id="healthList">
-            <div class="area-row" data-area="product"><span class="aswatch" style="background:#6d8bff"></span><span class="adot ok"></span><span class="an">Product</span><span class="as">moving</span></div>
-            <div class="area-row" data-area="finance"><span class="aswatch" style="background:#46c08a"></span><span class="adot watch"></span><span class="an">Finance</span><span class="as">Q2 pending</span></div>
-            <div class="area-row" data-area="health"><span class="aswatch" style="background:#e06fae"></span><span class="adot ok"></span><span class="an">Health</span><span class="as">on track</span></div>
-            <div class="area-row" data-area="admin"><span class="aswatch" style="background:#e0a94a"></span><span class="adot risk"></span><span class="an">Admin</span><span class="as">2 overdue</span></div>
-            <div class="area-row" data-area="rel"><span class="aswatch" style="background:#b07cf0"></span><span class="adot idle"></span><span class="an">Relationships</span><span class="as">quiet</span></div>
+        <div class="grid">
+          <div>
+            <div class="closehero">
+              <div class="ch-h">You moved the thing that mattered.</div>
+              <div class="ch-sub">
+                The prototype got real hours. That was the whole point of today.
+              </div>
+              <div class="stat-row">
+                <div class="stat">
+                  <div
+                    class="sv"
+                    data-count="190"
+                    data-suffix="m"
+                    data-fmt="hm"
+                  >
+                    3h 10m
+                  </div>
+                  <div class="sl">deep work</div>
+                </div>
+                <div class="stat">
+                  <div class="sv"><span data-count="2">0</span> / 3</div>
+                  <div class="sl">blocks held</div>
+                </div>
+                <div class="stat">
+                  <div class="sv" data-count="5">0</div>
+                  <div class="sl">captured</div>
+                </div>
+              </div>
+              <div class="section-h" style="margin-left: 0">
+                <h2>Carry to tomorrow?</h2>
+                <span class="hint">↵ to accept all</span>
+              </div>
+              <div class="carry">
+                <span class="cbx" data-cbx></span>
+                <div class="ct">Reply to Sam — contractor scope</div>
+                <span class="cmeta">2 days waiting</span>
+              </div>
+              <div class="carry">
+                <span class="cbx" data-cbx></span>
+                <div class="ct">Chase Dana on PR #343 sign-off</div>
+                <span class="cmeta">6 days waiting</span>
+              </div>
+              <div class="carry">
+                <span class="cbx" data-cbx></span>
+                <div class="ct">Countdown color idea → backlog</div>
+                <span class="cmeta">captured today</span>
+              </div>
+              <div
+                class="fh-actions"
+                style="
+                  justify-content: flex-start;
+                  margin-top: 22px;
+                  display: flex;
+                  gap: 12px;
+                "
+              >
+                <button class="btn-primary" id="closeEnd">
+                  End day cleanly <span class="k">↵</span>
+                </button>
+                <button class="btn-ghost" data-toast="Kept open. No pressure.">
+                  Not done yet
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============ FLOW ============ -->
-  <div data-view="flow">
-    <div class="greeting"><h1>In flow.</h1></div>
-    <div class="subline">One block. Everything else is waiting and it can keep waiting.</div>
-
-    <div class="grid">
-      <div>
-        <!-- derailment always renders a recovery proposal (UX-INV-3) — plain language -->
-        <div class="recover">
-          <div class="ic">↩</div>
-          <div class="rbody">
-            <div class="rt">You slipped away for ~12 minutes. That's normal.</div>
-            <div class="rm">Want back in? I'll trim the target so it still finishes before your 12:00 call.</div>
-          </div>
-          <button class="btn-amber" data-toast="Back in. Target trimmed to fit 11:30.">Get back in</button>
-        </div>
-
-        <div class="flowhero">
-          <div class="fh-tag">Current block · deep work</div>
-          <div class="fh-title">Moments prototype — the Start view</div>
-          <div class="ring warn">01:47:22</div>
-          <div class="ring-lbl">remaining — a budget, not a clock</div>
-          <div class="fh-actions">
-            <button class="btn-primary" id="flowDone">Done — log it <span class="k">↵</span></button>
-            <button class="btn-ghost" data-toast="Paused. Timer holds; nothing lost.">Pause</button>
-            <button class="btn-ghost" data-toast="Extended 25 min. Call still protected.">+25 min</button>
-          </div>
-        </div>
-
-        <div class="section-h"><h2>Parked while you work</h2><span class="hint">press C to add without leaving</span></div>
-        <div class="sched">
-          <div class="block"><div class="cd"><div class="big">later</div></div><span class="shape"></span><div class="body"><div class="t">Reply to Sam — contractor scope</div><div class="m">captured 9:14a · not now</div></div></div>
-          <div class="block"><div class="cd"><div class="big">later</div></div><span class="shape"></span><div class="body"><div class="t">Idea: countdown color at 10-min mark</div><div class="m">captured 9:31a · not now</div></div></div>
-        </div>
-      </div>
-
-      <div class="rail">
-        <div class="card">
-          <h3>Next up</h3>
-          <div class="wait"><div class="av" style="background:#6d8bff">▶</div><div class="who"><div class="n">Call — Priya</div><div class="w">roadmap sync · 30m</div></div><div class="age fresh"><span class="d">3h</span><span class="u">left</span></div></div>
-        </div>
-        <!-- guardrail REPLACEMENT: plain-language "What's protected" -->
-        <div class="card">
-          <h3>What's protected right now</h3>
-          <div class="protect">
-            <div class="shield">🛡</div>
-            <div>
-              <div class="pt">This block is held until 11:30.</div>
-              <div class="pm">Notifications muted · calls will roll to voicemail · Priya knows.</div>
+          <div class="rail">
+            <div class="card">
+              <h3>Tomorrow's first move</h3>
+              <div class="wait" style="border: none">
+                <div class="av" style="background: #6d8bff">▶</div>
+                <div class="who">
+                  <div class="n">Wire the capture overlay</div>
+                  <div class="w">2-min start · already chosen</div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Areas — end of day</h3>
+              <div class="health">
+                <div class="area-row">
+                  <span class="aswatch" style="background: #6d8bff"></span
+                  ><span class="adot ok"></span><span class="an">Product</span
+                  ><span class="as">advanced</span>
+                </div>
+                <div class="area-row">
+                  <span class="aswatch" style="background: #46c08a"></span
+                  ><span class="adot watch"></span
+                  ><span class="an">Finance</span
+                  ><span class="as">still pending</span>
+                </div>
+                <div class="area-row">
+                  <span class="aswatch" style="background: #e0a94a"></span
+                  ><span class="adot ok"></span><span class="an">Admin</span
+                  ><span class="as">1 cleared</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ============ CLOSE ============ -->
-  <div data-view="close">
-    <div class="greeting"><h1>Close the day.</h1></div>
-    <div class="subline">Two minutes. Then you're actually off.</div>
+    <!-- capture bar -->
+    <div class="capbar">
+      <span class="lead"
+        >Something on your mind? <b>Capture it</b> — don't hold it.</span
+      >
+      <kbd id="capKbd">C</kbd>
+    </div>
 
-    <div class="grid">
-      <div>
-        <div class="closehero">
-          <div class="ch-h">You moved the thing that mattered.</div>
-          <div class="ch-sub">The prototype got real hours. That was the whole point of today.</div>
-          <div class="stat-row">
-            <div class="stat"><div class="sv" data-count="190" data-suffix="m" data-fmt="hm">3h 10m</div><div class="sl">deep work</div></div>
-            <div class="stat"><div class="sv"><span data-count="2">0</span> / 3</div><div class="sl">blocks held</div></div>
-            <div class="stat"><div class="sv" data-count="5">0</div><div class="sl">captured</div></div>
-          </div>
-          <div class="section-h" style="margin-left:0"><h2>Carry to tomorrow?</h2><span class="hint">↵ to accept all</span></div>
-          <div class="carry"><span class="cbx" data-cbx></span><div class="ct">Reply to Sam — contractor scope</div><span class="cmeta">2 days waiting</span></div>
-          <div class="carry"><span class="cbx" data-cbx></span><div class="ct">Chase Dana on PR #343 sign-off</div><span class="cmeta">6 days waiting</span></div>
-          <div class="carry"><span class="cbx" data-cbx></span><div class="ct">Countdown color idea → backlog</div><span class="cmeta">captured today</span></div>
-          <div class="fh-actions" style="justify-content:flex-start; margin-top:22px; display:flex; gap:12px;">
-            <button class="btn-primary" id="closeEnd">End day cleanly <span class="k">↵</span></button>
-            <button class="btn-ghost" data-toast="Kept open. No pressure.">Not done yet</button>
-          </div>
-        </div>
-      </div>
-      <div class="rail">
-        <div class="card">
-          <h3>Tomorrow's first move</h3>
-          <div class="wait" style="border:none"><div class="av" style="background:#6d8bff">▶</div><div class="who"><div class="n">Wire the capture overlay</div><div class="w">2-min start · already chosen</div></div></div>
-        </div>
-        <div class="card">
-          <h3>Areas — end of day</h3>
-          <div class="health">
-            <div class="area-row"><span class="aswatch" style="background:#6d8bff"></span><span class="adot ok"></span><span class="an">Product</span><span class="as">advanced</span></div>
-            <div class="area-row"><span class="aswatch" style="background:#46c08a"></span><span class="adot watch"></span><span class="an">Finance</span><span class="as">still pending</span></div>
-            <div class="area-row"><span class="aswatch" style="background:#e0a94a"></span><span class="adot ok"></span><span class="an">Admin</span><span class="as">1 cleared</span></div>
-          </div>
-        </div>
+    <!-- capture overlay -->
+    <div class="scrim" id="scrim"></div>
+    <div class="capture" id="capture">
+      <input
+        class="cap-in"
+        id="capIn"
+        placeholder="What's on your mind? Just type — I'll sort it."
+        autocomplete="off"
+      />
+      <div class="cap-foot">
+        <span class="chip on" data-chip>Inbox</span>
+        <span class="chip" data-chip>Task</span>
+        <span class="chip" data-chip>Idea</span>
+        <span class="chip" data-chip>Waiting-on</span>
+        <span class="save"><kbd>↵</kbd> save &nbsp; <kbd>esc</kbd> close</span>
       </div>
     </div>
-  </div>
-</div>
 
-<!-- capture bar -->
-<div class="capbar">
-  <span class="lead">Something on your mind? <b>Capture it</b> — don't hold it.</span>
-  <kbd id="capKbd">C</kbd>
-</div>
+    <div class="toast" id="toast">
+      <span class="ok">✓</span><span id="toastMsg">Saved</span>
+    </div>
 
-<!-- capture overlay -->
-<div class="scrim" id="scrim"></div>
-<div class="capture" id="capture">
-  <input class="cap-in" id="capIn" placeholder="What's on your mind? Just type — I'll sort it." autocomplete="off">
-  <div class="cap-foot">
-    <span class="chip on" data-chip>Inbox</span>
-    <span class="chip" data-chip>Task</span>
-    <span class="chip" data-chip>Idea</span>
-    <span class="chip" data-chip>Waiting-on</span>
-    <span class="save"><kbd>↵</kbd> save &nbsp; <kbd>esc</kbd> close</span>
-  </div>
-</div>
+    <div class="kbdhelp">
+      <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> moments</span>
+      <span><kbd>C</kbd> capture</span>
+      <span><kbd>A</kbd> area</span>
+      <span><kbd>T</kbd> time</span>
+      <span><kbd>D</kbd> theme</span>
+      <span><kbd>M</kbd> map</span>
+      <span><kbd>↵</kbd> primary</span>
+    </div>
 
-<div class="toast" id="toast"><span class="ok">✓</span><span id="toastMsg">Saved</span></div>
+    <script>
+      (function () {
+        const html = document.documentElement;
 
-<div class="kbdhelp">
-  <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> moments</span>
-  <span><kbd>C</kbd> capture</span>
-  <span><kbd>A</kbd> area</span>
-  <span><kbd>T</kbd> time</span>
-  <span><kbd>D</kbd> theme</span>
-  <span><kbd>M</kbd> map</span>
-  <span><kbd>↵</kbd> primary</span>
-</div>
+        // ---------- moment switching (1/2/3) ----------
+        const views = {};
+        ["start", "flow", "close"].forEach(
+          (n) => (views[n] = document.querySelector('[data-view="' + n + '"]')),
+        );
+        const tabs = document.querySelectorAll("#moments button");
+        let current = "start";
+        function goto(name) {
+          current = name;
+          Object.entries(views).forEach(([k, el]) =>
+            el.classList.toggle("shown", k === name),
+          );
+          tabs.forEach((t) =>
+            t.classList.toggle("active", t.dataset.goto === name),
+          );
+        }
+        tabs.forEach((t) =>
+          t.addEventListener("click", () => goto(t.dataset.goto)),
+        );
 
-<script>
-(function(){
-  const html = document.documentElement;
+        // ---------- THEME toggle (dark default) ----------
+        const themeGl = document.getElementById("themeGl");
+        function applyTheme() {
+          const dark = html.getAttribute("data-theme") === "dark";
+          themeGl.textContent = dark ? "☾" : "☀";
+        }
+        function toggleTheme() {
+          html.setAttribute(
+            "data-theme",
+            html.getAttribute("data-theme") === "dark" ? "light" : "dark",
+          );
+          applyTheme();
+        }
+        document
+          .getElementById("themeBtn")
+          .addEventListener("click", toggleTheme);
+        applyTheme();
 
-  // ---------- moment switching (1/2/3) ----------
-  const views = {}; ['start','flow','close'].forEach(n=> views[n]=document.querySelector('[data-view="'+n+'"]'));
-  const tabs = document.querySelectorAll('#moments button');
-  let current = 'start';
-  function goto(name){
-    current = name;
-    Object.entries(views).forEach(([k,el])=> el.classList.toggle('shown', k===name));
-    tabs.forEach(t=> t.classList.toggle('active', t.dataset.goto===name));
-  }
-  tabs.forEach(t=> t.addEventListener('click', ()=> goto(t.dataset.goto)));
+        // ---------- AREA scope (retint whole UI) ----------
+        const AREAS = [
+          ["all", "All areas", "#6d8bff"],
+          ["product", "Product", "#6d8bff"],
+          ["finance", "Finance", "#46c08a"],
+          ["health", "Health", "#e06fae"],
+          ["admin", "Admin", "#e0a94a"],
+          ["rel", "Relationships", "#b07cf0"],
+        ];
+        const areaName = document.getElementById("areaName");
+        const startSub = document.getElementById("startSub");
+        const areamenu = document.getElementById("areamenu");
+        function applyScope(area) {
+          html.setAttribute("data-area", area);
+          const meta = AREAS.find((a) => a[0] === area);
+          areaName.textContent = meta[1];
+          // menu selection
+          areamenu
+            .querySelectorAll(".opt")
+            .forEach((o) => o.classList.toggle("sel", o.dataset.area === area));
+          // dim out-of-scope schedule blocks + waiting rows
+          document
+            .querySelectorAll(
+              '[data-view="start"] .block, [data-view="start"] .wait',
+            )
+            .forEach((el) => {
+              const a = el.getAttribute("data-area");
+              el.classList.toggle(
+                "out-of-scope",
+                area !== "all" && a && a !== area && a !== "all",
+              );
+            });
+          // subline note
+          if (area === "all") {
+            startSub.innerHTML =
+              "One clear block ahead of the noon call. <b>3 hours</b> of focus available — enough for the thing that actually matters.";
+          } else {
+            startSub.innerHTML =
+              'Scoped to <span class="scoped-note">' +
+              meta[1] +
+              "</span> — everything else is dimmed. <b>Enter</b> still starts your first move.";
+          }
+        }
+        function setArea(area) {
+          applyScope(area);
+          closeAreaMenu();
+        }
+        // menu open/close
+        const areaCur = document.getElementById("areaCur");
+        function openAreaMenu() {
+          areamenu.classList.add("open");
+        }
+        function closeAreaMenu() {
+          areamenu.classList.remove("open");
+        }
+        areaCur.addEventListener("click", (e) => {
+          e.stopPropagation();
+          areamenu.classList.toggle("open");
+        });
+        areamenu
+          .querySelectorAll(".opt")
+          .forEach((o) =>
+            o.addEventListener("click", () => setArea(o.dataset.area)),
+          );
+        document.addEventListener("click", (e) => {
+          if (!document.getElementById("areapick").contains(e.target))
+            closeAreaMenu();
+        });
+        // clicking an area health row / swatch scopes to it
+        document
+          .querySelectorAll(".area-row[data-area]")
+          .forEach((r) =>
+            r.addEventListener("click", () => setArea(r.dataset.area)),
+          );
+        function cycleArea() {
+          const cur = html.getAttribute("data-area");
+          const i = AREAS.findIndex((a) => a[0] === cur);
+          setArea(AREAS[(i + 1) % AREAS.length][0]);
+        }
 
-  // ---------- THEME toggle (dark default) ----------
-  const themeGl = document.getElementById('themeGl');
-  function applyTheme(){
-    const dark = html.getAttribute('data-theme')==='dark';
-    themeGl.textContent = dark ? '☾' : '☀';
-  }
-  function toggleTheme(){
-    html.setAttribute('data-theme', html.getAttribute('data-theme')==='dark'?'light':'dark');
-    applyTheme();
-  }
-  document.getElementById('themeBtn').addEventListener('click', toggleTheme);
-  applyTheme();
+        // ---------- PIPELINE drill-in ----------
+        const drill = document.getElementById("pipeDrill");
+        const DRILL = {
+          capture: [
+            "<b>7 raw captures</b> waiting to be sorted.",
+            "Voice memo from 8:02a · 3 quick links · Sam thread",
+          ],
+          triage: [
+            "<b>12 items</b> need a home — highest backlog.",
+            "5 arrived overnight · 4 are 2-min sorts · 3 need a decision",
+          ],
+          plan: [
+            "<b>4 tasks</b> lack an AI map — you're here.",
+            "Structural pass (mapped) · Q2 review · onboarding doc · billing fix",
+          ],
+          execute: [
+            "<b>3 in motion.</b> One is today's deep block.",
+            "Moments prototype (now) · Stripe migration · contractor scope",
+          ],
+          review: [
+            "<b>6 awaiting review</b> — 1 is blocking Dana.",
+            "PR #343 (6d) · Q2 draft · 4 shipped, need a look-back",
+          ],
+        };
+        let openStep = null;
+        document.querySelectorAll(".pstep").forEach((s) =>
+          s.addEventListener("click", () => {
+            const step = s.dataset.step;
+            document
+              .querySelectorAll(".pstep")
+              .forEach((x) => x.classList.toggle("active", x === s));
+            if (openStep === step) {
+              drill.classList.remove("open");
+              openStep = null;
+              return;
+            }
+            openStep = step;
+            drill.innerHTML = DRILL[step]
+              .map((t, i) =>
+                i === 0
+                  ? '<div class="dl-row"><span class="dot"></span><span>' +
+                    t +
+                    "</span></div>"
+                  : '<div style="color:var(--ink-faint); padding-left:16px; font-size:12px;">' +
+                    t +
+                    "</div>",
+              )
+              .join("");
+            drill.classList.add("open");
+          }),
+        );
 
-  // ---------- AREA scope (retint whole UI) ----------
-  const AREAS = [
-    ['all','All areas','#6d8bff'],['product','Product','#6d8bff'],['finance','Finance','#46c08a'],
-    ['health','Health','#e06fae'],['admin','Admin','#e0a94a'],['rel','Relationships','#b07cf0']
-  ];
-  const areaName = document.getElementById('areaName');
-  const startSub = document.getElementById('startSub');
-  const areamenu = document.getElementById('areamenu');
-  function applyScope(area){
-    html.setAttribute('data-area', area);
-    const meta = AREAS.find(a=>a[0]===area);
-    areaName.textContent = meta[1];
-    // menu selection
-    areamenu.querySelectorAll('.opt').forEach(o=> o.classList.toggle('sel', o.dataset.area===area));
-    // dim out-of-scope schedule blocks + waiting rows
-    document.querySelectorAll('[data-view="start"] .block, [data-view="start"] .wait').forEach(el=>{
-      const a = el.getAttribute('data-area');
-      el.classList.toggle('out-of-scope', area!=='all' && a && a!==area && a!=='all');
-    });
-    // subline note
-    if (area==='all'){
-      startSub.innerHTML = 'One clear block ahead of the noon call. <b>3 hours</b> of focus available — enough for the thing that actually matters.';
-    } else {
-      startSub.innerHTML = 'Scoped to <span class="scoped-note">'+meta[1]+'</span> — everything else is dimmed. <b>Enter</b> still starts your first move.';
-    }
-  }
-  function setArea(area){ applyScope(area); closeAreaMenu(); }
-  // menu open/close
-  const areaCur = document.getElementById('areaCur');
-  function openAreaMenu(){ areamenu.classList.add('open'); }
-  function closeAreaMenu(){ areamenu.classList.remove('open'); }
-  areaCur.addEventListener('click', (e)=>{ e.stopPropagation(); areamenu.classList.toggle('open'); });
-  areamenu.querySelectorAll('.opt').forEach(o=> o.addEventListener('click', ()=> setArea(o.dataset.area)));
-  document.addEventListener('click', (e)=>{ if(!document.getElementById('areapick').contains(e.target)) closeAreaMenu(); });
-  // clicking an area health row / swatch scopes to it
-  document.querySelectorAll('.area-row[data-area]').forEach(r=> r.addEventListener('click', ()=> setArea(r.dataset.area)));
-  function cycleArea(){
-    const cur = html.getAttribute('data-area');
-    const i = AREAS.findIndex(a=>a[0]===cur);
-    setArea(AREAS[(i+1)%AREAS.length][0]);
-  }
+        // ---------- MAP PEEK (progression rail) ----------
+        const firstmove = document.getElementById("firstmove");
+        const mapLbl = document.getElementById("mapToggleLbl");
+        function toggleMap() {
+          const open = firstmove.classList.toggle("mapopen");
+          mapLbl.textContent = open ? "Hide the map" : "See the map";
+        }
+        document
+          .getElementById("mapToggle")
+          .addEventListener("click", toggleMap);
 
-  // ---------- PIPELINE drill-in ----------
-  const drill = document.getElementById('pipeDrill');
-  const DRILL = {
-    capture: ['<b>7 raw captures</b> waiting to be sorted.','Voice memo from 8:02a · 3 quick links · Sam thread'],
-    triage:  ['<b>12 items</b> need a home — highest backlog.','5 arrived overnight · 4 are 2-min sorts · 3 need a decision'],
-    plan:    ['<b>4 tasks</b> lack an AI map — you\'re here.','Structural pass (mapped) · Q2 review · onboarding doc · billing fix'],
-    execute: ['<b>3 in motion.</b> One is today\'s deep block.','Moments prototype (now) · Stripe migration · contractor scope'],
-    review:  ['<b>6 awaiting review</b> — 1 is blocking Dana.','PR #343 (6d) · Q2 draft · 4 shipped, need a look-back']
-  };
-  let openStep = null;
-  document.querySelectorAll('.pstep').forEach(s=> s.addEventListener('click', ()=>{
-    const step = s.dataset.step;
-    document.querySelectorAll('.pstep').forEach(x=> x.classList.toggle('active', x===s));
-    if (openStep===step){ drill.classList.remove('open'); openStep=null; return; }
-    openStep = step;
-    drill.innerHTML = DRILL[step].map((t,i)=> i===0
-      ? '<div class="dl-row"><span class="dot"></span><span>'+t+'</span></div>'
-      : '<div style="color:var(--ink-faint); padding-left:16px; font-size:12px;">'+t+'</div>').join('');
-    drill.classList.add('open');
-  }));
+        // node completion celebration: click current node to "complete" it
+        const prograil = document.getElementById("prograil");
+        function completeCurrent() {
+          const cur = prograil.querySelector(".node.current");
+          if (!cur) return;
+          const dot = cur.querySelector(".ndot");
+          dot.textContent = "✓";
+          dot.classList.add("celebrate");
+          cur.querySelector(".ntag").textContent = "done";
+          // spark
+          const spark = document.createElement("span");
+          spark.className = "spark";
+          cur.appendChild(spark);
+          requestAnimationFrame(() => spark.classList.add("go"));
+          setTimeout(() => spark.remove(), 700);
+          cur.classList.remove("current");
+          cur.classList.add("done");
+          // promote next
+          const nxt = cur.nextElementSibling;
+          if (nxt) {
+            nxt.classList.remove("next", "tail");
+            nxt.classList.add("current");
+            nxt.querySelector(".ntag").textContent = "you're here";
+            const nn = nxt.querySelector(".ndot");
+            nn.style.borderStyle = "solid";
+          }
+          showToast("Node cleared. Next one's lit — keep the chain going.");
+        }
+        prograil.addEventListener("click", (e) => {
+          const node = e.target.closest(".node.current");
+          if (node) completeCurrent();
+        });
 
-  // ---------- MAP PEEK (progression rail) ----------
-  const firstmove = document.getElementById('firstmove');
-  const mapLbl = document.getElementById('mapToggleLbl');
-  function toggleMap(){
-    const open = firstmove.classList.toggle('mapopen');
-    mapLbl.textContent = open ? 'Hide the map' : 'See the map';
-  }
-  document.getElementById('mapToggle').addEventListener('click', toggleMap);
+        // ---------- collapsible cards ----------
+        document
+          .querySelectorAll(".card.collapsible [data-toggle]")
+          .forEach((h) =>
+            h.addEventListener("click", () =>
+              h.closest(".card").classList.toggle("collapsed"),
+            ),
+          );
 
-  // node completion celebration: click current node to "complete" it
-  const prograil = document.getElementById('prograil');
-  function completeCurrent(){
-    const cur = prograil.querySelector('.node.current');
-    if (!cur) return;
-    const dot = cur.querySelector('.ndot');
-    dot.textContent = '✓';
-    dot.classList.add('celebrate');
-    cur.querySelector('.ntag').textContent = 'done';
-    // spark
-    const spark = document.createElement('span'); spark.className='spark';
-    cur.appendChild(spark); requestAnimationFrame(()=> spark.classList.add('go'));
-    setTimeout(()=> spark.remove(), 700);
-    cur.classList.remove('current'); cur.classList.add('done');
-    // promote next
-    const nxt = cur.nextElementSibling;
-    if (nxt){
-      nxt.classList.remove('next','tail');
-      nxt.classList.add('current');
-      nxt.querySelector('.ntag').textContent = 'you\'re here';
-      const nn = nxt.querySelector('.ndot');
-      nn.style.borderStyle='solid';
-    }
-    showToast('Node cleared. Next one\'s lit — keep the chain going.');
-  }
-  prograil.addEventListener('click', (e)=>{
-    const node = e.target.closest('.node.current');
-    if (node) completeCurrent();
-  });
+        // ---------- carry checkboxes ----------
+        document.querySelectorAll("[data-cbx]").forEach((b) =>
+          b.addEventListener("click", () => {
+            b.classList.toggle("on");
+            b.textContent = b.classList.contains("on") ? "✓" : "";
+          }),
+        );
 
-  // ---------- collapsible cards ----------
-  document.querySelectorAll('.card.collapsible [data-toggle]').forEach(h=>
-    h.addEventListener('click', ()=> h.closest('.card').classList.toggle('collapsed')));
+        // ---------- capture overlay (C anywhere) ----------
+        const scrim = document.getElementById("scrim");
+        const cap = document.getElementById("capture");
+        const capIn = document.getElementById("capIn");
+        function openCap() {
+          scrim.classList.add("open");
+          cap.classList.add("open");
+          setTimeout(() => capIn.focus(), 40);
+        }
+        function closeCap() {
+          scrim.classList.remove("open");
+          cap.classList.remove("open");
+          capIn.value = "";
+        }
+        scrim.addEventListener("click", closeCap);
+        document.querySelectorAll("[data-chip]").forEach((c) =>
+          c.addEventListener("click", () => {
+            document
+              .querySelectorAll("[data-chip]")
+              .forEach((x) => x.classList.remove("on"));
+            c.classList.add("on");
+          }),
+        );
 
-  // ---------- carry checkboxes ----------
-  document.querySelectorAll('[data-cbx]').forEach(b=> b.addEventListener('click', ()=>{
-    b.classList.toggle('on'); b.textContent = b.classList.contains('on') ? '✓' : '';
-  }));
+        // ---------- toast ----------
+        let toastT;
+        const toast = document.getElementById("toast"),
+          toastMsg = document.getElementById("toastMsg");
+        function showToast(msg) {
+          toastMsg.textContent = msg;
+          toast.classList.add("show");
+          clearTimeout(toastT);
+          toastT = setTimeout(() => toast.classList.remove("show"), 2600);
+        }
+        document
+          .querySelectorAll("[data-toast]")
+          .forEach((b) =>
+            b.addEventListener("click", () => showToast(b.dataset.toast)),
+          );
 
-  // ---------- capture overlay (C anywhere) ----------
-  const scrim = document.getElementById('scrim');
-  const cap = document.getElementById('capture');
-  const capIn = document.getElementById('capIn');
-  function openCap(){ scrim.classList.add('open'); cap.classList.add('open'); setTimeout(()=>capIn.focus(),40); }
-  function closeCap(){ scrim.classList.remove('open'); cap.classList.remove('open'); capIn.value=''; }
-  scrim.addEventListener('click', closeCap);
-  document.querySelectorAll('[data-chip]').forEach(c=> c.addEventListener('click', ()=>{
-    document.querySelectorAll('[data-chip]').forEach(x=>x.classList.remove('on')); c.classList.add('on');
-  }));
+        // count-up stats when Close first shown
+        let countedClose = false;
+        function runCounts() {
+          if (countedClose) return;
+          countedClose = true;
+          document.querySelectorAll("[data-count]").forEach((el) => {
+            const to = +el.dataset.count,
+              fmt = el.dataset.fmt,
+              dur = 700;
+            const t0 = performance.now();
+            (function step(t) {
+              const p = Math.min(1, (t - t0) / dur),
+                v = Math.round(to * (1 - Math.pow(1 - p, 3)));
+              el.textContent =
+                fmt === "hm" ? Math.floor(v / 60) + "h " + (v % 60) + "m" : v;
+              if (p < 1) requestAnimationFrame(step);
+            })(performance.now());
+          });
+        }
+        const _goto = goto;
+        goto = function (name) {
+          _goto(name);
+          if (name === "close") runCounts();
+        };
+        tabs.forEach((t) =>
+          t.addEventListener("click", () => {
+            if (t.dataset.goto === "close") runCounts();
+          }),
+        );
 
-  // ---------- toast ----------
-  let toastT;
-  const toast = document.getElementById('toast'), toastMsg = document.getElementById('toastMsg');
-  function showToast(msg){ toastMsg.textContent = msg; toast.classList.add('show');
-    clearTimeout(toastT); toastT = setTimeout(()=> toast.classList.remove('show'), 2600); }
-  document.querySelectorAll('[data-toast]').forEach(b=> b.addEventListener('click', ()=> showToast(b.dataset.toast)));
+        // primary actions
+        document.getElementById("startBtn").addEventListener("click", () => {
+          goto("flow");
+          showToast("Timer running. You're in flow — everything else waits.");
+        });
+        document.getElementById("flowDone").addEventListener("click", () => {
+          showToast("Block logged. 3h 10m of deep work today.");
+        });
+        document.getElementById("closeEnd").addEventListener("click", () => {
+          showToast("Day closed. Tomorrow's first move is set. Rest well.");
+        });
 
-  // count-up stats when Close first shown
-  let countedClose = false;
-  function runCounts(){
-    if (countedClose) return; countedClose = true;
-    document.querySelectorAll('[data-count]').forEach(el=>{
-      const to = +el.dataset.count, fmt = el.dataset.fmt, dur = 700; const t0 = performance.now();
-      (function step(t){
-        const p = Math.min(1,(t-t0)/dur), v = Math.round(to*(1-Math.pow(1-p,3)));
-        el.textContent = fmt==='hm' ? (Math.floor(v/60)+'h '+(v%60)+'m') : v;
-        if (p<1) requestAnimationFrame(step);
-      })(performance.now());
-    });
-  }
-  const _goto = goto;
-  goto = function(name){ _goto(name); if(name==='close') runCounts(); };
-  tabs.forEach(t=> t.addEventListener('click', ()=> { if(t.dataset.goto==='close') runCounts(); }));
+        // ---------- TIME format toggle (countdown <-> clock) ----------
+        const timeLbl = document.getElementById("timeLbl"),
+          timeGl = document.getElementById("timeGl");
+        const schedHint = document.getElementById("schedHint");
+        function applyTimeMode() {
+          const cd = html.getAttribute("data-time") === "countdown";
+          timeLbl.textContent = cd ? "Countdown" : "Clock";
+          timeGl.textContent = cd ? "⏳" : "🕐";
+          schedHint.textContent = cd
+            ? "times shown as countdowns"
+            : "times shown as clock";
+          tick();
+        }
+        function toggleTime() {
+          html.setAttribute(
+            "data-time",
+            html.getAttribute("data-time") === "countdown"
+              ? "clock"
+              : "countdown",
+          );
+          applyTimeMode();
+        }
+        document
+          .getElementById("timeBtn")
+          .addEventListener("click", toggleTime);
 
-  // primary actions
-  document.getElementById('startBtn').addEventListener('click', ()=>{ goto('flow'); showToast("Timer running. You're in flow — everything else waits."); });
-  document.getElementById('flowDone').addEventListener('click', ()=>{ showToast('Block logged. 3h 10m of deep work today.'); });
-  document.getElementById('closeEnd').addEventListener('click', ()=>{ showToast("Day closed. Tomorrow's first move is set. Rest well."); });
+        // ---------- live countdowns ----------
+        const load = Date.now();
+        const base = new Date();
+        base.setHours(8, 32, 0, 0);
+        function fmtGap(ms) {
+          if (ms <= 0) return null;
+          const m = Math.floor(ms / 60000),
+            h = Math.floor(m / 60),
+            mm = m % 60;
+          if (h > 0) return "in " + h + "h " + mm + "m";
+          if (m > 0) return "in " + m + "m";
+          return "in <1m";
+        }
+        const els = document.querySelectorAll("[data-until]");
+        const remain = document.querySelector("[data-remain]");
+        function parseT(s) {
+          const [hh, mm] = s.split(":").map(Number);
+          const d = new Date(base);
+          d.setHours(hh, mm, 0, 0);
+          return d;
+        }
+        function tick() {
+          const clock = html.getAttribute("data-time") === "clock";
+          const now = new Date(base.getTime() + (Date.now() - load));
+          els.forEach((el) => {
+            const t = el.dataset.until,
+              abs = el.dataset.abs;
+            if (t === "now") {
+              el.textContent = clock ? "8:32a" : "now";
+              return;
+            }
+            if (t === "done") {
+              el.textContent = "done";
+              return;
+            }
+            if (clock) {
+              el.textContent = abs || t;
+              return;
+            }
+            const g = fmtGap(parseT(t) - now);
+            el.textContent = g || "started";
+          });
+          if (remain) {
+            const end = parseT(remain.dataset.remain);
+            const ms = end - now;
+            if (clock) {
+              remain.textContent = "ends 11:30";
+            } else if (ms > 0) {
+              const m = Math.floor(ms / 60000);
+              remain.textContent =
+                Math.floor(m / 60) + "h " + (m % 60) + "m left";
+            } else remain.textContent = "overrun";
+          }
+        }
+        tick();
+        setInterval(tick, 1000);
+        applyTimeMode();
 
-  // ---------- TIME format toggle (countdown <-> clock) ----------
-  const timeLbl = document.getElementById('timeLbl'), timeGl = document.getElementById('timeGl');
-  const schedHint = document.getElementById('schedHint');
-  function applyTimeMode(){
-    const cd = html.getAttribute('data-time')==='countdown';
-    timeLbl.textContent = cd ? 'Countdown' : 'Clock';
-    timeGl.textContent = cd ? '⏳' : '🕐';
-    schedHint.textContent = cd ? 'times shown as countdowns' : 'times shown as clock';
-    tick();
-  }
-  function toggleTime(){
-    html.setAttribute('data-time', html.getAttribute('data-time')==='countdown'?'clock':'countdown');
-    applyTimeMode();
-  }
-  document.getElementById('timeBtn').addEventListener('click', toggleTime);
+        // date string
+        const d = new Date();
+        document.getElementById("datestr").textContent = d.toLocaleDateString(
+          undefined,
+          { weekday: "long", month: "long", day: "numeric" },
+        );
 
-  // ---------- live countdowns ----------
-  const load = Date.now();
-  const base = new Date(); base.setHours(8,32,0,0);
-  function fmtGap(ms){
-    if (ms<=0) return null;
-    const m = Math.floor(ms/60000), h=Math.floor(m/60), mm=m%60;
-    if (h>0) return 'in '+h+'h '+mm+'m';
-    if (m>0) return 'in '+m+'m';
-    return 'in <1m';
-  }
-  const els = document.querySelectorAll('[data-until]');
-  const remain = document.querySelector('[data-remain]');
-  function parseT(s){ const [hh,mm]=s.split(':').map(Number); const d=new Date(base); d.setHours(hh,mm,0,0); return d; }
-  function tick(){
-    const clock = html.getAttribute('data-time')==='clock';
-    const now = new Date(base.getTime() + (Date.now()-load));
-    els.forEach(el=>{
-      const t = el.dataset.until, abs = el.dataset.abs;
-      if (t==='now'){ el.textContent = clock ? '8:32a' : 'now'; return; }
-      if (t==='done'){ el.textContent = 'done'; return; }
-      if (clock){ el.textContent = abs || t; return; }
-      const g = fmtGap(parseT(t) - now);
-      el.textContent = g || 'started';
-    });
-    if (remain){
-      const end = parseT(remain.dataset.remain);
-      const ms = end - now;
-      if (clock){ remain.textContent = 'ends 11:30'; }
-      else if (ms>0){ const m=Math.floor(ms/60000); remain.textContent = (Math.floor(m/60))+'h '+(m%60)+'m left'; }
-      else remain.textContent = 'overrun';
-    }
-  }
-  tick(); setInterval(tick, 1000);
-  applyTimeMode();
+        // ---------- keyboard ----------
+        document.addEventListener("keydown", (e) => {
+          const typing = cap.classList.contains("open");
+          if (typing) {
+            if (e.key === "Escape") closeCap();
+            else if (e.key === "Enter") {
+              const v = capIn.value.trim();
+              const kind = document.querySelector("[data-chip].on").textContent;
+              closeCap();
+              showToast(
+                v
+                  ? "Captured to " + kind + " — out of your head."
+                  : "Nothing to save.",
+              );
+            }
+            return;
+          }
+          if (e.metaKey || e.ctrlKey || e.altKey) return;
+          const k = e.key.toLowerCase();
+          if (k === "c") {
+            e.preventDefault();
+            openCap();
+          } else if (k === "1") {
+            goto("start");
+          } else if (k === "2") {
+            goto("flow");
+          } else if (k === "3") {
+            goto("close");
+          } else if (k === "a") {
+            e.preventDefault();
+            cycleArea();
+          } else if (k === "t") {
+            e.preventDefault();
+            toggleTime();
+          } else if (k === "d") {
+            e.preventDefault();
+            toggleTheme();
+          } else if (k === "m") {
+            e.preventDefault();
+            if (current === "start") {
+              if (!firstmove.classList.contains("mapopen")) toggleMap();
+              else completeCurrent();
+            }
+          } else if (e.key === "Enter") {
+            if (current === "start") {
+              goto("flow");
+              showToast(
+                "Timer running. You're in flow — everything else waits.",
+              );
+            } else if (current === "flow") {
+              showToast("Block logged. 3h 10m of deep work today.");
+            } else if (current === "close") {
+              showToast("Day closed. Tomorrow's first move is set. Rest well.");
+            }
+          }
+        });
 
-  // date string
-  const d = new Date();
-  document.getElementById('datestr').textContent =
-    d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'});
-
-  // ---------- keyboard ----------
-  document.addEventListener('keydown', (e)=>{
-    const typing = cap.classList.contains('open');
-    if (typing){
-      if (e.key==='Escape') closeCap();
-      else if (e.key==='Enter'){
-        const v = capIn.value.trim();
-        const kind = document.querySelector('[data-chip].on').textContent;
-        closeCap(); showToast(v ? ('Captured to '+kind+' — out of your head.') : 'Nothing to save.');
-      }
-      return;
-    }
-    if (e.metaKey||e.ctrlKey||e.altKey) return;
-    const k = e.key.toLowerCase();
-    if (k==='c'){ e.preventDefault(); openCap(); }
-    else if (k==='1'){ goto('start'); }
-    else if (k==='2'){ goto('flow'); }
-    else if (k==='3'){ goto('close'); }
-    else if (k==='a'){ e.preventDefault(); cycleArea(); }
-    else if (k==='t'){ e.preventDefault(); toggleTime(); }
-    else if (k==='d'){ e.preventDefault(); toggleTheme(); }
-    else if (k==='m'){ e.preventDefault(); if(current==='start'){ if(!firstmove.classList.contains('mapopen')) toggleMap(); else completeCurrent(); } }
-    else if (e.key==='Enter'){
-      if (current==='start'){ goto('flow'); showToast("Timer running. You're in flow — everything else waits."); }
-      else if (current==='flow'){ showToast('Block logged. 3h 10m of deep work today.'); }
-      else if (current==='close'){ showToast("Day closed. Tomorrow's first move is set. Rest well."); }
-    }
-  });
-
-  // init scope
-  applyScope('all');
-})();
-</script>
-</body>
+        // init scope
+        applyScope("all");
+      })();
+    </script>
+  </body>
 </html>

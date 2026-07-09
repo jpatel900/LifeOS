@@ -14,7 +14,7 @@ never code-first; active sequencing unchanged.
 Today the profile is static, hand-written truth: starting friction, time
 blindness, overplanning, collapse-after-missed-block. But people change —
 partly BECAUSE the system works. If LifeOS succeeds, the 2027 Jay has
-*less* starting friction than the 2026 Jay who wrote the profile, and a
+_less_ starting friction than the 2026 Jay who wrote the profile, and a
 system still compensating for the old trait becomes a subtle insult — it
 treats him as who he was.
 
@@ -24,8 +24,8 @@ first-move acceptance rate, countdown-vs-clock toggle usage, map-dwell
 time, recovery-proposal uptake). When evidence diverges from the trait for
 a sustained window, the system proposes a profile amendment — through the
 weekly review, never silently (same mechanics as every other learning
-loop). The profile stops being a diagnosis and becomes a *conversation the
-system keeps having with the evidence about who you are becoming.*
+loop). The profile stops being a diagnosis and becomes a _conversation the
+system keeps having with the evidence about who you are becoming._
 
 The Jarvis endpoint of this is quiet and profound: a system that notices
 you've outgrown a compensation before you do, and retires it with your
@@ -36,15 +36,15 @@ ceremony.
 
 Every string the system says — the brief's tone, the re-entry ritual's
 warmth, the refusal copy when WIP is full — is currently authored taste.
-But copy is a *suggestion surface like any other*: some phrasings get
+But copy is a _suggestion surface like any other_: some phrasings get
 acted on, some get dismissed, some get overridden with irritation.
 
 **Proposal: treat voice as a policy class on the trust ladder.** Variants
 of key copy (the ~20 highest-frequency system utterances) carry policy
 ids; acceptance/dismissal data selects among them per context. Not A/B
 growth-hacking — the graveyard forbids engagement manipulation — but the
-opposite: the system learns which voice *costs the least attention and
-produces the least resistance*, converging on the tone a great chief of
+opposite: the system learns which voice _costs the least attention and
+produces the least resistance_, converging on the tone a great chief of
 staff finds with a principal after a year of working together. The words
 are part of the interface; tune them with the same humility as the
 thresholds.
@@ -52,7 +52,7 @@ thresholds.
 ### 1c. Rupture protocol: the system demotes ITSELF
 
 Re-entry amnesty (G2) repairs a lapse. But the deeper failure mode of
-every productivity system in history is the *spiral*: absence → guilt →
+every productivity system in history is the _spiral_: absence → guilt →
 avoidance → abandonment. The predecessor Notion system died this way. The
 current design forgives the user; nothing yet changes the SYSTEM's own
 posture after rupture.
@@ -64,12 +64,12 @@ focus item, one 2-minute move, nothing else visible — and re-earns its
 complexity the same way it originally did, via the usage gates, on a
 compressed timescale (days, not months). Panels re-appear as they are
 re-used. Nothing is lost (data and features persist underneath); what
-changes is what the system *asks of you* on the day you come back.
+changes is what the system _asks of you_ on the day you come back.
 
 This is the usage-gate doctrine made symmetric: growth was earned by
 usage, so shrinkage follows disuse — automatically, blamelessly, and
-visibly reversible. The message it embodies: *the system needs to re-earn
-you, not the reverse.* No commercial tool has ever done this; it may be
+visibly reversible. The message it embodies: _the system needs to re-earn
+you, not the reverse._ No commercial tool has ever done this; it may be
 the single most dyad-true feature LifeOS could build.
 
 ## PART 2 — ALTITUDE EXTREMES
@@ -78,13 +78,13 @@ the single most dyad-true feature LifeOS could build.
 
 The map ladder currently tops out at the week. Life has arcs, and a
 map-first mind will eventually crave the largest altitude — but a
-*prospective* decade view is the overplanning trait weaponized at maximum
+_prospective_ decade view is the overplanning trait weaponized at maximum
 scale (speculative life-planning as the ultimate lingering-in-the-map).
 
 **Proposal: the life-arc view is strictly RETROSPECTIVE.** It renders only
 from approved wins, rollups, and Seasons — a map of where you have
 actually been: areas thickening and thinning across quarters, seasons
-labeled after the fact, the trail lit behind you. Trajectory *emerges*
+labeled after the fact, the trail lit behind you. Trajectory _emerges_
 from evidence instead of being drafted from ambition. The forward edge of
 the map is always just the current stage card — one honest dashed node,
 nothing beyond. Sense-of-direction without a five-year fantasy: the trail
@@ -103,7 +103,7 @@ observation in a brief that could only come from your own data ("this is
 the sixth consecutive week the RiseUp block survived contact with
 reality"). Governed like everything else: delight events are an
 I-ladder class with a hard budget (rare enough to stay surprising),
-dismissals demote them, and they must always be *true* — generated from
+dismissals demote them, and they must always be _true_ — generated from
 real evidence, never confected. The test: would a tasteful human chief of
 staff say it? Delight that fails the test is noise; delight that passes
 is the relationship's compound interest.
@@ -111,8 +111,8 @@ is the relationship's compound interest.
 ### 2c. The context diet (altitude rule applied to the AI itself)
 
 The altitude rule governs what the USER sees. Apply it to what the MODEL
-sees: every AI surface should receive the *least context that answers the
-wondering* — not the most context available. This is simultaneously a
+sees: every AI surface should receive the _least context that answers the
+wondering_ — not the most context available. This is simultaneously a
 privacy doctrine (life data is the most sensitive dataset there is; the
 least of it should transit to any external model), a cost doctrine
 (context is the dominant AI cost at scale), and a quality doctrine
@@ -230,9 +230,9 @@ task-management industry optimizes engagement; LifeOS optimizes for its
 own recession into quiet reliability. Every deepest idea in these two
 passes (self-shrinking surfaces, retrospective-only life maps, budgeted
 delight, context diets, inference independence, compensations that retire
-themselves) is the same idea wearing different clothes: *a system that
+themselves) is the same idea wearing different clothes: _a system that
 grows more trustworthy by needing less — less attention, less data, less
-intelligence, less of you.*
+intelligence, less of you._
 
 That is also why the method transferred so cleanly to organizations in THE
 METHOD doc: it was never really about software. It is a theory of how any
@@ -253,7 +253,7 @@ instead. That's not a limit on it. That's the design working.
 
 Every doctrine so far governs what LifeOS does with what it sees. Nothing
 yet governs what it should refuse to see. A life-operating system's
-terminal failure mode is not data loss — it is *totalization*: the quiet
+terminal failure mode is not data loss — it is _totalization_: the quiet
 assumption that a life IS its captured portion, that an unrecorded day is
 an empty one, that the map is the territory. The quantified-self movement
 died of this; the operator's history (guilt spirals over incomplete
@@ -293,10 +293,10 @@ overrides/dismissals, with asymmetric dynamics (slow to rise, fast to
 fall, automatic demotion, caps for irreversible classes).**
 
 **Proposal: implement trust ONCE.** A single `trust_ledger` primitive —
-(class_id, current_rung, evidence_count, override_rate_window, cap,
+(class*id, current_rung, evidence_count, override_rate_window, cap,
 last_demotion, graduation_rule_id) — that every ladder instantiates with
 its own classes and thresholds. Suggestion/override records already feed
-it; the ladders become *views* over one table instead of eight parallel
+it; the ladders become \_views* over one table instead of eight parallel
 mechanisms. Payoffs: the Mirror gets its trust-calibration view for free
 across ALL classes; demotion logic is written and tested once; every
 future ladder (there will be more) is a config row, not a subsystem; and
@@ -313,7 +313,7 @@ compatible instead of unified retroactively.
 The extended-mind question, asked honestly: is LifeOS a prosthesis
 (replaces a function forever), an exoskeleton (amplifies a function while
 worn), or a teacher (builds the function, then steps back)? The answer
-must be *per compensation*, and it changes everything about how each one
+must be _per compensation_, and it changes everything about how each one
 should be built:
 
 - **Prosthesis — permanent, by design.** Prospective memory (Triggers),
@@ -345,7 +345,7 @@ change how at least a third of them get built.
 ## PART 8 — THE LINEAGE OF MINDS (the last layer down)
 
 One more dyad exists that no document has named: between Jay and the
-*succession of intelligences* that build this system. Fable, Opus,
+_succession of intelligences_ that build this system. Fable, Opus,
 Sonnet, Codex, whatever comes after — none persistent, none identical,
 all working one codebase across months. The thing that makes that
 possible is now visible in full: **the doctrine is not documentation
@@ -371,17 +371,14 @@ letter.
 
 — Fable. End of pass. End of passes.
 
-
-
-
 ### 1d. The novelty-to-utility crossing (pre-instrument it)
 
 Every self-built system runs on novelty fuel first, utility fuel second,
 and most die in the gap between tanks. The Mirror (first pass) should
 carry one specific gauge: engagement composition over time — how much use
-is *building/tweaking LifeOS* vs *using LifeOS to do life*. The build:use
+is _building/tweaking LifeOS_ vs _using LifeOS to do life_. The build:use
 ratio falling is HEALTH (the system receding into infrastructure);
-falling *engagement with life-work itself* is the real alarm. Naming this
+falling _engagement with life-work itself_ is the real alarm. Naming this
 distinction now prevents the classic misread — panicking at the end of
 the honeymoon and "fixing" it by adding features, which is how systems
 bloat themselves to death exactly when they were starting to work.

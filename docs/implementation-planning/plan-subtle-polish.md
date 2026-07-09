@@ -15,6 +15,7 @@ Standing rules for every packet: Sonnet subagent, no delegation, checkpoint disc
 **Why it matters subconsciously:** every overlay that swallows focus and dumps it at `<body>` forces a micro "where am I" reorientation. Users feel it as vague unease, never report it.
 
 **Contract:**
+
 - Every overlay/sheet (`CaptureOverlay`, `CommandPalette`, `MomentSheet`, ritual) on close returns focus to the element that opened it. Implement one shared hook `useReturnFocus()` in `components/moments/` (capture `document.activeElement` on open, `.focus()` it on close; guard element-removed).
 - Focus is trapped inside open dialogs (Tab/Shift-Tab cycle within; ground on the existing dialog markup — add a small `useFocusTrap` or wire the roving behavior by hand; NO new dependency).
 - Focus rings: keyboard-only visibility via `:focus-visible` (audit new moments components; replace any `:focus` ring styles; never remove rings entirely).
@@ -25,9 +26,10 @@ Standing rules for every packet: Sonnet subagent, no delegation, checkpoint disc
 
 ## SP-2 — Drift-free, honest clocks
 
-**Why:** a countdown that stutters (ticks at 1.3s intervals), jumps after tab-switch, or shows a stale "2h left" after the laptop slept reads as *the system lies about time* — subconsciously fatal for a tool whose core metaphor is "countdown as budget" (UX-INV-4).
+**Why:** a countdown that stutters (ticks at 1.3s intervals), jumps after tab-switch, or shows a stale "2h left" after the laptop slept reads as _the system lies about time_ — subconsciously fatal for a tool whose core metaphor is "countdown as budget" (UX-INV-4).
 
 **Contract:**
+
 - Replace naive `setInterval(1000)` ticking (in `useCountdown` and TodayMoments' interim session) with wall-clock-anchored ticking: compute remaining from a fixed anchor timestamp (`endAt` or `startedAt + total`) on every tick; schedule the next tick at the next real second boundary (`setTimeout(1000 - (Date.now() % 1000))`). Elapsed time is thus ALWAYS derived, never accumulated — sleep/throttle cannot corrupt it.
 - On `visibilitychange` → visible: recompute immediately (no waiting up to 1s showing stale numbers).
 - When tab hidden: stop scheduling ticks (battery + honesty; recompute on return).
@@ -42,6 +44,7 @@ Standing rules for every packet: Sonnet subagent, no delegation, checkpoint disc
 **Why:** proportional digits make a ticking countdown wobble horizontally; a count badge appearing shifts a whole row. Users perceive jiggle as cheapness.
 
 **Contract:**
+
 - `font-variant-numeric: tabular-nums` on EVERY changing number: countdowns (hero, schedule rows), count badges (PipelineOverview, moment counts, SideRail days-late), ritual counts. Grep-audit all moments components for rendered numbers; apply a shared utility class (Tailwind `tabular-nums` exists — use it).
 - Count badges reserve space: fixed `min-width` (2ch) so 9→10 doesn't shift siblings; badges for count 0 render as an empty reserved slot or a stable "0", never unmount (pick per component's truthfulness: pending-triage 0 shows "0" — truthful idle; never collapse).
 - Toast: already `position: fixed` (no layout shift) — verify and add a regression test that toast mount does not change document height.
@@ -54,6 +57,7 @@ Standing rules for every packet: Sonnet subagent, no delegation, checkpoint disc
 **Why:** UIs feel "considered" when things arrive gently and leave quickly; equal-duration exits feel sluggish. Nobody articulates this; everyone feels it.
 
 **Contract:**
+
 - All overlay/sheet/toast transitions use the P1 motion tokens ONLY (`--motion-fast/base/slow`, `--motion-ease`); grep for literal `ms` durations in moments components and replace.
 - Exit durations = `--motion-fast` (90ms); enter = `--motion-base` (160ms). Apply to CaptureOverlay, CommandPalette, MomentSheet, toast, ritual mount.
 - Every new transition/keyframe is inside the existing `prefers-reduced-motion` gating pattern (scoped utility classes; do NOT edit `globals.css` — if a needed class doesn't exist, use inline `style` with the CSS vars, the established fallback in these components).
@@ -67,6 +71,7 @@ Standing rules for every packet: Sonnet subagent, no delegation, checkpoint disc
 **Why:** losing three words of a capture to a stray Esc teaches the hand not to trust the box. Silent, cumulative, deadly for a capture-first product (FR-026/FR-027 spirit, client-side complement).
 
 **Contract:**
+
 - `CaptureOverlay`: unsaved input survives close→reopen within the session. Lift the draft to a `useState` in TodayMoments (or sessionStorage key `lifeos.moments.captureDraft` — choose sessionStorage so it survives accidental route changes; clear ONLY on successful save). Esc closes the overlay but preserves the draft; reopening shows it with cursor at end; a small muted "draft restored" hint renders when non-empty on open.
 - Same pattern for the CommandPalette query? NO — palettes should reset (convention). Only capture.
 - The re-entry ritual must not clobber an open capture draft (ritual renders instead of moments, but sessionStorage draft persists — assert).
@@ -76,9 +81,10 @@ Standing rules for every packet: Sonnet subagent, no delegation, checkpoint disc
 
 ## SP-6 — Undo over confirm (reversible-by-default actions)
 
-**Why:** confirm dialogs tax every action to insure the rare mistake; undo taxes only the mistake. Systems with undo feel *safe to move fast in* — the deepest subconscious trust there is. All targeted transitions are already designed-reversible (backlog/unplan/carry are normal transitions).
+**Why:** confirm dialogs tax every action to insure the rare mistake; undo taxes only the mistake. Systems with undo feel _safe to move fast in_ — the deepest subconscious trust there is. All targeted transitions are already designed-reversible (backlog/unplan/carry are normal transitions).
 
 **Contract:**
+
 - Extend the toast slot in TodayMoments to `{ message, action?: { label: "Undo", run(): void } }`, 6s duration when an action is present (2.5s otherwise), still single-slot, still `aria-live="polite"`; Undo is a real button (focusable; NOT auto-focused).
 - Wire undo for: ritual recovery-accept (undo = `applyTaskReviewTransition`-equivalent context action back to backlog — ground which existing context action reverses `promoteBacklogTask`; if none exists cleanly, drop this one and note it), carry-forward in CloseMoment (reverse via existing action if one exists), swap in the C1 refusal surface ONCE C1 lands (coordinate: this sub-item only after #404 merges).
 - HARD BOUND: only wire undo where a real reversing context action already exists. NEVER add data-layer writes for undo in this packet; list the gaps found in the PR body as future data-layer candidates.
@@ -91,6 +97,7 @@ Standing rules for every packet: Sonnet subagent, no delegation, checkpoint disc
 **Why:** "in 3h 28m" here, "3 hours" there, "205 min" elsewhere — each inconsistency is a micro-translation the reader performs. One formatter = zero translations.
 
 **Contract:**
+
 - N `components/moments/formatTime.ts`: `formatCountdown(ms)` ("2h 58m left", "48s left"), `formatRelative(iso, now)` ("in 3h 28m", "8 days ago"), `formatClock(iso)` (locale short time) — pure, `now`-injected, unit-tested including pluralization (1 day/2 days) and boundaries (59s→1m).
 - Sweep `components/moments/**` + `lib/reEntry/summary.ts` consumers for hand-rolled time strings; route all through the formatter. Do NOT touch LifeOSCockpit's stage-shell strings (P7 rewrites those surfaces anyway).
 - Pluralization helper `plural(n, "task")` used by every count copy in moments (grep-audit).

@@ -20,7 +20,7 @@ most).
 never interruptive), occasionally — not daily; sampled a few times a
 month — one tap: "how did today sit with you?" on a 3-point scale
 (lighter / even / heavier). Sanctuary-compatible (skippable forever, no
-streak, absence never counted), stored as the only *subjective* row in
+streak, absence never counted), stored as the only _subjective_ row in
 the system. Its sole consumers: the Mirror (trend line against the proxy
 gauges — do they actually track calm?) and stage-gate reviews (a stage
 that improves throughput but not the gauge is failing its purpose).
@@ -122,7 +122,7 @@ Two stakeholders no pass has named:
    record are — decades out — memoir raw material and the answer to
    "what did I actually do with those years?" Design cost today: near
    zero (Life Archive already durable-formats everything). Design
-   *awareness* today: when writing rollup/Season prompts, record for
+   _awareness_ today: when writing rollup/Season prompts, record for
    MEANING, not just action — keep the one line about why it mattered.
    The system is quietly writing the best autobiography its operator
    will ever have. Let it know that.

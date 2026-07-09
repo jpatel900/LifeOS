@@ -6,6 +6,7 @@ Last full update: 2026-07-05 (Fable's final session).
 ## If you are here to BUILD LifeOS things
 
 Read in this order, nothing else first:
+
 1. **vision-execution-companion.md** — BINDING contracts for every vision
    item: WHAT/LANDS/WHEN/SPEC/DONE-WHEN/NEVER + Batch order A–D. This is
    your work source. The vision prose files are background only.
@@ -22,6 +23,7 @@ uncertainty escalates to the owner and never merges.
 ## If you are here to UNDERSTAND the vision (background)
 
 The four-pass triptych+1, in reading order:
+
 - **vision-fable-final-pass.md** — pass 1: features. Keep/shrink/evolve/
   add. Headliners: Initiative Ladder, Triggers, Compost, Mirror,
   Moments×Map, Rehearsal, Life Archive, apparatus sunset.

@@ -9,17 +9,17 @@
 
 **Strict: ★ Usability > ★ Enjoyability > everything else.**
 
-- **Usability** = *functionality as a baseline* + *ease-of-use, but only up to the point where it doesn't balloon implementation time/cost.* Ship the baseline; add ease-of-use where it's cheap; do **not** gold-plate.
+- **Usability** = _functionality as a baseline_ + _ease-of-use, but only up to the point where it doesn't balloon implementation time/cost._ Ship the baseline; add ease-of-use where it's cheap; do **not** gold-plate.
 - Because usability's remaining work is largely owner-gated, agent build-capacity serves usability first via the agent-buildable usability items (U4 icons, U2b drift-prevention) and by keeping the owner queue crisp — **then** enjoyability (E1→E3).
 - The parked-work rotation is a **small capped slice, subordinate to both paths** — it exists so set-aside work doesn't rot ("due share from time to time"), never ahead of a path item.
 
 ## The two fronts
 
-**★ Usability** — *"Can I live in it, on my real data, without breakage or lies?"*
+**★ Usability** — _"Can I live in it, on my real data, without breakage or lies?"_
 Foundation (reliability floor G1–G4) is DONE. What remains is **owner-gated at the root**, so "pushing usability" means keeping the owner queue crisp and unblocking Jay — not agent build-work.
 
-**★ Enjoyability** — *"Does it act for me? Do I reach for it unprompted?"*
-Foundation (moments surface + SP-1..10 polish) is DONE. What remains is **agent-buildable now**: make the system *act* on decisions instead of just recording them, remove nagging, make the brief worth opening.
+**★ Enjoyability** — _"Does it act for me? Do I reach for it unprompted?"_
+Foundation (moments surface + SP-1..10 polish) is DONE. What remains is **agent-buildable now**: make the system _act_ on decisions instead of just recording them, remove nagging, make the brief worth opening.
 
 These are **not two symmetric tracks.** Usability's next moves are owner actions; enjoyability's are build work. The map tags every ★ card with its leverage so this asymmetry stays visible:
 `OWNER-DRIVEN` · `AGENT-BUILDABLE` · `USAGE-GATED`.
@@ -27,8 +27,9 @@ These are **not two symmetric tracks.** Usability's next moves are owner actions
 ## The shared linchpin — the live-in-it week
 
 Both fronts converge on **one week of Jay as daily driver**. It cannot start until the owner queue clears (U1 ratify #251, U2 migrations) and prod holds real data (U3 populate). That week is the only place where:
+
 - the S9 data-dependent surfaces (`override_records`, `execution_sessions`) light up — they **cannot** be seeded in CI or smoke; and
-- the only honest signal for *what is actually enjoyable vs annoying* is generated.
+- the only honest signal for _what is actually enjoyable vs annoying_ is generated.
 
 Build enjoyability features before the week; **validate both fronts during it.**
 

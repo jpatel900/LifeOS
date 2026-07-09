@@ -36,7 +36,7 @@ replaceable without loss — including you.
 ### The unit of survival
 
 Before building anything, answer: **what is the unit that must stay healthy
-long-term?** It is never the system itself. It is the *relationship* between
+long-term?** It is never the system itself. It is the _relationship_ between
 the system and the people it serves (system–person dyad, company–customer,
 org–employee). A feature/policy/process that strengthens the system but
 degrades that relationship is a **defect**, no matter how impressive.
@@ -51,6 +51,7 @@ Every durable system has these layers. Build and maintain all six; keep
 each fact in exactly one layer.
 
 ### Layer 1 — Purpose
+
 One line stating what the system is FOR, phrased as the human outcome, not
 the mechanism. (LifeOS example: "reduce anxiety by making the picture of a
 person's work visible, coherent, absorbable.") Plus the unit-of-survival
@@ -59,7 +60,9 @@ strengths, weaknesses, and the compensation rules the system must apply.
 The profile is a design input to every layer below, not a nice-to-have.
 
 ### Layer 2 — Doctrine
+
 The decided things. Contains:
+
 - **A north-star decision record**: the staged roadmap (see Part IV), the
   trust ladder (Part V), and the spine/perimeter rule (below).
 - **Requirements in a fixed house format**, each with acceptance criteria
@@ -81,6 +84,7 @@ the spine, the answer is: it becomes a perimeter contract or it doesn't
 happen.
 
 ### Layer 3 — The Spine (the value loop)
+
 The smallest complete loop that delivers the purpose end-to-end. For
 software: capture → process → decide → act → review. For a business: lead →
 promise → deliver → collect → learn. Build it minimal, truthful (no silent
@@ -89,8 +93,10 @@ failures — every failure produces a visible signal), and reversible-first
 approval, forever).
 
 ### Layer 4 — Delivery Apparatus
+
 How work gets done: who/what implements, how work is specified, how it is
 verified and merged/adopted.
+
 - **Contracts, not vibes**: each unit of work has a written contract (issue
   body, work order, SOP) that a mediocre executor could implement
   faithfully. The contract is frozen once agreed; conflicts discovered
@@ -112,7 +118,9 @@ verified and merged/adopted.
   Process volume is not trust; gates are. When gates hold, ceremony goes.
 
 ### Layer 5 — Learning Loops
+
 The system watches its own decisions:
+
 - Every suggestion the system (or a role) makes is RECORDED with a stable
   policy id; every human override/acceptance is recorded against it.
 - Recalibration is computed from evidence (e.g. median over ≥N samples)
@@ -124,7 +132,9 @@ The system watches its own decisions:
   override rates spike. Demotion must be automatic; promotion never is.
 
 ### Layer 6 — Meta-Learning
+
 The system remembers its own history:
+
 - **FAILURES chronicle**: every significant failure, root cause, and the
   fence built — so no battle is fought twice.
 - **PLAYS chronicle**: every pattern that worked, so wins are repeatable.
@@ -238,24 +248,24 @@ proceed.
 
 The method is identical; only the nouns change.
 
-| Concept | Software | Organization / business |
-| --- | --- | --- |
-| Spine | Core data model + approval-gated writes | The commitment ledger: who promised what, decision log, cash truth |
-| Perimeter contract | API/one-way integration | Vendor/partner/department interface agreement |
-| Requirement + non-goals | FR in REQUIREMENTS.md | Policy/OKR with explicit "we will not" |
-| Guard test in CI | Automated test suite | Checklist gate, audit rule, four-eyes rule |
-| One-way door (T2) | Prod schema, security, workflows | Contracts signed, money moved, people hired/fired, public statements |
-| Work contract | Issue body, frozen | Work order / SOP / brief, frozen |
-| Cheap-lane executor | Smaller model / codegen | Contractor, junior, agency |
-| Merge review | PR review vs contract | Deliverable acceptance vs brief |
-| Trust ladder | AI autonomy per action class | Delegation ladder per decision class |
-| Override record | suggestion/override rows | Decision review: "did we accept the recommendation?" |
-| Watchdog | Cron checks, canaries | KPI alarms, exception reports |
-| FAILURES/PLAYS | Repo chronicle files | Post-mortems + playbook library |
-| Coherence registry | requirements↔code↔tests index | Policy↔process↔audit traceability |
-| SYSTEM MAP | One-page repo orientation doc | One-page operating manual |
-| Usage gate | Feature-adoption metrics | Revenue/retention/habit metrics before scaling |
-| Succession drill | Mid-tier model cold-start test | "New hire runs it from the manual" test |
+| Concept                 | Software                                | Organization / business                                              |
+| ----------------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| Spine                   | Core data model + approval-gated writes | The commitment ledger: who promised what, decision log, cash truth   |
+| Perimeter contract      | API/one-way integration                 | Vendor/partner/department interface agreement                        |
+| Requirement + non-goals | FR in REQUIREMENTS.md                   | Policy/OKR with explicit "we will not"                               |
+| Guard test in CI        | Automated test suite                    | Checklist gate, audit rule, four-eyes rule                           |
+| One-way door (T2)       | Prod schema, security, workflows        | Contracts signed, money moved, people hired/fired, public statements |
+| Work contract           | Issue body, frozen                      | Work order / SOP / brief, frozen                                     |
+| Cheap-lane executor     | Smaller model / codegen                 | Contractor, junior, agency                                           |
+| Merge review            | PR review vs contract                   | Deliverable acceptance vs brief                                      |
+| Trust ladder            | AI autonomy per action class            | Delegation ladder per decision class                                 |
+| Override record         | suggestion/override rows                | Decision review: "did we accept the recommendation?"                 |
+| Watchdog                | Cron checks, canaries                   | KPI alarms, exception reports                                        |
+| FAILURES/PLAYS          | Repo chronicle files                    | Post-mortems + playbook library                                      |
+| Coherence registry      | requirements↔code↔tests index           | Policy↔process↔audit traceability                                    |
+| SYSTEM MAP              | One-page repo orientation doc           | One-page operating manual                                            |
+| Usage gate              | Feature-adoption metrics                | Revenue/retention/habit metrics before scaling                       |
+| Succession drill        | Mid-tier model cold-start test          | "New hire runs it from the manual" test                              |
 
 ---
 
@@ -323,8 +333,8 @@ from it without further permission until a gate says otherwise.
 
 ---
 
-*Provenance: distilled 2026-07-05 from the LifeOS build — a single-user
+_Provenance: distilled 2026-07-05 from the LifeOS build — a single-user
 life-operating system whose development pipeline (multi-agent, dual-lane,
 gate-governed) itself obeyed every rule above. The method survived model
 downgrades, tool failures, and platform outages precisely because the
-capability was in these artifacts and the trust was in the gates.*
+capability was in these artifacts and the trust was in the gates._

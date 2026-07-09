@@ -26,7 +26,7 @@ and the free-rein answer is different for each:
   is scar tissue. Every piece is a fence around a 2026-era tool failure:
   Codex strandings, token exhaustion, weak implementer models, classifier
   quirks. Scar tissue was correct when cut, but it must not calcify into
-  identity. The project should *plan to shed it*.
+  identity. The project should _plan to shed it_.
 
 Everything below follows from that split.
 
@@ -61,8 +61,8 @@ this for documents; do the same for process.
 
 ### 2a. The Initiative Ladder (the single highest-leverage idea in this pass)
 
-The trust ladder governs what LifeOS may *do*. Nothing governs when it may
-*speak*. Attention is the scarcest resource in the dyad, and every planned
+The trust ladder governs what LifeOS may _do_. Nothing governs when it may
+_speak_. Attention is the scarcest resource in the dyad, and every planned
 surface (daily brief, aging nudges, recovery proposals, future Hermes
 presence, future notifications — currently a blanket non-goal) is an
 unpriced withdrawal from the same account.
@@ -71,7 +71,7 @@ unpriced withdrawal from the same account.
 for interruption rights.**
 
 - I0 — answers only when asked (ask-your-cockpit).
-- I1 — surfaces at *natural moments the user initiates* (the brief, Close,
+- I1 — surfaces at _natural moments the user initiates_ (the brief, Close,
   re-entry ritual). Everything in Stage 1 lives here. Zero unprompted pings.
 - I2 — may interject mid-day, but only within an explicit attention budget
   (e.g. 1/day), and only for evidence-strong classes ("the 3pm block's
@@ -88,7 +88,7 @@ export), and Stage 4 shadow-mode (rehearse interjections silently, measure
 would-have-been-welcome rate before graduating a class).
 
 Chief-of-staff framing: a great chief of staff is not the one who does the
-most — it's the one who interrupts you *exactly* when you'd want and never
+most — it's the one who interrupts you _exactly_ when you'd want and never
 otherwise. That is a learned, per-class skill. Make it the same earned-trust
 machinery you already built.
 
@@ -100,7 +100,7 @@ high-volume, low-stakes, fully reversible, rich override data from day one
 (#312 reject-learning already records it). **Proposal: name "auto-triage for
 high-confidence capture classes" as the intended first trust-ladder
 graduation** (Stage 4 brief material, FR reservation now). A capture that
-parses cleanly into a known area with known shape should be *born triaged*,
+parses cleanly into a known area with known shape should be _born triaged_,
 with an undo affordance, once the evidence supports it. The best inbox is
 the one you rarely visit; triage-the-stage remains as the exception queue.
 
@@ -121,7 +121,7 @@ on self-report; the Mirror measures them.
 
 ### 2d. Moments × Map — the spatial grammar (UX north star v3)
 
-ADR 0003 gave LifeOS its temporal grammar (Start/Flow/Close — *when* things
+ADR 0003 gave LifeOS its temporal grammar (Start/Flow/Close — _when_ things
 appear). The task node maps (FR-031 reservation) are the first piece of the
 matching **spatial grammar**. Full-size version: one continuous zoomable
 surface — life areas as regions (area-colored), projects as territories,
@@ -142,12 +142,12 @@ as one paragraph in STAGE_BRIEFS.md now so the taste survives model churn.
 
 ### 3a. Triggers (prospective memory)
 
-"When X happens, do Y" — *context*-conditioned intentions, not
+"When X happens, do Y" — _context_-conditioned intentions, not
 time-conditioned ones: "next time I talk to Darpan, raise the account plan";
 "when the SCE contract closes, invoice"; "if the canary opens twice in a
 week, escalate." Time triggers are calendar rows; context triggers have no
 home in any commercial tool, and holding them is half of what a human chief
-of staff is *for*. Schema is small (trigger_condition, intended_action,
+of staff is _for_. Schema is small (trigger_condition, intended_action,
 arm/fire/expire states); firing starts I1-only (surface in brief when
 context plausibly matched — person-linked captures, area events). This is
 the strongest Stage 2 card candidate in this document: it composes with
@@ -174,7 +174,7 @@ S7 wins and S8 rollups aggregate. One level up sits identity: quarterly,
 the approved weekly/monthly rollups compose into a short evidence-backed
 narrative — "this season you shipped X, held the line on Y, recovered from
 Z" — wins-only framing, misses appear solely as recovered/rerouted (guilt
-walls are defects). Anxiety reduction has two tenses: *today's* picture
+walls are defects). Anxiety reduction has two tenses: _today's_ picture
 (built) and trust in one's own track record (unbuilt). A person with
 starting-friction and collapse-after-missed-block patterns needs
 system-held proof that he finishes things. Nearly free: it's a fourth
@@ -182,11 +182,11 @@ altitude on the existing rollup ladder, same approval mechanics.
 
 ### 3d. Rehearsal — what-if planning
 
-Shadow-mode rehearsal exists for Stage-4 agents; give the *person* the same
+Shadow-mode rehearsal exists for Stage-4 agents; give the _person_ the same
 tool. Drag a hypothetical commitment onto the week (or ask: "what if I take
 the RiseUp thing?") → deterministic ripple preview: which focus budgets
 shrink, which waiting-ons slip, what the load rule says. No AI needed —
-free/busy math + the load rule, rendered on the map. Saying *no* is the
+free/busy math + the load rule, rendered on the map. Saying _no_ is the
 operator's hardest move; a picture of the cost is the strongest possible
 support for it. (Also the natural home of the one-in-one-out rule at
 decision time, not after.)
@@ -201,7 +201,7 @@ hostage, including to itself. Also the honest backstop for every
 sustainability question: if the dyad ever stops being healthy, leaving must
 be cheap. Trivial to build (it's SQL + serialization), disproportionate
 trust payoff. Also doubles as the Hermes/perimeter data diet: perimeter
-systems get *slices of the export format*, never DB access — the Operator
+systems get _slices of the export format_, never DB access — the Operator
 Profile export (#293) becomes v1 of this format rather than a bespoke
 artifact.
 
@@ -209,8 +209,8 @@ artifact.
 
 ## 4. FUTURE — strategic notes
 
-- **Hermes**: define the Operator Profile export as a *versioned artifact of
-  the Life Archive format* now (Stage 1 owns the profile; the contract is
+- **Hermes**: define the Operator Profile export as a _versioned artifact of
+  the Life Archive format_ now (Stage 1 owns the profile; the contract is
   one page). Add one-way "focus block started/ended" events to the eventual
   contract so body-doubling presence needs zero LifeOS access. Hermes
   inherits interruption rights from the Initiative Ladder — it may never
@@ -220,7 +220,7 @@ artifact.
   system. Capability-in-artifacts taken to its conclusion: the system's
   long-term survival must not require frontier intelligence, mine included.
 - **Scope beyond productivity**: health, finance, relationships will knock.
-  The answer is already in the architecture: they enter as *areas* with
+  The answer is already in the architecture: they enter as _areas_ with
   charters, or they stay perimeter. No new subsystems, ever. Write this
   single sentence into STAGE_BRIEFS so future enthusiasm meets it early.
 - **The dyad, instrumented**: every proposal above routes through the same
@@ -235,7 +235,7 @@ artifact.
 1. NOW: moments P7 → G1 floor → S5–S9 in the new shell. (No change.)
 2. Cheap doctrine writes, this wave: FR reservations for Initiative Ladder +
    auto-triage-first + compost; STAGE_BRIEFS paragraphs for spatial grammar
-   + scope-beyond-productivity; FAILURES.md retest-condition convention.
+   - scope-beyond-productivity; FAILURES.md retest-condition convention.
 3. Stage 2 card (#292) candidates, evidence-gated: Triggers, Compost,
    Mirror v1 (instrumented usage gates), Rehearsal v0 (free/busy ripple).
 4. Stage 3/4 briefs absorb: Initiative Ladder I2/I3, Hermes profile-export

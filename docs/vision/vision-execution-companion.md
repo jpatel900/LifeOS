@@ -25,6 +25,7 @@ STAGE_BRIEFS (Stage 2 section).
 WHEN: Buildable after moments shell + S5–S9 exist (it needs surfaces to
 hide). Stage 2 candidate.
 SPEC:
+
 - Signal: reuse G2's absence detection (absence.lastActivityAt). Rupture =
   no meaningful activity for >= 7 consecutive days (constant, in config
   not prompt), OR dismissal-rate > 60% across >= 10 proactive surfaces in
@@ -39,13 +40,13 @@ SPEC:
   everything" affordance (fallibility axiom: visible exit).
 - Copy: blame-free, system-owns-it tone ("I've made myself small. Start
   anywhere."). NO summary of what was missed on first screen.
-DONE-WHEN: simulated 8-day absence in a test renders the minimal face;
-one use of a hidden feature restores it; "show everything" restores all;
-zero guilt-language strings (grep the diff for missed/behind/overdue in
-new copy).
-NEVER: delete data; show missed-item counts on the minimal face; require
-more than one click to exit minimal mode; trigger on vacation-like
-patterns the owner pre-declared (respect sanctuary marks, item 5).
+  DONE-WHEN: simulated 8-day absence in a test renders the minimal face;
+  one use of a hidden feature restores it; "show everything" restores all;
+  zero guilt-language strings (grep the diff for missed/behind/overdue in
+  new copy).
+  NEVER: delete data; show missed-item counts on the minimal face; require
+  more than one click to exit minimal mode; trigger on vacation-like
+  patterns the owner pre-declared (respect sanctuary marks, item 5).
 
 ## 2. TRIGGERS (context-conditioned prospective memory)
 
@@ -55,6 +56,7 @@ LANDS: New FR in REQUIREMENTS.md. Stage 2 card candidate — add to #292
 comment.
 WHEN: Stage 2 (needs people table S3 + contextAssembly S2, both merged).
 SPEC:
+
 - Schema (additive migration): triggers(id, user_id, condition_type
   enum('person','area_event','date_window','manual_review'),
   condition_ref (uuid or text), intention_text, status
@@ -69,12 +71,12 @@ SPEC:
 - Lifecycle: armed → fired (shown; one-tap: done / re-arm / edit) ;
   unfired after expires_at → composted quietly (counts in weekly compost
   line, never listed as failure).
-DONE-WHEN: create trigger on person X; capturing a note linking X
-surfaces it in next brief render; expiry composts silently; suggestion/
-override records written with policy_id "trigger_surface.v1".
-NEVER: AI-invented triggers in v1; notification delivery; treating an
-expired trigger as a missed commitment (it is not action truth; it is a
-held thought).
+  DONE-WHEN: create trigger on person X; capturing a note linking X
+  surfaces it in next brief render; expiry composts silently; suggestion/
+  override records written with policy_id "trigger_surface.v1".
+  NEVER: AI-invented triggers in v1; notification delivery; treating an
+  expired trigger as a missed commitment (it is not action truth; it is a
+  held thought).
 
 ## 3. INITIATIVE LADDER (interruption rights, earned)
 
@@ -85,6 +87,7 @@ LANDS: NOW as doctrine (cheap): FR reservation in REQUIREMENTS ("FR —
 Initiative ladder; all current surfaces are I1-capped") + ¶ in
 STAGE_BRIEFS Stage 3/4 sections + note on #293. Code later (Stage 3+).
 SPEC (doctrine text to write verbatim-ish):
+
 - Every proactive surface declares an initiative class in code/config.
 - Stage 1–2 hard cap: nothing above I1. I2 unlocks Stage 3 (budget: max 1
   interjection/day, evidence-strong classes only). I3 unlocks Stage 4,
@@ -95,10 +98,10 @@ SPEC (doctrine text to write verbatim-ish):
   rung, 14-day cooldown before re-graduation eligibility.
 - Hermes/notification work MUST cite this FR; the "no notifications"
   non-goal becomes "capped at I1 until graduation," not deleted.
-DONE-WHEN (doctrine phase): FR merged with the numbers above; #293 note
-links it; graveyard unchanged.
-NEVER: implement I2+ before Stage 3 gate; exempt any surface class;
-let delight events (item 7) bypass this ladder.
+  DONE-WHEN (doctrine phase): FR merged with the numbers above; #293 note
+  links it; graveyard unchanged.
+  NEVER: implement I2+ before Stage 3 gate; exempt any surface class;
+  let delight events (item 7) bypass this ladder.
 
 ## 4. TRUST KERNEL (one primitive under all ladders)
 
@@ -178,8 +181,8 @@ NEVER: raise a budget inside a feature PR "because it needed more."
   evidence_metric + review_window; divergence sustained one window →
   amendment PROPOSAL in weekly review. NEVER silent profile edits.
 - **Voice-as-policy**: Stage 3+. Top ~20 system strings get variant sets
-  + policy ids; selection by acceptance data; graveyard bans
-  engagement-bait copy. Requires trust kernel.
+  - policy ids; selection by acceptance data; graveyard bans
+    engagement-bait copy. Requires trust kernel.
 - **Body-as-weather**: Stage 3+ brief ¶: one-way wearable import →
   day-condition enum (clear/low) → focus proposal input. NEVER scores,
   streaks, or health advice. Graveyard line now.
@@ -288,6 +291,7 @@ NEVER: raise a budget inside a feature PR "because it needed more."
 ## 7d. BATCH A ASSEMBLY INSTRUCTIONS (the exact docs PR)
 
 One branch, one PR, words only. Target files and what goes in each:
+
 1. `docs/REQUIREMENTS.md`: new FRs — Initiative Ladder (item 3 numbers),
    Adaptive Surface Area/rupture (item 1, mark Stage 2), Compost (§7),
    Purpose Gauge (7b), Closure Ritual (7b), Life Archive (§7);
@@ -308,10 +312,10 @@ One branch, one PR, words only. Target files and what goes in each:
 5. Comments (not files): #292 — Triggers/Mirror/Rehearsal/Gardens/
    Deliberations as Stage-2 card candidates + second-dyad note; #293 —
    link the merged PR as "vision harvest landed."
-Contract-check before opening the PR: every FR has non-goals; no code;
-no schema files touched; docRegistry untouched (these are all allowlisted
-canonical files). Owner reviews once. If any target section no longer
-exists on main, STOP and escalate — do not invent a new home.
+   Contract-check before opening the PR: every FR has non-goals; no code;
+   no schema files touched; docRegistry untouched (these are all allowlisted
+   canonical files). Owner reviews once. If any target section no longer
+   exists on main, STOP and escalate — do not invent a new home.
 
 ## 8. SUGGESTED BATCH ORDER FOR A LESSER AGENT
 
