@@ -40,6 +40,22 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/OBSERVABILITY_RUNBOOK.md",
   "docs/VERCEL_PRODUCTION_CHECKLIST.md",
   "docs/agent/CODEX_PROMPT_TEMPLATE.md",
+  "docs/agent/HANDOVER.md",
+  "docs/vision/vision-fable-final-pass.md",
+  "docs/vision/vision-fable-deeper-pass.md",
+  "docs/vision/vision-fable-wider-pass.md",
+  "docs/vision/vision-fable-horizon-pass.md",
+  "docs/vision/vision-execution-companion.md",
+  "docs/vision/README-VISION-INDEX.md",
+  "docs/vision/THE-METHOD-self-sustaining-systems.md",
+  "docs/vision/THE-METHOD-companion-templates.md",
+  "docs/implementation-planning/plan-moments-shell.md",
+  "docs/implementation-planning/plan-daily-driver-floor.md",
+  "docs/implementation-planning/plan-subtle-polish.md",
+  "docs/implementation-planning/plan-coherence-framework.md",
+  "docs/implementation-planning/plan-task-map-contract.md",
+  "docs/implementation-planning/plan-dual-critical-path.md",
+  "docs/implementation-planning/U3-live-in-it-onramp.md",
 ]);
 
 const CANONICAL_ALLOWLIST_PATTERNS = [

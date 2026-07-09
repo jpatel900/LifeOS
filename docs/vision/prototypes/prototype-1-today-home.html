@@ -1,0 +1,1435 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LifeOS — Today</title>
+    <style>
+      :root {
+        --bg: #f7f6f3;
+        --surface: #ffffff;
+        --ink: #1d1c1a;
+        --ink-soft: #6b6862;
+        --ink-faint: #a3a09a;
+        --line: #ecebe6;
+        --line-strong: #e0ded7;
+        --accent: #3b5bdb;
+        --accent-soft: #edf0fd;
+        --accent-ink: #2b45b0;
+        --green: #2f9e6f;
+        --amber: #c98a2b;
+        --red: #cf5a54;
+        --shadow-sm:
+          0 1px 2px rgba(30, 28, 24, 0.05), 0 1px 1px rgba(30, 28, 24, 0.03);
+        --shadow-lg:
+          0 24px 60px rgba(30, 28, 24, 0.14), 0 4px 12px rgba(30, 28, 24, 0.06);
+        --radius: 16px;
+        --radius-sm: 10px;
+        --font:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+          sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        line-height: 1.45;
+        overflow-x: hidden;
+      }
+      ::selection {
+        background: var(--accent-soft);
+      }
+
+      /* ---------- shell ---------- */
+      .shell {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 40px 32px 120px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 40px;
+      }
+      .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+      }
+      .brand .mark {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+      .datestr {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+
+      /* moment switcher */
+      .moments {
+        display: flex;
+        gap: 4px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px;
+        box-shadow: var(--shadow-sm);
+      }
+      .moment-tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--ink-soft);
+        padding: 7px 15px;
+        border-radius: 999px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        transition:
+          color 0.12s,
+          background 0.12s;
+      }
+      .moment-tab .k {
+        font-size: 10px;
+        color: var(--ink-faint);
+        border: 1px solid var(--line-strong);
+        border-radius: 5px;
+        padding: 1px 5px;
+        font-weight: 600;
+      }
+      .moment-tab:hover {
+        color: var(--ink);
+      }
+      .moment-tab.active {
+        background: var(--ink);
+        color: #fff;
+      }
+      .moment-tab.active .k {
+        color: rgba(255, 255, 255, 0.6);
+        border-color: rgba(255, 255, 255, 0.25);
+      }
+
+      /* ---------- header line ---------- */
+      .greeting {
+        margin-bottom: 4px;
+      }
+      .greeting h1 {
+        font-size: 30px;
+        font-weight: 620;
+        letter-spacing: -0.02em;
+      }
+      .subline {
+        font-size: 15px;
+        color: var(--ink-soft);
+        margin-bottom: 32px;
+      }
+      .subline b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      /* ---------- layout grid ---------- */
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 28px;
+        align-items: start;
+      }
+      @media (max-width: 880px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ---------- the primary moment card (first move) ---------- */
+      .firstmove {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 30px 30px 26px;
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+      }
+      .firstmove::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--accent);
+      }
+      .fm-eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .fm-eyebrow .tag {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent-ink);
+        background: var(--accent-soft);
+        padding: 4px 10px;
+        border-radius: 999px;
+      }
+      .fm-eyebrow .area {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+      .fm-title {
+        font-size: 23px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin-bottom: 8px;
+      }
+      .fm-why {
+        font-size: 14px;
+        color: var(--ink-soft);
+        margin-bottom: 22px;
+        max-width: 46ch;
+      }
+      .fm-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--accent);
+        color: #fff;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        padding: 13px 22px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(59, 91, 219, 0.28);
+        transition:
+          transform 0.08s,
+          box-shadow 0.12s;
+      }
+      .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(59, 91, 219, 0.32);
+      }
+      .btn-primary:active {
+        transform: translateY(0);
+      }
+      .btn-primary .k {
+        font-size: 11px;
+        background: rgba(255, 255, 255, 0.18);
+        padding: 2px 6px;
+        border-radius: 5px;
+      }
+      .btn-ghost {
+        background: transparent;
+        border: none;
+        color: var(--ink-soft);
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        padding: 8px 6px;
+        border-radius: 8px;
+        transition: color 0.12s;
+      }
+      .btn-ghost:hover {
+        color: var(--ink);
+      }
+      .fm-est {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+
+      /* ---------- schedule (countdown-rendered) ---------- */
+      .section-h {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin: 32px 4px 12px;
+      }
+      .section-h h2 {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+      .section-h .hint {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+
+      .sched {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+      }
+      .block {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--line);
+        position: relative;
+      }
+      .block:last-child {
+        border-bottom: none;
+      }
+      .block .cd {
+        min-width: 92px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .block .cd .big {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .block .cd .lbl {
+        font-size: 11px;
+        color: var(--ink-faint);
+      }
+      .block .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--line-strong);
+        flex: none;
+      }
+      .block.now .dot {
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+      }
+      .block .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .block .body .t {
+        font-size: 14.5px;
+        font-weight: 500;
+      }
+      .block .body .m {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+      .block.now {
+        background: linear-gradient(90deg, var(--accent-soft), transparent 60%);
+      }
+      .block.now .body .t {
+        color: var(--accent-ink);
+      }
+      .block.done .body .t {
+        color: var(--ink-faint);
+        text-decoration: line-through;
+      }
+      .block.done .cd .big {
+        color: var(--ink-faint);
+      }
+      .block .pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 999px;
+      }
+      .pill.now {
+        background: var(--accent);
+        color: #fff;
+      }
+      .pill.free {
+        background: #eef4f0;
+        color: var(--green);
+      }
+
+      /* ---------- side rail ---------- */
+      .rail {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 18px 18px 16px;
+      }
+      .card h3 {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+        margin-bottom: 14px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .card h3 .count {
+        color: var(--ink-faint);
+        font-weight: 600;
+      }
+
+      /* waiting-on */
+      .wait {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .wait:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .wait:first-of-type {
+        padding-top: 0;
+      }
+      .av {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: #fff;
+      }
+      .wait .who {
+        flex: 1;
+        min-width: 0;
+      }
+      .wait .who .n {
+        font-size: 13.5px;
+        font-weight: 500;
+      }
+      .wait .who .w {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .wait .days {
+        font-size: 12px;
+        font-weight: 600;
+        text-align: right;
+        flex: none;
+      }
+      .wait .days.warn {
+        color: var(--amber);
+      }
+      .wait .days.late {
+        color: var(--red);
+      }
+      .wait .days .u {
+        font-size: 10px;
+        color: var(--ink-faint);
+        font-weight: 500;
+        display: block;
+      }
+
+      /* area health dots */
+      .health {
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+      }
+      .area-row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+      .area-row .adot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: none;
+      }
+      .adot.ok {
+        background: var(--green);
+      }
+      .adot.watch {
+        background: var(--amber);
+      }
+      .adot.risk {
+        background: var(--red);
+      }
+      .adot.idle {
+        background: var(--line-strong);
+      }
+      .area-row .an {
+        font-size: 13.5px;
+        flex: 1;
+      }
+      .area-row .as {
+        font-size: 11.5px;
+        color: var(--ink-faint);
+      }
+
+      /* ---------- capture bar ---------- */
+      .capbar {
+        position: fixed;
+        left: 50%;
+        bottom: 26px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        padding: 9px 10px 9px 18px;
+        box-shadow: var(--shadow-lg);
+        z-index: 40;
+      }
+      .capbar .lead {
+        font-size: 13px;
+        color: var(--ink-soft);
+      }
+      .capbar .lead b {
+        color: var(--ink);
+      }
+      .capbar kbd {
+        font-family: var(--font);
+        font-size: 12px;
+        font-weight: 600;
+        background: var(--ink);
+        color: #fff;
+        border-radius: 7px;
+        padding: 4px 9px;
+      }
+
+      /* ---------- capture overlay ---------- */
+      .scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(29, 28, 26, 0.28);
+        backdrop-filter: blur(3px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.14s;
+        z-index: 50;
+      }
+      .scrim.open {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .capture {
+        position: fixed;
+        left: 50%;
+        top: 22%;
+        transform: translate(-50%, -8px) scale(0.98);
+        width: min(560px, 92vw);
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 18px;
+        box-shadow: var(--shadow-lg);
+        z-index: 60;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.14s,
+          transform 0.14s;
+        overflow: hidden;
+      }
+      .capture.open {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, 0) scale(1);
+      }
+      .capture .cap-in {
+        width: 100%;
+        border: none;
+        outline: none;
+        font-family: inherit;
+        font-size: 19px;
+        padding: 22px 24px 16px;
+        color: var(--ink);
+        background: transparent;
+      }
+      .capture .cap-in::placeholder {
+        color: var(--ink-faint);
+      }
+      .capture .cap-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        border-top: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+      .capture .cap-foot .chip {
+        font-size: 11px;
+        color: var(--ink-soft);
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 10px;
+        cursor: pointer;
+      }
+      .capture .cap-foot .chip.on {
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        border-color: transparent;
+      }
+      .capture .cap-foot .save {
+        margin-left: auto;
+        color: var(--ink-soft);
+      }
+      .capture .cap-foot .save kbd {
+        background: var(--line);
+        color: var(--ink-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-family: inherit;
+        font-weight: 600;
+      }
+
+      /* toast */
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 92px;
+        transform: translate(-50%, 10px);
+        background: var(--ink);
+        color: #fff;
+        font-size: 13.5px;
+        font-weight: 500;
+        padding: 11px 18px;
+        border-radius: 999px;
+        box-shadow: var(--shadow-lg);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.2s,
+          transform 0.2s;
+        z-index: 70;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .toast.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      .toast .ok {
+        color: #7fe0af;
+      }
+
+      /* recovery banner (Flow / missed-block) */
+      .recover {
+        background: linear-gradient(180deg, #fff8ef, #fffdf9);
+        border: 1px solid #f0e2c8;
+        border-radius: var(--radius);
+        padding: 18px 22px;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .recover .ic {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: #fbecca;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 19px;
+        flex: none;
+      }
+      .recover .rbody {
+        flex: 1;
+      }
+      .recover .rbody .rt {
+        font-size: 15px;
+        font-weight: 600;
+        color: #8a6417;
+      }
+      .recover .rbody .rm {
+        font-size: 13px;
+        color: #a07c34;
+      }
+      .recover .btn-amber {
+        background: var(--amber);
+        color: #fff;
+        border: none;
+        font-family: inherit;
+        font-size: 13.5px;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+
+      /* moment view visibility */
+      [data-view] {
+        display: none;
+      }
+      [data-view].shown {
+        display: block;
+        animation: rise 0.22s ease;
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      /* flow: current block hero */
+      .flowhero {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 32px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+      .flowhero::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 3px;
+        background: var(--accent);
+      }
+      .flowhero .fh-tag {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent-ink);
+      }
+      .flowhero .fh-title {
+        font-size: 26px;
+        font-weight: 640;
+        letter-spacing: -0.015em;
+        margin: 8px 0 20px;
+      }
+      .flowhero .ring {
+        font-size: 54px;
+        font-weight: 640;
+        letter-spacing: -0.03em;
+        font-variant-numeric: tabular-nums;
+        color: var(--ink);
+      }
+      .flowhero .ring.warn {
+        color: var(--amber);
+      }
+      .flowhero .ring-lbl {
+        font-size: 13px;
+        color: var(--ink-faint);
+        margin-top: 2px;
+      }
+      .flowhero .fh-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin-top: 26px;
+      }
+
+      /* close: summary */
+      .closehero {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 30px;
+      }
+      .closehero .ch-h {
+        font-size: 22px;
+        font-weight: 620;
+        letter-spacing: -0.01em;
+        margin-bottom: 4px;
+      }
+      .closehero .ch-sub {
+        font-size: 14px;
+        color: var(--ink-soft);
+        margin-bottom: 24px;
+      }
+      .stat-row {
+        display: flex;
+        gap: 14px;
+        margin-bottom: 24px;
+      }
+      .stat {
+        flex: 1;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 14px 16px;
+      }
+      .stat .sv {
+        font-size: 24px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+      }
+      .stat .sl {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+      .carry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 0;
+        border-top: 1px solid var(--line);
+      }
+      .carry:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+      .carry .cbx {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        border: 2px solid var(--line-strong);
+        flex: none;
+      }
+      .carry .ct {
+        flex: 1;
+        font-size: 14px;
+      }
+      .carry .cmeta {
+        font-size: 12px;
+        color: var(--ink-faint);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topbar">
+        <div class="brand">
+          <span class="mark">LifeOS · Today</span>
+          <span class="datestr" id="datestr">Saturday, July 4</span>
+        </div>
+        <div class="moments" role="tablist">
+          <button class="moment-tab active" data-goto="start">
+            <span>Start</span><span class="k">1</span>
+          </button>
+          <button class="moment-tab" data-goto="flow">
+            <span>Flow</span><span class="k">2</span>
+          </button>
+          <button class="moment-tab" data-goto="close">
+            <span>Close</span><span class="k">3</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ============ START (fully built) ============ -->
+      <div data-view="start" class="shown">
+        <div class="greeting"><h1 id="hello">Good morning, Jay.</h1></div>
+        <div class="subline">
+          One clear block ahead of the noon call. <b>3 hours</b> of focus
+          available — enough for the thing that actually matters.
+        </div>
+
+        <div class="grid">
+          <div>
+            <!-- ONE primary 2-minute first move -->
+            <div class="firstmove">
+              <div class="fm-eyebrow">
+                <span class="tag">First move · 2 min</span>
+                <span class="area">Product · LifeOS structural pass</span>
+              </div>
+              <div class="fm-title">
+                Open the moments prototype and write the one sentence you're
+                testing.
+              </div>
+              <div class="fm-why">
+                Just the sentence — not the build. Starting is the whole job
+                right now; momentum handles the rest.
+              </div>
+              <div class="fm-actions">
+                <button class="btn-primary" id="startBtn">
+                  Start now <span class="k">↵</span>
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Pushed 10 min — I'll nudge you."
+                >
+                  Snooze 10m
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Swapped. Picking the next-best 2-minute move."
+                >
+                  Not this →
+                </button>
+                <span class="fm-est">then a 90-min deep block opens up</span>
+              </div>
+            </div>
+
+            <!-- schedule as countdowns -->
+            <div class="section-h">
+              <h2>Ahead of you</h2>
+              <span class="hint">times shown as countdowns</span>
+            </div>
+            <div class="sched" id="sched">
+              <div class="block done">
+                <div class="cd">
+                  <div class="big">done</div>
+                  <div class="lbl">7:10a</div>
+                </div>
+                <span class="dot"></span>
+                <div class="body">
+                  <div class="t">Coffee &amp; inbox skim</div>
+                  <div class="m">cleared · nothing urgent</div>
+                </div>
+              </div>
+              <div class="block now">
+                <div class="cd">
+                  <div class="big" data-until="now">now</div>
+                  <div class="lbl">until 11:30</div>
+                </div>
+                <span class="dot"></span>
+                <div class="body">
+                  <div class="t">Deep block — moments prototype</div>
+                  <div class="m">your protected focus window</div>
+                </div>
+                <span class="pill now" data-remain="11:30">2h 58m left</span>
+              </div>
+              <div class="block">
+                <div class="cd">
+                  <div class="big" data-until="12:00">in 3h 28m</div>
+                  <div class="lbl">12:00p</div>
+                </div>
+                <span class="dot"></span>
+                <div class="body">
+                  <div class="t">Call — Priya (roadmap sync)</div>
+                  <div class="m">30 min · she owns the review gate</div>
+                </div>
+              </div>
+              <div class="block">
+                <div class="cd">
+                  <div class="big" data-until="13:00">in 4h 28m</div>
+                  <div class="lbl">1:00p</div>
+                </div>
+                <span class="dot"></span>
+                <div class="body">
+                  <div class="t">Open — no plan yet</div>
+                  <div class="m">protect it or let it fill</div>
+                </div>
+                <span class="pill free">free</span>
+              </div>
+              <div class="block">
+                <div class="cd">
+                  <div class="big" data-until="17:30">in 8h 58m</div>
+                  <div class="lbl">5:30p</div>
+                </div>
+                <span class="dot"></span>
+                <div class="body">
+                  <div class="t">Close the day</div>
+                  <div class="m">2-minute shutdown review</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- side rail -->
+          <div class="rail">
+            <div class="card">
+              <h3>Waiting on <span class="count">4</span></h3>
+              <div class="wait">
+                <div class="av" style="background: #c0603f">DR</div>
+                <div class="who">
+                  <div class="n">Dana R.</div>
+                  <div class="w">design sign-off · PR #343</div>
+                </div>
+                <div class="days late">6<span class="u">days</span></div>
+              </div>
+              <div class="wait">
+                <div class="av" style="background: #7a5cc0">MK</div>
+                <div class="who">
+                  <div class="n">Marcus K.</div>
+                  <div class="w">Stripe access grant</div>
+                </div>
+                <div class="days warn">3<span class="u">days</span></div>
+              </div>
+              <div class="wait">
+                <div class="av" style="background: #2f9e6f">SL</div>
+                <div class="who">
+                  <div class="n">Sam L.</div>
+                  <div class="w">reply · contractor scope</div>
+                </div>
+                <div class="days warn">2<span class="u">days</span></div>
+              </div>
+              <div class="wait">
+                <div class="av" style="background: #3b5bdb">AV</div>
+                <div class="who">
+                  <div class="n">Ava (accountant)</div>
+                  <div class="w">Q2 numbers back</div>
+                </div>
+                <div class="days">1<span class="u">day</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Areas</h3>
+              <div class="health">
+                <div class="area-row">
+                  <span class="adot ok"></span><span class="an">Product</span
+                  ><span class="as">moving</span>
+                </div>
+                <div class="area-row">
+                  <span class="adot watch"></span><span class="an">Finance</span
+                  ><span class="as">Q2 pending</span>
+                </div>
+                <div class="area-row">
+                  <span class="adot ok"></span><span class="an">Health</span
+                  ><span class="as">on track</span>
+                </div>
+                <div class="area-row">
+                  <span class="adot risk"></span><span class="an">Admin</span
+                  ><span class="as">2 overdue</span>
+                </div>
+                <div class="area-row">
+                  <span class="adot idle"></span
+                  ><span class="an">Relationships</span
+                  ><span class="as">quiet</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ FLOW (sketched state) ============ -->
+      <div data-view="flow">
+        <div class="greeting"><h1>In flow.</h1></div>
+        <div class="subline">
+          One block. Everything else is waiting and it can keep waiting.
+        </div>
+
+        <div class="grid">
+          <div>
+            <!-- derailment always renders a recovery proposal (UX-INV-3) -->
+            <div class="recover">
+              <div class="ic">↩</div>
+              <div class="rbody">
+                <div class="rt">You drifted for ~12 minutes.</div>
+                <div class="rm">
+                  Normal. Reclaim the block — I'll shorten the target so it
+                  still fits before the call.
+                </div>
+              </div>
+              <button
+                class="btn-amber"
+                data-toast="Back in. Target trimmed to fit 11:30."
+              >
+                Reclaim block
+              </button>
+            </div>
+
+            <div class="flowhero">
+              <div class="fh-tag">Current block · deep work</div>
+              <div class="fh-title">Moments prototype — the Start view</div>
+              <div class="ring warn">01:47:22</div>
+              <div class="ring-lbl">remaining — not a clock, a budget</div>
+              <div class="fh-actions">
+                <button class="btn-primary">
+                  Done — log it <span class="k">↵</span>
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Paused. Timer holds; nothing lost."
+                >
+                  Pause
+                </button>
+                <button
+                  class="btn-ghost"
+                  data-toast="Extended 25 min. Call still protected."
+                >
+                  +25 min
+                </button>
+              </div>
+            </div>
+
+            <div class="section-h">
+              <h2>Parked while you work</h2>
+              <span class="hint">press C to add without leaving</span>
+            </div>
+            <div class="sched">
+              <div class="block">
+                <div class="cd"><div class="big">later</div></div>
+                <span class="dot"></span>
+                <div class="body">
+                  <div class="t">Reply to Sam — contractor scope</div>
+                  <div class="m">captured 9:14a · not now</div>
+                </div>
+              </div>
+              <div class="block">
+                <div class="cd"><div class="big">later</div></div>
+                <span class="dot"></span>
+                <div class="body">
+                  <div class="t">Idea: countdown color at 10-min mark</div>
+                  <div class="m">captured 9:31a · not now</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rail">
+            <div class="card">
+              <h3>Next up</h3>
+              <div class="wait">
+                <div class="av" style="background: #3b5bdb">12</div>
+                <div class="who">
+                  <div class="n">Call — Priya</div>
+                  <div class="w">roadmap sync · 30m</div>
+                </div>
+                <div class="days">3h<span class="u">left</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Guardrail</h3>
+              <div class="health">
+                <div class="area-row">
+                  <span class="adot ok"></span
+                  ><span class="an">1 block open</span
+                  ><span class="as">focus held</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ CLOSE (sketched state) ============ -->
+      <div data-view="close">
+        <div class="greeting"><h1>Close the day.</h1></div>
+        <div class="subline">Two minutes. Then you're actually off.</div>
+
+        <div class="grid">
+          <div>
+            <div class="closehero">
+              <div class="ch-h">You moved the thing that mattered.</div>
+              <div class="ch-sub">
+                The prototype got real hours. That was the whole point of today.
+              </div>
+              <div class="stat-row">
+                <div class="stat">
+                  <div class="sv">3h 10m</div>
+                  <div class="sl">deep work</div>
+                </div>
+                <div class="stat">
+                  <div class="sv">2 / 3</div>
+                  <div class="sl">blocks held</div>
+                </div>
+                <div class="stat">
+                  <div class="sv">5</div>
+                  <div class="sl">captured</div>
+                </div>
+              </div>
+              <div class="section-h" style="margin-left: 0">
+                <h2>Carry to tomorrow?</h2>
+                <span class="hint">↵ to accept all</span>
+              </div>
+              <div class="carry">
+                <span class="cbx"></span>
+                <div class="ct">Reply to Sam — contractor scope</div>
+                <span class="cmeta">2 days waiting</span>
+              </div>
+              <div class="carry">
+                <span class="cbx"></span>
+                <div class="ct">Chase Dana on PR #343 sign-off</div>
+                <span class="cmeta">6 days waiting</span>
+              </div>
+              <div class="carry">
+                <span class="cbx"></span>
+                <div class="ct">Countdown color idea → backlog</div>
+                <span class="cmeta">captured today</span>
+              </div>
+              <div
+                class="fh-actions"
+                style="
+                  justify-content: flex-start;
+                  margin-top: 22px;
+                  display: flex;
+                  gap: 12px;
+                "
+              >
+                <button
+                  class="btn-primary"
+                  data-toast="Day closed. Tomorrow's first move is set. Rest well."
+                >
+                  End day cleanly <span class="k">↵</span>
+                </button>
+                <button class="btn-ghost" data-toast="Kept open. No pressure.">
+                  Not done yet
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="rail">
+            <div class="card">
+              <h3>Tomorrow's first move</h3>
+              <div class="wait" style="border: none">
+                <div class="av" style="background: #3b5bdb">▶</div>
+                <div class="who">
+                  <div class="n">Wire the capture overlay</div>
+                  <div class="w">2-min start · already chosen</div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Areas — end of day</h3>
+              <div class="health">
+                <div class="area-row">
+                  <span class="adot ok"></span><span class="an">Product</span
+                  ><span class="as">advanced</span>
+                </div>
+                <div class="area-row">
+                  <span class="adot watch"></span><span class="an">Finance</span
+                  ><span class="as">still pending</span>
+                </div>
+                <div class="area-row">
+                  <span class="adot ok"></span><span class="an">Admin</span
+                  ><span class="as">1 cleared</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- capture bar (always reachable) -->
+    <div class="capbar">
+      <span class="lead"
+        >Something on your mind? <b>Capture it</b> — don't hold it.</span
+      >
+      <kbd id="capKbd">C</kbd>
+    </div>
+
+    <!-- capture overlay -->
+    <div class="scrim" id="scrim"></div>
+    <div class="capture" id="capture">
+      <input
+        class="cap-in"
+        id="capIn"
+        placeholder="What's on your mind? Just type — I'll sort it."
+        autocomplete="off"
+      />
+      <div class="cap-foot">
+        <span class="chip on" data-chip>Inbox</span>
+        <span class="chip" data-chip>Task</span>
+        <span class="chip" data-chip>Idea</span>
+        <span class="chip" data-chip>Waiting-on</span>
+        <span class="save"><kbd>↵</kbd> save &nbsp; <kbd>esc</kbd> close</span>
+      </div>
+    </div>
+
+    <div class="toast" id="toast">
+      <span class="ok">✓</span><span id="toastMsg">Saved</span>
+    </div>
+
+    <script>
+      (function () {
+        // ---------- moment switching (1/2/3) ----------
+        const views = {
+          start: qv("start"),
+          flow: qv("flow"),
+          close: qv("close"),
+        };
+        const tabs = document.querySelectorAll(".moment-tab");
+        function qv(n) {
+          return document.querySelector('[data-view="' + n + '"]');
+        }
+        function goto(name) {
+          Object.entries(views).forEach(([k, el]) =>
+            el.classList.toggle("shown", k === name),
+          );
+          tabs.forEach((t) =>
+            t.classList.toggle("active", t.dataset.goto === name),
+          );
+        }
+        tabs.forEach((t) =>
+          t.addEventListener("click", () => goto(t.dataset.goto)),
+        );
+
+        // ---------- capture overlay (C anywhere) ----------
+        const scrim = document.getElementById("scrim");
+        const cap = document.getElementById("capture");
+        const capIn = document.getElementById("capIn");
+        function openCap() {
+          scrim.classList.add("open");
+          cap.classList.add("open");
+          setTimeout(() => capIn.focus(), 40);
+        }
+        function closeCap() {
+          scrim.classList.remove("open");
+          cap.classList.remove("open");
+          capIn.value = "";
+        }
+        scrim.addEventListener("click", closeCap);
+        document.querySelectorAll("[data-chip]").forEach((c) =>
+          c.addEventListener("click", () => {
+            document
+              .querySelectorAll("[data-chip]")
+              .forEach((x) => x.classList.remove("on"));
+            c.classList.add("on");
+          }),
+        );
+
+        // ---------- toast ----------
+        let toastT;
+        const toast = document.getElementById("toast"),
+          toastMsg = document.getElementById("toastMsg");
+        function showToast(msg) {
+          toastMsg.textContent = msg;
+          toast.classList.add("show");
+          clearTimeout(toastT);
+          toastT = setTimeout(() => toast.classList.remove("show"), 2600);
+        }
+        document
+          .querySelectorAll("[data-toast]")
+          .forEach((b) =>
+            b.addEventListener("click", () => showToast(b.dataset.toast)),
+          );
+
+        // start button
+        document.getElementById("startBtn").addEventListener("click", () => {
+          goto("flow");
+          showToast("Timer running. You're in flow — everything else waits.");
+        });
+
+        // ---------- keyboard ----------
+        document.addEventListener("keydown", (e) => {
+          const typing = cap.classList.contains("open");
+          if (typing) {
+            if (e.key === "Escape") closeCap();
+            else if (e.key === "Enter") {
+              const v = capIn.value.trim();
+              const kind = document.querySelector("[data-chip].on").textContent;
+              closeCap();
+              showToast(
+                v
+                  ? "Captured to " + kind + " — out of your head."
+                  : "Nothing to save.",
+              );
+            }
+            return;
+          }
+          if (e.metaKey || e.ctrlKey || e.altKey) return;
+          if (e.key === "c" || e.key === "C") {
+            e.preventDefault();
+            openCap();
+          } else if (e.key === "1") {
+            goto("start");
+          } else if (e.key === "2") {
+            goto("flow");
+          } else if (e.key === "3") {
+            goto("close");
+          } else if (e.key === "Enter") {
+            // primary action of the visible moment
+            const active =
+              document.querySelector(".moment-tab.active").dataset.goto;
+            if (active === "start") {
+              goto("flow");
+              showToast(
+                "Timer running. You're in flow — everything else waits.",
+              );
+            } else if (active === "flow") {
+              showToast("Block logged. 3h 10m of deep work today.");
+            } else if (active === "close") {
+              showToast("Day closed. Tomorrow's first move is set. Rest well.");
+            }
+          }
+        });
+
+        // ---------- live countdowns (time-blindness compensation) ----------
+        // Anchor to a fixed "morning" baseline so the demo always reads as ~8:32a,
+        // then tick forward from load so numbers visibly move.
+        const load = Date.now();
+        const base = new Date();
+        base.setHours(8, 32, 0, 0);
+        function fmtGap(ms) {
+          if (ms <= 0) return null;
+          const m = Math.floor(ms / 60000),
+            h = Math.floor(m / 60),
+            mm = m % 60;
+          if (h > 0) return "in " + h + "h " + mm + "m";
+          if (m > 0) return "in " + m + "m";
+          return "in <1m";
+        }
+        const els = document.querySelectorAll("[data-until]");
+        const remain = document.querySelector("[data-remain]");
+        function parseT(s) {
+          const [hh, mm] = s.split(":").map(Number);
+          const d = new Date(base);
+          d.setHours(hh, mm, 0, 0);
+          return d;
+        }
+        function tick() {
+          const now = new Date(base.getTime() + (Date.now() - load));
+          els.forEach((el) => {
+            const t = el.dataset.until;
+            if (t === "now") {
+              return;
+            }
+            const target = parseT(t);
+            const g = fmtGap(target - now);
+            el.textContent = g || "started";
+          });
+          if (remain) {
+            const end = parseT(remain.dataset.remain);
+            const ms = end - now;
+            if (ms > 0) {
+              const m = Math.floor(ms / 60000);
+              remain.textContent =
+                Math.floor(m / 60) + "h " + (m % 60) + "m left";
+            } else remain.textContent = "overrun";
+          }
+        }
+        tick();
+        setInterval(tick, 1000);
+
+        // date string
+        const d = new Date();
+        document.getElementById("datestr").textContent = d.toLocaleDateString(
+          undefined,
+          { weekday: "long", month: "long", day: "numeric" },
+        );
+      })();
+    </script>
+  </body>
+</html>
