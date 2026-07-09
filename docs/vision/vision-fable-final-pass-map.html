@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeOS — Fable's Final Pass (map)</title>
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b24; --line:#2a3140; --text:#dde3ec; --dim:#8b93a5;
+    --keep:#4ade80; --shrink:#f59e0b; --evolve:#60a5fa; --add:#c084fc; --future:#f472b6;
+  }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.5 "Segoe UI",system-ui,sans-serif;padding:28px}
+  h1{font-size:20px;margin:0 0 4px} .sub{color:var(--dim);margin-bottom:24px;font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1100px}
+  .zone{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .zone h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 10px;
+    display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .card{border-left:3px solid var(--line);padding:6px 12px;margin:8px 0;border-radius:0 8px 8px 0;
+    background:rgba(255,255,255,.02)}
+  .card b{display:block;font-size:14px}
+  .card span{color:var(--dim);font-size:12.5px}
+  .tag{float:right;font-size:10.5px;color:var(--dim);border:1px solid var(--line);
+    border-radius:99px;padding:1px 8px;margin-top:2px}
+  .keep .card{border-color:var(--keep)} .keep .dot{background:var(--keep)}
+  .shrink .card{border-color:var(--shrink)} .shrink .dot{background:var(--shrink)}
+  .evolve .card{border-color:var(--evolve)} .evolve .dot{background:var(--evolve)}
+  .add .card{border-color:var(--add)} .add .dot{background:var(--add)}
+  .future{grid-column:1/-1} .future .card{border-color:var(--future);display:inline-block;
+    width:calc(25% - 8px);margin-right:8px;vertical-align:top;min-height:96px}
+  .future .dot{background:var(--future)}
+  .star{color:#ffd166}
+  .foot{color:var(--dim);font-size:12px;margin-top:20px;max-width:1100px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}.future .card{width:100%;margin-right:0}}
+</style>
+</head>
+<body>
+<h1>LifeOS — the final free-rein pass</h1>
+<div class="sub">Doctrine is the product; apparatus is scar tissue. Keep the walls, shed the fences, grow four seeds, add five nouns. Full text: vision-fable-final-pass.md</div>
+
+<div class="grid">
+  <div class="zone keep">
+    <h2><span class="dot"></span>Keep — load-bearing walls</h2>
+    <div class="card"><b>Spine / perimeter + one system of record</b><span>Hermes, Notion, siblings never merge in</span></div>
+    <div class="card"><b>Usage gates + rolling wave + graveyard</b><span>restraint is the differentiator</span></div>
+    <div class="card"><b>Trust ladder w/ automatic demotion</b><span>autonomy is earned per class, never assumed</span></div>
+    <div class="card"><b>WIP refusal (FR-022)</b><span>refusal is the feature</span></div>
+  </div>
+
+  <div class="zone shrink">
+    <h2><span class="dot"></span>Shrink — apparatus sunset</h2>
+    <div class="card"><b>Retirement condition on every fence</b><span>FAILURES.md entries gain a retest line</span></div>
+    <div class="card"><b>Quarterly apparatus review (into #289)</b><span>failure not seen in 90d → retest → delete fence</span></div>
+    <div class="card"><b>Ceremony scales down with model capability</b><span>gates + guard tests are the trust, not process volume</span></div>
+  </div>
+
+  <div class="zone evolve">
+    <h2><span class="dot"></span>Evolve — seeds → full size</h2>
+    <div class="card"><b class="star">★ Initiative Ladder (I0–I3)</b><span>earned interruption rights, twin of the autonomy ladder; dismiss-spike = auto-demote; Hermes inherits it</span><span class="tag">FR reserve now</span></div>
+    <div class="card"><b>Triage graduates first</b><span>high-confidence captures born triaged; inbox = exception queue</span><span class="tag">Stage 4 brief</span></div>
+    <div class="card"><b>The Mirror — dyad vital signs</b><span>inflow/outflow, override trend, re-entry latency; one-in-one-out becomes data-enforced</span><span class="tag">Stage 2 card</span></div>
+    <div class="card"><b>Moments × Map — spatial grammar</b><span>one zoomable surface: life → area → project → next 2 min; zoom = altitude rule made physical</span><span class="tag">brief ¶ now</span></div>
+  </div>
+
+  <div class="zone add">
+    <h2><span class="dot"></span>Add — missing chief-of-staff nouns</h2>
+    <div class="card"><b class="star">★ Triggers — prospective memory</b><span>"when X happens, do Y" — context-conditioned, fires at I1</span><span class="tag">Stage 2 card</span></div>
+    <div class="card"><b>Compost — guilt-free capture aging</b><span>refusal's gentle twin; kept, findable, owes you nothing</span><span class="tag">FR reserve</span></div>
+    <div class="card"><b>Seasons — narrative layer</b><span>rollups → quarterly evidence: "you finish things"</span><span class="tag">Stage 3/4</span></div>
+    <div class="card"><b>Rehearsal — what-if ripple</b><span>drag a commitment, see the cost; deterministic; supports saying no</span><span class="tag">Stage 2 card</span></div>
+    <div class="card"><b>Life Archive — exit as a feature</b><span>one-command export; perimeter gets slices of it, never DB</span><span class="tag">cheap, early</span></div>
+  </div>
+
+  <div class="zone future">
+    <h2><span class="dot"></span>Future — strategic notes</h2>
+    <div class="card"><b>Hermes contract</b><span>profile export = Life Archive slice; one-way focus-block events; inherits I-ladder</span></div>
+    <div class="card"><b>Succession fire drill</b><span>yearly: can a mid-tier model alone operate + extend it?</span></div>
+    <div class="card"><b>Scope answer, pre-written</b><span>health/finance/relationships enter as areas or stay perimeter — no new subsystems, ever</span></div>
+    <div class="card"><b>The signature</b><span>every feature states its override-record and its map view — or it isn't LifeOS yet</span></div>
+  </div>
+</div>
+
+<div class="foot">Sequencing unchanged: P7 → G1 → S5–S9 in the new shell. This pass lands as doctrine paragraphs, FR reservations, and stage-card candidates — through REQUIREMENTS.md, never code-first. — Fable, 2026-07-05</div>
+</body>
+</html>
