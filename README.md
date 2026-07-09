@@ -87,6 +87,8 @@ Use [docs/VERCEL_PRODUCTION_CHECKLIST.md](docs/VERCEL_PRODUCTION_CHECKLIST.md) f
 
 On Windows, the recommended path is a Scoop-installed Supabase CLI (`supabase` in PATH). If `supabase` is unavailable, use the `npx` fallback commands shown below.
 
+CI pins the CLI to a fixed release (`supabase/setup-cli@v1`, `version: 2.109.1` in `.github/workflows/ci.yml`) for reproducibility. Match that version locally if you hit CLI-version-specific behavior.
+
 Start the local Supabase stack:
 
 ```bash
