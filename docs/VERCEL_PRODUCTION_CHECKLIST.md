@@ -265,6 +265,14 @@ fail the run.
   a zero-match delete is never mistaken for success.
 - **No production identifiers in the repo.** Everything is env-driven; no user
   ids, calendar ids, or credentials are hardcoded.
+- **Artifacts are opt-in, off by default.** Playwright trace/screenshot
+  capture is disabled by default in `playwright.smoke.config.ts` because a
+  failure trace can capture real personal task content, and on a public repo
+  CI artifacts are publicly downloadable. Set `SMOKE_CAPTURE_ARTIFACTS=1` to
+  retain trace/screenshot on failure when you need to debug a run. Use a
+  dedicated smoke test account (see `SMOKE_EMAIL`/`SMOKE_PASSWORD` above)
+  rather than a personal one, so any captured artifact has nothing sensitive
+  to leak.
 
 ### Unverified lane
 
