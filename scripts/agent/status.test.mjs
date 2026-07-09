@@ -132,6 +132,10 @@ function baseFixture(overrides = {}) {
       originDate: "2026-07-09T11:00:00-04:00",
       aheadOfOrigin: 0,
     },
+    allIssues: [],
+    allIssuesError: null,
+    plans: [],
+    plansError: null,
     ...overrides,
   };
 }
@@ -285,4 +289,128 @@ test("renderStatusHtml: is a single self-contained document (no separate CSS/JS 
   assert.match(html, /<style>/);
   assert.doesNotMatch(html, /<link[^>]+rel=["']stylesheet["']/i);
   assert.doesNotMatch(html, /<script[^>]+src=/i);
+});
+
+// ---------------------------------------------------------------------------
+// Two-view work map: tabs, Full map (all issues incl. closed), Plans & ideas
+// ---------------------------------------------------------------------------
+
+test("renderStatusHtml: renders tab markup for both views, Now active by default", () => {
+  const html = renderStatusHtml(baseFixture());
+  assert.match(html, /class="tab-btn active" data-view="view-now"/);
+  assert.match(html, /class="tab-btn" data-view="view-full"/);
+  assert.match(html, /id="view-now"/);
+  assert.match(html, /class="view hidden" id="view-full"/);
+});
+
+test("renderStatusHtml: default status filter chip is Open and marked active", () => {
+  const html = renderStatusHtml(baseFixture());
+  assert.match(
+    html,
+    /class="chip status-chip active" data-status="open">Open<\//,
+  );
+  assert.match(html, /class="chip status-chip" data-status="closed">Closed<\//);
+  assert.match(html, /class="chip status-chip" data-status="all">All<\//);
+});
+
+test("renderStatusHtml: renders a closed issue row muted, not strikethrough, with a closed badge", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      allIssues: [
+        {
+          number: 100,
+          title: "Shipped feature",
+          state: "CLOSED",
+          labels: ["enjoyability"],
+          url: "https://github.com/jpatel900/LifeOS/issues/100",
+          createdAt: "2026-06-01T00:00:00Z",
+          closedAt: "2026-07-01T00:00:00Z",
+        },
+      ],
+    }),
+  );
+  assert.match(html, /issue-row issue-closed/);
+  assert.match(html, /data-state="closed"/);
+  assert.match(html, /badge-closed">closed<\/span>/);
+  assert.match(html, /Shipped feature/);
+  assert.doesNotMatch(html, /<s>|text-decoration:\s*line-through/);
+});
+
+test("renderStatusHtml: renders an open issue row with data attributes for filtering", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      allIssues: [
+        {
+          number: 101,
+          title: "Still open work",
+          state: "OPEN",
+          labels: ["usability"],
+          url: "https://github.com/jpatel900/LifeOS/issues/101",
+          createdAt: "2026-07-01T00:00:00Z",
+          closedAt: null,
+        },
+      ],
+    }),
+  );
+  assert.match(html, /data-state="open"/);
+  assert.match(html, /data-labels="usability"/);
+  assert.match(html, /badge-open">open<\/span>/);
+  assert.match(html, /class="chip label-chip" data-label="usability"/);
+});
+
+test("renderStatusHtml: shows open/closed issue counts in the section title", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      allIssues: [
+        { number: 1, title: "a", state: "OPEN", labels: [], url: "#" },
+        { number: 2, title: "b", state: "CLOSED", labels: [], url: "#" },
+        { number: 3, title: "c", state: "CLOSED", labels: [], url: "#" },
+      ],
+    }),
+  );
+  assert.match(html, /All issues \(1 open \/ 2 closed\)/);
+});
+
+test("renderStatusHtml: degraded full-map issues renders an honest unavailable message", () => {
+  const html = renderStatusHtml(
+    baseFixture({ allIssuesError: "gh: rate limited" }),
+  );
+  assert.match(html, /Issue data unavailable: gh: rate limited/);
+});
+
+test("renderStatusHtml: renders the Plans & ideas section with STATUS detection", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      plans: [
+        {
+          path: "docs/implementation-planning/plan-daily-driver-floor.md",
+          status: "COMPLETE -- shipped as of 2026-07-08; kept for reference.",
+          complete: true,
+          url: "https://github.com/jpatel900/LifeOS/blob/main/docs/implementation-planning/plan-daily-driver-floor.md",
+        },
+        {
+          path: "docs/implementation-planning/plan-dual-critical-path.md",
+          status: null,
+          complete: false,
+          url: "https://github.com/jpatel900/LifeOS/blob/main/docs/implementation-planning/plan-dual-critical-path.md",
+        },
+      ],
+    }),
+  );
+  assert.match(html, /plan-row plan-complete/);
+  assert.match(html, /plan-daily-driver-floor\.md/);
+  assert.match(html, /COMPLETE -- shipped as of 2026-07-08/);
+  assert.match(html, /plan-dual-critical-path\.md/);
+  assert.match(html, /no STATUS line/);
+  assert.match(
+    html,
+    /href="https:\/\/github\.com\/jpatel900\/LifeOS\/blob\/main\/docs\/implementation-planning\/plan-daily-driver-floor\.md"/,
+  );
+});
+
+test("renderStatusHtml: degraded plans section renders an honest unavailable message", () => {
+  const html = renderStatusHtml(
+    baseFixture({ plansError: "git ls-files failed" }),
+  );
+  assert.match(html, /Plans data unavailable: git ls-files failed/);
 });
