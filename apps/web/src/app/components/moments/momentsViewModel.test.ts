@@ -14,6 +14,7 @@ import {
   buildGreeting,
   buildStartVM,
   greetingPeriod,
+  waitingOnAgingBucket,
 } from "./momentsViewModel";
 
 /** Pinned clock — no ambient Date.now anywhere in these tests. */
@@ -378,6 +379,28 @@ describe("buildStartVM — firstMove precedence", () => {
     const state = stateWith({});
     const vm = buildStartVM(state, { now: NOW });
     expect(vm.firstMove).toBeNull();
+  });
+});
+
+describe("waitingOnAgingBucket", () => {
+  // D-4 (#483): the pure age -> --state-* bucket ramp SideRail's waiting-on
+  // row color/bar derives from. Boundaries mirror the "waiting-on
+  // thresholds" describe block below exactly — this is the same rule,
+  // exercised directly.
+  it("buckets 0-2 days as ok", () => {
+    expect(waitingOnAgingBucket(0)).toBe("ok");
+    expect(waitingOnAgingBucket(1)).toBe("ok");
+    expect(waitingOnAgingBucket(2)).toBe("ok");
+  });
+
+  it("buckets 3-6 days as watch", () => {
+    expect(waitingOnAgingBucket(3)).toBe("watch");
+    expect(waitingOnAgingBucket(6)).toBe("watch");
+  });
+
+  it("buckets 7+ days as risk, unbounded", () => {
+    expect(waitingOnAgingBucket(7)).toBe("risk");
+    expect(waitingOnAgingBucket(30)).toBe("risk");
   });
 });
 

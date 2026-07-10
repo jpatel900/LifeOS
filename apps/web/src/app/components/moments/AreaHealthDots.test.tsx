@@ -48,4 +48,17 @@ describe("AreaHealthDots", () => {
       /nothing here|empty|no data|\bnone\b/,
     );
   });
+
+  // D-4 (#483): restyled to prototype-2's row treatment — the status word
+  // that previously only lived in the dot's aria-label is now visible text
+  // too, still sourced from the same STATUS_LABEL map (no new data).
+  it("shows the status word as visible text on each row, not just in aria-label", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    expect(screen.getByTestId("area-health-status-a1")).toHaveTextContent(
+      "on track",
+    );
+    expect(screen.getByTestId("area-health-status-a3")).toHaveTextContent(
+      "at risk",
+    );
+  });
 });
