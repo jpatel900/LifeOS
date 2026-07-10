@@ -822,6 +822,161 @@ Non-goals (binding):
 
 ---
 
+> FR-039 through FR-045 are the 2026-07-10 framework-gap reservations: a section-by-section audit of the General Productivity Framework against this document found these as the only prescriptions with neither shipped code nor an existing reservation. They follow the FR-031 docs-first pattern — this text is the requirement; no build slice starts before its stage gate opens and the owner ratifies the slice.
+
+### FR-039 (reservation) — State-Based Task Menus (sharp / functional / fried)
+
+**Priority:** SHOULD
+
+**Stage:** Stage 2 (needs real execution data and a populated Operator Profile to be more than decoration).
+
+Rationale: the daily question should be "given my current state, what useful work fits?", never "why am I failing the hardest task right now?". The Operator Profile encodes stable compensations and daily focus is calendar-load-aware, but nothing represents the operator's _current_ state — so a fried afternoon renders the same menu as a sharp morning, and the mismatch reads as personal failure.
+
+Acceptance criteria:
+
+- A declared, optional state — `sharp` / `functional` / `fried` — set by one tap and never solicited (FR-034 holds: no prompts to declare, and an absent declaration is never counted, shown, or treated as signal).
+- When a state is declared, focus and pickup surfaces re-rank or filter the **existing** focus list by a per-task state-fit tag. The fit rules are deterministic code from task attributes (kind, duration, mechanical flag); AI may propose the tag at draft time, approved in triage like any other draft field.
+- State never changes commitments: FR-022 WIP, the closed daily list, and the MIT stand. A `fried` declaration surfaces the 2-minute / admin-mechanical subset of what is already committed — it never adds work or hides obligations.
+- Declared states are logged for FR-021: repeated attempts of high-demand tasks in a `fried` state become a recalibration proposal ("move this class of work to a different menu"), per the existing override-pattern mechanics.
+
+Non-goals (binding):
+
+- Mood tracking, energy scores, charts, or history views of states.
+- Inferring state from biometrics, typing cadence, or activity signals (body-as-weather stays Stage 3+ doctrine, and even there is weather, never a score).
+- Blocking any task at any state — ordering is advisory; the operator can always do anything.
+
+---
+
+### FR-040 (reservation) — Timer Typology (flow / sprint / minimum-start)
+
+**Priority:** SHOULD
+
+**Stage:** Flow-moment polish era (Stage 1-adjacent), after the scripted test plan's findings land.
+
+Rationale: one fixed timer either guillotines productive hyperfocus or over-demands on a low day. The Flow moment already has a session concept and countdown rendering (time-blindness compensation), and the 2-minute first move already exists as a _promise_ — but there is no timer mode shaped like that promise.
+
+Acceptance criteria:
+
+- Three session modes at flow start: **count-up flow** (default for deep work; gentle elapsed display, nothing interrupts), **fixed sprint** (countdown, default 25 min, for mechanical/admin work), **minimum-start** (5–10 min countdown that, on expiry, offers one-tap continue-as-flow — the momentum ladder made mechanical).
+- The suggested mode is deterministic from task tags (state-fit / admin-mechanical per FR-039/FR-041); the operator always overrides with one keystroke.
+- Hyperfocus protection: in flow mode no non-critical surface interrupts (initiative-ladder I0/I1 discipline pre-graduation, FR-032); side-thought capture stays one keystroke and returns focus to the session.
+- Session outcomes feed FR-014/FR-021 duration learning exactly as today — the typology adds no new logging surface.
+
+Non-goals (binding):
+
+- Forced breaks, alarms-as-guilt, or any sound/animation reward mechanics.
+- A global pomodoro doctrine — mode is per-session, per-task, always operator-chosen.
+
+---
+
+### FR-041 (reservation) — Admin Sprint (mechanical batch mode)
+
+**Priority:** SHOULD
+
+**Stage:** With FR-039/FR-040 — it is the `fried`-menu × sprint-timer intersection and should land as their thin composition, not before either.
+
+Rationale: "do admin" is not a real task. Administrative drag is only startable when expressed mechanically and numerically ("reply to 4", "file 5") and only finishable inside a cap. The objective is reduced drag, not emotional satisfaction — which is exactly why it needs a stop built in.
+
+Acceptance criteria:
+
+- A task can carry an `admin-mechanical` tag with a numeric unit; the parse draft may propose tag and count, approved in triage.
+- An Admin Sprint launcher: select up to a small capped number of admin items, run one fixed sprint (FR-040), stop at the cap. The unfinished remainder stays as ordinary tasks, is deferred, or composts (FR-036) — an admin sprint never rolls into an open-ended session.
+- Outcome is recorded as counts (x of y units), non-shaming copy, and feeds FR-021 as ordinary duration evidence.
+
+Non-goals (binding):
+
+- A separate admin backlog or admin surface — admin items remain ordinary tasks wearing a tag.
+- Productivity scoring, throughput graphs, or sprint-over-sprint comparisons.
+
+---
+
+### FR-042 (reservation) — Habits (minimum version + never-skip-twice)
+
+**Priority:** SHOULD
+
+**Stage:** Stage 2, as an explicit scope expansion — habits are a new noun, and "habit tracker" is a graveyard-adjacent category; this FR exists precisely so the scope decision is made in this file, not in code.
+
+Rationale: recurring practices are not tasks — missing one is a lapse, not a failure, and the design goal is fast recovery, not an unbroken record. The only habit model compatible with the permanent non-goals (streak-as-guilt is already banned in §4) is recovery-first: full version, minimum version, never-skip-twice, stable trigger.
+
+Acceptance criteria:
+
+- A habit is exactly: name, stable trigger (an "after X" anchor phrase), full version, minimum version (≤2 minutes, always counts as done), and the recovery rule — after one miss, the next occurrence surfaces the minimum version as the suggested move.
+- Hard cap on active habits (default 3, one-in-one-out like FR-022). Habits render as small check-off affordances near their anchors on Today, never as items in the focus list — they do not interact with WIP or the closed daily list.
+- A miss is recorded without color, badge, or aging; the only aggregate ever surfaced is recovery-oriented ("minimum version available today"). Habit history feeds FR-021 only as recovery-rate evidence.
+
+Non-goals (binding):
+
+- Streak counters, chains, or completion percentages anywhere, in any rendering.
+- Red/overdue treatment of a missed habit, or auto-conversion of a missed habit into a task.
+- More than the capped number of active habits, on any surface, at any trust rung.
+
+---
+
+### FR-043 (reservation) — Executable Goals (direction → near-term proof)
+
+**Priority:** SHOULD
+
+**Stage:** Stage 2 (attaches to Area Charters; meaningful only once charters hold real data after the Notion identity migration).
+
+Rationale: charters give direction, and direction never tells today what to do. The bridge is the executable goal: **by [date ≤ 2 weeks], [specific artifact] exists and has been used once**. A direction guides; a goal produces evidence — and the wins log (FR-020) is already waiting to receive exactly that evidence.
+
+Acceptance criteria:
+
+- An area charter can hold at most **one** active executable goal, template-enforced: artifact, date ≤14 days out, and a used-once definition. Opening a second requires closing the first as COMPLETE or RELEASED (FR-035 semantics).
+- On Today the goal renders only as quiet context on its area's tasks ("serves: proposal sent by Friday") — never a separate surface, never a nag.
+- On the date, Close asks two questions: did the artifact exist, was it used once. The outcome lands in wins/evidence (FR-020); a miss routes to the recovery diagnostic (shrink / re-date / release), never to guilt copy.
+
+Non-goals (binding):
+
+- OKR trees, weighted scoring, cascading goal hierarchies, or more than one active goal per area.
+- AI-generated goals activating without explicit operator approval.
+
+---
+
+### FR-044 (reservation) — Research Stop Rule (extends FR-024)
+
+**Priority:** SHOULD
+
+**Stage:** With FR-024's next iteration — a small additive extension, buildable whenever FR-024 is next touched.
+
+Rationale: research continues after it stops changing the likely decision; the missing input is not information but a stopping condition. FR-024 already carries question, reversibility, and deadline. A research-flavored decision additionally needs: what evidence would change it, a time cap, and a required output.
+
+Acceptance criteria:
+
+- FR-024 decision objects gain optional research fields (additive columns only): research question, evidence-that-would-change-it, time cap, required output. When present, the decision surface renders the stop condition and the cap with countdown rendering (Operator Profile compensation).
+- At the cap the decision enters an FR-025-style fork: **recommend now** (record the recommendation plus what would genuinely change it) or **extend once, with a written reason**. Silent continuation is not a representable state.
+
+Non-goals (binding):
+
+- A separate research noun, table, or surface — this is an FR-024 extension and FR-024's non-goals hold unchanged.
+- AI auto-closing or auto-recommending decisions; the fork is always operator-executed.
+
+---
+
+### FR-045 (reservation) — Witnessed Commitments (human accountability, Hermes-relayed)
+
+**Priority:** SHOULD
+
+**Stage:** Stage 3 (requires Hermes channels, FR-032 initiative-ladder rungs, and the staged external-writes rung; nothing here opens earlier).
+
+Rationale: self-accountability depends on the same executive functions that are already struggling; a dashboard seen only by its owner is easy to ignore. External accountability is borrowed structure: a named person, a date, a visible artifact, a check-in moment. LifeOS stays the sole system of record; any channel — Hermes first — only relays.
+
+Acceptance criteria:
+
+- A commitment (FR-017) can gain a **witness block**: named person, date, artifact or demonstration, and a check-in moment. The block lives in LifeOS tables only — the perimeter contract that Hermes never remembers commitments is binding here (two systems of record is the fragmentation death this system exists to prevent).
+- All outbound witness messages (invite, deadline notice, check-in) are draft-for-approval external writes under Stage 3 rules: rendered, editable, explicitly sent by the operator. Auto-send is reachable only by trust-ladder graduation on accumulated decision data, and interruption timing is governed by the FR-032 rung then in effect.
+- The check-in renders in Close/Review with three first-class outcomes: **kept / renegotiated / released** — renegotiation is a legitimate outcome with non-shaming copy, because accountability is borrowed structure, not punishment.
+- Body doubling and presence remain Hermes-side (sibling system) permanently; LifeOS may record that a session happened only if the operator captures it like any other capture.
+
+Non-goals (binding):
+
+- Public commitment feeds or social mechanics of any kind.
+- Witness-visible dashboards or any witness access into LifeOS — a future witness-facing view, if ever, is a filtered FR-038 archive slice and requires its own FR first.
+- Punitive framing, consequences, or escalation mechanics on a missed commitment.
+- Hermes-side storage of commitments, deadlines, or witness identity beyond the in-flight message being relayed.
+
+---
+
 ### Constraint Layer — Deferred Capabilities
 
 The following feel productive to build and are explicitly deferred (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires reopening this section first.
