@@ -197,6 +197,25 @@ Phase 7F hardening:
 - `calendar_blocks.proposal_id` is unique to prevent duplicate local scheduled
   blocks for the same proposal.
 
+### 7.1 Outbound Telegram daily brief (FR-046)
+
+The FR-046 daily brief is a distinct external-write class: a scheduled,
+read-only content push, not a user-approved mutation. Its rules:
+
+- Recipient is pinned to the single owner chat id from `TELEGRAM_CHAT_ID`; the
+  sender never accepts a caller-supplied destination.
+- Content is the deterministic in-app brief. Task titles and schedule data do
+  leave the perimeter to Telegram — accepted by the owner's credential opt-in;
+  sanctuary-marked content (FR-034) is excluded by the same shared exclusion
+  predicate as every other surface once that mark ships.
+- Inbound Telegram traffic is not read, parsed, stored, or acted on at this
+  rung — the prompt-injection surface is closed by construction, not by
+  filtering.
+- Send failures are logged server-side and never affect app health or any
+  in-app surface.
+- Absent either secret, the feature is wholly inert (no run, no log, no
+  warning).
+
 ## 8. Logging Policy
 
 Log:
@@ -226,6 +245,7 @@ Secrets:
 - Supabase service-role key
 - Google OAuth client secret
 - encryption secrets
+- Telegram bot token + owner chat id (FR-046; absent = feature wholly inert)
 
 Rules:
 
