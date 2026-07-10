@@ -9,29 +9,29 @@ Claims discipline for anything that leaves the repo. An external claim (release 
 
 ## When to use / when NOT to use
 
-| Situation                                                                       | Verdict                                                                                                                          |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Writing release notes, changelog entries, README feature lists, badges          | USE                                                                                                                              |
-| Making or reviewing a benchmark / "faster than Y" / "supports X" claim          | USE                                                                                                                              |
-| Preparing a demo, tutorial, quickstart, paper, or blog post                     | USE                                                                                                                              |
-| Deciding whether something is "novel" vs "known technique applied here"         | USE                                                                                                                              |
-| Setting internal evidence standards, acceptance thresholds, test quality        | NOT — use **agentic-validation-and-qa** (this skill only governs the public-facing statement built on that evidence)             |
+| Situation | Verdict |
+|---|---|
+| Writing release notes, changelog entries, README feature lists, badges | USE |
+| Making or reviewing a benchmark / "faster than Y" / "supports X" claim | USE |
+| Preparing a demo, tutorial, quickstart, paper, or blog post | USE |
+| Deciding whether something is "novel" vs "known technique applied here" | USE |
+| Setting internal evidence standards, acceptance thresholds, test quality | NOT — use **agentic-validation-and-qa** (this skill only governs the public-facing statement built on that evidence) |
 | Gating whether a risky change may ship at all, PR hygiene, one-way-door process | NOT — use **agentic-change-control** (this skill applies its one-way-door rule to publishing; the general framework lives there) |
-| Writing internal docs, doc templates, house style                               | NOT — use **agentic-docs-and-writing**                                                                                           |
-| Designing the benchmark/experiment itself (predictions, refutation)             | NOT — use **agentic-research-methodology**; this skill governs how results are _reported_                                        |
+| Writing internal docs, doc templates, house style | NOT — use **agentic-docs-and-writing** |
+| Designing the benchmark/experiment itself (predictions, refutation) | NOT — use **agentic-research-methodology**; this skill governs how results are *reported* |
 
 ## The claims ladder (hard rule)
 
 Every external sentence maps to a tier. You may publish a claim only at or below the tier you have demonstrated. When in doubt, claim one tier lower.
 
-| Tier | Claim you may make        | Proof required                                                                                              | Typical wording                                                |
-| ---- | ------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| 0    | "exists / experimental"   | Code is in the repo                                                                                         | "experimental", "candidate", "work in progress"                |
-| 1    | "compiles / installs"     | Clean build from a fresh checkout                                                                           | "builds on <platforms>"                                        |
-| 2    | "tests pass"              | Full test suite green on CI, link to the run                                                                | "CI passing" (badge must point at the real pipeline)           |
-| 3    | "works on our golden set" | Documented input set + recorded outputs, rerunnable                                                         | "handles the cases in `examples/` / our test corpus"           |
-| 4    | "works for you"           | **Fresh-clone reproduction** (see below) by someone/something with only public docs                         | "quickstart", "getting started", any imperative 'run this' doc |
-| 5    | "faster/better than Y"    | Comparison run with pinned versions of BOTH sides, published harness, variance reported, limitations stated | benchmark tables, "N× speedup", "outperforms"                  |
+| Tier | Claim you may make | Proof required | Typical wording |
+|---|---|---|---|
+| 0 | "exists / experimental" | Code is in the repo | "experimental", "candidate", "work in progress" |
+| 1 | "compiles / installs" | Clean build from a fresh checkout | "builds on <platforms>" |
+| 2 | "tests pass" | Full test suite green on CI, link to the run | "CI passing" (badge must point at the real pipeline) |
+| 3 | "works on our golden set" | Documented input set + recorded outputs, rerunnable | "handles the cases in `examples/` / our test corpus" |
+| 4 | "works for you" | **Fresh-clone reproduction** (see below) by someone/something with only public docs | "quickstart", "getting started", any imperative 'run this' doc |
+| 5 | "faster/better than Y" | Comparison run with pinned versions of BOTH sides, published harness, variance reported, limitations stated | benchmark tables, "N× speedup", "outperforms" |
 
 Ladder violations to reject on sight:
 
@@ -95,14 +95,14 @@ If the fresh-clone test fails, the release does not go out. That is the entire g
 
 A published number is the longest-lived artifact you will produce; people quote it years later stripped of every caveat. Requirements, all hard rules:
 
-| Requirement                       | How                                                                                                                                                                                                                        |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pin both sides                    | Record exact versions: your side `git rev-parse HEAD`; theirs: release tag or commit hash, plus runtime versions (`python --version`, `node --version`, etc.). "Latest" is not a version.                                  |
-| Publish the harness               | The benchmark script, input data (or generator + seed), and hardware description live in the repo (e.g. `bench/`). A number without a rerunnable harness is an anecdote.                                                   |
-| Report variance, not the best run | ≥5 runs after warm-up; report median plus min/max or stddev. Publishing your single best run is selection bias with extra steps.                                                                                           |
-| Same-machine, same-session        | Both sides on the same hardware in the same session. Numbers from different machines or different days do not compose.                                                                                                     |
-| State what was NOT measured       | Explicitly: workloads not tested, sizes not tested, the competitor's tuning effort (did you tune yours and run theirs on defaults?), cold-start vs warm. The "not measured" paragraph is mandatory, not optional humility. |
-| Absolute numbers alongside ratios | "3× faster" must appear with the raw values (e.g. "12 ms vs 36 ms, median of 7 runs"). Ratios without absolutes hide whether anyone should care.                                                                           |
+| Requirement | How |
+|---|---|
+| Pin both sides | Record exact versions: your side `git rev-parse HEAD`; theirs: release tag or commit hash, plus runtime versions (`python --version`, `node --version`, etc.). "Latest" is not a version. |
+| Publish the harness | The benchmark script, input data (or generator + seed), and hardware description live in the repo (e.g. `bench/`). A number without a rerunnable harness is an anecdote. |
+| Report variance, not the best run | ≥5 runs after warm-up; report median plus min/max or stddev. Publishing your single best run is selection bias with extra steps. |
+| Same-machine, same-session | Both sides on the same hardware in the same session. Numbers from different machines or different days do not compose. |
+| State what was NOT measured | Explicitly: workloads not tested, sizes not tested, the competitor's tuning effort (did you tune yours and run theirs on defaults?), cold-start vs warm. The "not measured" paragraph is mandatory, not optional humility. |
+| Absolute numbers alongside ratios | "3× faster" must appear with the raw values (e.g. "12 ms vs 36 ms, median of 7 runs"). Ratios without absolutes hide whether anyone should care. |
 
 Environment capture for the methodology appendix:
 
@@ -116,11 +116,11 @@ uname -a; git rev-parse HEAD; git describe --tags --always
 [System.Environment]::OSVersion; git rev-parse HEAD; git describe --tags --always
 ```
 
-Plus the language-ecosystem lockfile (`pip freeze`, `npm ls --depth=0`, `cargo tree --depth 1`, or equivalent) committed next to the results. How to _design_ the experiment (pre-registered predictions, adversarial refutation) is owned by **agentic-research-methodology**.
+Plus the language-ecosystem lockfile (`pip freeze`, `npm ls --depth=0`, `cargo tree --depth 1`, or equivalent) committed next to the results. How to *design* the experiment (pre-registered predictions, adversarial refutation) is owned by **agentic-research-methodology**.
 
 ## Novelty honesty (agentic projects especially)
 
-Default label is "known technique applied here." "Novel" requires a real search: you looked for prior art (papers, existing tools, blog posts) and can name the closest prior work and state the delta. Agentic projects are especially prone to novelty inflation because recombining known pieces (retrieval + tool use + a loop) _feels_ new.
+Default label is "known technique applied here." "Novel" requires a real search: you looked for prior art (papers, existing tools, blog posts) and can name the closest prior work and state the delta. Agentic projects are especially prone to novelty inflation because recombining known pieces (retrieval + tool use + a loop) *feels* new.
 
 Hard rules:
 
@@ -142,13 +142,13 @@ Hard rules:
 
 ## Changelog / release-note house rules
 
-| Rule                                         | Detail                                                                                                                                       |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| User-visible changes only                    | Refactors, internal renames, CI tweaks: out. If a user cannot observe it, it is noise in this document. (Internal history lives in git log.) |
-| Breaking changes flagged loudly              | Separate **BREAKING** section at the top, each entry with the migration step. Never bury a breaking change mid-list.                         |
-| Dates absolute                               | `2026-07-02`, never "last week" / "recently". Release notes are read years later.                                                            |
-| Claims ladder applies                        | "Added support for X" in a release note is a public claim; it needs the same tier evidence as a README line.                                 |
-| Every entry answers "what do I do about it?" | Upgrade command, migration step, or "no action needed".                                                                                      |
+| Rule | Detail |
+|---|---|
+| User-visible changes only | Refactors, internal renames, CI tweaks: out. If a user cannot observe it, it is noise in this document. (Internal history lives in git log.) |
+| Breaking changes flagged loudly | Separate **BREAKING** section at the top, each entry with the migration step. Never bury a breaking change mid-list. |
+| Dates absolute | `2026-07-02`, never "last week" / "recently". Release notes are read years later. |
+| Claims ladder applies | "Added support for X" in a release note is a public claim; it needs the same tier evidence as a README line. |
+| Every entry answers "what do I do about it?" | Upgrade command, migration step, or "no action needed". |
 
 Find the file of record: `ls CHANGELOG* CHANGES* HISTORY* NEWS* 2>/dev/null` (bash) / `Get-ChildItem CHANGELOG*,CHANGES*,HISTORY*,NEWS* -ErrorAction SilentlyContinue` (PowerShell). If none exists and you are releasing, create `CHANGELOG.md` — format conventions are owned by **agentic-docs-and-writing**.
 

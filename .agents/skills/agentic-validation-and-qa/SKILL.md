@@ -7,7 +7,7 @@ description: "Use when deciding whether work is actually done, what counts as ev
 
 The evidence bar for agent-driven work. One rule dominates everything else here:
 **DONE MEANS DEMONSTRATED** — a change is complete when its intended behavior has
-been _observed_ (a test run, a command's output, a screenshot), never when the code
+been *observed* (a test run, a command's output, a screenshot), never when the code
 "looks right." Agent-generated code is uniquely good at looking right while being
 wrong, so the burden of proof is on demonstration, and the demonstration goes into
 the PR or report verbatim. This skill defines what counts as evidence, how to set
@@ -16,19 +16,19 @@ and the protocols for flaky tests and for validating changes another agent wrote
 
 ## When to use / when NOT to use
 
-| Situation                                                                           | Use                                  |
-| ----------------------------------------------------------------------------------- | ------------------------------------ |
-| Deciding whether a change is "done" and what proof to attach                        | THIS SKILL                           |
-| Setting pass/fail criteria before running a validation                              | THIS SKILL                           |
-| Reviewing a diff that touches, skips, or deletes tests                              | THIS SKILL                           |
-| A test is flaky and someone wants to retry-until-green                              | THIS SKILL                           |
-| Validating a change an agent authored                                               | THIS SKILL                           |
-| Claims leaving the repo (README, blog, announcement, benchmark claims to outsiders) | `agentic-external-positioning`       |
-| Research-grade evidence, hypothesis testing, predicting numbers before running      | `agentic-research-methodology`       |
-| Whether a change needs review at all, one-way-door classification, PR hygiene       | `agentic-change-control`             |
-| Finding _why_ something fails (triage, discriminating experiments)                  | `agentic-debugging-playbook`         |
-| Minimal repro, bisection, differential testing recipes                              | `agentic-proof-and-analysis-toolkit` |
-| Instrumentation and measurement tooling                                             | `agentic-diagnostics-and-tooling`    |
+| Situation | Use |
+|---|---|
+| Deciding whether a change is "done" and what proof to attach | THIS SKILL |
+| Setting pass/fail criteria before running a validation | THIS SKILL |
+| Reviewing a diff that touches, skips, or deletes tests | THIS SKILL |
+| A test is flaky and someone wants to retry-until-green | THIS SKILL |
+| Validating a change an agent authored | THIS SKILL |
+| Claims leaving the repo (README, blog, announcement, benchmark claims to outsiders) | `agentic-external-positioning` |
+| Research-grade evidence, hypothesis testing, predicting numbers before running | `agentic-research-methodology` |
+| Whether a change needs review at all, one-way-door classification, PR hygiene | `agentic-change-control` |
+| Finding *why* something fails (triage, discriminating experiments) | `agentic-debugging-playbook` |
+| Minimal repro, bisection, differential testing recipes | `agentic-proof-and-analysis-toolkit` |
+| Instrumentation and measurement tooling | `agentic-diagnostics-and-tooling` |
 
 ## 1. Done means demonstrated (hard rule)
 
@@ -43,14 +43,14 @@ A task is complete when ALL of these hold:
 
 ### Evidence hierarchy (strongest first)
 
-| Rank | Evidence                                                     | Notes                                                         |
-| ---- | ------------------------------------------------------------ | ------------------------------------------------------------- |
-| 1    | Automated test that fails without the change, passes with it | Permanent, re-runnable, regression-proof                      |
-| 2    | Exact command + captured output showing the behavior         | Re-runnable by a reviewer; paste verbatim                     |
-| 3    | Screenshot / recording of the behavior                       | For UI work; pair with the steps to reproduce it              |
-| 4    | Log excerpt from a real run                                  | Include enough context lines to locate it                     |
-| 5    | Manual walkthrough description ("I clicked X, saw Y")        | Weakest acceptable; only when 1–4 are impractical, and say so |
-| —    | "The code looks correct"                                     | NOT evidence. Never sufficient.                               |
+| Rank | Evidence | Notes |
+|---|---|---|
+| 1 | Automated test that fails without the change, passes with it | Permanent, re-runnable, regression-proof |
+| 2 | Exact command + captured output showing the behavior | Re-runnable by a reviewer; paste verbatim |
+| 3 | Screenshot / recording of the behavior | For UI work; pair with the steps to reproduce it |
+| 4 | Log excerpt from a real run | Include enough context lines to locate it |
+| 5 | Manual walkthrough description ("I clicked X, saw Y") | Weakest acceptable; only when 1–4 are impractical, and say so |
+| — | "The code looks correct" | NOT evidence. Never sufficient. |
 
 Default: use the highest rank that is practical. A fix without rank-1 evidence needs a stated reason (e.g., "requires production data; verified via rank 2 against staging").
 
@@ -137,13 +137,13 @@ If none exists and you are doing sustained work in the repo, propose one (5–20
 
 These exist because the cheapest way to make a red suite green is to lower the bar, and agents under "make tests pass" pressure will find that path.
 
-| #   | Rule                                                                                                                                                                                                                                                                                                                 | The violation it blocks             |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| 1   | **Never weaken an assertion to make a test pass.** Changing `assertEqual(x, 5)` to `assertTrue(x > 0)`, widening a tolerance, or asserting on less of the output is changing the spec, not fixing the code. If the spec genuinely changed, say so in the PR and get the same review the spec change itself requires. | Silent spec erosion                 |
-| 2   | **Never add skip/xfail/`.skip`/`@pytest.mark.skip`/`it.skip` without a linked issue and a reason string.** The issue tracks un-skipping. A skip without an issue is a deletion with extra steps.                                                                                                                     | Quiet test-suite decay              |
-| 3   | **Never special-case test inputs in product code.** No `if input == "test_user"`, no environment sniffing that changes behavior under test (test _seams_ like dependency injection are fine; behavior _forks_ keyed on test-detection are not).                                                                      | Passing tests that validate nothing |
-| 4   | **Deleting a failing test requires the same review as the change that broke it.** The test is a claim about behavior; deleting it is retracting the claim, which is at least as significant as the code change.                                                                                                      | Evidence destruction                |
-| 5   | **Never hard-code an expected output captured from the current (possibly broken) implementation just to go green.** Snapshot/golden-file updates must be reviewed as spec changes: the diff of the snapshot IS the diff to review.                                                                                   | Locking in bugs                     |
+| # | Rule | The violation it blocks |
+|---|---|---|
+| 1 | **Never weaken an assertion to make a test pass.** Changing `assertEqual(x, 5)` to `assertTrue(x > 0)`, widening a tolerance, or asserting on less of the output is changing the spec, not fixing the code. If the spec genuinely changed, say so in the PR and get the same review the spec change itself requires. | Silent spec erosion |
+| 2 | **Never add skip/xfail/`.skip`/`@pytest.mark.skip`/`it.skip` without a linked issue and a reason string.** The issue tracks un-skipping. A skip without an issue is a deletion with extra steps. | Quiet test-suite decay |
+| 3 | **Never special-case test inputs in product code.** No `if input == "test_user"`, no environment sniffing that changes behavior under test (test *seams* like dependency injection are fine; behavior *forks* keyed on test-detection are not). | Passing tests that validate nothing |
+| 4 | **Deleting a failing test requires the same review as the change that broke it.** The test is a claim about behavior; deleting it is retracting the claim, which is at least as significant as the code change. | Evidence destruction |
+| 5 | **Never hard-code an expected output captured from the current (possibly broken) implementation just to go green.** Snapshot/golden-file updates must be reviewed as spec changes: the diff of the snapshot IS the diff to review. | Locking in bugs |
 
 Reviewer's quick scan for gaming in any diff that touches tests:
 
@@ -174,7 +174,6 @@ Attach this to every non-trivial PR / task report. Honesty about non-coverage is
 <paste the actual terminal output — not a summary of it>
 
 **What was NOT covered:**
-
 - <e.g., "not tested against real S3, only the local stub">
 - <e.g., "Windows path handling untested; developed on Linux">
 - <e.g., "no load testing; correctness only">
@@ -196,13 +195,14 @@ If the "NOT covered" section is empty, that is a claim of exhaustive verificatio
 # bash: run the single test 20 times, count failures
 fails=0; for i in $(seq 1 20); do <test-command> <single-test> >/dev/null 2>&1 || fails=$((fails+1)); done; echo "failures: $fails/20"
 ```
-
 ```powershell
 # PowerShell equivalent
 $fails=0; 1..20 | ForEach-Object { <test-command> <single-test> *> $null; if ($LASTEXITCODE -ne 0) { $fails++ } }; "failures: $fails/20"
 ```
 
-0/20 failures → it is probably environment- or order-dependent: try running the full suite, or the suite in a different order, to reproduce. 4. A quarantined test that stays quarantined > <quarantine-ttl> (default candidate: 30 days) gets escalated: fix it or formally delete it under §4 rule 4. Quarantine is a waiting room, not a graveyard. 5. Flaky tests in the golden set (§3) are emergencies — the never-regress suite cannot contain dice rolls.
+   0/20 failures → it is probably environment- or order-dependent: try running the full suite, or the suite in a different order, to reproduce.
+4. A quarantined test that stays quarantined > <quarantine-ttl> (default candidate: 30 days) gets escalated: fix it or formally delete it under §4 rule 4. Quarantine is a waiting room, not a graveyard.
+5. Flaky tests in the golden set (§3) are emergencies — the never-regress suite cannot contain dice rolls.
 
 Root-causing the flake itself is `agentic-debugging-playbook` territory.
 
@@ -222,10 +222,10 @@ Checklist for reviewing a change authored by an agent (yours or another's):
 
 Stakes-based depth (default tiers; align with `agentic-change-control` risk tiers):
 
-| Change class                                    | Minimum validation                                                |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| Docs / comments only                            | Read the diff; render if markup                                   |
-| Reversible code change, tests included          | Verify red→green claim + suite green + gaming scan                |
+| Change class | Minimum validation |
+|---|---|
+| Docs / comments only | Read the diff; render if markup |
+| Reversible code change, tests included | Verify red→green claim + suite green + gaming scan |
 | Golden-set, schema, API-contract, data-mutating | All of the above + re-run verification yourself + second reviewer |
 
 ## Provenance and maintenance
