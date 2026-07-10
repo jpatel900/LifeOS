@@ -71,4 +71,28 @@ describe("SideRail", () => {
     expect(button).toHaveClass("min-h-[44px]");
     expect(button).toHaveClass("touch-manipulation");
   });
+
+  // D-4 (#483): the day-count carries a length-encoded age bar (bucket ->
+  // fill width) alongside its color, so the aging ramp survives without
+  // color as well as with it — no fabricated per-day scale, just the same
+  // ok/watch/risk bucket rendered twice.
+  it("renders a length-encoded age bar per waiting-on row, keyed to its bucket", () => {
+    render(
+      <SideRail waitingOn={WAITING} areas={AREAS} onOpenHealth={vi.fn()} />,
+    );
+    const row = screen.getByTestId("side-rail-waiting-row-t1");
+    const bar = row.querySelector("span > span") as HTMLElement | null;
+    expect(bar).not.toBeNull();
+  });
+
+  // D-4 (#483): restyled rows keep the task title as the row's single line —
+  // no fabricated person name/avatar (no people store backs `WaitingVM`).
+  it("waiting rows show only the task title, no avatar or person name", () => {
+    render(
+      <SideRail waitingOn={WAITING} areas={AREAS} onOpenHealth={vi.fn()} />,
+    );
+    expect(
+      screen.queryByRole("img", { name: /contract redline/i }),
+    ).not.toBeInTheDocument();
+  });
 });

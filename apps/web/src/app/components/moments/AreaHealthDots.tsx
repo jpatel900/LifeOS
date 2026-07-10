@@ -8,6 +8,16 @@ import type { AreaHealthVM } from "./momentsViewModel";
  * Renders one dot per area, colored by `--state-ok/watch/risk/idle`. Color
  * is never the only signal: each dot's aria-label spells out the textual
  * status plus its note so the same information survives without color.
+ *
+ * D-4 (design alignment, #483): restyles the flex-wrap chip row to
+ * prototype-2's `.area-row` list — one row per area, colored dot on the
+ * left, a visible status word on the right (previously that same word only
+ * lived in the dot's `aria-label`; now it's on-screen text too, still
+ * backed by the same `STATUS_LABEL` map, no new data). The prototype's
+ * per-area color *swatch* (`.aswatch`, a distinct hue per area for
+ * identity) is not ported: `AreaHealthVM` carries no area color today —
+ * only status — so a swatch here would mean inventing a color per area
+ * rather than reading one that exists.
  */
 
 export interface AreaHealthDotsProps {
@@ -41,20 +51,30 @@ export function AreaHealthDots({ areas }: AreaHealthDotsProps) {
   }
 
   return (
-    <ul
-      className="flex flex-wrap items-center gap-3"
-      data-testid="area-health-dots"
-    >
+    <ul className="divide-y divide-border/60" data-testid="area-health-dots">
       {areas.map((area) => (
-        <li key={area.id} className="flex items-center gap-1.5">
+        <li
+          key={area.id}
+          className="flex items-center justify-between gap-2 py-1.5 text-sm first:pt-0 last:pb-0"
+          data-testid={`area-health-row-${area.id}`}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span
+              aria-label={`${area.name}: ${STATUS_LABEL[area.status]} — ${area.note}`}
+              role="img"
+              className="inline-block size-2.5 shrink-0 rounded-full"
+              style={{ background: STATUS_VAR[area.status] }}
+              data-testid={`area-health-dot-${area.id}`}
+            />
+            <span className="truncate text-muted-foreground">{area.name}</span>
+          </span>
           <span
-            aria-label={`${area.name}: ${STATUS_LABEL[area.status]} — ${area.note}`}
-            role="img"
-            className="inline-block size-2.5 rounded-full"
-            style={{ background: STATUS_VAR[area.status] }}
-            data-testid={`area-health-dot-${area.id}`}
-          />
-          <span className="text-xs text-muted-foreground">{area.name}</span>
+            className="shrink-0 text-xs font-medium"
+            style={{ color: STATUS_VAR[area.status] }}
+            data-testid={`area-health-status-${area.id}`}
+          >
+            {STATUS_LABEL[area.status]}
+          </span>
         </li>
       ))}
     </ul>

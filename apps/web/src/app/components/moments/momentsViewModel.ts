@@ -427,6 +427,22 @@ function buildFocusItems(
   return firstMove ? [firstMove, ...remainingItems] : remainingItems;
 }
 
+/**
+ * D-4 (design alignment, #483) waiting-on aging ramp: pure age (days) -> the
+ * closed --state-* bucket (ok/watch/risk — never a new color axis, per
+ * ADR 0004 §Decision R5 / G-UX-3). Extracted from the inline ternary this
+ * builder always used, unchanged in behavior — same 3/7-day boundaries the
+ * "waiting-on thresholds" tests already pin — so the SideRail row treatment
+ * (color + a length-encoded age bar, porting prototype-2's `.wait .age`
+ * shape) has one truthful, independently testable source for its bucket
+ * instead of re-deriving it from raw days.
+ */
+export function waitingOnAgingBucket(daysWaiting: number): WaitingVM["status"] {
+  if (daysWaiting >= 7) return "risk";
+  if (daysWaiting >= 3) return "watch";
+  return "ok";
+}
+
 function buildWaitingOn(state: WorkflowState, now: Date): WaitingVM[] {
   return state.tasks
     .filter(
@@ -440,15 +456,12 @@ function buildWaitingOn(state: WorkflowState, now: Date): WaitingVM[] {
         ? Math.floor((now.getTime() - new Date(since).getTime()) / MS_PER_DAY)
         : 0;
 
-      const status: WaitingVM["status"] =
-        daysWaiting >= 7 ? "risk" : daysWaiting >= 3 ? "watch" : "ok";
-
       return {
         taskId: task.id,
         title: task.title,
         since,
         daysWaiting,
-        status,
+        status: waitingOnAgingBucket(daysWaiting),
       };
     });
 }
