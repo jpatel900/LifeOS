@@ -1,4 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -192,14 +191,11 @@ body {
   @apply bg-background text-foreground antialiased;
   margin: 0;
   min-height: 100vh;
+  /* D-7b (issue #483): prototype-2-today-home.html's system font stack,
+     ported verbatim (--font). No webfont load — first-paint text renders
+     in the OS UI font on every platform. */
   font-family:
-    "IBM Plex Sans",
-    "Inter",
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   background:
     radial-gradient(
       circle at top center,
@@ -286,7 +282,9 @@ body {
   min-height: 100vh;
   background: var(--bd);
   color: var(--ink);
-  font-family: "Hanken Grotesk", Inter, system-ui, sans-serif;
+  /* D-7b (issue #483): prototype-2-today-home.html's system font stack. */
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   transition:
     background-color 0.25s ease,
     color 0.25s ease;
@@ -355,8 +353,14 @@ body {
   font: inherit;
 }
 
+/* D-7b (issue #483): the prototype has no dedicated mono webfont — it gets
+   tabular alignment via `font-variant-numeric: tabular-nums` on its system
+   --font stack. This app's code/tabular surfaces still need a genuine
+   monospace face, so `.mono` keeps one, now a system-only ui-monospace
+   fallback chain instead of the retired IBM Plex Mono webfont. */
 .lifeos-cockpit .mono {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 @media (max-width: 640px) {
@@ -653,7 +657,8 @@ summary {
 
 .workflow-page-title {
   margin: 0;
-  font-family: "Fraunces", "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   font-size: clamp(1.9rem, 2vw + 1.2rem, 2.9rem);
   line-height: 0.98;
   letter-spacing: -0.03em;
@@ -1121,7 +1126,8 @@ summary {
 
 .workflow-metric-value {
   margin-top: 0.45rem;
-  font-family: "Fraunces", "IBM Plex Sans", "Inter", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   font-size: clamp(1.55rem, 2vw + 0.65rem, 2.2rem);
   line-height: 0.95;
   letter-spacing: -0.03em;
@@ -1342,19 +1348,14 @@ summary {
   );
 }
 
+/* D-7b (issue #483): the prototype has no separate heading face — headings
+   render in the same system --font stack as body text. */
 h1,
 h2,
 h3,
 h4 {
   font-family:
-    "Fraunces",
-    "IBM Plex Sans",
-    "Inter",
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
   letter-spacing: -0.01em;
 }
 
