@@ -9,13 +9,14 @@ Open problems in agentic engineering where a single disciplined project — one 
 
 **Everything in this file is labeled OPEN or CANDIDATE.** This skill must model the no-oversell rule itself: these are directions with reasoned promise, not established findings. As of 2026-07-02 the field moves fast — re-check what has since been solved before investing (see Provenance).
 
-**Jargon:** *SOTA* = state of the art, here meaning common best practice, not a leaderboard. *Falsifiable milestone* = a pre-registered outcome that could visibly fail. *Override rate* = how often a human reverses an agent's proposed/executed action.
+**Jargon:** _SOTA_ = state of the art, here meaning common best practice, not a leaderboard. _Falsifiable milestone_ = a pre-registered outcome that could visibly fail. _Override rate_ = how often a human reverses an agent's proposed/executed action.
 
 ## When to use / when NOT to use
 
 **Use when:** choosing a research direction, sizing its promise, or forcing an ambitious idea into a falsifiable shape.
 
 **Do NOT use for:**
+
 - HOW to run the experiments (evidence bar, pre-registration, refutation) → `agentic-research-methodology`. Every program below routes through it.
 - Claiming results publicly → `agentic-external-positioning` (its claims ladder applies with full force to research claims).
 - Day-to-day engineering — none of this file is needed to fix a bug.
@@ -24,11 +25,11 @@ Open problems in agentic engineering where a single disciplined project — one 
 
 ### 1. Earned autonomy (OPEN)
 
-**Why SOTA fails:** agent autonomy is gated by *static* permission lists — allowlists and approval prompts configured once, by intuition, then never updated by evidence. The human either rubber-stamps (gate theater) or bottlenecks.
+**Why SOTA fails:** agent autonomy is gated by _static_ permission lists — allowlists and approval prompts configured once, by intuition, then never updated by evidence. The human either rubber-stamps (gate theater) or bottlenecks.
 **The asset:** a project running `agentic-change-control` accumulates decision data — every propose→approve/override/edit event, per action class.
 **First three steps:** (1) Log every approval decision with action class, outcome, and any human edit (a one-file JSONL is enough). (2) Define graduation criteria per class in advance (e.g. N≥20 consecutive non-overridden instances; the ladder's graduation rule). (3) Graduate ONE low-stakes class (e.g. docs-only commits) by the data, and keep logging post-graduation defects.
 **You have a result when:** a data-graduated class runs auto-executed for 30+ days with zero overrides/defects, while a matched still-gated class shows the human approving ≥95% unchanged — demonstrating the gate carried no information the data hadn't already captured. Falsified if post-graduation defects exceed the gated baseline.
-**Field update (as of 2026-07):** industry now names the endpoint of this ladder the "dark factory" (fully hands-off pipelines; five-level maturity spectrum from human-written through agent-authored-human-reviewed to no-human-review). Practitioner writing on the pattern (e.g. the AI Pattern Book dark-factory entry, 2026) argues graduation is gated on test-oracle strength — "a weak oracle makes Dark Factory dangerous" — not on model capability; treat that as informed opinion, not established consensus. The open question stays open: graduation driven by *decision data* rather than by declaration.
+**Field update (as of 2026-07):** industry now names the endpoint of this ladder the "dark factory" (fully hands-off pipelines; five-level maturity spectrum from human-written through agent-authored-human-reviewed to no-human-review). Practitioner writing on the pattern (e.g. the AI Pattern Book dark-factory entry, 2026) argues graduation is gated on test-oracle strength — "a weak oracle makes Dark Factory dangerous" — not on model capability; treat that as informed opinion, not established consensus. The open question stays open: graduation driven by _decision data_ rather than by declaration.
 
 ### 2. Self-verification that transfers (OPEN)
 
@@ -39,14 +40,14 @@ Open problems in agentic engineering where a single disciplined project — one 
 
 ### 3. Durable memory across sessions (OPEN)
 
-**Why SOTA fails:** conversation memory dies at compaction; naive fixes (bigger windows, transcript summaries, vector stores over chat logs) preserve *text* but not *decisions with their evidence* — the summary keeps the conclusion and silently drops the caveat that made it safe.
+**Why SOTA fails:** conversation memory dies at compaction; naive fixes (bigger windows, transcript summaries, vector stores over chat logs) preserve _text_ but not _decisions with their evidence_ — the summary keeps the conclusion and silently drops the caveat that made it safe.
 **The asset:** the files-as-memory discipline: campaign docs with re-verification commands (`agentic-long-horizon-campaign`), the failure chronicle, ADRs.
 **First three steps:** (1) Run one real multi-week problem strictly by the campaign protocol. (2) At each session boundary, log re-entry cost: minutes-to-first-productive-action and human words of re-briefing needed. (3) Compare against a control problem run with ad-hoc handoffs.
 **You have a result when:** cold sessions pass their next campaign gate with ZERO human re-briefing across N≥10 consecutive resumptions, and re-entry cost stays flat as the campaign ages (ad-hoc control degrades). Falsified if campaign-doc drift (state file says X, repo says Y) recurs despite the re-verification protocol.
 
 ### 4. Multi-agent reliability (OPEN)
 
-**Why SOTA fails:** fan-out multiplies throughput and error together; common practice reviews multi-agent output the same way as single-agent output, so defect rates scale with agent count. (This library's own authoring hit the other failure mode: fan-out also multiplies *cost* into rate limits.)
+**Why SOTA fails:** fan-out multiplies throughput and error together; common practice reviews multi-agent output the same way as single-agent output, so defect rates scale with agent count. (This library's own authoring hit the other failure mode: fan-out also multiplies _cost_ into rate limits.)
 **The asset:** structured handoffs, adversarial reviewer roles, and per-boundary verification (`agentic-context-engineering-reference` §5).
 **First three steps:** (1) Pick a decomposable task class you actually repeat (e.g. multi-file refactors). (2) Run matched tasks in both modes — single strong session vs fan-out+adversarial-review — with a pre-registered defect rubric. (3) Count verified defects and total cost per mode.
 **You have a result when:** reviewed fan-out beats the single-agent baseline on defect rate at equal-or-better wall-clock, on tasks you pre-registered — not on the anecdote where it happened to shine. Falsified if review overhead eats the parallelism (also worth publishing).
@@ -70,6 +71,7 @@ Open problems in agentic engineering where a single disciplined project — one 
 Authored 2026-07-02. Problem selection and "why SOTA fails" characterizations reflect the field as of this date and WILL age; the milestones are designed to remain falsifiable even as tooling changes. Nothing here is an established result — states are OPEN (unattempted at rigor, to this author's knowledge) and CANDIDATE (attemptable immediately with this library).
 
 **Volatile facts, re-verify if this file is old:**
+
 - Whether any problem has since been credibly solved: search recent agentic-engineering literature and major agent-tool release notes before investing (a solved problem here should be demoted to a reference, not re-attempted).
 - The premise of #5 (skill libraries unmeasured) and #2 (self-grading weak) are empirical claims about the ecosystem as of 2026-07-02 — re-verify before repeating them.
 - Sibling skills referenced: `agentic-research-methodology`, `agentic-external-positioning`, `agentic-change-control`, `agentic-validation-and-qa`, `agentic-long-horizon-campaign`, `agentic-context-engineering-reference`, `agentic-failure-archaeology` — re-verify against the library index.
