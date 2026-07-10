@@ -57,7 +57,7 @@ No clean sandbox slice until test-plan findings arrive. The pattern that works: 
 1. **Merge #480** (pill fix — Claude-authored, self-approval classifier).
 2. **Run test-plan Session 0 + 1** (~25 min; starts the data clock for sessions 5–7).
 3. Close CO-6 #398 (merged in #405, still open).
-4. _(Housekeeping)_ delete merged/stale remote branches `guard/server-timestamp-coverage` and `docs/handover-session10` (superseded by `-v2`; its PR #481 was closed as based on a stale ref).
+4. _(Housekeeping)_ delete merged remote branches `guard/server-timestamp-coverage` and `docs/handover-session10` (PR #481 — cut from a stale local origin/main ref but auto-merged cleanly; #482 layered the corrections on top).
 
 ## 5. Session 10 deliverables (2026-07-09, all merged unless noted)
 

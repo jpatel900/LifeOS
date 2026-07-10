@@ -18,10 +18,23 @@ import { isMomentsHomeEnabled } from "@/lib/flags";
 // centering/padding) so the moments home gets the same page shell as the
 // cockpit routes, without touching TodayMoments' own markup or the
 // dev-only /moments-preview route (which has its own wrapper).
+//
+// #477: CaptureAffordance floats `fixed bottom-6` with a footprint of
+// ~94px from the viewport's bottom edge (its own rendered height, up to
+// ~70px once "Capture a thought" wraps to two lines at narrow widths,
+// plus the 24px bottom-6 offset) — unaffected by scroll, since `fixed`
+// pins it to the viewport, not the document. On a short page (e.g. the
+// Start moment's empty state) the last content row — the Pipeline
+// disclosure — sits at the natural end of the flow, which on scroll
+// lands directly under the pill with no shell-level clearance reserved
+// for it. `pb-32` (128px) reserves comfortably more than that footprint
+// so the last row always clears the pill regardless of content height,
+// at any width (the pill's size/position don't change per breakpoint,
+// so this isn't a `sm:` variant like the surrounding px/pt).
 function MomentsHomeShell() {
   return (
     <main className="lifeos-cockpit" data-testid="moments-home-shell">
-      <div className="mx-auto flex min-h-screen w-full max-w-[var(--max)] flex-col gap-5 px-4 py-4 sm:px-6 sm:py-6">
+      <div className="mx-auto flex min-h-screen w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6">
         <TodayMoments />
       </div>
     </main>
