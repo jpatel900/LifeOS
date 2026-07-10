@@ -1,0 +1,210 @@
+name: Format Self-heal
+
+# Auto-repairs main when CI's "Check formatting" step reds it, and only that
+# step. Motivated by the 2026-07-09 merge race: PR #471 (docs/KNOWN_ISSUES.md
+# content edit) and PR #472 (repo-wide reformat + the new blocking format
+# check itself) each proved green in isolation, then merged 49 seconds
+# apart. Neither PR's own CI run ever validated the COMBINED state that
+# landed on main, so the resulting formatting drift went unvalidated until
+# the next CI run on main went red -- and stayed red for every subsequent
+# PR (pnpm format:check runs against the whole repo) until a human opened a
+# one-file prettier fix by hand (PR #476, which rode the docs safe-automerge
+# lane). This workflow automates exactly that recovery so it doesn't need a
+# human to notice.
+#
+# Scope discipline (deliberately narrow, unlike the retired LLM-based
+# `codex-ci-autofix.yml`): this workflow does NOT parse CI logs to decide
+# what broke. It re-runs `pnpm format:check` against current main itself.
+#   - If that check PASSES, whatever failed CI was not a formatting problem
+#     -- log "not my department" and exit 0. No other repair is attempted.
+#   - If it FAILS, run `pnpm format`, confirm the diff is non-empty AND that
+#     `pnpm format:check` now passes, then open a PR with just that diff.
+#     If format:check still fails after `pnpm format` (a prettier-can't-fix
+#     case), the job fails loudly (::error + exit 1) rather than looping or
+#     guessing further.
+#
+# Known overlap: `.github/workflows/main-red-guard.yml` listens to the same
+# workflow_run(CI, completed) event on main and, on a REPRODUCED red (its
+# own flake-guard retry also fails), opens a revert-to-last-green PR
+# instead of a forward fix. Both workflows may now fire for the same
+# incident. Deliberately NOT reconciled here (see OWNER-GATE in this PR's
+# body) -- revert-vs-fix-forward is a policy call, not a mechanical one.
+# In practice main-red-guard's revert only arms on run_attempt >= 2 (a
+# format red is not a flake, so it will reproduce and both may open PRs);
+# the revert PR's own body says closing it cancels the revert — when both
+# appear, land the forward fix and close the revert. main-red-guard's
+# push-403 (under-scoped CODEX_KICK_TOKEN used as checkout token) is fixed
+# in the same PR that adds this file.
+#
+# Auto-merge lane: opens the PR with `agent:ready` + `risk:low` +
+# `automerge:safe` so it can ride the existing docs safe-automerge lane
+# (`.github/workflows/safe-automerge.yml` +
+# `scripts/agent/check-safe-automerge.mjs`). That lane only allows
+# `docs/**`, `README.md`, `.github/ISSUE_TEMPLATE/**`, `.agents/skills/**`
+# -- so a drift confined to docs (like this incident) auto-merges, and a
+# drift touching code paths is correctly left ineligible and waits for the
+# owner. That is the intended degraded mode, not a bug.
+#
+# This file is a GitHub Actions workflow: per .github/AGENT_AUTOMATION_POLICY.md
+# it is T2 -- agent implementation allowed, but changes to this file (and any
+# PR it opens against main, since it is workflow-adjacent recovery tooling)
+# require human review before merge.
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+  workflow_dispatch: {}
+
+# One heal attempt in flight at a time; never cancel a heal that is already
+# writing/pushing partway through.
+concurrency:
+  group: format-selfheal
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  heal:
+    name: Self-heal formatting drift on main
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git identity for the heal commit
+        run: |
+          git config user.name "format-selfheal[bot]"
+          git config user.email "format-selfheal@users.noreply.github.com"
+
+      # Mirrors ci.yml's "Monorepo Validation" job setup verbatim, so the
+      # formatter runs under the exact toolchain CI uses to judge it.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check current formatting on main
+        id: precheck
+        run: |
+          if pnpm format:check; then
+            echo "clean=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "clean=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Not my department
+        if: steps.precheck.outputs.clean == 'true'
+        run: |
+          echo "main format is clean; the CI failure was something else — not my department."
+          exit 0
+
+      - name: Run prettier --write
+        if: steps.precheck.outputs.clean == 'false'
+        run: pnpm format
+
+      - name: Verify the fix actually fixes it
+        if: steps.precheck.outputs.clean == 'false'
+        id: verify
+        run: |
+          changed="$(git diff --name-only)"
+          if [ -z "$changed" ]; then
+            echo "::error::pnpm format:check failed but pnpm format produced no diff. Fail loud instead of opening an empty PR."
+            exit 1
+          fi
+
+          if ! pnpm format:check; then
+            echo "::error::pnpm format:check still fails after pnpm format. This is not a plain formatting drift prettier can fix on its own — needs a human, not a loop."
+            exit 1
+          fi
+
+          echo "Formatting fixed. Changed files:"
+          echo "$changed"
+          {
+            echo "files<<EOF"
+            echo "$changed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check for an existing open self-heal PR
+        if: steps.precheck.outputs.clean == 'false'
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing_url="$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --state open \
+            --json url,headRefName \
+            --jq '[.[] | select(.headRefName | startswith("selfheal/format-"))][0].url // empty')"
+          echo "url=$existing_url" >> "$GITHUB_OUTPUT"
+
+      - name: Create branch and commit the fix
+        if: steps.precheck.outputs.clean == 'false' && steps.existing.outputs.url == ''
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id || github.run_id }}
+        run: |
+          branch="selfheal/format-${RUN_ID}"
+          git switch -c "$branch"
+          git add -A
+          git commit -m "fix(format): self-heal formatting drift on main [selfheal]"
+          git push origin "$branch"
+          echo "BRANCH=$branch" >> "$GITHUB_ENV"
+
+      - name: Open the self-heal PR
+        if: steps.precheck.outputs.clean == 'false' && steps.existing.outputs.url == ''
+        env:
+          # Kick PAT first, NOT github.token: PRs opened by github.token never
+          # trigger workflow runs (GitHub anti-recursion), so required checks
+          # would sit pending forever and safe-automerge could never land the
+          # heal. The kick PAT is Issues+PRs-scoped — enough to open/label a
+          # PR, and as a real user its PR-open event triggers CI normally.
+          # (The branch push above stays on github.token, which has the
+          # contents:write this workflow's permissions grant.) Fallback to
+          # github.token = degraded mode: PR opens but the owner must nudge
+          # checks (close/reopen or push) before it can merge.
+          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          RUN_URL: ${{ github.event.workflow_run.html_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
+          CHANGED_FILES: ${{ steps.verify.outputs.files }}
+        run: |
+          body="$(printf '## What drifted\n\nCI'\''s blocking `pnpm format:check` step failed on main. This PR is the automated repair: `pnpm format` applied and re-verified clean, no other changes.\n\nFailed run: %s\n\nFiles reformatted:\n```\n%s\n```\n\nOpened automatically by `.github/workflows/format-selfheal.yml`. This workflow file is T2 (owner-merge) per `.github/AGENT_AUTOMATION_POLICY.md` -- see that file'\''s header for why main-red-guard may also react to the same incident.\n\n- [ ] AGENT-TODO: if this PR touches only `docs/**` / `README.md` / `.agents/skills/**`, the existing safe-automerge lane should auto-merge it once checks pass; otherwise it waits here for owner merge.\n' "$RUN_URL" "$CHANGED_FILES")"
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --title "fix(format): self-heal formatting drift on main" \
+            --body "$body" \
+            --label agent:ready \
+            --label risk:low \
+            --label automerge:safe
+
+      - name: Comment on existing self-heal PR instead of duplicating
+        if: steps.precheck.outputs.clean == 'false' && steps.existing.outputs.url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.event.workflow_run.html_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
+          EXISTING_URL: ${{ steps.existing.outputs.url }}
+        run: |
+          gh pr comment "$EXISTING_URL" \
+            --body "Formatting drift detected again by $RUN_URL. An open self-heal PR already exists here; not opening a duplicate."
