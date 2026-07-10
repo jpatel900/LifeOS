@@ -12,3 +12,8 @@ pnpm-lock.yaml
 # wholesale rather than fix real drift. See PR for chore/ci-cost-hardening.
 design_handoff_lifeos/**
 docs/implementation-planning/ui-handoff-conflicts/**
+# Vendored skill-hub content synced verbatim by the daily sync workflow —
+# externally authored, and some files are prettier-non-idempotent (format
+# then check still fails), which redded main on 2026-07-10 (#496 -> revert
+# #499). See issue #508.
+.agents/skills/**
