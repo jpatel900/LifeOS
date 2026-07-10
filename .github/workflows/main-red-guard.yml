@@ -63,7 +63,14 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-          token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          # github.token, NOT the kick PAT: the checkout token becomes the
+          # persisted credential `git push origin guard/revert-main-*` uses.
+          # The Issues+PRs-scoped kick PAT lacks contents:write and 403'd the
+          # push on 2026-07-09 (run 29055368826, "denied to jpatel900") — the
+          # revert silently never landed. github.token has the contents:write
+          # this workflow's permissions grant. PR creation below still uses
+          # the kick PAT so the revert PR's own checks actually trigger.
+          token: ${{ github.token }}
 
       - name: Skip if a guard revert PR is already open
         id: dedupe
@@ -165,7 +172,9 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-          token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          # github.token for git pushes (kick PAT lacks contents:write — same
+          # 403 class as the guard job's 2026-07-09 failure).
+          token: ${{ github.token }}
 
       - name: Open demotion PR for implicated safe auto-merge class
         env:
@@ -187,7 +196,9 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-          token: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          # github.token for git pushes (kick PAT lacks contents:write — same
+          # 403 class as the guard job's 2026-07-09 failure).
+          token: ${{ github.token }}
 
       - name: Open demotion PR for reverted safe auto-merge class
         env:

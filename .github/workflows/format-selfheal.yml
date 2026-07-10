@@ -29,10 +29,12 @@ name: Format Self-heal
 # instead of a forward fix. Both workflows may now fire for the same
 # incident. Deliberately NOT reconciled here (see OWNER-GATE in this PR's
 # body) -- revert-vs-fix-forward is a policy call, not a mechanical one.
-# In practice main-red-guard's revert only arms on run_attempt >= 2 and (as
-# of 2026-07-09) its push step 403s using an expired CODEX_KICK_TOKEN PAT
-# (see the PR body's AGENT-TODO), so today this workflow is the one that
-# actually lands a fix.
+# In practice main-red-guard's revert only arms on run_attempt >= 2 (a
+# format red is not a flake, so it will reproduce and both may open PRs);
+# the revert PR's own body says closing it cancels the revert — when both
+# appear, land the forward fix and close the revert. main-red-guard's
+# push-403 (under-scoped CODEX_KICK_TOKEN used as checkout token) is fixed
+# in the same PR that adds this file.
 #
 # Auto-merge lane: opens the PR with `agent:ready` + `risk:low` +
 # `automerge:safe` so it can ride the existing docs safe-automerge lane
@@ -173,7 +175,16 @@ jobs:
       - name: Open the self-heal PR
         if: steps.precheck.outputs.clean == 'false' && steps.existing.outputs.url == ''
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Kick PAT first, NOT github.token: PRs opened by github.token never
+          # trigger workflow runs (GitHub anti-recursion), so required checks
+          # would sit pending forever and safe-automerge could never land the
+          # heal. The kick PAT is Issues+PRs-scoped — enough to open/label a
+          # PR, and as a real user its PR-open event triggers CI normally.
+          # (The branch push above stays on github.token, which has the
+          # contents:write this workflow's permissions grant.) Fallback to
+          # github.token = degraded mode: PR opens but the owner must nudge
+          # checks (close/reopen or push) before it can merge.
+          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
           RUN_URL: ${{ github.event.workflow_run.html_url || format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
           CHANGED_FILES: ${{ steps.verify.outputs.files }}
         run: |
