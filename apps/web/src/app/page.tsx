@@ -1,4 +1,5 @@
 import { CockpitRoute } from "./components/CockpitRoute";
+import { MomentsThemeShell } from "./components/moments/MomentsThemeShell";
 import { TodayMoments } from "./components/moments/TodayMoments";
 import { isMomentsHomeEnabled } from "@/lib/flags";
 
@@ -36,16 +37,15 @@ import { isMomentsHomeEnabled } from "@/lib/flags";
 // subtle radial accent tint behind `.lifeos-cockpit`'s flat `--bd`
 // background — depth for this shell only, the cockpit stage routes keep
 // their plain background untouched.
+//
+// #501: the shell's `data-theme` (which flips `.lifeos-cockpit`'s hex token
+// axis to light) must follow the app's next-themes theme rather than staying
+// permanently unset — see MomentsThemeShell for the client-side wiring.
 function MomentsHomeShell() {
   return (
-    <main
-      className="lifeos-cockpit moments-home"
-      data-testid="moments-home-shell"
-    >
-      <div className="mx-auto flex min-h-screen w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6">
-        <TodayMoments />
-      </div>
-    </main>
+    <MomentsThemeShell>
+      <TodayMoments />
+    </MomentsThemeShell>
   );
 }
 
