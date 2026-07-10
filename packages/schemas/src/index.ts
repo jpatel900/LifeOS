@@ -19,6 +19,7 @@ export * from "./user";
 export * from "./model-tier";
 export * from "./meta-learning";
 export * from "./phase2-mock-workflow";
+export * from "./task-map";
 
 export const CreateCaptureItemInputSchema = z.object({
   raw_text: z.string().trim().min(1),
