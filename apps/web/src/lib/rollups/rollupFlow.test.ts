@@ -10,11 +10,14 @@ import {
 } from "./rollupDraft";
 
 /**
- * S8 (#260) acceptance flow, exercised end-to-end across the deterministic
- * draft composer and the persistence layer:
+ * S8 (#260) / #486 acceptance flow, exercised end-to-end across the
+ * deterministic draft composer and the persistence layer:
  *
  *  - two seeded weeks produce two APPROVED weekly rows,
  *  - the two approved weeks compose into one monthly CANDIDATE draft,
+ *  - approving the monthly candidate persists it through the SAME
+ *    `createRollupSummary` path with `period_type: "month"` (#486 — no new
+ *    persistence path),
  *  - a rejected draft persists nothing (createRollupSummary is never called).
  */
 
@@ -106,6 +109,24 @@ describe("S8 rollup acceptance flow", () => {
     // A rejected draft is simply never handed to createRollupSummary: no third
     // insert happened.
     expect(captured).toHaveLength(2);
+
+    // #486: approving the monthly candidate persists it through the SAME
+    // path, with period_type "month" — no new write path.
+    const r3 = await createRollupSummary(client, {
+      area_id: areaId,
+      period_type: "month",
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      summary: monthlyCandidate!,
+    });
+    expect(r3.provider).toBe("supabase");
+    expect(r3.rollupSummary.period_type).toBe("month");
+    expect(captured).toHaveLength(3);
+    expect(captured[2]).toMatchObject({
+      period_type: "month",
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+    });
   });
 
   it("lists nothing before any rollup is approved (mock provider)", async () => {

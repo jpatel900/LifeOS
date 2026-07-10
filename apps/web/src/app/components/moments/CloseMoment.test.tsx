@@ -38,6 +38,15 @@ function renderClose(
     onApproveRollup: vi.fn(),
     onDismissRollup: vi.fn(),
     onToggleRollupProse: vi.fn(),
+    pendingMonthlyRollups: [] as React.ComponentProps<
+      typeof CloseMoment
+    >["pendingMonthlyRollups"],
+    approvedMonthlyRollups: [] as React.ComponentProps<
+      typeof CloseMoment
+    >["approvedMonthlyRollups"],
+    onApproveMonthlyRollup: vi.fn(),
+    onDismissMonthlyRollup: vi.fn(),
+    onToggleMonthlyRollupProse: vi.fn(),
     ...overrides,
   };
   render(<CloseMoment {...props} />);
@@ -195,5 +204,130 @@ describe("CloseMoment — S8 rollup readback", () => {
     expect(
       screen.getByTestId("close-moment-rollup-toggleprose-area-1"),
     ).toHaveTextContent("Use AI version");
+  });
+});
+
+const monthlyRollupDraft = {
+  areaId: "area-1",
+  areaLabel: "Main Job",
+  periodStart: "2026-07-01",
+  periodEnd: "2026-07-05",
+  periodLabel: "2026-07-01 – 2026-07-05",
+  summary: {
+    highlights: ["Shipped onboarding", "Launched pricing"],
+    misses: ["Deep-work morning"],
+    counts: { wins: 2, completed_sessions: 10, missed_sessions: 1 },
+  },
+  weeksComposed: 2,
+};
+
+describe("CloseMoment — #486 monthly rollup readback", () => {
+  it("hides the monthly rollup card when there is nothing to approve or show", () => {
+    renderClose();
+    expect(
+      screen.queryByTestId("close-moment-monthly-rollup-area-1"),
+    ).toBeNull();
+    expect(
+      screen.queryByTestId("close-moment-monthly-rollups-approved"),
+    ).toBeNull();
+  });
+
+  it("renders a pending monthly rollup draft with highlights and misses", () => {
+    renderClose({ pendingMonthlyRollups: [monthlyRollupDraft] });
+    const card = screen.getByTestId("close-moment-monthly-rollup-area-1");
+    expect(card).toHaveTextContent("Main Job");
+    expect(card).toHaveTextContent("Shipped onboarding");
+    expect(card).toHaveTextContent("Launched pricing");
+    expect(card).toHaveTextContent("Deep-work morning");
+  });
+
+  it("approves a monthly rollup draft", () => {
+    const props = renderClose({
+      pendingMonthlyRollups: [monthlyRollupDraft],
+    });
+    fireEvent.click(
+      screen.getByTestId("close-moment-monthly-rollup-approve-area-1"),
+    );
+    expect(props.onApproveMonthlyRollup).toHaveBeenCalledWith(
+      monthlyRollupDraft,
+    );
+    expect(props.onDismissMonthlyRollup).not.toHaveBeenCalled();
+  });
+
+  it("dismisses a monthly rollup draft without approving (writes nothing)", () => {
+    const props = renderClose({
+      pendingMonthlyRollups: [monthlyRollupDraft],
+    });
+    fireEvent.click(
+      screen.getByTestId("close-moment-monthly-rollup-dismiss-area-1"),
+    );
+    expect(props.onDismissMonthlyRollup).toHaveBeenCalledWith("area-1");
+    expect(props.onApproveMonthlyRollup).not.toHaveBeenCalled();
+  });
+
+  it("reads back approved monthly rollups", () => {
+    renderClose({
+      approvedMonthlyRollups: [
+        {
+          areaLabel: "Main Job",
+          periodLabel: "2026-07-01 – 2026-07-05",
+          counts: { wins: 2 },
+        },
+      ],
+    });
+    expect(
+      screen.getByTestId("close-moment-monthly-rollups-approved"),
+    ).toHaveTextContent("Main Job");
+  });
+
+  it("shows no AI provenance affordance for a deterministic draft", () => {
+    renderClose({ pendingMonthlyRollups: [monthlyRollupDraft] });
+    expect(
+      screen.queryByTestId("close-moment-monthly-rollup-aiflag-area-1"),
+    ).toBeNull();
+    expect(
+      screen.queryByTestId("close-moment-monthly-rollup-toggleprose-area-1"),
+    ).toBeNull();
+  });
+
+  it("flags AI-polished prose and offers to keep the original", () => {
+    const props = renderClose({
+      pendingMonthlyRollups: [
+        { ...monthlyRollupDraft, enhanced: true, hasEnhancement: true },
+      ],
+    });
+    expect(
+      screen.getByTestId("close-moment-monthly-rollup-aiflag-area-1"),
+    ).toHaveTextContent("AI-polished");
+
+    const toggle = screen.getByTestId(
+      "close-moment-monthly-rollup-toggleprose-area-1",
+    );
+    expect(toggle).toHaveTextContent("Keep original");
+    fireEvent.click(toggle);
+    expect(props.onToggleMonthlyRollupProse).toHaveBeenCalledWith("area-1");
+  });
+
+  it("renders the month-over-month readback only when a prior-month row exists", () => {
+    renderClose({
+      pendingMonthlyRollups: [monthlyRollupDraft],
+      monthOverMonthReadback: [
+        {
+          areaId: "area-1",
+          periodLabel: "2026-06-01 – 2026-06-30",
+          counts: { wins: 1, completed_sessions: 4, missed_sessions: 1 },
+        },
+      ],
+    });
+    expect(
+      screen.getByTestId("close-moment-monthly-rollup-mom-area-1"),
+    ).toHaveTextContent("vs last month");
+  });
+
+  it("never fabricates a month-over-month line when no prior row is supplied", () => {
+    renderClose({ pendingMonthlyRollups: [monthlyRollupDraft] });
+    expect(
+      screen.queryByTestId("close-moment-monthly-rollup-mom-area-1"),
+    ).toBeNull();
   });
 });

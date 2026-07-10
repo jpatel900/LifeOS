@@ -25,6 +25,7 @@ import {
   type Phase2TaskDraft,
   type Phase2TimeBlockProposal,
   type ReviewEntry,
+  type RollupSummary,
   type RollupSummaryContent,
   type Task,
   type TimeBlockProposal as PersistedTimeBlockProposal,
@@ -75,6 +76,7 @@ import {
   createReviewEntry,
   createWinRecord,
   createRollupSummary,
+  listRollupSummaries,
   createTask,
   createTimeBlockProposal,
   editTimeBlockProposal,
@@ -401,10 +403,15 @@ interface WorkflowContextValue {
   }) => Promise<void>;
   confirmRollup: (input: {
     areaId: string;
+    periodType: "week" | "month";
     periodStart: string;
     periodEnd: string;
     summary: RollupSummaryContent;
   }) => Promise<void>;
+  // #486: read-only, workflow-area-scoped fetch of already-approved rollups
+  // (weekly and monthly), used for the monthly composer and month-over-month
+  // readback. See `listApprovedRollups` for the mapping/fallback details.
+  listApprovedRollups: () => Promise<RollupSummary[]>;
   // S9 (#261) learning-loop consumer. Reads are derived from loaded
   // override_records + execution-session actuals; decisions are propose->approve
   // and NEVER auto-apply a default (the recorded decision is the only mutation).
@@ -1879,12 +1886,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [markLocalOnly],
   );
 
-  // S8 (#260): persist a user-APPROVED rollup (NS-INV-4 — dismissed drafts never
-  // reach here). Weekly period; same local↔persisted area mapping + markLocalOnly
+  // S8 (#260, extended #486): persist a user-APPROVED rollup (NS-INV-4 —
+  // dismissed drafts never reach here). `periodType` is caller-supplied
+  // (weekly and monthly rollups share this exact persistence path — no new
+  // write path per #486); same local↔persisted area mapping + markLocalOnly
   // fallback as confirmWin. Mock/preview keeps the approval local.
   const confirmRollup = useCallback(
     async (input: {
       areaId: string;
+      periodType: "week" | "month";
       periodStart: string;
       periodEnd: string;
       summary: RollupSummaryContent;
@@ -1904,7 +1914,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       try {
         await createRollupSummary(client, {
           area_id: persistedAreaId,
-          period_type: "week",
+          period_type: input.periodType,
           period_start: input.periodStart,
           period_end: input.periodEnd,
           summary: input.summary,
@@ -1915,6 +1925,34 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     [markLocalOnly],
   );
+
+  // #486: read-only fetch of this user's already-APPROVED rollups, resolved
+  // to workflow-scoped area ids (same mapping `confirmRollup` writes through)
+  // so callers can group/compare without knowing about persisted area ids.
+  // Reuses `listRollupSummaries` (S8, previously unused outside tests) — no
+  // new persistence path. Mock/preview (no client) returns an empty list, the
+  // same "nothing to show" the rest of the rollup surface already treats as
+  // honest, not degraded.
+  const listApprovedRollups = useCallback(async (): Promise<
+    RollupSummary[]
+  > => {
+    const client = createSupabaseBrowserClient();
+    if (!client) return [];
+
+    try {
+      const result = await listRollupSummaries(client);
+      return result.rollupSummaries.map((row) => ({
+        ...row,
+        area_id:
+          workflowAreaIdForPersistedAreaId(
+            row.area_id,
+            persistedAreasRef.current,
+          ) ?? row.area_id,
+      }));
+    } catch {
+      return [];
+    }
+  }, []);
 
   // S9 (#261): a stable key for a (policy, area) proposal so a decided proposal
   // is hidden without a reload. Mirrors the scan's grouping.
@@ -3227,6 +3265,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     confirmWin,
     confirmRollup,
+    listApprovedRollups,
     overridePolicyProposals,
     decideOverridePolicyProposal,
     recalibrationForProposal,

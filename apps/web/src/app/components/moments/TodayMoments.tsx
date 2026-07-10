@@ -18,8 +18,17 @@ import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
 import { StartMoment } from "./StartMoment";
 import { FlowMoment } from "./FlowMoment";
 import { CloseMoment, type CloseWinVM } from "./CloseMoment";
-import type { RollupDraftVM } from "./momentsViewModel";
-import type { RollupSummaryContent } from "@lifeos/schemas";
+import type {
+  ApprovedWeeklyRollupInput,
+  MonthlyRollupDraftVM,
+  PriorMonthRollupInput,
+  RollupDraftVM,
+} from "./momentsViewModel";
+import {
+  buildMonthlyRollupDrafts,
+  deriveMonthOverMonthReadback,
+} from "./momentsViewModel";
+import type { RollupSummary, RollupSummaryContent } from "@lifeos/schemas";
 import { requestRollupProse } from "@/lib/ai/rollupProseClient";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useReEntryRitual } from "./useReEntryRitual";
@@ -175,6 +184,7 @@ export function TodayMoments({
     saveReview,
     confirmWin,
     confirmRollup,
+    listApprovedRollups,
     refreshPersistedWorkflow,
     promoteBacklogTask,
     deferTask,
@@ -507,6 +517,7 @@ export function TodayMoments({
       ]);
       void confirmRollup({
         areaId: draft.areaId,
+        periodType: "week",
         periodStart: draft.periodStart,
         periodEnd: draft.periodEnd,
         summary: draft.summary,
@@ -524,6 +535,216 @@ export function TodayMoments({
   }, []);
   const handleToggleRollupProse = useCallback((areaId: string) => {
     setKeptOriginalRollupAreaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(areaId)) {
+        next.delete(areaId);
+      } else {
+        next.add(areaId);
+      }
+      return next;
+    });
+  }, []);
+
+  // #486 (S8 follow-up): monthly rollup, mirroring the S8 weekly flow above
+  // wholesale. Unlike weekly (composed live from `state.calendarBlocks`), the
+  // monthly draft composes from this month's already-APPROVED weekly rollups
+  // — persisted rows, fetched once via `listApprovedRollups` (real client
+  // only; mock/preview keeps `allRollupSummaries` empty, so no monthly card
+  // shows there, same "nothing to show" idiom as everywhere else in this
+  // surface). Composition and the month-over-month readback are pure
+  // (momentsViewModel); approve/dismiss/AI-prose state is kept independent of
+  // the weekly rollup state above so each rollup type is separately decided.
+  const [allRollupSummaries, setAllRollupSummaries] = useState<RollupSummary[]>(
+    [],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const rollups = await listApprovedRollups();
+      if (!cancelled) setAllRollupSummaries(rollups);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listApprovedRollups]);
+
+  const areaLabelForWorkflowId = useCallback(
+    (areaId: string) =>
+      state.areas.find((area) => area.id === areaId)?.name ?? "",
+    [state.areas],
+  );
+
+  const approvedWeeklyRollupsThisMonth = useMemo<ApprovedWeeklyRollupInput[]>(
+    () =>
+      allRollupSummaries
+        .filter((row) => row.period_type === "week")
+        .map((row) => ({
+          areaId: row.area_id,
+          areaLabel: areaLabelForWorkflowId(row.area_id),
+          periodStart: row.period_start,
+          summary: row.summary,
+        })),
+    [allRollupSummaries, areaLabelForWorkflowId],
+  );
+  const monthlyRollupDraftsRaw = useMemo(
+    () => buildMonthlyRollupDrafts(approvedWeeklyRollupsThisMonth, now),
+    [approvedWeeklyRollupsThisMonth, now],
+  );
+
+  const priorMonthRollups = useMemo<PriorMonthRollupInput[]>(
+    () =>
+      allRollupSummaries
+        .filter((row) => row.period_type === "month")
+        .map((row) => ({
+          areaId: row.area_id,
+          periodStart: row.period_start,
+          periodEnd: row.period_end,
+          summary: row.summary,
+        })),
+    [allRollupSummaries],
+  );
+  const monthOverMonthReadback = useMemo(
+    () => deriveMonthOverMonthReadback(priorMonthRollups, now),
+    [priorMonthRollups, now],
+  );
+
+  const [approvedMonthlyRollups, setApprovedMonthlyRollups] = useState<
+    {
+      areaId: string;
+      areaLabel: string;
+      periodLabel: string;
+      counts: Record<string, number>;
+    }[]
+  >([]);
+  const [dismissedMonthlyRollupAreaIds, setDismissedMonthlyRollupAreaIds] =
+    useState<Set<string>>(() => new Set());
+  const approvedMonthlyRollupAreaIds = useMemo(
+    () => new Set(approvedMonthlyRollups.map((rollup) => rollup.areaId)),
+    [approvedMonthlyRollups],
+  );
+  const pendingMonthlyRollups = useMemo(
+    () =>
+      monthlyRollupDraftsRaw.filter(
+        (draft) =>
+          !dismissedMonthlyRollupAreaIds.has(draft.areaId) &&
+          !approvedMonthlyRollupAreaIds.has(draft.areaId),
+      ),
+    [
+      monthlyRollupDraftsRaw,
+      dismissedMonthlyRollupAreaIds,
+      approvedMonthlyRollupAreaIds,
+    ],
+  );
+
+  // E3 parity: AI-prose enhancement for pending monthly rollup drafts, routed
+  // through the SAME choke point as weekly (`requestRollupProse`) with
+  // `periodType: "month"` — no new AI plumbing.
+  const [enhancedMonthlyRollupSummaries, setEnhancedMonthlyRollupSummaries] =
+    useState<Record<string, RollupSummaryContent>>({});
+  const requestedMonthlyRollupAreaIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const client = createSupabaseBrowserClient();
+    if (!client) {
+      return;
+    }
+    const toRequest = pendingMonthlyRollups.filter(
+      (draft) => !requestedMonthlyRollupAreaIdsRef.current.has(draft.areaId),
+    );
+    if (toRequest.length === 0) {
+      return;
+    }
+    for (const draft of toRequest) {
+      requestedMonthlyRollupAreaIdsRef.current.add(draft.areaId);
+    }
+    let cancelled = false;
+    void (async () => {
+      const accessToken =
+        (await client.auth.getSession()).data.session?.access_token ?? null;
+      for (const draft of toRequest) {
+        if (cancelled) {
+          return;
+        }
+        const result = await requestRollupProse(
+          {
+            areaLabel: draft.areaLabel,
+            periodType: "month",
+            periodLabel: draft.periodLabel,
+            draft: draft.summary,
+          },
+          { accessToken },
+        );
+        if (cancelled) {
+          return;
+        }
+        if (!result.enhanced) {
+          continue;
+        }
+        setEnhancedMonthlyRollupSummaries((prev) =>
+          prev[draft.areaId]
+            ? prev
+            : { ...prev, [draft.areaId]: result.summary },
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingMonthlyRollups]);
+  const [
+    keptOriginalMonthlyRollupAreaIds,
+    setKeptOriginalMonthlyRollupAreaIds,
+  ] = useState<Set<string>>(() => new Set());
+  const displayedMonthlyRollups = useMemo(
+    () =>
+      pendingMonthlyRollups.map((draft) => {
+        const enhanced = enhancedMonthlyRollupSummaries[draft.areaId];
+        const showingProse =
+          Boolean(enhanced) &&
+          !keptOriginalMonthlyRollupAreaIds.has(draft.areaId);
+        return {
+          ...draft,
+          summary: showingProse && enhanced ? enhanced : draft.summary,
+          enhanced: showingProse,
+          hasEnhancement: Boolean(enhanced),
+        };
+      }),
+    [
+      pendingMonthlyRollups,
+      enhancedMonthlyRollupSummaries,
+      keptOriginalMonthlyRollupAreaIds,
+    ],
+  );
+  const handleApproveMonthlyRollup = useCallback(
+    (draft: MonthlyRollupDraftVM) => {
+      setApprovedMonthlyRollups((prev) => [
+        {
+          areaId: draft.areaId,
+          areaLabel: draft.areaLabel,
+          periodLabel: draft.periodLabel,
+          counts: draft.summary.counts,
+        },
+        ...prev,
+      ]);
+      void confirmRollup({
+        areaId: draft.areaId,
+        periodType: "month",
+        periodStart: draft.periodStart,
+        periodEnd: draft.periodEnd,
+        summary: draft.summary,
+      });
+      showToast("Rollup approved");
+    },
+    [confirmRollup, showToast],
+  );
+  const handleDismissMonthlyRollup = useCallback((areaId: string) => {
+    setDismissedMonthlyRollupAreaIds((prev) => {
+      const next = new Set(prev);
+      next.add(areaId);
+      return next;
+    });
+  }, []);
+  const handleToggleMonthlyRollupProse = useCallback((areaId: string) => {
+    setKeptOriginalMonthlyRollupAreaIds((prev) => {
       const next = new Set(prev);
       if (next.has(areaId)) {
         next.delete(areaId);
@@ -957,6 +1178,12 @@ export function TodayMoments({
               onApproveRollup={handleApproveRollup}
               onDismissRollup={handleDismissRollup}
               onToggleRollupProse={handleToggleRollupProse}
+              pendingMonthlyRollups={displayedMonthlyRollups}
+              approvedMonthlyRollups={approvedMonthlyRollups}
+              monthOverMonthReadback={monthOverMonthReadback}
+              onApproveMonthlyRollup={handleApproveMonthlyRollup}
+              onDismissMonthlyRollup={handleDismissMonthlyRollup}
+              onToggleMonthlyRollupProse={handleToggleMonthlyRollupProse}
             />
           ) : null}
         </>

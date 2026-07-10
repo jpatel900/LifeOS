@@ -13,7 +13,10 @@ import {
   buildDaySynthesis,
   buildFlowVM,
   buildGreeting,
+  buildMonthlyRollupDrafts,
   buildStartVM,
+  deriveMonthOverMonthReadback,
+  formatRollupCountsComparison,
   greetingPeriod,
   waitingOnAgingBucket,
 } from "./momentsViewModel";
@@ -842,6 +845,161 @@ describe("buildCloseVM", () => {
 
     const vm = buildCloseVM(state, { now: NOW });
     expect(vm.rollupDrafts).toEqual([]);
+  });
+});
+
+/**
+ * #486 (monthly rollup surface, S8 follow-up) — pure composition over
+ * caller-supplied approved-weekly-rollup input (not `state`), mirroring
+ * `buildWeeklyRollupDrafts`'s per-area/deterministic shape. `NOW` is pinned
+ * to 2026-07-05, so the current month is July 2026 (period_start
+ * "2026-07-01") and the prior month is June 2026 ("2026-06-01").
+ */
+describe("buildMonthlyRollupDrafts (#486)", () => {
+  it("composes a per-area monthly draft from that area's approved weekly rollups this month", () => {
+    const drafts = buildMonthlyRollupDrafts(
+      [
+        {
+          areaId: "area-1",
+          areaLabel: "Main Job",
+          periodStart: "2026-07-01",
+          summary: {
+            highlights: ["Shipped onboarding"],
+            misses: ["Deep-work morning"],
+            counts: { wins: 1, completed_sessions: 4, missed_sessions: 1 },
+          },
+        },
+        {
+          areaId: "area-1",
+          areaLabel: "Main Job",
+          periodStart: "2026-07-05",
+          summary: {
+            highlights: ["Launched pricing"],
+            misses: [],
+            counts: { wins: 1, completed_sessions: 6, missed_sessions: 0 },
+          },
+        },
+      ],
+      NOW,
+    );
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      areaId: "area-1",
+      areaLabel: "Main Job",
+      periodStart: "2026-07-01",
+      periodEnd: "2026-07-05",
+      weeksComposed: 2,
+    });
+    expect(drafts[0].summary.highlights).toEqual([
+      "Shipped onboarding",
+      "Launched pricing",
+    ]);
+    expect(drafts[0].summary.counts).toEqual({
+      wins: 2,
+      completed_sessions: 10,
+      missed_sessions: 1,
+    });
+  });
+
+  it("excludes a weekly rollup approved before the current month started", () => {
+    const drafts = buildMonthlyRollupDrafts(
+      [
+        {
+          areaId: "area-1",
+          areaLabel: "Main Job",
+          periodStart: "2026-06-24",
+          summary: {
+            highlights: ["Old week"],
+            misses: [],
+            counts: { wins: 1 },
+          },
+        },
+      ],
+      NOW,
+    );
+
+    expect(drafts).toEqual([]);
+  });
+
+  it("keeps areas independent — one draft per area", () => {
+    const drafts = buildMonthlyRollupDrafts(
+      [
+        {
+          areaId: "area-1",
+          areaLabel: "Main Job",
+          periodStart: "2026-07-01",
+          summary: { highlights: [], misses: [], counts: { wins: 1 } },
+        },
+        {
+          areaId: "area-2",
+          areaLabel: "Personal",
+          periodStart: "2026-07-01",
+          summary: { highlights: [], misses: [], counts: { wins: 2 } },
+        },
+      ],
+      NOW,
+    );
+
+    expect(drafts.map((d) => d.areaId)).toEqual(["area-1", "area-2"]);
+  });
+});
+
+describe("deriveMonthOverMonthReadback (#486)", () => {
+  it("returns the prior month's row for an area that has one", () => {
+    const readback = deriveMonthOverMonthReadback(
+      [
+        {
+          areaId: "area-1",
+          periodStart: "2026-06-01",
+          periodEnd: "2026-06-30",
+          summary: { highlights: [], misses: [], counts: { wins: 3 } },
+        },
+      ],
+      NOW,
+    );
+
+    expect(readback).toEqual([
+      {
+        areaId: "area-1",
+        periodLabel: "2026-06-01 – 2026-06-30",
+        counts: { wins: 3 },
+      },
+    ]);
+  });
+
+  it("never fabricates a comparison when no prior-month row exists", () => {
+    const readback = deriveMonthOverMonthReadback(
+      [
+        {
+          areaId: "area-1",
+          // Two months back, not the immediately-prior month.
+          periodStart: "2026-05-01",
+          periodEnd: "2026-05-31",
+          summary: { highlights: [], misses: [], counts: { wins: 3 } },
+        },
+      ],
+      NOW,
+    );
+
+    expect(readback).toEqual([]);
+  });
+});
+
+describe("formatRollupCountsComparison (#486)", () => {
+  it("formats a signed delta per count key, sorted", () => {
+    const text = formatRollupCountsComparison(
+      { wins: 2, completed_sessions: 10 },
+      { wins: 1 },
+    );
+    expect(text).toBe(
+      "completed sessions: 10 (+10 vs last month) · wins: 2 (+1 vs last month)",
+    );
+  });
+
+  it("shows a zero/negative delta truthfully", () => {
+    const text = formatRollupCountsComparison({ wins: 1 }, { wins: 3 });
+    expect(text).toBe("wins: 1 (-2 vs last month)");
   });
 });
 
