@@ -478,6 +478,33 @@ Status: not yet implemented. All additive per NS-INV-2; no new tables preferred 
 
 FR-029 (persistence truth + session longevity) and FR-030 (provider canary + mock-first auto-degrade) add no schema: FR-029 reuses the existing `provider === "mock"` signal (section 6 health tables / `workflow.ts`) and the Supabase client's own session store; FR-030 reads the existing `ai_call_traces` table (`latency_ms`, `status`) added for the constraint layer's parse-service instrumentation and writes no new columns.
 
+### 4.16 Task-Map v1 (FR-031) — additive shape sketch
+
+**PROPOSED — lands with the v1 build, not this PR.** This subsection sketches the shape FR-031 will need; it is not a frozen target-shape contract like 4.10-4.15 and does not authorize a migration on its own. A build slice still needs its own approved issue, migration, RLS, export coverage, and tests per section 11's guardrail.
+
+Purpose: nodes are nodes of the existing `tasks` table (no parallel node model); a new additive `task_edges` table carries the DAG's dependency/branch/merge edges; node-role annotations distinguish required, optional, and red (do-not/only-if) nodes.
+
+`tasks` — additive columns (sketch):
+
+| Column        | Type                                                    | Notes                                                                               |
+| ------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| node_role     | text nullable, check in (`required`, `optional`, `red`) | null when the task carries no map; FR-031 §(c)/(d) caps enforced in code + schema   |
+| red_reason    | text nullable                                           | required when `node_role = 'red'`; the cited reason for the do-not/only-if guidance |
+| red_condition | text nullable                                           | optional; the condition under which a red node becomes allowed                      |
+
+`task_edges` (sketch, additive new table):
+
+| Column          | Type        | Notes                                                                |
+| --------------- | ----------- | -------------------------------------------------------------------- |
+| id              | uuid pk     | generated                                                            |
+| user_id         | uuid        | owner (owner-scoped, like `people`/`operator_profiles` in 4.10/4.12) |
+| task_id         | uuid        | fk `tasks`; the map/DAG this edge belongs to                         |
+| from_node_order | integer     | source node within the task's map                                    |
+| to_node_order   | integer     | target node within the task's map (enables branching/merging edges)  |
+| created_at      | timestamptz | generated                                                            |
+
+Standard owner RLS (section 8), same pattern as sibling additive tables — no bespoke policy shape. Export coverage required (INV-2) in the creating PR. v1 caps (FR-031: ≤7 required + ≤4 optional nodes, one level of branching, ≤2 red nodes) are enforced in the strict schema and in code, not by this sketch's column shape alone.
+
 ## 5. Meta-Learning Tables
 
 ### 5.1 `priority_profiles`
