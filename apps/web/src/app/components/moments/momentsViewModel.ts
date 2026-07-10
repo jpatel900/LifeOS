@@ -247,6 +247,43 @@ function taskTitle(state: WorkflowState, taskId: string | null): string {
   return state.tasks.find((task) => task.id === taskId)?.title ?? "Focus block";
 }
 
+/** Time-derived subset of a calendar block, enough to place it on the timeline. */
+export type TimelineBlockInput = Pick<
+  Phase2MockCalendarBlock,
+  "status" | "start_at" | "end_at"
+>;
+
+/**
+ * D-5 (design alignment, #483) — pure done/now/upcoming derivation, extracted
+ * from `buildTodayBlocks` so the row-state rule is independently unit
+ * testable. A block is "done" once its status is `completed`; "now" while
+ * `running` (status overrides the clock — an explicitly-started block stays
+ * "now" even if the clock has drifted past its planned end) or while `now`
+ * falls inside `[start_at, end_at)`; otherwise "upcoming". No `Date.now()` —
+ * `now` is always caller-supplied, matching every other builder here.
+ * "free" is deliberately not a return value: v0 has no gap-row synthesis
+ * (see `buildTodayBlocks`'s doc comment), so no real block ever resolves to
+ * it — `ScheduleBlockVM.state` keeps that union member for P2 rendering only.
+ */
+export function blockTimelineState(
+  block: TimelineBlockInput,
+  now: Date,
+): "done" | "now" | "upcoming" {
+  if (block.status === "completed") {
+    return "done";
+  }
+
+  const startMs = new Date(block.start_at).getTime();
+  const endMs = new Date(block.end_at).getTime();
+  const nowMs = now.getTime();
+
+  if (block.status === "running" || (startMs <= nowMs && nowMs < endMs)) {
+    return "now";
+  }
+
+  return "upcoming";
+}
+
 /**
  * Today's non-cancelled calendar blocks mapped to schedule rows, sorted by
  * start time. "Today" = same calendar day as `now`. No gap/"free" row
@@ -258,32 +295,16 @@ function buildTodayBlocks(state: WorkflowState, now: Date): ScheduleBlockVM[] {
       (block) =>
         block.status !== "cancelled" && isSameCalendarDay(block.start_at, now),
     )
-    .map((block): ScheduleBlockVM => {
-      const startMs = new Date(block.start_at).getTime();
-      const endMs = new Date(block.end_at).getTime();
-      const nowMs = now.getTime();
-
-      let vmState: ScheduleBlockVM["state"];
-      if (block.status === "completed") {
-        vmState = "done";
-      } else if (
-        block.status === "running" ||
-        (startMs <= nowMs && nowMs < endMs)
-      ) {
-        vmState = "now";
-      } else {
-        vmState = "upcoming";
-      }
-
-      return {
+    .map(
+      (block): ScheduleBlockVM => ({
         id: block.id,
         title: taskTitle(state, block.task_id),
         meta: areaName(state.areas, block.area_id),
-        state: vmState,
+        state: blockTimelineState(block, now),
         startAt: block.start_at,
         endAt: block.end_at,
-      };
-    })
+      }),
+    )
     .sort(
       (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
     );

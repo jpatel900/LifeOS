@@ -8,6 +8,7 @@ import type {
   Phase2MockTask,
 } from "@/lib/types";
 import {
+  blockTimelineState,
   buildCloseVM,
   buildDaySynthesis,
   buildFlowVM,
@@ -233,6 +234,81 @@ describe("buildStartVM — schedule block mapping", () => {
 
     const vm = buildStartVM(state, { now: NOW });
     expect(vm.blocks.map((b) => b.id)).toEqual(["b-early", "b-late"]);
+  });
+});
+
+describe("blockTimelineState — D-5 (#483)", () => {
+  it("returns 'done' once status is completed, even mid-window", () => {
+    expect(
+      blockTimelineState(
+        {
+          status: "completed",
+          start_at: atTodayHour(9),
+          end_at: atTodayHour(10),
+        },
+        new Date(atTodayHour(9, 30)),
+      ),
+    ).toBe("done");
+  });
+
+  it("returns 'now' when now falls inside [start_at, end_at)", () => {
+    const block = {
+      status: "scheduled" as const,
+      start_at: atTodayHour(11),
+      end_at: atTodayHour(13),
+    };
+
+    expect(blockTimelineState(block, NOW)).toBe("now");
+  });
+
+  it("treats the start instant as 'now' (inclusive lower bound)", () => {
+    const block = {
+      status: "scheduled" as const,
+      start_at: atTodayHour(12),
+      end_at: atTodayHour(13),
+    };
+
+    expect(blockTimelineState(block, NOW)).toBe("now");
+  });
+
+  it("treats the end instant as 'upcoming', not 'now' (exclusive upper bound)", () => {
+    const block = {
+      status: "scheduled" as const,
+      start_at: atTodayHour(11),
+      end_at: atTodayHour(12),
+    };
+
+    expect(blockTimelineState(block, NOW)).toBe("upcoming");
+  });
+
+  it("returns 'upcoming' before the window starts", () => {
+    const block = {
+      status: "scheduled" as const,
+      start_at: atTodayHour(13),
+      end_at: atTodayHour(14),
+    };
+
+    expect(blockTimelineState(block, NOW)).toBe("upcoming");
+  });
+
+  it("returns 'now' for status='running' regardless of the time window", () => {
+    const block = {
+      status: "running" as const,
+      start_at: atTodayHour(20),
+      end_at: atTodayHour(21),
+    };
+
+    expect(blockTimelineState(block, NOW)).toBe("now");
+  });
+
+  it("never returns 'free' — v0 has no gap-row synthesis", () => {
+    const block = {
+      status: "cancelled" as const,
+      start_at: atTodayHour(9),
+      end_at: atTodayHour(10),
+    };
+
+    expect(blockTimelineState(block, NOW)).not.toBe("free");
   });
 });
 
