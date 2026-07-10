@@ -10,7 +10,10 @@ import {
   deriveFreeHoursFromBlocks,
   splitByFocusBudget,
 } from "@/lib/focus/dailyFocusBudget";
-import { buildWeeklyRollupDraft } from "@/lib/rollups/rollupDraft";
+import {
+  buildWeeklyRollupDraft,
+  composeMonthlyRollupDraft,
+} from "@/lib/rollups/rollupDraft";
 import type { RollupSummaryContent } from "@lifeos/schemas";
 
 /**
@@ -200,6 +203,51 @@ export interface RollupDraftVM {
   periodEnd: string;
   periodLabel: string;
   summary: RollupSummaryContent;
+}
+
+// #486 (monthly rollup surface, S8 follow-up): one already-APPROVED weekly
+// rollup, resolved to a workflow-scoped area label. This is the shape the
+// monthly composer reads — persisted rows fetched via `listRollupSummaries`,
+// not session-local drafts (a single Close session sees at most one weekly
+// draft per area, so composing "a month" from session state alone would be a
+// fabricated comparison; see `buildMonthlyRollupDrafts`).
+export interface ApprovedWeeklyRollupInput {
+  areaId: string;
+  areaLabel: string;
+  periodStart: string;
+  summary: RollupSummaryContent;
+}
+
+// #486: a per-area monthly rollup draft composed from that area's approved
+// weekly rollups falling within the current calendar month. `weeksComposed`
+// is display-only provenance (how many weeks fed the draft); the `summary`
+// shape is identical to the weekly draft's and persists unchanged via the
+// existing `createRollupSummary` path with `period_type: "month"`.
+export interface MonthlyRollupDraftVM {
+  areaId: string;
+  areaLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  summary: RollupSummaryContent;
+  weeksComposed: number;
+}
+
+// #486: one prior-month APPROVED rollup, resolved to a workflow-scoped area
+// id, used only for the month-over-month readback comparison.
+export interface PriorMonthRollupInput {
+  areaId: string;
+  periodStart: string;
+  periodEnd: string;
+  summary: RollupSummaryContent;
+}
+
+// #486: the month-over-month readback line for one area — rendered only when
+// a matching prior-month row actually exists (never fabricated).
+export interface MonthOverMonthReadbackVM {
+  areaId: string;
+  periodLabel: string;
+  counts: Record<string, number>;
 }
 
 export interface CloseVM {
@@ -976,4 +1024,102 @@ function buildWeeklyRollupDrafts(
   }
 
   return drafts.sort((a, b) => a.areaLabel.localeCompare(b.areaLabel));
+}
+
+/**
+ * #486 (S8 follow-up) — monthly rollup composition, mirroring
+ * `buildWeeklyRollupDrafts`'s per-area/deterministic/testable shape but over
+ * a caller-supplied input (not `state`): the current calendar month's already
+ * APPROVED weekly rollups (resolved area labels, persisted `period_start`).
+ * This stays a pure function — the fetch that produces `approvedWeeklyRollups`
+ * lives in the caller (mirrors `userName`/`calendarUnavailable` on
+ * `StartVMOptions`: an explicit injected input, not a new ambient read here).
+ *
+ * One draft per area that has 1+ approved weekly rollup whose `periodStart`
+ * falls on/after the first day of `now`'s month. Composition itself reuses
+ * `composeMonthlyRollupDraft` (S8, #260) unchanged — union highlights/misses,
+ * sum counts. `periodStart` is the first of the month; `periodEnd` is `now`
+ * (a month approved mid-month is a truthful partial period, same idiom as the
+ * weekly draft's `periodEnd`).
+ */
+export function buildMonthlyRollupDrafts(
+  approvedWeeklyRollups: ApprovedWeeklyRollupInput[],
+  now: Date,
+): MonthlyRollupDraftVM[] {
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const periodStart = toIsoDate(monthStart);
+  const periodEnd = toIsoDate(now);
+
+  const byArea = new Map<string, ApprovedWeeklyRollupInput[]>();
+  for (const rollup of approvedWeeklyRollups) {
+    if (rollup.periodStart < periodStart) continue;
+    const list = byArea.get(rollup.areaId) ?? [];
+    list.push(rollup);
+    byArea.set(rollup.areaId, list);
+  }
+
+  const drafts: MonthlyRollupDraftVM[] = [];
+  for (const [areaId, rollups] of byArea) {
+    const summary = composeMonthlyRollupDraft(rollups.map((r) => r.summary));
+    if (!summary) continue;
+    drafts.push({
+      areaId,
+      areaLabel: rollups[0].areaLabel,
+      periodStart,
+      periodEnd,
+      periodLabel: `${periodStart} – ${periodEnd}`,
+      summary,
+      weeksComposed: rollups.length,
+    });
+  }
+
+  return drafts.sort((a, b) => a.areaLabel.localeCompare(b.areaLabel));
+}
+
+/**
+ * #486 — month-over-month readback: per area, the prior calendar month's
+ * already-APPROVED monthly rollup, if one exists. Never fabricates a
+ * comparison — an area with no prior-month row simply has no entry in the
+ * returned list, and callers must treat absence as "nothing to show", not a
+ * zero/empty placeholder.
+ */
+export function deriveMonthOverMonthReadback(
+  priorMonthRollups: PriorMonthRollupInput[],
+  now: Date,
+): MonthOverMonthReadbackVM[] {
+  const priorMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const priorMonthStart = toIsoDate(priorMonthDate);
+
+  return priorMonthRollups
+    .filter((rollup) => rollup.periodStart === priorMonthStart)
+    .map((rollup) => ({
+      areaId: rollup.areaId,
+      periodLabel: `${rollup.periodStart} – ${rollup.periodEnd}`,
+      counts: rollup.summary.counts,
+    }));
+}
+
+/**
+ * #486 — formats a truthful, deterministic month-over-month comparison line
+ * from two count maps. Only keys present on `current` are shown (the current
+ * month's own count keys are authoritative); a key absent from `prior`
+ * compares against 0, not omitted, since "0 last month" is still true data
+ * (not a fabrication — the prior row itself is only passed in when it
+ * genuinely exists).
+ */
+export function formatRollupCountsComparison(
+  current: Record<string, number>,
+  prior: Record<string, number>,
+): string {
+  return Object.keys(current)
+    .sort()
+    .map((key) => {
+      const currentValue = current[key];
+      const priorValue = prior[key] ?? 0;
+      const delta = currentValue - priorValue;
+      const sign = delta > 0 ? "+" : "";
+      const label = key.replace(/_/g, " ");
+      return `${label}: ${currentValue} (${sign}${delta} vs last month)`;
+    })
+    .join(" · ");
 }
