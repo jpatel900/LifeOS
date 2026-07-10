@@ -120,3 +120,54 @@ test.describe("moments home layout (/) has no horizontal overflow", () => {
     });
   }
 });
+
+// #477: the floating "Capture a thought" pill (fixed bottom-center, see
+// CaptureAffordance.tsx) must never overlap the Pipeline disclosure row —
+// the last content row on a short/empty-state Start moment. The pill is
+// `fixed`, so it never moves on scroll; the shell's reserved bottom
+// clearance (pb-32 in MomentsHomeShell) only does its job once the page is
+// scrolled all the way to its true end — that's the realistic "reached the
+// bottom of a short page" moment, not the "nearest edge" a bare
+// scrollIntoView would stop at (which parks the row at the viewport edge
+// regardless of any reserved trailing space and would misreport an overlap
+// on already-fixed code). Viewport heights are picked so the mobile case
+// genuinely requires scrolling (its content is taller than 667px) while the
+// desktop case's short two-column content stays a non-regression check.
+// Pin the moment to Start (the Pipeline disclosure only renders there).
+test.describe("moments home capture pill clears the Pipeline row (#477)", () => {
+  for (const viewport of [
+    { width: 375, height: 667 },
+    { width: 1280, height: 900 },
+  ]) {
+    test(`capture pill does not intersect the Pipeline row at ${viewport.width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const pill = page.getByTestId("capture-affordance");
+      const pipeline = page.getByTestId("start-moment-pipeline-disclosure");
+      await expect(pill).toBeVisible();
+      await expect(pipeline).toBeVisible();
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+
+      const pillBox = await pill.boundingBox();
+      const pipelineBox = await pipeline.boundingBox();
+      expect(pillBox).not.toBeNull();
+      expect(pipelineBox).not.toBeNull();
+
+      const intersects =
+        pillBox!.x < pipelineBox!.x + pipelineBox!.width &&
+        pillBox!.x + pillBox!.width > pipelineBox!.x &&
+        pillBox!.y < pipelineBox!.y + pipelineBox!.height &&
+        pillBox!.y + pillBox!.height > pipelineBox!.y;
+
+      expect(intersects).toBe(false);
+    });
+  }
+});
