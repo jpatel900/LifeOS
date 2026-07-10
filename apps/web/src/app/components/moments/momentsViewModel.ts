@@ -168,6 +168,16 @@ export interface StartVM {
    */
   staleProject: StaleProjectVM | null;
   recoveryNudge: RecoveryNudgeVM | null;
+  /**
+   * D-2 (design alignment, #483): start-moment hero copy, porting
+   * prototype-2's "Good morning, Jay." + subline. Both are pure derivations
+   * — `greeting` from `now` (+ optional injected name, see `buildGreeting`),
+   * `daySynthesis` from counts this same builder already computed
+   * (`blocks`, `focusItems`, `focusBudget`, `deferredItems`). No AI prose,
+   * no new fetch.
+   */
+  greeting: string;
+  daySynthesis: string;
 }
 
 export interface FlowVM {
@@ -221,6 +231,15 @@ interface StartVMOptions extends NowOption {
    * this flag instead. Defaults to false (not degraded).
    */
   calendarUnavailable?: boolean;
+  /**
+   * D-2 (#483): optional display name for the hero greeting. LifeOS has no
+   * user display-name field plumbed into `WorkflowContext` yet (single-user
+   * app, no profile-table read) — this is an explicit injected input a
+   * future caller can supply once one exists, not a new fetch added here.
+   * Omitted/empty renders the time-of-day greeting alone rather than
+   * fabricating a name. Defaults to `null`.
+   */
+  userName?: string | null;
 }
 
 function taskTitle(state: WorkflowState, taskId: string | null): string {
@@ -578,12 +597,99 @@ function deriveRecoveryNudge(
   };
 }
 
+export type GreetingPeriod = "morning" | "afternoon" | "evening";
+
+/**
+ * D-2 (#483) time-of-day bucket for the hero greeting — local hour, same
+ * `now.getHours()` idiom `TodayMoments`' `heuristicMoment` already uses so
+ * "morning" here means the same thing it means for the start/flow/close
+ * moment heuristic. Boundaries: morning [0,12), afternoon [12,17),
+ * evening [17,24).
+ */
+export function greetingPeriod(now: Date): GreetingPeriod {
+  const hour = now.getHours();
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
+}
+
+/**
+ * D-2 (#483): deterministic hero greeting, porting prototype-2's
+ * "Good morning, Jay." line. Pure over the injected `now` (no ambient
+ * Date.now) plus an optional name — see `StartVMOptions.userName` for why
+ * that input is optional and not read from a new source here. A
+ * null/undefined/whitespace-only name renders the time-of-day greeting
+ * alone; a real name renders "Good <period>, <name>."
+ */
+export function buildGreeting(now: Date, name?: string | null): string {
+  const period = greetingPeriod(now);
+  const trimmedName = name?.trim();
+  const base = `Good ${period}`;
+  return trimmedName ? `${base}, ${trimmedName}.` : `${base}.`;
+}
+
+export interface DaySynthesisInput {
+  todayBlockCount: number;
+  focusFilledCount: number;
+  focusBudget: number;
+  deferredCount: number;
+}
+
+/**
+ * D-2 (#483): deterministic day-synthesis sentence, porting prototype-2's
+ * subline ("One clear block ahead of the noon call. 3 hours of focus
+ * available…"). Pure over counts `buildStartVM` already derives —
+ * `blocks.length` (today's schedule), and the S5 (#257) focus-budget split
+ * (`focusItems.length`/`focusBudget`/`deferredItems.length`). No AI prose,
+ * no new signal: every number here already exists on `StartVM` before this
+ * function runs.
+ *
+ * Rules (in order):
+ * 1. Nothing scheduled AND nothing queued for focus -> a single truthful
+ *    empty-day sentence pointing at capture (mirrors `StartMoment`'s
+ *    existing UX-INV-6 empty-first-move copy).
+ * 2. Otherwise, two clauses joined by an em dash: block count today
+ *    ("No blocks…" / "1 block…" / "N blocks…"), then focus-slot fill
+ *    ("nothing queued for focus" / "N of BUDGET focus slot(s) filled"),
+ *    with a parenthetical "(N deferred)" suffix appended only when
+ *    `deferredCount > 0` (never hidden — mirrors the FocusList's own
+ *    never-hide-deferred rule).
+ */
+export function buildDaySynthesis(input: DaySynthesisInput): string {
+  const { todayBlockCount, focusFilledCount, focusBudget, deferredCount } =
+    input;
+
+  if (todayBlockCount === 0 && focusFilledCount === 0 && deferredCount === 0) {
+    return "Nothing on the calendar and nothing queued — capture something to get moving.";
+  }
+
+  const blocksPart =
+    todayBlockCount === 0
+      ? "No blocks on the calendar today"
+      : `${todayBlockCount} block${todayBlockCount === 1 ? "" : "s"} on the calendar today`;
+
+  const focusPart =
+    focusFilledCount === 0
+      ? "nothing queued for focus"
+      : `${focusFilledCount} of ${focusBudget} focus slot${focusBudget === 1 ? "" : "s"} filled`;
+
+  const deferredSuffix =
+    deferredCount > 0 ? ` (${deferredCount} deferred)` : "";
+
+  return `${blocksPart} — ${focusPart}${deferredSuffix}.`;
+}
+
 /** Start moment view model — today's schedule, first move, waiting-on, area health. */
 export function buildStartVM(
   state: WorkflowState,
   options: StartVMOptions,
 ): StartVM {
-  const { now, selectedAreaId = null, calendarUnavailable = false } = options;
+  const {
+    now,
+    selectedAreaId = null,
+    calendarUnavailable = false,
+    userName = null,
+  } = options;
 
   const blocks = buildTodayBlocks(state, now);
   const waitingOn = buildWaitingOn(state, now);
@@ -617,6 +723,16 @@ export function buildStartVM(
   const staleProject = deriveStaleProject(state, now);
   const recoveryNudge = deriveRecoveryNudge(state, now);
 
+  // D-2 (#483) start-moment hero copy — pure over the values already
+  // computed above; see `buildGreeting`/`buildDaySynthesis` doc comments.
+  const greeting = buildGreeting(now, userName);
+  const daySynthesis = buildDaySynthesis({
+    todayBlockCount: blocks.length,
+    focusFilledCount: focusItems.length,
+    focusBudget,
+    deferredCount: deferredItems.length,
+  });
+
   return {
     firstMove,
     blocks,
@@ -633,6 +749,8 @@ export function buildStartVM(
     deferredItems,
     staleProject,
     recoveryNudge,
+    greeting,
+    daySynthesis,
   };
 }
 

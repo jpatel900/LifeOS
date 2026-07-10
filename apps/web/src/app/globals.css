@@ -1390,6 +1390,25 @@ health-*/review-* classes above stay untouched so the
   color: var(--fnt);
 }
 
+/* D-2 (#483) start-moment hero: greeting + deterministic day-synthesis
+   line, porting prototype-2's `.greeting h1` (30px/620/-0.02em) and
+   `.subline` (15px/muted/62ch) scale verbatim. Foreground/muted only — no
+   new color axis; this text is data, not area/state signaling. */
+.moments-greeting {
+  margin: 0;
+  font-size: 1.875rem;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.moments-daysynthesis {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.95rem;
+  color: var(--muted-foreground);
+}
+
 ::selection {
   background: color-mix(in oklch, var(--primary) 45%, transparent);
 }
