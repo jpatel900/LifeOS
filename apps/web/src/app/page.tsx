@@ -31,9 +31,17 @@ import { isMomentsHomeEnabled } from "@/lib/flags";
 // so the last row always clears the pill regardless of content height,
 // at any width (the pill's size/position don't change per breakpoint,
 // so this isn't a `sm:` variant like the surrounding px/pt).
+//
+// D-1 (issue #483): `moments-home` (globals.css) layers the prototype's
+// subtle radial accent tint behind `.lifeos-cockpit`'s flat `--bd`
+// background — depth for this shell only, the cockpit stage routes keep
+// their plain background untouched.
 function MomentsHomeShell() {
   return (
-    <main className="lifeos-cockpit" data-testid="moments-home-shell">
+    <main
+      className="lifeos-cockpit moments-home"
+      data-testid="moments-home-shell"
+    >
       <div className="mx-auto flex min-h-screen w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-32 pt-4 sm:px-6 sm:pt-6">
         <TodayMoments />
       </div>

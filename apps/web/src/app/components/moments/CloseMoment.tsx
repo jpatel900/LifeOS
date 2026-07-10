@@ -71,7 +71,7 @@ export function CloseMoment({
 
   return (
     <div className="grid gap-6" data-testid="close-moment">
-      <Card className="workflow-support-card">
+      <Card className="workflow-support-card moments-card">
         <CardContent className="grid grid-cols-2 gap-4 pt-5 sm:grid-cols-2">
           <div className="grid gap-0.5">
             <span
@@ -97,9 +97,9 @@ export function CloseMoment({
       </Card>
 
       {pendingWins.length > 0 || confirmedWins.length > 0 ? (
-        <Card className="workflow-support-card">
+        <Card className="workflow-support-card moments-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm tracking-tight">
+            <CardTitle className="moments-label text-sm tracking-tight">
               Wins &amp; evidence
             </CardTitle>
           </CardHeader>
@@ -195,9 +195,9 @@ export function CloseMoment({
       ) : null}
 
       {pendingRollups.length > 0 || approvedRollups.length > 0 ? (
-        <Card className="workflow-support-card">
+        <Card className="workflow-support-card moments-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm tracking-tight">
+            <CardTitle className="moments-label text-sm tracking-tight">
               Weekly rollup
             </CardTitle>
           </CardHeader>
@@ -301,9 +301,9 @@ export function CloseMoment({
         </Card>
       ) : null}
 
-      <Card className="workflow-support-card">
+      <Card className="workflow-support-card moments-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm tracking-tight">
+          <CardTitle className="moments-label text-sm tracking-tight">
             Carry forward
           </CardTitle>
         </CardHeader>
@@ -344,9 +344,9 @@ export function CloseMoment({
       </Card>
 
       {vm.tomorrowFirstMove ? (
-        <Card className="workflow-support-card">
+        <Card className="workflow-support-card moments-card">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm tracking-tight">
+            <CardTitle className="moments-label text-sm tracking-tight">
               Tomorrow&apos;s first move
             </CardTitle>
           </CardHeader>

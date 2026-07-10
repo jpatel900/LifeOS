@@ -33,7 +33,7 @@ export function FocusList({ items, deferred }: FocusListProps) {
       {items.map((item, index) => (
         <li
           key={focusItemKey(item, index)}
-          className="workflow-compact-item flex items-center justify-between gap-3"
+          className="workflow-compact-item moments-row flex items-center justify-between gap-3"
           data-testid="focus-list-item"
         >
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -50,7 +50,7 @@ export function FocusList({ items, deferred }: FocusListProps) {
       {deferred.map((item, index) => (
         <li
           key={focusItemKey(item, index)}
-          className="workflow-compact-item flex items-center justify-between gap-3 opacity-80"
+          className="workflow-compact-item moments-row flex items-center justify-between gap-3 opacity-80"
           data-testid="focus-list-deferred-item"
         >
           <div className="flex min-w-0 flex-col gap-0.5">
