@@ -977,6 +977,33 @@ Non-goals (binding):
 
 ---
 
+### FR-046 — Outbound Telegram Daily Brief (Stage-3 rung 1)
+
+**Priority:** SHOULD
+
+**Stage:** Stage 3, rung 1 — owner-accelerated (2026-07-09 backlog ratification, issue #485). This entry is the docs-first scope expansion; no build slice starts until this FR is owner-ratified (merge of this PR is the ratification). Build order after ratification: pure composer/sender module (Codex-lane candidate), then env-gated wiring.
+
+Rationale: the daily brief only reduces anxiety if it is seen, and the owner's day does not start inside the app. Pushing the same deterministic brief the Start moment already renders to a channel the owner already opens (Telegram) moves the brief to where attention already is, without adding an AI voice, an inbound command surface, or a second system of record. This is deliberately the smallest possible outbound rung: one message, one recipient, fixed cadence, wholly inert unless the owner has physically wired the channel.
+
+Acceptance criteria:
+
+- **Content parity, no AI prose:** the message body is composed by pure code from the same deterministic day-synthesis data the Start moment renders (blocks, focus budget, waiting-on, first move) — no LLM call anywhere in the path (usability > enjoyability precedent; FR-022 enforcement-in-code precedent).
+- **Owner-only, outbound-only:** the sender posts to exactly one chat id (`TELEGRAM_CHAT_ID`) via the owner's own bot token (`TELEGRAM_BOT_TOKEN`). No inbound message is read, parsed, stored, or acted on at this rung — inbound handling is a later trust-ladder rung requiring its own FR. Ignoring inbound also closes the prompt-injection surface (INV-8 posture) by construction.
+- **Wholly inert without opt-in:** if either secret is absent the feature does not run, log, warn, or render — physical credential provision is the standing consent that unlocks it, and deleting either secret is the standing revocation (demotion path).
+- **Initiative-ladder reconciliation (FR-032):** by channel this is an I3-class surface arriving ahead of graduated I2 acceptance data. It is unlocked by explicit owner ratification of this FR plus the credential opt-in above — recorded here as the FR-032-required citation — and stays inside I3's spirit by being **at most once per day on a fixed schedule**, never event-triggered, never engagement-timed. Any second message class (nudges, alerts, replies) requires a new FR and the FR-032 rung then in effect.
+- **Failure isolation:** send failures are caught, logged server-side, and never affect app health, the brief's in-app rendering, or any other surface. Timeouts are bounded; the sender never throws into a caller.
+- **Secrets discipline:** both values are server-side environment variables per SECURITY_PRIVACY §9 — never committed, never client-visible, never sent to AI, rotated if exposed.
+
+Non-goals (binding):
+
+- Inbound Telegram commands, replies, or capture — any inbound behavior is a separate FR on a later trust rung.
+- AI-generated or AI-personalized message content.
+- Additional recipients, group chats, or channel posts.
+- Any second scheduled or event-triggered message class (this FR covers exactly one daily brief).
+- Delivery/read receipts feeding any engagement metric (permanent non-goals apply).
+
+---
+
 ### Constraint Layer — Deferred Capabilities
 
 The following feel productive to build and are explicitly deferred (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires reopening this section first.
