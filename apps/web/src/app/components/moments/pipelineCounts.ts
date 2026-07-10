@@ -8,7 +8,8 @@ import {
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
  *
  * Pure, presentation-only derivation of per-stage pipeline counts for the
- * Start moment's collapsed Pipeline disclosure. Deliberately reuses
+ * Start moment's Pipeline stage rail (D-3, #483 — formerly a collapsed
+ * disclosure). Deliberately reuses
  * `buildCockpitViewModel` from `@/lib/cockpit/viewModel` rather than
  * re-deriving the counts by hand: the cockpit's `review` badge is
  * `reviewQueue.length + sessions.length`, where `reviewQueue` is a

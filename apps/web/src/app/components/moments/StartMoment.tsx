@@ -17,9 +17,19 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * fixed-width rail). UX-INV-6: the empty state is truthful — no first move
  * queued is stated plainly, with the capture shortcut as the way out.
  *
- * Moments pass P5 adds a collapsed-by-default "Pipeline" `<details>`
- * disclosure at the bottom (NFR-005): PipelineOverview renders inside it,
+ * Moments pass P5 added a collapsed-by-default "Pipeline" `<details>`
+ * disclosure at the bottom (NFR-005): PipelineOverview rendered inside it,
  * never in the masthead and never a seventh nav item.
+ *
+ * D-3 (design alignment, #483) replaces that collapsed disclosure with the
+ * prototype-2 stage rail, always visible (the prototype never collapses
+ * it either) — still never in the masthead, still never a seventh nav
+ * item. The disclosure's only interaction was expand/collapse, which
+ * carried no deep-link or keyboard binding of its own (see TodayMoments'
+ * deepLink handling — it targets moment/overlay/sheet, never this
+ * section), so removing it drops nothing observable. The section keeps an
+ * `aria-label`/sr-only heading so screen-reader users still get a "Pipeline"
+ * landmark in place of the old `<summary>` text.
  *
  * S5 (#257) adds the calendar-load-aware focus budget: FirstMoveCard
  * remains the #1 focus item (it always renders `vm.firstMove`, which is
@@ -213,17 +223,14 @@ export function StartMoment({
         />
       </div>
 
-      <details
-        className="workflow-support-card moments-card rounded-lg border border-border p-3"
-        data-testid="start-moment-pipeline-disclosure"
+      <section
+        aria-label="Pipeline"
+        data-testid="start-moment-pipeline-rail"
+        className="grid gap-2"
       >
-        <summary className="moments-label cursor-pointer text-sm font-semibold text-muted-foreground">
-          Pipeline
-        </summary>
-        <div className="mt-3">
-          <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
-        </div>
-      </details>
+        <h2 className="sr-only">Pipeline</h2>
+        <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
+      </section>
     </div>
   );
 }

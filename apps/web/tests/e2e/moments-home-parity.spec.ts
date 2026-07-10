@@ -122,18 +122,21 @@ test.describe("moments home layout (/) has no horizontal overflow", () => {
 });
 
 // #477: the floating "Capture a thought" pill (fixed bottom-center, see
-// CaptureAffordance.tsx) must never overlap the Pipeline disclosure row —
-// the last content row on a short/empty-state Start moment. The pill is
-// `fixed`, so it never moves on scroll; the shell's reserved bottom
-// clearance (pb-32 in MomentsHomeShell) only does its job once the page is
-// scrolled all the way to its true end — that's the realistic "reached the
-// bottom of a short page" moment, not the "nearest edge" a bare
-// scrollIntoView would stop at (which parks the row at the viewport edge
-// regardless of any reserved trailing space and would misreport an overlap
-// on already-fixed code). Viewport heights are picked so the mobile case
-// genuinely requires scrolling (its content is taller than 667px) while the
-// desktop case's short two-column content stays a non-regression check.
-// Pin the moment to Start (the Pipeline disclosure only renders there).
+// CaptureAffordance.tsx) must never overlap the Pipeline row — the last
+// content row on a short/empty-state Start moment. D-3 (#483) replaced the
+// collapsed disclosure with an always-visible stage rail
+// (start-moment-pipeline-rail), so this now checks the rail directly rather
+// than an expand/collapse row. The pill is `fixed`, so it never moves on
+// scroll; the shell's reserved bottom clearance (pb-32 in MomentsHomeShell)
+// only does its job once the page is scrolled all the way to its true end —
+// that's the realistic "reached the bottom of a short page" moment, not the
+// "nearest edge" a bare scrollIntoView would stop at (which parks the row at
+// the viewport edge regardless of any reserved trailing space and would
+// misreport an overlap on already-fixed code). Viewport heights are picked
+// so the mobile case genuinely requires scrolling (its content is taller
+// than 667px) while the desktop case's short two-column content stays a
+// non-regression check. Pin the moment to Start (the Pipeline rail only
+// renders there).
 test.describe("moments home capture pill clears the Pipeline row (#477)", () => {
   for (const viewport of [
     { width: 375, height: 667 },
@@ -149,7 +152,7 @@ test.describe("moments home capture pill clears the Pipeline row (#477)", () => 
       await expect(page.getByTestId("start-moment")).toBeVisible();
 
       const pill = page.getByTestId("capture-affordance");
-      const pipeline = page.getByTestId("start-moment-pipeline-disclosure");
+      const pipeline = page.getByTestId("start-moment-pipeline-rail");
       await expect(pill).toBeVisible();
       await expect(pipeline).toBeVisible();
       await page.evaluate(() =>
