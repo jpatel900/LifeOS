@@ -174,3 +174,46 @@ test.describe("moments home capture pill clears the Pipeline row (#477)", () => 
     });
   }
 });
+
+// D-6 (#483): the bottom-left keyboard legend (KeyboardLegend.tsx) must never
+// overlap or crowd the fixed capture pill. The legend hides below `sm`
+// (matching the prototype's own <720px cutoff) so mobile is a visibility
+// check; at desktop width both are visible and geometrically checked for
+// overlap, mirroring the #477 pill/pipeline guard above.
+test.describe("moments home keyboard legend clears the capture pill (#483 D-6)", () => {
+  test("legend is hidden below the sm breakpoint at 375px", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("capture-affordance")).toBeVisible();
+    await expect(page.getByTestId("keyboard-legend")).toBeHidden();
+  });
+
+  test("legend does not intersect the capture pill at 1280px", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+
+    const pill = page.getByTestId("capture-affordance");
+    const legend = page.getByTestId("keyboard-legend");
+    await expect(pill).toBeVisible();
+    await expect(legend).toBeVisible();
+
+    const pillBox = await pill.boundingBox();
+    const legendBox = await legend.boundingBox();
+    expect(pillBox).not.toBeNull();
+    expect(legendBox).not.toBeNull();
+
+    const intersects =
+      pillBox!.x < legendBox!.x + legendBox!.width &&
+      pillBox!.x + pillBox!.width > legendBox!.x &&
+      pillBox!.y < legendBox!.y + legendBox!.height &&
+      pillBox!.y + pillBox!.height > legendBox!.y;
+
+    expect(intersects).toBe(false);
+  });
+});

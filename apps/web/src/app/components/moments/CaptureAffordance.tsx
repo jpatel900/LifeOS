@@ -14,6 +14,16 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * offline-captured thoughts are still waiting to sync (the count exposed by
  * WorkflowContext after #443's offline queue). Color is never the only signal —
  * an sr-only phrase carries the same status without it.
+ *
+ * D-6 (#483): the full prototype microcopy ("Something on your mind? Capture
+ * it — don't hold it.") only shows at `sm` and up, where the pill has room to
+ * stay on one line. Below that it falls back to the original short label —
+ * owner feedback on #483 (2026-07-10) was to keep density in check rather
+ * than port clutter, and the longer sentence wrapping to extra lines on
+ * narrow viewports would grow the pill's footprint past the clearance
+ * `MomentsHomeShell`'s `pb-32` reserves (see page.tsx) and risk crowding the
+ * Pipeline row the #477 e2e guard checks. The shortcut hint and all click/
+ * disabled behavior are unchanged.
  */
 
 export interface CaptureAffordanceProps {
@@ -42,7 +52,17 @@ export function CaptureAffordance({
       )}
       data-testid="capture-affordance"
     >
-      {captureLocked ? "Capture resolving…" : "Capture a thought"}
+      {captureLocked ? (
+        "Capture resolving…"
+      ) : (
+        <>
+          <span className="hidden sm:inline">
+            Something on your mind? <b className="font-bold">Capture it</b> —
+            don&apos;t hold it.
+          </span>
+          <span className="sm:hidden">Capture a thought</span>
+        </>
+      )}
       <kbd className="rounded border border-primary-foreground/40 bg-black/10 px-1.5 py-0.5 text-[0.7rem] font-semibold">
         {momentKeyLabel("open-capture")}
       </kbd>
