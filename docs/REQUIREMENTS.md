@@ -645,9 +645,32 @@ Non-goals:
 
 ---
 
-### FR-031 (reserved) — Task-Map v1
+### FR-031 — Task-Map v1 (DAG Progression Map)
 
-FR-031 is reserved for the task-map contract plan (progression-map / breakdown work), not yet landed. It is referenced here only to record the renumbering: the daily-driver floor (FR-027..030) claimed the FR-027..030 slots ahead of the previously-numbered task-map draft, which now lands as FR-031 when its own docs-first slice is integrated. No task-map requirements text is adopted by this entry.
+**Priority:** MUST
+
+**Stage:** Stage 1, post-S3 additive slice — chain S2 → S3 (#255) → FR-031 per `docs/implementation-planning/plan-task-map-contract.md`. This entry lands the docs-first requirements text only (issue #484); no build slice starts until this FR is owner-ratified (merge of this PR is the ratification).
+
+Rationale: real work branches and converges — forcing every breakdown into a single ordered list either flattens genuine parallel/optional structure or invites the operator to fake a linear order to fit the tool. The owner's 2026-07-09 extension of the original task-map draft (recorded in the STATUS line of `plan-task-map-contract.md`) requires a true DAG, and requires the headline "critical path" to be a deterministic, code-computed traversal of the approved graph rather than an AI-asserted flag — the overplanning governor (one-pass approve, collapse-to-critical-path default, draft-until-approved diffs) is worthless if the thing being approved and collapsed to is itself an ungrounded AI guess. Optional nodes give the operator a legible, pre-approved fallback for FR-025's cut-scope moment instead of an ad hoc DoD edit under time pressure. Red nodes give the map a cheap, capped way to record known dead ends and gated moves without turning it into a full risk register.
+
+Acceptance criteria:
+
+- The task breakdown renders as a directed acyclic graph — nodes connected by dependency edges that may branch (one node feeding multiple next nodes) and merge (multiple nodes feeding one next node) — not a linear ordered list.
+- The critical path is computed deterministically in code from the approved node/edge graph. Enforcement is deterministic code, not prompt behavior (FR-022 precedent): the AI drafts the candidate graph only; no AI call determines, edits, or re-scores which nodes are highlighted as critical, at draft time or on any later re-approval.
+- Optional nodes are off the critical path, never block progression to subsequent required nodes, and feed the task's Definition of Done / success criteria as declared. They are the ready-made cut-scope candidates surfaced by the existing FR-025 DoD-cap flow: when the DoD-cap state machine fires CUT SCOPE, the surfaced candidates for scope reduction are the map's not-yet-completed optional nodes.
+- Red nodes express do-not / only-if-condition guidance and are not actionable steps. Each red node is REQUIRED to carry a cited `red_reason` (why this path is disallowed or conditional) and MAY carry a `red_condition` (the condition under which it becomes allowed). A map carries **at most 2 red nodes**.
+- Overplanning governor lifecycle: AI drafts the full graph → the owner approves the whole draft in **one pass** (a single L1 approval of one suggestion instance, ADR 0002 D1 — not an L2 pre-filled auto-execute default) → the default view **collapses to the critical path**, with non-critical/optional/red nodes behind an expand affordance. After approval, any map change is an **AI-proposed diff**, offered only at node-completion or session/day Close, and stays **draft-until-approved** (a fresh L1 approval per diff, NS-INV-4); the approved map is never mutated silently.
+- Hard v1 caps, regardless of trust rung: **at most 7 required nodes and at most 4 optional nodes** per map, **at most one level of branching** (no nested sub-branches), and at most 2 red nodes (per above). Map generation is **on-demand only** — triage-accept or explicit user-requested regeneration — never a background job (NFR-001 / NFR-005).
+- All AI-drafted graph/node/edge output validates against a strict versioned schema (`packages/schemas`) before persistence; invalid output is rejected and the surface degrades to the existing plain-breakdown rail (NFR-004). No AI-drafted map content is ever written externally — NS-INV-1, NS-INV-4, and NS-INV-9 apply unchanged and are not restated here.
+- As an AI judgment surface, the map is born instrumented per NS-INV-3 (stable policy id, versioned zod schema, `suggestion_records` / `override_records`) with no bespoke plumbing of its own.
+
+Non-goals:
+
+- Cross-task edges or a DAG spanning multiple tasks (that is the v2 `task_edges` normalized graph — see `plan-task-map-contract.md` §4.1).
+- More than one level of branching depth, or more than 7 required / 4 optional / 2 red nodes.
+- Autonomous or background map regeneration; any revision outside the node-completion / Close proposal points.
+- Any AI call that determines or overrides the critical-path highlight directly — that computation is code-only.
+- Gamification scoring, streaks, or reward mechanics.
 
 ---
 
