@@ -7,7 +7,14 @@ import type {
   Phase2MockProject,
   Phase2MockTask,
 } from "@/lib/types";
-import { buildCloseVM, buildFlowVM, buildStartVM } from "./momentsViewModel";
+import {
+  buildCloseVM,
+  buildDaySynthesis,
+  buildFlowVM,
+  buildGreeting,
+  buildStartVM,
+  greetingPeriod,
+} from "./momentsViewModel";
 
 /** Pinned clock — no ambient Date.now anywhere in these tests. */
 const NOW = new Date("2026-07-05T12:00:00.000Z");
@@ -1198,5 +1205,150 @@ describe("buildStartVM — S6 recovery nudge (#258)", () => {
 
     const vm = buildStartVM(state, { now: NOW });
     expect(vm.recoveryNudge?.taskId).toBe("t-earlier");
+  });
+});
+
+// D-2 (design alignment, #483) — start-moment hero: deterministic greeting
+// + day-synthesis sentence. `now.getHours()` reads local time (same idiom
+// as `TodayMoments`' `heuristicMoment`), so these use the local `Date`
+// constructor rather than a UTC ISO string to stay TZ-independent.
+describe("greetingPeriod / buildGreeting — D-2 (#483)", () => {
+  it("returns morning for hours [0, 12)", () => {
+    expect(greetingPeriod(new Date(2026, 6, 5, 0, 0))).toBe("morning");
+    expect(greetingPeriod(new Date(2026, 6, 5, 11, 59))).toBe("morning");
+  });
+
+  it("returns afternoon for hours [12, 17)", () => {
+    expect(greetingPeriod(new Date(2026, 6, 5, 12, 0))).toBe("afternoon");
+    expect(greetingPeriod(new Date(2026, 6, 5, 16, 59))).toBe("afternoon");
+  });
+
+  it("returns evening for hours [17, 24)", () => {
+    expect(greetingPeriod(new Date(2026, 6, 5, 17, 0))).toBe("evening");
+    expect(greetingPeriod(new Date(2026, 6, 5, 23, 59))).toBe("evening");
+  });
+
+  it("renders the time-of-day greeting alone when no name is given", () => {
+    expect(buildGreeting(new Date(2026, 6, 5, 9, 0))).toBe("Good morning.");
+    expect(buildGreeting(new Date(2026, 6, 5, 9, 0), null)).toBe(
+      "Good morning.",
+    );
+    expect(buildGreeting(new Date(2026, 6, 5, 9, 0), "")).toBe("Good morning.");
+    expect(buildGreeting(new Date(2026, 6, 5, 9, 0), "   ")).toBe(
+      "Good morning.",
+    );
+  });
+
+  it("appends the trimmed name when given", () => {
+    expect(buildGreeting(new Date(2026, 6, 5, 14, 0), "  Jay  ")).toBe(
+      "Good afternoon, Jay.",
+    );
+    expect(buildGreeting(new Date(2026, 6, 5, 20, 0), "Jay")).toBe(
+      "Good evening, Jay.",
+    );
+  });
+});
+
+describe("buildDaySynthesis — D-2 (#483)", () => {
+  it("returns the truthful empty-day sentence when nothing is scheduled or queued", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 0,
+        focusFilledCount: 0,
+        focusBudget: 2,
+        deferredCount: 0,
+      }),
+    ).toBe(
+      "Nothing on the calendar and nothing queued — capture something to get moving.",
+    );
+  });
+
+  it("singularizes 1 block and 1 focus slot", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 1,
+        focusFilledCount: 1,
+        focusBudget: 1,
+        deferredCount: 0,
+      }),
+    ).toBe("1 block on the calendar today — 1 of 1 focus slot filled.");
+  });
+
+  it("pluralizes N blocks and N focus slots with no deferred suffix", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 3,
+        focusFilledCount: 2,
+        focusBudget: 3,
+        deferredCount: 0,
+      }),
+    ).toBe("3 blocks on the calendar today — 2 of 3 focus slots filled.");
+  });
+
+  it("reads 'No blocks' when blocks are 0 but focus items exist", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 0,
+        focusFilledCount: 2,
+        focusBudget: 2,
+        deferredCount: 0,
+      }),
+    ).toBe("No blocks on the calendar today — 2 of 2 focus slots filled.");
+  });
+
+  it("reads 'nothing queued for focus' when focusFilledCount is 0 but blocks exist", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 2,
+        focusFilledCount: 0,
+        focusBudget: 2,
+        deferredCount: 0,
+      }),
+    ).toBe("2 blocks on the calendar today — nothing queued for focus.");
+  });
+
+  it("appends the deferred-count suffix — never hidden — when deferredCount > 0", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 4,
+        focusFilledCount: 1,
+        focusBudget: 1,
+        deferredCount: 3,
+      }),
+    ).toBe(
+      "4 blocks on the calendar today — 1 of 1 focus slot filled (3 deferred).",
+    );
+  });
+});
+
+describe("buildStartVM — D-2 hero wiring (#483)", () => {
+  it("wires greeting from `now` with no name by default", () => {
+    const state = stateWith({});
+    const vm = buildStartVM(state, { now: new Date(2026, 6, 5, 9, 0) });
+    expect(vm.greeting).toBe("Good morning.");
+  });
+
+  it("wires greeting with an injected userName", () => {
+    const state = stateWith({});
+    const vm = buildStartVM(state, {
+      now: new Date(2026, 6, 5, 9, 0),
+      userName: "Jay",
+    });
+    expect(vm.greeting).toBe("Good morning, Jay.");
+  });
+
+  it("wires daySynthesis from the same counts already on StartVM", () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Write report" })],
+    });
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.daySynthesis).toBe(
+      buildDaySynthesis({
+        todayBlockCount: vm.blocks.length,
+        focusFilledCount: vm.focusItems.length,
+        focusBudget: vm.focusBudget,
+        deferredCount: vm.deferredItems.length,
+      }),
+    );
   });
 });

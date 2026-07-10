@@ -18,6 +18,9 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     deferredItems: [],
     staleProject: null,
     recoveryNudge: null,
+    greeting: "Good morning.",
+    daySynthesis:
+      "Nothing on the calendar and nothing queued — capture something to get moving.",
     ...overrides,
   };
 }
@@ -427,5 +430,123 @@ describe("StartMoment — S6 daily brief (#258)", () => {
     expect(screen.getByTestId("start-stale-project")).toBeInTheDocument();
     expect(screen.getByTestId("start-recovery-nudge")).toBeInTheDocument();
     expect(screen.getByTestId("start-moment-empty")).toBeInTheDocument();
+  });
+});
+
+describe("StartMoment — D-2 start-moment hero (#483)", () => {
+  it("renders the injected greeting verbatim", () => {
+    const vm = baseVM({ greeting: "Good afternoon, Jay." });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-greeting")).toHaveTextContent(
+      "Good afternoon, Jay.",
+    );
+  });
+
+  it("renders the injected day-synthesis sentence verbatim", () => {
+    const vm = baseVM({
+      daySynthesis:
+        "3 blocks on the calendar today — 2 of 3 focus slots filled.",
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-day-synthesis")).toHaveTextContent(
+      "3 blocks on the calendar today — 2 of 3 focus slots filled.",
+    );
+  });
+
+  it("renders the hero ahead of the first-move card", () => {
+    const vm = baseVM({
+      firstMove: {
+        title: "Write report",
+        why: "Oldest active commitment",
+        areaLabel: "Work",
+        estMinutes: 25,
+        taskId: "t1",
+      },
+      focusItems: [
+        {
+          title: "Write report",
+          why: "Oldest active commitment",
+          areaLabel: "Work",
+          estMinutes: 25,
+          taskId: "t1",
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const hero = screen.getByTestId("start-hero");
+    const firstMoveCard = screen.getByTestId("first-move-card");
+    expect(
+      hero.compareDocumentPosition(firstMoveCard) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("still renders the target 'Start now / Snooze 10m / Not this' first-move microcopy unchanged", () => {
+    const vm = baseVM({
+      firstMove: {
+        title: "Write report",
+        why: "Oldest active commitment",
+        areaLabel: "Work",
+        estMinutes: 25,
+        taskId: "t1",
+      },
+      focusItems: [
+        {
+          title: "Write report",
+          why: "Oldest active commitment",
+          areaLabel: "Work",
+          estMinutes: 25,
+          taskId: "t1",
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("first-move-start")).toHaveTextContent(
+      "Start now",
+    );
+    expect(screen.getByTestId("first-move-snooze")).toHaveTextContent(
+      "Snooze 10m",
+    );
+    expect(screen.getByTestId("first-move-swap")).toHaveTextContent("Not this");
   });
 });

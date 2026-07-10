@@ -39,6 +39,15 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * suggestion for a block missed yesterday. The card's single action routes
  * to the existing Close-moment carry-forward surface (`onOpenRecovery`); it
  * never mutates from here.
+ *
+ * D-2 (design alignment, #483) — start-moment hero: a greeting
+ * (`vm.greeting`) and deterministic day-synthesis sentence
+ * (`vm.daySynthesis`), porting prototype-2's "Good morning, Jay." + subline
+ * ahead of the FirstMoveCard. Both are computed in momentsViewModel
+ * (`buildGreeting`/`buildDaySynthesis`) — pure, no AI prose, no new fetch.
+ * Presentation-only: the first-move card below already carries the target
+ * "Start now / Snooze 10m / Not this" microcopy and its existing
+ * launch-gate handlers (`onStartMove`/`onSnooze`/`onSwap`) are unchanged.
  */
 
 export interface StartMomentProps {
@@ -79,6 +88,15 @@ export function StartMoment({
 
   return (
     <div className="grid gap-6" data-testid="start-moment">
+      <div className="grid gap-1" data-testid="start-hero">
+        <h1 className="moments-greeting" data-testid="start-greeting">
+          {vm.greeting}
+        </h1>
+        <p className="moments-daysynthesis" data-testid="start-day-synthesis">
+          {vm.daySynthesis}
+        </p>
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="grid gap-6">
           {cardMove && vm.firstMove ? (
