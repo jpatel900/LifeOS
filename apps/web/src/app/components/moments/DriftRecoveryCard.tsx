@@ -39,7 +39,7 @@ export function DriftRecoveryCard({
 
   return (
     <Card
-      className="workflow-flagship-card relative overflow-hidden border-l-4 p-0"
+      className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
       style={{ borderLeftColor: "var(--state-warn)" }}
       data-testid="drift-recovery-card"
     >
@@ -50,7 +50,9 @@ export function DriftRecoveryCard({
         >
           Drift recovery
         </p>
-        <h2 className="workflow-surface-title tabular-nums">{headline}</h2>
+        <h2 className="workflow-surface-title moments-card-title tabular-nums">
+          {headline}
+        </h2>
         {reasonLine ? (
           <p className="text-sm text-muted-foreground">{reasonLine}</p>
         ) : null}

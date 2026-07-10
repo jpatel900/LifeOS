@@ -35,7 +35,7 @@ export function FirstMoveCard({
 }: FirstMoveCardProps) {
   return (
     <Card
-      className="workflow-flagship-card relative overflow-hidden border-l-4 p-0"
+      className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
       style={{ borderLeftColor: "var(--acc)" }}
       data-testid="first-move-card"
     >
@@ -43,7 +43,9 @@ export function FirstMoveCard({
         <p className="workflow-page-eyebrow m-0 tabular-nums">
           First move · {move.estMinutes} min · {move.areaLabel}
         </p>
-        <h2 className="workflow-surface-title">{move.title}</h2>
+        <h2 className="workflow-surface-title moments-card-title">
+          {move.title}
+        </h2>
         <p className="workflow-surface-body text-sm text-muted-foreground">
           {move.why}
         </p>

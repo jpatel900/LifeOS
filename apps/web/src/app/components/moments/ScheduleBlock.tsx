@@ -49,7 +49,7 @@ export function ScheduleBlock({ block, timeDisplay, now }: ScheduleBlockProps) {
   return (
     <li
       className={cn(
-        "workflow-compact-item flex items-center justify-between gap-3",
+        "workflow-compact-item moments-row flex items-center justify-between gap-3",
         isNow && "area-accent-card",
         isDone && "opacity-60",
       )}

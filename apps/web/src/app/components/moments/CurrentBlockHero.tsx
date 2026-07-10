@@ -65,7 +65,7 @@ export function CurrentBlockHero({
 
   return (
     <Card
-      className="workflow-flagship-card relative overflow-hidden border-t-4 p-0"
+      className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-t-4 p-0"
       style={{ borderTopColor: "var(--acc)" }}
       data-testid="current-block-hero"
     >
@@ -73,7 +73,9 @@ export function CurrentBlockHero({
         <p className="workflow-page-eyebrow m-0">
           Current block · deep work · {block.areaLabel}
         </p>
-        <h2 className="workflow-surface-title">{block.title}</h2>
+        <h2 className="workflow-surface-title moments-card-title">
+          {block.title}
+        </h2>
 
         <div className="mt-1 flex flex-wrap items-end gap-2">
           {timeDisplay === "clock" ? (

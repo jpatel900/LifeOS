@@ -27,9 +27,11 @@ const WAITING_STATUS_VAR: Record<WaitingVM["status"], string> = {
 export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
   return (
     <div className="grid gap-4" data-testid="side-rail">
-      <Card className="workflow-support-card">
+      <Card className="workflow-support-card moments-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm tracking-tight">Waiting on</CardTitle>
+          <CardTitle className="moments-label text-sm tracking-tight">
+            Waiting on
+          </CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           {waitingOn.length === 0 ? (
@@ -61,9 +63,11 @@ export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
         </CardContent>
       </Card>
 
-      <Card className="workflow-support-card">
+      <Card className="workflow-support-card moments-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm tracking-tight">Areas</CardTitle>
+          <CardTitle className="moments-label text-sm tracking-tight">
+            Areas
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 pt-0">
           <AreaHealthDots areas={areas} />

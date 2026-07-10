@@ -104,7 +104,7 @@ export function StartMoment({
           {vm.focusItems.length > 1 || vm.deferredItems.length > 0 ? (
             <section className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-muted-foreground">
+                <h2 className="moments-label text-sm font-semibold text-muted-foreground">
                   Today&apos;s focus
                 </h2>
                 <span
@@ -132,7 +132,7 @@ export function StartMoment({
 
           {recoveryNudge ? (
             <Card
-              className="workflow-support-card relative overflow-hidden border-l-4 p-0"
+              className="workflow-support-card moments-card relative overflow-hidden border-l-4 p-0"
               style={{ borderLeftColor: "var(--state-watch)" }}
               data-testid="start-recovery-nudge"
             >
@@ -177,7 +177,7 @@ export function StartMoment({
           ) : null}
 
           <section className="grid gap-3">
-            <h2 className="text-sm font-semibold text-muted-foreground">
+            <h2 className="moments-label text-sm font-semibold text-muted-foreground">
               Today&apos;s schedule
             </h2>
             <ScheduleList
@@ -196,10 +196,10 @@ export function StartMoment({
       </div>
 
       <details
-        className="workflow-support-card rounded-lg border border-border p-3"
+        className="workflow-support-card moments-card rounded-lg border border-border p-3"
         data-testid="start-moment-pipeline-disclosure"
       >
-        <summary className="cursor-pointer text-sm font-semibold text-muted-foreground">
+        <summary className="moments-label cursor-pointer text-sm font-semibold text-muted-foreground">
           Pipeline
         </summary>
         <div className="mt-3">

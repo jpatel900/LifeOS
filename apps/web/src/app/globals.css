@@ -227,6 +227,20 @@ body {
   --motion-base: 160ms;
   --motion-slow: 240ms;
   --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* D-1 (issue #483): surface/elevation axis — distinct from --acc/--st-*
+     (area + state MEANING). These carry DEPTH only: how far off the page a
+     card sits. Values port prototype-2-today-home.html's dark --radius/
+     --radius-sm/--shadow-sm/--shadow-lg/--glow verbatim; --sf/--sf2/--ln/
+     --ink/--mut/--fnt already cover the prototype's --surface/--surface-2/
+     --line/--ink/--ink-soft/--ink-faint roles 1:1, so those are reused
+     as-is rather than forked under a second name. */
+  --surface-radius: 16px;
+  --surface-radius-sm: 10px;
+  --surface-shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.25);
+  --surface-shadow-lg:
+    0 24px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --surface-glow: 0.34;
   min-height: 100vh;
   background: var(--bd);
   color: var(--ink);
@@ -268,6 +282,13 @@ body {
   --motion-base: 160ms;
   --motion-slow: 240ms;
   --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* D-1: light-theme surface/elevation — prototype's light --shadow-sm/
+     --shadow-lg/--glow verbatim (--surface-radius* don't vary by theme). */
+  --surface-shadow-sm:
+    0 1px 2px rgba(30, 28, 24, 0.05), 0 1px 1px rgba(30, 28, 24, 0.03);
+  --surface-shadow-lg:
+    0 24px 60px rgba(30, 28, 24, 0.14), 0 4px 12px rgba(30, 28, 24, 0.06);
+  --surface-glow: 0.22;
 }
 
 .lifeos-cockpit button,
@@ -1277,6 +1298,95 @@ h4 {
     "Segoe UI",
     sans-serif;
   letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   D-1 (issue #483, packet D-1) — moments home surfaces & depth.
+   Ports docs/vision/prototypes/prototype-2-today-home.html's visual
+   language (layered surfaces, card treatment, background depth, type
+   hierarchy) onto the live moments home. New rules only — the shared
+   workflow-*/health-*/review-* classes above stay untouched so the
+   demoted cockpit routes, /login, and /settings/areas render exactly as
+   before. Applied as ADDITIONAL classes (never a replacement) on
+   existing elements in app/components/moments/** and the
+   MomentsHomeShell in app/page.tsx; later source position here is what
+   lets these win over the shared classes' background/radius/shadow
+   without touching the shared rules themselves. Visual only — no new
+   motion (see motion.test.ts's frozen duration/keyframe inventory). */
+
+/* Page-level depth: the prototype's body isn't flat — a soft radial
+   accent tint sits behind the flat surface color. `.moments-home`
+   pairs with `.lifeos-cockpit` on the shell <main>; `.lifeos-cockpit`
+   itself keeps its plain `--bd` background so the cockpit stage routes
+   and /login are unaffected. */
+.moments-home {
+  background:
+    radial-gradient(
+      1100px 520px at 82% -8%,
+      color-mix(in srgb, var(--acc) 12%, transparent),
+      transparent 60%
+    ),
+    var(--bd);
+}
+
+/* Base elevated surface — prototype's shared `.card`/`.sched`/`.firstmove`
+   treatment: flat surface color, hairline border, soft shadow, prototype's
+   16px radius. `border-color` only (never the `border` shorthand): the
+   flagship cards carry a `border-l-4`/`border-t-4` Tailwind width on top
+   of the shadcn Card's 1px base border for their accent-colored edge —
+   a shorthand here would reset that side's width back to 1px. */
+.moments-card {
+  background: var(--sf);
+  border-color: var(--ln);
+  border-radius: var(--surface-radius);
+  box-shadow: var(--surface-shadow-sm);
+}
+
+/* Nested row surface (schedule/focus-list rows) — one elevation step up
+   from the page, one step below a full card; prototype's smaller
+   10px radius. `:not(.area-accent-card)` leaves the existing "now" row
+   tint (area-accent-card's background/border-color) in charge when both
+   classes land on the same row — this rule only sets the depth baseline,
+   never a state color. */
+.moments-row:not(.area-accent-card) {
+  background: var(--sf2);
+  border: 1px solid var(--ln);
+}
+
+.moments-row {
+  border-radius: var(--surface-radius-sm);
+}
+
+/* The single emphasized/primary card on screen (first move, current
+   block, drift recovery) — same base surface plus a subtle accent halo,
+   porting the prototype's accent-tinted emphasis (its --glow-driven
+   button shadow, ported here as a quiet ring rather than a shout). */
+.moments-card--emphasis {
+  box-shadow:
+    var(--surface-shadow-sm),
+    0 0 0 1px color-mix(in srgb, var(--acc) 16%, transparent);
+}
+
+/* Typographic hierarchy: large warm card headings vs small-caps section
+   labels vs muted meta text — prototype's `.fm-title`/`.section-h h2`/
+   `.card h3`/`.lbl` scale. */
+.moments-card-title {
+  font-weight: 620;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
+.moments-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fnt);
+}
+
+.moments-meta {
+  font-size: 0.75rem;
+  color: var(--fnt);
 }
 
 ::selection {
