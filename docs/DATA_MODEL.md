@@ -611,7 +611,11 @@ Statuses:
 
 ### 5.7 `rollup_summaries` (target shape, Stage 1 slice S8)
 
-Status: not yet implemented.
+Status: implemented (slice S8). Weekly rollups shipped with S8's end-to-end
+surface; the monthly surface (Close-moment card, approve/dismiss,
+month-over-month readback composed from approved weekly rollups) landed
+2026-07-10 via issue #486 — both period types persist through the same
+`createRollupSummary` path described here.
 
 Purpose: AI-drafted weekly/monthly rollups per area (FR-020). Only approved rollups persist; drafts live in the UI only (NS-INV-4).
 
