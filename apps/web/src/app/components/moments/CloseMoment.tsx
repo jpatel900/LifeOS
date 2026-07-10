@@ -4,7 +4,13 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { CloseVM, RollupDraftVM } from "./momentsViewModel";
+import type {
+  CloseVM,
+  MonthOverMonthReadbackVM,
+  MonthlyRollupDraftVM,
+  RollupDraftVM,
+} from "./momentsViewModel";
+import { formatRollupCountsComparison } from "./momentsViewModel";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -48,6 +54,25 @@ export interface CloseMomentProps {
   // E3: swap a rollup between its AI-polished prose and the deterministic
   // original (session-local). Optional — mock/preview may omit it.
   onToggleRollupProse?(areaId: string): void;
+  // #486: per-area monthly rollup drafts (composed from this month's approved
+  // weekly rollups), plus the monthly rollups approved this session (the
+  // month-over-month readback, newest first). Same E3 provenance flags as
+  // the weekly rollups, routed through the identical AI-prose choke point.
+  pendingMonthlyRollups: (MonthlyRollupDraftVM & {
+    enhanced?: boolean;
+    hasEnhancement?: boolean;
+  })[];
+  approvedMonthlyRollups: {
+    areaLabel: string;
+    periodLabel: string;
+    counts: Record<string, number>;
+  }[];
+  // #486: prior-month counts per area, present ONLY when a prior-month row
+  // actually exists — absence must render nothing, never a fabricated "0".
+  monthOverMonthReadback?: MonthOverMonthReadbackVM[];
+  onApproveMonthlyRollup(draft: MonthlyRollupDraftVM): void;
+  onDismissMonthlyRollup(areaId: string): void;
+  onToggleMonthlyRollupProse?(areaId: string): void;
 }
 
 export function CloseMoment({
@@ -63,6 +88,12 @@ export function CloseMoment({
   onApproveRollup,
   onDismissRollup,
   onToggleRollupProse,
+  pendingMonthlyRollups,
+  approvedMonthlyRollups,
+  monthOverMonthReadback,
+  onApproveMonthlyRollup,
+  onDismissMonthlyRollup,
+  onToggleMonthlyRollupProse,
 }: CloseMomentProps) {
   // Inline edits to a candidate's title before it is confirmed. Keyed by
   // taskId; absent means "use the candidate's original title".
@@ -282,6 +313,130 @@ export function CloseMoment({
                 data-testid="close-moment-rollups-approved"
               >
                 {approvedRollups.map((rollup, index) => (
+                  <li
+                    key={`${rollup.areaLabel}-${rollup.periodLabel}-${index}`}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span aria-hidden className="text-emerald-500">
+                      ✓
+                    </span>
+                    <span className="min-w-0 truncate">{rollup.areaLabel}</span>
+                    <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {rollup.periodLabel}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {pendingMonthlyRollups.length > 0 || approvedMonthlyRollups.length > 0 ? (
+        <Card className="workflow-support-card moments-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="moments-label text-sm tracking-tight">
+              Monthly rollup
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 pt-0">
+            {pendingMonthlyRollups.map((draft) => {
+              const priorMonth = monthOverMonthReadback?.find(
+                (entry) => entry.areaId === draft.areaId,
+              );
+              return (
+                <div
+                  key={draft.areaId}
+                  className="grid gap-2 rounded-md border border-border/50 p-3"
+                  data-testid={`close-moment-monthly-rollup-${draft.areaId}`}
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {draft.areaLabel}
+                      </span>
+                      {draft.enhanced ? (
+                        <span
+                          className="rounded border border-border/60 px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+                          title="Reworded by AI — approve only if it still matches what happened."
+                          data-testid={`close-moment-monthly-rollup-aiflag-${draft.areaId}`}
+                        >
+                          AI-polished
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {draft.periodLabel}
+                    </span>
+                  </div>
+                  {draft.summary.highlights.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="text-foreground">Highlights:</span>{" "}
+                      {draft.summary.highlights.join("; ")}
+                    </p>
+                  ) : null}
+                  {draft.summary.misses.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="text-foreground">Misses:</span>{" "}
+                      {draft.summary.misses.join("; ")}
+                    </p>
+                  ) : null}
+                  {priorMonth ? (
+                    <p
+                      className="text-xs text-muted-foreground"
+                      data-testid={`close-moment-monthly-rollup-mom-${draft.areaId}`}
+                    >
+                      <span className="text-foreground">Vs last month:</span>{" "}
+                      {formatRollupCountsComparison(
+                        draft.summary.counts,
+                        priorMonth.counts,
+                      )}
+                    </p>
+                  ) : null}
+                  <div className="flex items-center justify-end gap-1">
+                    {draft.hasEnhancement && onToggleMonthlyRollupProse ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onToggleMonthlyRollupProse(draft.areaId)}
+                        className="mr-auto min-h-[44px] touch-manipulation text-xs text-muted-foreground"
+                        data-testid={`close-moment-monthly-rollup-toggleprose-${draft.areaId}`}
+                      >
+                        {draft.enhanced ? "Keep original" : "Use AI version"}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDismissMonthlyRollup(draft.areaId)}
+                      className="min-h-[44px] touch-manipulation"
+                      data-testid={`close-moment-monthly-rollup-dismiss-${draft.areaId}`}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      onClick={() => onApproveMonthlyRollup(draft)}
+                      className="min-h-[44px] touch-manipulation"
+                      data-testid={`close-moment-monthly-rollup-approve-${draft.areaId}`}
+                    >
+                      Approve rollup
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {approvedMonthlyRollups.length > 0 ? (
+              <ul
+                className="grid gap-1 border-t border-border/50 pt-3"
+                data-testid="close-moment-monthly-rollups-approved"
+              >
+                {approvedMonthlyRollups.map((rollup, index) => (
                   <li
                     key={`${rollup.areaLabel}-${rollup.periodLabel}-${index}`}
                     className="flex items-center gap-2 text-sm"
