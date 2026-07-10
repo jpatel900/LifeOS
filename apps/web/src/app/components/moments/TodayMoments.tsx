@@ -12,6 +12,7 @@ import {
   type CountdownClockValue,
 } from "./CountdownClockToggle";
 import { CaptureAffordance } from "./CaptureAffordance";
+import { KeyboardLegend } from "./KeyboardLegend";
 import { CaptureOverlay } from "./CaptureOverlay";
 import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
 import { StartMoment } from "./StartMoment";
@@ -960,6 +961,8 @@ export function TodayMoments({
           ) : null}
         </>
       )}
+
+      <KeyboardLegend />
 
       <CaptureAffordance
         disabled={captureParse.phase === "parsing"}

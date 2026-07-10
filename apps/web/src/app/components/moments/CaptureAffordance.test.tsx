@@ -68,4 +68,30 @@ describe("CaptureAffordance", () => {
       "1 capture waiting to sync",
     );
   });
+
+  // D-6 (#483): the prototype's microcopy at sm+, a compact fallback below
+  // it so the pill doesn't wrap to extra lines and outgrow the shell's
+  // reserved bottom clearance on narrow viewports.
+  it("carries the prototype's capture microcopy for wider viewports", () => {
+    render(<CaptureAffordance onOpen={vi.fn()} />);
+    const button = screen.getByTestId("capture-affordance");
+    expect(button).toHaveTextContent(
+      "Something on your mind? Capture it — don't hold it.",
+    );
+  });
+
+  it("falls back to the short label below the sm breakpoint", () => {
+    render(<CaptureAffordance onOpen={vi.fn()} />);
+    const button = screen.getByTestId("capture-affordance");
+    const shortLabel = Array.from(button.querySelectorAll("span")).find(
+      (span) => span.textContent === "Capture a thought",
+    );
+    expect(shortLabel).toBeDefined();
+    expect(shortLabel).toHaveClass("sm:hidden");
+  });
+
+  it("still renders the open-capture shortcut hint from the keymap", () => {
+    render(<CaptureAffordance onOpen={vi.fn()} />);
+    expect(screen.getByTestId("capture-affordance")).toHaveTextContent("C");
+  });
 });
