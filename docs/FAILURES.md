@@ -133,6 +133,14 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date** (+ **R
 - **Status:** Fixed by U2b. `pnpm drift:assemble <files>` generates the paste-ready apply SQL in one command (proven to reproduce the hand-assembled ledger exactly — PR #453); a `Migration Apply Reminder` PR check flags any migration-adding PR with that exact command; `pnpm status` surfaces a RED Migration Drift with the fix. The human gate on prod DDL is deliberately kept — the prevention is generation + reminder, not auto-apply (NS-INV-2 additive-only makes CI auto-apply a later, lower-risk graduation, not now).
 - **Date:** 2026-07-07
 
+## A second merge race turned main red: two green-in-isolation docs PRs combined within 49 seconds
+
+- **Symptom:** PR #471 (privacy/evidence hygiene, touched `docs/KNOWN_ISSUES.md`) and PR #472 (the blocking format check itself, plus a repo-wide reformat) each passed CI on their own branch, then merged 49 seconds apart. The combined state on main was never itself CI-validated before landing, and it had formatting drift; CI's new `pnpm format:check` step then failed on every subsequent PR (it checks the whole repo, not just the diff) until a human opened a one-file prettier fix by hand (PR #476).
+- **Root cause:** Same pattern as the earlier `WorkflowState` guard race (#331/#337, above): a PR's CI proves the PR against the merge ref at review time, not against whatever lands on main seconds later from a concurrently-merging PR. `pnpm format:check` was added in the same PR (#472) that also reformatted the tree, so #471's un-rebased `docs/KNOWN_ISSUES.md` edit combined with #472's formatting pass into a state neither PR's own CI run had seen.
+- **Evidence:** Commits `6b7c8561` (#471, 2026-07-09 18:30:34) and `4455c49c` (#472, 18:31:22); fix commit `8386bd69` (#476, 19:23:35).
+- **Status:** Fenced going forward by `.github/workflows/format-selfheal.yml`: the blocking format check is what caught the drift (the fence already worked as a stop), and this workflow now auto-heals it — on the next CI failure whose only problem is formatting, it reformats main, verifies clean, and opens a PR through the same docs safe-automerge lane #476 rode, instead of waiting for a human to notice.
+- **Date:** 2026-07-09
+
 ---
 
 _Seeded 2026-07-02 from repo history and operator memory. Dead branches at seeding time (`agent/single-review-policy`, `codex/...a4-governance-restructure...`, `fix/plan-single-task-scheduling`, `ui/handoff-cockpit-pass`) were not chronicled — whoever closes or deletes one adds its entry._
