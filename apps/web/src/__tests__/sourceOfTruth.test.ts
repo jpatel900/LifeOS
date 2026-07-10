@@ -338,7 +338,7 @@ describe("source-of-truth boundaries", () => {
     expect(cockpit).toContain("buildCockpitAccentStyle");
     expect(accent).toContain('mix(acc, dark ? "#ffffff" : "#000000", 0.16)');
     expect(accent).toContain('lum(acc) > 0.55 ? "#1a1a14" : "#ffffff"');
-    expect(globalsCss).toContain("--bd: #0c0d10");
+    expect(globalsCss).toContain("--bd: #14151a");
     expect(globalsCss).toContain('.lifeos-cockpit[data-theme="light"]');
   });
 

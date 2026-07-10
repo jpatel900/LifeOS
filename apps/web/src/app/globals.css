@@ -4,26 +4,41 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(0.985 0.005 260);
-  --foreground: oklch(0.22 0.015 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.02 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.24 0.02 260);
-  --primary: oklch(0.57 0.14 244);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.01 260);
-  --secondary-foreground: oklch(0.28 0.02 260);
-  --muted: oklch(0.95 0.01 260);
-  --muted-foreground: oklch(0.5 0.02 260);
-  --accent: oklch(0.9 0.03 220);
-  --accent-foreground: oklch(0.28 0.02 260);
-  --destructive: oklch(0.57 0.23 28);
+  /* D-7a (issue #483): light-theme values port prototype-2-today-home.html's
+     light axis verbatim (hex -> oklch, Björn Ottosson's sRGB->OKLab formulas)
+     — --bg #f7f6f3, --surface #ffffff, --surface-2 #f4f3ef, --ink #1d1c1a,
+     --ink-soft #6b6862, --line #ecebe6, --st-red #cf5a54, default/product
+     --accent #6d8bff. Token NAMES are unchanged; only the color VALUES move. */
+  --background: oklch(0.973 0.004 91.4); /* prototype light --bg #f7f6f3 */
+  --foreground: oklch(0.227 0.004 84.6); /* prototype light --ink #1d1c1a */
+  --card: oklch(1 0 0); /* prototype light --surface #ffffff */
+  --card-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
+  --popover: oklch(0.964 0.005 95.1); /* prototype light --surface-2 #f4f3ef */
+  --popover-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
+  --primary: oklch(
+    0.67 0.174 270.2
+  ); /* prototype default/product --accent #6d8bff */
+  --primary-foreground: oklch(1 0 0); /* prototype .btn-primary color: #fff */
+  --secondary: oklch(
+    0.964 0.005 95.1
+  ); /* prototype light --surface-2 #f4f3ef */
+  --secondary-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
+  --muted: oklch(0.964 0.005 95.1); /* prototype light --surface-2 #f4f3ef */
+  --muted-foreground: oklch(
+    0.518 0.01 84.6
+  ); /* prototype light --ink-soft #6b6862 */
+  --accent: oklch(
+    0.9 0.03 270.2
+  ); /* pastel tint of the accent hue for chip bg */
+  --accent-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
+  --destructive: oklch(0.614 0.15 25.4); /* prototype light --st-red #cf5a54 */
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.9 0.01 260);
-  --input: oklch(0.9 0.01 260);
-  --ring: oklch(0.72 0.11 240);
-  --area-accent: oklch(0.56 0.03 255);
+  --border: oklch(0.939 0.007 97.4); /* prototype light --line #ecebe6 */
+  --input: oklch(0.939 0.007 97.4); /* prototype light --line #ecebe6 */
+  --ring: oklch(0.72 0.11 270.2); /* accent-hued focus ring */
+  --area-accent: oklch(
+    0.67 0.174 270.2
+  ); /* default area accent = prototype's default/product accent, matches --primary */
   --area-accent-soft: color-mix(in oklch, var(--area-accent) 10%, white);
   --area-accent-muted: color-mix(in oklch, var(--area-accent) 18%, white);
   --area-accent-border: color-mix(
@@ -84,26 +99,37 @@
 }
 
 .dark {
-  --background: oklch(0.16 0.015 258);
-  --foreground: oklch(0.95 0.01 262);
-  --card: oklch(0.22 0.015 258);
-  --card-foreground: oklch(0.96 0.01 262);
-  --popover: oklch(0.19 0.015 258);
-  --popover-foreground: oklch(0.96 0.01 262);
-  --primary: oklch(0.72 0.14 240);
-  --primary-foreground: oklch(0.19 0.01 260);
-  --secondary: oklch(0.29 0.015 258);
-  --secondary-foreground: oklch(0.95 0.01 262);
-  --muted: oklch(0.28 0.012 258);
-  --muted-foreground: oklch(0.78 0.015 262);
-  --accent: oklch(0.35 0.03 235);
-  --accent-foreground: oklch(0.96 0.01 262);
-  --destructive: oklch(0.66 0.21 27);
+  /* D-7a (issue #483): dark-theme values port prototype-2-today-home.html's
+     dark axis verbatim (hex -> oklch) — --bg #14151a, --bg-2 #191b22,
+     --surface #1e2028, --surface-2 #24262f, --ink #eef0f4, --ink-soft
+     #a6a9b4, --line #2a2c36, --st-red #e56b64, default/product --accent
+     #6d8bff (accent is theme-independent in the prototype). */
+  --background: oklch(0.197 0.01 276.5); /* prototype dark --bg #14151a */
+  --foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink #eef0f4 */
+  --card: oklch(0.245 0.016 274.2); /* prototype dark --surface #1e2028 */
+  --card-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
+  --popover: oklch(0.223 0.014 272.7); /* prototype dark --bg-2 #191b22 */
+  --popover-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
+  --primary: oklch(
+    0.67 0.174 270.2
+  ); /* prototype default/product --accent #6d8bff */
+  --primary-foreground: oklch(1 0 0); /* prototype .btn-primary color: #fff */
+  --secondary: oklch(0.27 0.017 275.4); /* prototype dark --surface-2 #24262f */
+  --secondary-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
+  --muted: oklch(0.245 0.016 274.2); /* prototype dark --surface #1e2028 */
+  --muted-foreground: oklch(
+    0.736 0.016 273.8
+  ); /* prototype dark --ink-soft #a6a9b4 */
+  --accent: oklch(0.35 0.05 270.2); /* dim accent-hued chip bg for dark theme */
+  --accent-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
+  --destructive: oklch(0.673 0.153 25.3); /* prototype dark --st-red #e56b64 */
   --destructive-foreground: oklch(0.97 0.01 30);
-  --border: oklch(0.38 0.015 258);
-  --input: oklch(0.38 0.015 258);
-  --ring: oklch(0.75 0.13 242);
-  --area-accent: oklch(0.72 0.03 255);
+  --border: oklch(0.295 0.018 276.3); /* prototype dark --line #2a2c36 */
+  --input: oklch(0.295 0.018 276.3); /* prototype dark --line #2a2c36 */
+  --ring: oklch(0.75 0.14 270.2); /* accent-hued focus ring */
+  --area-accent: oklch(
+    0.67 0.174 270.2
+  ); /* default area accent = prototype's default/product accent, matches --primary */
   --area-accent-soft: color-mix(
     in oklch,
     var(--area-accent) 16%,
@@ -189,33 +215,49 @@ body {
 }
 
 .lifeos-cockpit {
-  --bd: #0c0d10;
-  --sf: #15171c;
-  --sf2: #1b1e25;
-  --sf3: #21252d;
-  --ink: #f2f1ec;
-  --mut: #9b9ca4;
-  --fnt: #686a73;
-  --ln: #23262e;
-  --ln2: #2c303a;
-  --btn: #f2f1ec;
-  --btn-fg: #15171c;
-  --track: #262a33;
-  --amb-fg: #e3ad52;
-  --amb-sf: #2c2615;
-  --amb-rng: #51441f;
-  --blu-fg: #7aa2dd;
-  --blu-sf: #172838;
-  --blu-rng: #2e486a;
-  --grn-fg: #6fb98c;
-  --grn-sf: #14301f;
-  --grn-rng: #295036;
+  /* D-7a (issue #483): dark-base values port prototype-2-today-home.html's
+     dark neutral/state/accent axes. --bd/--sf/--sf2 are the prototype's
+     --bg/--surface/--surface-2 verbatim; --sf3 and --track have no
+     prototype anchor (no third surface tier or track token exists there),
+     so both reuse the prototype's --line value as the next elevation step.
+     --ln/--ln2 are --line/--line-strong verbatim. --amb-fg/--grn-fg are
+     --st-amber/--st-green verbatim; --amb-sf/--grn-sf flatten the
+     prototype's own rgba(color, 0.14) state-bg over the new --sf. --acc/
+     --blu-fg are the prototype's default/product --accent #6d8bff verbatim
+     (theme-independent, matching the prototype); --acc-sf/--blu-sf flatten
+     rgba(accent, 0.16) (the prototype's --accent-soft alpha) over --sf.
+     The *-rng tokens have no prototype anchor either; each flattens its
+     family's -fg color at 43% over --ln (matching the existing app's
+     approximate fg/line blend ratio). --acc2 lightens --acc 15% toward
+     white for hover states. --btn/--btn-fg keep their existing ink/surface
+     inversion relationship, now pointing at the new --ink/--sf values. */
+  --bd: #14151a;
+  --sf: #1e2028;
+  --sf2: #24262f;
+  --sf3: #2a2c36;
+  --ink: #eef0f4;
+  --mut: #a6a9b4;
+  --fnt: #6f727d;
+  --ln: #2a2c36;
+  --ln2: #363945;
+  --btn: #eef0f4;
+  --btn-fg: #1e2028;
+  --track: #2a2c36;
+  --amb-fg: #e0a94a;
+  --amb-sf: #39332d;
+  --amb-rng: #78623f;
+  --blu-fg: #6d8bff;
+  --blu-sf: #2b314a;
+  --blu-rng: #47558c;
+  --grn-fg: #46c08a;
+  --grn-sf: #243636;
+  --grn-rng: #366c5a;
   --max: 1000px;
   --cockpit-radius: 22px;
-  --acc: #6b78e8;
-  --acc2: #7f8aeb;
-  --acc-sf: #20232e;
-  --acc-rng: #414a7a;
+  --acc: #6d8bff;
+  --acc2: #839cff;
+  --acc-sf: #2b314a;
+  --acc-rng: #47558c;
   --on-acc: #ffffff;
   /* Moments pass P1: color-carries-state + motion tokens */
   --state-ok: var(--grn-fg);
@@ -251,27 +293,43 @@ body {
 }
 
 .lifeos-cockpit[data-theme="light"] {
-  --bd: #e7e4db;
-  --sf: #fbfaf7;
-  --sf2: #ffffff;
-  --sf3: #f4f1ea;
-  --ink: #18170f;
-  --mut: #6f6d64;
-  --fnt: #a8a69d;
-  --ln: #efece5;
-  --ln2: #e2dfd6;
-  --btn: #18170f;
+  /* D-7a (issue #483): light-theme values port prototype-2-today-home.html's
+     light neutral/state axes the same way as the dark base above — --bd/
+     --sf/--sf2 are the prototype's light --bg/--surface/--surface-2
+     verbatim; --sf3/--track reuse --line (no prototype anchor, mirrors the
+     dark-base choice); --ln/--ln2 are --line/--line-strong verbatim;
+     --amb-fg/--grn-fg are --st-amber/--st-green verbatim and --amb-sf/
+     --grn-sf are the prototype's own solid light --st-amber-bg/
+     --st-green-bg hex (no flattening needed — the prototype already gives
+     opaque hex for the light theme). --amb-rng/--grn-rng flatten their -fg
+     color at 43% over --ln, matching the dark-base formula. --blu-fg reuses
+     the prototype's default/product accent (theme-independent); --blu-sf
+     flattens rgba(accent, 0.16) over this block's own --sf. --btn/--btn-fg
+     keep the ink/surface inversion relationship, now pointing at this
+     block's own --ink/--sf. --acc/--acc2/--acc-sf/--acc-rng/--on-acc are
+     not redefined here: they cascade from the dark-base block above since
+     the prototype's accent doesn't vary by theme. */
+  --bd: #f7f6f3;
+  --sf: #ffffff;
+  --sf2: #f4f3ef;
+  --sf3: #ecebe6;
+  --ink: #1d1c1a;
+  --mut: #6b6862;
+  --fnt: #a3a09a;
+  --ln: #ecebe6;
+  --ln2: #e0ded7;
+  --btn: #1d1c1a;
   --btn-fg: #ffffff;
-  --track: #ece9e1;
-  --amb-fg: #b5791f;
-  --amb-sf: #f6ecd6;
-  --amb-rng: #ecdcbb;
-  --blu-fg: #3f6fb8;
-  --blu-sf: #e7eefa;
-  --blu-rng: #d4e0f2;
-  --grn-fg: #4a8c63;
-  --grn-sf: #e4efe8;
-  --grn-rng: #d2e6da;
+  --track: #ecebe6;
+  --amb-fg: #c98a2b;
+  --amb-sf: #f8efdd;
+  --amb-rng: #ddc196;
+  --blu-fg: #6d8bff;
+  --blu-sf: #e8ecff;
+  --blu-rng: #b5c2f1;
+  --grn-fg: #2f9e6f;
+  --grn-sf: #eaf5ef;
+  --grn-rng: #9bcab3;
   /* Moments pass P1: color-carries-state + motion tokens */
   --state-ok: var(--grn-fg);
   --state-watch: var(--amb-fg);
