@@ -16,7 +16,7 @@ You are taking over an autonomous, dual-lane (Claude + Codex) build program on *
 - **Path:** `D:\OneDrive - Seneca\ContentFolder\AI\Codex\LifeOS` (GitHub `jpatel900/LifeOS`). Windows.
 - **First actions:** `cd` in → `git checkout main && git pull --ff-only` → `gh pr list` → run `node scripts/agent/status.mjs` → read memory `C:\Users\jaypa\.claude\projects\C--Users-jaypa\memory\lifeos-agent-pipeline.md` (distilled: mechanics + standing lessons) and `lifeos-dual-critical-path.md` (stable priority contract).
 - **Default work source:** `status.mjs`'s **Agent pickup queue** section (checkbox items tagged `AGENT-TODO:` per AGENTS.md rule 15) is pre-classified as agent-doable. When no higher-priority directive from this handover applies, work that queue next — do not re-triage those items or second-guess the marker. OWNER-GATE items are never agent-actionable.
-- **Branch discipline (binding):** create branches as a **standalone** command and verify `git branch --show-current` before every commit. A compound `test … && git checkout -b` SHORT-CIRCUITS on main and commits ON main. Check whether another agent owns the main checkout before using it (a concurrent agent's uncommitted work has been found on it — work in a worktree if in doubt).
+- **Branch discipline (binding):** create branches as a **standalone** command and verify `git branch --show-current` before every commit. A compound `test … && git checkout -b` SHORT-CIRCUITS on main and commits ON main. Before branching off `origin/main`, verify the local ref is actually fresh: compare `git rev-parse origin/main` against `gh api repos/jpatel900/LifeOS/branches/main --jq .commit.sha` — a silently-stale ref on this OneDrive checkout once produced a branch off a pre-consolidation base. Check whether another agent owns the main checkout before using it; work in a worktree if in doubt.
 - **Canonical surfaces:** the work map is **GENERATED** — `node scripts/agent/status.mjs --html --out "C:\Users\jaypa\LifeOS-work-map-generated.html"` (two views: "Now" + filterable "Full map" incl. closed issues and the Plans & ideas shelf; regenerate rather than hand-edit — the old hand-maintained map is archived). Priority contract `docs/implementation-planning/plan-dual-critical-path.md`. Plans/vision live in `docs/implementation-planning/` and `docs/vision/` in this repo.
 
 ## 1. Governing priority (owner, strict)
@@ -57,7 +57,7 @@ No clean sandbox slice until test-plan findings arrive. The pattern that works: 
 1. **Merge #480** (pill fix — Claude-authored, self-approval classifier).
 2. **Run test-plan Session 0 + 1** (~25 min; starts the data clock for sessions 5–7).
 3. Close CO-6 #398 (merged in #405, still open).
-4. _(Housekeeping)_ delete the merged `guard/server-timestamp-coverage` remote branch.
+4. _(Housekeeping)_ delete merged remote branches `guard/server-timestamp-coverage` and `docs/handover-session10` (PR #481 — cut from a stale local origin/main ref but auto-merged cleanly; #482 layered the corrections on top).
 
 ## 5. Session 10 deliverables (2026-07-09, all merged unless noted)
 
@@ -87,7 +87,7 @@ No clean sandbox slice until test-plan findings arrive. The pattern that works: 
 
 ## 8. Backlog / parked (not now)
 
-Test-plan findings (the next real work source) · INV-8 delimiter hardening #448 (owner-gated, before Stage 3) · Stage 2 planning #292 (premature before real-usage signal) · distillation #289 (due 2026-10-01, no pressure) · #268 autonomy-gate checklist · #269 janitor report · E3 monthly rollup surface · E4 Telegram push (Stage-3, post-test-plan) · #478 empty-state composition (waits on U3 data).
+Test-plan findings (the next real work source) · **Task-map v1/v2 (FR-031 reserved; owner extended the design 2026-07-09: true DAG with branching/merging, critical-path highlight, optional nodes feeding DoD, red do-not/only-if nodes — see `docs/implementation-planning/plan-task-map-contract.md` + memory `lifeos-task-map-progression-idea`; post-test-plan)** · INV-8 delimiter hardening #448 (owner-gated, before Stage 3) · Stage 2 planning #292 (premature before real-usage signal) · distillation #289 (due 2026-10-01) · #268 autonomy-gate checklist · #269 janitor report · E3 monthly rollup surface · E4 Telegram push (Stage-3, post-test-plan) · #478 empty-state composition (waits on U3 data).
 
 ---
 

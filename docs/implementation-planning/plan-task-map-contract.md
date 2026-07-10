@@ -1,4 +1,4 @@
-STATUS: COMPLETE — shipped as of 2026-07-08; kept for reference.
+STATUS: RESERVED — FR-031 placeholder; NOT built. Owner extended the design 2026-07-09 (true DAG: branching/merging, critical-path highlight, optional nodes feeding DoD, red do-not/only-if nodes). Post-test-plan.
 
 # Task Node Map / Progression — v1/v2 Contract
 
