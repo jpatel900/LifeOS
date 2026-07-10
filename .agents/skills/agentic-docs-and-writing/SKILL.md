@@ -10,6 +10,7 @@ Documentation for an agent-heavy project is not prose - it is context, and conte
 ## When to use / when NOT to use
 
 **Use when:**
+
 - Creating or restructuring any project doc: README, runbook, ADR, postmortem, contributing guide, agent memory file.
 - Two docs disagree, or a doc disagrees with CI or with observed behavior.
 - An entry file (README, CLAUDE.md, AGENTS.md) has bloated past its budget.
@@ -17,24 +18,25 @@ Documentation for an agent-heavy project is not prose - it is context, and conte
 - Deciding where a new fact belongs ("which doc owns this?").
 
 **Do NOT use when:**
+
 - The content will leave the repo - marketing copy, release announcements, benchmark claims, anything external-facing. Use **agentic-external-positioning** (claims discipline, prove-before-claiming).
-- Recording an architectural decision's *substance* (invariants, load-bearing choices, known-weak points). The ADR-lite *template* lives here; what belongs in the architecture record and why is **agentic-architecture-contract**.
+- Recording an architectural decision's _substance_ (invariants, load-bearing choices, known-weak points). The ADR-lite _template_ lives here; what belongs in the architecture record and why is **agentic-architecture-contract**.
 - Recording failures and dead ends so they are not re-fought. Template discipline is here; the failure chronicle's content and maintenance is **agentic-failure-archaeology**.
-- Writing operational procedures' *content* (deploy, rollback, process hygiene). Runbook *format* is here; what to run and operate is **agentic-run-and-operate**.
+- Writing operational procedures' _content_ (deploy, rollback, process hygiene). Runbook _format_ is here; what to run and operate is **agentic-run-and-operate**.
 - Structuring PR risk gating and change approval - **agentic-change-control** owns PR hygiene policy; this skill only owns the description template.
 
 ## 1. Docs of record: one home per fact
 
-**Hard rule:** for each concern there is exactly ONE authoritative doc (the *doc of record*). Every other mention of that concern is a link to it, never a copy. Duplicated facts fork; forked facts diverge; diverged facts burn agent sessions.
+**Hard rule:** for each concern there is exactly ONE authoritative doc (the _doc of record_). Every other mention of that concern is a link to it, never a copy. Duplicated facts fork; forked facts diverge; diverged facts burn agent sessions.
 
-| Concern | Typical doc of record |
-|---|---|
-| How to build/run/test | README (or a doc README links to in its first screen) |
-| Operational procedures | `docs/runbooks/<task>.md`, one file per task |
-| Why a decision was made | `docs/adr/NNNN-<slug>.md`, append-only |
-| What went wrong and lessons | `docs/postmortems/YYYY-MM-DD-<slug>.md` |
+| Concern                     | Typical doc of record                                         |
+| --------------------------- | ------------------------------------------------------------- |
+| How to build/run/test       | README (or a doc README links to in its first screen)         |
+| Operational procedures      | `docs/runbooks/<task>.md`, one file per task                  |
+| Why a decision was made     | `docs/adr/NNNN-<slug>.md`, append-only                        |
+| What went wrong and lessons | `docs/postmortems/YYYY-MM-DD-<slug>.md`                       |
 | Agent standing instructions | The agent memory file (CLAUDE.md / AGENTS.md / .cursor/rules) |
-| Config axes and env setup | See **agentic-config-and-environment** |
+| Config axes and env setup   | See **agentic-config-and-environment**                        |
 
 Discovery - find where docs already live before adding any:
 
@@ -65,14 +67,14 @@ If it hits, link to the hit; do not restate.
 
 ## 2. Entry-file line budgets
 
-An entry file is what a human or agent reads *first*: root README, CLAUDE.md / AGENTS.md / .cursor/rules. These are loaded into context on nearly every session, so their length is a per-session tax.
+An entry file is what a human or agent reads _first_: root README, CLAUDE.md / AGENTS.md / .cursor/rules. These are loaded into context on nearly every session, so their length is a per-session tax.
 
-| File | Budget (default, not hard rule) | Rationale |
-|---|---|---|
-| Agent memory file | ≤ 150 lines | Loaded every session; every line is a standing instruction competing for attention |
-| Root README | ≤ 300 lines | First screen must answer: what is this, how do I run it, where is everything else |
-| Any single runbook | ≤ 200 lines | Longer means it is two runbooks |
-| Registry/index | ≤ 100 lines | It is a table of links, not a document |
+| File               | Budget (default, not hard rule) | Rationale                                                                          |
+| ------------------ | ------------------------------- | ---------------------------------------------------------------------------------- |
+| Agent memory file  | ≤ 150 lines                     | Loaded every session; every line is a standing instruction competing for attention |
+| Root README        | ≤ 300 lines                     | First screen must answer: what is this, how do I run it, where is everything else  |
+| Any single runbook | ≤ 200 lines                     | Longer means it is two runbooks                                                    |
+| Registry/index     | ≤ 100 lines                     | It is a table of links, not a document                                             |
 
 A CLAUDE.md or README past a few hundred lines stops being read - by humans who skim and by agents whose attention degrades over long low-density context. Measure:
 
@@ -106,7 +108,7 @@ Written for a zero-context engineer or an agent dropped in cold. Every rule belo
 6. **State the negative space.** Every doc of record says what it does NOT cover (with a link to what does) and what is NOT allowed. "This runbook does not cover restores - see `runbooks/restore.md`. Never run this against production without the gate in **agentic-change-control**." Absence of a prohibition reads as permission to an agent.
 7. **Front-load the punchline.** First paragraph answers "what is this and when do I need it." Background goes last or gets cut.
 8. **One doc, one audience.** Do not interleave "for operators" and "for contributors" sections; split the doc.
-9. *(Default, not hard rule)* Prefer relative repo links (`docs/adr/0004-...md`) over absolute URLs so links survive forks and mirrors.
+9. _(Default, not hard rule)_ Prefer relative repo links (`docs/adr/0004-...md`) over absolute URLs so links survive forks and mirrors.
 
 ## 4. Freshness discipline
 
@@ -147,6 +149,7 @@ Copy verbatim; delete sections that do not apply rather than leaving them empty.
 <One sentence: what this is and who it is for.>
 
 ## Quick start
+
 ```<shell>
 <install command>     # discover: look for package.json / pyproject.toml / go.mod / Cargo.toml
 <run command>
@@ -155,13 +158,15 @@ Copy verbatim; delete sections that do not apply rather than leaving them empty.
 ```
 
 ## Documentation
-| Doc | Scope |
-|---|---|
-| docs/runbooks/ | Operational procedures |
-| docs/adr/ | Decision records |
+
+| Doc                 | Scope                       |
+| ------------------- | --------------------------- |
+| docs/runbooks/      | Operational procedures      |
+| docs/adr/           | Decision records            |
 | <agent memory file> | Agent standing instructions |
 
 ## Does NOT cover
+
 <What lives elsewhere, with links. What is out of scope entirely.>
 ````
 
@@ -175,6 +180,7 @@ Copy verbatim; delete sections that do not apply rather than leaving them empty.
 **Does NOT cover:** <adjacent task> - see <link>.
 
 ## Steps
+
 1. ```<shell>
    <command>
    # Expected: <output / exit code>
@@ -182,18 +188,21 @@ Copy verbatim; delete sections that do not apply rather than leaving them empty.
 2. <next step. One command per step. No step may require unstated judgment.>
 
 ## If it fails
-| Symptom | Meaning | Action |
-|---|---|---|
+
+| Symptom      | Meaning | Action              |
+| ------------ | ------- | ------------------- |
 | <error text> | <cause> | <fix or escalation> |
 
 ## Rollback
+
 <Exact commands, or "none possible - see agentic-change-control before running.">
 
 ## Re-verify this runbook
+
 ```<shell>
 <one-liners proving the tools/paths/targets above still exist>
 ```
-```
+````
 
 ### ADR-lite
 
@@ -201,6 +210,7 @@ This is the template's ONLY home (`agentic-architecture-contract` owns when an A
 
 ```markdown
 # ADR-NNNN: <decision as a verb phrase>
+
 **Date:** 2026-07-02 | **Status:** accepted | superseded-by ADR-MMMM
 
 **Context:** <the forces, in 2-4 sentences>
@@ -216,41 +226,52 @@ Append-only: never edit an accepted ADR's decision - supersede it with a new one
 
 ```markdown
 # Postmortem: <incident> - YYYY-MM-DD
+
 **Impact:** <who/what, for how long> | **Detected by:** <alert/human/luck>
 
 ## Timeline (UTC)
+
 | Time | Event |
-|---|---|
+| ---- | ----- |
 
 ## Root cause
+
 <Mechanism, not blame. "The deploy script assumed X" not "engineer forgot X.">
 
 ## What went well / what went badly
+
 ## Action items
+
 | Action | Owner | Verifiable done-condition |
-|---|---|---|
+| ------ | ----- | ------------------------- |
 ```
 
 Cross-file the lesson into the failure chronicle - **agentic-failure-archaeology** owns that.
 
 ### PR description
 
-```markdown
+````markdown
 ## What
+
 <One-paragraph summary of the change.>
 
 ## Why
+
 <Problem or link to issue. If reverting/superseding, link the prior change.>
 
 ## How verified
+
 ```<shell>
 <exact commands run>
 # <actual observed output, pasted - not "tests pass"; see agentic-validation-and-qa>
 ```
+````
 
 ## Risk & rollback
+
 <Blast radius if wrong. How to revert. One-way-door? See agentic-change-control.>
-```
+
+````
 
 ## 6. Authoring skill files
 
@@ -272,4 +293,8 @@ Skill files (this file's own format) follow the portable Agent Skills convention
   ls docs/ 2>/dev/null                                    # registry location still true?
   head -5 "$(dirname "$0")/SKILL.md" 2>/dev/null          # frontmatter still two keys?
   git log --format='%ad' --date=short -1 -- docs/         # is docs/ still alive?
-  ```
+````
+
+```
+
+```
