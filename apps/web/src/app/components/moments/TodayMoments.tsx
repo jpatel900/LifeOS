@@ -554,9 +554,9 @@ export function TodayMoments({
   // surface). Composition and the month-over-month readback are pure
   // (momentsViewModel); approve/dismiss/AI-prose state is kept independent of
   // the weekly rollup state above so each rollup type is separately decided.
-  const [allRollupSummaries, setAllRollupSummaries] = useState<
-    RollupSummary[]
-  >([]);
+  const [allRollupSummaries, setAllRollupSummaries] = useState<RollupSummary[]>(
+    [],
+  );
   useEffect(() => {
     let cancelled = false;
     void (async () => {
