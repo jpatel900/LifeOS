@@ -10,8 +10,10 @@ import { HIT_TARGET_INVISIBLE, HIT_TARGET_MIN } from "./hitTarget";
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
  *
  * Thin summary sheet for the Triage stage, opened from the Start moment's
- * Pipeline disclosure (UX-INV-5: at most 2 interactions from Today — open
- * disclosure, click Triage). Lists pending capture drafts, area-scoped the
+ * Pipeline rail (UX-INV-5: at most 2 interactions from Today — D-3 (#483)
+ * made this a single click on the rail's Triage node, since the rail is no
+ * longer behind a collapsed disclosure). Lists pending capture drafts,
+ * area-scoped the
  * same way the pipeline "Triage" badge counts them
  * (`buildPipelineCounts`/`buildCockpitViewModel`'s `inbox` filter): when no
  * area is selected ("All areas"), both the badge and this list resolve to

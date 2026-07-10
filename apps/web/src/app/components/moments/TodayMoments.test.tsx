@@ -737,10 +737,13 @@ describe("TodayMoments — P4 derail -> recovery journey", () => {
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
- * Additive coverage: the Start moment's Pipeline disclosure opens the
+ * D-3 (#483) replaced the collapsed Pipeline disclosure with an
+ * always-visible stage rail — the "expand first" step these tests used to
+ * need is gone; the rail (and its stage buttons) are present immediately.
+ * Additive coverage: the Start moment's Pipeline rail opens the
  * triage/plan sheets, Escape ordering, and the new palette entries.
  */
-describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
+describe("TodayMoments — P5 pipeline rail and sheets", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
@@ -753,21 +756,17 @@ describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
     window.localStorage.clear();
   });
 
-  it("the Pipeline disclosure is collapsed by default and renders PipelineOverview", () => {
+  it("the Pipeline rail renders immediately (no expand step) with PipelineOverview", () => {
     renderToday({ initialMoment: "start" });
 
-    const disclosure = screen.getByTestId("start-moment-pipeline-disclosure");
-    expect(disclosure).toBeInTheDocument();
-    expect(disclosure).not.toHaveAttribute("open");
-
-    fireEvent.click(screen.getByText("Pipeline"));
+    const rail = screen.getByTestId("start-moment-pipeline-rail");
+    expect(rail).toBeInTheDocument();
     expect(screen.getByTestId("pipeline-overview")).toBeInTheDocument();
   });
 
-  it("drilling into triage from the Pipeline disclosure opens the TriageSheet", () => {
+  it("drilling into triage from the Pipeline rail opens the TriageSheet", () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.click(screen.getByText("Pipeline"));
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-triage"));
 
     expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
@@ -776,10 +775,9 @@ describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
     );
   });
 
-  it("drilling into plan from the Pipeline disclosure opens the PlanSheet", () => {
+  it("drilling into plan from the Pipeline rail opens the PlanSheet", () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.click(screen.getByText("Pipeline"));
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-plan"));
 
     expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
@@ -791,7 +789,6 @@ describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
   it("drilling into a non-wired stage (execute) shows the 'opens with full shell' toast", () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.click(screen.getByText("Pipeline"));
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-execute"));
 
     expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
@@ -802,7 +799,6 @@ describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
   it("closes the sheet via its own Escape handling without affecting the capture overlay's independent Escape path", () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.click(screen.getByText("Pipeline"));
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-triage"));
     expect(screen.getByTestId("moment-sheet-dialog")).toBeInTheDocument();
 
@@ -815,7 +811,6 @@ describe("TodayMoments — P5 pipeline disclosure and sheets", () => {
   it("global Escape (via useMomentKeyboard) is disabled while a sheet is open — number keys do not switch moments", () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.click(screen.getByText("Pipeline"));
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-triage"));
     expect(screen.getByTestId("moment-sheet-dialog")).toBeInTheDocument();
 
