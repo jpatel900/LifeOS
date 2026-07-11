@@ -340,31 +340,35 @@ export const mockAreas: Area[] = [
 // S3 (#255): `charter_text` is now selected so the live parse read path can
 // send per-area charters through the NS-INV-1 context-assembly module. S2
 // added the column and injection; this slice wires the request-time read.
-const areaColumns =
+// Exported (not just module-private) so another server-only reader (e.g. the
+// telegram brief loader in workflowServerLoad.ts) can select the SAME columns
+// as these RLS-scoped readers, in the same order, without duplicating the
+// literal strings. Additive export only — no behavior change to this file.
+export const areaColumns =
   "id,user_id,name,slug,description,color,icon,sort_order,is_active,charter_text,charter_updated_at,created_at,updated_at";
 
-const captureColumns =
+export const captureColumns =
   "id,user_id,area_id,raw_text,raw_audio_ref,return_hook,client_capture_id,capture_mode,inferred_area_confidence,status,created_at";
 
 // S3 (#255): the person/commitment link columns are now selected so the accept
 // path can return them and S4 aging can read populated values. Additive — every
 // task reader parses through TaskSchema, which optional-accepts these columns.
-const taskColumns =
+export const taskColumns =
   "id,user_id,area_id,project_id,source_capture_item_id,title,description,status,priority_score,priority_confidence,task_type,is_reversible,energy_type,estimated_minutes_low,estimated_minutes_high,due_at,definition_of_done,first_tiny_step,waiting_on_person_id,waiting_on_since,is_commitment,committed_to_person_id,created_at,updated_at";
 
 const projectColumns =
   "id,user_id,area_id,title,description,status,created_at,updated_at";
 
-const timeBlockProposalColumns =
+export const timeBlockProposalColumns =
   "id,user_id,area_id,task_id,proposed_start,proposed_end,rationale_json,conflict_flag,conflict_details_json,status,created_at";
 
-const calendarBlockColumns =
+export const calendarBlockColumns =
   "id,user_id,area_id,proposal_id,task_id,google_event_id,start_at,end_at,status,created_at,updated_at";
 
-const executionSessionColumns =
+export const executionSessionColumns =
   "id,user_id,area_id,task_id,calendar_block_id,planned_minutes,actual_minutes,paused_minutes,distraction_minutes,productivity_rating,energy_rating,outcome,cap_outcome,notes,created_at";
 
-const reviewEntryColumns =
+export const reviewEntryColumns =
   "id,user_id,area_id,review_type,period_start,period_end,summary_json,created_at";
 
 const winRecordColumns =
