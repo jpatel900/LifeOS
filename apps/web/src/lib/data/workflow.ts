@@ -353,8 +353,11 @@ export const captureColumns =
 // S3 (#255): the person/commitment link columns are now selected so the accept
 // path can return them and S4 aging can read populated values. Additive — every
 // task reader parses through TaskSchema, which optional-accepts these columns.
+// FR-031 slice 3 (20260711120000): progression_map/map_status/
+// map_schema_version/map_approved_at appended for the same reason — additive,
+// optional-accepted by TaskSchema.
 export const taskColumns =
-  "id,user_id,area_id,project_id,source_capture_item_id,title,description,status,priority_score,priority_confidence,task_type,is_reversible,energy_type,estimated_minutes_low,estimated_minutes_high,due_at,definition_of_done,first_tiny_step,waiting_on_person_id,waiting_on_since,is_commitment,committed_to_person_id,created_at,updated_at";
+  "id,user_id,area_id,project_id,source_capture_item_id,title,description,status,priority_score,priority_confidence,task_type,is_reversible,energy_type,estimated_minutes_low,estimated_minutes_high,due_at,definition_of_done,first_tiny_step,waiting_on_person_id,waiting_on_since,is_commitment,committed_to_person_id,progression_map,map_status,map_schema_version,map_approved_at,created_at,updated_at";
 
 const projectColumns =
   "id,user_id,area_id,title,description,status,created_at,updated_at";

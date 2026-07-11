@@ -129,6 +129,15 @@ export const TaskSchema = z.object({
   waiting_on_since: z.string().datetime().nullable().optional(),
   is_commitment: z.boolean().optional(),
   committed_to_person_id: z.string().uuid().nullable().optional(),
+  // FR-031 slice 3 (task-map v1 persistence, 20260711120000) additive
+  // columns. Nullable — null for tasks with no approved map. `progression_map`
+  // is validated as `TaskMapGraphDraftSchema` + `validateGraph` before write
+  // (see apps/web/src/lib/taskmap/persistence.ts); it is typed loosely here as
+  // JsonValueSchema because packages cannot import app code.
+  progression_map: JsonValueSchema.nullable().optional(),
+  map_status: z.enum(["draft", "approved", "superseded"]).nullable().optional(),
+  map_schema_version: z.string().nullable().optional(),
+  map_approved_at: z.string().datetime().nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });

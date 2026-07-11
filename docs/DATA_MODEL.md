@@ -478,21 +478,26 @@ Status: not yet implemented. All additive per NS-INV-2; no new tables preferred 
 
 FR-029 (persistence truth + session longevity) and FR-030 (provider canary + mock-first auto-degrade) add no schema: FR-029 reuses the existing `provider === "mock"` signal (section 6 health tables / `workflow.ts`) and the Supabase client's own session store; FR-030 reads the existing `ai_call_traces` table (`latency_ms`, `status`) added for the constraint layer's parse-service instrumentation and writes no new columns.
 
-### 4.16 Task-Map v1 (FR-031) — additive shape sketch
+### 4.16 Task-Map v1 (FR-031) — progression map persistence
 
-**PROPOSED — lands with the v1 build, not this PR.** This subsection sketches the shape FR-031 will need; it is not a frozen target-shape contract like 4.10-4.15 and does not authorize a migration on its own. A build slice still needs its own approved issue, migration, RLS, export coverage, and tests per section 11's guardrail.
+**SHIPPED (slice 3, migration `20260711120000_add_task_progression_map.sql`).** The tasks-as-nodes + `task_edges` sketch this section previously carried (from #487) is superseded for v1 by what actually shipped below. `task_edges` remains the v2 normalized-graph candidate (`docs/implementation-planning/plan-task-map-contract.md` §4.1) — deferred, not built.
 
-Purpose: nodes are nodes of the existing `tasks` table (no parallel node model); a new additive `task_edges` table carries the DAG's dependency/branch/merge edges; node-role annotations distinguish required, optional, and red (do-not/only-if) nodes.
+Purpose: the approved progression map is a single denormalized jsonb graph document stored directly on the `tasks` row it belongs to (no parallel node table, no edge table). Node identity (ids, roles, red-node reasons) and edges are internal to the document, not represented as separate rows. This matches plan-task-map-contract.md §4.1 decision 5: v1 caps (≤7 required, ≤4 optional, ≤2 red nodes; depth 1) make a denormalized jsonb document correct and additive per NS-INV-2.
 
-`tasks` — additive columns (sketch):
+`tasks` — additive columns (shipped):
 
-| Column        | Type                                                    | Notes                                                                               |
-| ------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| node_role     | text nullable, check in (`required`, `optional`, `red`) | null when the task carries no map; FR-031 §(c)/(d) caps enforced in code + schema   |
-| red_reason    | text nullable                                           | required when `node_role = 'red'`; the cited reason for the do-not/only-if guidance |
-| red_condition | text nullable                                           | optional; the condition under which a red node becomes allowed                      |
+| Column             | Type                                                        | Notes                                                                                               |
+| ------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| progression_map    | jsonb nullable                                              | the approved graph document; shape = `TaskMapGraphDraftSchema` (`packages/schemas/src/task-map.ts`) |
+| map_status         | text nullable, check in (`draft`, `approved`, `superseded`) | null when the task carries no map                                                                   |
+| map_schema_version | text nullable                                               | mirrors `progression_map.schema_version` for forward-compat reads without parsing the jsonb body    |
+| map_approved_at    | timestamptz nullable                                        | set when `map_status` transitions to `approved`                                                     |
 
-`task_edges` (sketch, additive new table):
+Validation: any write path must run BOTH `TaskMapGraphDraftSchema` and `validateGraph` (`apps/web/src/lib/taskmap/graph.ts`) before persisting — `apps/web/src/lib/taskmap/persistence.ts` (`validateTaskMapForPersistence`) is that single choke point, per the header comment on `TaskMapGraphDraftSchema`. Schema-level caps (≤7 required, ≤4 optional, ≤2 red nodes) and graph-level semantics (cycle detection, edge referential integrity, red→required edge rejection, one-level branching) are both enforced before write; neither channel alone is sufficient.
+
+Standard owner RLS (section 8) already covers these columns — additive-only change to an existing owner-scoped table, no new policy. Export coverage: `apps/web/src/lib/data/export.ts` selects `select("*")` per table, so no explicit column list change was needed for INV-2 coverage.
+
+`task_edges` (v2 candidate, not built — sketch retained for the v2 decision record):
 
 | Column          | Type        | Notes                                                                |
 | --------------- | ----------- | -------------------------------------------------------------------- |
@@ -503,7 +508,7 @@ Purpose: nodes are nodes of the existing `tasks` table (no parallel node model);
 | to_node_order   | integer     | target node within the task's map (enables branching/merging edges)  |
 | created_at      | timestamptz | generated                                                            |
 
-Standard owner RLS (section 8), same pattern as sibling additive tables — no bespoke policy shape. Export coverage required (INV-2) in the creating PR. v1 caps (FR-031: ≤7 required + ≤4 optional nodes, one level of branching, ≤2 red nodes) are enforced in the strict schema and in code, not by this sketch's column shape alone.
+`task_edges` would carry a normalized DAG for a v2 that spans multiple tasks or deeper dependency graphs; v1's single-task, depth-1, capped shape does not need it.
 
 ## 5. Meta-Learning Tables
 
