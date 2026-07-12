@@ -50,6 +50,8 @@ interface CurrentMapNodeInput {
   title: string;
   role: "required" | "optional" | "red";
   done?: boolean;
+  red_reason?: string | null;
+  red_condition?: string | null;
 }
 
 interface CurrentMapEdgeInput {
@@ -186,6 +188,14 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
         title: nodeRecord.title as string,
         role: nodeRecord.role as "required" | "optional" | "red",
         done: nodeRecord.done === true,
+        red_reason:
+          typeof nodeRecord.red_reason === "string"
+            ? nodeRecord.red_reason
+            : null,
+        red_condition:
+          typeof nodeRecord.red_condition === "string"
+            ? nodeRecord.red_condition
+            : null,
       };
     });
 

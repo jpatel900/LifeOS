@@ -17,6 +17,8 @@ export interface TaskMapDraftRequestCurrentMapNode {
   title: string;
   role: "required" | "optional" | "red";
   done?: boolean;
+  red_reason?: string | null;
+  red_condition?: string | null;
 }
 
 export interface TaskMapDraftRequestCurrentMapEdge {
