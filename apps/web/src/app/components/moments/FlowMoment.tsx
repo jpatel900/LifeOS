@@ -49,6 +49,7 @@ export interface FlowMomentProps {
   onRequestTaskMapDraft(): void;
   onDismissTaskMapDraft(): void;
   onApproveTaskMapDraft(graph: TaskMapGraph & { schema_version: "1.0" }): void;
+  onToggleTaskMapNodeCompletion(nodeId: string): void;
 }
 
 export function FlowMoment({
@@ -68,6 +69,7 @@ export function FlowMoment({
   onRequestTaskMapDraft,
   onDismissTaskMapDraft,
   onApproveTaskMapDraft,
+  onToggleTaskMapNodeCompletion,
 }: FlowMomentProps) {
   const hasActiveSession = session.activeTaskId !== null || session.total > 0;
 
@@ -119,6 +121,7 @@ export function FlowMoment({
         onRequestDraft={onRequestTaskMapDraft}
         onDismissDraft={onDismissTaskMapDraft}
         onApproveDraft={onApproveTaskMapDraft}
+        onToggleNodeCompletion={onToggleTaskMapNodeCompletion}
       />
     </div>
   );

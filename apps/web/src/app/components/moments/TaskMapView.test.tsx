@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { TaskMapView } from "./TaskMapView";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
 
@@ -64,5 +64,42 @@ describe("TaskMapView", () => {
   it("omits the age label when there is no approval timestamp", () => {
     render(<TaskMapView graph={graph} mapApprovedAt={null} now={new Date()} />);
     expect(screen.queryByTestId("taskmap-age-label")).not.toBeInTheDocument();
+  });
+
+  it("wires onToggleNodeCompletion to non-red chip clicks, including hidden ones", () => {
+    const onToggle = vi.fn();
+    render(
+      <TaskMapView
+        graph={graph}
+        mapApprovedAt={null}
+        now={new Date()}
+        onToggleNodeCompletion={onToggle}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("taskmap-node-req-2"));
+    expect(onToggle).toHaveBeenCalledWith("req-2");
+
+    fireEvent.click(screen.getByTestId("taskmap-expand"));
+    fireEvent.click(screen.getByTestId("taskmap-node-opt-1"));
+    expect(onToggle).toHaveBeenCalledWith("opt-1");
+  });
+
+  it("keeps red nodes non-interactive even when onToggleNodeCompletion is provided", () => {
+    const onToggle = vi.fn();
+    render(
+      <TaskMapView
+        graph={graph}
+        mapApprovedAt={null}
+        now={new Date()}
+        onToggleNodeCompletion={onToggle}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("taskmap-expand"));
+
+    const red = screen.getByTestId("taskmap-node-red-1");
+    expect(red.tagName).toBe("DIV");
+    fireEvent.click(red);
+    expect(onToggle).not.toHaveBeenCalled();
   });
 });

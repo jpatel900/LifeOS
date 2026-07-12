@@ -65,6 +65,7 @@ import {
   swapWipSlot,
   clearWipRefusal,
   approveTaskMapLocal,
+  toggleTaskMapNodeCompletionLocal,
   type WipRefusal,
   type WorkflowState,
 } from "./workflow";
@@ -104,6 +105,7 @@ import {
   rejectTimeBlockProposal,
   unplanCalendarBlock,
   approveTaskMap,
+  setTaskMapNodeCompletion,
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
@@ -280,6 +282,12 @@ type WorkflowAction =
       graph: TaskMapGraph & { schema_version: string };
     }
   | {
+      type: "toggleTaskMapNodeCompletionLocal";
+      taskId: string;
+      nodeId: string;
+      nowIso: string;
+    }
+  | {
       type: "unplanTask";
       blockId: string;
     }
@@ -389,6 +397,13 @@ interface WorkflowContextValue {
   approveTaskMapDraft: (
     taskId: string,
     graph: TaskMapGraph & { schema_version: "1.0" },
+  ) => Promise<void>;
+  // FR-031 slice 6: user-action-only, reversible node-completion toggle on
+  // an already-approved map. Never AI-invoked; not instrumented (a
+  // completion tap is not an AI suggestion resolution).
+  toggleTaskMapNodeCompletion: (
+    taskId: string,
+    nodeId: string,
   ) => Promise<void>;
   // FR-027 (F-G1a): number of raw captures saved offline and not yet synced to
   // the spine (the queue-badge signal). Drains automatically on reconnect.
@@ -1042,6 +1057,13 @@ function workflowReducer(
       );
     case "approveTaskMapLocal":
       return approveTaskMapLocal(state, action.taskId, action.graph);
+    case "toggleTaskMapNodeCompletionLocal":
+      return toggleTaskMapNodeCompletionLocal(
+        state,
+        action.taskId,
+        action.nodeId,
+        action.nowIso,
+      );
     case "unplanTask":
       return unplanTask(state, action.blockId);
     case "startSession":
@@ -1944,6 +1966,54 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         await syncPersistedWorkflowRows(client);
       } catch {
         markLocalOnly("Map approved locally; account sync is pending.");
+      }
+    },
+    [markLocalOnly, syncPersistedWorkflowRows],
+  );
+
+  // FR-031 slice 6 — reversible node-completion toggle on an approved map.
+  // Same local-first pattern as `approveTaskMapDraftAction`: the reducer
+  // patch flips the UI immediately (and safely no-ops for a red/unknown
+  // node or a task with no approved map — `toggleTaskMapNodeCompletionLocal`
+  // guards all of that), and the Supabase persist is best-effort with the
+  // same markLocalOnly fallback.
+  const toggleTaskMapNodeCompletionAction = useCallback(
+    async (taskId: string, nodeId: string) => {
+      const nowIso = new Date().toISOString();
+
+      dispatch({
+        type: "toggleTaskMapNodeCompletionLocal",
+        taskId,
+        nodeId,
+        nowIso,
+      });
+
+      const client = createSupabaseBrowserClient();
+      const persistedTaskId = persistedIdForLocalId(
+        taskId,
+        persistedTaskIdByLocalIdRef.current,
+      );
+
+      if (!client || !persistedTaskId) {
+        markLocalOnly("Completion saved locally; account sync is pending.");
+        return;
+      }
+
+      const task = stateRef.current.tasks.find((item) => item.id === taskId);
+      if (!task?.progression_map) {
+        return;
+      }
+
+      try {
+        await setTaskMapNodeCompletion(client, {
+          task_id: persistedTaskId,
+          node_id: nodeId,
+          graph: task.progression_map,
+          now: nowIso,
+        });
+        await syncPersistedWorkflowRows(client);
+      } catch {
+        markLocalOnly("Completion saved locally; account sync is pending.");
       }
     },
     [markLocalOnly, syncPersistedWorkflowRows],
@@ -3107,6 +3177,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     requestTaskMapDraft: requestTaskMapDraftAction,
     dismissTaskMapDraft: dismissTaskMapDraftAction,
     approveTaskMapDraft: approveTaskMapDraftAction,
+    toggleTaskMapNodeCompletion: toggleTaskMapNodeCompletionAction,
     unsyncedCaptureCount,
     clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>

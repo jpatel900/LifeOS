@@ -3,9 +3,22 @@ export type TaskMapNode = {
   title: string;
   role: "required" | "optional" | "red";
   done?: boolean;
+  // FR-031 slice 6: ISO timestamp of the user action that marked this node
+  // done, or null/absent when not done. This is the source of truth for
+  // completion (see `isNodeComplete`) — `done` is kept in sync alongside it
+  // for backward compatibility with slice 5 fixtures/logic, but the
+  // timestamp is what makes overplanning-dwell (map_approved_at -> first
+  // node completion) computable later. AI drafts never set this field.
+  completed_at?: string | null;
   red_reason?: string;
   red_condition?: string;
 };
+
+/** True when a node has been marked done by either signal. Centralizes the
+ * done-check so `completed_at` and `done` never drift apart in comparisons. */
+export function isNodeComplete(node: TaskMapNode): boolean {
+  return node.done === true || Boolean(node.completed_at);
+}
 
 export type TaskMapEdge = {
   from: string;
@@ -152,7 +165,7 @@ export function computeCriticalPath(graph: TaskMapGraph): string[] {
 
 export function cutScopeCandidates(graph: TaskMapGraph): TaskMapNode[] {
   return graph.nodes
-    .filter((node) => node.role === "optional" && !node.done)
+    .filter((node) => node.role === "optional" && !isNodeComplete(node))
     .sort(
       (left, right) =>
         compareStrings(left.title, right.title) ||
