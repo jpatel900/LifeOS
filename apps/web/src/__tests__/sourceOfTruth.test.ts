@@ -128,14 +128,18 @@ describe("source-of-truth boundaries", () => {
   });
 
   it("suggestionRecordColumns includes resolution_reason and decided_by", () => {
-    const workflow = readRepoFile("apps/web/src/lib/data/workflow.ts");
+    // KNOWN_ISSUES row 8 paydown: suggestionRecordColumns now lives in
+    // workflow/shared.ts (workflow.ts is a re-export barrel).
+    const workflow = readRepoFile("apps/web/src/lib/data/workflow/shared.ts");
 
     expect(workflow).toContain("resolution_reason");
     expect(workflow).toContain("decided_by");
   });
 
   it("overrideRecordColumns includes suggestion_id", () => {
-    const workflow = readRepoFile("apps/web/src/lib/data/workflow.ts");
+    // KNOWN_ISSUES row 8 paydown: overrideRecordColumns now lives in
+    // workflow/shared.ts (workflow.ts is a re-export barrel).
+    const workflow = readRepoFile("apps/web/src/lib/data/workflow/shared.ts");
 
     expect(workflow).toContain("suggestion_id");
   });
