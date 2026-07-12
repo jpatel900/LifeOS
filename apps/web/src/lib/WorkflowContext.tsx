@@ -1864,6 +1864,34 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
       : null;
 
+    // FR-031 slice 8: an already-approved map turns this generation call
+    // into a regeneration — send the current map (nodes/edges/completion)
+    // as data alongside the request so the prompt can offer it as context
+    // (contextAssembly.ts). The client already holds the approved graph
+    // locally; no extra read is needed.
+    let currentMap: NonNullable<
+      Parameters<typeof fetchTaskMapDraft>[0]["currentMap"]
+    > | null = null;
+    if (task.map_status === "approved" && task.progression_map) {
+      const validatedCurrent = validateTaskMapForPersistence(
+        task.progression_map,
+      );
+      if (validatedCurrent.ok) {
+        currentMap = {
+          nodes: validatedCurrent.graph.nodes.map((node) => ({
+            id: node.id,
+            title: node.title,
+            role: node.role,
+            done: node.done === true || Boolean(node.completed_at),
+          })),
+          edges: validatedCurrent.graph.edges.map((edge) => ({
+            from: edge.from,
+            to: edge.to,
+          })),
+        };
+      }
+    }
+
     const result = await fetchTaskMapDraft({
       taskId,
       areaId: persistedAreaId,
@@ -1872,6 +1900,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       definitionOfDone: task.definition_of_done ?? null,
       firstTinyStep: task.first_tiny_step ?? null,
       authorization,
+      currentMap,
     });
 
     // Ignore a stale response if the focused task changed mid-flight.
@@ -1950,6 +1979,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
         : null;
 
+      // FR-031 slice 8: `stateRef.current` lags a render behind (it's
+      // synced from `state` in an effect, line ~1237), so right after the
+      // `approveTaskMapLocal` dispatch above it still holds the PRE-dispatch
+      // task — exactly the prior approved map (if any) that
+      // `approveTaskMapLocal` itself carried completion forward from. Send
+      // it here too so the Supabase-persisted row applies the identical
+      // carry-forward rule (`carryForwardNodeCompletion`, shared helper).
+      const previousGraph =
+        task?.map_status === "approved" && task.progression_map
+          ? task.progression_map
+          : null;
+
       try {
         await approveTaskMap(client, {
           task_id: persistedTaskId,
@@ -1962,6 +2003,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               }
             : null,
           suggestion_record_id: aiDraftSource?.suggestionRecordId ?? null,
+          previous_graph: previousGraph,
         });
         await syncPersistedWorkflowRows(client);
       } catch {

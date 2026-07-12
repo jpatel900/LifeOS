@@ -26,6 +26,11 @@ export interface TaskMapDraftReviewProps {
   draft: TaskMapGraph & { schema_version: "1.0" };
   onApprove(graph: TaskMapGraph & { schema_version: "1.0" }): void;
   onDismiss(): void;
+  /** FR-031 slice 8 — true when this draft is a regeneration of an
+   * already-approved map (reached via the "Revise map" affordance). Swaps
+   * the intro copy and the "Not now" label to make clear that approving
+   * replaces the current map, and dismissing leaves it untouched. */
+  isRevision?: boolean;
 }
 
 let nextCustomNodeSuffix = 0;
@@ -39,6 +44,7 @@ export function TaskMapDraftReview({
   draft,
   onApprove,
   onDismiss,
+  isRevision = false,
 }: TaskMapDraftReviewProps) {
   const [nodes, setNodes] = useState<TaskMapNode[]>(draft.nodes);
   const [edges, setEdges] = useState(draft.edges);
@@ -82,10 +88,13 @@ export function TaskMapDraftReview({
       className="workflow-flagship-card moments-card grid gap-3 rounded-xl border p-4"
       data-testid="taskmap-draft-review"
     >
-      <p className="workflow-page-eyebrow m-0">Task map draft</p>
+      <p className="workflow-page-eyebrow m-0">
+        {isRevision ? "Revised map draft" : "Task map draft"}
+      </p>
       <p className="text-sm text-muted-foreground">
-        Right enough to start? Edit titles, drop a step, or add one — then
-        approve the whole map in one pass.
+        {isRevision
+          ? "Approving replaces the current map. Edit titles, drop a step, or add one — then approve the whole revision in one pass."
+          : "Right enough to start? Edit titles, drop a step, or add one — then approve the whole map in one pass."}
       </p>
 
       <div
@@ -185,7 +194,7 @@ export function TaskMapDraftReview({
           className="min-h-[44px] touch-manipulation"
           data-testid="taskmap-draft-approve"
         >
-          Right enough to start
+          {isRevision ? "Replace the map" : "Right enough to start"}
         </Button>
         <Button
           type="button"
@@ -195,7 +204,7 @@ export function TaskMapDraftReview({
           className="min-h-[44px] touch-manipulation"
           data-testid="taskmap-draft-dismiss"
         >
-          Not now
+          {isRevision ? "Keep current map" : "Not now"}
         </Button>
       </div>
     </div>

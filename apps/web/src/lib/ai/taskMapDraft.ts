@@ -6,6 +6,7 @@ import {
 import {
   buildTaskMapDraftMessages,
   type TaskMapDraftBreakdownStepContext,
+  type TaskMapDraftCurrentMapContext,
   type TaskMapDraftPromptInput,
 } from "./contextAssembly";
 import {
@@ -13,7 +14,11 @@ import {
   type StructuredOutputProvider,
 } from "./provider";
 
-export type { TaskMapDraftBreakdownStepContext, TaskMapDraftPromptInput };
+export type {
+  TaskMapDraftBreakdownStepContext,
+  TaskMapDraftCurrentMapContext,
+  TaskMapDraftPromptInput,
+};
 
 export interface TaskMapDraftInput {
   title: string;
@@ -21,6 +26,8 @@ export interface TaskMapDraftInput {
   definitionOfDone?: string | null;
   firstTinyStep?: string | null;
   breakdownSteps?: TaskMapDraftBreakdownStepContext[] | null;
+  /** FR-031 slice 8 — present only for a regeneration request. */
+  currentMap?: TaskMapDraftCurrentMapContext | null;
 }
 
 export interface TaskMapDraftOptions {
@@ -88,6 +95,7 @@ export async function taskMapDraftDetailed(
       definitionOfDone: input.definitionOfDone,
       firstTinyStep: input.firstTinyStep,
       breakdownSteps: input.breakdownSteps,
+      currentMap: input.currentMap,
     }),
     responseFormat: taskMapDraftResponseFormat,
   });

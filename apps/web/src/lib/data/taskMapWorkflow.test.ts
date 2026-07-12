@@ -310,6 +310,207 @@ describe("approveTaskMap", () => {
     expect(result.task.map_status).toBe("approved");
     warn.mockRestore();
   });
+
+  // FR-031 slice 8 — regen carry-forward matrix. `previous_graph` is the
+  // prior approved map; the new graph being approved is the regen
+  // revision. Asserts the write itself (`taskUpdate` payload), not just
+  // the returned `task`, so a bug that carries forward locally but not
+  // into the write would still be caught.
+  describe("regen completion carry-forward (previous_graph)", () => {
+    function stubTaskUpdate() {
+      const taskSingle = vi
+        .fn()
+        .mockResolvedValue({ data: taskRow, error: null });
+      const taskSelect = vi.fn().mockReturnValue({ single: taskSingle });
+      const taskEq = vi.fn().mockReturnValue({ select: taskSelect });
+      const taskUpdate = vi.fn().mockReturnValue({ eq: taskEq });
+      const from = vi.fn((table: string) => {
+        if (table === "tasks") return { update: taskUpdate };
+        if (table === "suggestion_records") {
+          return { update: vi.fn().mockReturnValue({ eq: vi.fn() }) };
+        }
+        if (table === "override_records") {
+          return {
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: {}, error: null }),
+              }),
+            }),
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+      return { from, taskUpdate };
+    }
+
+    const previousGraph = {
+      schema_version: "1.0",
+      nodes: [
+        {
+          id: "step-1",
+          title: "Gather inputs",
+          role: "required",
+          done: true,
+          completed_at: "2026-07-10T09:00:00.000Z",
+        },
+        { id: "step-2", title: "Do the work", role: "required", done: false },
+      ],
+      edges: [{ from: "step-1", to: "step-2" }],
+    };
+
+    it("survives: a completed node whose id is unchanged in the revision keeps done/completed_at", async () => {
+      const { from, taskUpdate } = stubTaskUpdate();
+      const revisedGraph = {
+        schema_version: "1.0",
+        nodes: [
+          { id: "step-1", title: "Gather inputs (revised)", role: "required" },
+          { id: "step-2", title: "Do the work", role: "required" },
+        ],
+        edges: [{ from: "step-1", to: "step-2" }],
+      };
+
+      await approveTaskMap(authenticatedClient(from), {
+        task_id: taskId,
+        area_id: areaId,
+        graph: revisedGraph,
+        ai_draft: null,
+        previous_graph: previousGraph,
+      });
+
+      const written = taskUpdate.mock.calls[0]![0] as {
+        progression_map: { nodes: { id: string; done?: boolean }[] };
+      };
+      const step1 = written.progression_map.nodes.find(
+        (node) => node.id === "step-1",
+      );
+      expect(step1?.done).toBe(true);
+      expect((step1 as { completed_at?: string }).completed_at).toBe(
+        "2026-07-10T09:00:00.000Z",
+      );
+    });
+
+    it("dropped: a completed node whose id no longer appears in the revision carries nothing forward", async () => {
+      const { from, taskUpdate } = stubTaskUpdate();
+      const revisedGraph = {
+        schema_version: "1.0",
+        nodes: [{ id: "step-2", title: "Do the work", role: "required" }],
+        edges: [],
+      };
+
+      await approveTaskMap(authenticatedClient(from), {
+        task_id: taskId,
+        area_id: areaId,
+        graph: revisedGraph,
+        ai_draft: null,
+        previous_graph: previousGraph,
+      });
+
+      const written = taskUpdate.mock.calls[0]![0] as {
+        progression_map: { nodes: { id: string }[] };
+      };
+      expect(written.progression_map.nodes.map((node) => node.id)).toEqual([
+        "step-2",
+      ]);
+    });
+
+    it("renamed-id: a completed node given a new id in the revision does not carry forward", async () => {
+      const { from, taskUpdate } = stubTaskUpdate();
+      const revisedGraph = {
+        schema_version: "1.0",
+        nodes: [
+          { id: "step-1-renamed", title: "Gather inputs", role: "required" },
+          { id: "step-2", title: "Do the work", role: "required" },
+        ],
+        edges: [{ from: "step-1-renamed", to: "step-2" }],
+      };
+
+      await approveTaskMap(authenticatedClient(from), {
+        task_id: taskId,
+        area_id: areaId,
+        graph: revisedGraph,
+        ai_draft: null,
+        previous_graph: previousGraph,
+      });
+
+      const written = taskUpdate.mock.calls[0]![0] as {
+        progression_map: { nodes: { id: string; done?: boolean }[] };
+      };
+      const renamed = written.progression_map.nodes.find(
+        (node) => node.id === "step-1-renamed",
+      );
+      expect(renamed?.done).toBeUndefined();
+    });
+
+    it("role-changed-to-red: a completed node reclassified as red in the revision never carries forward completion", async () => {
+      const { from, taskUpdate } = stubTaskUpdate();
+      const revisedGraph = {
+        schema_version: "1.0",
+        nodes: [
+          {
+            id: "step-1",
+            title: "Gather inputs",
+            role: "red",
+            red_reason: "No longer needed.",
+          },
+          { id: "step-2", title: "Do the work", role: "required" },
+        ],
+        edges: [],
+      };
+
+      await approveTaskMap(authenticatedClient(from), {
+        task_id: taskId,
+        area_id: areaId,
+        graph: revisedGraph,
+        ai_draft: null,
+        previous_graph: previousGraph,
+      });
+
+      const written = taskUpdate.mock.calls[0]![0] as {
+        progression_map: { nodes: { id: string; done?: boolean }[] };
+      };
+      const step1 = written.progression_map.nodes.find(
+        (node) => node.id === "step-1",
+      );
+      expect(step1?.done).toBeUndefined();
+    });
+
+    it("no previous_graph (first-time approve) never carries anything forward", async () => {
+      const { from, taskUpdate } = stubTaskUpdate();
+
+      await approveTaskMap(authenticatedClient(from), {
+        task_id: taskId,
+        area_id: areaId,
+        graph: validGraph,
+        ai_draft: null,
+      });
+
+      const written = taskUpdate.mock.calls[0]![0] as {
+        progression_map: { nodes: { id: string; done?: boolean }[] };
+      };
+      expect(written.progression_map.nodes.every((node) => !node.done)).toBe(
+        true,
+      );
+    });
+
+    it("degrades to no carry-forward (rather than throwing) when previous_graph fails validation", async () => {
+      const { from, taskUpdate } = stubTaskUpdate();
+
+      await approveTaskMap(authenticatedClient(from), {
+        task_id: taskId,
+        area_id: areaId,
+        graph: validGraph,
+        ai_draft: null,
+        previous_graph: { schema_version: "1.0", nodes: [], edges: [] },
+      });
+
+      const written = taskUpdate.mock.calls[0]![0] as {
+        progression_map: { nodes: { id: string; done?: boolean }[] };
+      };
+      expect(written.progression_map.nodes.every((node) => !node.done)).toBe(
+        true,
+      );
+    });
+  });
 });
 
 describe("setTaskMapNodeCompletion", () => {

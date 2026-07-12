@@ -19,7 +19,10 @@ import type {
 } from "./types";
 import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
 import { validateTaskMapForPersistence } from "./taskmap/persistence";
-import { toggleNodeCompletion } from "./taskmap/collapse";
+import {
+  carryForwardNodeCompletion,
+  toggleNodeCompletion,
+} from "./taskmap/collapse";
 import type { TaskMapGraph } from "./taskmap/graph";
 
 export const WIP_ENFORCEMENT_POLICY_ID = "wip_enforcement.v1";
@@ -1149,30 +1152,52 @@ export function updateTaskFirstTinyStep(
 // best-effort Supabase persist (in WorkflowContext) succeeds. The caller is
 // responsible for validating the graph (`validateTaskMapForPersistence`)
 // before dispatching this — the reducer trusts its input.
+//
+// FR-031 slice 8: when the task already has an approved map (a regen
+// revision), `carryForwardNodeCompletion` runs against that prior graph
+// before folding in the new one, so a completed node that survives (same
+// id, non-red in the revision) keeps its `done`/`completed_at`. Mirrors the
+// same call in `approveTaskMap` (apps/web/src/lib/data/workflow.ts) — both
+// call sites share the one pure helper so the optimistic local state and
+// the eventually-synced Supabase row never disagree on the rule.
 export function approveTaskMapLocal(
   state: WorkflowState,
   taskId: string,
   graph: { schema_version: string; nodes: unknown[]; edges: unknown[] },
 ): WorkflowState {
-  if (!state.tasks.some((task) => task.id === taskId)) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) {
     return state;
   }
 
   const approvedAt = nowIso();
 
+  let nextGraph = graph;
+  if (task.map_status === "approved" && task.progression_map) {
+    const previousValidation = validateTaskMapForPersistence(
+      task.progression_map,
+    );
+    if (previousValidation.ok) {
+      nextGraph = carryForwardNodeCompletion(
+        previousValidation.graph as TaskMapGraph,
+        graph as TaskMapGraph,
+      ) as typeof graph;
+    }
+  }
+
   return {
     ...state,
-    tasks: state.tasks.map((task) =>
-      task.id === taskId
+    tasks: state.tasks.map((item) =>
+      item.id === taskId
         ? {
-            ...task,
-            progression_map: graph,
+            ...item,
+            progression_map: nextGraph,
             map_status: "approved",
-            map_schema_version: graph.schema_version,
+            map_schema_version: nextGraph.schema_version,
             map_approved_at: approvedAt,
             updated_at: approvedAt,
           }
-        : task,
+        : item,
     ),
   };
 }

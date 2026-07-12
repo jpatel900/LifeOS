@@ -53,6 +53,61 @@ describe("requestTaskMapDraft", () => {
     });
   });
 
+  it("FR-031 slice 8: sends currentMap when provided (regen) and null when omitted (initial draft)", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        parser: "mock",
+        draft: validDraft,
+        suggestionRecordId: null,
+        status: "mock",
+      }),
+    })) as unknown as typeof fetch;
+
+    await requestTaskMapDraft({
+      taskId: "task-1",
+      areaId: null,
+      title: "Ship the report",
+      description: null,
+      definitionOfDone: null,
+      firstTinyStep: null,
+      fetchImpl,
+    });
+    const [, initialInit] = (fetchImpl as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
+    expect(
+      JSON.parse((initialInit as RequestInit).body as string).currentMap,
+    ).toBeNull();
+
+    const currentMap = {
+      nodes: [
+        {
+          id: "n1",
+          title: "Draft outline",
+          role: "required" as const,
+          done: true,
+        },
+      ],
+      edges: [],
+    };
+    await requestTaskMapDraft({
+      taskId: "task-1",
+      areaId: null,
+      title: "Ship the report",
+      description: null,
+      definitionOfDone: null,
+      firstTinyStep: null,
+      fetchImpl,
+      currentMap,
+    });
+    const [, regenInit] = (fetchImpl as unknown as ReturnType<typeof vi.fn>)
+      .mock.calls[1];
+    expect(
+      JSON.parse((regenInit as RequestInit).body as string).currentMap,
+    ).toEqual(currentMap);
+  });
+
   it("degrades to breakdown_rail on ok:false", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

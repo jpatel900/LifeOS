@@ -7,6 +7,7 @@ import { validateTaskMapForPersistence } from "@/lib/taskmap/persistence";
 import {
   taskMapDraftDetailed,
   type TaskMapDraftBreakdownStepContext,
+  type TaskMapDraftCurrentMapContext,
   type TaskMapDraftOptions,
   type TaskMapDraftTelemetry,
 } from "./taskMapDraft";
@@ -31,6 +32,11 @@ export interface TaskMapDraftServiceInput {
   definitionOfDone?: string | null;
   firstTinyStep?: string | null;
   breakdownSteps?: TaskMapDraftBreakdownStepContext[] | null;
+  /** FR-031 slice 8 — present only for a regeneration request (an
+   * already-approved map exists for this task). The mock parser ignores
+   * this (its degrade/validate behavior is unchanged either way); only the
+   * AI prompt (via `contextAssembly.ts`) reads it. */
+  currentMap?: TaskMapDraftCurrentMapContext | null;
 }
 
 export interface TaskMapDraftServiceOptions {
@@ -352,6 +358,7 @@ export async function generateTaskMapDraftWithFallback(
         definitionOfDone: input.definitionOfDone,
         firstTinyStep: input.firstTinyStep,
         breakdownSteps: input.breakdownSteps,
+        currentMap: input.currentMap,
       },
       {
         apiKey,

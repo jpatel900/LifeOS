@@ -12,6 +12,26 @@ import {
  * rail (NFR-004).
  */
 
+export interface TaskMapDraftRequestCurrentMapNode {
+  id: string;
+  title: string;
+  role: "required" | "optional" | "red";
+  done?: boolean;
+}
+
+export interface TaskMapDraftRequestCurrentMapEdge {
+  from: string;
+  to: string;
+}
+
+/** FR-031 slice 8 — the current approved map, sent only for an explicit
+ * user-requested regeneration. The route requires no DB read for this: the
+ * client already holds `task.progression_map` locally. */
+export interface TaskMapDraftRequestCurrentMap {
+  nodes: TaskMapDraftRequestCurrentMapNode[];
+  edges: TaskMapDraftRequestCurrentMapEdge[];
+}
+
 export interface TaskMapDraftRequestInput {
   taskId: string;
   areaId: string | null;
@@ -21,6 +41,8 @@ export interface TaskMapDraftRequestInput {
   firstTinyStep: string | null;
   authorization?: string;
   fetchImpl?: typeof fetch;
+  /** Present only for a regeneration request. */
+  currentMap?: TaskMapDraftRequestCurrentMap | null;
 }
 
 export type TaskMapDraftRequestResult =
@@ -61,6 +83,7 @@ export async function requestTaskMapDraft(
         firstTinyStep: input.firstTinyStep,
         breakdownSteps: null,
         parserMode: "auto",
+        currentMap: input.currentMap ?? null,
       }),
     });
     httpOk = httpResponse.ok;

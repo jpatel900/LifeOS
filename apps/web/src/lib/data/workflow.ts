@@ -73,7 +73,10 @@ import {
   normalizeSupabaseRows,
 } from "./supabaseRowNormalization";
 import { validateTaskMapForPersistence } from "../taskmap/persistence";
-import { toggleNodeCompletion } from "../taskmap/collapse";
+import {
+  carryForwardNodeCompletion,
+  toggleNodeCompletion,
+} from "../taskmap/collapse";
 import type { TaskMapGraph } from "../taskmap/graph";
 
 export type DataProvider = "mock" | "supabase";
@@ -1027,6 +1030,10 @@ export interface TaskMapDraftSuggestionInput {
   node_counts: TaskMapDraftSuggestionNodeCounts;
   node_titles: string[];
   confidence?: number | null;
+  /** FR-031 slice 8 — "initial" for the first draft on a task, "regen" for
+   * an explicit user-requested revision of an already-approved map.
+   * Defaults to "initial" for callers that predate slice 8. */
+  generated_from?: "initial" | "regen";
 }
 
 export interface TaskMapDraftSuggestionResult {
@@ -1057,6 +1064,7 @@ export async function recordTaskMapDraftSuggestion(
       suggestion_json: {
         node_counts: input.node_counts,
         node_titles: input.node_titles,
+        generated_from: input.generated_from ?? "initial",
       },
       confidence: input.confidence ?? null,
       status: "pending",
@@ -1208,6 +1216,14 @@ export interface ApproveTaskMapInput {
   ai_draft: ApproveTaskMapAiDraft | null;
   /** The pending suggestion_records row from generation, if one exists. */
   suggestion_record_id?: string | null;
+  /** FR-031 slice 8 — the previously approved graph, when this approval is
+   * a regen revision of an already-approved map. Null/omitted for a
+   * first-time approve. Used ONLY to carry `completed_at`/`done` forward
+   * for surviving node ids (`carryForwardNodeCompletion`); it plays no
+   * part in override diffing (that stays `ai_draft` vs. the persisted
+   * graph, per slice 4). An unparseable `previous_graph` degrades to no
+   * carry-forward rather than blocking the approve. */
+  previous_graph?: unknown | null;
 }
 
 export interface TaskMapApproveResult {
@@ -1219,9 +1235,20 @@ export interface TaskMapApproveResult {
  * FR-031 slice 4 one-pass approve path (NS-INV-4: no AI-drafted map persists
  * without approval). Runs `validateTaskMapForPersistence` — schema AND graph
  * validation — before ever touching `tasks.progression_map`; rejects on
- * failure instead of writing anything. Statuses `draft`/`superseded` are not
- * used by this slice (reserved for the regen flow, a later slice) — every
- * successful approval here writes `map_status: "approved"` directly.
+ * failure instead of writing anything. Every successful approval here
+ * writes `map_status: "approved"` directly — `superseded` stays reserved.
+ * Scope decision (slice 8): `tasks.progression_map` is a single jsonb
+ * column, one map per task, so an approved revision overwrites the prior
+ * content rather than modeling row-level map history; `superseded` has no
+ * row to apply to in v1 and is not invented one here (no new tables — that
+ * is v2 territory). The prior content is not lost: it lives in the
+ * `suggestion_records`/`override_records` instrumentation trail from its
+ * own approval, just not as a live "superseded map" row.
+ *
+ * FR-031 slice 8: when `input.previous_graph` is supplied (a regen
+ * revision), `carryForwardNodeCompletion` runs on the validated graph
+ * before it is written, so a completed node that survives the revision
+ * (same id, non-red in the new graph) keeps its `done`/`completed_at`.
  */
 export async function approveTaskMap(
   client: MinimalSupabaseClient | null,
@@ -1233,7 +1260,22 @@ export async function approveTaskMap(
       `Task map failed validation and was not saved: ${validation.errors.join("; ")}`,
     );
   }
-  const graph = validation.graph;
+
+  let graph = validation.graph;
+  if (input.previous_graph) {
+    const previousValidation = validateTaskMapForPersistence(
+      input.previous_graph,
+    );
+    if (previousValidation.ok) {
+      graph = carryForwardNodeCompletion(
+        previousValidation.graph as TaskMapGraph,
+        graph as TaskMapGraph,
+      ) as typeof graph;
+    }
+    // An unparseable previous_graph degrades to no carry-forward rather
+    // than blocking the approve — the same NFR-004 posture as every other
+    // task-map degrade path in this file.
+  }
 
   if (!client) {
     throw new Error("Mock task-map approval uses the local workflow context.");

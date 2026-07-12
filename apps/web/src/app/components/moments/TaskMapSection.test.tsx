@@ -168,6 +168,109 @@ describe("TaskMapSection", () => {
     expect(onToggleNodeCompletion).toHaveBeenCalledWith("req-2");
   });
 
+  it("shows a Revise map affordance on the approved map view and wires it to onRequestDraft", () => {
+    const onRequestDraft = vi.fn();
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: approvedGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "idle" }}
+        now={new Date()}
+        onRequestDraft={onRequestDraft}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("taskmap-view")).toBeInTheDocument();
+    const button = screen.getByTestId("taskmap-revise-cta");
+    expect(button).toHaveTextContent("Revise map");
+    fireEvent.click(button);
+    expect(onRequestDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the approved map visible (not the rail) while a regen is pending", () => {
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: approvedGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "pending" }}
+        now={new Date()}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("taskmap-view")).toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-revise-cta")).toHaveTextContent(
+      "Revising map…",
+    );
+    expect(screen.getByTestId("taskmap-revise-cta")).toBeDisabled();
+  });
+
+  it("keeps the approved map visible and shows a notice when a regen fails", () => {
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: approvedGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "failed", message: "Couldn't revise the map." }}
+        now={new Date()}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("taskmap-view")).toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-revise-notice")).toHaveTextContent(
+      "Couldn't revise the map.",
+    );
+  });
+
+  it("replaces the approved map with the draft review, marked as a revision, when the regen draft is ready", () => {
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: approvedGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "ready", draft: approvedGraph }}
+        now={new Date()}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("taskmap-draft-review")).toBeInTheDocument();
+    expect(screen.queryByTestId("taskmap-view")).not.toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-draft-approve")).toHaveTextContent(
+      "Replace the map",
+    );
+    expect(screen.getByTestId("taskmap-draft-dismiss")).toHaveTextContent(
+      "Keep current map",
+    );
+  });
+
   it("no task (nothing focused) renders the rail without a Draft map affordance", () => {
     render(
       <TaskMapSection

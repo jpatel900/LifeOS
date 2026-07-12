@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PARSE_CAPTURE_PROMPT_VERSION,
   buildParseCaptureMessages,
+  buildTaskMapDraftMessages,
   type ParseCaptureAreaContext,
 } from "./contextAssembly";
 
@@ -194,6 +195,67 @@ describe("contextAssembly parse prompt", () => {
     expect(userMessage.content).toContain("Recent rollups:");
     expect(userMessage.content).toContain(
       "- main-job (week 2026-05-01–2026-05-07): highlights: Shipped the cockpit; Cleared the triage backlog | misses: Skipped two deep-work mornings",
+    );
+  });
+});
+
+describe("buildTaskMapDraftMessages (FR-031 slice 8 regen input)", () => {
+  const baseInput = {
+    title: "Ship the report",
+    description: null,
+    definitionOfDone: null,
+    firstTinyStep: null,
+    breakdownSteps: null,
+  };
+
+  it("omits the current-map section for a first-time draft (no currentMap)", () => {
+    const [, userMessage] = buildTaskMapDraftMessages(baseInput);
+    expect(userMessage.content).not.toContain("REVISION request");
+    expect(userMessage.content).not.toContain("Current approved map");
+  });
+
+  it("includes the current map's nodes, edges, and completion state for a regen request", () => {
+    const [, userMessage] = buildTaskMapDraftMessages({
+      ...baseInput,
+      currentMap: {
+        nodes: [
+          {
+            id: "step-1",
+            title: "Gather inputs",
+            role: "required",
+            done: true,
+          },
+          { id: "step-2", title: "Do the work", role: "required" },
+        ],
+        edges: [{ from: "step-1", to: "step-2" }],
+      },
+    });
+
+    expect(userMessage.content).toContain("This is a REVISION request.");
+    expect(userMessage.content).toContain(
+      "- step-1 (required, done): Gather inputs",
+    );
+    expect(userMessage.content).toContain("- step-2 (required): Do the work");
+    expect(userMessage.content).toContain("- step-1 -> step-2");
+  });
+
+  it("labels an edge-less current map explicitly rather than omitting the section", () => {
+    const [, userMessage] = buildTaskMapDraftMessages({
+      ...baseInput,
+      currentMap: {
+        nodes: [{ id: "step-1", title: "Gather inputs", role: "required" }],
+        edges: [],
+      },
+    });
+
+    expect(userMessage.content).toContain("(no edges)");
+  });
+
+  it("instructs the model to preserve completed-node identity on revision, never to set completion itself", () => {
+    const [systemMessage] = buildTaskMapDraftMessages(baseInput);
+    expect(systemMessage.content).toContain("REVISION request");
+    expect(systemMessage.content).toContain(
+      "You never set or unset completion yourself",
     );
   });
 });

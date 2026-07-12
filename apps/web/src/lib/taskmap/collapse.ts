@@ -87,6 +87,50 @@ export function toggleNodeCompletion(
 }
 
 /**
+ * FR-031 slice 8 — pure completion carry-forward for map revision. When a
+ * regen draft is approved, it overwrites `progression_map` wholesale; this
+ * function is the ONE place (server `approveTaskMap` and the client's
+ * `approveTaskMapLocal` reducer both call it) that decides which nodes in
+ * the newly-approved graph keep their prior completion state, so the two
+ * call sites can never drift on the rule.
+ *
+ * Rule: a node whose id survives from `previousGraph` into `nextGraph` AND
+ * was complete there AND is not `red` in the new graph carries its
+ * `done`/`completed_at` forward unchanged. A dropped id, a renamed id (no
+ * match), or a node whose new role is `red` all get no carry-forward — red
+ * nodes are never actionable/completable (mirrors `toggleNodeCompletion`).
+ */
+export function carryForwardNodeCompletion(
+  previousGraph: TaskMapGraph | null | undefined,
+  nextGraph: TaskMapGraph,
+): TaskMapGraph {
+  if (!previousGraph?.nodes.length) {
+    return nextGraph;
+  }
+
+  const previousById = new Map(
+    previousGraph.nodes.map((node) => [node.id, node]),
+  );
+
+  let changed = false;
+  const nodes = nextGraph.nodes.map((node) => {
+    const prior = previousById.get(node.id);
+    if (!prior || node.role === "red" || !isNodeComplete(prior)) {
+      return node;
+    }
+
+    changed = true;
+    return {
+      ...node,
+      done: true,
+      completed_at: prior.completed_at ?? null,
+    };
+  });
+
+  return changed ? { ...nextGraph, nodes } : nextGraph;
+}
+
+/**
  * Presentation-only "map approved N ago" label. Pure over an explicit `now`
  * (no ambient Date.now) so it is unit-testable and deterministic. Kept
  * intentionally coarse (days, not hours/minutes) — this is a subtle,
