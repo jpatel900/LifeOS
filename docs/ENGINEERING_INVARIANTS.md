@@ -58,6 +58,41 @@ Every AI surface receives the least context that answers its question, not the m
 
 Enforcement: (target, guard pending — Batch B, lands with the NS-INV-1 guard) a test rendering each surface's assembled context against fixtures and asserting it stays at or under its declared budget. Status: NOT yet wired — depends on `contextAssembly.ts` existing (NS-INV-1). Do not claim it enforced until that guard merges.
 
+## INV-10 — Autonomy graduation gate (issue #268)
+
+No action class may move up the trust ladder (ADR 0002 D1: L0 silent → L1 propose-per-instance → L2 propose-with-default → L3 auto-execute-reversible; irreversible/external classes never pass L2) without first clearing every item below. This is the dark-factory precondition checklist: the industry lesson that a Level 4/5 factory inherits the quality of its test oracle, so no class graduates faster than its oracle can prove it safe.
+
+**Preconditions (all required before graduation):**
+
+1. **Oracle exists and is strong** — a never-regress suite covers the class's behavior; changes to that suite are themselves one-way-door gated.
+2. **Acceptance scenarios codified** — the class's contract is written in the issue/spec verbatim, not implied.
+3. **Fitness functions guard the invariants** — guard tests in the style of `docRegistry.test.ts` (allowlist + shrink-only + budget) exist for every invariant the class could violate.
+4. **Decision data collected** — approve/override/edit outcomes logged per instance, with graduation criteria pre-registered (default candidate: 20 consecutive non-overridden instances or 4 weeks, whichever is longer).
+5. **De-graduation rule encoded** — one defect or near-miss moves the class back a rung automatically; re-graduation needs a fresh evidence run.
+6. **Rollback trigger written before graduation** — "if `<metric/error>` exceeds `<threshold>` within `<window>`, revert via `<procedure>`"; for deploy-shaped classes, canary/staged rollout preferred.
+7. **Fallback capability retained** — a human (or the class's Level-3-or-lower flow) can still operate the class if the automation is paused. Hands-off must never become hands-tied.
+8. **Prompt-injection surface reviewed** — any class consuming external text (issues, emails, calendar payloads) gets an injection review before losing its human gate.
+
+**Non-goals:**
+
+- No class graduates by convenience, deadline, or "it always gets approved anyway."
+- Irreversible/external classes (real calendar writes, outbound messages) stay human-gated regardless of ladder level until explicitly and individually delegated in writing.
+
+**Applicability:** any future issue or PR proposing an automerge or auto-execute expansion MUST cite this section (INV-10) and show the checklist filled in, item by item, before the expansion may be considered.
+
+**Currently-graduated class and its evidence:** the docs-only automerge lane (`scripts/agent/check-safe-automerge.mjs`, path/label policy in `scripts/agent/automation-policy.mjs`, workflow `.github/workflows/safe-automerge.yml`) is the one class currently past L2 for this repo. It satisfies some but not all items above; do not treat it as a template for full compliance:
+
+- Oracle (1): partially satisfied. `check-safe-automerge.mjs --self-test` and `safe-automerge-demotion.mjs --self-test` cover the eligibility and demotion logic with fixture cases, but **neither self-test is invoked from any CI workflow** — confirmed by grep across `.github/workflows/*.yml`. The oracle exists but is not itself gated; a change to the policy could silently break the self-test without CI noticing. Gap, not a pass.
+- Acceptance scenarios (2): satisfied. The lane's contract is written in `.github/AGENT_AUTOMATION_POLICY.md` (T0 section) and the allowed/forbidden path patterns in `automation-policy.mjs` are explicit and comment-dated (e.g., the `.agents/skills/**` extension is dated 2026-07-03 with its owner-approval rationale inline).
+- Fitness functions (3): partially satisfied. `docRegistry.test.ts` itself is a vitest-enforced allowlist + shrink-only + budget guard for markdown files, and `check-safe-automerge.mjs` enforces the safe-automerge path allowlist deterministically — but `automation-policy.mjs`'s pattern lists have no vitest guard test of their own (only the unwired self-tests above), so there is no CI-enforced shrink-only or budget property on the automerge allowlist itself.
+- Decision data (4): NOT satisfied. There is no `user_decisions`-style per-instance log of docs-only automerges with pre-registered graduation criteria. The lane graduated on path-determinism reasoning (docs-only diffs are non-executable), not on collected approve/override data. This is a real gap against the checklist as written.
+- De-graduation rule (5): satisfied. `.github/workflows/main-red-guard.yml` calls `scripts/agent/safe-automerge-demotion.mjs` automatically on a red-main or canonical-revert trigger; it opens a PR removing the implicated class from `SAFE_AUTOMERGE_ALLOWED_PATH_PATTERNS`, and re-graduation is explicitly out of scope for that PR ("must follow the prove-then-trust expansion policy from scratch").
+- Rollback trigger (6): satisfied. The trigger is written into the demotion tooling itself: red main CI or a canonical revert implicating the class within the same PR's diff.
+- Fallback retained (7): satisfied. Auto-merge only arms GitHub's native auto-merge on an already-mergeable, already-gated PR; a human can always merge manually with automerge paused, and the lane has no side effect beyond the merge itself.
+- Prompt-injection review (8): satisfied by scope, not by a documented review artifact. The lane's eligibility test is purely path/label/draft-status based (`classifyEligibility` in `check-safe-automerge.mjs`) and never interprets diff content as instructions, so there is no injection surface to review — but this reasoning is not written down anywhere else, so treat it as asserted here rather than independently verified.
+
+**Honest summary:** the docs-only automerge lane satisfies items 2, 5, 6, and 7 cleanly, partially satisfies 1 and 3 (oracle and fitness functions exist but are not CI-wired against regression of the policy itself), and does not satisfy item 4 (no pre-registered decision-data graduation criteria were collected before this class graduated). Any future automerge/auto-execute expansion citing this class as precedent must close items 1, 3, and 4 for itself rather than assume the existing lane already proves the pattern.
+
 ## Stage epic invariants (NS-INV, ADR 0002)
 
 The invariants below are defined in `docs/adr/0002-north-star-stages-and-trust-ladder.md` D4 and are binding on every Stage 1+ slice. They are recorded here with their concrete enforcement points as those slices land.
