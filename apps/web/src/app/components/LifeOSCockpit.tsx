@@ -45,6 +45,11 @@ import {
 import { cn } from "@/lib/utils";
 import { GoogleCalendarApprovalBridge } from "./GoogleCalendarApprovalBridge";
 import { useFocusSession } from "./moments/useFocusSession";
+import { CutScopeCandidates } from "./moments/CutScopeCandidates";
+import {
+  appendCutScopeNote,
+  cutScopeCandidatesForTask,
+} from "@/lib/taskmap/cutScope";
 
 const STAGE_LABELS: Record<CockpitStage, string> = {
   today: "Today",
@@ -316,7 +321,10 @@ export function LifeOSCockpit({
     start(taskId, minutes);
   }
 
-  function finishSession(status: "completed" | "stuck" | "missed") {
+  function finishSession(
+    status: "completed" | "stuck" | "missed",
+    cutScopeNoteDraft?: string,
+  ) {
     const currentSession = state.executionSessions[0] ?? null;
     const currentTask = currentSession?.task_id
       ? state.tasks.find((task) => task.id === currentSession.task_id)
@@ -335,9 +343,22 @@ export function LifeOSCockpit({
         .toLowerCase();
 
       if (choice === "1" || choice === "cut" || choice === "cut scope") {
-        const revisedDod = window
-          .prompt("Cut scope: write the definition of done that is true now.")
-          ?.trim();
+        // FR-031 slice 7: prefill with whatever the operator tapped from the
+        // "ready-made cuts from your map" list, if anything -- the map
+        // itself is never mutated (NS-INV-4), only this text default. A
+        // task with no map (or no candidates tapped) calls window.prompt
+        // with exactly its original single argument, so that path is
+        // unchanged, not just equivalent.
+        const revisedDod = (
+          cutScopeNoteDraft
+            ? window.prompt(
+                "Cut scope: write the definition of done that is true now.",
+                cutScopeNoteDraft,
+              )
+            : window.prompt(
+                "Cut scope: write the definition of done that is true now.",
+              )
+        )?.trim();
         if (!revisedDod) {
           showToast("Write the cut scope before closing");
           return;
@@ -1843,7 +1864,7 @@ function PlanView({
   );
 }
 
-function ExecuteView({
+export function ExecuteView({
   vm,
   activeTaskId,
   running,
@@ -1863,7 +1884,10 @@ function ExecuteView({
   total: number;
   onStart: (taskId: string, minutes: number) => void;
   onToggle: () => void;
-  onFinish: (status: "completed" | "stuck" | "missed") => void;
+  onFinish: (
+    status: "completed" | "stuck" | "missed",
+    cutScopeNoteDraft?: string,
+  ) => void;
   onPlan: () => void;
   onCapture: () => void;
   onSideCapture: (text: string) => void;
@@ -1872,6 +1896,17 @@ function ExecuteView({
   const minutes = Math.floor(remaining / 60);
   const seconds = `${remaining % 60}`.padStart(2, "0");
   const [sideCapture, setSideCapture] = useState("");
+  // FR-031 slice 7: text draft for the DoD-cap CUT SCOPE moment, built up
+  // by tapping "ready-made cuts from your map" candidates. Reset whenever
+  // the active task changes so a stale note never bleeds into a different
+  // task's cap moment.
+  const [cutScopeNoteDraft, setCutScopeNoteDraft] = useState("");
+  const cutScopeCandidatesForActiveTask = active
+    ? cutScopeCandidatesForTask(active.task)
+    : [];
+  useEffect(() => {
+    setCutScopeNoteDraft("");
+  }, [activeTaskId]);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -1956,6 +1991,15 @@ function ExecuteView({
             <div className="mx-auto mt-4 max-w-md rounded-2xl border border-[var(--amb)] bg-[var(--amb-sf)] p-3 text-sm text-[var(--amb-fg)]">
               Time cap reached. If the definition of done is unmet, choose cut
               scope or defer; continuing silently is not an option.
+              <CutScopeCandidates
+                candidates={cutScopeCandidatesForActiveTask}
+                note={cutScopeNoteDraft}
+                onSelect={(candidate) =>
+                  setCutScopeNoteDraft((current) =>
+                    appendCutScopeNote(current, candidate.title),
+                  )
+                }
+              />
             </div>
           ) : null}
           <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -1971,7 +2015,7 @@ function ExecuteView({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onFinish("completed")}
+                  onClick={() => onFinish("completed", cutScopeNoteDraft)}
                   className="min-h-12 rounded-full bg-[var(--grn-sf)] px-5 font-bold text-[var(--grn-fg)]"
                 >
                   Complete
