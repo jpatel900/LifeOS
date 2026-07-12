@@ -64,6 +64,7 @@ import {
   saveReview,
   swapWipSlot,
   clearWipRefusal,
+  approveTaskMapLocal,
   type WipRefusal,
   type WorkflowState,
 } from "./workflow";
@@ -102,9 +103,13 @@ import {
   recordDurationRecalibrationDecision,
   rejectTimeBlockProposal,
   unplanCalendarBlock,
+  approveTaskMap,
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "./data/workflow";
+import { requestTaskMapDraft as fetchTaskMapDraft } from "./ai/taskMapDraftClient";
+import { validateTaskMapForPersistence } from "./taskmap/persistence";
+import type { TaskMapGraph } from "./taskmap/graph";
 import {
   AREA_DURATION_TASK_TYPE,
   applyStoredDuration,
@@ -270,6 +275,11 @@ type WorkflowAction =
       firstTinyStep: string;
     }
   | {
+      type: "approveTaskMapLocal";
+      taskId: string;
+      graph: TaskMapGraph & { schema_version: string };
+    }
+  | {
       type: "unplanTask";
       blockId: string;
     }
@@ -328,6 +338,27 @@ export type CaptureParseState =
       canRetryWithMock: boolean;
     };
 
+/**
+ * FR-031 slice 5 — UI-facing status of the on-demand task-map draft
+ * round-trip, keyed to the task it was drafted for so switching the
+ * focused task never shows a stale draft. Generation is on-demand only
+ * (NFR-001/NFR-005): entering "pending" always follows an explicit
+ * `requestTaskMapDraft` call, never a background effect.
+ */
+export type TaskMapDraftState =
+  | { phase: "idle" }
+  | { phase: "pending"; taskId: string }
+  | {
+      phase: "ready";
+      taskId: string;
+      draft: TaskMapGraph & { schema_version: "1.0" };
+      suggestionRecordId: string | null;
+    }
+  | { phase: "failed"; taskId: string; message: string };
+
+const SAFE_TASK_MAP_FAILURE_MESSAGE =
+  "Couldn't draft a map right now. Staying on the step list.";
+
 interface WorkflowContextValue {
   state: WorkflowState;
   selectedAreaId: string | null;
@@ -351,6 +382,14 @@ interface WorkflowContextValue {
   ) => void;
   captureParse: CaptureParseState;
   retryCaptureParseWithMock: () => void;
+  // FR-031 slice 5: on-demand task-map draft + one-pass approve.
+  taskMapDraft: TaskMapDraftState;
+  requestTaskMapDraft: (taskId: string) => Promise<void>;
+  dismissTaskMapDraft: () => void;
+  approveTaskMapDraft: (
+    taskId: string,
+    graph: TaskMapGraph & { schema_version: "1.0" },
+  ) => Promise<void>;
   // FR-027 (F-G1a): number of raw captures saved offline and not yet synced to
   // the spine (the queue-badge signal). Drains automatically on reconnect.
   unsyncedCaptureCount: number;
@@ -1001,6 +1040,8 @@ function workflowReducer(
         action.taskId,
         action.firstTinyStep,
       );
+    case "approveTaskMapLocal":
+      return approveTaskMapLocal(state, action.taskId, action.graph);
     case "unplanTask":
       return unplanTask(state, action.blockId);
     case "startSession":
@@ -1092,6 +1133,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [captureParse, setCaptureParse] = useState<CaptureParseState>({
     phase: "idle",
   });
+  const [taskMapDraft, setTaskMapDraft] = useState<TaskMapDraftState>({
+    phase: "idle",
+  });
   // S9 (#261): loaded override_records (learning history) + the set of policy
   // proposals the user has already decided this session (so a decided proposal
   // leaves the review surface without needing a reload).
@@ -1115,6 +1159,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const persistedProposalIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedBlockIdByLocalIdRef = useRef(new Map<string, string>());
   const persistedSessionIdByLocalIdRef = useRef(new Map<string, string>());
+  // FR-031 slice 5: mirrors `taskMapDraft` state so the approve action can
+  // read the AI draft/suggestion id synchronously (for override diffing)
+  // without a stale closure over the useState value.
+  const taskMapDraftRef = useRef<TaskMapDraftState>({ phase: "idle" });
 
   const markLocalOnly = useCallback((message: string) => {
     setSyncStatus((current) => ({
@@ -1756,6 +1804,149 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     },
     [markLocalOnly],
+  );
+
+  // FR-031 slice 5: on-demand task-map draft generation (NFR-001/NFR-005 —
+  // only ever called from an explicit user action, never a background
+  // effect). Keyed to `taskId` so a stale draft from a previously focused
+  // task never renders against the wrong task.
+  const requestTaskMapDraftAction = useCallback(async (taskId: string) => {
+    const task = stateRef.current.tasks.find((item) => item.id === taskId);
+    if (!task) return;
+
+    const setDraft = (next: TaskMapDraftState) => {
+      taskMapDraftRef.current = next;
+      setTaskMapDraft(next);
+    };
+
+    setDraft({ phase: "pending", taskId });
+
+    // Best-effort bearer token; the route requires one and 401s (as an
+    // ordinary ok:false) without it, so a missing/expired session degrades
+    // to the usual failed-draft notice rather than throwing.
+    let authorization: string | undefined;
+    try {
+      const authClient = createSupabaseBrowserClient();
+      if (authClient) {
+        const { data } = await authClient.auth.getSession();
+        const accessToken = data.session?.access_token?.trim();
+        if (accessToken) {
+          authorization = `Bearer ${accessToken}`;
+        }
+      }
+    } catch {
+      // Tracing/auth is best-effort; fall through to an unauthenticated call.
+    }
+
+    const persistedAreaId = task.area_id
+      ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
+      : null;
+
+    const result = await fetchTaskMapDraft({
+      taskId,
+      areaId: persistedAreaId,
+      title: task.title,
+      description: task.description ?? null,
+      definitionOfDone: task.definition_of_done ?? null,
+      firstTinyStep: task.first_tiny_step ?? null,
+      authorization,
+    });
+
+    // Ignore a stale response if the focused task changed mid-flight.
+    if (
+      taskMapDraftRef.current.phase !== "pending" ||
+      taskMapDraftRef.current.taskId !== taskId
+    ) {
+      return;
+    }
+
+    if (!result.ok) {
+      setDraft({
+        phase: "failed",
+        taskId,
+        message: SAFE_TASK_MAP_FAILURE_MESSAGE,
+      });
+      return;
+    }
+
+    setDraft({
+      phase: "ready",
+      taskId,
+      draft: result.draft,
+      suggestionRecordId: result.suggestionRecordId,
+    });
+  }, []);
+
+  const dismissTaskMapDraftAction = useCallback(() => {
+    taskMapDraftRef.current = { phase: "idle" };
+    setTaskMapDraft({ phase: "idle" });
+  }, []);
+
+  // FR-031 slice 5 one-pass approve (ADR 0002 D1). The local reducer patch
+  // flips the UI from the v0 rail to `TaskMapView` immediately; Supabase
+  // persistence (via `approveTaskMap`, which re-validates before writing)
+  // is best-effort, mirroring `confirmWin`/`confirmRollup`'s markLocalOnly
+  // fallback — a sync failure never loses the owner's approval decision.
+  const approveTaskMapDraftAction = useCallback(
+    async (taskId: string, graph: TaskMapGraph & { schema_version: "1.0" }) => {
+      const validated = validateTaskMapForPersistence(graph);
+      if (!validated.ok) {
+        markLocalOnly("Map couldn't be saved as edited; nothing changed.");
+        return;
+      }
+      const validatedGraph = validated.graph as TaskMapGraph & {
+        schema_version: string;
+      };
+
+      const priorDraft = taskMapDraftRef.current;
+      const aiDraftSource =
+        priorDraft.phase === "ready" && priorDraft.taskId === taskId
+          ? priorDraft
+          : null;
+
+      dispatch({
+        type: "approveTaskMapLocal",
+        taskId,
+        graph: validatedGraph,
+      });
+      taskMapDraftRef.current = { phase: "idle" };
+      setTaskMapDraft({ phase: "idle" });
+
+      const client = createSupabaseBrowserClient();
+      const persistedTaskId = persistedIdForLocalId(
+        taskId,
+        persistedTaskIdByLocalIdRef.current,
+      );
+
+      if (!client || !persistedTaskId) {
+        markLocalOnly("Map approved locally; account sync is pending.");
+        return;
+      }
+
+      const task = stateRef.current.tasks.find((item) => item.id === taskId);
+      const persistedAreaId = task?.area_id
+        ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
+        : null;
+
+      try {
+        await approveTaskMap(client, {
+          task_id: persistedTaskId,
+          area_id: persistedAreaId,
+          graph: validatedGraph,
+          ai_draft: aiDraftSource
+            ? {
+                nodes: aiDraftSource.draft.nodes,
+                edges: aiDraftSource.draft.edges,
+              }
+            : null,
+          suggestion_record_id: aiDraftSource?.suggestionRecordId ?? null,
+        });
+        await syncPersistedWorkflowRows(client);
+      } catch {
+        markLocalOnly("Map approved locally; account sync is pending.");
+      }
+    },
+    [markLocalOnly, syncPersistedWorkflowRows],
   );
 
   // S8 (#260, extended #486): persist a user-APPROVED rollup (NS-INV-4 —
@@ -2912,6 +3103,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     submitCaptureRaw,
     captureParse,
     retryCaptureParseWithMock,
+    taskMapDraft,
+    requestTaskMapDraft: requestTaskMapDraftAction,
+    dismissTaskMapDraft: dismissTaskMapDraftAction,
+    approveTaskMapDraft: approveTaskMapDraftAction,
     unsyncedCaptureCount,
     clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>

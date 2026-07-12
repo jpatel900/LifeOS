@@ -2,19 +2,27 @@
 
 import { CurrentBlockHero } from "./CurrentBlockHero";
 import { DriftRecoveryCard } from "./DriftRecoveryCard";
-import { ProgressionRail } from "./ProgressionRail";
+import {
+  TaskMapSection,
+  type TaskMapDraftUiState,
+  type TaskMapFocusedTask,
+} from "./TaskMapSection";
 import type { FlowVM } from "./momentsViewModel";
 import type { ProgressionNode } from "./progressionNodes";
+import type { TaskMapGraph } from "@/lib/taskmap/graph";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
  * Moments pass P4 — packet: adds DriftRecoveryCard + ProgressionRail v0.
+ * FR-031 slice 5 — packet: swaps the bare ProgressionRail for
+ * `TaskMapSection`, which renders the v0 rail (unchanged) plus an
+ * on-demand "Draft map" affordance when there's no approved map yet, or
+ * the approved-map collapsed view when there is one.
  *
  * The Flow moment: the current block/session hero, or a truthful empty
  * state pointing back to Start (UX-INV-6 — no dead ends). When `vm.drift`
  * is present, the recovery card renders regardless of hero/empty state
- * (UX-INV-3 — a derailed Flow is never a dead end). The progression rail
- * renders below, showing v0's presentation-only progress derivation.
+ * (UX-INV-3 — a derailed Flow is never a dead end).
  */
 
 export interface FlowMomentSession {
@@ -35,6 +43,12 @@ export interface FlowMomentProps {
   onReclaimDrift(): void;
   onAbandonDrift(): void;
   progressionNodes: ProgressionNode[];
+  focusedTask: TaskMapFocusedTask | null;
+  taskMapDraft: TaskMapDraftUiState;
+  now: Date;
+  onRequestTaskMapDraft(): void;
+  onDismissTaskMapDraft(): void;
+  onApproveTaskMapDraft(graph: TaskMapGraph & { schema_version: "1.0" }): void;
 }
 
 export function FlowMoment({
@@ -48,6 +62,12 @@ export function FlowMoment({
   onReclaimDrift,
   onAbandonDrift,
   progressionNodes,
+  focusedTask,
+  taskMapDraft,
+  now,
+  onRequestTaskMapDraft,
+  onDismissTaskMapDraft,
+  onApproveTaskMapDraft,
 }: FlowMomentProps) {
   const hasActiveSession = session.activeTaskId !== null || session.total > 0;
 
@@ -91,7 +111,15 @@ export function FlowMoment({
         />
       ) : null}
 
-      <ProgressionRail nodes={progressionNodes} />
+      <TaskMapSection
+        task={focusedTask}
+        progressionNodes={progressionNodes}
+        draftState={taskMapDraft}
+        now={now}
+        onRequestDraft={onRequestTaskMapDraft}
+        onDismissDraft={onDismissTaskMapDraft}
+        onApproveDraft={onApproveTaskMapDraft}
+      />
     </div>
   );
 }

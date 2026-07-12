@@ -1140,6 +1140,40 @@ export function updateTaskFirstTinyStep(
   };
 }
 
+// FR-031 slice 5: local-first fold-back for the approved task-map graph.
+// Mirrors `updateTaskFirstTinyStep` — a pure reducer patch so the UI flips
+// from the v0 rail to `TaskMapView` immediately, independent of whether the
+// best-effort Supabase persist (in WorkflowContext) succeeds. The caller is
+// responsible for validating the graph (`validateTaskMapForPersistence`)
+// before dispatching this — the reducer trusts its input.
+export function approveTaskMapLocal(
+  state: WorkflowState,
+  taskId: string,
+  graph: { schema_version: string; nodes: unknown[]; edges: unknown[] },
+): WorkflowState {
+  if (!state.tasks.some((task) => task.id === taskId)) {
+    return state;
+  }
+
+  const approvedAt = nowIso();
+
+  return {
+    ...state,
+    tasks: state.tasks.map((task) =>
+      task.id === taskId
+        ? {
+            ...task,
+            progression_map: graph,
+            map_status: "approved",
+            map_schema_version: graph.schema_version,
+            map_approved_at: approvedAt,
+            updated_at: approvedAt,
+          }
+        : task,
+    ),
+  };
+}
+
 export function unplanTask(
   state: WorkflowState,
   blockId: string,
