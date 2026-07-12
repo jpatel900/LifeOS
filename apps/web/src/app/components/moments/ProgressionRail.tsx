@@ -3,7 +3,17 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ProgressionNode } from "./progressionNodes";
-import { HIT_TARGET_INVISIBLE } from "./hitTarget";
+
+/**
+ * `HIT_TARGET_INVISIBLE`'s blanket `-m-2.5` assumes the surrounding layout
+ * gap is at least 10px; this rail's `gap-2` (8px) is smaller, so the pulled
+ * hit box collided with the neighboring chip's focus ring ("+N steps"
+ * rendered flush against the current-node chip). Same 44px floor, but the
+ * invisible box only expands vertically and AWAY from the chips
+ * (inline-end), never into the 8px gap on the chip-facing side.
+ */
+const RAIL_HIT_TARGET =
+  "-my-2.5 -me-2.5 inline-flex min-h-[44px] min-w-[44px] items-center justify-center touch-manipulation";
 
 /**
  * Moments pass P4 — packet: ProgressionRail v0.
@@ -93,7 +103,7 @@ export function ProgressionRail({ nodes, onExpand }: ProgressionRailProps) {
         <button
           type="button"
           className={cn(
-            HIT_TARGET_INVISIBLE,
+            RAIL_HIT_TARGET,
             "mt-2 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline",
           )}
           onClick={handleCollapse}
@@ -133,7 +143,7 @@ export function ProgressionRail({ nodes, onExpand }: ProgressionRailProps) {
             <button
               type="button"
               className={cn(
-                HIT_TARGET_INVISIBLE,
+                RAIL_HIT_TARGET,
                 "text-xs font-medium tabular-nums text-muted-foreground underline-offset-2 hover:underline",
               )}
               onClick={handleExpand}
