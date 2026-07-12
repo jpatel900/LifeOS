@@ -143,7 +143,74 @@ describe("validateGraph", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toContain(
-      "Nested required branching path: start -> nested",
+      "Nested required branching: multiple fork nodes (nested, start)",
+    );
+  });
+
+  it("accepts a branch that re-converges to a merge node (diamond, FR-031 branch+merge)", () => {
+    const result = validateGraph({
+      nodes: [
+        required("start"),
+        required("left"),
+        required("right"),
+        required("merge"),
+      ],
+      edges: [
+        { from: "start", to: "left" },
+        { from: "start", to: "right" },
+        { from: "left", to: "merge" },
+        { from: "right", to: "merge" },
+      ],
+    });
+
+    expect(result).toEqual({ valid: true, errors: [] });
+  });
+
+  it("rejects a second merge node", () => {
+    const result = validateGraph({
+      nodes: [
+        required("start"),
+        required("left"),
+        required("right"),
+        required("merge-one"),
+        required("merge-two"),
+      ],
+      edges: [
+        { from: "start", to: "left" },
+        { from: "start", to: "right" },
+        { from: "left", to: "merge-one" },
+        { from: "right", to: "merge-one" },
+        { from: "left", to: "merge-two" },
+        { from: "right", to: "merge-two" },
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(
+      "Nested required branching: multiple merge nodes (merge-one, merge-two)",
+    );
+  });
+
+  it("rejects a node that both merges and forks", () => {
+    const result = validateGraph({
+      nodes: [
+        required("a"),
+        required("b"),
+        required("hub"),
+        required("x"),
+        required("y"),
+      ],
+      edges: [
+        { from: "a", to: "hub" },
+        { from: "b", to: "hub" },
+        { from: "hub", to: "x" },
+        { from: "hub", to: "y" },
+      ],
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(
+      "Nested required branching: node hub both merges and forks",
     );
   });
 });

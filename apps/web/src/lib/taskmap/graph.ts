@@ -272,37 +272,36 @@ function findNestedBranchErrors(
     inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
   }
 
-  const branchNodes = [...requiredIds]
-    .filter(
-      (nodeId) =>
-        (inDegree.get(nodeId) ?? 0) > 1 || (outDegree.get(nodeId) ?? 0) > 1,
-    )
+  const forkNodes = [...requiredIds]
+    .filter((nodeId) => (outDegree.get(nodeId) ?? 0) > 1)
     .sort();
-  const branchNodeIds = new Set(branchNodes);
-  const outgoing = buildAdjacency([...requiredIds], requiredEdges);
+  const mergeNodes = [...requiredIds]
+    .filter((nodeId) => (inDegree.get(nodeId) ?? 0) > 1)
+    .sort();
   const errors: string[] = [];
 
-  // One-level branching rule: among required nodes, any node with in-degree > 1
-  // or out-degree > 1 is a branch/merge node. A valid map may contain a single
-  // branch shape, but no branch/merge node may reach another branch/merge node
-  // through one or more required-node edges; that would create nested branching.
-  for (const startId of branchNodes) {
-    const queue = [...(outgoing.get(startId) ?? [])];
-    const seen = new Set<string>();
-
-    while (queue.length > 0) {
-      const nodeId = queue.shift();
-      if (!nodeId || seen.has(nodeId)) {
-        continue;
-      }
-      seen.add(nodeId);
-
-      if (branchNodeIds.has(nodeId)) {
-        errors.push(`Nested required branching path: ${startId} -> ${nodeId}`);
-        break;
-      }
-
-      queue.push(...(outgoing.get(nodeId) ?? []));
+  // One-level branching rule (FR-031): edges may branch (one fork node,
+  // out-degree > 1) and merge back (one merge node, in-degree > 1) — a
+  // diamond is legal. "No nested sub-branches" is enforced as: at most ONE
+  // fork node and at most ONE merge node among required nodes, and no single
+  // node may both merge and fork (that would chain two branch shapes through
+  // one node). A second fork anywhere — inside an open branch arm or after
+  // the merge — exceeds one level and is rejected.
+  if (forkNodes.length > 1) {
+    errors.push(
+      `Nested required branching: multiple fork nodes (${forkNodes.join(", ")})`,
+    );
+  }
+  if (mergeNodes.length > 1) {
+    errors.push(
+      `Nested required branching: multiple merge nodes (${mergeNodes.join(", ")})`,
+    );
+  }
+  for (const nodeId of forkNodes) {
+    if ((inDegree.get(nodeId) ?? 0) > 1) {
+      errors.push(
+        `Nested required branching: node ${nodeId} both merges and forks`,
+      );
     }
   }
 
