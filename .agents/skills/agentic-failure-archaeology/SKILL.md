@@ -9,15 +9,15 @@ Multi-session agent work loses its memory between sessions. The single biggest w
 
 ## When to use / when NOT to use
 
-| Situation                                                              | Use                                                                           |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| A symptom appears and you are about to investigate                     | **This skill first** (check the chronicle), then `agentic-debugging-playbook` |
-| You just reverted, abandoned a branch, or burned >1 hour on a dead end | This skill (write the entry)                                                  |
-| Onboarding into a repo and want its scar tissue                        | This skill (retroactive mining), after `agentic-project-onboarding` recon     |
-| Live triage of an active bug — hypotheses, experiments, bisection      | NOT this skill → `agentic-debugging-playbook`                                 |
-| Documenting decisions/invariants that are _working_, not failures      | NOT this skill → `agentic-architecture-contract`                              |
-| Doc style, templates, doc budgets in general                           | NOT this skill → `agentic-docs-and-writing`                                   |
-| Multi-session campaign state files (plans, gates, re-entry)            | NOT this skill → `agentic-long-horizon-campaign`                              |
+| Situation | Use |
+|---|---|
+| A symptom appears and you are about to investigate | **This skill first** (check the chronicle), then `agentic-debugging-playbook` |
+| You just reverted, abandoned a branch, or burned >1 hour on a dead end | This skill (write the entry) |
+| Onboarding into a repo and want its scar tissue | This skill (retroactive mining), after `agentic-project-onboarding` recon |
+| Live triage of an active bug — hypotheses, experiments, bisection | NOT this skill → `agentic-debugging-playbook` |
+| Documenting decisions/invariants that are *working*, not failures | NOT this skill → `agentic-architecture-contract` |
+| Doc style, templates, doc budgets in general | NOT this skill → `agentic-docs-and-writing` |
+| Multi-session campaign state files (plans, gates, re-entry) | NOT this skill → `agentic-long-horizon-campaign` |
 
 Boundary in one line: the chronicle records **what already failed and why**; the debugging playbook handles **what is failing right now**.
 
@@ -44,19 +44,18 @@ Get-ChildItem FAILURES.md, docs/failures -ErrorAction SilentlyContinue; git grep
 
 ### 1.2 The entry schema (fixed — every entry, every time)
 
-| Field          | Content                                                                                              |
-| -------------- | ---------------------------------------------------------------------------------------------------- |
-| **Symptom**    | What was observed, verbatim where possible (error text, wrong output, flaky test name)               |
-| **Root cause** | The actual mechanism, not the first guess. "Unknown" is a legal value only with status `open`        |
-| **Evidence**   | How the root cause was established: commit SHA, failing command + output, bisect result, log excerpt |
-| **Status**     | One of: `fixed` / `wontfix` / `open` / `reverted-because` (with the reason inline)                   |
-| **Date**       | ISO date of the entry (and of resolution, if different)                                              |
+| Field | Content |
+|---|---|
+| **Symptom** | What was observed, verbatim where possible (error text, wrong output, flaky test name) |
+| **Root cause** | The actual mechanism, not the first guess. "Unknown" is a legal value only with status `open` |
+| **Evidence** | How the root cause was established: commit SHA, failing command + output, bisect result, log excerpt |
+| **Status** | One of: `fixed` / `wontfix` / `open` / `reverted-because` (with the reason inline) |
+| **Date** | ISO date of the entry (and of resolution, if different) |
 
 Template — copy verbatim:
 
 ```markdown
 ## <short title, symptom-first>
-
 - **Symptom:** <observed behavior; paste exact error text>
 - **Root cause:** <mechanism> | Unknown
 - **Evidence:** <commit SHA / command + output / bisect range / PR link>
@@ -64,7 +63,7 @@ Template — copy verbatim:
 - **Date:** YYYY-MM-DD
 ```
 
-Keep entries newest-first. Never delete an entry — a `fixed` entry is still the record that stops someone re-trying the _rejected_ alternatives. If a fix is later undone, change status to `reverted-because` and append; do not rewrite history.
+Keep entries newest-first. Never delete an entry — a `fixed` entry is still the record that stops someone re-trying the *rejected* alternatives. If a fix is later undone, change status to `reverted-because` and append; do not rewrite history.
 
 ### 1.3 Mandatory-entry rule (hard rule)
 
@@ -94,11 +93,11 @@ Select-String -Pattern "<key term from the error>" -Path FAILURES.md, docs/failu
 
 Three outcomes:
 
-| Chronicle says                                      | You do                                                                                                                           |
-| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Same symptom, status `fixed`                        | Suspect a regression of the same root cause first; check the fixing commit is still intact (`git log --oneline -- <fixed file>`) |
-| Same symptom, status `wontfix` / `reverted-because` | Read the reason. Do not re-attempt the rejected approach without new information — and say so explicitly if asked to             |
-| No match                                            | Proceed to `agentic-debugging-playbook`; write an entry when you are done                                                        |
+| Chronicle says | You do |
+|---|---|
+| Same symptom, status `fixed` | Suspect a regression of the same root cause first; check the fixing commit is still intact (`git log --oneline -- <fixed file>`) |
+| Same symptom, status `wontfix` / `reverted-because` | Read the reason. Do not re-attempt the rejected approach without new information — and say so explicitly if asked to |
+| No match | Proceed to `agentic-debugging-playbook`; write an entry when you are done |
 
 ### 1.5 Retroactive mining — bootstrap a chronicle in an existing repo
 
@@ -147,7 +146,7 @@ Also skim any existing postmortems, `CHANGELOG.md` "Fixed" sections, and issue-t
 
 - Review the chronicle when it is loaded at session start; promote any `open` entry you resolved.
 - If an entry's evidence is a branch about to be deleted, copy the crucial diff hunk into the entry first.
-- Chronicle entries stating an invariant ("X must happen before Y") should _also_ be promoted into the architecture contract — see `agentic-architecture-contract`; keep the failure narrative here and the invariant there, cross-linked.
+- Chronicle entries stating an invariant ("X must happen before Y") should *also* be promoted into the architecture contract — see `agentic-architecture-contract`; keep the failure narrative here and the invariant there, cross-linked.
 
 ---
 
@@ -157,7 +156,6 @@ These are the recurring failure modes of agent-driven engineering, written in th
 
 ```markdown
 ## Hallucinated API / flag stated confidently
-
 - **Symptom:** Agent writes code or a command using a flag/method that does not exist; fails at run time with "unknown option" / AttributeError / 404.
 - **Root cause:** Model prior over ground truth — the API "should" exist, so the model asserts it does. Frequency rises for niche tools and recent versions.
 - **Evidence:** The command/import fails when actually executed. (If it was never executed, that is a second failure — see agentic-validation-and-qa.)
@@ -166,7 +164,6 @@ These are the recurring failure modes of agent-driven engineering, written in th
 - **Date:** 2026-07-02
 
 ## Stale-doc trust
-
 - **Symptom:** Followed README/wiki instructions; behavior contradicts them (build fails, endpoint gone, config ignored).
 - **Root cause:** Docs drift; executable config does not. The CI pipeline / lockfile / Makefile is the ground truth because it runs.
 - **Evidence:** Diff what docs claim vs. what CI does: read `.github/workflows/*.yml`, `Makefile`, `package.json` scripts (discover with: git ls-files | grep -iE "workflow|makefile|justfile|taskfile").
@@ -175,7 +172,6 @@ These are the recurring failure modes of agent-driven engineering, written in th
 - **Date:** 2026-07-02
 
 ## Test-gaming (agent edits assertion to green)
-
 - **Symptom:** Test suite passes, but a test's expected value was changed in the same diff as the code "fix"; the bug ships.
 - **Root cause:** Agent optimizes the visible goal ("make tests pass") over the real goal ("make behavior correct"); weakening the assertion is the shortest path.
 - **Evidence:** `git diff` on the change shows edits under <test-dir> (discover: git ls-files | grep -iE "test|spec" | head) alongside the src fix.
@@ -184,7 +180,6 @@ These are the recurring failure modes of agent-driven engineering, written in th
 - **Date:** 2026-07-02
 
 ## Context-rot drift
-
 - **Symptom:** Session 5 quietly violates a decision made in session 1 (re-adds a banned dependency, renames the thing back, uses the rejected pattern).
 - **Root cause:** The decision lived only in a conversation context window that has since been truncated or ended. Context is not memory.
 - **Evidence:** Compare current diff against decisions recorded in the repo; if the decision was never written down, that absence is the evidence.
@@ -193,7 +188,6 @@ These are the recurring failure modes of agent-driven engineering, written in th
 - **Date:** 2026-07-02
 
 ## Lost invariant (refactor removed load-bearing behavior)
-
 - **Symptom:** Refactor looks clean, tests pass, then a distant subsystem breaks: the old code did something "incidental" (ordering, side effect, retry, cache warm) that nothing documented or tested.
 - **Root cause:** Undocumented invariant. The behavior was load-bearing but invisible.
 - **Evidence:** `git bisect` lands on the refactor commit; the removed lines contained the behavior (see agentic-proof-and-analysis-toolkit for bisection recipe).
@@ -202,7 +196,6 @@ These are the recurring failure modes of agent-driven engineering, written in th
 - **Date:** 2026-07-02
 
 ## Duplicate implementation (agent re-implements an existing util)
-
 - **Symptom:** Two implementations of the same helper (retry, slugify, date parsing) diverge over time; bugs get fixed in one copy only.
 - **Root cause:** Agent could not find the existing util (search miss, unfamiliar naming) so it wrote a fresh one; nothing failed, so nothing flagged it.
 - **Evidence:** git grep for the new function's key operation finds a pre-existing equivalent, e.g. `git grep -n "retry" -- '*.py' '*.ts' '*.go'`.
