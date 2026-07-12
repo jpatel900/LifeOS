@@ -73,6 +73,8 @@ import {
   normalizeSupabaseRows,
 } from "./supabaseRowNormalization";
 import { validateTaskMapForPersistence } from "../taskmap/persistence";
+import { toggleNodeCompletion } from "../taskmap/collapse";
+import type { TaskMapGraph } from "../taskmap/graph";
 
 export type DataProvider = "mock" | "supabase";
 
@@ -1297,6 +1299,104 @@ export async function approveTaskMap(
   }
 
   return { provider: "supabase", task };
+}
+
+export interface SetTaskMapNodeCompletionInput {
+  task_id: string;
+  node_id: string;
+  /** The current approved graph (pre-toggle), as already loaded by the
+   * caller (WorkflowContext holds the persisted task's `progression_map` in
+   * local state). Re-validated here before any mutation is computed or
+   * written — this function is the sole choke point for a completion write,
+   * mirroring `approveTaskMap`. */
+  graph: unknown;
+  /** ISO timestamp of the user action, supplied by the caller so the write
+   * is deterministic and testable (no ambient `Date.now`). */
+  now: string;
+}
+
+export interface TaskMapNodeCompletionResult {
+  provider: DataProvider;
+  task: Task;
+}
+
+/**
+ * FR-031 slice 6 — user-action-only node completion on an already-approved
+ * map. Never AI-invoked, never instrumented (a completion tap is not an AI
+ * suggestion resolution, so no suggestion_records/override_records write
+ * happens here). Gate-first: the incoming graph is validated with
+ * `validateTaskMapForPersistence` before the pure `toggleNodeCompletion`
+ * (apps/web/src/lib/taskmap/collapse.ts) computes the mutated graph, which
+ * is re-validated before it ever reaches `tasks.progression_map`. Red nodes
+ * and unknown node ids are rejected (`toggleNodeCompletion` no-ops and this
+ * function throws instead of writing silently).
+ */
+export async function setTaskMapNodeCompletion(
+  client: MinimalSupabaseClient | null,
+  input: SetTaskMapNodeCompletionInput,
+): Promise<TaskMapNodeCompletionResult> {
+  const validation = validateTaskMapForPersistence(input.graph);
+  if (!validation.ok) {
+    throw new Error(
+      `Task map failed validation and completion was not saved: ${validation.errors.join("; ")}`,
+    );
+  }
+
+  const currentNode = validation.graph.nodes.find(
+    (node) => node.id === input.node_id,
+  );
+  if (!currentNode) {
+    throw new Error(`Task map node not found: ${input.node_id}`);
+  }
+  if (currentNode.role === "red") {
+    throw new Error("Red task-map nodes cannot be marked done.");
+  }
+
+  const updatedGraph = toggleNodeCompletion(
+    validation.graph as TaskMapGraph,
+    input.node_id,
+    input.now,
+  );
+
+  const revalidation = validateTaskMapForPersistence(updatedGraph);
+  if (!revalidation.ok) {
+    throw new Error(
+      `Task map completion failed validation and was not saved: ${revalidation.errors.join("; ")}`,
+    );
+  }
+
+  if (!client) {
+    throw new Error(
+      "Mock task-map completion uses the local workflow context.",
+    );
+  }
+
+  await requireSupabaseUser(client, "Sign in before updating task maps.");
+
+  const query = client.from("tasks") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({ progression_map: revalidation.graph })
+    .eq("id", input.task_id)
+    .select(taskColumns)
+    .single();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return { provider: "supabase", task: parseTask(data) };
 }
 
 const peopleColumns =

@@ -18,6 +18,12 @@ export const TaskMapNodeSchema = z
     title: z.string().min(1),
     role: z.enum(["required", "optional", "red"]),
     done: z.boolean().optional(),
+    // FR-031 slice 6: additive, optional, nullable ISO timestamp of the
+    // user action that completed this node. Persisted-document-only — the
+    // AI draft prompt contract (taskMapDraft.ts) intentionally does NOT gain
+    // this field; the AI never emits completion state, only the user does
+    // (via setTaskMapNodeCompletion / toggleNodeCompletion).
+    completed_at: z.string().datetime().nullable().optional(),
     red_reason: z.string().min(1).optional(),
     red_condition: z.string().min(1).optional(),
   })

@@ -194,6 +194,7 @@ export function TodayMoments({
     requestTaskMapDraft,
     dismissTaskMapDraft,
     approveTaskMapDraft,
+    toggleTaskMapNodeCompletion,
   } = useWorkflow();
 
   const ritual = useReEntryRitual({
@@ -284,6 +285,13 @@ export function TodayMoments({
       void approveTaskMapDraft(railTaskId, graph);
     },
     [railTaskId, approveTaskMapDraft],
+  );
+  const handleToggleTaskMapNodeCompletion = useCallback(
+    (nodeId: string) => {
+      if (!railTaskId) return;
+      void toggleTaskMapNodeCompletion(railTaskId, nodeId);
+    },
+    [railTaskId, toggleTaskMapNodeCompletion],
   );
   const pipelineCounts = useMemo(
     () => buildPipelineCounts(state, selectedAreaId),
@@ -1202,6 +1210,7 @@ export function TodayMoments({
               onRequestTaskMapDraft={handleRequestTaskMapDraft}
               onDismissTaskMapDraft={dismissTaskMapDraft}
               onApproveTaskMapDraft={handleApproveTaskMapDraft}
+              onToggleTaskMapNodeCompletion={handleToggleTaskMapNodeCompletion}
             />
           ) : null}
 

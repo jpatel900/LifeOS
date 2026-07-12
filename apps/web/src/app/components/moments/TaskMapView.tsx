@@ -24,6 +24,9 @@ export interface TaskMapViewProps {
   graph: TaskMapGraph;
   mapApprovedAt: string | null;
   now: Date;
+  /** FR-031 slice 6: user-action-only completion toggle. Omit to render the
+   * map as read-only (chips stay non-interactive presentation). */
+  onToggleNodeCompletion?: (nodeId: string) => void;
 }
 
 function columnsFor(nodes: TaskMapNode[], graph: TaskMapGraph) {
@@ -35,7 +38,12 @@ function columnsFor(nodes: TaskMapNode[], graph: TaskMapGraph) {
   return groupIntoColumns(restrictedGraph);
 }
 
-export function TaskMapView({ graph, mapApprovedAt, now }: TaskMapViewProps) {
+export function TaskMapView({
+  graph,
+  mapApprovedAt,
+  now,
+  onToggleNodeCompletion,
+}: TaskMapViewProps) {
   const [expanded, setExpanded] = useState(false);
   const view = buildTaskMapCollapseView(graph);
   const ageLabel = mapApprovedAgeLabel(mapApprovedAt, now);
@@ -68,6 +76,7 @@ export function TaskMapView({ graph, mapApprovedAt, now }: TaskMapViewProps) {
                   key={id}
                   node={node}
                   emphasized={id === view.nextActionableId}
+                  onToggleComplete={onToggleNodeCompletion}
                 />
               );
             })}
@@ -94,7 +103,10 @@ export function TaskMapView({ graph, mapApprovedAt, now }: TaskMapViewProps) {
               <ul className="flex flex-wrap items-start gap-2">
                 {view.hiddenNodes.map((node) => (
                   <li key={node.id}>
-                    <TaskMapNodeChip node={node} />
+                    <TaskMapNodeChip
+                      node={node}
+                      onToggleComplete={onToggleNodeCompletion}
+                    />
                   </li>
                 ))}
               </ul>

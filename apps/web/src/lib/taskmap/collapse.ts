@@ -1,5 +1,6 @@
 import {
   computeCriticalPath,
+  isNodeComplete,
   type TaskMapGraph,
   type TaskMapNode,
 } from "./graph";
@@ -34,7 +35,8 @@ export function buildTaskMapCollapseView(
     .map((id) => nodesById.get(id))
     .filter((node): node is TaskMapNode => node !== undefined);
 
-  const nextActionable = criticalNodes.find((node) => !node.done) ?? null;
+  const nextActionable =
+    criticalNodes.find((node) => !isNodeComplete(node)) ?? null;
 
   const hiddenNodes = graph.nodes.filter((node) => !criticalSet.has(node.id));
 
@@ -42,6 +44,45 @@ export function buildTaskMapCollapseView(
     criticalNodes,
     nextActionableId: nextActionable ? nextActionable.id : null,
     hiddenNodes,
+  };
+}
+
+/**
+ * FR-031 slice 6 — pure, reversible node-completion toggle. Marking a node
+ * done is a USER action on the approved map, never an AI one: this function
+ * has no AI call and no side effects, and the caller (data layer / local
+ * reducer) is responsible for persisting the result through
+ * `validateTaskMapForPersistence`.
+ *
+ * Red nodes are never actionable (FR-031) and an unknown node id is a no-op
+ * — both return the exact same `graph` reference so callers can detect a
+ * rejected toggle with `result === graph`. Toggling an already-done node
+ * undoes it (calm coaching, no ratchet): `completed_at` and `done` are
+ * cleared together, keeping both signals in sync.
+ */
+export function toggleNodeCompletion(
+  graph: TaskMapGraph,
+  nodeId: string,
+  nowIso: string,
+): TaskMapGraph {
+  const node = graph.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node || node.role === "red") {
+    return graph;
+  }
+
+  const wasComplete = isNodeComplete(node);
+
+  return {
+    ...graph,
+    nodes: graph.nodes.map((candidate) =>
+      candidate.id === nodeId
+        ? {
+            ...candidate,
+            done: !wasComplete,
+            completed_at: wasComplete ? null : nowIso,
+          }
+        : candidate,
+    ),
   };
 }
 

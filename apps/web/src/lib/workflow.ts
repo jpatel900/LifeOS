@@ -18,6 +18,9 @@ import type {
   Phase2MockTask,
 } from "./types";
 import type { ParsedWorkflowResult } from "./ai/parseCaptureWorkflow";
+import { validateTaskMapForPersistence } from "./taskmap/persistence";
+import { toggleNodeCompletion } from "./taskmap/collapse";
+import type { TaskMapGraph } from "./taskmap/graph";
 
 export const WIP_ENFORCEMENT_POLICY_ID = "wip_enforcement.v1";
 export const WIP_ENFORCEMENT_LIMIT = 3;
@@ -1170,6 +1173,47 @@ export function approveTaskMapLocal(
             updated_at: approvedAt,
           }
         : task,
+    ),
+  };
+}
+
+// FR-031 slice 6: local-first fold-back for a node-completion toggle,
+// mirroring `approveTaskMapLocal` — a pure reducer patch so the UI reflects
+// the tap immediately, independent of whether the best-effort Supabase
+// persist (in WorkflowContext) succeeds. Guards its own inputs (unlike
+// `approveTaskMapLocal`, which trusts an already-validated graph) because
+// this is invoked directly from a UI tap rather than after an explicit
+// approve-time validation step: a task with no approved map, an unknown
+// node id, or a red node all safely no-op.
+export function toggleTaskMapNodeCompletionLocal(
+  state: WorkflowState,
+  taskId: string,
+  nodeId: string,
+  nowIso: string,
+): WorkflowState {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || task.map_status !== "approved" || !task.progression_map) {
+    return state;
+  }
+
+  const validated = validateTaskMapForPersistence(task.progression_map);
+  if (!validated.ok) {
+    return state;
+  }
+
+  const currentGraph = validated.graph as TaskMapGraph;
+  const updatedGraph = toggleNodeCompletion(currentGraph, nodeId, nowIso);
+  if (updatedGraph === currentGraph) {
+    // Unknown node id or a red node — toggleNodeCompletion no-ops.
+    return state;
+  }
+
+  return {
+    ...state,
+    tasks: state.tasks.map((item) =>
+      item.id === taskId
+        ? { ...item, progression_map: updatedGraph, updated_at: nowIso }
+        : item,
     ),
   };
 }

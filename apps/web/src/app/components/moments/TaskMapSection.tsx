@@ -41,6 +41,8 @@ export interface TaskMapSectionProps {
   onRequestDraft(): void;
   onDismissDraft(): void;
   onApproveDraft(graph: TaskMapGraph & { schema_version: "1.0" }): void;
+  /** FR-031 slice 6: omit to render the approved map read-only. */
+  onToggleNodeCompletion?(nodeId: string): void;
 }
 
 export function TaskMapSection({
@@ -51,6 +53,7 @@ export function TaskMapSection({
   onRequestDraft,
   onDismissDraft,
   onApproveDraft,
+  onToggleNodeCompletion,
 }: TaskMapSectionProps) {
   if (task && task.map_status === "approved" && task.progression_map) {
     const validated = validateTaskMapForPersistence(task.progression_map);
@@ -60,6 +63,7 @@ export function TaskMapSection({
           graph={validated.graph as TaskMapGraph}
           mapApprovedAt={task.map_approved_at ?? null}
           now={now}
+          onToggleNodeCompletion={onToggleNodeCompletion}
         />
       );
     }

@@ -24,6 +24,8 @@ import {
   unplanTask,
   updateTaskFirstTinyStep,
   updateProposal,
+  approveTaskMapLocal,
+  toggleTaskMapNodeCompletionLocal,
 } from "@/lib/workflow";
 
 describe("local mock workflow", () => {
@@ -162,6 +164,70 @@ describe("local mock workflow", () => {
     const accepted = acceptProposal(ready, proposalId);
     expect(accepted.tasks[0].status).toBe("scheduled");
     expect(accepted.calendarBlocks[0].task_id).toBe(accepted.tasks[0].id);
+  });
+
+  it("toggles task-map node completion locally, reversibly, rejecting red nodes", () => {
+    let state = createInitialWorkflowState();
+    state = submitCapture(state, {
+      rawText: "Ship the quarterly report.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    const taskId = state.tasks[0].id;
+
+    const graph = {
+      schema_version: "1.0" as const,
+      nodes: [
+        { id: "step-1", title: "Draft outline", role: "required" as const },
+        { id: "step-2", title: "Send it", role: "required" as const },
+        {
+          id: "red-1",
+          title: "Do not send early",
+          role: "red" as const,
+          red_reason: "Needs sign-off first.",
+        },
+      ],
+      edges: [{ from: "step-1", to: "step-2" }],
+    };
+    state = approveTaskMapLocal(state, taskId, graph);
+
+    const marked = toggleTaskMapNodeCompletionLocal(
+      state,
+      taskId,
+      "step-1",
+      "2026-07-12T12:00:00.000Z",
+    );
+    const markedNode = (
+      marked.tasks[0].progression_map as typeof graph
+    ).nodes.find((node) => node.id === "step-1") as {
+      done?: boolean;
+      completed_at?: string | null;
+    };
+    expect(markedNode.done).toBe(true);
+    expect(markedNode.completed_at).toBe("2026-07-12T12:00:00.000Z");
+
+    const undone = toggleTaskMapNodeCompletionLocal(
+      marked,
+      taskId,
+      "step-1",
+      "2026-07-12T13:00:00.000Z",
+    );
+    const undoneNode = (
+      undone.tasks[0].progression_map as typeof graph
+    ).nodes.find((node) => node.id === "step-1") as {
+      done?: boolean;
+      completed_at?: string | null;
+    };
+    expect(undoneNode.done).toBe(false);
+    expect(undoneNode.completed_at).toBeNull();
+
+    const redAttempt = toggleTaskMapNodeCompletionLocal(
+      state,
+      taskId,
+      "red-1",
+      "2026-07-12T12:00:00.000Z",
+    );
+    expect(redAttempt).toBe(state);
   });
 
   it("edits and reassigns a pending triage draft", () => {

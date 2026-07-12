@@ -144,6 +144,30 @@ describe("TaskMapSection", () => {
     expect(onRequestDraft).toHaveBeenCalledTimes(1);
   });
 
+  it("wires onToggleNodeCompletion through to the approved TaskMapView", () => {
+    const onToggleNodeCompletion = vi.fn();
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: approvedGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "idle" }}
+        now={new Date()}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+        onToggleNodeCompletion={onToggleNodeCompletion}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("taskmap-node-req-2"));
+    expect(onToggleNodeCompletion).toHaveBeenCalledWith("req-2");
+  });
+
   it("no task (nothing focused) renders the rail without a Draft map affordance", () => {
     render(
       <TaskMapSection
