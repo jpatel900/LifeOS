@@ -213,7 +213,17 @@ describe("task-map route", () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(mocks.generateTaskMapDraftWithFallback).toHaveBeenCalledWith(
-      expect.objectContaining({ currentMap }),
+      expect.objectContaining({
+        currentMap: {
+          ...currentMap,
+          // The route normalizes red fields to explicit nulls when absent.
+          nodes: currentMap.nodes.map((node) => ({
+            ...node,
+            red_reason: null,
+            red_condition: null,
+          })),
+        },
+      }),
       expect.anything(),
     );
     expect(mocks.recordTaskMapDraftSuggestion).toHaveBeenCalledWith(

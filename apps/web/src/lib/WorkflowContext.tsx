@@ -1883,6 +1883,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             title: node.title,
             role: node.role,
             done: node.done === true || Boolean(node.completed_at),
+            red_reason: node.red_reason ?? null,
+            red_condition: node.red_condition ?? null,
           })),
           edges: validatedCurrent.graph.edges.map((edge) => ({
             from: edge.from,

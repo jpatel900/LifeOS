@@ -239,6 +239,40 @@ describe("buildTaskMapDraftMessages (FR-031 slice 8 regen input)", () => {
     expect(userMessage.content).toContain("- step-1 -> step-2");
   });
 
+  it("carries red_reason/red_condition into the regen prompt so red guidance is not re-drafted blind", () => {
+    const [, userMessage] = buildTaskMapDraftMessages({
+      ...baseInput,
+      currentMap: {
+        nodes: [
+          { id: "step-1", title: "Gather inputs", role: "required" },
+          {
+            id: "repaint",
+            title: "Repaint the floor",
+            role: "red",
+            red_reason: "Out of scope until shelving is done.",
+            red_condition: "Only if the cleanout finishes early.",
+          },
+          {
+            id: "skip-it",
+            title: "Skip the permit",
+            role: "red",
+            red_reason: "Illegal without inspection.",
+          },
+        ],
+        edges: [],
+      },
+    });
+
+    expect(userMessage.content).toContain(
+      "- repaint (red): Repaint the floor [red_reason: Out of scope until shelving is done.; red_condition: Only if the cleanout finishes early.]",
+    );
+    expect(userMessage.content).toContain(
+      "- skip-it (red): Skip the permit [red_reason: Illegal without inspection.]",
+    );
+    // Non-red nodes never grow a red note, even if fields were passed.
+    expect(userMessage.content).toContain("- step-1 (required): Gather inputs");
+  });
+
   it("labels an edge-less current map explicitly rather than omitting the section", () => {
     const [, userMessage] = buildTaskMapDraftMessages({
       ...baseInput,

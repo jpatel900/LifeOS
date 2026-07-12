@@ -328,6 +328,11 @@ export interface TaskMapDraftCurrentMapNodeContext {
   title: string;
   role: "required" | "optional" | "red";
   done?: boolean;
+  /** Carried for red nodes so a revision prompt keeps WHY a path was
+   * marked do-not / only-if — without it the AI re-drafts red guidance
+   * blind. Data-only, like every other current-map field. */
+  red_reason?: string | null;
+  red_condition?: string | null;
 }
 
 export interface TaskMapDraftCurrentMapEdgeContext {
@@ -370,10 +375,17 @@ const taskMapDraftSystemPrompt = [
 function formatCurrentMapNodes(
   nodes: TaskMapDraftCurrentMapNodeContext[],
 ): string[] {
-  return nodes.map(
-    (node) =>
-      `- ${node.id} (${node.role}${node.done ? ", done" : ""}): ${node.title}`,
-  );
+  return nodes.map((node) => {
+    const redNote =
+      node.role === "red" && node.red_reason?.trim()
+        ? ` [red_reason: ${node.red_reason.trim()}${
+            node.red_condition?.trim()
+              ? `; red_condition: ${node.red_condition.trim()}`
+              : ""
+          }]`
+        : "";
+    return `- ${node.id} (${node.role}${node.done ? ", done" : ""}): ${node.title}${redNote}`;
+  });
 }
 
 function formatCurrentMapEdges(
