@@ -81,7 +81,7 @@ export function TaskMapSection({
     <div className="grid gap-2" data-testid="taskmap-rail-fallback">
       <ProgressionRail nodes={progressionNodes} />
       {task ? (
-        <div className="flex items-center gap-2">
+        <div className="grid gap-1.5 justify-items-start">
           <button
             type="button"
             className={cn(
@@ -95,12 +95,12 @@ export function TaskMapSection({
             {draftState.phase === "pending" ? "Drafting map…" : "Draft map"}
           </button>
           {draftState.phase === "failed" ? (
-            <span
-              className="text-xs text-muted-foreground"
+            <p
+              className="m-0 text-xs text-muted-foreground"
               data-testid="taskmap-draft-notice"
             >
               {draftState.message}
-            </span>
+            </p>
           ) : null}
         </div>
       ) : null}

@@ -20,7 +20,7 @@ const draft: TaskMapGraph & { schema_version: "1.0" } = {
 };
 
 describe("TaskMapDraftReview", () => {
-  it("renders all drafted nodes with role-distinct treatment", () => {
+  it("renders exactly one representation per node with role-distinct treatment", () => {
     render(
       <TaskMapDraftReview
         draft={draft}
@@ -29,17 +29,36 @@ describe("TaskMapDraftReview", () => {
       />,
     );
 
-    expect(screen.getByTestId("taskmap-node-req-1")).toHaveAttribute(
-      "data-role",
-      "required",
-    );
-    expect(screen.getByTestId("taskmap-node-opt-1")).toHaveAttribute(
-      "data-role",
-      "optional",
-    );
+    // Non-red nodes render a single chip-styled editable input — no
+    // duplicate read-only chip above it.
+    const requiredInput = screen.getByTestId("taskmap-draft-edit-req-1");
+    expect(requiredInput).toHaveAttribute("data-role", "required");
+    expect(screen.queryByTestId("taskmap-node-req-1")).not.toBeInTheDocument();
+
+    const optionalInput = screen.getByTestId("taskmap-draft-edit-opt-1");
+    expect(optionalInput).toHaveAttribute("data-role", "optional");
+    expect(optionalInput.className).toMatch(/border-dashed/);
+    expect(optionalInput.className).toMatch(/text-muted-foreground/);
+    expect(screen.queryByTestId("taskmap-node-opt-1")).not.toBeInTheDocument();
+
+    // Red nodes keep the shared read-only chip (never editable).
     const red = screen.getByTestId("taskmap-node-red-1");
     expect(red).toHaveAttribute("data-role", "red");
     expect(red).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("editable inputs take the full column width (no title clipping)", () => {
+    render(
+      <TaskMapDraftReview
+        draft={draft}
+        onApprove={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("taskmap-draft-edit-req-1")).toHaveClass(
+      "w-full",
+    );
   });
 
   it("red nodes have no editable title field (never actionable)", () => {
@@ -88,7 +107,9 @@ describe("TaskMapDraftReview", () => {
     );
 
     fireEvent.click(screen.getByTestId("taskmap-draft-remove-opt-1"));
-    expect(screen.queryByTestId("taskmap-node-opt-1")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("taskmap-draft-edit-opt-1"),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("taskmap-draft-approve"));
     expect(onApprove).toHaveBeenCalledTimes(1);

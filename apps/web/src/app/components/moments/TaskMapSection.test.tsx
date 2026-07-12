@@ -100,9 +100,11 @@ describe("TaskMapSection", () => {
     );
 
     expect(screen.getByTestId("progression-rail")).toBeInTheDocument();
-    expect(screen.getByTestId("taskmap-draft-notice")).toHaveTextContent(
-      "Couldn't draft a map right now.",
-    );
+    const notice = screen.getByTestId("taskmap-draft-notice");
+    expect(notice).toHaveTextContent("Couldn't draft a map right now.");
+    // Block-level on its own line, never jammed inline against the trigger.
+    expect(notice.tagName).toBe("P");
+    expect(notice.parentElement?.className).toMatch(/grid/);
   });
 
   it("renders the draft review and calls onApproveDraft with the edited graph", () => {

@@ -93,28 +93,42 @@ export function TaskMapDraftReview({
         data-testid="taskmap-draft-columns"
       >
         {columns.map((column) => (
-          <div key={column.index} className="flex flex-col gap-2">
+          <div
+            key={column.index}
+            className="flex min-w-[220px] flex-1 flex-col gap-2"
+          >
             {column.nodeIds.map((id) => {
               const node = nodesById.get(id);
               if (!node) return null;
+              // One representation per node: red nodes render the shared
+              // read-only chip (never editable, never actionable); every
+              // other node renders a single chip-styled editable input
+              // carrying the role treatment directly (optional = dashed,
+              // de-emphasized) — no duplicate chip above it.
               return (
-                <div key={id} className="flex flex-col gap-1">
-                  <TaskMapNodeChip node={node} />
-                  {node.role !== "red" ? (
+                <div key={id} className="flex w-full flex-col gap-1">
+                  {node.role === "red" ? (
+                    <TaskMapNodeChip node={node} />
+                  ) : (
                     <input
                       type="text"
                       value={node.title}
                       onChange={(event) => editTitle(id, event.target.value)}
-                      className="workflow-compact-item rounded border px-2 py-1 text-xs"
-                      aria-label={`Edit title for ${node.title}`}
+                      className={cn(
+                        "workflow-compact-item w-full rounded-lg border px-3 py-2 text-xs font-medium",
+                        node.role === "optional" &&
+                          "border-dashed text-muted-foreground",
+                      )}
+                      aria-label={`Edit title for ${node.title} (${node.role} step)`}
                       data-testid={`taskmap-draft-edit-${id}`}
+                      data-role={node.role}
                     />
-                  ) : null}
+                  )}
                   <button
                     type="button"
                     className={cn(
                       HIT_TARGET_INVISIBLE,
-                      "text-xs font-medium text-muted-foreground underline-offset-2 hover:underline",
+                      "self-start text-xs font-medium text-muted-foreground underline-offset-2 hover:underline",
                     )}
                     onClick={() => removeNode(id)}
                     data-testid={`taskmap-draft-remove-${id}`}
