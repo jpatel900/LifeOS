@@ -433,7 +433,7 @@ Owner RLS (section 8). Export coverage required (INV-2).
 
 ### 4.13 `win_records` (target shape, Stage 1 slice S7)
 
-Status: not yet implemented.
+Status: implemented (slice S7, issue #259, migration `20260706120000_add_win_records.sql`). This entry previously read "not yet implemented"; corrected here because FR-035 (Closure Ritual) now depends on this table being real.
 
 Purpose: user-confirmed wins harvested from completions during weekly review (FR-020).
 
@@ -509,6 +509,28 @@ Standard owner RLS (section 8) already covers these columns — additive-only ch
 | created_at      | timestamptz | generated                                                            |
 
 `task_edges` would carry a normalized DAG for a v2 that spans multiple tasks or deeper dependency graphs; v1's single-task, depth-1, capped shape does not need it.
+
+### 4.17 Closure Ritual (FR-035) — additive shape sketch
+
+**PROPOSED — lands with the build slice, not this PR.** This subsection sketches the shape FR-035 will need; it is not a frozen target-shape contract like 4.10-4.16 and does not authorize a migration on its own. A build slice still needs its own approved issue, migration, RLS, export coverage, and tests per section 11's guardrail.
+
+Purpose: closure is recorded as additive metadata on the existing `projects` row and the existing `areas` row — no new status values, no new tables. Per section 11 ("status controls workflow; metadata explains nuance"; any status expansion requires a separate approved T3 issue), the ritual reuses the existing terminal transition already in the schema — `status = 'archived'` for projects, `is_active = false` for areas — for workflow, and adds `closure_type` / `closure_summary` / `closed_at` as additive columns that explain _why_ the row was archived and carry the approved post-mortem. A null `closure_type` means an ordinary archive/deactivate (FR-001's existing plain toggle, unchanged); a populated `closure_type` means the transition happened through this ritual.
+
+`projects` — additive columns (sketch):
+
+| Column          | Type                                             | Notes                                                                                                                                                                                                                             |
+| --------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| closure_type    | text nullable, check in (`complete`, `released`) | null = ordinary archive (FR-001); set only via the closure ritual. "failed" is deliberately not a valid value — no code path can write it                                                                                         |
+| closure_summary | jsonb nullable                                   | the approved post-mortem: `{ purpose, what_got_done, lessons }`; zod-schema'd like `rollup_summaries.summary` (5.7); only the approved version persists — AI drafts and hand-written drafts are UI-only until approval (NS-INV-4) |
+| closed_at       | timestamptz nullable                             | set when `closure_type` is set                                                                                                                                                                                                    |
+
+`areas` — additive columns (sketch): the same three columns (`closure_type`, `closure_summary`, `closed_at`), same semantics, paired with the existing `is_active` transition to `false` rather than a `status` column (areas have no `status` column — see 3.1).
+
+Wins extracted during closure reuse the existing shipped `win_records` table (4.13) unchanged via the existing `createWinRecord` path (`apps/web/src/lib/data/workflow/rollups.ts`) — no new column needed; `area_id` / `source_project_id` already carry the link.
+
+Instrumentation: born instrumented per NS-INV-3 — policy id `closure_ritual.v1`; the AI-drafted post-mortem is a `suggestion_records` row (`subject_type` = `project` or `area`); a hand-written fallback or an edit-before-approve is an `override_records` row. No bespoke plumbing beyond the existing section 5 vocabulary.
+
+Standard owner RLS (section 8), same pattern as sibling additive columns on existing owner-scoped tables (4.14-4.16) — no bespoke policy shape, no new table, no new RLS surface. Export coverage: `apps/web/src/lib/data/export.ts` selects `select("*")` per table (per the 4.16 precedent), so no explicit column-list change is anticipated for INV-2 coverage — to be confirmed in the build slice.
 
 ## 5. Meta-Learning Tables
 
