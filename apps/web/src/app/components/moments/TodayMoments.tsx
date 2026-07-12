@@ -35,6 +35,7 @@ import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 import { buildProgressionNodes } from "./progressionNodes";
 import { buildPipelineCounts } from "./pipelineCounts";
+import type { TaskMapDraftUiState } from "./TaskMapSection";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
 import type { DeepLinkTarget } from "./deepLink";
@@ -189,6 +190,10 @@ export function TodayMoments({
     promoteBacklogTask,
     deferTask,
     unsyncedCaptureCount,
+    taskMapDraft,
+    requestTaskMapDraft,
+    dismissTaskMapDraft,
+    approveTaskMapDraft,
   } = useWorkflow();
 
   const ritual = useReEntryRitual({
@@ -246,6 +251,39 @@ export function TodayMoments({
   const progressionNodes = useMemo(
     () => buildProgressionNodes(state, railTaskId),
     [state, railTaskId],
+  );
+  // FR-031 slice 5: the same focused-task id the v0 rail derives from, so
+  // the map/rail switch and the rail never disagree about which task they
+  // describe.
+  const focusedTask = useMemo(
+    () => state.tasks.find((task) => task.id === railTaskId) ?? null,
+    [state.tasks, railTaskId],
+  );
+  const taskMapDraftForSection = useMemo<TaskMapDraftUiState>(() => {
+    if (taskMapDraft.phase === "idle") {
+      return { phase: "idle" };
+    }
+    if (taskMapDraft.taskId !== railTaskId) {
+      return { phase: "idle" };
+    }
+    if (taskMapDraft.phase === "pending") {
+      return { phase: "pending" };
+    }
+    if (taskMapDraft.phase === "ready") {
+      return { phase: "ready", draft: taskMapDraft.draft };
+    }
+    return { phase: "failed", message: taskMapDraft.message };
+  }, [taskMapDraft, railTaskId]);
+  const handleRequestTaskMapDraft = useCallback(() => {
+    if (!railTaskId) return;
+    void requestTaskMapDraft(railTaskId);
+  }, [railTaskId, requestTaskMapDraft]);
+  const handleApproveTaskMapDraft = useCallback(
+    (graph: Parameters<typeof approveTaskMapDraft>[1]) => {
+      if (!railTaskId) return;
+      void approveTaskMapDraft(railTaskId, graph);
+    },
+    [railTaskId, approveTaskMapDraft],
   );
   const pipelineCounts = useMemo(
     () => buildPipelineCounts(state, selectedAreaId),
@@ -1158,6 +1196,12 @@ export function TodayMoments({
               onReclaimDrift={handleReclaimDrift}
               onAbandonDrift={handleAbandonDrift}
               progressionNodes={progressionNodes}
+              focusedTask={focusedTask}
+              taskMapDraft={taskMapDraftForSection}
+              now={now}
+              onRequestTaskMapDraft={handleRequestTaskMapDraft}
+              onDismissTaskMapDraft={dismissTaskMapDraft}
+              onApproveTaskMapDraft={handleApproveTaskMapDraft}
             />
           ) : null}
 
