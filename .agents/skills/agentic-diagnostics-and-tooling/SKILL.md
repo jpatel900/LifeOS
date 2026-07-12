@@ -7,20 +7,18 @@ description: "Use when you need to MEASURE something instead of eyeballing it: '
 
 How to measure instead of eyeball. The doctrine in one line: **an observation is (command, output, timestamp) — an impression is not evidence.** "It seems faster" and "it looks fixed" are hypotheses awaiting a measurement; this skill provides the measurement recipes and ships two scripts. Agents especially need this discipline because an agent's confident prose reads like evidence while containing none.
 
-**Jargon:** _churn_ = how often a file changes in history. _Warm vs cold_ = with vs without caches populated. _Instrumentation_ = temporary code added solely to observe behavior.
+**Jargon:** *churn* = how often a file changes in history. *Warm vs cold* = with vs without caches populated. *Instrumentation* = temporary code added solely to observe behavior.
 
 ## When to use / when NOT to use
 
 **Use when:**
-
 - Any claim of the form faster/slower/bigger/fixed/flaky is about to be made or believed.
 - Two environments, commits, or runs behave differently and you need the delta.
 - You are repeating a manual check for the third time (build a script instead).
 
 **Do NOT use for:**
-
 - The full debugging method (hypotheses, triage, traps) → `agentic-debugging-playbook`; this skill supplies its instruments.
-- Whether the evidence is _sufficient to ship_ → `agentic-validation-and-qa`.
+- Whether the evidence is *sufficient to ship* → `agentic-validation-and-qa`.
 - Deep proof techniques (bisection recipe, differential testing, invariant checks) → `agentic-proof-and-analysis-toolkit`.
 
 ## 1. The shipped scripts
@@ -47,7 +45,7 @@ sh <library-root>/agentic-diagnostics-and-tooling/scripts/git-hotspots.sh 20 "90
 pwsh -File <library-root>/agentic-diagnostics-and-tooling/scripts/git-hotspots.ps1 -Top 20 -Since "90 days ago"
 ```
 
-Interpretation guide (heuristics, not laws): high churn + large file = design stress point, prime bug habitat, handle per `agentic-architecture-contract`. High churn in a _config_ file = unstable process. A file churned by many different _fix_ commits (`git log --oneline --follow <file> | grep -c -i fix`) = the fixes aren't holding; suspect a wrong-layer fix (see `agentic-debugging-playbook` traps).
+Interpretation guide (heuristics, not laws): high churn + large file = design stress point, prime bug habitat, handle per `agentic-architecture-contract`. High churn in a *config* file = unstable process. A file churned by many different *fix* commits (`git log --oneline --follow <file> | grep -c -i fix`) = the fixes aren't holding; suspect a wrong-layer fix (see `agentic-debugging-playbook` traps).
 
 ## 2. Technique recipes
 
@@ -127,7 +125,6 @@ The third time you run a manual check, script it. House rules for diagnostic scr
 Authored 2026-07-02. Doctrine line and recipes are distilled cross-project practice; interpretation guides in §1 are labeled heuristics. Scripts `env-snapshot.{sh,ps1}` and `git-hotspots.{sh,ps1}` authored and syntax-verified 2026-07-02.
 
 **Volatile facts, re-verify if this file is old:**
-
 - Tool lists inside `env-snapshot` scripts track ecosystem churn — extend as needed.
 - `hyperfine` availability/flags: `hyperfine --help`.
 - Script self-test: `sh scripts/git-hotspots.sh 5` inside any git repo (expect 5 count-prefixed lines); `sh scripts/env-snapshot.sh /tmp/t.txt && head -3 /tmp/t.txt`.
