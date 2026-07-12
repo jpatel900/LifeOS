@@ -230,6 +230,65 @@ describe("local mock workflow", () => {
     expect(redAttempt).toBe(state);
   });
 
+  // FR-031 slice 8 — approveTaskMapLocal carries completion forward on a
+  // regen revision by reading the task's own prior progression_map from
+  // state (mirroring the server-side approveTaskMap's `previous_graph`).
+  it("regen: approveTaskMapLocal carries completion forward for surviving node ids, not for dropped or renamed ones", () => {
+    let state = createInitialWorkflowState();
+    state = submitCapture(state, {
+      rawText: "Ship the quarterly report.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    const taskId = state.tasks[0].id;
+
+    const firstGraph = {
+      schema_version: "1.0" as const,
+      nodes: [
+        { id: "step-1", title: "Draft outline", role: "required" as const },
+        { id: "step-2", title: "Send it", role: "required" as const },
+      ],
+      edges: [{ from: "step-1", to: "step-2" }],
+    };
+    state = approveTaskMapLocal(state, taskId, firstGraph);
+    state = toggleTaskMapNodeCompletionLocal(
+      state,
+      taskId,
+      "step-1",
+      "2026-07-12T12:00:00.000Z",
+    );
+    expect(
+      (state.tasks[0].progression_map as typeof firstGraph).nodes.find(
+        (node) => node.id === "step-1",
+      ),
+    ).toMatchObject({ done: true });
+
+    // Regen revision: step-1 survives (same id), step-2 is dropped and
+    // replaced by a differently-id'd step-2b.
+    const revisedGraph = {
+      schema_version: "1.0" as const,
+      nodes: [
+        {
+          id: "step-1",
+          title: "Draft outline (revised)",
+          role: "required" as const,
+        },
+        { id: "step-2b", title: "Send it, revised", role: "required" as const },
+      ],
+      edges: [{ from: "step-1", to: "step-2b" }],
+    };
+    state = approveTaskMapLocal(state, taskId, revisedGraph);
+
+    const revisedNodes = (state.tasks[0].progression_map as typeof revisedGraph)
+      .nodes as { id: string; done?: boolean; completed_at?: string | null }[];
+    const survivedStep1 = revisedNodes.find((node) => node.id === "step-1");
+    const newStep2b = revisedNodes.find((node) => node.id === "step-2b");
+
+    expect(survivedStep1?.done).toBe(true);
+    expect(survivedStep1?.completed_at).toBe("2026-07-12T12:00:00.000Z");
+    expect(newStep2b?.done).toBeUndefined();
+  });
+
   it("edits and reassigns a pending triage draft", () => {
     let state = createInitialWorkflowState();
 

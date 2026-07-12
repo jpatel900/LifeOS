@@ -45,6 +45,23 @@ interface BreakdownStepInput {
   estimatedMinutes?: number | null;
 }
 
+interface CurrentMapNodeInput {
+  id: string;
+  title: string;
+  role: "required" | "optional" | "red";
+  done?: boolean;
+}
+
+interface CurrentMapEdgeInput {
+  from: string;
+  to: string;
+}
+
+interface CurrentMapInput {
+  nodes: CurrentMapNodeInput[];
+  edges: CurrentMapEdgeInput[];
+}
+
 interface TaskMapRequestBody {
   taskId: string;
   areaId: string | null;
@@ -54,6 +71,10 @@ interface TaskMapRequestBody {
   firstTinyStep: string | null;
   breakdownSteps: BreakdownStepInput[] | null;
   parserMode: "auto" | "mock";
+  /** FR-031 slice 8 — present only when the client is requesting a
+   * regeneration of an already-approved map (explicit user action; this
+   * route stays on-demand-only either way). */
+  currentMap: CurrentMapInput | null;
 }
 
 function parseRequestBody(body: unknown): TaskMapRequestBody {
@@ -137,6 +158,56 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     }
   }
 
+  let currentMap: CurrentMapInput | null = null;
+  if (record.currentMap !== undefined && record.currentMap !== null) {
+    if (typeof record.currentMap !== "object") {
+      throw new Error("currentMap must be an object when provided.");
+    }
+    const mapRecord = record.currentMap as Record<string, unknown>;
+
+    if (!Array.isArray(mapRecord.nodes)) {
+      throw new Error("currentMap.nodes must be an array.");
+    }
+    const nodes = mapRecord.nodes.map((node) => {
+      if (
+        !node ||
+        typeof node !== "object" ||
+        typeof (node as Record<string, unknown>).id !== "string" ||
+        typeof (node as Record<string, unknown>).title !== "string" ||
+        !["required", "optional", "red"].includes(
+          (node as Record<string, unknown>).role as string,
+        )
+      ) {
+        throw new Error("currentMap.nodes entries require id, title, role.");
+      }
+      const nodeRecord = node as Record<string, unknown>;
+      return {
+        id: nodeRecord.id as string,
+        title: nodeRecord.title as string,
+        role: nodeRecord.role as "required" | "optional" | "red",
+        done: nodeRecord.done === true,
+      };
+    });
+
+    if (!Array.isArray(mapRecord.edges)) {
+      throw new Error("currentMap.edges must be an array.");
+    }
+    const edges = mapRecord.edges.map((edge) => {
+      if (
+        !edge ||
+        typeof edge !== "object" ||
+        typeof (edge as Record<string, unknown>).from !== "string" ||
+        typeof (edge as Record<string, unknown>).to !== "string"
+      ) {
+        throw new Error("currentMap.edges entries require from and to.");
+      }
+      const edgeRecord = edge as Record<string, unknown>;
+      return { from: edgeRecord.from as string, to: edgeRecord.to as string };
+    });
+
+    currentMap = { nodes, edges };
+  }
+
   return {
     taskId: record.taskId.trim(),
     areaId: typeof record.areaId === "string" ? record.areaId : null,
@@ -151,6 +222,7 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
       typeof record.firstTinyStep === "string" ? record.firstTinyStep : null,
     breakdownSteps,
     parserMode,
+    currentMap,
   };
 }
 
@@ -225,6 +297,7 @@ export async function POST(request: Request) {
         definitionOfDone: input.definitionOfDone,
         firstTinyStep: input.firstTinyStep,
         breakdownSteps: input.breakdownSteps,
+        currentMap: input.currentMap,
       },
       {
         forceMock,
@@ -258,6 +331,7 @@ export async function POST(request: Request) {
       node_counts: countNodesByRole(result.draft.nodes),
       node_titles: result.draft.nodes.map((node) => node.title),
       confidence: null,
+      generated_from: input.currentMap ? "regen" : "initial",
     });
 
     return Response.json({

@@ -128,6 +128,46 @@ describe("task map draft server service", () => {
     );
   });
 
+  it("FR-031 slice 8: forwards currentMap to the AI implementation for a regen request", async () => {
+    const aiDraft = {
+      schema_version: TASK_MAP_DRAFT_SCHEMA_VERSION,
+      nodes: [
+        { id: "step-1", title: "Gather inputs", role: "required" as const },
+        { id: "step-2", title: "Do the work", role: "required" as const },
+      ],
+      edges: [{ from: "step-1", to: "step-2" }],
+    };
+    const taskMapDraftImpl = vi.fn().mockResolvedValue(aiDraft);
+    const currentMap = {
+      nodes: [
+        {
+          id: "step-1",
+          title: "Gather inputs",
+          role: "required" as const,
+          done: true,
+        },
+      ],
+      edges: [],
+    };
+
+    const result = await generateTaskMapDraftWithFallback(
+      { title: "Ship the report", currentMap },
+      {
+        env: {
+          OPENAI_API_KEY: "test-key",
+          AI_MODEL_STANDARD: "standard-model",
+        },
+        taskMapDraftImpl,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(taskMapDraftImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ currentMap }),
+      expect.anything(),
+    );
+  });
+
   it("degrades to breakdown_rail on a provider failure (never throws)", async () => {
     const taskMapDraftImpl = vi
       .fn()
