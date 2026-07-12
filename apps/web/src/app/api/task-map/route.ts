@@ -1,0 +1,283 @@
+import {
+  getTaskMapDraftStatus,
+  generateTaskMapDraftWithFallback,
+} from "@/lib/ai/taskMapDraftService";
+import {
+  recordTaskMapDraftSuggestion,
+  type MinimalSupabaseClient,
+} from "@/lib/data/workflow";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { captureError } from "@/lib/observability";
+
+/**
+ * FR-031 slice 4 — on-demand task-map draft generation.
+ *
+ * Mirrors `api/parse-capture/route.ts`'s provider/mock-first plumbing and
+ * `ai_call_traces` observability. One deliberate divergence: this route
+ * requires a bearer token. `parse-capture`'s bearer is optional and
+ * tracing-only — this route additionally identifies the user for the
+ * NS-INV-3 suggestion_records write and the one-pass approve linkage
+ * (the returned suggestion id), so an unauthenticated caller is rejected
+ * outright rather than degraded to an anonymous trace.
+ *
+ * NS-INV-4: this endpoint never persists. It returns the AI-drafted graph
+ * ephemerally, like a parse-capture draft; only the approve path
+ * (`approveTaskMap` in `@/lib/data/workflow`) writes `tasks.progression_map`.
+ */
+
+function readBearerToken(request: Request) {
+  const authorization = request.headers.get("authorization");
+
+  if (!authorization) {
+    return null;
+  }
+
+  const [scheme, value] = authorization.split(/\s+/, 2);
+  if (scheme?.toLowerCase() !== "bearer" || !value?.trim()) {
+    return null;
+  }
+
+  return value.trim();
+}
+
+interface BreakdownStepInput {
+  title: string;
+  estimatedMinutes?: number | null;
+}
+
+interface TaskMapRequestBody {
+  taskId: string;
+  areaId: string | null;
+  title: string;
+  description: string | null;
+  definitionOfDone: string | null;
+  firstTinyStep: string | null;
+  breakdownSteps: BreakdownStepInput[] | null;
+  parserMode: "auto" | "mock";
+}
+
+function parseRequestBody(body: unknown): TaskMapRequestBody {
+  if (!body || typeof body !== "object") {
+    throw new Error("Task map request body is required.");
+  }
+
+  const record = body as Record<string, unknown>;
+
+  if (typeof record.taskId !== "string" || !record.taskId.trim()) {
+    throw new Error("taskId is required.");
+  }
+
+  if (typeof record.title !== "string" || !record.title.trim()) {
+    throw new Error("title is required.");
+  }
+
+  if (
+    record.areaId !== undefined &&
+    record.areaId !== null &&
+    typeof record.areaId !== "string"
+  ) {
+    throw new Error("areaId must be a string when provided.");
+  }
+
+  if (
+    record.description !== undefined &&
+    record.description !== null &&
+    typeof record.description !== "string"
+  ) {
+    throw new Error("description must be a string when provided.");
+  }
+
+  if (
+    record.definitionOfDone !== undefined &&
+    record.definitionOfDone !== null &&
+    typeof record.definitionOfDone !== "string"
+  ) {
+    throw new Error("definitionOfDone must be a string when provided.");
+  }
+
+  if (
+    record.firstTinyStep !== undefined &&
+    record.firstTinyStep !== null &&
+    typeof record.firstTinyStep !== "string"
+  ) {
+    throw new Error("firstTinyStep must be a string when provided.");
+  }
+
+  let breakdownSteps: BreakdownStepInput[] | null = null;
+  if (record.breakdownSteps !== undefined && record.breakdownSteps !== null) {
+    if (!Array.isArray(record.breakdownSteps)) {
+      throw new Error("breakdownSteps must be an array when provided.");
+    }
+
+    breakdownSteps = record.breakdownSteps.map((step) => {
+      if (
+        !step ||
+        typeof step !== "object" ||
+        typeof (step as Record<string, unknown>).title !== "string"
+      ) {
+        throw new Error("breakdownSteps entries require a title.");
+      }
+
+      const stepRecord = step as Record<string, unknown>;
+      const estimatedMinutes =
+        typeof stepRecord.estimatedMinutes === "number"
+          ? stepRecord.estimatedMinutes
+          : null;
+
+      return { title: stepRecord.title as string, estimatedMinutes };
+    });
+  }
+
+  let parserMode: "auto" | "mock" = "auto";
+  if (record.parserMode !== undefined) {
+    if (record.parserMode === "auto" || record.parserMode === "mock") {
+      parserMode = record.parserMode;
+    } else {
+      throw new Error("parserMode must be auto or mock when provided.");
+    }
+  }
+
+  return {
+    taskId: record.taskId.trim(),
+    areaId: typeof record.areaId === "string" ? record.areaId : null,
+    title: record.title.trim(),
+    description:
+      typeof record.description === "string" ? record.description : null,
+    definitionOfDone:
+      typeof record.definitionOfDone === "string"
+        ? record.definitionOfDone
+        : null,
+    firstTinyStep:
+      typeof record.firstTinyStep === "string" ? record.firstTinyStep : null,
+    breakdownSteps,
+    parserMode,
+  };
+}
+
+function countNodesByRole(nodes: { role: "required" | "optional" | "red" }[]) {
+  return {
+    required: nodes.filter((node) => node.role === "required").length,
+    optional: nodes.filter((node) => node.role === "optional").length,
+    red: nodes.filter((node) => node.role === "red").length,
+  };
+}
+
+async function logRouteFailure(error: unknown) {
+  console.error(
+    `task-map draft failed safely: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  await captureError({
+    feature: "task_map_route",
+    error,
+    context: {
+      environment: "server",
+      error_category: "route_handler_failure",
+      route_pattern: "/api/task-map",
+    },
+  });
+}
+
+export async function GET() {
+  const status = getTaskMapDraftStatus();
+
+  return Response.json({
+    ok: true,
+    status: status.status,
+    preferredParser: status.preferredParser,
+  });
+}
+
+export async function POST(request: Request) {
+  const status = getTaskMapDraftStatus();
+  const accessToken = readBearerToken(request);
+
+  if (!accessToken) {
+    return Response.json(
+      {
+        ok: false,
+        error: "Sign in to generate a task map.",
+        errorCategory: "auth_rejected",
+      },
+      { status: 401 },
+    );
+  }
+
+  let input: TaskMapRequestBody;
+  try {
+    input = parseRequestBody(await request.json());
+  } catch (error) {
+    return Response.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Invalid request.",
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const forceMock =
+      input.parserMode === "mock" || status.status === "ai_unavailable";
+    const result = await generateTaskMapDraftWithFallback(
+      {
+        title: input.title,
+        description: input.description,
+        definitionOfDone: input.definitionOfDone,
+        firstTinyStep: input.firstTinyStep,
+        breakdownSteps: input.breakdownSteps,
+      },
+      {
+        forceMock,
+        traceContext: { accessToken },
+      },
+    );
+
+    if (!result.ok) {
+      // NFR-004: never a dead end. Provider failure, AI-schema-invalid, and
+      // graph-invalid output all degrade to a typed, non-throwing response so
+      // the UI can fall back to the plain breakdown rail.
+      return Response.json({
+        ok: false,
+        degrade: result.degrade,
+        errors: result.errors,
+        status: status.status,
+      });
+    }
+
+    // NS-INV-3: instrument the draft at birth. This write is awaited (with
+    // full error containment inside recordTaskMapDraftSuggestion) rather than
+    // detached fire-and-forget, because the caller needs the row id back to
+    // resolve it on approve; a write failure degrades to a null
+    // suggestionRecordId without affecting the draft response.
+    const client = createSupabaseServerClient({
+      accessToken,
+    }) as MinimalSupabaseClient | null;
+    const suggestion = await recordTaskMapDraftSuggestion(client, {
+      area_id: input.areaId,
+      task_id: input.taskId,
+      node_counts: countNodesByRole(result.draft.nodes),
+      node_titles: result.draft.nodes.map((node) => node.title),
+      confidence: null,
+    });
+
+    return Response.json({
+      ok: true,
+      parser: result.parser,
+      draft: result.draft,
+      suggestionRecordId: suggestion.suggestionId,
+      status: status.status,
+    });
+  } catch (error) {
+    await logRouteFailure(error);
+
+    return Response.json(
+      {
+        ok: false,
+        degrade: "breakdown_rail",
+        errors: ["Task-map draft generation failed safely."],
+        status: status.status,
+      },
+      { status: 200 },
+    );
+  }
+}
