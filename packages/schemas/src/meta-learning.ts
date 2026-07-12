@@ -26,6 +26,8 @@ export const SuggestionRecordTypeSchema = z.enum([
   // policy proposal (propose->approve, never auto-applied).
   "duration_recalibration",
   "policy_change",
+  // FR-031 slice 4: task-map v1 AI graph draft, born instrumented per NS-INV-3.
+  "task_map_draft",
 ]);
 
 export const SuggestionRecordStatusSchema = z.enum([
@@ -41,6 +43,12 @@ export const OverrideRecordTypeSchema = z.enum([
   "edited",
   "rejected",
   "replaced",
+  // FR-031 slice 4: per-node task-map diffs recorded on approve. Additive —
+  // the DB column is free text with a not-blank check; these extend the
+  // client-side vocabulary gate alongside the pre-existing generic values.
+  "node_removed",
+  "node_edited",
+  "node_added",
 ]);
 
 export const PolicyIdentifierSchema = z

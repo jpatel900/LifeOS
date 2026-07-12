@@ -72,6 +72,7 @@ import {
   normalizeSupabaseRow,
   normalizeSupabaseRows,
 } from "./supabaseRowNormalization";
+import { validateTaskMapForPersistence } from "../taskmap/persistence";
 
 export type DataProvider = "mock" | "supabase";
 
@@ -1007,6 +1008,295 @@ export function recordPersonLinkRejection(
       },
     });
   }
+}
+
+// FR-031 slice 4: task-map v1 AI graph draft, born instrumented per NS-INV-3.
+export const TASK_MAP_DRAFT_POLICY_ID = "task_map.v1" as const;
+
+export interface TaskMapDraftSuggestionNodeCounts {
+  required: number;
+  optional: number;
+  red: number;
+}
+
+export interface TaskMapDraftSuggestionInput {
+  area_id: string | null;
+  task_id: string;
+  node_counts: TaskMapDraftSuggestionNodeCounts;
+  node_titles: string[];
+  confidence?: number | null;
+}
+
+export interface TaskMapDraftSuggestionResult {
+  provider: DataProvider;
+  suggestionId: string | null;
+}
+
+/**
+ * Instrument a generated task-map draft at birth (NS-INV-3): one pending
+ * suggestion_records row per generation. Unlike the other recorders in this
+ * file, this one is awaited (with full error containment, never throwing) —
+ * the caller (the one-pass approve path) needs the row id back to resolve it
+ * later, so a truly detached fire-and-forget write would lose that id. A
+ * write failure still never breaks the generation response: it degrades to a
+ * null suggestionId, and the draft is returned to the caller either way.
+ */
+export async function recordTaskMapDraftSuggestion(
+  client: MinimalSupabaseClient | null,
+  input: TaskMapDraftSuggestionInput,
+): Promise<TaskMapDraftSuggestionResult> {
+  try {
+    const result = await createSuggestionRecord(client, {
+      area_id: input.area_id,
+      policy_identifier: TASK_MAP_DRAFT_POLICY_ID,
+      suggestion_type: "task_map_draft",
+      subject_type: "task",
+      subject_id: uuidPattern.test(input.task_id) ? input.task_id : null,
+      suggestion_json: {
+        node_counts: input.node_counts,
+        node_titles: input.node_titles,
+      },
+      confidence: input.confidence ?? null,
+      status: "pending",
+    });
+
+    const record = result.record as { id?: string } | null;
+    return { provider: result.provider, suggestionId: record?.id ?? null };
+  } catch (error) {
+    logLearningWriteFailure(error, {
+      table: "suggestion_records",
+      policy_identifier: TASK_MAP_DRAFT_POLICY_ID,
+      suggestion_type: "task_map_draft",
+    });
+    return { provider: client ? "supabase" : "mock", suggestionId: null };
+  }
+}
+
+interface SuggestionResolutionInput {
+  id: string;
+  status: "accepted" | "rejected";
+  decided_by: "user" | "system";
+  resolved_at: string;
+}
+
+async function updateSuggestionRecordStatus(
+  client: MinimalSupabaseClient,
+  input: SuggestionResolutionInput,
+): Promise<void> {
+  const query = client.from("suggestion_records") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => Promise<{ data: unknown; error: unknown }>;
+    };
+  };
+
+  const { error } = await query
+    .update({
+      status: input.status,
+      decided_by: input.decided_by,
+      resolved_at: input.resolved_at,
+    })
+    .eq("id", input.id);
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+}
+
+function recordSuggestionResolutionFireAndForget(
+  client: MinimalSupabaseClient,
+  input: SuggestionResolutionInput,
+): void {
+  void updateSuggestionRecordStatus(client, input).catch((error) => {
+    logLearningWriteFailure(error, {
+      table: "suggestion_records",
+      policy_identifier: TASK_MAP_DRAFT_POLICY_ID,
+      action: "resolve",
+    });
+  });
+}
+
+interface TaskMapNodeLike {
+  id: string;
+  title: string;
+  role: "required" | "optional" | "red";
+  red_reason?: string;
+  red_condition?: string;
+}
+
+type TaskMapNodeDiff =
+  | {
+      override_type: "node_removed";
+      old_value: TaskMapNodeLike;
+      new_value: null;
+    }
+  | { override_type: "node_added"; old_value: null; new_value: TaskMapNodeLike }
+  | {
+      override_type: "node_edited";
+      old_value: TaskMapNodeLike;
+      new_value: TaskMapNodeLike;
+    };
+
+/**
+ * Diffs the AI draft's nodes against the (possibly user-edited) approved
+ * graph's nodes, keyed by node id. Unchanged nodes produce no diff entry —
+ * only actual removals/edits/additions are instrumented, per NS-INV-3.
+ */
+function diffTaskMapNodes(
+  aiNodes: TaskMapNodeLike[],
+  approvedNodes: TaskMapNodeLike[],
+): TaskMapNodeDiff[] {
+  const aiById = new Map(aiNodes.map((node) => [node.id, node]));
+  const approvedById = new Map(approvedNodes.map((node) => [node.id, node]));
+  const diffs: TaskMapNodeDiff[] = [];
+
+  for (const node of aiNodes) {
+    if (!approvedById.has(node.id)) {
+      diffs.push({
+        override_type: "node_removed",
+        old_value: node,
+        new_value: null,
+      });
+    }
+  }
+
+  for (const node of approvedNodes) {
+    const aiNode = aiById.get(node.id);
+    if (!aiNode) {
+      diffs.push({
+        override_type: "node_added",
+        old_value: null,
+        new_value: node,
+      });
+      continue;
+    }
+
+    const changed =
+      aiNode.title !== node.title ||
+      aiNode.role !== node.role ||
+      (aiNode.red_reason ?? null) !== (node.red_reason ?? null) ||
+      (aiNode.red_condition ?? null) !== (node.red_condition ?? null);
+
+    if (changed) {
+      diffs.push({
+        override_type: "node_edited",
+        old_value: aiNode,
+        new_value: node,
+      });
+    }
+  }
+
+  return diffs;
+}
+
+export interface ApproveTaskMapAiDraft {
+  nodes: TaskMapNodeLike[];
+  edges: { from: string; to: string }[];
+}
+
+export interface ApproveTaskMapInput {
+  task_id: string;
+  area_id: string | null;
+  /** The (possibly user-edited) graph to persist; validated before write. */
+  graph: unknown;
+  /** The original AI draft, kept for override diffing. Null when the map was
+   * hand-built with no AI draft to diff against (no diffs are recorded). */
+  ai_draft: ApproveTaskMapAiDraft | null;
+  /** The pending suggestion_records row from generation, if one exists. */
+  suggestion_record_id?: string | null;
+}
+
+export interface TaskMapApproveResult {
+  provider: DataProvider;
+  task: Task;
+}
+
+/**
+ * FR-031 slice 4 one-pass approve path (NS-INV-4: no AI-drafted map persists
+ * without approval). Runs `validateTaskMapForPersistence` — schema AND graph
+ * validation — before ever touching `tasks.progression_map`; rejects on
+ * failure instead of writing anything. Statuses `draft`/`superseded` are not
+ * used by this slice (reserved for the regen flow, a later slice) — every
+ * successful approval here writes `map_status: "approved"` directly.
+ */
+export async function approveTaskMap(
+  client: MinimalSupabaseClient | null,
+  input: ApproveTaskMapInput,
+): Promise<TaskMapApproveResult> {
+  const validation = validateTaskMapForPersistence(input.graph);
+  if (!validation.ok) {
+    throw new Error(
+      `Task map failed validation and was not saved: ${validation.errors.join("; ")}`,
+    );
+  }
+  const graph = validation.graph;
+
+  if (!client) {
+    throw new Error("Mock task-map approval uses the local workflow context.");
+  }
+
+  await requireSupabaseUser(client, "Sign in before approving task maps.");
+
+  const approvedAt = new Date().toISOString();
+  const query = client.from("tasks") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        select: (columns: string) => {
+          single: () => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({
+      progression_map: graph,
+      map_status: "approved",
+      map_schema_version: graph.schema_version,
+      map_approved_at: approvedAt,
+    })
+    .eq("id", input.task_id)
+    .select(taskColumns)
+    .single();
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const task = parseTask(data);
+
+  if (input.suggestion_record_id) {
+    recordSuggestionResolutionFireAndForget(client, {
+      id: input.suggestion_record_id,
+      status: "accepted",
+      decided_by: "user",
+      resolved_at: approvedAt,
+    });
+  }
+
+  if (input.ai_draft) {
+    const diffs = diffTaskMapNodes(input.ai_draft.nodes, graph.nodes);
+    for (const diff of diffs) {
+      recordOverrideFireAndForget(client, {
+        area_id: input.area_id,
+        policy_identifier: TASK_MAP_DRAFT_POLICY_ID,
+        suggestion_id: input.suggestion_record_id ?? null,
+        subject_type: "task_map_node",
+        subject_id: task.id,
+        override_type: diff.override_type,
+        old_value_json: diff.old_value ?? {},
+        new_value_json: diff.new_value ?? {},
+        reason: null,
+      });
+    }
+  }
+
+  return { provider: "supabase", task };
 }
 
 const peopleColumns =
