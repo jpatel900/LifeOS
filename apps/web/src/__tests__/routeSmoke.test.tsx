@@ -48,11 +48,17 @@ describe("handoff cockpit route provider wiring", () => {
 
   // Post go-live (P7d), `/` renders the moments home; the demoted stage routes
   // below still render the shared cockpit and stay wired through the provider.
-  it("renders / through the moments home", async () => {
-    renderThroughAppShell(<HomePage />, "/");
+  it("renders / through the moments home with one h1 and a first-focusable skip link", async () => {
+    const { container } = renderThroughAppShell(<HomePage />, "/");
 
     expect(await screen.findByTestId("today-moments")).toBeDefined();
     expect(screen.queryByTestId("lifeos-cockpit")).toBeNull();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(
+      container.querySelector(
+        'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
+      ),
+    ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
   });
 
   it.each([
@@ -72,13 +78,36 @@ describe("handoff cockpit route provider wiring", () => {
     async (pathname, createPage, text) => {
       renderThroughAppShell(createPage(), pathname);
 
-      expect(await screen.findByTestId("lifeos-cockpit")).toBeDefined();
+      const cockpit = await screen.findByTestId("lifeos-cockpit");
+      expect(cockpit).toBeDefined();
+      expect(
+        cockpit.querySelector(
+          'a[href="#stage-content"],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
+        ),
+      ).toBe(screen.getByRole("link", { name: "Skip to stage content" }));
       expect(
         screen.getByRole("navigation", { name: "Workflow stages" }),
       ).toBeDefined();
       expect(screen.getByText(text)).toBeDefined();
     },
   );
+
+  it("labels the capture textarea and health ring control programmatically", async () => {
+    renderThroughAppShell(<CapturePage />, "/capture");
+
+    expect(
+      await screen.findByRole("textbox", { name: "Capture thought" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Capture" }),
+    ).toBeDefined();
+
+    renderThroughAppShell(<HealthPage />, "/health");
+
+    expect(
+      await screen.findByRole("button", { name: /Run health system check/i }),
+    ).toBeDefined();
+  });
 
   it("keeps settings outside the cockpit but inside the provider", async () => {
     renderThroughAppShell(<AreasSettingsPage />, "/settings/areas");

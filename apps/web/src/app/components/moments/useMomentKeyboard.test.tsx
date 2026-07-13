@@ -85,7 +85,7 @@ describe("useMomentKeyboard", () => {
     expect(handlers.onEscape).toHaveBeenCalledTimes(1);
   });
 
-  it("suppresses every mapping except Escape/Enter when an input is focused, including the palette combo", () => {
+  it("suppresses every mapping except Escape when an input is focused, including Enter and the palette combo", () => {
     const handlers = makeHandlers();
     render(<Harness {...handlers} />);
 
@@ -96,16 +96,29 @@ describe("useMomentKeyboard", () => {
     fireKey({ key: "1" }, input);
     fireKey({ key: "c" }, input);
     fireKey({ key: "k", ctrlKey: true }, input);
+    fireKey({ key: "Enter" }, input);
+    fireKey({ key: "Escape" }, input);
 
     expect(handlers.onSwitchMoment).not.toHaveBeenCalled();
     expect(handlers.onCapture).not.toHaveBeenCalled();
     expect(handlers.onPalette).not.toHaveBeenCalled();
-
-    fireKey({ key: "Enter" }, input);
-    fireKey({ key: "Escape" }, input);
-
-    expect(handlers.onPrimary).toHaveBeenCalledTimes(1);
+    expect(handlers.onPrimary).not.toHaveBeenCalled();
     expect(handlers.onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not map Enter from a focused button or link to the global primary action", () => {
+    const handlers = makeHandlers();
+    render(<Harness {...handlers} />);
+
+    const button = document.createElement("button");
+    const link = document.createElement("a");
+    link.href = "#stage-content";
+    document.body.append(button, link);
+
+    fireKey({ key: "Enter" }, button);
+    fireKey({ key: "Enter" }, link);
+
+    expect(handlers.onPrimary).not.toHaveBeenCalled();
   });
 
   it("passes through other modifier combos untouched (e.g. Ctrl+C is not intercepted)", () => {

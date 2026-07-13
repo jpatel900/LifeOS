@@ -485,6 +485,12 @@ export function LifeOSCockpit({
       data-testid="lifeos-cockpit"
     >
       <div className="mx-auto flex min-h-screen w-full max-w-[var(--max)] flex-col gap-5 px-4 py-4 sm:px-6 sm:py-6">
+        <a
+          href="#stage-content"
+          className="sr-only rounded-full bg-[var(--btn)] px-4 py-2 font-bold text-[var(--btn-fg)] focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        >
+          Skip to stage content
+        </a>
         <header className="flex flex-wrap items-center gap-1 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2 sm:gap-2">
           <button
             type="button"
@@ -629,7 +635,7 @@ export function LifeOSCockpit({
           ))}
         </nav>
 
-        <section className="min-h-[560px]">
+        <section id="stage-content" tabIndex={-1} className="min-h-[560px]">
           {state.wipRefusal ? (
             <WipRefusalPanel
               refusal={state.wipRefusal}
@@ -1010,6 +1016,7 @@ function CaptureView({
   return (
     <Panel className="grid min-h-[560px] place-items-center">
       <div className="w-full max-w-2xl">
+        <h1 className="sr-only">Capture</h1>
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -1019,6 +1026,7 @@ function CaptureView({
             }
           }}
           autoFocus
+          aria-label="Capture thought"
           placeholder="Drop the thought here."
           className="min-h-64 w-full resize-none border-0 bg-transparent text-3xl font-semibold leading-tight text-[var(--ink)] outline-none placeholder:text-[var(--fnt)] focus:caret-[var(--acc)]"
         />
@@ -2379,6 +2387,7 @@ function HealthView({ vm }: { vm: ReturnType<typeof buildCockpitViewModel> }) {
             onClick={() => {
               void runSystemCheck();
             }}
+            aria-label={`Run health system check. ${headline}. Score ${score} out of 100.`}
             className={cn(
               "grid size-56 place-items-center rounded-full border border-[var(--grn-rng)] bg-[var(--grn-sf)] text-[var(--grn-fg)]",
               pulse && "animate-pulse",
