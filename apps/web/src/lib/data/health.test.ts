@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { getObservabilityHealthSnapshot } from "@/lib/observability";
 import {
+  deriveProviderIncidents,
   getHealthDashboard,
   type HealthDashboardCheck,
   type MinimalHealthSupabaseClient,
@@ -9,6 +10,18 @@ import {
 const userId = "550e8400-e29b-41d4-a716-446655440001";
 const rpcExistsError = { message: "task not found" };
 const fixedNow = new Date("2026-05-08T20:00:00.000Z");
+
+function readableTraceTable(data: unknown[] = []) {
+  return {
+    select: vi.fn().mockReturnValue({
+      gte: vi.fn().mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          limit: vi.fn().mockResolvedValue({ data, error: null }),
+        }),
+      }),
+    }),
+  };
+}
 
 function readableTable() {
   return {
@@ -23,6 +36,117 @@ function checkBySubsystem(checks: HealthDashboardCheck[], subsystem: string) {
   expect(check).toBeDefined();
   return check!;
 }
+
+describe("deriveProviderIncidents", () => {
+  it("detects three failed traces inside an inclusive 30-minute rolling window", () => {
+    const incidents = deriveProviderIncidents(
+      [
+        {
+          feature: "parse",
+          status: "failed",
+          created_at: "2026-05-08T19:00:00.000Z",
+          latency_ms: 500,
+        },
+        {
+          feature: "parse",
+          status: "failed",
+          created_at: "2026-05-08T19:15:00.000Z",
+          latency_ms: 600,
+        },
+        {
+          feature: "parse",
+          status: "failed",
+          created_at: "2026-05-08T19:30:00.000Z",
+          latency_ms: 700,
+        },
+      ],
+      fixedNow,
+    );
+
+    expect(incidents).toEqual([
+      {
+        feature: "parse",
+        failedCount: 3,
+        windowStartedAt: "2026-05-08T19:00:00.000Z",
+        windowEndedAt: "2026-05-08T19:30:00.000Z",
+        latestFailedAt: "2026-05-08T19:30:00.000Z",
+        latestLatencyMs: 700,
+      },
+    ]);
+  });
+
+  it("keeps mixed features separate and clears the incident after recovery", () => {
+    const incidents = deriveProviderIncidents(
+      [
+        {
+          feature: "parse",
+          status: "failed",
+          created_at: "2026-05-08T19:00:00.000Z",
+        },
+        {
+          feature: "task_map_draft",
+          status: "failed",
+          created_at: "2026-05-08T19:01:00.000Z",
+        },
+        {
+          feature: "parse",
+          status: "failed",
+          created_at: "2026-05-08T19:10:00.000Z",
+        },
+        {
+          feature: "task_map_draft",
+          status: "failed",
+          created_at: "2026-05-08T19:11:00.000Z",
+        },
+        {
+          feature: "parse",
+          status: "failed",
+          created_at: "2026-05-08T19:20:00.000Z",
+        },
+        {
+          feature: "task_map_draft",
+          status: "failed",
+          created_at: "2026-05-08T19:21:00.000Z",
+        },
+        {
+          feature: "parse",
+          status: "passed",
+          created_at: "2026-05-08T19:35:00.000Z",
+        },
+      ],
+      fixedNow,
+    );
+
+    expect(incidents.map((incident) => incident.feature)).toEqual([
+      "task_map_draft",
+    ]);
+  });
+
+  it("does not detect failures outside one 30-minute window", () => {
+    expect(
+      deriveProviderIncidents(
+        [
+          {
+            feature: "parse",
+            status: "failed",
+            created_at: "2026-05-08T18:00:00.000Z",
+          },
+          {
+            feature: "parse",
+            status: "failed",
+            created_at: "2026-05-08T18:31:00.000Z",
+          },
+          {
+            feature: "parse",
+            status: "failed",
+            created_at: "2026-05-08T19:02:00.000Z",
+          },
+        ],
+        fixedNow,
+      ),
+    ).toEqual([]);
+  });
+});
 
 describe("health dashboard data provider", () => {
   it("builds deterministic mock-mode health checks without Supabase", async () => {
@@ -144,6 +268,7 @@ describe("health dashboard data provider", () => {
       if (table === "areas") return { select: areasSelect };
       if (table === "capture_items") return { select: captureSelect };
       if (table === "health_checks") return { insert: healthInsert };
+      if (table === "ai_call_traces") return readableTraceTable();
       return readableTable();
     });
 
@@ -192,6 +317,74 @@ describe("health dashboard data provider", () => {
     );
   });
 
+  it("surfaces repeated AI-provider failures from persisted trace data", async () => {
+    const areasEq = vi.fn().mockResolvedValue({ data: [], error: null });
+    const areasOrder = vi.fn().mockReturnValue({ eq: areasEq });
+    const areasSelect = vi.fn().mockReturnValue({ order: areasOrder });
+    const captureLimit = vi.fn().mockResolvedValue({ data: [], error: null });
+    const captureSelect = vi.fn().mockReturnValue({ limit: captureLimit });
+    const healthInsert = vi.fn().mockResolvedValue({ error: null });
+    const traceTable = readableTraceTable([
+      {
+        surface: "parse",
+        validation_outcome: "failed",
+        created_at: "2026-05-08T19:00:00.000Z",
+        latency_ms: 800,
+      },
+      {
+        surface: "parse",
+        validation_outcome: "failed",
+        created_at: "2026-05-08T19:12:00.000Z",
+        latency_ms: 900,
+      },
+      {
+        surface: "parse",
+        validation_outcome: "failed",
+        created_at: "2026-05-08T19:24:00.000Z",
+        latency_ms: 1000,
+      },
+    ]);
+    const from = vi.fn((table: string) => {
+      if (table === "areas") return { select: areasSelect };
+      if (table === "capture_items") return { select: captureSelect };
+      if (table === "health_checks") return { insert: healthInsert };
+      if (table === "ai_call_traces") return traceTable;
+      return readableTable();
+    });
+
+    const result = await getHealthDashboard(
+      {
+        from,
+        rpc: vi.fn().mockResolvedValue({ data: null, error: rpcExistsError }),
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: { user: { id: userId } },
+            error: null,
+          }),
+        },
+      } as MinimalHealthSupabaseClient,
+      {
+        now: () => fixedNow,
+        supabaseConfigured: true,
+      },
+    );
+
+    const incidentCheck = checkBySubsystem(
+      result.checks,
+      "AI provider incidents",
+    );
+    expect(from).toHaveBeenCalledWith("ai_call_traces");
+    expect(incidentCheck.status).toBe("watch");
+    expect(incidentCheck.summary).toContain("AI provider incident");
+    expect(incidentCheck.details).toMatchObject({
+      incident_count: 1,
+      affected_features: ["parse"],
+      latest_failed_at: "2026-05-08T19:24:00.000Z",
+      window_minutes: 30,
+      threshold: 3,
+    });
+  });
+
   it("accepts Supabase area timestamps with offsets during signed-in health reads", async () => {
     const areasEq = vi.fn().mockResolvedValue({
       data: [
@@ -220,6 +413,7 @@ describe("health dashboard data provider", () => {
       if (table === "areas") return { select: areasSelect };
       if (table === "capture_items") return { select: captureSelect };
       if (table === "health_checks") return { insert: healthInsert };
+      if (table === "ai_call_traces") return readableTraceTable();
       return readableTable();
     });
 
@@ -257,6 +451,7 @@ describe("health dashboard data provider", () => {
       if (table === "areas") return { select: areasSelect };
       if (table === "capture_items") return { select: captureSelect };
       if (table === "health_checks") return { insert: healthInsert };
+      if (table === "ai_call_traces") return readableTraceTable();
       return readableTable();
     });
 
@@ -297,6 +492,7 @@ describe("health dashboard data provider", () => {
         };
       }
       if (table === "health_checks") return { insert: healthInsert };
+      if (table === "ai_call_traces") return readableTraceTable();
       return readableTable();
     });
     const rpc = vi
