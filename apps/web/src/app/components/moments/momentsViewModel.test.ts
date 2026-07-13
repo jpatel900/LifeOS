@@ -1514,6 +1514,7 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         focusFilledCount: 0,
         focusBudget: 2,
         deferredCount: 0,
+        pendingTriageCount: 0,
       }),
     ).toBe(
       "Nothing on the calendar and nothing queued — capture something to get moving.",
@@ -1527,6 +1528,7 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         focusFilledCount: 1,
         focusBudget: 1,
         deferredCount: 0,
+        pendingTriageCount: 0,
       }),
     ).toBe("1 block on the calendar today — 1 of 1 focus slot filled.");
   });
@@ -1538,6 +1540,7 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         focusFilledCount: 2,
         focusBudget: 3,
         deferredCount: 0,
+        pendingTriageCount: 0,
       }),
     ).toBe("3 blocks on the calendar today — 2 of 3 focus slots filled.");
   });
@@ -1549,6 +1552,7 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         focusFilledCount: 2,
         focusBudget: 2,
         deferredCount: 0,
+        pendingTriageCount: 0,
       }),
     ).toBe("No blocks on the calendar today — 2 of 2 focus slots filled.");
   });
@@ -1560,6 +1564,7 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         focusFilledCount: 0,
         focusBudget: 2,
         deferredCount: 0,
+        pendingTriageCount: 0,
       }),
     ).toBe("2 blocks on the calendar today — nothing queued for focus.");
   });
@@ -1571,9 +1576,61 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         focusFilledCount: 1,
         focusBudget: 1,
         deferredCount: 3,
+        pendingTriageCount: 0,
       }),
     ).toBe(
       "4 blocks on the calendar today — 1 of 1 focus slot filled (3 deferred).",
+    );
+  });
+
+  it("#551: pendingTriageCount 0 leaves every sentence unchanged", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 0,
+        focusFilledCount: 0,
+        focusBudget: 3,
+        deferredCount: 0,
+        pendingTriageCount: 0,
+      }),
+    ).toBe(
+      "Nothing on the calendar and nothing queued — capture something to get moving.",
+    );
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 2,
+        focusFilledCount: 1,
+        focusBudget: 3,
+        deferredCount: 0,
+        pendingTriageCount: 0,
+      }),
+    ).toBe("2 blocks on the calendar today — 1 of 3 focus slots filled.");
+  });
+
+  it("#551: an otherwise-empty day with 1 pending draft never claims 'nothing queued' (singular)", () => {
+    const sentence = buildDaySynthesis({
+      todayBlockCount: 0,
+      focusFilledCount: 0,
+      focusBudget: 3,
+      deferredCount: 0,
+      pendingTriageCount: 1,
+    });
+    expect(sentence).toBe(
+      "Nothing on the calendar yet — 1 thought waiting for a decision.",
+    );
+    expect(sentence).not.toContain("nothing queued");
+  });
+
+  it("#551: pending drafts with blocks present append a second plural sentence", () => {
+    expect(
+      buildDaySynthesis({
+        todayBlockCount: 2,
+        focusFilledCount: 1,
+        focusBudget: 3,
+        deferredCount: 0,
+        pendingTriageCount: 3,
+      }),
+    ).toBe(
+      "2 blocks on the calendar today — 1 of 3 focus slots filled. 3 thoughts waiting for a decision.",
     );
   });
 });
@@ -1605,6 +1662,7 @@ describe("buildStartVM — D-2 hero wiring (#483)", () => {
         focusFilledCount: vm.focusItems.length,
         focusBudget: vm.focusBudget,
         deferredCount: vm.deferredItems.length,
+        pendingTriageCount: vm.counts.pendingTriage,
       }),
     );
   });

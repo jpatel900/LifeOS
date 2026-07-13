@@ -58,6 +58,11 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * Presentation-only: the first-move card below already carries the target
  * "Start now / Snooze 10m / Not this" microcopy and its existing
  * launch-gate handlers (`onStartMove`/`onSnooze`/`onSwap`) are unchanged.
+ *
+ * #551 (state truth, UX audit P0-1) — a capture is a real state change:
+ * `vm.counts.pendingTriage > 0` now renders a clickable "N thought(s)
+ * waiting for a decision." line (`onOpenTriage`) so the Start column stops
+ * claiming "Nothing queued" right after the user just queued something.
  */
 
 export interface StartMomentProps {
@@ -71,6 +76,7 @@ export interface StartMomentProps {
   pipelineCounts: Record<string, number>;
   onDrillPipeline(stage: string): void;
   onOpenRecovery(taskId: string): void;
+  onOpenTriage(): void;
 }
 
 export function StartMoment({
@@ -84,6 +90,7 @@ export function StartMoment({
   pipelineCounts,
   onDrillPipeline,
   onOpenRecovery,
+  onOpenTriage,
 }: StartMomentProps) {
   const cardMove: FirstMoveCardMove | null = vm.firstMove
     ? {
@@ -95,6 +102,21 @@ export function StartMoment({
     : null;
 
   const recoveryNudge = vm.recoveryNudge;
+
+  const pendingTriage = vm.counts.pendingTriage;
+  const pendingTriageLine =
+    pendingTriage > 0 ? (
+      <button
+        type="button"
+        onClick={onOpenTriage}
+        className="workflow-surface-body text-left text-sm text-muted-foreground underline-offset-4 hover:underline"
+        data-testid="start-pending-triage"
+      >
+        {pendingTriage === 1
+          ? "1 thought waiting for a decision."
+          : `${pendingTriage} thoughts waiting for a decision.`}
+      </button>
+    ) : null;
 
   return (
     <div className="grid gap-6" data-testid="start-moment">
@@ -110,12 +132,17 @@ export function StartMoment({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="grid gap-6">
           {cardMove && vm.firstMove ? (
-            <FirstMoveCard
-              move={cardMove}
-              onStart={() => onStartMove(vm.firstMove as FirstMoveVM)}
-              onSnooze={onSnooze}
-              onSwap={onSwap}
-            />
+            <>
+              <FirstMoveCard
+                move={cardMove}
+                onStart={() => onStartMove(vm.firstMove as FirstMoveVM)}
+                onSnooze={onSnooze}
+                onSwap={onSwap}
+              />
+              {pendingTriageLine}
+            </>
+          ) : pendingTriageLine ? (
+            pendingTriageLine
           ) : (
             <p
               className="workflow-surface-body text-sm text-muted-foreground"

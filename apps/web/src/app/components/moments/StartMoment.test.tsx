@@ -32,6 +32,7 @@ const NOOP_HANDLERS = {
   onOpenHealth: vi.fn(),
   onDrillPipeline: vi.fn(),
   onOpenRecovery: vi.fn(),
+  onOpenTriage: vi.fn(),
 };
 
 describe("StartMoment — S5 focus budget (#257)", () => {
@@ -548,5 +549,107 @@ describe("StartMoment — D-2 start-moment hero (#483)", () => {
       "Snooze 10m",
     );
     expect(screen.getByTestId("first-move-swap")).toHaveTextContent("Not this");
+  });
+});
+
+describe("StartMoment — state truth for pending triage (#551)", () => {
+  it("renders the truthful empty state and no pending-triage line when pendingTriage is 0 and there is no firstMove", () => {
+    const vm = baseVM({
+      counts: { pendingTriage: 0, activeTasks: 0, todayBlocks: 0 },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-moment-empty")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("start-pending-triage"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("replaces the empty state with a singular pending-triage line when pendingTriage is 1 and there is no firstMove", () => {
+    const vm = baseVM({
+      counts: { pendingTriage: 1, activeTasks: 0, todayBlocks: 0 },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-pending-triage")).toHaveTextContent(
+      "1 thought waiting for a decision.",
+    );
+    expect(screen.queryByTestId("start-moment-empty")).not.toBeInTheDocument();
+  });
+
+  it("renders the plural pending-triage line alongside the first-move card when pendingTriage is 3 and firstMove is present", () => {
+    const vm = baseVM({
+      counts: { pendingTriage: 3, activeTasks: 0, todayBlocks: 0 },
+      firstMove: {
+        title: "Write report",
+        why: "Oldest active commitment",
+        areaLabel: "Work",
+        estMinutes: 25,
+        taskId: "t1",
+      },
+      focusItems: [
+        {
+          title: "Write report",
+          why: "Oldest active commitment",
+          areaLabel: "Work",
+          estMinutes: 25,
+          taskId: "t1",
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("first-move-card")).toBeInTheDocument();
+    expect(screen.getByTestId("start-pending-triage")).toHaveTextContent(
+      "3 thoughts waiting for a decision.",
+    );
+  });
+
+  it("calls onOpenTriage when the pending-triage line is clicked", () => {
+    const onOpenTriage = vi.fn();
+    const vm = baseVM({
+      counts: { pendingTriage: 2, activeTasks: 0, todayBlocks: 0 },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+        onOpenTriage={onOpenTriage}
+      />,
+    );
+
+    screen.getByTestId("start-pending-triage").click();
+    expect(onOpenTriage).toHaveBeenCalledTimes(1);
   });
 });

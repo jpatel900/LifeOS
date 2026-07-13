@@ -1189,6 +1189,7 @@ export function TodayMoments({
               pipelineCounts={pipelineCounts}
               onDrillPipeline={handleDrillPipeline}
               onOpenRecovery={() => setMoment("close")}
+              onOpenTriage={() => setActiveSheet("triage")}
             />
           ) : null}
 
