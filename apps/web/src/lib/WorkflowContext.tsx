@@ -3007,6 +3007,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     returnHook?: string | null,
   ) {
     if (captureParse.phase === "parsing") {
+      stageAndPersistRawCapture(rawText, areaId, returnHook);
       return;
     }
 

@@ -354,6 +354,77 @@ describe("WorkflowProvider storage fallback", () => {
     );
   });
 
+  it("stages a second raw capture while the first capture is still parsing", async () => {
+    replaceSessionStorage({});
+
+    let resolveParse!: (response: Response) => void;
+    const parseResponse = new Promise<Response>((resolve) => {
+      resolveParse = resolve;
+    });
+    const fetchMock = vi.fn(() => parseResponse);
+    vi.stubGlobal("fetch", fetchMock);
+
+    function ConcurrentCaptureProbe() {
+      const { captureParse, state, submitCaptureText } = useWorkflow();
+      return (
+        <div>
+          <span data-testid="capture-count">{state.captureItems.length}</span>
+          <span data-testid="capture-texts">
+            {state.captureItems.map((capture) => capture.raw_text).join("|")}
+          </span>
+          <span data-testid="parse-phase">{captureParse.phase}</span>
+          <button
+            type="button"
+            onClick={() => submitCaptureText("First capture", "area-main-job")}
+          >
+            Add first capture
+          </button>
+          <button
+            type="button"
+            onClick={() => submitCaptureText("Second capture", "area-main-job")}
+          >
+            Add second capture
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <WorkflowProvider>
+        <ConcurrentCaptureProbe />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add first capture" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("parse-phase")).toHaveTextContent("parsing");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add second capture" }));
+
+    expect(screen.getByTestId("capture-count")).toHaveTextContent("2");
+    expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      "First capture",
+    );
+    expect(screen.getByTestId("capture-texts")).toHaveTextContent(
+      "Second capture",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveParse({
+        ok: false,
+        json: async () => ({
+          ok: false,
+          error: "Parsing failed safely.",
+          can_retry_with_mock: true,
+          status: "ai_available",
+        }),
+      } as Response);
+      await parseResponse;
+    });
+  });
+
   it("submitCaptureRaw stages the capture but never parses it", async () => {
     replaceSessionStorage({});
 
