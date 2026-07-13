@@ -740,23 +740,30 @@ Non-goals (binding):
 
 ---
 
-### FR-035 (reservation) — Closure Ritual (dignified endings)
+### FR-035 — Closure Ritual (dignified endings)
 
 **Priority:** SHOULD
 
-**Stage:** With the wins/rollup era (S7/S8-adjacent).
+**Stage:** With the wins/rollup era — the gating condition is now met: weekly rollups (Stage 1 slice S8) and the monthly rollup surface (issue #486, merged #512) are live, and wins (`win_records`, slice S7) are live. This entry lands the docs-first requirements text only; no build slice starts until this FR is owner-ratified (merge of this PR is the ratification), same precedent as FR-031 (#484/#487). Build slices remain issue-gated.
 
 Rationale: the one-in-one-out load rule has no graceful exit; today projects and areas end by silent abandonment, which is exactly how guilt accretes. Quitting well is a skill the operator's profile records as never taught; the system can make it a ceremony instead of a shame.
 
 Acceptance criteria:
 
-- Closure is an explicit, operator-initiated operation on any project or area: an AI-drafted post-mortem (what it was for, what got done, wins extracted to the log, one lessons line to the chronicle), one-pass approved.
-- Terminal status is a binary choice: **COMPLETE** (it did its job) or **RELEASED** (we chose to stop). The status **"failed" does not exist** — the distinction is the feature. Archive follows.
+- Closure is an explicit, operator-initiated operation on any project or area — never automatic, never triggered by aging, inactivity, or any other proactive surface (Initiative Ladder, FR-032, does not raise this above I0/user-initiated).
+- The system drafts a post-mortem covering three things: what the project/area was for, what got done, and one lessons line. The draft is presented as a single L1 proposal (ADR 0002 D1 — the owner approves the whole draft in one pass; this is never a pre-filled auto-execute L2 default). On approval it persists as `closure_summary` on the project/area row (additive; see `docs/DATA_MODEL.md` 4.17 sketch).
+- On approval, wins worth keeping are extracted into the existing wins log — `win_records` (FR-020, shipped slice S7; `createWinRecord` in `apps/web/src/lib/data/workflow/rollups.ts`) — through the same user-confirmed-only path already shipped for weekly review. Closure does not bypass or duplicate that gate, and adds no parallel wins mechanism.
+- Terminal status is a binary choice the operator makes as part of the one-pass approval: **COMPLETE** (it did its job) or **RELEASED** (we chose to stop). The status **"failed" does not exist** — no code path, schema value, or copy string may express it; the COMPLETE/RELEASED distinction is the feature, not a euphemism for one.
+- Archive follows: closure always ends with the project/area in its existing terminal archived state — `status = 'archived'` for projects, `is_active = false` for areas (both existing values; no new status is introduced, per `docs/DATA_MODEL.md` section 11's guardrail against status expansion). What distinguishes a ritual closure from an ordinary archive/deactivate (FR-001's existing plain toggle, unchanged) is the populated `closure_type` + `closure_summary` + `closed_at` recorded alongside it.
+- As an AI judgment surface, the ritual is born instrumented per NS-INV-3 from its first merge: stable policy id `closure_ritual.v1`, a `suggestion_records` row for the drafted post-mortem, and an `override_records` row for any hand-edit or hand-written replacement.
+- Degradation: if the AI post-mortem draft fails or is unavailable, the operator writes the post-mortem by hand on the same one-pass approval surface. Closure is never blocked by AI availability (NFR-004 precedent).
 
 Non-goals (binding):
 
-- Auto-running closure (always operator-initiated).
-- Any penalty, score, or "abandoned" framing.
+- Auto-running closure on any trigger (aging, inactivity, rupture protocol, or any other proactive surface) — always operator-initiated.
+- Any penalty, score, or "abandoned"/"failed" framing, in copy or in data.
+- Bulk closure (closing multiple projects/areas in one action) — v1 is one closure, one ceremony, one post-mortem.
+- Deleting any data. Closure archives; it never deletes captures, tasks, wins, or history.
 
 ---
 
