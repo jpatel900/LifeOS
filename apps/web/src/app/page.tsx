@@ -20,18 +20,32 @@ import { isMomentsHomeEnabled } from "@/lib/flags";
 // cockpit routes, without touching TodayMoments' own markup or the
 // dev-only /moments-preview route (which has its own wrapper).
 //
-// #477: CaptureAffordance floats `fixed bottom-6` with a footprint of
-// ~94px from the viewport's bottom edge (its own rendered height, up to
-// ~70px once "Capture a thought" wraps to two lines at narrow widths,
-// plus the 24px bottom-6 offset) — unaffected by scroll, since `fixed`
-// pins it to the viewport, not the document. On a short page (e.g. the
-// Start moment's empty state) the last content row — the Pipeline
-// disclosure — sits at the natural end of the flow, which on scroll
-// lands directly under the pill with no shell-level clearance reserved
-// for it. `pb-32` (128px) reserves comfortably more than that footprint
-// so the last row always clears the pill regardless of content height,
-// at any width (the pill's size/position don't change per breakpoint,
-// so this isn't a `sm:` variant like the surrounding px/pt).
+// #477: CaptureAffordance floats `fixed bottom-[calc(...)]` with a footprint
+// of ~44-70px from the viewport's bottom edge (its own rendered height, plus
+// the ~24px safe-area-aware offset — see CaptureAffordance.tsx's #553
+// comment) — unaffected by scroll, since `fixed` pins it to the viewport,
+// not the document. On a short page (e.g. the Start moment's empty state)
+// the last content row — the Pipeline disclosure — sits at the natural end
+// of the flow, which on scroll lands directly under the pill with no
+// shell-level clearance reserved for it. MomentsThemeShell's bottom padding
+// reserves comfortably more than that footprint so the last row always
+// clears the pill regardless of content height, at any width (the pill's
+// size/position don't change per breakpoint, so this isn't a `sm:` variant
+// like the surrounding px/pt).
+//
+// #553: this guarantee is scoped to the scrolled-to-end position, same as
+// #477 established — a viewport-fixed, always-visible pill can transiently
+// sit over whatever content occupies its band at other scroll offsets (e.g.
+// the Areas card, on the Start moment's default unscrolled load, if the page
+// is only slightly taller than the viewport). Eliminating that entirely
+// would require either giving up "always available without scrolling" or a
+// bigger structural change (bounding this shell to its own internally
+// scrolled pane) than this fix's scope — see the tradeoff note on the #553
+// e2e guard in tests/e2e/moments-home-parity.spec.ts. What #553 does fix:
+// the pill respects the safe-area inset (CaptureAffordance.tsx), and a
+// shrink-to-fit centering bug that forced the short mobile label to wrap to
+// two lines — inflating the pill's footprint and the terminal clearance it
+// needs — is corrected, so the pill is no larger than it needs to be.
 //
 // D-1 (issue #483): `moments-home` (globals.css) layers the prototype's
 // subtle radial accent tint behind `.lifeos-cockpit`'s flat `--bd`

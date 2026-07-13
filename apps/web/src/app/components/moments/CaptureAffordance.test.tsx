@@ -94,4 +94,25 @@ describe("CaptureAffordance", () => {
     render(<CaptureAffordance onOpen={vi.fn()} />);
     expect(screen.getByTestId("capture-affordance")).toHaveTextContent("C");
   });
+
+  // #553: fixed-to-viewport-bottom positioning, above the safe-area inset,
+  // is a hard requirement on small screens (see #477's e2e geometry guard
+  // and this suite's #553 addition in tests/e2e/moments-home-parity.spec.ts
+  // for the real-layout intersection proof — jsdom does not compute real
+  // layout, so this checks the classes that encode the contract instead).
+  // `inset-x-0 mx-auto w-fit` (not `left-1/2 -translate-x-1/2`) is the
+  // centering technique — see CaptureAffordance.tsx's #553 comment for the
+  // shrink-to-fit width bug that technique caused.
+  it("stays fixed to the viewport bottom, above the safe-area inset", () => {
+    render(<CaptureAffordance onOpen={vi.fn()} />);
+    const button = screen.getByTestId("capture-affordance");
+    expect(button).toHaveClass("fixed");
+    expect(button).toHaveClass(
+      "bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]",
+    );
+    expect(button).toHaveClass("inset-x-0");
+    expect(button).toHaveClass("mx-auto");
+    expect(button).toHaveClass("w-fit");
+    expect(button).toHaveClass("z-40");
+  });
 });

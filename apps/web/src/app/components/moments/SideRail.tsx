@@ -108,7 +108,10 @@ export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
         </CardContent>
       </Card>
 
-      <Card className="workflow-support-card moments-card">
+      <Card
+        className="workflow-support-card moments-card"
+        data-testid="side-rail-areas-card"
+      >
         <CardHeader className="pb-2">
           <CardTitle className="moments-label text-sm tracking-tight">
             Areas
