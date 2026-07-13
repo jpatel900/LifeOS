@@ -146,9 +146,30 @@ Each lane's root verifies its own subagents' work (Claude adds the
 visual/experience gate on anything rendered). Cross-lane review is read-only:
 Claude reviews Codex PRs for usability/interaction/a11y; Codex reviews Claude
 PRs for contract/regression. The authoring lane fixes its own branch; neither
-lane edits the other's branch. **Claude lane is the single merge point for
-both lanes** and posts "dependency merged at <sha>, rebase clear" on dependent
-PRs when their dependency lands.
+lane edits the other's branch.
+
+**Integration ownership:** Claude lane is the single integration point — it
+harvests, applies, independently verifies, and merges Codex-lane work
+(Codex-authored deliveries may be patch-only with no PR; the harvest replaces
+the PR flow). Claude-AUTHORED PRs remain owner-merged under the existing
+self-approval classifier — Claude prepares them (evidence complete, checks
+green, marked ready) but does not merge its own work.
+
+When a dependency lands, the integrating root posts on the dependent
+issue/PR:
+
+```text
+DEPENDENCY-INTEGRATED v1
+Dependency: #<issue>
+Source commit: <sha of the delivering lane's commit>
+Applied as: <integrating-branch SHA>
+Base: <current origin/main SHA>
+Verification:
+- <commands and decisive output>
+Overlap result:
+- <what was retained unchanged / what stays separately attributable>
+Integration status: clear | blocked
+```
 
 ## Claim release
 
