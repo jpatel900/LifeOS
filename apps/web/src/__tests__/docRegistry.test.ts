@@ -57,6 +57,10 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/implementation-planning/plan-task-map-contract.md",
   "docs/implementation-planning/plan-dual-critical-path.md",
   "docs/implementation-planning/U3-live-in-it-onramp.md",
+  // Owner-commissioned external UX audit (2026-07-13), preserved verbatim as
+  // the canonical debt source for epic #555; added under the owner's active
+  // continuous-loop order (owner directive: take this audit seriously).
+  "docs/design/ux-audit-2026-07-13-codex.md",
 ]);
 
 const CANONICAL_ALLOWLIST_PATTERNS = [
