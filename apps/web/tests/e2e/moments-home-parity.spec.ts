@@ -40,19 +40,38 @@ test.describe("moments home parity (/moments-preview)", () => {
     await page.getByTestId("capture-affordance").click();
     const dialog = page.getByRole("dialog", { name: "Capture a thought" });
     await expect(dialog).toBeVisible();
-    await page
-      .getByTestId("capture-overlay-textarea")
-      .fill("Mock mode parse proof capture");
-    await page.getByTestId("capture-overlay-textarea").press("Enter");
+    const textarea = page.getByTestId("capture-overlay-textarea");
+    await textarea.fill("Mock mode parse proof capture");
+    await page.getByTestId("capture-overlay-return-hook").fill("the inbox");
+    await textarea.press("Enter");
+
+    // #556 FR-026 containment: held in context through the wait — the raw
+    // text and return hook stay fully visible, the dialog does not close the
+    // instant Enter is pressed, and no capture can begin again while this
+    // one is in flight (Close is disabled).
+    await expect(dialog).toBeVisible();
+    await expect(textarea).toHaveValue("Mock mode parse proof capture");
+    await expect(page.getByTestId("capture-overlay-return-hook")).toHaveValue(
+      "the inbox",
+    );
+    await expect(page.getByTestId("capture-overlay-close")).toBeDisabled();
 
     // The real parity claim (mirrors capture-parse-mock.spec.ts): the moments
-    // capture surface round-trips through /api/parse-capture in mock mode. The
-    // "Captured" toast is transient (~2.5s) and intentionally not asserted here.
+    // capture surface round-trips through /api/parse-capture in mock mode.
     const parseResponse = await parseResponsePromise;
     expect(parseResponse.status()).toBe(200);
     const body = await parseResponse.json();
     expect(body.ok).toBe(true);
     expect(body.parser).toBe("mock");
+
+    // Containment's closing beat, still inside the dialog before it closes:
+    // the "back to: <hook>" conclusion.
+    await expect(page.getByTestId("capture-overlay-conclusion")).toContainText(
+      "back to: the inbox",
+    );
+
+    // The "Captured" toast is transient (~2.5s) and intentionally not
+    // asserted here.
     await expect(dialog).toBeHidden();
 
     // #551 state truth: the capture just landed in triage as a pending

@@ -70,7 +70,7 @@ const REVISED_GRAPH = {
 
 async function captureAndEnterFlow(page: Page, title: string) {
   await page.goto("/capture");
-  await page.getByRole("textbox").fill(title);
+  await page.getByPlaceholder("Drop the thought here.").fill(title);
 
   const parseResponsePromise = page.waitForResponse(
     (response) =>

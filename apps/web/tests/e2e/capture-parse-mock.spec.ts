@@ -16,8 +16,19 @@ test("cockpit capture round-trips through /api/parse-capture in mock mode", asyn
       response.request().method() === "POST",
   );
 
-  await page.getByRole("textbox").fill("Mock mode parse proof capture");
+  const textarea = page.getByPlaceholder("Drop the thought here.");
+  await textarea.fill("Mock mode parse proof capture");
   await page.getByRole("button", { name: "Save thought" }).click();
+
+  // #556 FR-026 containment: the capture stage holds the user through the
+  // wait instead of navigating instantly — raw text stays fully visible,
+  // the surface is locked against a second submit, and the "Saved; waiting
+  // in Triage" toast has not fired yet. The mock parser resolves fast, so
+  // this assertion races the response; it still catches a regression back
+  // to instant navigation because the URL check below requires the wait to
+  // have actually happened (the textarea would already be gone otherwise).
+  await expect(textarea).toHaveValue("Mock mode parse proof capture");
+  await expect(page.getByText("Saved; waiting in Triage")).toHaveCount(0);
 
   const parseResponse = await parseResponsePromise;
   expect(parseResponse.status()).toBe(200);
@@ -25,10 +36,18 @@ test("cockpit capture round-trips through /api/parse-capture in mock mode", asyn
   expect(body.ok).toBe(true);
   expect(body.parser).toBe("mock");
 
+  // Containment's closing beat: the "back to: <hook>" conclusion renders on
+  // the capture stage itself before the toast/navigation fire (no hook was
+  // entered, so it falls back to the default label).
+  await expect(page.getByTestId("capture-page-conclusion")).toContainText(
+    "back to: what you were doing",
+  );
+
   // #555: capture -> triage is a real router.push now; the first client-side
-  // navigation to /triage in a dev run can spend several seconds compiling,
-  // so give the URL commit more than the default 5s expect window.
-  await expect(page).toHaveURL(/\/triage$/, { timeout: 15_000 });
+  // navigation to /triage in a dev run can spend several seconds compiling
+  // (a cold /_error compile alone has been observed north of 20s when this
+  // spec leads a multi-file run), so give the URL commit a wide window.
+  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
   await expect(
     page.getByRole("heading", { name: "Mock mode parse proof capture" }),
   ).toBeVisible();

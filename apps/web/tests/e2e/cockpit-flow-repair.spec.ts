@@ -9,8 +9,16 @@ async function goToStage(page: Page, stage: RegExp) {
 
 async function captureTask(page: Page, title: string) {
   await page.goto("/capture");
-  await page.getByRole("textbox").fill(title);
+  await page.getByPlaceholder("Drop the thought here.").fill(title);
   await page.getByRole("button", { name: "Save thought" }).click();
+  // #556 FR-026: saving no longer navigates instantly — the capture stage
+  // holds the user through the parse wait (raw text + hook visible, no
+  // second submit possible) and only navigates to Triage once the parse
+  // truly resolves ("back to: <hook>" conclusion). Every caller of this
+  // helper immediately assumes it landed on /triage, so wait for that here.
+  // 30s: the first capture-submit of a dev run can hit multi-second cold
+  // compiles (/_error, /triage) that starve a 15s window under load.
+  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
 }
 
 async function planTaskAtEight(page: Page, title: string) {
@@ -54,7 +62,9 @@ test("all areas pipeline board includes work from every area", async ({
 
   await page.getByRole("button", { name: "Personal" }).click();
   await goToStage(page, /Capture/);
-  await page.getByRole("textbox").fill("Personal board repair item");
+  await page
+    .getByPlaceholder("Drop the thought here.")
+    .fill("Personal board repair item");
   await page.getByRole("button", { name: "Save thought" }).click();
 
   await page.getByRole("button", { name: "All areas" }).click();

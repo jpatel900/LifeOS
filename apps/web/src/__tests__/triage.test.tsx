@@ -56,7 +56,13 @@ describe("Triage cockpit", () => {
       },
     );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Someday" }));
+    // #556: navigation to Triage now only happens once the parse actually
+    // resolves (raw text + hook held in context through the wait, then the
+    // "back to: <hook>" conclusion) — under full-suite load that round trip
+    // can exceed RTL's 1000ms findBy default, so this waits longer.
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Someday" }, { timeout: 5000 }),
+    );
 
     expect(await screen.findByText("Inbox clear")).toBeDefined();
   });

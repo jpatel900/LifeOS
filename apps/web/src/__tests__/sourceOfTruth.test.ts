@@ -300,6 +300,13 @@ describe("source-of-truth boundaries", () => {
     const handoffReadme = normalizeWhitespace(
       readRepoFile("design_handoff_lifeos/README.md"),
     );
+    // #556: the capture stage's primary save action was extracted into the
+    // shared CaptureCore component (reused by every capture surface), so
+    // its label no longer appears as a literal string in the cockpit file
+    // itself — the cockpit composes CaptureCore instead.
+    const captureCore = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/moments/CaptureCore.tsx"),
+    );
 
     expect(cockpitRoute).toContain("LifeOSCockpit");
     for (const [source, stage] of [
@@ -318,7 +325,8 @@ describe("source-of-truth boundaries", () => {
     }
 
     expect(cockpit).toContain('data-testid="lifeos-cockpit"');
-    expect(cockpit).toContain("Save thought");
+    expect(cockpit).toContain("CaptureCore");
+    expect(captureCore).toContain("Save thought");
     expect(cockpit).toContain("Google writes are separate");
     expect(cockpit).toContain("All areas overview");
     expect(globalsCss).toContain(".lifeos-cockpit");
