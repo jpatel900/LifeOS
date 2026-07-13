@@ -130,6 +130,141 @@ describe("TriageSheet", () => {
     restoreFetch();
   });
 
+  it("renders the parsed draft's substance — area dot/name, type, estimate range, first move", async () => {
+    const restoreFetch = stubParseCaptureFetch();
+    renderSheet(true);
+
+    fireEvent.click(screen.getByTestId("seed-submit"));
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+    });
+
+    const item = screen.getByTestId(/^triage-sheet-item-/);
+    const draftId = item.dataset.testid?.replace("triage-sheet-item-", "");
+
+    const area = screen.getByTestId(`triage-sheet-area-${draftId}`);
+    expect(area).toBeInTheDocument();
+    expect(area.querySelector("span")).toHaveClass("rounded-full");
+
+    // The deterministic mock parser (AI off) always fills task_type "task",
+    // an estimate range, and a first_tiny_step — so all three render.
+    expect(
+      screen.getByTestId(`triage-sheet-type-${draftId}`),
+    ).toHaveTextContent("Task");
+    expect(
+      screen.getByTestId(`triage-sheet-estimate-${draftId}`),
+    ).toHaveTextContent(/^~\d+.\d+m$/);
+    expect(
+      screen.getByTestId(`triage-sheet-first-move-${draftId}`),
+    ).toHaveTextContent("First move:");
+
+    restoreFetch();
+  });
+
+  it("omits the first-move line when first_tiny_step is absent", async () => {
+    const restoreFetch = stubParseCaptureFetch();
+
+    function EditBridge() {
+      const { state, submitCaptureText, editTaskDraft } = useWorkflow();
+      const draft = state.taskDrafts[0];
+      return (
+        <div>
+          <button
+            type="button"
+            data-testid="seed"
+            onClick={() => submitCaptureText("Draft the proposal", null)}
+          >
+            Seed
+          </button>
+          <button
+            type="button"
+            data-testid="clear-first-step"
+            onClick={() =>
+              draft && editTaskDraft(draft.id, { first_tiny_step: null })
+            }
+          >
+            Clear first step
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <WorkflowProvider>
+        <EditBridge />
+        <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("seed"));
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+    });
+    const item = screen.getByTestId(/^triage-sheet-item-/);
+    const draftId = item.dataset.testid?.replace("triage-sheet-item-", "");
+    expect(
+      screen.getByTestId(`triage-sheet-first-move-${draftId}`),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("clear-first-step"));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByTestId(`triage-sheet-first-move-${draftId}`),
+      ).not.toBeInTheDocument();
+    });
+
+    restoreFetch();
+  });
+
+  it("Do today routes the draft the same way the cockpit's onToday action does (accepted, active status)", async () => {
+    const restoreFetch = stubParseCaptureFetch();
+
+    function StateBridge() {
+      const { state, submitCaptureText } = useWorkflow();
+      const draft = state.taskDrafts[0];
+      return (
+        <div>
+          <span data-testid="draft-status">{draft?.status ?? "none"}</span>
+          <span data-testid="task-count">{state.tasks.length}</span>
+          <button
+            type="button"
+            data-testid="seed"
+            onClick={() => submitCaptureText("Draft the proposal", null)}
+          >
+            Seed
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <WorkflowProvider>
+        <StateBridge />
+        <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("seed"));
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+    });
+
+    const todayButtons = screen.getAllByTestId(/^triage-sheet-today-/);
+    expect(todayButtons.length).toBeGreaterThan(0);
+    fireEvent.click(todayButtons[0]);
+
+    // acceptTaskDraft (the same action LifeOSCockpit's TriageView wires to
+    // onToday) marks the draft accepted and creates a real task — the same
+    // state change as "active" acceptance, distinct from backlogTaskDraft.
+    await waitFor(() => {
+      expect(screen.getByTestId("draft-status")).toHaveTextContent("accepted");
+    });
+    expect(screen.getByTestId("task-count")).toHaveTextContent("1");
+
+    restoreFetch();
+  });
+
   it("links out to the full /triage view", () => {
     renderSheet(true);
     expect(screen.getByTestId("triage-sheet-open-full")).toHaveAttribute(
