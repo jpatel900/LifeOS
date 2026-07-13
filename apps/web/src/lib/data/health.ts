@@ -9,6 +9,33 @@ import { normalizeSupabaseRows } from "./supabaseRowNormalization";
 
 type HealthStatus = HealthCheck["status"];
 
+const PROVIDER_INCIDENT_WINDOW_MS = 30 * 60 * 1000;
+const PROVIDER_INCIDENT_FAILURE_THRESHOLD = 3;
+const PROVIDER_TRACE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+const providerFailureStatuses = new Set([
+  "failed",
+  "schema_failed",
+  "error",
+  "timeout",
+]);
+
+export interface ProviderIncidentTrace {
+  feature: string;
+  status: string;
+  created_at: string;
+  latency_ms?: number | null;
+}
+
+export interface ProviderIncident {
+  feature: string;
+  failedCount: number;
+  windowStartedAt: string;
+  windowEndedAt: string;
+  latestFailedAt: string;
+  latestLatencyMs: number | null;
+}
+
 export type HealthPersistenceStatus =
   | "not_applicable"
   | "skipped"
@@ -87,6 +114,79 @@ const coreReadTables = [
   "execution_sessions",
   "review_entries",
 ] as const;
+
+function isProviderFailure(status: string) {
+  return providerFailureStatuses.has(status.trim().toLowerCase());
+}
+
+function compareTraceTimes(
+  left: Pick<ProviderIncidentTrace, "created_at">,
+  right: Pick<ProviderIncidentTrace, "created_at">,
+) {
+  return (
+    new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
+  );
+}
+
+export function deriveProviderIncidents(
+  traces: ProviderIncidentTrace[],
+  now: Date,
+): ProviderIncident[] {
+  const nowMs = now.getTime();
+  const byFeature = new Map<string, ProviderIncidentTrace[]>();
+
+  for (const trace of traces) {
+    const feature = trace.feature.trim();
+    const traceMs = new Date(trace.created_at).getTime();
+
+    if (!feature || Number.isNaN(traceMs) || traceMs > nowMs) {
+      continue;
+    }
+
+    byFeature.set(feature, [...(byFeature.get(feature) ?? []), trace]);
+  }
+
+  const incidents: ProviderIncident[] = [];
+
+  for (const [feature, featureTraces] of byFeature) {
+    const ordered = [...featureTraces].sort(compareTraceTimes);
+    const latest = ordered.at(-1);
+
+    if (!latest || !isProviderFailure(latest.status)) {
+      continue;
+    }
+
+    const failures = ordered.filter((trace) => isProviderFailure(trace.status));
+
+    for (let startIndex = 0; startIndex < failures.length; startIndex += 1) {
+      const windowStart = new Date(failures[startIndex].created_at).getTime();
+      const windowFailures = failures.filter((trace) => {
+        const traceMs = new Date(trace.created_at).getTime();
+        return (
+          traceMs >= windowStart &&
+          traceMs <= windowStart + PROVIDER_INCIDENT_WINDOW_MS
+        );
+      });
+
+      if (windowFailures.length >= PROVIDER_INCIDENT_FAILURE_THRESHOLD) {
+        const latestFailure = windowFailures.at(-1)!;
+        incidents.push({
+          feature,
+          failedCount: windowFailures.length,
+          windowStartedAt: windowFailures[0].created_at,
+          windowEndedAt: latestFailure.created_at,
+          latestFailedAt: latestFailure.created_at,
+          latestLatencyMs: latestFailure.latency_ms ?? null,
+        });
+        break;
+      }
+    }
+  }
+
+  return incidents.sort((left, right) =>
+    left.feature.localeCompare(right.feature),
+  );
+}
 
 function getErrorCode(error: unknown) {
   if (
@@ -383,6 +483,110 @@ function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
   return checks;
 }
 
+async function readProviderIncidentTraces(
+  client: MinimalHealthSupabaseClient,
+  now: Date,
+): Promise<ProviderIncidentTrace[]> {
+  const since = new Date(
+    now.getTime() - PROVIDER_TRACE_LOOKBACK_MS,
+  ).toISOString();
+  const query = client.from("ai_call_traces") as {
+    select: (columns: string) => {
+      gte: (
+        column: string,
+        value: string,
+      ) => {
+        order: (
+          column: string,
+          options: { ascending: boolean },
+        ) => {
+          limit: (count: number) => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .select("surface,validation_outcome,created_at,latency_ms")
+    .gte("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(200);
+
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+
+  const rows = normalizeSupabaseRows(data) as unknown[];
+
+  return rows.flatMap((row: unknown) => {
+    if (!row || typeof row !== "object") {
+      return [];
+    }
+
+    const candidate = row as Record<string, unknown>;
+
+    if (
+      typeof candidate.surface !== "string" ||
+      typeof candidate.validation_outcome !== "string" ||
+      typeof candidate.created_at !== "string"
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        feature: candidate.surface,
+        status: candidate.validation_outcome,
+        created_at: candidate.created_at,
+        latency_ms:
+          typeof candidate.latency_ms === "number"
+            ? candidate.latency_ms
+            : null,
+      },
+    ];
+  });
+}
+
+function providerIncidentCheck(incidents: ProviderIncident[]) {
+  if (incidents.length === 0) {
+    return makeCheck(
+      "health-ai-provider-incidents",
+      "AI provider incidents",
+      "healthy",
+      100,
+      "No repeated AI-provider failures were found in recent trace data.",
+      {
+        incident_count: 0,
+        window_minutes: 30,
+        threshold: PROVIDER_INCIDENT_FAILURE_THRESHOLD,
+        repair_steps: [],
+      },
+    );
+  }
+
+  return makeCheck(
+    "health-ai-provider-incidents",
+    "AI provider incidents",
+    "watch",
+    55,
+    `${incidents.length} AI provider incident${incidents.length === 1 ? "" : "s"} found from repeated recent failures. Capture stays safe; check the affected AI path before relying on it.`,
+    {
+      incident_count: incidents.length,
+      affected_features: incidents.map((incident) => incident.feature),
+      latest_failed_at: incidents.reduce(
+        (latest, incident) =>
+          incident.latestFailedAt > latest ? incident.latestFailedAt : latest,
+        incidents[0].latestFailedAt,
+      ),
+      window_minutes: 30,
+      threshold: PROVIDER_INCIDENT_FAILURE_THRESHOLD,
+      repair_steps: [
+        "Review recent AI provider errors and retry after the provider recovers.",
+      ],
+    },
+  );
+}
+
 async function readAreas(client: MinimalHealthSupabaseClient) {
   const query = client.from("areas") as {
     select: (columns: string) => {
@@ -596,7 +800,8 @@ export async function getHealthDashboard(
   client: MinimalHealthSupabaseClient | null,
   options: HealthDashboardOptions = {},
 ): Promise<HealthDashboardResult> {
-  const checkedAt = (options.now ?? (() => new Date()))().toISOString();
+  const now = (options.now ?? (() => new Date()))();
+  const checkedAt = now.toISOString();
   const observability =
     options.observability ?? getObservabilityHealthSnapshot();
   const supabaseConfigured = options.supabaseConfigured ?? client !== null;
@@ -798,6 +1003,27 @@ export async function getHealthDashboard(
 
     checks.push(await probeTransitionRpcs(client));
     checks.push(await probeCoreReads(client));
+
+    try {
+      const traces = await readProviderIncidentTraces(client, now);
+      checks.push(providerIncidentCheck(deriveProviderIncidents(traces, now)));
+    } catch (error) {
+      checks.push(
+        makeCheck(
+          "health-ai-provider-incidents",
+          "AI provider incidents",
+          "watch",
+          60,
+          normalizeSupabaseFailureSummary(
+            error instanceof Error ? error.message : "",
+            "Unable to read recent AI provider trace data.",
+          ),
+          {
+            repair_steps: ["Check ai_call_traces grants, RLS, and auth state."],
+          },
+        ),
+      );
+    }
   } else {
     checks.push(
       informationalCheck(
