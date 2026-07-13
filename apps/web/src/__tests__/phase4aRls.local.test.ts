@@ -6,6 +6,7 @@ import {
 } from "@/lib/data/workflow";
 
 const runLocalRlsTests = process.env.RUN_SUPABASE_RLS_TESTS === "1";
+// QA doctrine #269: deliberate local RLS opt-in gate; default runs skip until RUN_SUPABASE_RLS_TESTS=1 provides local Supabase proof.
 const describeLocalRls = runLocalRlsTests ? describe : describe.skip;
 
 const supabaseUrl =
