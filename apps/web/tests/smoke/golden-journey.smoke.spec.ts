@@ -243,10 +243,12 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
  * Absent that var, this leg is skipped and the default run never writes.
  */
 test("opt-in: explicit Google write against SMOKE_GOOGLE_TEST_CALENDAR_ID", async () => {
+  // QA doctrine #269: deliberate external-write opt-in gate; default smoke runs skip unless an explicit low-risk test calendar id is supplied.
   test.skip(
     !env.googleTestCalendarId,
     "SMOKE_GOOGLE_TEST_CALENDAR_ID not set; external write path is intentionally not exercised.",
   );
+  // QA doctrine #269: deliberate provider-auth opt-in gate; Google write proof requires SMOKE_EMAIL/SMOKE_PASSWORD and Supabase env.
   test.skip(
     !canAuthenticate(env),
     "authenticated session required to exercise the Google write path.",

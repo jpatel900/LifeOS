@@ -78,15 +78,18 @@ test.describe("degraded-mode: designed states, not crashes", () => {
   }) => {
     // The authed branch must ALSO be a designed state, never a crash. This
     // leg needs a live provider, so it skips (does not fail) without it.
+    // QA doctrine #269: deliberate provider-auth opt-in gate; default smoke runs skip without SMOKE_EMAIL/SMOKE_PASSWORD and Supabase env.
     test.skip(
       !canAuthenticate(env),
       "authenticated Google status needs SMOKE_EMAIL/SMOKE_PASSWORD + Supabase env",
     );
 
     const loggedIn = await login(page, env);
+    // QA doctrine #269: deliberate live-login dependency gate; skip records unavailable auth state instead of hiding test debt.
     test.skip(!loggedIn, "login failed; skipping authenticated Google probe");
 
     const accessToken = await readSupabaseAccessToken(page);
+    // QA doctrine #269: deliberate browser-session token gate; authenticated Google probe cannot run without a Supabase bearer token.
     test.skip(!accessToken, "no Supabase access token available after login");
 
     const authed = await request.get("/api/google-calendar/connection", {
