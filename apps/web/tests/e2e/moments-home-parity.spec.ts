@@ -54,6 +54,14 @@ test.describe("moments home parity (/moments-preview)", () => {
     expect(body.ok).toBe(true);
     expect(body.parser).toBe("mock");
     await expect(dialog).toBeHidden();
+
+    // #551 state truth: the capture just landed in triage as a pending
+    // draft, so the Start column must show that visibly rather than still
+    // reading "Nothing queued".
+    await expect(page.getByTestId("start-pending-triage")).toBeVisible();
+    await expect(page.getByTestId("start-pending-triage")).toHaveText(
+      /waiting for a decision/,
+    );
   });
 
   // Parity with the golden-journey / cockpit-flow-repair "start -> execute ->

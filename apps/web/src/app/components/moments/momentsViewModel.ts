@@ -715,6 +715,7 @@ export interface DaySynthesisInput {
   focusFilledCount: number;
   focusBudget: number;
   deferredCount: number;
+  pendingTriageCount: number;
 }
 
 /**
@@ -736,12 +737,32 @@ export interface DaySynthesisInput {
  *    with a parenthetical "(N deferred)" suffix appended only when
  *    `deferredCount > 0` (never hidden — mirrors the FocusList's own
  *    never-hide-deferred rule).
+ *
+ * #551 (state truth, UX audit P0-1): the sentence must also account for
+ * triage-pending drafts (`pendingTriageCount`, same derivation the Start
+ * column's pending-triage line uses). An otherwise-empty day with pending
+ * drafts must NOT claim "nothing queued" — it says the thought(s) are
+ * waiting for a decision instead; any other combination appends that as a
+ * second sentence.
  */
 export function buildDaySynthesis(input: DaySynthesisInput): string {
-  const { todayBlockCount, focusFilledCount, focusBudget, deferredCount } =
-    input;
+  const {
+    todayBlockCount,
+    focusFilledCount,
+    focusBudget,
+    deferredCount,
+    pendingTriageCount,
+  } = input;
+
+  const pendingSentence =
+    pendingTriageCount === 1
+      ? "1 thought waiting for a decision."
+      : `${pendingTriageCount} thoughts waiting for a decision.`;
 
   if (todayBlockCount === 0 && focusFilledCount === 0 && deferredCount === 0) {
+    if (pendingTriageCount > 0) {
+      return `Nothing on the calendar yet — ${pendingSentence}`;
+    }
     return "Nothing on the calendar and nothing queued — capture something to get moving.";
   }
 
@@ -758,7 +779,8 @@ export function buildDaySynthesis(input: DaySynthesisInput): string {
   const deferredSuffix =
     deferredCount > 0 ? ` (${deferredCount} deferred)` : "";
 
-  return `${blocksPart} — ${focusPart}${deferredSuffix}.`;
+  const base = `${blocksPart} — ${focusPart}${deferredSuffix}.`;
+  return pendingTriageCount > 0 ? `${base} ${pendingSentence}` : base;
 }
 
 /** Start moment view model — today's schedule, first move, waiting-on, area health. */
@@ -813,6 +835,9 @@ export function buildStartVM(
     focusFilledCount: focusItems.length,
     focusBudget,
     deferredCount: deferredItems.length,
+    // #551: single-sourced — the same `pendingTriage` derivation feeding
+    // `counts.pendingTriage` below, computed once above.
+    pendingTriageCount: pendingTriage,
   });
 
   return {
