@@ -175,6 +175,75 @@ test.describe("moments home capture pill clears the Pipeline row (#477)", () => 
   }
 });
 
+// #553 (2026-07-13 owner-lens audit): at 390x844 the pill visibly covered two
+// rows of the Areas card (side-rail-areas-card, SideRail.tsx) on the Start
+// moment's default empty-state load. As #477's comment above documents, a
+// viewport-fixed always-visible pill can transiently sit over whatever
+// content occupies its band at scroll offsets other than the true end of the
+// page — that's inherent to a persistent FAB and not something bottom
+// padding can fix (padding only reserves space *after* the last child; it
+// cannot move earlier content, like the Areas card, out of the pill's band
+// before the user scrolls). What IS a real, fixable regression is the pill
+// still sitting over the Areas card once the page is scrolled all the way to
+// its true end — exactly the guarantee #477 established for the Pipeline
+// row and MomentsThemeShell's reserved bottom padding is supposed to
+// provide. This extends that same guard to the Areas card, at the issue's
+// literal 390px viewport plus a 1280px desktop case to prove no regression
+// there (the pill's size/position is breakpoint-independent — see #477's
+// page.tsx comment — so desktop, whose content is short enough to never
+// need scrolling, should already pass and stays a non-regression check).
+test.describe("moments home capture pill clears the Areas card (#553)", () => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1280, height: 900 },
+  ]) {
+    test(`capture pill does not intersect the Areas card at ${viewport.width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const pill = page.getByTestId("capture-affordance");
+      const areasCard = page.getByTestId("side-rail-areas-card");
+      await expect(pill).toBeVisible();
+      await expect(areasCard).toBeVisible();
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+
+      const pillBox = await pill.boundingBox();
+      const areasBox = await areasCard.boundingBox();
+      expect(pillBox).not.toBeNull();
+      expect(areasBox).not.toBeNull();
+
+      const intersects =
+        pillBox!.x < areasBox!.x + areasBox!.width &&
+        pillBox!.x + pillBox!.width > areasBox!.x &&
+        pillBox!.y < areasBox!.y + areasBox!.height &&
+        pillBox!.y + pillBox!.height > areasBox!.y;
+
+      expect(intersects).toBe(false);
+    });
+  }
+});
+
+// MANUAL VERIFICATION NOTE (#553): what this guard does not, and cannot,
+// prove — on the Start moment's default *unscrolled* load at 390px, the
+// pill still visibly sits over the bottom of the Areas card (verified by
+// screenshot during this fix; scroll=0 pill/Areas bounding boxes do
+// intersect). #553's centering fix (CaptureAffordance.tsx) shrank the pill
+// from two lines/~70px tall to one line/~46px, which measurably reduces how
+// much of the card it covers, but does not eliminate the overlap — doing
+// that fully would mean either giving up "always visible without
+// scrolling" or bounding this shell to its own internally-scrolled pane
+// (a structural change out of scope for this fix; see MomentsThemeShell.tsx
+// and page.tsx for the tradeoff notes). Flagged for a follow-up product
+// decision (e.g. auto-hiding the pill while scrolling, or condensing the
+// empty-state's Waiting-on/Areas cards) rather than silently declared fixed.
+
 // D-6 (#483): the bottom-left keyboard legend (KeyboardLegend.tsx) must never
 // overlap or crowd the fixed capture pill. The legend hides below `sm`
 // (matching the prototype's own <720px cutoff) so mobile is a visibility

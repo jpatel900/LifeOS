@@ -21,9 +21,37 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * owner feedback on #483 (2026-07-10) was to keep density in check rather
  * than port clutter, and the longer sentence wrapping to extra lines on
  * narrow viewports would grow the pill's footprint past the clearance
- * `MomentsHomeShell`'s `pb-32` reserves (see page.tsx) and risk crowding the
- * Pipeline row the #477 e2e guard checks. The shortcut hint and all click/
- * disabled behavior are unchanged.
+ * `MomentsHomeShell`'s bottom padding reserves (see page.tsx) and risk
+ * crowding the Pipeline row the #477 e2e guard checks. The shortcut hint and
+ * all click/disabled behavior are unchanged.
+ *
+ * #553 (2026-07-13 owner-lens audit): two fixes.
+ *
+ * 1. `bottom-6` was a bare 24px offset with no `env(safe-area-inset-bottom)`
+ *    term, so on a device with a home-indicator safe area the pill sat 24px
+ *    above the *viewport* edge rather than 24px above the *safe* area —
+ *    closer to on-screen gesture chrome than the design intends.
+ *    `bottom-[calc(...)]` adds the env() term (0 on devices/browsers without
+ *    one, so desktop and non-notched viewports are pixel-identical to the
+ *    old `bottom-6`). See MomentsThemeShell.tsx for the matching
+ *    bottom-padding term that keeps the shell's reserved clearance in sync.
+ *
+ * 2. `left-1/2 -translate-x-1/2` (the previous centering technique) was a
+ *    real shrink-to-fit bug, not just a style preference: for a `fixed`
+ *    element with `left` set and `right` left `auto`, the browser computes
+ *    "available width" from `left` to the containing block's *far* edge —
+ *    i.e. from the viewport's horizontal midpoint, not its actual right
+ *    edge — before the `translate-x` recentering is ever applied (the
+ *    transform doesn't feed back into that layout pass). At 390px that capped
+ *    the pill's shrink-to-fit width at 195px regardless of its content's
+ *    natural width, forcing the short "Capture a thought" label to wrap to
+ *    two lines and inflating the pill to ~70px tall — 26px more of the
+ *    Areas card row band than the label actually needed. `inset-x-0 mx-auto
+ *    w-fit` centers the same way but gives shrink-to-fit the *full* viewport
+ *    width to measure against, so the label renders on one line at its
+ *    natural size (matching the `sm:` desktop pill, which never hit this
+ *    bug because its wider two-line-microcopy content already exceeded
+ *    195px and pushed past the cap visibly rather than wrapping tighter).
  */
 
 export interface CaptureAffordanceProps {
@@ -48,7 +76,7 @@ export function CaptureAffordance({
       aria-disabled={captureLocked}
       className={cn(
         HIT_TARGET_ROW,
-        "fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:hover:scale-100",
+        "fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] z-40 mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:hover:scale-100",
       )}
       data-testid="capture-affordance"
     >
