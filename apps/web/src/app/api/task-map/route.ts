@@ -236,6 +236,22 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
   };
 }
 
+async function verifyBearerToken(accessToken: string) {
+  const client = createSupabaseServerClient({ accessToken });
+
+  if (!client) {
+    return null;
+  }
+
+  const { data, error } = await client.auth.getUser();
+
+  if (error || !data.user) {
+    return null;
+  }
+
+  return client as MinimalSupabaseClient;
+}
+
 function countNodesByRole(nodes: { role: "required" | "optional" | "red" }[]) {
   return {
     required: nodes.filter((node) => node.role === "required").length,
@@ -275,11 +291,16 @@ export async function POST(request: Request) {
 
   if (!accessToken) {
     return Response.json(
-      {
-        ok: false,
-        error: "Sign in to generate a task map.",
-        errorCategory: "auth_rejected",
-      },
+      { ok: false, errorCategory: "auth_rejected" },
+      { status: 401 },
+    );
+  }
+
+  const client = await verifyBearerToken(accessToken);
+
+  if (!client) {
+    return Response.json(
+      { ok: false, errorCategory: "auth_rejected" },
       { status: 401 },
     );
   }
@@ -332,9 +353,6 @@ export async function POST(request: Request) {
     // detached fire-and-forget, because the caller needs the row id back to
     // resolve it on approve; a write failure degrades to a null
     // suggestionRecordId without affecting the draft response.
-    const client = createSupabaseServerClient({
-      accessToken,
-    }) as MinimalSupabaseClient | null;
     const suggestion = await recordTaskMapDraftSuggestion(client, {
       area_id: input.areaId,
       task_id: input.taskId,

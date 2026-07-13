@@ -57,6 +57,14 @@ describe("task-map route", () => {
       provider: "supabase",
       suggestionId: "11111111-1111-4111-8111-111111111111",
     });
+    mocks.createSupabaseServerClient.mockReturnValue({
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-a" } }, error: null }),
+      },
+      from: vi.fn(),
+    });
   });
 
   it("returns status from GET", async () => {
@@ -78,12 +86,37 @@ describe("task-map route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body).toEqual({
-      ok: false,
-      error: "Sign in to generate a task map.",
-      errorCategory: "auth_rejected",
+    expect(body).toEqual({ ok: false, errorCategory: "auth_rejected" });
+    expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
+    expect(mocks.generateTaskMapDraftWithFallback).not.toHaveBeenCalled();
+  });
+
+  it("rejects a request with an invalid bearer token before generating a draft", async () => {
+    mocks.createSupabaseServerClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+          error: new Error("bad jwt"),
+        }),
+      },
+      from: vi.fn(),
+    });
+
+    const response = await POST(
+      postRequest(
+        { taskId: "task-1", title: "Ship the report" },
+        { Authorization: "Bearer invalid-access-token" },
+      ),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ ok: false, errorCategory: "auth_rejected" });
+    expect(mocks.createSupabaseServerClient).toHaveBeenCalledWith({
+      accessToken: "invalid-access-token",
     });
     expect(mocks.generateTaskMapDraftWithFallback).not.toHaveBeenCalled();
+    expect(mocks.recordTaskMapDraftSuggestion).not.toHaveBeenCalled();
   });
 
   it("generates a draft and records a suggestion on success", async () => {
@@ -92,8 +125,6 @@ describe("task-map route", () => {
       parser: "ai",
       draft: validDraft,
     });
-    mocks.createSupabaseServerClient.mockReturnValue({ from: vi.fn() });
-
     const response = await POST(
       postRequest(
         { taskId: "task-1", areaId: "area-1", title: "Ship the report" },
@@ -108,6 +139,9 @@ describe("task-map route", () => {
     expect(body.suggestionRecordId).toBe(
       "11111111-1111-4111-8111-111111111111",
     );
+    expect(mocks.createSupabaseServerClient).toHaveBeenCalledWith({
+      accessToken: "user-a-access-token",
+    });
     expect(mocks.generateTaskMapDraftWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Ship the report" }),
       expect.objectContaining({
@@ -187,8 +221,6 @@ describe("task-map route", () => {
       parser: "ai",
       draft: validDraft,
     });
-    mocks.createSupabaseServerClient.mockReturnValue({ from: vi.fn() });
-
     const currentMap = {
       nodes: [
         { id: "step-1", title: "Gather inputs", role: "required", done: true },
@@ -238,8 +270,6 @@ describe("task-map route", () => {
       parser: "ai",
       draft: validDraft,
     });
-    mocks.createSupabaseServerClient.mockReturnValue({ from: vi.fn() });
-
     await POST(
       postRequest({ taskId: "task-1", title: "Ship the report" }, authHeaders),
     );
