@@ -61,6 +61,8 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   // the canonical debt source for epic #555; added under the owner's active
   // continuous-loop order (owner directive: take this audit seriously).
   "docs/design/ux-audit-2026-07-13-codex.md",
+  // Epic #555 item-1 design note (one shell / one renderer per URL).
+  "docs/implementation-planning/plan-one-shell-routing.md",
 ]);
 
 const CANONICAL_ALLOWLIST_PATTERNS = [
