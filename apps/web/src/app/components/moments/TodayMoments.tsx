@@ -294,8 +294,8 @@ export function TodayMoments({
     [railTaskId, toggleTaskMapNodeCompletion],
   );
   const pipelineCounts = useMemo(
-    () => buildPipelineCounts(state, selectedAreaId),
-    [state, selectedAreaId],
+    () => buildPipelineCounts(state, selectedAreaId, { now }),
+    [state, selectedAreaId, now],
   );
 
   useEffect(() => {

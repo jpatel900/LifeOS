@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
-import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
@@ -13,12 +12,9 @@ import {
   PIPELINE_OVERVIEW_STAGES,
 } from "./pipelineCounts";
 
-/** Pinned clock convention shared with momentsViewModel.test.ts. */
 const NOW = new Date("2026-07-05T12:00:00.000Z");
-
-function daysBefore(days: number): string {
-  return new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
-}
+const TODAY = "2026-07-05T09:00:00.000Z";
+const YESTERDAY = "2026-07-04T09:00:00.000Z";
 
 function makeArea(
   overrides: Partial<Phase2MockArea> & { id: string },
@@ -27,7 +23,7 @@ function makeArea(
     user_id: "user-1",
     name: `Area ${overrides.id}`,
     color: "#000000",
-    created_at: daysBefore(100),
+    created_at: YESTERDAY,
     ...overrides,
   };
 }
@@ -51,8 +47,8 @@ function makeTask(
     due_at: null,
     definition_of_done: null,
     first_tiny_step: null,
-    created_at: daysBefore(1),
-    updated_at: daysBefore(1),
+    created_at: YESTERDAY,
+    updated_at: YESTERDAY,
     ...overrides,
   } as Phase2MockTask;
 }
@@ -67,7 +63,7 @@ function makeCaptureItem(
     capture_mode: "text",
     inferred_area_confidence: null,
     status: "new",
-    created_at: daysBefore(1),
+    created_at: YESTERDAY,
     ...overrides,
   };
 }
@@ -89,7 +85,7 @@ function makeTaskDraft(
     person_mentions: [],
     is_commitment: false,
     status: "pending",
-    created_at: daysBefore(1),
+    created_at: YESTERDAY,
     ...overrides,
   };
 }
@@ -103,11 +99,11 @@ function makeBlock(
     proposal_id: null,
     task_id: null,
     google_event_id: null,
-    start_at: NOW.toISOString(),
-    end_at: NOW.toISOString(),
+    start_at: TODAY,
+    end_at: "2026-07-05T10:00:00.000Z",
     status: "scheduled",
-    created_at: daysBefore(1),
-    updated_at: daysBefore(1),
+    created_at: YESTERDAY,
+    updated_at: YESTERDAY,
     ...overrides,
   } as Phase2MockCalendarBlock;
 }
@@ -123,7 +119,7 @@ function makeSession(
     planned_minutes: null,
     actual_minutes: null,
     status: "running",
-    outcome: "completed",
+    outcome: "partial",
     ...overrides,
   };
 }
@@ -136,40 +132,7 @@ function stateWith(partial: Partial<WorkflowState>): WorkflowState {
   };
 }
 
-describe("buildPipelineCounts — fixture-driven", () => {
-  it("counts pending drafts, capture items, active tasks, planned blocks, and review items per stage", () => {
-    const state = stateWith({
-      captureItems: [
-        makeCaptureItem({ id: "cap-1", status: "new" }),
-        makeCaptureItem({ id: "cap-2", status: "triage_required" }),
-      ],
-      taskDrafts: [
-        makeTaskDraft({ id: "draft-1", status: "pending" }),
-        makeTaskDraft({ id: "draft-2", status: "accepted" }),
-      ],
-      tasks: [
-        makeTask({ id: "task-1", title: "Active one", status: "active" }),
-      ],
-      calendarBlocks: [
-        makeBlock({
-          id: "block-1",
-          status: "scheduled",
-          task_id: "task-scheduled",
-        }),
-      ],
-    });
-
-    const counts = buildPipelineCounts(state, "area-1");
-
-    expect(counts.capture).toBe(2);
-    expect(counts.triage).toBe(1);
-    expect(counts.plan).toBe(1);
-    expect(counts.execute).toBe(0); // block references a task not in `tasks` with status scheduled
-    // review = reviewQueue.length + sessions.length; reviewQueue includes
-    // every "today" (active) task with reason "open" per buildCockpitViewModel.
-    expect(counts.review).toBe(1);
-  });
-
+describe("buildPipelineCounts", () => {
   it("returns only the five non-today pipeline stages", () => {
     expect(PIPELINE_OVERVIEW_STAGES).toEqual([
       "capture",
@@ -179,53 +142,116 @@ describe("buildPipelineCounts — fixture-driven", () => {
       "review",
     ]);
   });
-});
 
-describe("buildPipelineCounts — agreement with the real cockpit nav badges", () => {
-  it("matches buildCockpitViewModel(...).counts for every pipeline stage", () => {
+  it("returns zero states when no stage has actionable work", () => {
+    expect(buildPipelineCounts(stateWith({}), "area-1", { now: NOW })).toEqual({
+      capture: 0,
+      triage: 0,
+      plan: 0,
+      execute: 0,
+      review: 0,
+    });
+  });
+
+  it("counts only raw captures not yet parsed or dispatched", () => {
     const state = stateWith({
-      areas: [makeArea({ id: "area-1" }), makeArea({ id: "area-2" })],
       captureItems: [
-        makeCaptureItem({ id: "cap-1", area_id: "area-1", status: "new" }),
-        makeCaptureItem({ id: "cap-2", area_id: "area-2", status: "new" }),
-      ],
-      taskDrafts: [
-        makeTaskDraft({ id: "draft-1", area_id: "area-1", status: "pending" }),
-      ],
-      tasks: [
-        makeTask({
-          id: "task-1",
-          title: "Active",
-          area_id: "area-1",
-          status: "active",
-        }),
-        makeTask({
-          id: "task-2",
-          title: "Scheduled",
-          area_id: "area-1",
-          status: "scheduled",
-        }),
-      ],
-      calendarBlocks: [
-        makeBlock({
-          id: "block-1",
-          area_id: "area-1",
-          status: "scheduled",
-          task_id: "task-2",
-        }),
-      ],
-      executionSessions: [
-        makeSession({ id: "session-1", area_id: "area-1", status: "stuck" }),
+        makeCaptureItem({ id: "cap-new", status: "new" }),
+        makeCaptureItem({ id: "cap-parsed", status: "parsed" }),
+        makeCaptureItem({ id: "cap-triage", status: "triage_required" }),
+        makeCaptureItem({ id: "cap-resolved", status: "resolved" }),
       ],
     });
 
-    for (const areaId of ["area-1", "area-2", null]) {
-      const ourCounts = buildPipelineCounts(state, areaId);
-      const cockpitVM = buildCockpitViewModel(state, areaId, false);
+    expect(buildPipelineCounts(state, "area-1", { now: NOW }).capture).toBe(1);
+  });
 
-      for (const stage of PIPELINE_OVERVIEW_STAGES) {
-        expect(ourCounts[stage]).toBe(cockpitVM.counts[stage]);
-      }
-    }
+  it("counts pending drafts and excludes accepted/rejected historical drafts", () => {
+    const state = stateWith({
+      taskDrafts: [
+        makeTaskDraft({ id: "draft-pending", status: "pending" }),
+        makeTaskDraft({ id: "draft-accepted", status: "accepted" }),
+        makeTaskDraft({ id: "draft-rejected", status: "rejected" }),
+      ],
+    });
+
+    expect(buildPipelineCounts(state, "area-1", { now: NOW }).triage).toBe(1);
+  });
+
+  it("counts do-today tasks that do not have an open block today", () => {
+    const state = stateWith({
+      tasks: [
+        makeTask({ id: "task-unplaced", title: "Unplaced" }),
+        makeTask({ id: "task-placed", title: "Placed" }),
+        makeTask({ id: "task-backlog", title: "Backlog", status: "backlog" }),
+      ],
+      calendarBlocks: [
+        makeBlock({ id: "block-today", task_id: "task-placed" }),
+      ],
+    });
+
+    expect(buildPipelineCounts(state, "area-1", { now: NOW }).plan).toBe(1);
+  });
+
+  it("counts planned-but-unstarted blocks today and excludes historical or started blocks", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({ id: "block-scheduled-today", task_id: "task-1" }),
+        makeBlock({
+          id: "block-scheduled-yesterday",
+          task_id: "task-2",
+          start_at: YESTERDAY,
+        }),
+        makeBlock({
+          id: "block-running-today",
+          task_id: "task-3",
+          status: "running",
+        }),
+        makeBlock({
+          id: "block-completed-today",
+          task_id: "task-4",
+          status: "completed",
+        }),
+      ],
+    });
+
+    expect(buildPipelineCounts(state, "area-1", { now: NOW }).execute).toBe(1);
+  });
+
+  it("counts today's sessions awaiting review and excludes historical sessions", () => {
+    const state = stateWith({
+      calendarBlocks: [
+        makeBlock({
+          id: "block-today",
+          task_id: "task-1",
+          status: "completed",
+        }),
+        makeBlock({
+          id: "block-yesterday",
+          task_id: "task-2",
+          status: "completed",
+          start_at: YESTERDAY,
+        }),
+      ],
+      executionSessions: [
+        makeSession({
+          id: "session-today",
+          calendar_block_id: "block-today",
+          status: "completed",
+        }),
+        makeSession({
+          id: "session-yesterday",
+          calendar_block_id: "block-yesterday",
+          status: "completed",
+        }),
+        makeSession({
+          id: "session-running",
+          calendar_block_id: "block-today",
+          status: "running",
+        }),
+      ],
+    });
+
+    expect(buildPipelineCounts(state, "area-1", { now: NOW }).review).toBe(1);
   });
 });
