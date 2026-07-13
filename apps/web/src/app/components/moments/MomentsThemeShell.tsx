@@ -55,7 +55,15 @@ export function MomentsThemeShell({ children }: { children: ReactNode }) {
           viewport (address bar hidden), which would under-reserve this
           padding once the toolbar is showing. */}
       <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+8rem)] pt-4 sm:px-6 sm:pt-6">
-        {children}
+        <a
+          href="#stage-content"
+          className="sr-only rounded-full bg-[var(--btn)] px-4 py-2 font-bold text-[var(--btn-fg)] focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+        >
+          Skip to stage content
+        </a>
+        <div id="stage-content" tabIndex={-1}>
+          {children}
+        </div>
       </div>
     </main>
   );
