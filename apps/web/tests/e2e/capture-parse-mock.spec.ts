@@ -25,7 +25,10 @@ test("cockpit capture round-trips through /api/parse-capture in mock mode", asyn
   expect(body.ok).toBe(true);
   expect(body.parser).toBe("mock");
 
-  await expect(page).toHaveURL(/\/triage$/);
+  // #555: capture -> triage is a real router.push now; the first client-side
+  // navigation to /triage in a dev run can spend several seconds compiling,
+  // so give the URL commit more than the default 5s expect window.
+  await expect(page).toHaveURL(/\/triage$/, { timeout: 15_000 });
   await expect(
     page.getByRole("heading", { name: "Mock mode parse proof capture" }),
   ).toBeVisible();

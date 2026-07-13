@@ -26,6 +26,11 @@ const warmRoutes = [
   "/review",
   "/settings/areas",
   "/health",
+  // #555 one-shell routing: in-app stage navigation is now a real router.push,
+  // so every stage route the specs reach in-app must be compiled up front —
+  // an on-demand dev compile mid-test can blow the specs' 5s expect window.
+  "/areas",
+  "/today",
   "/api/parse-capture",
 ];
 const serverLogBuffer = [];

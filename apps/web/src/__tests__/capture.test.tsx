@@ -4,14 +4,22 @@ import CapturePage from "../app/capture/page";
 import { AppShell } from "../app/components/AppShell";
 import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
+const mockPathname = vi.fn(() => "/capture");
+
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/capture",
+  usePathname: () => mockPathname(),
+  useRouter: () => ({
+    // Keep the mocked pathname in sync with in-app navigation so the
+    // pathname-derived stage actually transitions (Save thought -> triage).
+    push: (path: string) => mockPathname.mockReturnValue(path),
+  }),
 }));
 
 describe("Capture cockpit", () => {
   let restoreFetch: () => void;
 
   beforeEach(() => {
+    mockPathname.mockReturnValue("/capture");
     restoreFetch = stubParseCaptureFetch();
   });
 

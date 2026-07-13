@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { momentKeyLabel } from "@/lib/keys/keymap";
 import { useMomentKeyboard } from "./useMomentKeyboard";
@@ -149,6 +151,7 @@ export function TodayMoments({
   // (tests), the timer never arms: `now` stays exactly the injected value,
   // so existing and new deterministic tests are unaffected unless they
   // explicitly opt into the default-clock path.
+  const router = useRouter();
   const [autoNow, setAutoNow] = useState<Date>(() => new Date());
   useEffect(() => {
     if (nowProp) return undefined;
@@ -1170,6 +1173,13 @@ export function TodayMoments({
                 onChange={setTimeDisplay}
               />
               <MomentSwitcher value={moment} onChange={setMoment} />
+              <Link
+                href="/settings/areas"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                data-testid="moments-settings-link"
+              >
+                Settings
+              </Link>
             </div>
           </header>
 
@@ -1185,7 +1195,7 @@ export function TodayMoments({
               onStartMove={handleStartMove}
               onSnooze={() => showToast("Snoozed 10m")}
               onSwap={() => showToast("Looking for something else")}
-              onOpenHealth={() => showToast("Area health is on the roadmap")}
+              onOpenHealth={() => router.push("/health")}
               pipelineCounts={pipelineCounts}
               onDrillPipeline={handleDrillPipeline}
               onOpenRecovery={() => setMoment("close")}

@@ -9,6 +9,11 @@ import {
   workflowSeed,
 } from "./helpers/workflowReachability";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/calendar",
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 const STORAGE_KEY = "lifeos.phase2.workflow";
 const PROPOSAL_UUID = "3f2c8a34-9b1e-4c5d-8e2f-1a2b3c4d5e6f";
 const BLOCK_UUID = "9d8c7b6a-5f4e-4d3c-9b2a-0f1e2d3c4b5a";

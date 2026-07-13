@@ -63,6 +63,10 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/design/ux-audit-2026-07-13-codex.md",
   // Epic #555 item-1 design note (one shell / one renderer per URL).
   "docs/implementation-planning/plan-one-shell-routing.md",
+  // In-flight lane ledger for the two-harness (Claude + Codex) parallel
+  // workstreams — owner directive 2026-07-13. Both lanes check it before
+  // starting a slice; it lists per-slice file manifests to prevent collisions.
+  "docs/agent/LANES.md",
 ]);
 
 const CANONICAL_ALLOWLIST_PATTERNS = [

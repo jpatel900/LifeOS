@@ -45,6 +45,12 @@ test("all areas pipeline board includes work from every area", async ({
   page,
 }) => {
   await captureTask(page, "Main area board repair item");
+  // #555: saving navigates to /triage for real now, and a second capture
+  // submitted while the first parse is still in flight is dropped by the
+  // capture guard (WorkflowContext submitCaptureText) — settle the first
+  // parse (draft visible in triage) before starting the second capture.
+  await expect(page).toHaveURL(/\/triage$/, { timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Do today" })).toBeVisible();
 
   await page.getByRole("button", { name: "Personal" }).click();
   await goToStage(page, /Capture/);
@@ -52,6 +58,9 @@ test("all areas pipeline board includes work from every area", async ({
   await page.getByRole("button", { name: "Save thought" }).click();
 
   await page.getByRole("button", { name: "All areas" }).click();
+  // #555: in-app stage navigation is a real router.push now — settle on the
+  // /areas URL before asserting the overview content.
+  await expect(page).toHaveURL(/\/areas$/);
 
   await expect(page.getByText("Global scope")).toBeVisible();
   await expect(page.getByText("Main area board repair item")).toBeVisible();
@@ -64,6 +73,10 @@ test("started execution remains finishable and can complete into review", async 
   await planTaskAtEight(page, "Complete execution repair item");
 
   await page.getByRole("button", { name: "Start focusing" }).click();
+  // #555: stage navigation is a real router.push now (async), so wait for the
+  // URL to settle before touching execute-stage controls — the plan screen
+  // (still rendered mid-transition) matches the task-title locator twice.
+  await expect(page).toHaveURL(/\/execute$/, { timeout: 15_000 });
   await page
     .getByRole("button", { name: /Complete execution repair item/ })
     .click();
@@ -81,6 +94,7 @@ test("stuck execution is recoverable from review", async ({ page }) => {
   await planTaskAtEight(page, "Stuck execution repair item");
 
   await page.getByRole("button", { name: "Start focusing" }).click();
+  await expect(page).toHaveURL(/\/execute$/, { timeout: 15_000 });
   await page
     .getByRole("button", { name: /Stuck execution repair item/ })
     .click();
@@ -100,6 +114,7 @@ test("missed execution is recoverable from review", async ({ page }) => {
   await planTaskAtEight(page, "Missed execution repair item");
 
   await page.getByRole("button", { name: "Start focusing" }).click();
+  await expect(page).toHaveURL(/\/execute$/, { timeout: 15_000 });
   await page
     .getByRole("button", { name: /Missed execution repair item/ })
     .click();
@@ -121,6 +136,7 @@ test("pause, resume, and side capture do not interrupt execution", async ({
   await planTaskAtEight(page, "Pause and side capture repair item");
 
   await page.getByRole("button", { name: "Start focusing" }).click();
+  await expect(page).toHaveURL(/\/execute$/, { timeout: 15_000 });
   await page
     .getByRole("button", { name: /Pause and side capture repair item/ })
     .click();

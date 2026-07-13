@@ -9,6 +9,7 @@ const mockPathname = vi.fn(() => "/capture");
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 describe("handoff cockpit area accents", () => {

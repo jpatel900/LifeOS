@@ -5,6 +5,7 @@ import { AppShell } from "../app/components/AppShell";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/execute",
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 describe("Execute cockpit", () => {
