@@ -1,38 +1,158 @@
-# LANES.md — in-flight work ledger (both harnesses)
+# LANES.md — cross-harness coordination protocol (stable rules only)
 
-> **Check this file before starting any slice. Update it when you claim or finish one.**
-> Purpose: two agentic harnesses (Claude lane, Codex lane) work this repo in
-> parallel. This ledger is how they avoid file collisions. It lists every
-> in-flight slice with the files it may touch. Rules:
->
-> 1. If a file you need is listed under another in-flight slice → do not start.
->    Comment on that slice's issue and wait, or renegotiate the split.
-> 2. **Shared contract surfaces are Claude-lane-edit-only:** view models
->    (`momentsViewModel.ts`, `cockpit/viewModel.ts`), `WorkflowContext`,
->    `packages/schemas`, route/page files, `.github/workflows/**`. Codex lane
->    builds against them, never edits them.
-> 3. Both lanes use subagents for actual implementation (owner directive
->    2026-07-13); the lane orchestrator authors contracts, verifies, and (Claude
->    lane only) merges.
-> 4. Cross-cutting changes need a design note in `docs/implementation-planning/`
->    before code.
-> 5. One slice = one issue = one branch = one PR. Claude lane is the single
->    merge-serialization point for both lanes.
+Two agentic harnesses work this repo in parallel: the **Claude lane** and the
+**Codex lane**. This file holds the STABLE rules of engagement. It must never
+contain current tasks, branches, commits, or status — live state lives on
+GitHub (single-home rule below). If this file and a live GitHub claim seem to
+disagree about a boundary, surface the contradiction on the issue; do not
+resolve it silently.
 
-## In flight
+## Single-home rule
 
-| Lane   | Issue                           | Branch                       | File manifest (may touch)                                                                                                                                                                                                                                                                                                                                                          |
-| ------ | ------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude | #555 item 1 (one-shell routing) | `feat/555-one-shell-routing` | `apps/web/src/app/components/LifeOSCockpit.tsx`, `apps/web/src/app/today/page.tsx` (new), `apps/web/src/app/components/moments/TodayMoments.tsx`, `apps/web/tests/e2e/nav-truth.spec.ts` (new), `apps/web/tests/e2e/{cockpit-flow-repair,handoff-cockpit,capture-parse-mock,moments-home-parity}.spec.ts`, `apps/web/src/__tests__/*` (router-mock updates), `docs/agent/LANES.md` |
+Every fact has exactly one authoritative home. Do not copy status across
+surfaces — copies drift.
 
-## Queued (not yet claimed)
+| Surface            | What belongs there                                                        |
+| ------------------ | ------------------------------------------------------------------------- |
+| `LANES.md` (this)  | Stable lane boundaries, red-zone rules, claim formats, collision protocol |
+| Issue body         | Frozen task contract: authority anchors, acceptance criteria, touch sets  |
+| Issue comments     | Claims, ACKs, collisions, blockers, verification handoffs                 |
+| Draft PR           | Live implementation truth: actual files, commits, dependencies, evidence  |
+| PR review comments | Cross-lane review findings (authoring lane fixes its own branch)          |
+| ADRs               | Durable architecture/product decisions                                    |
+| `PROJECT_STATE.md` | Materially changed shipped state                                          |
 
-| Lane   | Scope                                                                                                                       |
-| ------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Claude | #556 FR-026 capture containment → then epic #555 order (execute/review contracts, mobile shell + a11y visual halves, fonts) |
-| Codex  | Productivity workstream — awaiting owner scope; territory must be file-disjoint from the epic #555 build order above        |
+`docs/agent/HANDOVER.md` is Claude-lane session continuity only — never a
+cross-lane communication bus.
 
-## Done (recent, for context)
+## Lane definitions
 
-- #551 home hero truth (PR #564, merged 2026-07-13) — Claude lane
-- #558 badge truth (PR #563), #559 a11y semantics (PR #562) — Codex lane, harvested + merged 2026-07-13
+- **Claude lane:** visual/experience work, architecture and doctrine-sensitive
+  changes, contract authoring for both lanes, final verification (including the
+  visual/experience gate), ALL merges (both lanes' PRs), continuity.
+- **Codex lane:** contracted implementation with text-verifiable results (pure
+  logic, data layer, guard tests, e2e specs), standing audits, second opinions
+  on design notes.
+
+**Root orchestrators only** write GitHub comments. Both lanes delegate
+implementation to bounded subagents; subagents report internally to their root
+and never claim issues or post status themselves.
+
+## Red zones (Claude-lane-edit-only shared surfaces)
+
+`apps/web/src/lib/WorkflowContext.tsx` · `momentsViewModel.ts` ·
+`lib/cockpit/viewModel.ts` · `packages/schemas/**` · route/page files ·
+`.github/workflows/**` · migrations/RLS · `docs/REQUIREMENTS.md` ·
+`docs/UX_FLOWS.md` · `docs/adr/**`.
+
+The Codex lane builds against these, never edits them. A scoped exception may
+be granted per-issue by an explicit Claude-root comment on that issue naming
+the exact file(s) and block(s); the exception dies with the issue.
+
+## Claim protocol (issue comments, meaningful state changes only)
+
+Comment only on: claim · ACK/collision · blocker or scope change ·
+implementation handoff · verification result · claim release/completion.
+No hourly chatter.
+
+### CLAIM v1
+
+```text
+CLAIM v1
+Lane: claude | codex
+Orchestrator: <root>
+Implementer: <subagent identifier>
+Verifier: pending | <identifier>
+Branch: <branch>
+Base: <sha>
+Claimed at / Claim until: <UTC>
+Authority:
+- <requirement/ADR/invariant>
+Owned outcome:
+- <one measurable outcome>
+Expected touch set:
+- <files or narrow globs>
+Forbidden touch set:
+- <other lane's files, red zones>
+Shared contracts/red zones:
+- <files/interfaces or none>
+Dependencies:
+- <issue/PR or none>
+```
+
+### ACK v1 (other lane, after overlap check)
+
+```text
+ACK v1
+Lane: <acknowledging lane>
+Issue: #<n>
+Overlap check: no file or semantic overlap found
+Checked against:
+- branch <branch> / commit <sha> / touch set <summary>
+```
+
+### COLLISION v1 (instead of ACK when overlap exists)
+
+```text
+COLLISION v1
+Type: file | contract | journey
+Overlap:
+- <exact file, requirement, or state transition>
+Decision required: serialize | interface-first | single integration owner | owner product decision
+Both lanes stop this slice until resolved.
+```
+
+### HANDOFF v1 (implementation → verification)
+
+```text
+HANDOFF v1
+Issue: #<n>
+Commit: <sha>
+Changed files: ...
+Evidence: <command> → <decisive output>
+UNVERIFIED: ...
+Other-lane review requested: usability/accessibility | contract/regression
+```
+
+## Collision matrix
+
+| Situation                                       | Rule                                                   |
+| ----------------------------------------------- | ------------------------------------------------------ |
+| Same file                                       | Serialize; declare merge order in the claim            |
+| Different files, same contract/state transition | Agree the interface first; name one integration owner  |
+| Different files, independent contracts          | Parallel work allowed                                  |
+| Dependent work                                  | `Depends on #<PR>` + stacked branch; never cherry-pick |
+
+Overlap detection covers BOTH file intersection and semantic intersection
+(same requirement, state transition, interface, or user journey). Absence of a
+merge conflict does not prove independence.
+
+## PRs
+
+Open a draft PR as soon as work is pushed — the draft's file set is the live
+touch-set broadcast the other lane diffs against. Before every commit and
+before marking a PR ready, each root refreshes: open PRs, claims, the other
+lane's branch SHA, actual changed-file intersections, shared
+requirement/state-transition intersections.
+
+PR body fields: Issue · Lane · Depends on · Base SHA · Authority anchors ·
+Declared file manifest · Forbidden files confirmed untouched (yes/no) ·
+Cross-lane overlap checked at (UTC + other branch SHA) · Validation evidence ·
+NOT VERIFIED · Risk and rollback.
+
+## Verification and integration ownership
+
+Each lane's root verifies its own subagents' work (Claude adds the
+visual/experience gate on anything rendered). Cross-lane review is read-only:
+Claude reviews Codex PRs for usability/interaction/a11y; Codex reviews Claude
+PRs for contract/regression. The authoring lane fixes its own branch; neither
+lane edits the other's branch. **Claude lane is the single merge point for
+both lanes** and posts "dependency merged at <sha>, rebase clear" on dependent
+PRs when their dependency lands.
+
+## Claim release
+
+A claim is released by a completion comment (verification result + merged PR
+link) or an explicit release comment when abandoning; a lapsed `Claim until`
+with no activity means the other lane may post a takeover notice and proceed
+after a reasonable wait. Never silently adopt another lane's claimed issue.
