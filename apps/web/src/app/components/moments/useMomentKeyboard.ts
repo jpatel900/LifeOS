@@ -27,7 +27,15 @@ export interface MomentKeyboardHandlers {
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    tag === "BUTTON" ||
+    tag === "A"
+  ) {
+    return true;
+  }
   return target.isContentEditable;
 }
 
@@ -57,14 +65,11 @@ export function useMomentKeyboard(handlers: MomentKeyboardHandlers): void {
       );
 
       if (typing) {
-        // Typing fields win: only Escape/Enter pass through; the palette
-        // combo is ignored too (ADR D2), every other mapping is inert.
+        // Native interactive controls win: global shortcuts never turn
+        // Enter from a focused control into the page primary action. Escape
+        // remains a global close affordance for overlays.
         if (matchesMomentKeyBinding(event, momentKeyBindingById("escape"))) {
           onEscape();
-        } else if (
-          matchesMomentKeyBinding(event, momentKeyBindingById("primary-action"))
-        ) {
-          onPrimary();
         }
         return;
       }

@@ -1173,6 +1173,10 @@ export function TodayMoments({
             </div>
           </header>
 
+          {moment !== "start" ? (
+            <h1 className="sr-only">LifeOS Today</h1>
+          ) : null}
+
           {moment === "start" ? (
             <StartMoment
               vm={startVM}

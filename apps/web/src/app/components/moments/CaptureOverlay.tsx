@@ -150,6 +150,7 @@ export function CaptureOverlay({
           value={text}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          aria-label="Capture thought"
           placeholder="What's on your mind?"
           data-testid="capture-overlay-textarea"
         />
