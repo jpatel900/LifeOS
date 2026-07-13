@@ -4,6 +4,11 @@ import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/capture",
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 const {
   mockListAreas,
   mockListCaptureItems,

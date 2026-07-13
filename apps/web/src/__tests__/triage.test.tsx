@@ -9,12 +9,19 @@ const mockPathname = vi.fn(() => "/triage");
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
+  useRouter: () => ({
+    // Keep the mocked pathname in sync with in-app navigation so the
+    // pathname-derived stage actually transitions, mirroring the real
+    // app router (LifeOSCockpit derives its stage from usePathname()).
+    push: (path: string) => mockPathname.mockReturnValue(path),
+  }),
 }));
 
 describe("Triage cockpit", () => {
   let restoreFetch: () => void;
 
   beforeEach(() => {
+    mockPathname.mockReturnValue("/triage");
     window.sessionStorage.clear();
     restoreFetch = stubParseCaptureFetch();
   });

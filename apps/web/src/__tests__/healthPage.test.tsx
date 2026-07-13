@@ -5,6 +5,7 @@ import { AppShell } from "../app/components/AppShell";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/health",
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 const mocks = vi.hoisted(() => ({

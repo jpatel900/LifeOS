@@ -207,6 +207,9 @@ test("execute, review, health, and all areas keep the handoff hierarchy", async 
   ).toBeVisible();
 
   await page.getByRole("button", { name: "All areas" }).click();
+  // #555: in-app stage navigation is a real router.push now — settle on the
+  // /areas URL before asserting the overview content.
+  await expect(page).toHaveURL(/\/areas$/);
   await expect(
     page.getByRole("heading", { name: "All areas overview" }),
   ).toBeVisible();

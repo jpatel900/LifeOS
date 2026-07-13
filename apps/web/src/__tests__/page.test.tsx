@@ -5,6 +5,7 @@ import { AppShell } from "../app/components/AppShell";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 // Post go-live (P7d) `/` renders the moments home by default; the seven-stage

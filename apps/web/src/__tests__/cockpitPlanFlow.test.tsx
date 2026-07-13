@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarPage from "../app/calendar/page";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import {
@@ -7,6 +7,11 @@ import {
   captureWorkflow,
   workflowSeed,
 } from "./helpers/workflowReachability";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/calendar",
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
 

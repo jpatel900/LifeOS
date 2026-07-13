@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import type { Phase2TaskDraft } from "@lifeos/schemas";
 import {
   Check,
@@ -63,7 +64,7 @@ const STAGE_LABELS: Record<CockpitStage, string> = {
 };
 
 const STAGE_PATHS: Partial<Record<CockpitStage, string>> = {
-  today: "/",
+  today: "/today",
   capture: "/capture",
   triage: "/triage",
   plan: "/calendar",
@@ -72,6 +73,13 @@ const STAGE_PATHS: Partial<Record<CockpitStage, string>> = {
   health: "/health",
   overview: "/areas",
 };
+
+// Single-sourced from STAGE_PATHS: the URL is the only source of navigation
+// truth, so the pathname -> stage lookup must never drift from the
+// stage -> pathname table above.
+const STAGE_FOR_PATH: Record<string, CockpitStage> = Object.fromEntries(
+  Object.entries(STAGE_PATHS).map(([stage, path]) => [path, stage]),
+) as Record<string, CockpitStage>;
 
 const HOURS = Array.from({ length: 11 }, (_, index) => index + 8);
 
@@ -153,7 +161,9 @@ export function LifeOSCockpit({
     appliedDurationForArea,
     decideDurationRecalibration,
   } = useWorkflow();
-  const [stage, setStage] = useState<CockpitStage>(initialStage);
+  const router = useRouter();
+  const pathname = usePathname();
+  const stage = STAGE_FOR_PATH[pathname] ?? initialStage;
   // S9 (issue 261): proposals whose recalibration the user has decided this session,
   // so the sourced adjustment card resolves once accepted/dismissed.
   const [decidedRecalIds, setDecidedRecalIds] = useState<Set<string>>(
@@ -178,10 +188,6 @@ export function LifeOSCockpit({
   const hasRealActiveArea = state.areas.some(
     (area) => area.id === activeArea.id,
   );
-
-  useEffect(() => {
-    setStage(initialStage);
-  }, [initialStage]);
 
   useEffect(() => {
     try {
@@ -221,10 +227,12 @@ export function LifeOSCockpit({
   }, [dark, selectedAreaId, stage]);
 
   function navigate(nextStage: CockpitStage) {
-    setStage(nextStage);
     const path = STAGE_PATHS[nextStage];
-    if (path && typeof window !== "undefined") {
-      window.history.pushState(null, "", path);
+    // The URL is the only source of navigation truth: pushing the pathname we
+    // are already on is a no-op by definition (and a same-URL push would
+    // re-run the route, remounting the page mid-interaction).
+    if (path && path !== pathname) {
+      router.push(path);
     }
   }
 
@@ -494,7 +502,7 @@ export function LifeOSCockpit({
         <header className="flex flex-wrap items-center gap-1 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2 sm:gap-2">
           <button
             type="button"
-            onClick={() => navigate("today")}
+            onClick={() => router.push("/")}
             className="flex min-h-10 items-center gap-2 rounded-full px-2 text-[var(--ink)] sm:min-h-11 sm:px-3"
           >
             <span className="grid size-7 place-items-center rounded-full bg-[var(--acc)] text-[var(--on-acc)]">

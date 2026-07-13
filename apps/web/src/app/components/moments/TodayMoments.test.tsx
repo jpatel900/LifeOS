@@ -8,6 +8,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
 import { latestActivityTimestamp } from "@/lib/reEntry/detect";
 import * as momentsViewModel from "./momentsViewModel";

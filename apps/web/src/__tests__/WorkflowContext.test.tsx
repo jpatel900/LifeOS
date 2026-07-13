@@ -11,6 +11,11 @@ import TriagePage from "../app/triage/page";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { createInitialWorkflowState } from "@/lib/workflow";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/triage",
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 const originalSessionStorageDescriptor = Object.getOwnPropertyDescriptor(
   window,
   "sessionStorage",
