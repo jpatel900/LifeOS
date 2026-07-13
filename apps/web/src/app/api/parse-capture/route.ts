@@ -4,6 +4,7 @@ import {
   type ParseCaptureRuntimeStatus,
 } from "@/lib/ai/parseCaptureService";
 import { captureError } from "@/lib/observability";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization");
@@ -18,6 +19,18 @@ function readBearerToken(request: Request) {
   }
 
   return value.trim();
+}
+
+async function verifyBearerToken(accessToken: string) {
+  const client = createSupabaseServerClient({ accessToken });
+
+  if (!client) {
+    return false;
+  }
+
+  const { data, error } = await client.auth.getUser();
+
+  return !error && Boolean(data.user);
 }
 
 function parseRequestBody(body: unknown) {
@@ -159,6 +172,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const status = getParseCaptureStatus();
+  const accessToken = readBearerToken(request);
+
+  if (accessToken && !(await verifyBearerToken(accessToken))) {
+    return Response.json(
+      { ok: false, errorCategory: "auth_rejected" },
+      { status: 401 },
+    );
+  }
 
   try {
     const input = parseRequestBody(await request.json());
@@ -168,7 +189,7 @@ export async function POST(request: Request) {
       forceMock,
       // Optional caller token: used only for fire-and-forget Postgres AI
       // call tracing (issue #288); parsing works without it.
-      traceContext: { accessToken: readBearerToken(request) },
+      traceContext: { accessToken },
     });
 
     return Response.json({

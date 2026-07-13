@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   captureError: vi.fn(),
   getParseCaptureStatus: vi.fn(),
   parseCaptureWithFallback: vi.fn(),
+  createSupabaseServerClient: vi.fn(),
 }));
 
 vi.mock("@/lib/ai/parseCaptureService", () => ({
@@ -15,11 +16,22 @@ vi.mock("@/lib/observability", () => ({
   captureError: mocks.captureError,
 }));
 
+vi.mock("@/lib/supabase/server", () => ({
+  createSupabaseServerClient: mocks.createSupabaseServerClient,
+}));
+
 import { GET, POST } from "./route";
 
 describe("parse-capture route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.createSupabaseServerClient.mockReturnValue({
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: "user-a" } }, error: null }),
+      },
+    });
   });
 
   it("returns parser status from GET", async () => {
@@ -70,6 +82,7 @@ describe("parse-capture route", () => {
 
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
+    expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
     expect(mocks.parseCaptureWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({ rawText: "Plan Monday work." }),
       expect.objectContaining({
@@ -79,6 +92,40 @@ describe("parse-capture route", () => {
         traceContext: { accessToken: null },
       }),
     );
+  });
+
+  it("rejects a present but invalid bearer token before parsing", async () => {
+    mocks.getParseCaptureStatus.mockReturnValue({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+    mocks.createSupabaseServerClient.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+          error: new Error("bad jwt"),
+        }),
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer invalid-access-token",
+        },
+        body: JSON.stringify({ rawText: "Plan Monday work." }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ ok: false, errorCategory: "auth_rejected" });
+    expect(mocks.createSupabaseServerClient).toHaveBeenCalledWith({
+      accessToken: "invalid-access-token",
+    });
+    expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
   });
 
   it("forwards the bearer token to the tracing context when present (issue #288)", async () => {
@@ -113,6 +160,9 @@ describe("parse-capture route", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mocks.createSupabaseServerClient).toHaveBeenCalledWith({
+      accessToken: "user-a-access-token",
+    });
     expect(mocks.parseCaptureWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({ rawText: "Plan Monday work." }),
       expect.objectContaining({
