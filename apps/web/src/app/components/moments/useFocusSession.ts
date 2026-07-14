@@ -43,8 +43,19 @@ export interface UseFocusSessionResult {
    * call markSession.
    */
   toggle(): void;
-  /** Ends the session with `status`, calls markSession with elapsed minutes, and resets state. */
-  finish(status: "completed" | "stuck" | "missed"): void;
+  /**
+   * Ends the session with `status`, calls markSession, and resets state.
+   * `actualMinutes` defaults to the elapsed clock time but is overridable
+   * (the end sheet, #572, prefills from the clock and lets the user edit
+   * it). `notes` is optional. Resolves once markSession's persistence
+   * attempt resolves (#572 state truth) — callers that show a
+   * "closed"/verdict copy or navigate away must await this.
+   */
+  finish(
+    status: "completed" | "stuck" | "missed" | "partial" | "skipped",
+    actualMinutes?: number,
+    notes?: string | null,
+  ): Promise<void>;
   /** Adds `minutes` to both remaining and total without touching workflow state. */
   extend(minutes: number): void;
 }
@@ -153,13 +164,19 @@ export function useFocusSession(
     startTaskSession(taskId);
   }
 
-  function finish(status: "completed" | "stuck" | "missed") {
-    const actualMinutes = Math.max(0, Math.ceil((total - remaining) / 60));
-    markSession(status, actualMinutes);
+  function finish(
+    status: "completed" | "stuck" | "missed" | "partial" | "skipped",
+    actualMinutes?: number,
+    notes?: string | null,
+  ) {
+    const resolvedMinutes =
+      actualMinutes ?? Math.max(0, Math.ceil((total - remaining) / 60));
+    const result = markSession(status, resolvedMinutes, notes);
     setRunning(false);
     setRemaining(0);
     endsAtRef.current = null;
     setActiveTaskId(null);
+    return result;
   }
 
   function toggle() {

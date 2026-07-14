@@ -569,6 +569,66 @@ describe("local mock workflow", () => {
     expect(state.calendarBlocks[0].status).toBe("completed");
   });
 
+  // #572 (execute/review contract): "partial" and "skipped" are first-class
+  // end-sheet outcomes, not an afterthought bolted onto "missed" — they
+  // record actual_minutes/notes and feed review/carry-forward the same way
+  // "missed" already does (block status -> "missed", task stays active).
+  it("records a partial session outcome with actual minutes and notes", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Partial outcome proof.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    state = planTaskAtHour(state, state.tasks[0].id, 10);
+    state = startExecutionSession(state, state.tasks[0].id);
+    state = markCurrentSession(state, "partial", {
+      actualMinutes: 12,
+      notes: "Got the outline done, not the draft.",
+    });
+
+    expect(state.executionSessions[0].status).toBe("partial");
+    expect(state.executionSessions[0].outcome).toBe("partial");
+    expect(state.executionSessions[0].actual_minutes).toBe(12);
+    expect(state.executionSessions[0].notes).toBe(
+      "Got the outline done, not the draft.",
+    );
+    // Feeds carry-forward the same way "missed" does: block reads as
+    // missed, task stays active rather than flipping to "done"/"blocked".
+    expect(state.calendarBlocks[0].status).toBe("missed");
+    // Task status is left untouched (same as "missed" today) so it stays
+    // reachable for carry-forward rather than silently flipping to a
+    // terminal state.
+    expect(state.tasks[0].status).toBe("scheduled");
+  });
+
+  it("records a skipped session outcome with actual minutes and notes", () => {
+    let state = createInitialWorkflowState();
+
+    state = submitCapture(state, {
+      rawText: "Skipped outcome proof.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    state = planTaskAtHour(state, state.tasks[0].id, 10);
+    state = startExecutionSession(state, state.tasks[0].id);
+    state = markCurrentSession(state, "skipped", {
+      actualMinutes: 0,
+      notes: "Didn't get to it.",
+    });
+
+    expect(state.executionSessions[0].status).toBe("skipped");
+    expect(state.executionSessions[0].outcome).toBe("skipped");
+    expect(state.executionSessions[0].actual_minutes).toBe(0);
+    expect(state.executionSessions[0].notes).toBe("Didn't get to it.");
+    expect(state.calendarBlocks[0].status).toBe("missed");
+    // Task status is left untouched (same as "missed" today) so it stays
+    // reachable for carry-forward rather than silently flipping to a
+    // terminal state.
+    expect(state.tasks[0].status).toBe("scheduled");
+  });
+
   it("moves a project-like capture through triage into an accepted project", () => {
     let state = createInitialWorkflowState();
 

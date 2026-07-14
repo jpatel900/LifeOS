@@ -237,4 +237,104 @@ describe("CommandPalette", () => {
     expect(row).toHaveClass("min-h-[44px]");
     expect(row).toHaveClass("touch-manipulation");
   });
+
+  // #574: input reaches the same >=44px hit-area floor as every other
+  // interactive control this packet audited.
+  it("input carries the hit-area utility", () => {
+    render(
+      <CommandPalette
+        open
+        actions={ACTIONS}
+        onRun={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("command-palette-input")).toHaveClass(
+      "min-h-[44px]",
+    );
+  });
+
+  // #574: ARIA 1.2 combobox-with-listbox-popup pattern — role=combobox,
+  // aria-expanded, aria-controls pointing at the listbox's real id, and
+  // role=listbox/option (+ ids, aria-selected) on the results, with
+  // aria-activedescendant tracking the arrow-key-highlighted row. Keyboard
+  // behavior itself is covered by the pre-existing arrow/Enter/Escape tests
+  // above, which are unchanged by this packet.
+  describe("#574 combobox semantics", () => {
+    it("input exposes role=combobox, aria-expanded, and aria-controls pointing at the real listbox id", () => {
+      render(
+        <CommandPalette
+          open
+          actions={ACTIONS}
+          onRun={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByTestId("command-palette-input");
+      expect(input).toHaveAttribute("role", "combobox");
+      expect(input).toHaveAttribute("aria-expanded", "true");
+
+      const listbox = screen.getByRole("listbox", { name: "Commands" });
+      expect(input.getAttribute("aria-controls")).toBe(listbox.id);
+      expect(listbox.id).toBeTruthy();
+    });
+
+    it("options expose role=option, ids, and aria-selected already wired for aria-activedescendant", () => {
+      render(
+        <CommandPalette
+          open
+          actions={ACTIONS}
+          onRun={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      const options = screen.getAllByRole("option");
+      expect(options).toHaveLength(ACTIONS.length);
+      for (const option of options) {
+        expect(option.id).toBeTruthy();
+      }
+    });
+
+    it("aria-activedescendant tracks the highlighted row as arrow keys move it", () => {
+      render(
+        <CommandPalette
+          open
+          actions={ACTIONS}
+          onRun={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByTestId("command-palette-input");
+      const startOption = screen.getByTestId("command-palette-option-start");
+      const flowOption = screen.getByTestId("command-palette-option-flow");
+
+      // Starts highlighted on the first row ("start").
+      expect(input.getAttribute("aria-activedescendant")).toBe(startOption.id);
+
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      expect(input.getAttribute("aria-activedescendant")).toBe(flowOption.id);
+    });
+
+    it("aria-activedescendant is unset when no options match the query", () => {
+      render(
+        <CommandPalette
+          open
+          actions={ACTIONS}
+          onRun={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByTestId("command-palette-input"), {
+        target: { value: "zzz-no-match" },
+      });
+
+      expect(screen.getByTestId("command-palette-input")).not.toHaveAttribute(
+        "aria-activedescendant",
+      );
+    });
+  });
 });

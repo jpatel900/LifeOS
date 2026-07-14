@@ -65,7 +65,7 @@ export interface CockpitViewModel {
     task: Phase2MockTask;
     block: Phase2MockCalendarBlock | null;
     session: Phase2MockExecutionSession | null;
-    reason: "open" | "backlog" | "stuck" | "missed";
+    reason: "open" | "backlog" | "stuck" | "missed" | "partial";
   }[];
   /** S4 (#256): rule-based waiting-on aging, scoped to the active area. */
   agingWaitingOn: AgingWaitingOnItem<Phase2MockTask>[];
@@ -246,7 +246,14 @@ export function buildCockpitViewModel(
       .filter(
         (session) =>
           session.area_id === areaId &&
-          ["stuck", "missed", "stopped", "distracted"].includes(session.status),
+          [
+            "stuck",
+            "missed",
+            "stopped",
+            "distracted",
+            "partial",
+            "skipped",
+          ].includes(session.status),
       )
       .map((session) => {
         const task = state.tasks.find((item) => item.id === session.task_id);
@@ -260,9 +267,11 @@ export function buildCockpitViewModel(
           block,
           session,
           reason:
-            session.status === "missed"
+            session.status === "missed" || session.status === "skipped"
               ? ("missed" as const)
-              : ("stuck" as const),
+              : session.status === "partial"
+                ? ("partial" as const)
+                : ("stuck" as const),
         };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item)),

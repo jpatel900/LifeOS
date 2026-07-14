@@ -67,6 +67,9 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   // workstreams — owner directive 2026-07-13. Both lanes check it before
   // starting a slice; it lists per-slice file manifests to prevent collisions.
   "docs/agent/LANES.md",
+  // Epic #555 item-4 design note (one planning model — placement wins),
+  // ratified by the owner decision 2026-07-14.
+  "docs/implementation-planning/plan-one-planning-model.md",
   // Epic #555 item-7 design note (onboarding ritual), content delegated to
   // Claude by the owner 2026-07-14; owner reviews the built result.
   "docs/implementation-planning/plan-onboarding-ritual.md",

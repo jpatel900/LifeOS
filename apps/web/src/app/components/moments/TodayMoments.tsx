@@ -5,10 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { momentKeyLabel } from "@/lib/keys/keymap";
+import { cn } from "@/lib/utils";
 import { useMomentKeyboard } from "./useMomentKeyboard";
+import { HIT_TARGET_ROW, HIT_TARGET_INVISIBLE } from "./hitTarget";
 import { buildStartVM, buildFlowVM, buildCloseVM } from "./momentsViewModel";
 import type { FirstMoveVM } from "./momentsViewModel";
 import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
+import { BottomNavigator } from "./BottomNavigator";
 import {
   CountdownClockToggle,
   type CountdownClockValue,
@@ -40,6 +43,7 @@ import { buildPipelineCounts } from "./pipelineCounts";
 import type { TaskMapDraftUiState } from "./TaskMapSection";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
+import { EndSessionSheet, type EndSessionOutcome } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 
 /**
@@ -184,6 +188,7 @@ export function TodayMoments({
     retryCaptureParseWithMock,
     startTaskSession,
     markSession,
+    updateTaskFirstTinyStep,
     carryForwardTask,
     saveReview,
     confirmWin,
@@ -819,15 +824,51 @@ export function TodayMoments({
     [startTaskSession],
   );
 
+  // #572 (execute/review contract): ending a session no longer closes it
+  // instantly. "Done" opens the end sheet (outcome, actual duration,
+  // optional note) — the verdict/toast copy below only fires once
+  // `handleEndSessionSave` has awaited the save.
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
+
   const finishFocus = useCallback(() => {
-    const elapsedMinutes =
-      session.total > 0
-        ? Math.round((session.total - session.remaining) / 60)
-        : 0;
-    markSession("completed", elapsedMinutes);
-    setSession({ activeTaskId: null, running: false, remaining: 0, total: 0 });
-    showToast("Focus session logged");
-  }, [markSession, session.remaining, session.total, showToast]);
+    if (session.activeTaskId === null && session.total === 0) return;
+    setEndSessionOpen(true);
+  }, [session.activeTaskId, session.total]);
+
+  const endSessionElapsedMinutes =
+    session.total > 0
+      ? Math.round((session.total - session.remaining) / 60)
+      : 0;
+
+  const handleEndSessionSave = useCallback(
+    async (
+      outcome: EndSessionOutcome,
+      actualMinutes: number,
+      note: string | null,
+    ) => {
+      // State truth (#551/#563): await the save before resetting the
+      // session/closing the sheet, so no verdict copy claims a save that
+      // hasn't resolved yet.
+      await markSession(outcome, actualMinutes, note);
+      setSession({
+        activeTaskId: null,
+        running: false,
+        remaining: 0,
+        total: 0,
+      });
+      setEndSessionOpen(false);
+      showToast(
+        outcome === "completed"
+          ? "Session complete"
+          : outcome === "partial"
+            ? "Partial progress saved"
+            : outcome === "skipped"
+              ? "Skipped — carried to review"
+              : "Stuck — logged for review",
+      );
+    },
+    [markSession, showToast],
+  );
 
   const pauseFocus = useCallback(() => {
     setSession((current) => ({ ...current, running: !current.running }));
@@ -1155,7 +1196,10 @@ export function TodayMoments({
                 onChange={(event) =>
                   setSelectedAreaId(event.target.value || null)
                 }
-                className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+                className={cn(
+                  HIT_TARGET_ROW,
+                  "rounded-md border border-border bg-background px-2 py-1 text-sm",
+                )}
                 data-testid="today-moments-area-switcher"
               >
                 <option value="">All areas</option>
@@ -1175,7 +1219,10 @@ export function TodayMoments({
               <MomentSwitcher value={moment} onChange={setMoment} />
               <Link
                 href="/settings/areas"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                className={cn(
+                  HIT_TARGET_INVISIBLE,
+                  "text-sm font-medium text-muted-foreground hover:text-foreground",
+                )}
                 data-testid="moments-settings-link"
               >
                 Settings
@@ -1226,6 +1273,11 @@ export function TodayMoments({
               onDismissTaskMapDraft={dismissTaskMapDraft}
               onApproveTaskMapDraft={handleApproveTaskMapDraft}
               onToggleTaskMapNodeCompletion={handleToggleTaskMapNodeCompletion}
+              firstTinyStep={focusedTask?.first_tiny_step ?? null}
+              onUpdateFirstTinyStep={(value) => {
+                if (!focusedTask) return;
+                updateTaskFirstTinyStep(focusedTask.id, value);
+              }}
             />
           ) : null}
 
@@ -1264,6 +1316,15 @@ export function TodayMoments({
         onOpen={() => setCaptureOpen(true)}
         unsyncedCount={unsyncedCaptureCount}
       />
+
+      {/* #574: <640px only (BottomNavigator itself is `sm:hidden`) — the
+          Start/Flow/Close switch + Settings, reachable in the thumb zone
+          without scrolling to the header. Rendered unconditionally
+          (matching CaptureAffordance just above), including while the
+          re-entry ritual is active: it's a fixed low-risk nav strip, not
+          part of the ritual's own flow, and hiding it would just be one
+          more state to track for no real benefit. */}
+      <BottomNavigator value={moment} onChange={setMoment} />
 
       <CaptureOverlay
         open={captureOpen}
@@ -1313,6 +1374,16 @@ export function TodayMoments({
         blocks={startVM.blocks}
         timeDisplay={timeDisplay}
         now={now}
+      />
+
+      <EndSessionSheet
+        open={endSessionOpen}
+        taskTitle={
+          focusedTask?.title ?? flowVM.currentBlock?.title ?? "Focus session"
+        }
+        elapsedMinutes={endSessionElapsedMinutes}
+        onCancel={() => setEndSessionOpen(false)}
+        onSave={handleEndSessionSave}
       />
 
       <div

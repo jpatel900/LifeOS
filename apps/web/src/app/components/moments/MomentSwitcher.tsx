@@ -16,6 +16,18 @@ export type MomentValue = "start" | "flow" | "close";
 export interface MomentSwitcherProps {
   value: MomentValue;
   onChange(value: MomentValue): void;
+  /**
+   * #574: the mobile bottom navigator renders a second MomentSwitcher
+   * instance alongside the header's (same `value`/`onChange` — no forked
+   * state, just a second view onto it). Two instances with identical
+   * `data-testid`s in the DOM at once would break every existing
+   * `getByTestId("moment-switcher-*")` call (RTL throws on ambiguous
+   * matches). Default omitted keeps the original testids byte-for-byte for
+   * every existing single-instance call site (header, standalone tests);
+   * the bottom navigator passes `idPrefix="bottom-nav"` to get distinct
+   * `moment-switcher-bottom-nav*` ids instead.
+   */
+  idPrefix?: string;
 }
 
 const TABS: { value: MomentValue; label: string; keyHint: string }[] = [
@@ -24,13 +36,20 @@ const TABS: { value: MomentValue; label: string; keyHint: string }[] = [
   { value: "close", label: "Close", keyHint: momentKeyLabel("switch-close") },
 ];
 
-export function MomentSwitcher({ value, onChange }: MomentSwitcherProps) {
+export function MomentSwitcher({
+  value,
+  onChange,
+  idPrefix,
+}: MomentSwitcherProps) {
+  const testIdBase = idPrefix
+    ? `moment-switcher-${idPrefix}`
+    : "moment-switcher";
   return (
     <div
       role="tablist"
       aria-label="Moment"
       className="workflow-shell__nav inline-flex items-center gap-1 border border-border bg-muted/40 p-1"
-      data-testid="moment-switcher"
+      data-testid={testIdBase}
     >
       {TABS.map((tab) => {
         const selected = value === tab.value;
@@ -48,7 +67,7 @@ export function MomentSwitcher({ value, onChange }: MomentSwitcherProps) {
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
-            data-testid={`moment-switcher-${tab.value}`}
+            data-testid={`${testIdBase}-${tab.value}`}
           >
             {tab.label}
             <kbd
