@@ -15,6 +15,18 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * runs it, Escape closes — this component owns its own Escape handling
  * (UX-INV-5) since the global keyboard listener is disabled while any
  * overlay is open.
+ *
+ * #574 (epic #555 item 6, accessibility): the input follows the ARIA 1.2
+ * combobox-with-listbox-popup pattern instead of a bare text input next to
+ * an unrelated list. `role="combobox"` + `aria-expanded="true"` (always true
+ * while mounted — the component renders nothing at all when closed, so
+ * there is no "collapsed" mounted state) + `aria-controls` pointing at the
+ * listbox's id + `aria-activedescendant` pointing at the highlighted
+ * option's id (or unset when the list is empty — no option is "active" if
+ * none exist) on the input; `id`s on the `listbox`/`option` elements for
+ * `aria-activedescendant` to reference, plus `aria-selected` already
+ * present. Keyboard behavior (arrow/Enter/Escape handling) is byte-for-byte
+ * unchanged — only ARIA wiring was added.
  */
 
 export interface CommandPaletteAction {
@@ -67,6 +79,16 @@ export function CommandPalette({
   }, [query]);
 
   if (!open) return null;
+
+  // #574: stable ids for the combobox/listbox ARIA wiring — the listbox has
+  // one fixed id, each option's id derives from its action id (unique by
+  // construction — TodayMoments' paletteActions and the test fixtures never
+  // repeat an id within one list).
+  const listboxId = "command-palette-listbox";
+  const activeOption = filtered[highlighted];
+  const activeOptionId = activeOption
+    ? `command-palette-option-${activeOption.id}`
+    : undefined;
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown") {
@@ -128,15 +150,24 @@ export function CommandPalette({
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls={listboxId}
+          aria-activedescendant={activeOptionId}
+          aria-autocomplete="list"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a command…"
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={cn(
+            HIT_TARGET_ROW,
+            "w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          )}
           data-testid="command-palette-input"
         />
 
         <ul
+          id={listboxId}
           role="listbox"
           aria-label="Commands"
           className="grid max-h-72 gap-0.5 overflow-y-auto"
@@ -153,6 +184,7 @@ export function CommandPalette({
               return (
                 <li
                   key={action.id}
+                  id={`command-palette-option-${action.id}`}
                   role="option"
                   aria-selected={active}
                   onMouseEnter={() => setHighlighted(index)}

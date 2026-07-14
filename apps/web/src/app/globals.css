@@ -233,7 +233,19 @@ body {
   --sf3: #2a2c36;
   --ink: #eef0f4;
   --mut: #a6a9b4;
-  --fnt: #6f727d;
+  /* #574 (epic #555 item 6, WCAG AA contrast): the prototype's original
+     #6f727d measured ~3.33:1 against the card/#1e2028 surface (ux-audit
+     2026-07-13-codex.md) — below the 4.5:1 AA floor for normal text.
+     Computed (WCAG relative-luminance formula) against every surface this
+     token actually sits on in this dark axis: #6f727d vs --bd #14151a =
+     3.80:1, vs --sf #1e2028 = 3.39:1, vs --sf2 #24262f = 3.14:1, vs --sf3
+     #2a2c36 = 2.90:1 (worst case — the lightest of the four, i.e. closest
+     in luminance to the text color). #90939c is the smallest same-hue
+     lightening (hue/saturation held fixed, only HSL lightness raised) that
+     clears 4.5:1 against that worst case: vs --bd 5.94:1, vs --sf 5.29:1,
+     vs --sf2 4.91:1, vs --sf3 4.52:1 — AA on every surface, calm/muted
+     character preserved (same hue, just lighter). */
+  --fnt: #90939c;
   --ln: #2a2c36;
   --ln2: #363945;
   --btn: #eef0f4;
@@ -313,7 +325,18 @@ body {
   --sf3: #ecebe6;
   --ink: #1d1c1a;
   --mut: #6b6862;
-  --fnt: #a3a09a;
+  /* #574 (epic #555 item 6, WCAG AA contrast): the prototype's original
+     #a3a09a measured ~1.92-2.34:1 on light surfaces (ux-audit
+     2026-07-13-codex.md) — far below the 4.5:1 AA floor for normal text.
+     Computed against every surface this token sits on in this light axis:
+     #a3a09a vs --bd #f7f6f3 = 2.41:1, vs --sf #ffffff = 2.61:1, vs --sf2
+     #f4f3ef = 2.35:1, vs --sf3 #ecebe6 = 2.18:1 (worst case — the darkest
+     of the four, closest in luminance to the text color). #6e6a64 is the
+     smallest same-hue darkening (hue/saturation held fixed, only HSL
+     lightness lowered) that clears 4.5:1 against that worst case: vs --bd
+     4.97:1, vs --sf 5.37:1, vs --sf2 4.84:1, vs --sf3 4.50:1 — AA on every
+     surface, calm/muted character preserved (same hue, just darker). */
+  --fnt: #6e6a64;
   --ln: #ecebe6;
   --ln2: #e0ded7;
   --btn: #1d1c1a;

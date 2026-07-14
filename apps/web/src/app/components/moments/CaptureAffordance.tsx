@@ -52,6 +52,27 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  *    natural size (matching the `sm:` desktop pill, which never hit this
  *    bug because its wider two-line-microcopy content already exceeded
  *    195px and pushed past the cap visibly rather than wrapping tighter).
+ *
+ * #574 (mobile shell, epic #555 item 6): below `sm` (<640px) a new fixed
+ * bottom navigator (BottomNavigator.tsx) now also occupies the bottom band,
+ * so the pill's plain #553 offset (`env(safe-area-inset-bottom)+1.5rem`,
+ * 24px) would sit UNDER the navigator there. The offset is now
+ * breakpoint-split: below `sm` it becomes
+ * `env(safe-area-inset-bottom)+5.5rem` (88px = the navigator's ~74px real
+ * height — per BottomNavigator's MOBILE_NAV_CONTENT_HEIGHT_PX and the
+ * height math in its doc comment — plus ~14px clear air above it) so the
+ * pill sits above the navigator with a guaranteed gap regardless of the
+ * safe-area value (both elements' offsets carry the same env() term, so it
+ * cancels out of the gap). At `sm:` and up it reverts to the original #553
+ * 24px offset (the navigator doesn't render there — `sm:hidden`). The #553
+ * safe-area-aware and shrink-to-fit-centering guarantees above are
+ * otherwise unchanged; MomentsThemeShell's reserved bottom padding is
+ * widened to match at mobile widths (see its own #574 comment) so
+ * scrolled-to-end content still clears the pill's new, taller mobile
+ * position. The pill/navigator non-intersection is proven at real layout by
+ * the #574 e2e guard in tests/e2e/moments-home-parity.spec.ts (which caught
+ * a first cut of this offset — 4.5rem, based on an undercounted 60px
+ * navigator height — actually intersecting at 390x844).
  */
 
 export interface CaptureAffordanceProps {
@@ -76,7 +97,7 @@ export function CaptureAffordance({
       aria-disabled={captureLocked}
       className={cn(
         HIT_TARGET_ROW,
-        "fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] z-40 mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:hover:scale-100",
+        "fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 mx-auto flex w-fit items-center gap-2 rounded-full border border-border bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none motion-reduce:duration-0 motion-reduce:hover:scale-100 sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]",
       )}
       data-testid="capture-affordance"
     >
