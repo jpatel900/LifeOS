@@ -119,7 +119,12 @@ export const Phase2TimeBlockProposalSchema = z.object({
   proposed_end: z.string().datetime(),
   rationale: z.string().min(1),
   conflict_flag: z.boolean(),
-  status: z.enum(["proposed", "edited", "accepted", "rejected"]),
+  // #580 (one planning model): "superseded" added so the local workflow can
+  // represent placement-superseded proposals, aligning this mock enum with
+  // the canonical TIME_BLOCK_PROPOSAL_STATUSES (constants.ts), which already
+  // includes it. Additive only — orchestrator-authorized exception to the
+  // no-schemas-change rule for issue #580.
+  status: z.enum(["proposed", "edited", "accepted", "rejected", "superseded"]),
   created_at: z.string().datetime(),
 });
 

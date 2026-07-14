@@ -141,6 +141,7 @@ export {
   createTimeBlockProposal,
   editTimeBlockProposal,
   rejectTimeBlockProposal,
+  supersedePendingTimeBlockProposalsForTask,
   acceptTimeBlockProposal,
   checkTimeBlockProposalConflict,
   createGoogleCalendarEventFromProposal,

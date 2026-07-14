@@ -230,6 +230,48 @@ test("triage supports local split and merge", async ({ page }) => {
   ).toBeVisible();
 });
 
+// #580 (one planning model — placement wins): the audit's exact journey.
+// Capture → parse auto-creates a proposal → the user places the task
+// directly on the hour rail. The placement supersedes the pending proposal
+// atomically: ONE scheduled block, ZERO active proposals, and the old
+// dual-model "accepting adds another block" warning copy never appears.
+test("placing a task supersedes its parse-created proposal — one block, zero active proposals, no warning", async ({
+  page,
+}) => {
+  const title = "Placement wins audit item";
+  await captureTask(page, title);
+  await page.getByRole("button", { name: "Do today" }).click();
+  await goToStage(page, /Plan/);
+
+  // The parse-created proposal is pending in the Proposals panel.
+  await expect(
+    page.getByRole("button", { name: "Accept local", exact: true }),
+  ).toBeVisible();
+
+  // Direct placement at 8am — THE scheduling action.
+  await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
+  await page.getByRole("button", { name: /8a\s+Drop here/ }).click();
+
+  // ONE scheduled block on the rail (exactly one slot carries the title).
+  await expect(
+    page.getByRole("button", { name: new RegExp(`8a\\s+${title}`) }),
+  ).toBeVisible();
+  await expect(page.getByText("Tap to unplan")).toHaveCount(1);
+
+  // ZERO active proposals: the pending proposal was superseded, so its
+  // accept control is gone and the empty-proposals copy shows instead.
+  await expect(
+    page.getByRole("button", { name: "Accept local", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Select a task, then draft a local proposal."),
+  ).toBeVisible();
+
+  // The dual-model warning copy is dead.
+  await expect(page.getByText(/already has a scheduled block/i)).toHaveCount(0);
+  await expect(page.getByText(/Accepting adds/i)).toHaveCount(0);
+});
+
 test("plan exposes local proposal edit, reject, and accept controls", async ({
   page,
 }) => {

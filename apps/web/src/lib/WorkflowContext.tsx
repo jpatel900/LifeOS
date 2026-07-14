@@ -103,6 +103,7 @@ import {
   recordPolicyProposalDecision,
   recordDurationRecalibrationDecision,
   rejectTimeBlockProposal,
+  supersedePendingTimeBlockProposalsForTask,
   unplanCalendarBlock,
   approveTaskMap,
   setTaskMapNodeCompletion,
@@ -1582,6 +1583,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       );
     }
 
+    // #580: mirror the local supersede-on-place transition so a later sync
+    // cannot resurrect a pending proposal for the task just placed. Runs
+    // after the accept RPC, so the accepted proposal is already settled.
+    await supersedePendingTimeBlockProposalsForTask(client, persistedTaskId);
+
     await syncPersistedWorkflowRows(client);
   }
 
@@ -1707,6 +1713,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       persistedBlockIdByLocalIdRef.current.set(
         localBlock.id,
         acceptResult.block.id,
+      );
+    }
+
+    // #580: mirror the local supersede-on-place transition (accept = place)
+    // so sibling pending proposal rows for the task cannot come back as
+    // active on the next sync. Runs after the accept RPC settles this one.
+    const persistedTaskIdForSupersede = persistedIdForLocalId(
+      localProposal.task_id,
+      persistedTaskIdByLocalIdRef.current,
+    );
+    if (persistedTaskIdForSupersede) {
+      await supersedePendingTimeBlockProposalsForTask(
+        client,
+        persistedTaskIdForSupersede,
       );
     }
 

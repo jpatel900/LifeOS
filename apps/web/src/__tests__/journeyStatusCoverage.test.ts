@@ -36,10 +36,10 @@ const JOURNEY_UNREACHED_STATUSES = {
     // No transition-driven helper archives tasks yet; keep visible until a real transition reaches it.
     "archived",
   ],
-  timeBlockProposals: [
-    // No transition-driven helper supersedes proposals yet; keep visible until a real transition reaches it.
-    "superseded",
-  ],
+  // #580 (one planning model): "superseded" left this allowlist — placement
+  // (plan/accept) now supersedes sibling pending proposals, so the journeys
+  // below reach it through a real transition.
+  timeBlockProposals: [],
   calendarBlocks: [],
 };
 

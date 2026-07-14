@@ -277,6 +277,60 @@ export function buildWorkflowTodayCockpitModel(
   });
 }
 
+// #580 (one planning model — placement wins): read-only query helpers over a
+// reached WorkflowState, used by the placement-invariant guard tests. Live
+// here (not in the test files) so their `WorkflowState` parameter typing
+// stays inside the allowlisted reachability boundary.
+const PENDING_PROPOSAL_STATUSES_FOR_TESTS = ["proposed", "edited"];
+
+export function activeTaskFor(state: WorkflowState) {
+  const task = state.tasks.find((item) => item.status === "active");
+  if (!task) {
+    throw new Error("No active task is reachable from the workflow state.");
+  }
+  return task;
+}
+
+export function pendingProposalsFor(state: WorkflowState, taskId: string) {
+  return state.timeBlockProposals.filter(
+    (item) =>
+      item.task_id === taskId &&
+      PENDING_PROPOSAL_STATUSES_FOR_TESTS.includes(item.status),
+  );
+}
+
+export function supersededProposalsFor(state: WorkflowState, taskId: string) {
+  return state.timeBlockProposals.filter(
+    (item) => item.task_id === taskId && item.status === "superseded",
+  );
+}
+
+export function scheduledBlocksFor(state: WorkflowState, taskId: string) {
+  return state.calendarBlocks.filter(
+    (block) => block.task_id === taskId && block.status === "scheduled",
+  );
+}
+
+// #580: an active task with two pending proposals — the audit's exact
+// "parsing auto-creates a proposal, then a second suggestion arrives" shape,
+// used by the placement-supersedes guard tests.
+export function seedTaskWithTwoPendingProposals(): WorkflowState {
+  let state = workflowSeed();
+  state = captureWorkflow(state, "Placement wins proof task.");
+  // acceptLatestDraft folds in the parse-created proposal draft as a pending
+  // proposal — the audit's exact "parsing auto-creates a proposal" shape.
+  state = acceptLatestDraft(state);
+  const task = activeTaskFor(state);
+  const start = new Date();
+  start.setHours(14, 0, 0, 0);
+  const end = new Date(start.getTime() + 45 * 60 * 1000);
+  return createLocalProposalFromTask(state, task.id, {
+    proposed_start: start.toISOString(),
+    proposed_end: end.toISOString(),
+    rationale: "Second pending suggestion for the same task.",
+  });
+}
+
 export function goldenJourneyState(): WorkflowState {
   let state = workflowSeed();
   state = captureWorkflow(state, "Golden capture needs triage and planning.");
