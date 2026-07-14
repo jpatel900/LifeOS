@@ -1265,14 +1265,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           });
       }
     },
-    saveReview: () => {
+    saveReview: async () => {
       const previous = stateRef.current;
       const next = saveReview(previous);
       applyWorkflowState(next);
 
-      void persistenceOps.persistReviewEntry(next).catch((error) => {
+      // #588: local state updates optimistically above, but the RESULT is the
+      // truth callers gate "day closed" copy on — resolved only after the
+      // persisted write settles (or truthfully reports local-only/failure).
+      try {
+        return await persistenceOps.persistReviewEntry(next);
+      } catch (error) {
         markPersistedSaveFailure(error);
-      });
+        return "failure";
+      }
     },
     confirmWin,
     confirmRollup,

@@ -215,7 +215,7 @@ describe("TodayMoments", () => {
     restoreFetch();
   });
 
-  it("close-day journey: Close moment renders counts and Close the day fires without crashing", () => {
+  it("close-day journey: Close moment renders counts and Close the day fires without crashing", async () => {
     renderToday({ initialMoment: "close" });
 
     expect(screen.getByTestId("close-moment-completed")).toHaveTextContent("0");
@@ -223,9 +223,13 @@ describe("TodayMoments", () => {
 
     fireEvent.click(screen.getByTestId("close-moment-close-day"));
 
-    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
-      "Day closed",
-    );
+    // #588: mock mode has no account, so the resolved save result is
+    // local-only and the toast states that truth (not a bare "Day closed").
+    await waitFor(() => {
+      expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+        "Day closed locally — account sync pending",
+      );
+    });
   });
 
   it("persists timeDisplay and moment through localStorage and reads them back", () => {
@@ -1558,14 +1562,17 @@ describe("TodayMoments — SP-6 undo over confirm", () => {
     window.sessionStorage.clear();
   });
 
-  it("string-only showToast still works and auto-dismisses (back-compat)", () => {
+  it("string-only showToast still works and auto-dismisses (back-compat)", async () => {
     vi.useFakeTimers();
     renderToday({ initialMoment: "close" });
 
     fireEvent.click(screen.getByTestId("close-moment-close-day"));
 
+    // #588: the toast now appears only once the save result resolves
+    // (local-only in mock mode) — flush the microtask queue first.
+    await act(async () => {});
     expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
-      "Day closed",
+      "Day closed locally — account sync pending",
     );
     expect(
       screen.queryByTestId("today-moments-toast-undo"),

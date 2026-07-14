@@ -66,7 +66,7 @@ describe("handoff cockpit route provider wiring", () => {
     ["/triage", () => <TriagePage />, "Inbox clear"],
     ["/calendar", () => <CalendarPage />, "Hour rail"],
     ["/execute", () => <ExecutePage />, "Focus queue"],
-    ["/review", () => <ReviewPage />, /Day closed clean|carry over/],
+    ["/review", () => <ReviewPage />, /Ready to close|carry over/],
     [
       "/health",
       () => <HealthPage />,

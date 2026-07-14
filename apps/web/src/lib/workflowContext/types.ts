@@ -166,7 +166,15 @@ export interface WorkflowContextValue {
   carryForwardTask: (taskId: string) => void;
   deferTask: (taskId: string) => void;
   dropTask: (taskId: string) => void;
-  saveReview: () => void;
+  /**
+   * #588 (review closure truth): resolves with the actual persistence
+   * outcome. Local state still updates synchronously/optimistically, but any
+   * caller that reports a "day closed" verdict MUST await this and gate the
+   * copy on the result — "persisted" is the only outcome that may claim
+   * closure; "local-only" keeps the recovery-oriented local-fallback truth;
+   * "failure" must show recovery copy, never a closure claim.
+   */
+  saveReview: () => Promise<ReviewSaveResult>;
   confirmWin: (input: {
     taskId: string;
     title: string;
@@ -222,6 +230,14 @@ export interface WorkflowContextValue {
     blockId: string,
   ) => Promise<GoogleCalendarBridgeResult>;
 }
+
+/**
+ * #588: how a review save actually resolved.
+ * - "persisted": the review entry reached the account (Supabase row created).
+ * - "local-only": no real client/persisted area — saved locally, sync pending.
+ * - "failure": the persisted write threw; local state kept, nothing synced.
+ */
+export type ReviewSaveResult = "persisted" | "local-only" | "failure";
 
 export interface GoogleCalendarBridgeResult {
   outcome:

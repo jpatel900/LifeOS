@@ -737,9 +737,23 @@ export function LifeOSCockpit({
               onDefer={deferTask}
               onDrop={dropTask}
               onSave={() => {
-                saveReview();
-                showToast("Review saved");
-                navigate("today");
+                // #588: report closure only after persistence resolves.
+                // "persisted" is the only outcome that claims the day closed;
+                // local-only states the fallback truth; failure shows
+                // recovery copy and stays on review so Save can be retried.
+                void saveReview().then((result) => {
+                  if (result === "persisted") {
+                    showToast("Day closed — review saved");
+                    navigate("today");
+                    return;
+                  }
+                  if (result === "local-only") {
+                    showToast("Review saved locally — account sync pending");
+                    navigate("today");
+                    return;
+                  }
+                  showToast("Couldn't save the review — day not closed yet");
+                });
               }}
             />
           ) : null}
@@ -759,6 +773,7 @@ export function LifeOSCockpit({
         <div
           role="status"
           aria-live="polite"
+          data-testid="cockpit-toast"
           className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[var(--grn-sf)] px-4 py-2 text-sm font-semibold text-[var(--grn-fg)] shadow-lg"
         >
           {toast}
