@@ -61,7 +61,12 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/settings/areas");
+    // #592: route to Today (`/`) on success, not Settings — Today owns the
+    // first-use decision (the deterministic zero-state predicate in
+    // lib/onboarding/onboarding.ts decides whether the onboarding ritual
+    // appears). Routing straight to Settings bypassed that predicate
+    // entirely, so a brand-new account never saw the ritual.
+    router.push("/");
   }
 
   return (
