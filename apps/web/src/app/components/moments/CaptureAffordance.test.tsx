@@ -104,21 +104,20 @@ describe("CaptureAffordance", () => {
   // centering technique — see CaptureAffordance.tsx's #553 comment for the
   // shrink-to-fit width bug that technique caused.
   //
-  // #574: the base (mobile, <640px) offset moved from the original #553
-  // 24px to 88px to clear the new fixed BottomNavigator, with an `sm:`
-  // override restoring the original 24px at 640px and up (where the
-  // navigator is `sm:hidden`) — see CaptureAffordance.tsx's #574 comment
-  // for the exact math.
-  it("stays fixed to the viewport bottom, above the safe-area inset", () => {
+  // #593 (supersedes the #574 offset split): the pill is desktop-only
+  // (`hidden sm:flex`) at the plain #553 24px safe-area offset — the mobile
+  // capture action lives in BottomNavigator's band instead, so there is no
+  // mobile offset to manage anymore. See CaptureAffordance.tsx's #593
+  // comment and the #593 e2e band guard.
+  it("stays fixed to the viewport bottom, above the safe-area inset, desktop-only", () => {
     render(<CaptureAffordance onOpen={vi.fn()} />);
     const button = screen.getByTestId("capture-affordance");
     expect(button).toHaveClass("fixed");
     expect(button).toHaveClass(
-      "bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]",
+      "bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]",
     );
-    expect(button).toHaveClass(
-      "sm:bottom-[calc(env(safe-area-inset-bottom)+1.5rem)]",
-    );
+    expect(button).toHaveClass("hidden");
+    expect(button).toHaveClass("sm:flex");
     expect(button).toHaveClass("inset-x-0");
     expect(button).toHaveClass("mx-auto");
     expect(button).toHaveClass("w-fit");

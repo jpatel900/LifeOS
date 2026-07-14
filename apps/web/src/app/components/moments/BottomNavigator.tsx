@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
 import { HIT_TARGET_MIN } from "./hitTarget";
@@ -45,13 +46,26 @@ export interface BottomNavigatorProps {
   value: MomentValue;
   onChange(value: MomentValue): void;
   settingsHref?: string;
+  /**
+   * #593: the mobile capture action lives IN this band (one bottom-band
+   * action model). Wired to the same open/disabled/queue state the desktop
+   * CaptureAffordance pill uses; the pill itself is `hidden` below `sm`.
+   */
+  onCapture(): void;
+  captureDisabled?: boolean;
+  unsyncedCount?: number;
 }
 
 export function BottomNavigator({
   value,
   onChange,
   settingsHref = "/settings/areas",
+  onCapture,
+  captureDisabled = false,
+  unsyncedCount = 0,
 }: BottomNavigatorProps) {
+  const pendingSync = unsyncedCount > 0;
+
   return (
     <nav
       aria-label="Moment and settings"
@@ -59,15 +73,48 @@ export function BottomNavigator({
       data-testid="bottom-navigator"
     >
       <MomentSwitcher value={value} onChange={onChange} idPrefix="bottom-nav" />
-      <Link
-        href={settingsHref}
+      <button
+        type="button"
+        onClick={captureDisabled ? undefined : onCapture}
+        disabled={captureDisabled}
+        aria-disabled={captureDisabled}
         className={cn(
           HIT_TARGET_MIN,
-          "rounded-full px-3 text-sm font-medium text-muted-foreground hover:text-foreground",
+          "relative rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-70",
+        )}
+        data-testid="bottom-navigator-capture"
+      >
+        {captureDisabled ? "Resolving…" : "Capture"}
+        {pendingSync ? (
+          <span
+            role="status"
+            aria-live="polite"
+            className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border border-border bg-background px-1.5 py-0.5 text-[0.7rem] font-semibold leading-none tabular-nums shadow-sm"
+            style={{ color: "var(--state-watch)" }}
+            data-testid="bottom-navigator-capture-badge"
+          >
+            <span aria-hidden="true">{unsyncedCount}</span>
+            <span className="sr-only">
+              {unsyncedCount} {unsyncedCount === 1 ? "capture" : "captures"}{" "}
+              waiting to sync
+            </span>
+          </span>
+        ) : null}
+      </button>
+      {/* #593: icon-only at mobile — the band now also carries Capture, and
+          three text affordances don't fit 390px without crowding. 44px
+          square target; the name survives for AT via aria-label/sr-only. */}
+      <Link
+        href={settingsHref}
+        aria-label="Settings"
+        className={cn(
+          HIT_TARGET_MIN,
+          "rounded-full text-muted-foreground hover:text-foreground",
         )}
         data-testid="bottom-navigator-settings-link"
       >
-        Settings
+        <Settings aria-hidden="true" className="size-5" />
+        <span className="sr-only">Settings</span>
       </Link>
     </nav>
   );
