@@ -309,4 +309,65 @@ describe("OnboardingRitual (#581)", () => {
       expect(props.onComplete).toHaveBeenCalledWith("skipped");
     });
   });
+
+  describe("44px hit targets (#594)", () => {
+    // #594: every actionable control on the ritual reaches the shared
+    // >=44px floor via hitTarget.ts — never a raw min-h-10/size-9 (both
+    // 40/36px). jsdom does not compute layout, so this is a className-level
+    // guard; the real geometric proof is the Playwright e2e at 390px
+    // (tests/e2e/hit-targets-390.spec.ts).
+    it("step 1 (areas) controls carry a 44px hit-target class", () => {
+      renderRitual();
+
+      expect(
+        screen.getAllByTestId("onboarding-area-color")[0].className,
+      ).toContain("min-h-[44px]");
+      expect(
+        screen.getAllByTestId("onboarding-area-name")[0].className,
+      ).toContain("min-h-[44px]");
+      expect(
+        screen.getAllByTestId("onboarding-area-remove")[0].className,
+      ).toContain("min-h-[44px]");
+      expect(screen.getByTestId("onboarding-area-add").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("onboarding-areas-skip").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(
+        screen.getByTestId("onboarding-areas-continue").className,
+      ).toContain("min-h-[44px]");
+    });
+
+    it("step 2 (day shape) controls carry a 44px hit-target class", async () => {
+      renderRitual();
+      fireEvent.click(screen.getByTestId("onboarding-areas-continue"));
+      await screen.findByTestId("onboarding-step-day");
+
+      expect(screen.getByTestId("onboarding-day-start").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("onboarding-day-end").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("onboarding-session-45").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("onboarding-day-skip").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("onboarding-day-continue").className).toContain(
+        "min-h-[44px]",
+      );
+    });
+
+    it("step 3 (capture) skip control carries a 44px hit-target class", async () => {
+      renderRitual();
+      await advanceToStep("capture");
+
+      expect(screen.getByTestId("onboarding-capture-skip").className).toContain(
+        "min-h-[44px]",
+      );
+    });
+  });
 });
