@@ -307,6 +307,19 @@ describe("source-of-truth boundaries", () => {
     const captureCore = normalizeWhitespace(
       readRepoFile("apps/web/src/app/components/moments/CaptureCore.tsx"),
     );
+    // #590 slice 2: the per-stage screens were mechanically extracted into
+    // apps/web/src/app/components/cockpit/ — LifeOSCockpit.tsx is now the
+    // thin stage-router/shell that composes them, so stage-screen literals
+    // live in the per-stage files rather than the shell itself.
+    const captureView = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/cockpit/CaptureView.tsx"),
+    );
+    const planView = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/cockpit/PlanView.tsx"),
+    );
+    const overviewView = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/components/cockpit/OverviewView.tsx"),
+    );
 
     expect(cockpitRoute).toContain("LifeOSCockpit");
     for (const [source, stage] of [
@@ -325,10 +338,11 @@ describe("source-of-truth boundaries", () => {
     }
 
     expect(cockpit).toContain('data-testid="lifeos-cockpit"');
-    expect(cockpit).toContain("CaptureCore");
+    expect(cockpit).toContain("CaptureView");
+    expect(captureView).toContain("CaptureCore");
     expect(captureCore).toContain("Save thought");
-    expect(cockpit).toContain("Google writes are separate");
-    expect(cockpit).toContain("All areas overview");
+    expect(planView).toContain("Google writes are separate");
+    expect(overviewView).toContain("All areas overview");
     expect(globalsCss).toContain(".lifeos-cockpit");
     expect(agents).toContain("design_handoff_lifeos/README.md");
     expect(handoffReadme).toContain("One screen component");

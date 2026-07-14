@@ -42,8 +42,8 @@ import { useCloseMomentRollups } from "./useCloseMomentRollups";
  * Container that wires the P1 view-model builders and P2 presentation
  * primitives to WorkflowContext. Owns the moment/capture/palette UI state,
  * preferences persistence, and cross-moment coordination (primary action,
- * command palette, deep links, toast). No fetches, no new routes — this
- * only renders on the dev-only /moments-preview route.
+ * command palette, deep links, toast). No fetches; renders at `/` when
+ * NEXT_PUBLIC_MOMENTS_HOME is on (see app/page.tsx).
  *
  * #590 slice 3: Flow's focus-session/task-map wiring and Close's wins/rollup
  * harvesting now live in `useFlowFocusSession` and `useCloseMomentRollups`

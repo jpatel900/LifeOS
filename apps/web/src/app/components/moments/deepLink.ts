@@ -4,7 +4,7 @@
  * Pure mapping from a demoted stage-route path to the Today surface it
  * should deep-link into once the moments home flips at P7. This module does
  * not change any live route's rendering — it only defines the map + helpers
- * that TodayMoments and the dev-only /moments-preview route consume.
+ * that TodayMoments' `deepLink` prop consumes.
  */
 
 export type DeepLinkTarget = {

@@ -3,7 +3,8 @@ import { expect, test, type Page } from "@playwright/test";
 /**
  * S6 (#258) — daily brief read-only synthesis, Playwright evidence.
  *
- * Proves two things against the dev-only `/moments-preview` route (live
+ * Proves two things against `/` (this suite's webServer sets
+ * NEXT_PUBLIC_MOMENTS_HOME=true, see playwright.config.ts; live
  * WorkflowContext, live wall-clock — `now` is left undefined so
  * TodayMoments defaults to `new Date()`, same as the existing
  * moments-home-parity spec):
@@ -136,7 +137,7 @@ function buildSeedState() {
   };
 }
 
-test.describe("moments daily brief (/moments-preview, #258)", () => {
+test.describe("moments daily brief (/, #258)", () => {
   test("complete variant: renders the stale-project line and recovery-nudge card, zero mutations", async ({
     page,
   }) => {
@@ -150,7 +151,7 @@ test.describe("moments daily brief (/moments-preview, #258)", () => {
       { key: STORAGE_KEY, value: seed },
     );
 
-    await page.goto("/moments-preview");
+    await page.goto("/");
     await expect(page.getByTestId("today-moments")).toBeVisible();
     // Pin Start deterministically regardless of wall-clock time-of-day.
     await page.keyboard.press("1");
@@ -183,7 +184,7 @@ test.describe("moments daily brief (/moments-preview, #258)", () => {
     // No seed — the route's default mock state has no active project old
     // enough to be stale and no missed block from yesterday, so both
     // sections should be omitted entirely (not an error state).
-    await page.goto("/moments-preview");
+    await page.goto("/");
     await expect(page.getByTestId("today-moments")).toBeVisible();
     await page.keyboard.press("1");
     await expect(page.getByTestId("start-moment")).toBeVisible();
