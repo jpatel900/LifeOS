@@ -846,8 +846,16 @@ export function TodayMoments({
           (matching CaptureAffordance just above), including while the
           re-entry ritual is active: it's a fixed low-risk nav strip, not
           part of the ritual's own flow, and hiding it would just be one
-          more state to track for no real benefit. */}
-      <BottomNavigator value={moment} onChange={setMoment} />
+          more state to track for no real benefit.
+          #593: it also carries the mobile capture action (same state as the
+          desktop pill above, which is `hidden` below `sm`). */}
+      <BottomNavigator
+        value={moment}
+        onChange={setMoment}
+        onCapture={() => setCaptureOpen(true)}
+        captureDisabled={captureParse.phase === "parsing"}
+        unsyncedCount={unsyncedCaptureCount}
+      />
 
       <CaptureOverlay
         open={captureOpen}

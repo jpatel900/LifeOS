@@ -164,11 +164,12 @@ test.describe("moments home layout (/) has no horizontal overflow", () => {
 // than 667px) while the desktop case's short two-column content stays a
 // non-regression check. Pin the moment to Start (the Pipeline rail only
 // renders there).
+// #593: the pill is desktop-only now (`hidden sm:flex`) — the mobile capture
+// action lives in the BottomNavigator band, and the mobile zero-intersection
+// contract is proven by the #593 guard below. This check keeps the desktop
+// pill honest.
 test.describe("moments home capture pill clears the Pipeline row (#477)", () => {
-  for (const viewport of [
-    { width: 375, height: 667 },
-    { width: 1280, height: 900 },
-  ]) {
+  for (const viewport of [{ width: 1280, height: 900 }]) {
     test(`capture pill does not intersect the Pipeline row at ${viewport.width}px`, async ({
       page,
     }) => {
@@ -219,11 +220,10 @@ test.describe("moments home capture pill clears the Pipeline row (#477)", () => 
 // there (the pill's size/position is breakpoint-independent — see #477's
 // page.tsx comment — so desktop, whose content is short enough to never
 // need scrolling, should already pass and stays a non-regression check).
+// #593: mobile (390x844) moved to the #593 band guard below — the pill no
+// longer renders there. Desktop non-regression retained.
 test.describe("moments home capture pill clears the Areas card (#553)", () => {
-  for (const viewport of [
-    { width: 390, height: 844 },
-    { width: 1280, height: 900 },
-  ]) {
+  for (const viewport of [{ width: 1280, height: 900 }]) {
     test(`capture pill does not intersect the Areas card at ${viewport.width}px`, async ({
       page,
     }) => {
@@ -259,15 +259,13 @@ test.describe("moments home capture pill clears the Areas card (#553)", () => {
 
 // #574 (epic #555 item 6, mobile shell): below 640px a fixed bottom
 // navigator (BottomNavigator.tsx) now carries the Start/Flow/Close switch +
-// Settings link into the thumb zone. Mirrors the #553 pill/Areas-card
-// overlap guard above: visibility at the issue's literal 390x844 viewport,
-// plus a geometric non-intersection check against the capture pill (the
-// other fixed bottom-band element) once scrolled to the true end of the
-// page — same "reached the bottom of a short page" rationale #477/#553
-// already established for why that's the meaningful check for two
-// viewport-fixed elements.
+// Settings link into the thumb zone. #593 update: the capture pill no
+// longer exists below `sm` — the navigator now carries the capture action
+// itself (one bottom-band action model), so this guard asserts the pill's
+// mobile absence and the in-band capture button's presence instead of
+// managing an overlap between two fixed elements.
 test.describe("moments home bottom navigator (#574)", () => {
-  test("bottom navigator is visible at 390x844 and never overlaps the capture pill", async ({
+  test("bottom navigator at 390x844 carries moment switch, capture, and settings; the pill is gone", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -277,9 +275,14 @@ test.describe("moments home bottom navigator (#574)", () => {
     await expect(page.getByTestId("start-moment")).toBeVisible();
 
     const nav = page.getByTestId("bottom-navigator");
-    const pill = page.getByTestId("capture-affordance");
     await expect(nav).toBeVisible();
-    await expect(pill).toBeVisible();
+    // #593: the floating pill is desktop-only; capture lives in the band.
+    await expect(page.getByTestId("capture-affordance")).toBeHidden();
+    const captureButton = page.getByTestId("bottom-navigator-capture");
+    await expect(captureButton).toBeVisible();
+    const captureBox = await captureButton.boundingBox();
+    expect(captureBox!.height).toBeGreaterThanOrEqual(44);
+    expect(captureBox!.width).toBeGreaterThanOrEqual(44);
 
     // Thumb-zone reachability: both the moment switch and Settings are in
     // the bottom navigator, with no scroll required.
@@ -289,23 +292,6 @@ test.describe("moments home bottom navigator (#574)", () => {
     await expect(
       page.getByTestId("bottom-navigator-settings-link"),
     ).toBeVisible();
-
-    await page.evaluate(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight),
-    );
-
-    const navBox = await nav.boundingBox();
-    const pillBox = await pill.boundingBox();
-    expect(navBox).not.toBeNull();
-    expect(pillBox).not.toBeNull();
-
-    const intersects =
-      navBox!.x < pillBox!.x + pillBox!.width &&
-      navBox!.x + navBox!.width > pillBox!.x &&
-      navBox!.y < pillBox!.y + pillBox!.height &&
-      navBox!.y + navBox!.height > pillBox!.y;
-
-    expect(intersects).toBe(false);
   });
 
   test("bottom navigator is not rendered at 1280px (desktop keeps the header switcher only)", async ({
@@ -318,19 +304,83 @@ test.describe("moments home bottom navigator (#574)", () => {
   });
 });
 
-// MANUAL VERIFICATION NOTE (#553): what this guard does not, and cannot,
-// prove — on the Start moment's default *unscrolled* load at 390px, the
-// pill still visibly sits over the bottom of the Areas card (verified by
-// screenshot during this fix; scroll=0 pill/Areas bounding boxes do
-// intersect). #553's centering fix (CaptureAffordance.tsx) shrank the pill
-// from two lines/~70px tall to one line/~46px, which measurably reduces how
-// much of the card it covers, but does not eliminate the overlap — doing
-// that fully would mean either giving up "always visible without
-// scrolling" or bounding this shell to its own internally-scrolled pane
-// (a structural change out of scope for this fix; see MomentsThemeShell.tsx
-// and page.tsx for the tradeoff notes). Flagged for a follow-up product
-// decision (e.g. auto-hiding the pill while scrolling, or condensing the
-// empty-state's Waiting-on/Areas cards) rather than silently declared fixed.
+// #593 (audit #2) — resolves the #553 manual-verification gap that used to
+// live here: the unscrolled-view pill/Areas overlap was inherent to a
+// mid-viewport floating pill, so the pill no longer renders below `sm` at
+// all. The mobile capture action moved into the BottomNavigator band (one
+// bottom-band action model). The band is the only fixed bottom element on
+// mobile now, so pairwise capture/nav/content intersection reduces to
+// nav-vs-Pipeline and nav-vs-Areas.
+//
+// Invariant, at 375x667 AND 390x844:
+// - scroll END: strict zero intersection — the shell's reserved clearance
+//   must fully clear the band (the #477/#553 guarantee).
+// - scroll ZERO: an intersection is a violation ONLY if the covered element
+//   ends above the viewport bottom. An element that continues past the
+//   fold sliding under an edge-docked translucent bar is inherent to every
+//   fixed bottom nav (content height varies with platform font metrics —
+//   this exact case passed on Windows and failed on CI Linux) and is
+//   recoverable by scrolling, unlike the mid-viewport floater #553 flagged,
+//   which covered content that could never scroll clear of it.
+test.describe("mobile bottom band never intersects content (#593)", () => {
+  for (const viewport of [
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`band clears Pipeline and Areas at ${viewport.width}x${viewport.height}, scroll 0 and end`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const nav = page.getByTestId("bottom-navigator");
+      await expect(nav).toBeVisible();
+      await expect(page.getByTestId("capture-affordance")).toBeHidden();
+
+      const pipeline = page.getByTestId("start-moment-pipeline-rail");
+      const areasCard = page.getByTestId("side-rail-areas-card");
+      await expect(pipeline).toBeVisible();
+      await expect(areasCard).toBeVisible();
+
+      for (const position of ["zero", "end"] as const) {
+        await page.evaluate((pos) => {
+          window.scrollTo(
+            0,
+            pos === "zero" ? 0 : document.documentElement.scrollHeight,
+          );
+        }, position);
+
+        const navBox = await nav.boundingBox();
+        expect(navBox).not.toBeNull();
+
+        for (const [name, locator] of [
+          ["pipeline", pipeline],
+          ["areas", areasCard],
+        ] as const) {
+          const box = await locator.boundingBox();
+          expect(box, `${name} box at scroll ${position}`).not.toBeNull();
+          const intersects =
+            navBox!.x < box!.x + box!.width &&
+            navBox!.x + navBox!.width > box!.x &&
+            navBox!.y < box!.y + box!.height &&
+            navBox!.y + navBox!.height > box!.y;
+          // Below-fold continuation sliding under the edge-docked band is
+          // allowed at scroll zero (see the describe comment); everything
+          // else — and the entire scroll-end state — must be clear.
+          const endsAboveFold = box!.y + box!.height <= viewport.height;
+          const violation = intersects && (position === "end" || endsAboveFold);
+          expect(
+            violation,
+            `bottom band intersects ${name} at scroll ${position} (${viewport.width}px)`,
+          ).toBe(false);
+        }
+      }
+    });
+  }
+});
 
 // D-6 (#483): the bottom-left keyboard legend (KeyboardLegend.tsx) must never
 // overlap or crowd the fixed capture pill. The legend hides below `sm`
@@ -344,7 +394,9 @@ test.describe("moments home keyboard legend clears the capture pill (#483 D-6)",
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto("/");
     await expect(page.getByTestId("today-moments")).toBeVisible();
-    await expect(page.getByTestId("capture-affordance")).toBeVisible();
+    // #593: the pill is desktop-only now; the mobile capture control lives
+    // in the bottom navigator band.
+    await expect(page.getByTestId("bottom-navigator-capture")).toBeVisible();
     await expect(page.getByTestId("keyboard-legend")).toBeHidden();
   });
 

@@ -55,19 +55,17 @@ export function MomentsThemeShell({ children }: { children: ReactNode }) {
           viewport (address bar hidden), which would under-reserve this
           padding once the toolbar is showing.
 
-          #574 (mobile shell): below `sm` the fixed BottomNavigator also now
-          occupies the bottom band, and CaptureAffordance's mobile offset
-          moved up to clear it (see CaptureAffordance.tsx's #574 comment) —
-          so the pill's own top edge sits up to ~88px (its new offset) + 70px
-          (its own max rendered height, per page.tsx's #477 comment) = 158px
-          above the safe area at mobile widths, versus ~94px (24+70) before.
-          `pb-12rem` (192px) keeps the same ~34px buffer past that new worst
-          case (158+34=192) that the original `8rem` (128px) kept past the
-          old one (94+34=128) — same formula, just re-solved for the taller
-          mobile-only obstruction. `sm:pb-8rem` restores the original value
-          unchanged at `sm:` and up, where the navigator doesn't render and
-          the pill reverts to its original #553 offset. */}
-      <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+12rem)] pt-4 sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6">
+          #593 (audit #2, supersedes the #574 padding math): below `sm` the
+          capture pill no longer renders — the capture action moved into the
+          fixed BottomNavigator band, so the only mobile bottom obstruction
+          is the navigator itself (~74px content height per its
+          MOBILE_NAV_CONTENT_HEIGHT_PX, above the same safe-area term this
+          padding carries, which therefore cancels out of the clearance).
+          `pb-7rem` (112px) keeps a ~38px buffer past that (74+38=112) —
+          same formula as #477/#574, re-solved for the shorter obstruction.
+          `sm:pb-8rem` stays the original desktop value, where the navigator
+          doesn't render and the pill floats at its #553 offset. */}
+      <div className="mx-auto flex min-h-dvh w-full max-w-[var(--max)] flex-col gap-5 px-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] pt-4 sm:px-6 sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-6">
         <a
           href="#stage-content"
           className="sr-only rounded-full bg-[var(--btn)] px-4 py-2 font-bold text-[var(--btn-fg)] focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
