@@ -101,9 +101,15 @@ export interface CaptureCoreProps {
 }
 
 const DEFAULT_HOOK_LABEL = "what you were doing";
-// Long enough to read "back to: <hook>", short enough to stay well under
-// RTL's 1000ms findBy default and Playwright's action-wait budget.
-const CONCLUSION_AUTO_DISMISS_MS = 450;
+// #591: 450ms was not a materially perceivable dwell — the "back to: <hook>"
+// conclusion could auto-dismiss before a person had time to read it. This
+// matches TOAST_DURATION_MS (TodayMoments.tsx), the reviewed standard this
+// codebase already uses for a non-actionable, non-blocking auto-dismiss.
+// The conclusion is never *only* reachable by waiting it out, though:
+// clicking it, or pressing Enter/Escape while it's shown, dismisses it
+// immediately (see handleKeyDown and the onClick below) — the dwell is a
+// ceiling on how long a capture can be blocked, not the only way out.
+const CONCLUSION_AUTO_DISMISS_MS = 2500;
 
 export function CaptureCore({
   mode,

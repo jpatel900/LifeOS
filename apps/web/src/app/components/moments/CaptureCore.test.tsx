@@ -148,9 +148,17 @@ describe("CaptureCore", () => {
       );
     });
 
-    await waitFor(() => {
-      expect(onResolved).toHaveBeenCalledWith("parsed");
-    });
+    // #591: the auto-dismiss dwell is now a materially perceivable ~2.5s,
+    // not the old 450ms — real-timer tests need headroom past RTL's 1000ms
+    // default waitFor timeout to see it resolve without asserting anything
+    // about the exact duration (that's covered by the fake-timer tests
+    // below).
+    await waitFor(
+      () => {
+        expect(onResolved).toHaveBeenCalledWith("parsed");
+      },
+      { timeout: 4000 },
+    );
   });
 
   it("falls back to a default hook label when none was entered", async () => {
@@ -270,10 +278,108 @@ describe("CaptureCore", () => {
     expect(screen.queryByTestId("capture-parsing")).not.toBeInTheDocument();
     expect(screen.getByTestId("capture-conclusion")).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(onResolved).toHaveBeenCalledWith("raw");
-    });
+    await waitFor(
+      () => {
+        expect(onResolved).toHaveBeenCalledWith("raw");
+      },
+      { timeout: 4000 },
+    );
 
     onLineSpy.mockRestore();
+  });
+
+  describe("conclusion dwell is materially perceivable (#591)", () => {
+    it("stays visible and does not resolve at the old 450ms mark", async () => {
+      vi.useFakeTimers();
+      try {
+        const onResolved = vi.fn();
+        render(<ParseHarness onResolved={onResolved} />);
+
+        fireEvent.change(screen.getByTestId("capture-textarea"), {
+          target: { value: "Follow up with Alex" },
+        });
+        fireEvent.keyDown(screen.getByTestId("capture-textarea"), {
+          key: "Enter",
+        });
+        fireEvent.click(screen.getByTestId("resolve-parsed"));
+
+        expect(screen.getByTestId("capture-conclusion")).toBeInTheDocument();
+
+        vi.advanceTimersByTime(450);
+        expect(screen.getByTestId("capture-conclusion")).toBeInTheDocument();
+        expect(onResolved).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("auto-resolves once the full reviewed dwell has elapsed", () => {
+      vi.useFakeTimers();
+      try {
+        const onResolved = vi.fn();
+        render(<ParseHarness onResolved={onResolved} />);
+
+        fireEvent.change(screen.getByTestId("capture-textarea"), {
+          target: { value: "Follow up with Alex" },
+        });
+        fireEvent.keyDown(screen.getByTestId("capture-textarea"), {
+          key: "Enter",
+        });
+        fireEvent.click(screen.getByTestId("resolve-parsed"));
+
+        vi.advanceTimersByTime(2500);
+        expect(onResolved).toHaveBeenCalledWith("parsed");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("an explicit click dismisses the conclusion immediately, well before the dwell elapses", () => {
+      vi.useFakeTimers();
+      try {
+        const onResolved = vi.fn();
+        render(<ParseHarness onResolved={onResolved} />);
+
+        fireEvent.change(screen.getByTestId("capture-textarea"), {
+          target: { value: "Follow up with Alex" },
+        });
+        fireEvent.keyDown(screen.getByTestId("capture-textarea"), {
+          key: "Enter",
+        });
+        fireEvent.click(screen.getByTestId("resolve-parsed"));
+
+        vi.advanceTimersByTime(100);
+        fireEvent.click(screen.getByTestId("capture-conclusion"));
+
+        expect(onResolved).toHaveBeenCalledWith("parsed");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("Enter dismisses the conclusion immediately, well before the dwell elapses", () => {
+      vi.useFakeTimers();
+      try {
+        const onResolved = vi.fn();
+        render(<ParseHarness onResolved={onResolved} />);
+
+        fireEvent.change(screen.getByTestId("capture-textarea"), {
+          target: { value: "Follow up with Alex" },
+        });
+        fireEvent.keyDown(screen.getByTestId("capture-textarea"), {
+          key: "Enter",
+        });
+        fireEvent.click(screen.getByTestId("resolve-parsed"));
+
+        vi.advanceTimersByTime(100);
+        fireEvent.keyDown(screen.getByTestId("capture-textarea"), {
+          key: "Enter",
+        });
+
+        expect(onResolved).toHaveBeenCalledWith("parsed");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

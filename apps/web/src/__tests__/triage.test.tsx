@@ -83,8 +83,14 @@ describe("Triage cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
+    // #591: the "back to: <hook>" conclusion's auto-dismiss dwell is now a
+    // materially perceivable ~2.5s (CaptureCore's CONCLUSION_AUTO_DISMISS_MS,
+    // was 450ms) before it navigates on to Triage — give this findBy
+    // headroom past RTL's 1000ms default.
     expect(
-      await screen.findByText("Start here (same first move)"),
+      await screen.findByText("Start here (same first move)", undefined, {
+        timeout: 4000,
+      }),
     ).toBeDefined();
     expect(
       screen.getAllByText(

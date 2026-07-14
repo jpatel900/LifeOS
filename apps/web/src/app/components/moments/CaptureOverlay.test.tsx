@@ -483,9 +483,49 @@ describe("CaptureOverlay", () => {
         ).toHaveTextContent("back to: the weekly review");
       });
 
-      await waitFor(() => {
+      // #591: auto-dismiss dwell is now a materially perceivable ~2.5s
+      // (CaptureCore's CONCLUSION_AUTO_DISMISS_MS) — give the real-timer
+      // waitFor headroom past RTL's 1000ms default.
+      await waitFor(
+        () => {
+          expect(onResolved).toHaveBeenCalledWith("parsed");
+        },
+        { timeout: 4000 },
+      );
+    });
+
+    it("the conclusion is human-perceptible: it survives the old 450ms mark and explicit dismissal (click) resolves it immediately (#591)", () => {
+      vi.useFakeTimers();
+      try {
+        const onResolved = vi.fn();
+        render(<ContainmentHarness onResolved={onResolved} />);
+
+        fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+          target: { value: "Follow up with Alex" },
+        });
+        fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
+          key: "Enter",
+        });
+        fireEvent.click(screen.getByTestId("resolve-parsed"));
+
+        expect(
+          screen.getByTestId("capture-overlay-conclusion"),
+        ).toBeInTheDocument();
+
+        // Still visible well past the old 450ms auto-dismiss.
+        vi.advanceTimersByTime(450);
+        expect(
+          screen.getByTestId("capture-overlay-conclusion"),
+        ).toBeInTheDocument();
+        expect(onResolved).not.toHaveBeenCalled();
+
+        // Explicit dismissal resolves it immediately, without waiting out
+        // the rest of the dwell.
+        fireEvent.click(screen.getByTestId("capture-overlay-conclusion"));
         expect(onResolved).toHaveBeenCalledWith("parsed");
-      });
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("offers a synchronous mock-retry or keep-as-raw choice when the parse fails, never fire-and-forget", async () => {
