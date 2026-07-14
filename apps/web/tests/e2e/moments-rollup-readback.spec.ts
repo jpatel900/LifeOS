@@ -3,10 +3,11 @@ import { expect, test, type Page } from "@playwright/test";
 /**
  * S8 (#260) — rollup readback UI, Playwright golden journey.
  *
- * Against the dev-only `/moments-preview` route (live WorkflowContext, mock
- * mode — approve persists nothing over the network and the UI is
- * deterministic). Seeds a WorkflowState with this-week completed + missed
- * blocks for one area, then drives the Close moment's weekly-rollup step:
+ * Against `/` (this suite's webServer sets NEXT_PUBLIC_MOMENTS_HOME=true,
+ * see playwright.config.ts; live WorkflowContext, mock mode — approve
+ * persists nothing over the network and the UI is deterministic). Seeds a
+ * WorkflowState with this-week completed + missed blocks for one area, then
+ * drives the Close moment's weekly-rollup step:
  *
  *  1. the area's weekly rollup draft (highlights + misses) surfaces,
  *  2. approving moves it into the week-over-week readback and off the pending
@@ -106,13 +107,13 @@ async function openCloseMoment(page: Page) {
     },
     { key: STORAGE_KEY, value: buildSeedState() },
   );
-  await page.goto("/moments-preview");
+  await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
   await page.keyboard.press("3");
   await expect(page.getByTestId("close-moment")).toBeVisible();
 }
 
-test.describe("moments rollup readback (/moments-preview, #260)", () => {
+test.describe("moments rollup readback (/, #260)", () => {
   test("approves the weekly rollup draft into the readback", async ({
     page,
   }) => {

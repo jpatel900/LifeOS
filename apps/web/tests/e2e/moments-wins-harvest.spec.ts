@@ -3,9 +3,10 @@ import { expect, test, type Page } from "@playwright/test";
 /**
  * S7 (#259) — wins & evidence log, Playwright golden journey.
  *
- * Against the dev-only `/moments-preview` route (live WorkflowContext, mock
- * mode — `createSupabaseBrowserClient()` returns null, so confirm persists
- * nothing over the network and the harvest UI is deterministic). Seeds a
+ * Against `/` (this suite's webServer sets NEXT_PUBLIC_MOMENTS_HOME=true,
+ * see playwright.config.ts; live WorkflowContext, mock mode —
+ * `createSupabaseBrowserClient()` returns null, so confirm persists nothing
+ * over the network and the harvest UI is deterministic). Seeds a
  * WorkflowState with one task completed today (a `completed` calendar block
  * linked to it), then drives the Close moment's harvest step:
  *
@@ -101,13 +102,13 @@ async function openCloseMoment(page: Page) {
     },
     { key: STORAGE_KEY, value: buildSeedState() },
   );
-  await page.goto("/moments-preview");
+  await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
   await page.keyboard.press("3");
   await expect(page.getByTestId("close-moment")).toBeVisible();
 }
 
-test.describe("moments wins harvest (/moments-preview, #259)", () => {
+test.describe("moments wins harvest (/, #259)", () => {
   test("confirms a completed task into the evidence log with an edited title", async ({
     page,
   }) => {

@@ -55,8 +55,8 @@ import type { DeepLinkTarget } from "./deepLink";
  * Container that wires the P1 view-model builders and P2 presentation
  * primitives to WorkflowContext. Owns the moment/capture/palette UI state,
  * preferences persistence, and the interim local focus session (replaced
- * once packet P0 extracts useFocusSession from LifeOSCockpit). No fetches,
- * no new routes — this only renders on the dev-only /moments-preview route.
+ * once packet P0 extracts useFocusSession from LifeOSCockpit). No fetches;
+ * renders at `/` when NEXT_PUBLIC_MOMENTS_HOME is on (see app/page.tsx).
  */
 
 const PREFERENCES_KEY = "lifeos.moments.preferences";

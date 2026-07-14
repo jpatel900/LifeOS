@@ -3,11 +3,11 @@ import { expect, test } from "@playwright/test";
 /**
  * Moments pass P7 — parity proof (pre-flip).
  *
- * Before `/` is flipped to the moments home (P7b), these specs prove the
- * moments-native equivalents of the stage-chrome journeys work, running
- * against the dev-only `/moments-preview` route so they do not depend on the
- * flip and cannot regress the live stage specs. Each test names the stage
- * spec it establishes parity with.
+ * These specs prove the moments-native equivalents of the stage-chrome
+ * journeys work, running against `/` (this suite's webServer sets
+ * NEXT_PUBLIC_MOMENTS_HOME=true, see playwright.config.ts) so they cannot
+ * regress the live stage specs. Each test names the stage spec it
+ * establishes parity with.
  *
  * Parity boundary (documented, not a failure): the moments home hosts capture
  * and the Start -> Flow -> Close focus journey inline. Triage/Plan are reached
@@ -17,14 +17,14 @@ import { expect, test } from "@playwright/test";
  * packet brings them inline. This suite covers what the moments home owns.
  */
 
-test.describe("moments home parity (/moments-preview)", () => {
+test.describe("moments home parity (/)", () => {
   // Parity with capture-parse-mock.spec.ts: the moments capture surface
   // exercises the real /api/parse-capture route, answering in mock mode
   // without AI env.
   test("capture round-trips through /api/parse-capture in mock mode", async ({
     page,
   }) => {
-    await page.goto("/moments-preview");
+    await page.goto("/");
     await expect(page.getByTestId("today-moments")).toBeVisible();
     // The home's default moment is time-of-day derived, so pin it to Start for
     // a deterministic run regardless of the wall clock (1/2/3 switch moments).
@@ -89,7 +89,7 @@ test.describe("moments home parity (/moments-preview)", () => {
   test("start-first-move enters Flow, and moments switch Start/Flow/Close", async ({
     page,
   }) => {
-    await page.goto("/moments-preview");
+    await page.goto("/");
     await expect(page.getByTestId("today-moments")).toBeVisible();
 
     // Start owns the single primary action. If the seeded state offers a first
