@@ -371,8 +371,7 @@ test.describe("mobile bottom band never intersects content (#593)", () => {
           // allowed at scroll zero (see the describe comment); everything
           // else — and the entire scroll-end state — must be clear.
           const endsAboveFold = box!.y + box!.height <= viewport.height;
-          const violation =
-            intersects && (position === "end" || endsAboveFold);
+          const violation = intersects && (position === "end" || endsAboveFold);
           expect(
             violation,
             `bottom band intersects ${name} at scroll ${position} (${viewport.width}px)`,
