@@ -461,6 +461,11 @@
       "id": "task_map_draft.v1",
       "fr": "FR-031",
       "note": "Task-map v1 draft prompt contract version used by the AI context assembly path (slice 4)."
+    },
+    {
+      "id": "closure_ritual.v1",
+      "fr": "FR-035",
+      "note": "Deterministic closure-command policy core (issue #597 slice 1): complete/released terminal commands with the exact three-part summary; consumed by the later persistence/UI slices."
     }
   ]
 }
