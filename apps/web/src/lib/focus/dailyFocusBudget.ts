@@ -32,9 +32,9 @@
  * require new user-configurable state for this slice.
  *
  * ## Budget thresholds (documented — the binding contract for this module)
- * - `>= 7` free hours -> 3 (light day: room for a third focus item)
- * - `>= 4` free hours -> 2 (normal day: two focus items)
- * - `<  4` free hours -> 1 (packed day: single focus item)
+ * - `>= 5` free hours -> 3 (light day: room for a third focus item)
+ * - `>= 2` free hours -> 2 (normal day: two focus items)
+ * - `<  2` free hours -> 1 (packed day: single focus item)
  * These are deliberately global (no per-area weighting): issue #257 says
  * "per-area weighting only if S0 specified it," and no S0 artifact in this
  * repo specifies per-area weighting for the focus budget, so this stays a
@@ -59,8 +59,8 @@ export const WORKING_WINDOW_HOURS =
 export const DEFAULT_FOCUS_BUDGET = 2;
 
 const FOCUS_BUDGET_THRESHOLDS = [
-  { minFreeHours: 7, budget: 3 },
-  { minFreeHours: 4, budget: 2 },
+  { minFreeHours: 5, budget: 3 },
+  { minFreeHours: 2, budget: 2 },
 ] as const;
 const MINIMUM_FOCUS_BUDGET = 1;
 
@@ -74,7 +74,7 @@ export interface DailyFocusBudgetInput {
 
 /**
  * Compute today's focus budget (3 / 2 / 1) from free hours. Documented
- * thresholds (see module doc comment): >= 7 free hours -> 3; >= 4 -> 2;
+ * thresholds (see module doc comment): >= 5 free hours -> 3; >= 2 -> 2;
  * else -> 1. `freeHours: null` (signal unavailable) -> DEFAULT_FOCUS_BUDGET.
  */
 export function computeDailyFocusBudget(input: DailyFocusBudgetInput): number {
