@@ -116,7 +116,12 @@ test("capture saves raw thought and routes the item to triage", async ({
     .fill("Browser handoff proof capture item");
   await page.getByRole("button", { name: "Save thought" }).click();
 
-  await expect(page).toHaveURL(/\/triage$/);
+  // #612: cold Next.js dev-mode compile of /api/parse-capture (first hit can
+  // take 2.5-4s+) plus CaptureCore's fixed 2500ms conclusion dwell can exceed
+  // the default 5s assertion window — widen it for this navigation only. The
+  // raw capture is persisted BEFORE the parse fires (captureParse.ts), so the
+  // flake was never a data-loss risk.
+  await expect(page).toHaveURL(/\/triage$/, { timeout: 15_000 });
   await expect(
     page.getByRole("heading", {
       name: "Browser handoff proof capture item",
