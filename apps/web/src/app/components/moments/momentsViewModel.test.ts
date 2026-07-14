@@ -1026,17 +1026,17 @@ describe("buildStartVM — S5 focus budget (#257)", () => {
     expect(vm.focusDegraded).toBe(false);
   });
 
-  it("normal day (5 busy hours) -> budget 2", () => {
+  it("moderate day (7 busy hours, 3 free hours) -> budget 2", () => {
     const state = stateWith({
       calendarBlocks: [
         makeBlock({
           id: "b1",
-          start_at: atLocalHour(9),
+          start_at: atLocalHour(8),
           end_at: atLocalHour(10),
         }),
         makeBlock({
           id: "b2",
-          start_at: atLocalHour(11),
+          start_at: atLocalHour(10),
           end_at: atLocalHour(13),
         }),
         makeBlock({
@@ -1052,7 +1052,7 @@ describe("buildStartVM — S5 focus budget (#257)", () => {
     expect(vm.focusDegraded).toBe(false);
   });
 
-  it("packed day (8 busy hours) -> budget 1", () => {
+  it("packed day (9 busy hours, 1 free hour) -> budget 1", () => {
     const state = stateWith({
       calendarBlocks: [
         makeBlock({
@@ -1063,7 +1063,7 @@ describe("buildStartVM — S5 focus budget (#257)", () => {
         makeBlock({
           id: "b2",
           start_at: atLocalHour(12),
-          end_at: atLocalHour(16),
+          end_at: atLocalHour(17),
         }),
       ],
     });
@@ -1183,7 +1183,7 @@ describe("buildStartVM — S5 focus budget (#257)", () => {
           created_at: daysBefore(10),
         }),
       ],
-      // Packed day -> budget 1. Marked "completed" so neither block is
+      // Packed day (1 free hour) -> budget 1. Marked "completed" so neither block is
       // picked up as firstMove (this fixture is isolated to the
       // focus/deferred split, not firstMove-from-block precedence, which
       // is covered separately above).
@@ -1198,7 +1198,7 @@ describe("buildStartVM — S5 focus budget (#257)", () => {
           id: "b2",
           status: "completed",
           start_at: atLocalHour(12),
-          end_at: atLocalHour(16),
+          end_at: atLocalHour(17),
         }),
       ],
     });

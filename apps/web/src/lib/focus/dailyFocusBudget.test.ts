@@ -25,34 +25,34 @@ function block(
 }
 
 describe("computeDailyFocusBudget — documented thresholds", () => {
-  it(">= 7 free hours -> 3 (empty-calendar fixture: 10 free hours)", () => {
+  it(">= 5 free hours -> 3 (empty-calendar fixture: 10 free hours)", () => {
     expect(computeDailyFocusBudget({ freeHours: WORKING_WINDOW_HOURS })).toBe(
       3,
     );
   });
 
-  it(">= 4 and < 7 free hours -> 2 (normal-day fixture: 5 free hours)", () => {
-    expect(computeDailyFocusBudget({ freeHours: 5 })).toBe(2);
+  it(">= 2 and < 5 free hours -> 2 (moderate-day fixture: 3 free hours)", () => {
+    expect(computeDailyFocusBudget({ freeHours: 3 })).toBe(2);
   });
 
-  it("< 4 free hours -> 1 (packed-day fixture: 2 free hours)", () => {
-    expect(computeDailyFocusBudget({ freeHours: 2 })).toBe(1);
+  it("< 2 free hours -> 1 (packed-day fixture: 1 free hour)", () => {
+    expect(computeDailyFocusBudget({ freeHours: 1 })).toBe(1);
   });
 
-  it("boundary: exactly 7 free hours -> 3", () => {
-    expect(computeDailyFocusBudget({ freeHours: 7 })).toBe(3);
+  it("boundary: exactly 5 free hours -> 3", () => {
+    expect(computeDailyFocusBudget({ freeHours: 5 })).toBe(3);
   });
 
-  it("boundary: just under 7 free hours -> 2", () => {
-    expect(computeDailyFocusBudget({ freeHours: 6.99 })).toBe(2);
+  it("boundary: just under 5 free hours -> 2", () => {
+    expect(computeDailyFocusBudget({ freeHours: 4.99 })).toBe(2);
   });
 
-  it("boundary: exactly 4 free hours -> 2", () => {
-    expect(computeDailyFocusBudget({ freeHours: 4 })).toBe(2);
+  it("boundary: exactly 2 free hours -> 2", () => {
+    expect(computeDailyFocusBudget({ freeHours: 2 })).toBe(2);
   });
 
-  it("boundary: just under 4 free hours -> 1", () => {
-    expect(computeDailyFocusBudget({ freeHours: 3.99 })).toBe(1);
+  it("boundary: just under 2 free hours -> 1", () => {
+    expect(computeDailyFocusBudget({ freeHours: 1.99 })).toBe(1);
   });
 
   it("0 free hours -> 1 (floor, never 0)", () => {
@@ -127,24 +127,24 @@ describe("deriveFreeHoursFromBlocks — fixture days", () => {
     expect(computeDailyFocusBudget({ freeHours })).toBe(3);
   });
 
-  it("normal day (three meetings, 5 busy hours) -> 5 free hours -> budget 2", () => {
+  it("moderate day (three meetings, 7 busy hours) -> 3 free hours -> budget 2", () => {
     const blocks = [
-      block({ start_at: atTodayHour(9), end_at: atTodayHour(10) }), // 1h
-      block({ start_at: atTodayHour(11), end_at: atTodayHour(13) }), // 2h
+      block({ start_at: atTodayHour(8), end_at: atTodayHour(10) }), // 2h
+      block({ start_at: atTodayHour(10), end_at: atTodayHour(13) }), // 3h
       block({ start_at: atTodayHour(15), end_at: atTodayHour(17) }), // 2h
     ];
     const freeHours = deriveFreeHoursFromBlocks(blocks, NOW);
-    expect(freeHours).toBe(5);
+    expect(freeHours).toBe(3);
     expect(computeDailyFocusBudget({ freeHours })).toBe(2);
   });
 
-  it("packed day (back-to-back meetings, 8 busy hours) -> 2 free hours -> budget 1", () => {
+  it("packed day (back-to-back meetings, 9 busy hours) -> 1 free hour -> budget 1", () => {
     const blocks = [
       block({ start_at: atTodayHour(8), end_at: atTodayHour(12) }), // 4h
-      block({ start_at: atTodayHour(12), end_at: atTodayHour(16) }), // 4h
+      block({ start_at: atTodayHour(12), end_at: atTodayHour(17) }), // 5h
     ];
     const freeHours = deriveFreeHoursFromBlocks(blocks, NOW);
-    expect(freeHours).toBe(2);
+    expect(freeHours).toBe(1);
     expect(computeDailyFocusBudget({ freeHours })).toBe(1);
   });
 
