@@ -449,12 +449,19 @@ interface WorkflowContextValue {
   updateTaskFirstTinyStep: (taskId: string, firstTinyStep: string) => void;
   unplanTask: (blockId: string) => void;
   startTaskSession: (taskId: string) => void;
+  /**
+   * #572 (state truth, execute/review contract): resolves only once the
+   * outcome is persisted (or truthfully falls back to local-only). Local
+   * state updates synchronously/optimistically as before; callers that show
+   * a "closed"/verdict copy or navigate away MUST await this so that copy
+   * never claims a save that hasn't resolved.
+   */
   markSession: (
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
     notes?: string | null,
     capOutcome?: Phase2MockExecutionSession["cap_outcome"],
-  ) => void;
+  ) => Promise<void>;
   carryForwardTask: (taskId: string) => void;
   deferTask: (taskId: string) => void;
   dropTask: (taskId: string) => void;
@@ -2369,10 +2376,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
 
     await markExecutionSession(client, persistedSessionId, {
+      // The persisted MarkExecutionSessionInput `status` enum
+      // (@lifeos/schemas) is a red-zone constant that doesn't carry
+      // "partial"/"skipped" — it has no DB column and is only used by
+      // `executionMarkPatch` to special-case "paused". "partial" and
+      // "skipped" map to any non-"paused" member so that branch is skipped
+      // and their real semantics ride entirely on `outcome` below, which
+      // already has both values (EXECUTION_SESSION_OUTCOMES).
       status:
         status === "completed"
           ? "completed"
-          : status === "missed"
+          : status === "missed" || status === "skipped"
             ? "missed"
             : status === "distracted"
               ? "distracted"
@@ -2388,7 +2402,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               ? "distracted"
               : status === "stuck"
                 ? "blocked"
-                : null,
+                : status === "partial"
+                  ? "partial"
+                  : status === "skipped"
+                    ? "skipped"
+                    : null,
       actual_minutes:
         status === "paused"
           ? null
@@ -3172,12 +3190,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function markSessionWithPersistence(
+  async function markSessionWithPersistence(
     status: Phase2MockExecutionSession["status"],
     actualMinutes?: number,
     notes?: string | null,
     capOutcome?: Phase2MockExecutionSession["cap_outcome"],
-  ) {
+  ): Promise<void> {
     const previous = stateRef.current;
     const localSession = previous.executionSessions[0];
     const next = markCurrentSession(previous, status, {
@@ -3190,15 +3208,22 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     recordWipRefusalIfNew(previous, next);
 
     if (localSession) {
-      void persistMarkedSession(
-        localSession,
-        status,
-        actualMinutes,
-        notes,
-        capOutcome,
-      ).catch((error) => {
+      // #572: the caller awaits this so it never shows "closed"/verdict
+      // copy before the save attempt has resolved. A persistence failure
+      // still resolves (not rejects) — it is a truthful terminal state
+      // (recorded via markPersistedSaveFailure), same as the local-only
+      // fallback inside persistMarkedSession.
+      try {
+        await persistMarkedSession(
+          localSession,
+          status,
+          actualMinutes,
+          notes,
+          capOutcome,
+        );
+      } catch (error) {
         markPersistedSaveFailure(error);
-      });
+      }
     }
   }
 

@@ -1592,7 +1592,11 @@ export function markCurrentSession(
           ? "distracted"
           : status === "stuck"
             ? "blocked"
-            : current.outcome;
+            : status === "partial"
+              ? "partial"
+              : status === "skipped"
+                ? "skipped"
+                : current.outcome;
 
   return {
     ...state,
@@ -1610,7 +1614,9 @@ export function markCurrentSession(
                     status === "missed" ||
                     status === "stuck" ||
                     status === "stopped" ||
-                    status === "distracted"
+                    status === "distracted" ||
+                    status === "partial" ||
+                    status === "skipped"
                   ? (options.actualMinutes ?? session.actual_minutes ?? 0)
                   : session.actual_minutes,
             distraction_minutes:
@@ -1630,7 +1636,10 @@ export function markCurrentSession(
     calendarBlocks: state.calendarBlocks.map((block) =>
       block.id === current.calendar_block_id && status === "completed"
         ? { ...block, status: "completed" }
-        : block.id === current.calendar_block_id && status === "missed"
+        : block.id === current.calendar_block_id &&
+            (status === "missed" ||
+              status === "partial" ||
+              status === "skipped")
           ? { ...block, status: "missed" }
           : block,
     ),

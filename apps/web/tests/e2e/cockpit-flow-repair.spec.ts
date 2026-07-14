@@ -94,7 +94,11 @@ test("started execution remains finishable and can complete into review", async 
   await expect(
     page.getByRole("heading", { name: "Complete execution repair item" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Complete", exact: true }).click();
+  // #572: ending a session opens the end sheet (outcome/duration/note)
+  // before any closed verdict — "Done" is preselected, so Save alone
+  // completes this flow.
+  await page.getByTestId("cockpit-end-session").click();
+  await page.getByTestId("end-session-save").click();
 
   await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByText("completed")).toBeVisible();
@@ -108,7 +112,9 @@ test("stuck execution is recoverable from review", async ({ page }) => {
   await page
     .getByRole("button", { name: /Stuck execution repair item/ })
     .click();
-  await page.getByRole("button", { name: "Stuck", exact: true }).click();
+  await page.getByTestId("cockpit-end-session").click();
+  await page.getByTestId("end-session-outcome-stuck").click();
+  await page.getByTestId("end-session-save").click();
 
   await expect(page).toHaveURL(/\/review$/);
   await expect(page.getByText("Stuck execution repair item")).toBeVisible();
@@ -120,23 +126,27 @@ test("stuck execution is recoverable from review", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("missed execution is recoverable from review", async ({ page }) => {
-  await planTaskAtEight(page, "Missed execution repair item");
+test("skipped execution is recoverable from review", async ({ page }) => {
+  await planTaskAtEight(page, "Skipped execution repair item");
 
   await page.getByRole("button", { name: "Start focusing" }).click();
   await expect(page).toHaveURL(/\/execute$/, { timeout: 15_000 });
   await page
-    .getByRole("button", { name: /Missed execution repair item/ })
+    .getByRole("button", { name: /Skipped execution repair item/ })
     .click();
-  await page.getByRole("button", { name: "Missed", exact: true }).click();
+  // #572: "skipped" is a first-class outcome (audit P1) — no more instant
+  // "Missed" button; it's a choice in the end sheet.
+  await page.getByTestId("cockpit-end-session").click();
+  await page.getByTestId("end-session-outcome-skipped").click();
+  await page.getByTestId("end-session-save").click();
 
   await expect(page).toHaveURL(/\/review$/);
-  await expect(page.getByText("Missed execution repair item")).toBeVisible();
+  await expect(page.getByText("Skipped execution repair item")).toBeVisible();
 
   await page.getByRole("button", { name: "Carry forward" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
   await expect(
-    page.getByRole("button", { name: /^Missed execution repair item/ }),
+    page.getByRole("button", { name: /^Skipped execution repair item/ }),
   ).toBeVisible();
 });
 

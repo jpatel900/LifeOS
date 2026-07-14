@@ -48,6 +48,11 @@ import { GoogleCalendarApprovalBridge } from "./GoogleCalendarApprovalBridge";
 import { useFocusSession } from "./moments/useFocusSession";
 import { CaptureCore, type CaptureCoreOutcome } from "./moments/CaptureCore";
 import { CutScopeCandidates } from "./moments/CutScopeCandidates";
+import { FirstTinyStepCard } from "./moments/FirstTinyStepCard";
+import {
+  EndSessionSheet,
+  type EndSessionOutcome,
+} from "./moments/EndSessionSheet";
 import {
   appendCutScopeNote,
   cutScopeCandidatesForTask,
@@ -317,8 +322,17 @@ export function LifeOSCockpit({
     start(taskId, minutes);
   }
 
-  function finishSession(
-    status: "completed" | "stuck" | "missed",
+  // #572 (execute/review contract): the sheet has already captured
+  // outcome/actual-duration/note before this ever runs — this function only
+  // decides which persistence path applies (the DoD-cap and decision-task
+  // paths still gather their own extra confirmation via window.prompt,
+  // unchanged from before) and, per state truth (#551/#563), never shows a
+  // "closed"/verdict toast or navigates to review until the save it
+  // triggered has actually resolved.
+  async function finishSession(
+    status: "completed" | "partial" | "skipped" | "stuck",
+    actualMinutes: number,
+    note: string | null,
     cutScopeNoteDraft?: string,
   ) {
     const currentSession = state.executionSessions[0] ?? null;
@@ -359,9 +373,9 @@ export function LifeOSCockpit({
           showToast("Write the cut scope before closing");
           return;
         }
-        markSession(
+        await markSession(
           "completed",
-          undefined,
+          actualMinutes,
           `dod_cap.v1 cut_scope: ${revisedDod}`,
           "cut_scope",
         );
@@ -378,9 +392,9 @@ export function LifeOSCockpit({
           showToast("Write a carry note before deferring");
           return;
         }
-        markSession(
+        await markSession(
           "stuck",
-          undefined,
+          actualMinutes,
           `dod_cap.v1 deferred: ${carryNote}`,
           "deferred",
         );
@@ -408,11 +422,19 @@ export function LifeOSCockpit({
         showToast("Decision choice is required before closing");
         return;
       }
-      markSession(status, undefined, decisionChoice);
+      await markSession(status, actualMinutes, decisionChoice);
     } else {
-      finish(status);
+      await finish(status, actualMinutes, note);
     }
-    showToast(status === "completed" ? "Session complete" : "Session logged");
+    showToast(
+      status === "completed"
+        ? "Session complete"
+        : status === "partial"
+          ? "Partial progress saved"
+          : status === "skipped"
+            ? "Skipped — carried to review"
+            : "Stuck — logged for review",
+    );
     navigate("review");
   }
 
@@ -743,6 +765,7 @@ export function LifeOSCockpit({
               onPlan={() => navigate("plan")}
               onCapture={() => navigate("capture")}
               onSideCapture={saveSideCapture}
+              onUpdateFirstTinyStep={updateTaskFirstTinyStep}
             />
           ) : null}
           {stage === "review" ? (
@@ -1910,6 +1933,7 @@ export function ExecuteView({
   onPlan,
   onCapture,
   onSideCapture,
+  onUpdateFirstTinyStep,
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
   activeTaskId: string | null;
@@ -1919,12 +1943,15 @@ export function ExecuteView({
   onStart: (taskId: string, minutes: number) => void;
   onToggle: () => void;
   onFinish: (
-    status: "completed" | "stuck" | "missed",
+    status: "completed" | "partial" | "skipped" | "stuck",
+    actualMinutes: number,
+    note: string | null,
     cutScopeNoteDraft?: string,
-  ) => void;
+  ) => Promise<void>;
   onPlan: () => void;
   onCapture: () => void;
   onSideCapture: (text: string) => void;
+  onUpdateFirstTinyStep: (taskId: string, firstTinyStep: string) => void;
 }) {
   const active = vm.planned.find((item) => item.task.id === activeTaskId);
   const minutes = Math.floor(remaining / 60);
@@ -1940,6 +1967,20 @@ export function ExecuteView({
   useEffect(() => {
     setCutScopeNoteDraft("");
   }, [activeTaskId]);
+  // #572: the end sheet stands between "end this session" and any
+  // "closed"/verdict copy or navigation. `onFinish` is awaited before the
+  // sheet closes, so state truth holds even through the DoD-cap/decision
+  // window.prompt sub-flows nested inside it.
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
+  const elapsedMinutes = Math.max(0, Math.round((total - remaining) / 60));
+  async function handleEndSessionSave(
+    outcome: EndSessionOutcome,
+    actualMinutes: number,
+    note: string | null,
+  ) {
+    await onFinish(outcome, actualMinutes, note, cutScopeNoteDraft);
+    setEndSessionOpen(false);
+  }
 
   return (
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
@@ -2015,6 +2056,14 @@ export function ExecuteView({
           <h2 className="mt-28 text-2xl font-extrabold">
             {active?.task.title ?? "Pick a block"}
           </h2>
+          {active ? (
+            <div className="mx-auto mt-3 max-w-md text-left">
+              <FirstTinyStepCard
+                value={active.task.first_tiny_step ?? null}
+                onSave={(value) => onUpdateFirstTinyStep(active.task.id, value)}
+              />
+            </div>
+          ) : null}
           {active?.task.definition_of_done ? (
             <p className="mx-auto mt-3 max-w-md text-sm text-[var(--mut)]">
               Definition of done: {active.task.definition_of_done}
@@ -2048,30 +2097,26 @@ export function ExecuteView({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onFinish("completed", cutScopeNoteDraft)}
+                  data-testid="cockpit-end-session"
+                  onClick={() => setEndSessionOpen(true)}
                   className="min-h-12 rounded-full bg-[var(--grn-sf)] px-5 font-bold text-[var(--grn-fg)]"
                 >
-                  Complete
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onFinish("stuck")}
-                  className="min-h-12 rounded-full bg-[var(--amb-sf)] px-5 font-bold text-[var(--amb-fg)]"
-                >
-                  Stuck
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onFinish("missed")}
-                  className="min-h-12 rounded-full border border-[var(--ln2)] px-5 text-[var(--mut)]"
-                >
-                  Missed
+                  End session
                 </button>
               </>
             ) : (
               <Focus className="text-[var(--fnt)]" size={38} />
             )}
           </div>
+          {active ? (
+            <EndSessionSheet
+              open={endSessionOpen}
+              taskTitle={active.task.title}
+              elapsedMinutes={elapsedMinutes}
+              onCancel={() => setEndSessionOpen(false)}
+              onSave={handleEndSessionSave}
+            />
+          ) : null}
           {active ? (
             // #556: raw-save-only (mode="raw-only") — Execute side-capture
             // never waits on a parse (issue #556 explicitly allows this;
@@ -2193,6 +2238,14 @@ export function ReviewView({
                     }}
                   />
                 </div>
+                {session.notes ? (
+                  <p
+                    className="mt-1 text-xs text-[var(--mut)]"
+                    data-testid="review-session-note"
+                  >
+                    {session.notes}
+                  </p>
+                ) : null}
               </div>
             ))
           ) : (
