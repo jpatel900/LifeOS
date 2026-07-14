@@ -217,7 +217,11 @@ test("execute, review, health, and all areas keep the handoff hierarchy", async 
   await page.getByRole("button", { name: "All areas" }).click();
   // #555: in-app stage navigation is a real router.push now — settle on the
   // /areas URL before asserting the overview content.
-  await expect(page).toHaveURL(/\/areas$/);
+  // #609: this is the first client-side visit to /areas in this spec (unlike
+  // nav-truth.spec.ts, which warms /areas earlier), so a dev-mode on-demand
+  // compile can take longer than the default 5s expect window — same
+  // precedent as the /settings/areas assertion in nav-truth.spec.ts.
+  await expect(page).toHaveURL(/\/areas$/, { timeout: 15_000 });
   await expect(
     page.getByRole("heading", { name: "All areas overview" }),
   ).toBeVisible();
