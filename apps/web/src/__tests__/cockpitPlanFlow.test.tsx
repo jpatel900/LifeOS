@@ -54,4 +54,40 @@ describe("cockpit plan flow", () => {
     expect(within(tenAmSlot).getByText("Tap to unplan")).toBeDefined();
     expect(screen.queryByText(/No do-today tasks waiting/i)).toBeDefined();
   });
+
+  // #580: mobile task-first Plan — the hour rail collapses empty hours
+  // behind a disclosure below `sm:`; at `sm:` and up every row stays
+  // visible via a `sm:grid` override, so this only asserts class state
+  // (jsdom doesn't evaluate the media query itself).
+  it("collapses empty hour rows behind a 'show empty hours' disclosure until toggled", async () => {
+    renderCalendarWithStoredJourney();
+    await screen.findAllByText(/Draft agenda/i);
+
+    const emptyRow = screen.getByTestId("hour-row-11");
+    expect(emptyRow).toHaveClass("hidden");
+    expect(emptyRow).toHaveClass("sm:grid");
+
+    const toggle = screen.getByTestId("show-empty-hours-toggle");
+    expect(toggle).toHaveClass("sm:hidden");
+    expect(toggle).toHaveTextContent("Show 11 empty hours");
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByTestId("hour-row-11")).not.toHaveClass("hidden");
+    expect(screen.queryByTestId("show-empty-hours-toggle")).toBeNull();
+  });
+
+  it("never collapses an hour row that already has a placed block", async () => {
+    renderCalendarWithStoredJourney();
+    await screen.findAllByText(/Draft agenda/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /10a\s+Drop here/i }));
+
+    const placedRow = screen.getByTestId("hour-row-10");
+    expect(placedRow).not.toHaveClass("hidden");
+    // The remaining ten empty hours are still collapsible.
+    expect(screen.getByTestId("show-empty-hours-toggle")).toHaveTextContent(
+      "Show 10 empty hours",
+    );
+  });
 });

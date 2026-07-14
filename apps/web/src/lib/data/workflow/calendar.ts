@@ -247,6 +247,52 @@ export async function rejectTimeBlockProposal(
   };
 }
 
+/**
+ * #580 (one planning model — placement wins): best-effort persisted mirror of
+ * the local supersede-on-place transition. Marks every still-pending
+ * (proposed/edited) proposal row for the task `superseded` — retained, never
+ * deleted — so a later `syncPersistedWorkflowRows` cannot resurrect a pending
+ * proposal for a task that just received a scheduled block. Call it AFTER the
+ * accept RPC so the accepted proposal is already out of the pending set.
+ * Status "superseded" is already legal in the DB (time_block_proposals status
+ * CHECK constraint) and in TIME_BLOCK_PROPOSAL_STATUSES.
+ */
+export async function supersedePendingTimeBlockProposalsForTask(
+  client: MinimalSupabaseClient | null,
+  taskId: string,
+): Promise<void> {
+  if (!client) {
+    return;
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before updating planning proposals.",
+  );
+
+  const query = client.from("time_block_proposals") as {
+    update: (row: Record<string, unknown>) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        in: (
+          column: string,
+          values: string[],
+        ) => PromiseLike<{ error: unknown }>;
+      };
+    };
+  };
+
+  const { error } = await query
+    .update({ status: "superseded" })
+    .eq("task_id", taskId)
+    .in("status", ["proposed", "edited"]);
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+}
+
 export async function acceptTimeBlockProposal(
   client: MinimalSupabaseClient | null,
   proposalId: string,

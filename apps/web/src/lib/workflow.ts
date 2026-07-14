@@ -1062,6 +1062,108 @@ export function promoteBacklogTask(
   };
 }
 
+// #580 (one planning model — placement wins, FR-008): the statuses that make
+// a proposal "active" — still awaiting a decision and feeding placement.
+const PENDING_PROPOSAL_STATUSES = ["proposed", "edited"] as const;
+
+function isPendingProposal(proposal: Phase2TimeBlockProposal) {
+  return (PENDING_PROPOSAL_STATUSES as readonly string[]).includes(
+    proposal.status,
+  );
+}
+
+// #580: placement supersedes — every pending proposal for the task flips to
+// "superseded" in the SAME state transition that creates the block. Retained
+// (never deleted) so the decision stays visible in history; the excluded id
+// is the proposal being accepted (it becomes "accepted" instead).
+function supersedePendingProposalsForTask(
+  proposals: Phase2TimeBlockProposal[],
+  taskId: string,
+  excludeProposalId: string | null,
+): Phase2TimeBlockProposal[] {
+  return proposals.map((item) =>
+    item.task_id === taskId &&
+    item.id !== excludeProposalId &&
+    isPendingProposal(item)
+      ? { ...item, status: "superseded" as const }
+      : item,
+  );
+}
+
+// #580: THE single placement path (FR-008 "one planning model"). Both direct
+// hour-rail placement (`planTaskAtHour`) and proposal acceptance
+// (`acceptProposal`) funnel here: schedule the task, create exactly one
+// block, and supersede every other pending proposal for the task atomically.
+// Callers own the guards (task lookup, launch step, WIP admission).
+function placeTaskOnSchedule(
+  state: WorkflowState,
+  task: Phase2MockTask,
+  input: {
+    start: string;
+    end: string;
+    /** Accepting an existing proposal — it flips to "accepted" and the block
+     *  points at it. When null (direct placement) a new already-accepted
+     *  proposal is recorded, matching the pre-#580 audit trail. */
+    acceptedProposal: Phase2TimeBlockProposal | null;
+    rationale: string;
+    logMessage: string;
+  },
+): WorkflowState {
+  const createdAt = nowIso();
+  let proposals: Phase2TimeBlockProposal[];
+  let proposalId: string;
+
+  if (input.acceptedProposal) {
+    proposalId = input.acceptedProposal.id;
+    proposals = state.timeBlockProposals.map((item) =>
+      item.id === proposalId ? { ...item, status: "accepted" as const } : item,
+    );
+  } else {
+    proposalId = nextId("proposal");
+    const proposal = Phase2TimeBlockProposalSchema.parse({
+      id: proposalId,
+      user_id: task.user_id,
+      area_id: task.area_id,
+      task_id: task.id,
+      proposed_start: input.start,
+      proposed_end: input.end,
+      rationale: input.rationale,
+      conflict_flag: false,
+      status: "accepted",
+      created_at: createdAt,
+    });
+    proposals = [proposal, ...state.timeBlockProposals];
+  }
+
+  proposals = supersedePendingProposalsForTask(proposals, task.id, proposalId);
+
+  const block: Phase2MockCalendarBlock = {
+    id: nextId("block"),
+    user_id: input.acceptedProposal?.user_id ?? task.user_id,
+    area_id: input.acceptedProposal?.area_id ?? task.area_id,
+    task_id: task.id,
+    proposal_id: proposalId,
+    google_event_id: null,
+    start_at: input.start,
+    end_at: input.end,
+    status: "scheduled",
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+
+  return {
+    ...state,
+    tasks: state.tasks.map((item) =>
+      item.id === task.id
+        ? { ...item, status: "scheduled", updated_at: createdAt }
+        : item,
+    ),
+    timeBlockProposals: proposals,
+    calendarBlocks: [block, ...state.calendarBlocks],
+    reviewLog: [input.logMessage, ...state.reviewLog],
+  };
+}
+
 export function planTaskAtHour(
   state: WorkflowState,
   taskId: string,
@@ -1085,45 +1187,14 @@ export function planTaskAtHour(
   const minutes =
     task.estimated_minutes_high ?? task.estimated_minutes_low ?? 45;
   const end = new Date(start.getTime() + minutes * 60 * 1000);
-  const createdAt = nowIso();
-  const proposalId = nextId("proposal");
-  const proposal = Phase2TimeBlockProposalSchema.parse({
-    id: proposalId,
-    user_id: task.user_id,
-    area_id: task.area_id,
-    task_id: task.id,
-    proposed_start: start.toISOString(),
-    proposed_end: end.toISOString(),
-    rationale: `Placed on the local hour rail at ${hour}:00.`,
-    conflict_flag: false,
-    status: "accepted",
-    created_at: createdAt,
-  });
-  const block: Phase2MockCalendarBlock = {
-    id: nextId("block"),
-    user_id: task.user_id,
-    area_id: task.area_id,
-    task_id: task.id,
-    proposal_id: proposalId,
-    google_event_id: null,
-    start_at: start.toISOString(),
-    end_at: end.toISOString(),
-    status: "scheduled",
-    created_at: createdAt,
-    updated_at: createdAt,
-  };
 
-  return {
-    ...state,
-    tasks: state.tasks.map((item) =>
-      item.id === taskId
-        ? { ...item, status: "scheduled", updated_at: createdAt }
-        : item,
-    ),
-    timeBlockProposals: [proposal, ...state.timeBlockProposals],
-    calendarBlocks: [block, ...state.calendarBlocks],
-    reviewLog: [`Planned task: ${task.title}`, ...state.reviewLog],
-  };
+  return placeTaskOnSchedule(state, task, {
+    start: start.toISOString(),
+    end: end.toISOString(),
+    acceptedProposal: null,
+    rationale: `Placed on the local hour rail at ${hour}:00.`,
+    logMessage: `Planned task: ${task.title}`,
+  });
 }
 
 export function updateTaskFirstTinyStep(
@@ -1320,16 +1391,27 @@ export function updateProposal(
     "proposed_start" | "proposed_end" | "rationale"
   >,
 ): WorkflowState {
+  const proposal = state.timeBlockProposals.find(
+    (item) => item.id === proposalId,
+  );
+  // #580 guard: only an active (pending) proposal can be edited. Editing a
+  // settled proposal (accepted/rejected/superseded) would resurrect it as
+  // pending — for a scheduled task that would recreate the dual model the
+  // invariant forbids.
+  if (!proposal || !isPendingProposal(proposal)) {
+    return state;
+  }
+
   return {
     ...state,
-    timeBlockProposals: state.timeBlockProposals.map((proposal) =>
-      proposal.id === proposalId
+    timeBlockProposals: state.timeBlockProposals.map((item) =>
+      item.id === proposalId
         ? Phase2TimeBlockProposalSchema.parse({
-            ...proposal,
+            ...item,
             ...changes,
             status: "edited",
           })
-        : proposal,
+        : item,
     ),
   };
 }
@@ -1359,48 +1441,30 @@ export function acceptProposal(
   const proposal = state.timeBlockProposals.find(
     (item) => item.id === proposalId,
   );
-  if (!proposal || proposal.status === "accepted") {
+  // #580: accept = place. Only an active (pending) proposal can be accepted;
+  // accepted, rejected, and superseded proposals are settled history.
+  if (!proposal || !isPendingProposal(proposal)) {
     return state;
   }
   const task = state.tasks.find((item) => item.id === proposal.task_id);
-  if (!hasLaunchSequenceStep(task?.first_tiny_step)) {
+  if (!task || !hasLaunchSequenceStep(task.first_tiny_step)) {
     return state;
   }
-  if (task && !canAdmitWipTask(state, task.id)) {
+  if (!canAdmitWipTask(state, task.id)) {
     return withWipRefusal(state, task, "plan_scheduling");
   }
 
-  const createdAt = nowIso();
-  const block: Phase2MockCalendarBlock = {
-    id: nextId("block"),
-    user_id: proposal.user_id,
-    area_id: proposal.area_id,
-    task_id: proposal.task_id,
-    proposal_id: proposal.id,
-    google_event_id: null,
-    start_at: proposal.proposed_start,
-    end_at: proposal.proposed_end,
-    status: "scheduled",
-    created_at: createdAt,
-    updated_at: createdAt,
-  };
-
-  return {
-    ...state,
-    timeBlockProposals: state.timeBlockProposals.map((item) =>
-      item.id === proposalId ? { ...item, status: "accepted" } : item,
-    ),
-    tasks: state.tasks.map((task) =>
-      task.id === proposal.task_id
-        ? { ...task, status: "scheduled", updated_at: createdAt }
-        : task,
-    ),
-    calendarBlocks: [block, ...state.calendarBlocks],
-    reviewLog: [
-      `Accepted local proposal for task ${proposal.task_id}`,
-      ...state.reviewLog,
-    ],
-  };
+  // #580: accepting IS placement — the same single code path as the hour
+  // rail, called with the proposal's start/end. The block comes from the
+  // placement path; the proposal itself flips to "accepted" and every other
+  // pending proposal for the task is superseded in the same transition.
+  return placeTaskOnSchedule(state, task, {
+    start: proposal.proposed_start,
+    end: proposal.proposed_end,
+    acceptedProposal: proposal,
+    rationale: proposal.rationale,
+    logMessage: `Accepted local proposal for task ${proposal.task_id}`,
+  });
 }
 
 /**
@@ -1450,8 +1514,16 @@ export function applyGoogleCalendarWriteResult(
 
   return {
     ...state,
-    timeBlockProposals: state.timeBlockProposals.map((item) =>
-      item.id === proposalId ? { ...item, status: "accepted" } : item,
+    // #580: this is also a placement path (a scheduled block appears), so
+    // sibling pending proposals for the task are superseded in the same
+    // transition. The Flow 8 approval gate itself is untouched — this
+    // transition still only mirrors an already-approved server-side write.
+    timeBlockProposals: supersedePendingProposalsForTask(
+      state.timeBlockProposals.map((item) =>
+        item.id === proposalId ? { ...item, status: "accepted" } : item,
+      ),
+      proposal.task_id,
+      proposalId,
     ),
     tasks: state.tasks.map((item) =>
       item.id === proposal.task_id

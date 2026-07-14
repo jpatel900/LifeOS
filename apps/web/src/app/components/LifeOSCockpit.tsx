@@ -1534,6 +1534,11 @@ function PlanView({
   const [firstMoveDrafts, setFirstMoveDrafts] = useState<
     Record<string, string>
   >({});
+  // #580: mobile task-first Plan — the "show empty hours" disclosure state.
+  // Below `sm:` this starts collapsed; at `sm:` and up the CSS override
+  // (`sm:grid` on every row) makes it irrelevant, matching the "desktop
+  // unchanged" requirement without a media-query read.
+  const [showEmptyHours, setShowEmptyHours] = useState(false);
   const missingLaunchStep =
     taskToPlace && !taskToPlace.first_tiny_step?.trim() ? taskToPlace : null;
   const hasReadyBlock = vm.planned.length > 0;
@@ -1547,9 +1552,26 @@ function PlanView({
     setFirstMoveDrafts((current) => ({ ...current, [taskId]: "" }));
   }
 
+  // #580: below `sm:` the audit found ~11 empty hour cards standing between
+  // the user and "To place" (a 2,040px empty scroll). Two changes, CSS-only
+  // so desktop (>=sm) markup and behavior are byte-identical to before:
+  // (1) `order-*` swaps visual order below `sm:` only — "To place" (the
+  //     right column's first panel) leads, Hour rail follows; (2) hour rows
+  //     with nothing to show (no placed block, no conflicting proposal) get
+  //     `hidden sm:grid` so they collapse below `sm:` behind a "Show empty
+  //     hours" disclosure, and are unconditionally visible at `sm:` and up.
+  const hourHasConflict = (hour: number) =>
+    vm.proposals.some(
+      (item) => item.hour === hour && item.proposal.conflict_flag,
+    );
+  const collapsibleHours = HOURS.filter(
+    (hour) =>
+      !vm.planned.some((item) => item.hour === hour) && !hourHasConflict(hour),
+  );
+
   return (
     <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-      <Panel>
+      <Panel className="order-2 sm:order-1">
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-extrabold">Hour rail</h1>
           <span className="mono text-sm text-[var(--fnt)]">8a-6p</span>
@@ -1557,10 +1579,13 @@ function PlanView({
         <div className="grid gap-2">
           {HOURS.map((hour) => {
             const placed = vm.planned.find((item) => item.hour === hour);
+            const collapsible =
+              !placed && !hourHasConflict(hour) && !showEmptyHours;
             return (
               <button
                 key={hour}
                 type="button"
+                data-testid={`hour-row-${hour}`}
                 onClick={() =>
                   placed
                     ? onUnplan(placed.block.id)
@@ -1569,7 +1594,8 @@ function PlanView({
                       : undefined
                 }
                 className={cn(
-                  "grid min-h-16 grid-cols-[58px_1fr] items-center rounded-2xl border p-3 text-left",
+                  "min-h-16 grid-cols-[58px_1fr] items-center rounded-2xl border p-3 text-left",
+                  collapsible ? "hidden sm:grid" : "grid",
                   placed
                     ? "border-[var(--acc-rng)] bg-[var(--acc-sf)]"
                     : taskIdToPlace
@@ -1603,9 +1629,20 @@ function PlanView({
               </button>
             );
           })}
+          {collapsibleHours.length && !showEmptyHours ? (
+            <button
+              type="button"
+              data-testid="show-empty-hours-toggle"
+              onClick={() => setShowEmptyHours(true)}
+              className="min-h-11 rounded-2xl border border-dashed border-[var(--ln)] p-3 text-left text-sm font-semibold text-[var(--mut)] sm:hidden"
+            >
+              Show {collapsibleHours.length} empty hour
+              {collapsibleHours.length === 1 ? "" : "s"}
+            </button>
+          ) : null}
         </div>
       </Panel>
-      <div className="grid gap-5">
+      <div className="order-1 grid gap-5 sm:order-2">
         <Panel>
           <h2 className="text-xl font-bold">To place</h2>
           <div className="mt-4 grid gap-2">
@@ -1720,13 +1757,7 @@ function PlanView({
           <div className="mt-4 grid gap-2">
             {vm.proposals.length ? (
               vm.proposals.map(
-                ({
-                  allDayContexts,
-                  proposal,
-                  task,
-                  hour,
-                  hasExistingBlock,
-                }) => (
+                ({ allDayContexts, proposal, task, hour }) => (
                   <div
                     key={proposal.id}
                     className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
@@ -1762,16 +1793,10 @@ function PlanView({
                         </button>
                       </div>
                     </div>
-                    {hasExistingBlock ? (
-                      <p
-                        role="status"
-                        aria-live="polite"
-                        className="mt-3 rounded-xl bg-[var(--amb-sf)] px-3 py-2 text-sm font-semibold text-[var(--amb-fg)]"
-                      >
-                        This task already has a scheduled block. Accepting adds
-                        another one.
-                      </p>
-                    ) : null}
+                    {/* #580: the "already has a scheduled block / accepting
+                        adds another one" warning is gone — placement now
+                        supersedes pending proposals atomically, so this state
+                        is unreachable. */}
                     {/* E1 (issue 456): sourced duration recalibration from this
                         area's real actuals. Accepting APPLIES it — records the
                         decision (NS-INV-3), retimes this pending block to the

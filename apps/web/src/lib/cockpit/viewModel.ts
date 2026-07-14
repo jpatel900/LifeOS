@@ -56,7 +56,6 @@ export interface CockpitViewModel {
     proposal: Phase2TimeBlockProposal;
     task: Phase2MockTask;
     hour: number;
-    hasExistingBlock: boolean;
   }[];
   done: Phase2MockTask[];
   sessions: Phase2MockExecutionSession[];
@@ -224,15 +223,16 @@ export function buildCockpitViewModel(
           item.id === proposal.task_id &&
           ["active", "scheduled"].includes(item.status),
       );
+      // #580 (one planning model): `hasExistingBlock` and its "accepting
+      // adds another block" warning are gone — placement supersedes pending
+      // proposals atomically, so a task can never simultaneously hold an
+      // active proposal and a scheduled block.
       return task
         ? {
             allDayContexts: allDayContextsForProposal(proposal),
             proposal,
             task,
             hour: new Date(proposal.proposed_start).getHours(),
-            hasExistingBlock: plannedBlocks.some(
-              (block) => block.task_id === task.id,
-            ),
           }
         : null;
     })
