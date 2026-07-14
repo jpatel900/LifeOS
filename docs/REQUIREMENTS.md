@@ -168,6 +168,13 @@ Acceptance criteria:
 - User can approve, edit, reject, or supersede.
 - Proposal can be generated without Google Calendar write access.
 - Conflict status is advisory.
+- **One planning model (owner decision 2026-07-14, "placement wins"):**
+  direct placement of a task onto an hour is the authoritative scheduling
+  action. Placing a task automatically supersedes that task's pending
+  proposals (status `superseded`, never deleted); accepting a proposal IS
+  placement (one code path). A task never simultaneously has a scheduled
+  block and an active proposal; the UI presents exactly one way to
+  schedule — proposals are suggestions feeding it, not a parallel model.
 
 ---
 
