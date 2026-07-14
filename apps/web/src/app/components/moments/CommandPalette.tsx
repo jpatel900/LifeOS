@@ -155,6 +155,7 @@ export function CommandPalette({
           aria-controls={listboxId}
           aria-activedescendant={activeOptionId}
           aria-autocomplete="list"
+          aria-label="Search commands"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={handleKeyDown}

@@ -318,6 +318,25 @@ describe("CommandPalette", () => {
       expect(input.getAttribute("aria-activedescendant")).toBe(flowOption.id);
     });
 
+    // #595: the combobox is identified only by placeholder text on current
+    // main — a stable accessible name (independent of placeholder/value)
+    // is required so assistive tech announces it consistently.
+    it("has a stable accessible name via aria-label, independent of the placeholder", () => {
+      render(
+        <CommandPalette
+          open
+          actions={ACTIONS}
+          onRun={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      const combobox = screen.getByRole("combobox", {
+        name: "Search commands",
+      });
+      expect(combobox).toBe(screen.getByTestId("command-palette-input"));
+    });
+
     it("aria-activedescendant is unset when no options match the query", () => {
       render(
         <CommandPalette
