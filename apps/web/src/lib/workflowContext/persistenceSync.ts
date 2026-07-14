@@ -463,7 +463,13 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     await syncPersistedWorkflowRows(client);
   }
 
-  async function persistReviewEntry(next: WorkflowState) {
+  // #588: surfaces the real outcome so callers can gate "day closed" copy on
+  // it — "persisted" only after the Supabase row is created, "local-only" on
+  // the recovery-oriented local fallback. Failures still throw (the caller
+  // maps them to its failure result).
+  async function persistReviewEntry(
+    next: WorkflowState,
+  ): Promise<"persisted" | "local-only"> {
     const client = createSupabaseBrowserClient();
     const persistedAreaId = selectedAreaId
       ? persistedAreaIdForWorkflowId(selectedAreaId, persistedAreasRef.current)
@@ -471,7 +477,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
 
     if (!client || (selectedAreaId && !persistedAreaId)) {
       markLocalOnly("Review saved locally; account sync is pending.");
-      return;
+      return "local-only";
     }
 
     const today = new Date().toISOString().slice(0, 10);
@@ -502,6 +508,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     });
 
     await syncPersistedWorkflowRows(client);
+    return "persisted";
   }
 
   async function persistStartedSession(

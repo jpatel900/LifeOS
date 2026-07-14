@@ -200,7 +200,7 @@ test("execute, review, health, and all areas keep the handoff hierarchy", async 
 
   await page.goto("/review");
   await expect(
-    page.getByRole("heading", { name: /Day closed clean|carry over/ }),
+    page.getByRole("heading", { name: /Ready to close|carry over/ }),
   ).toBeVisible();
   await expect(page.getByText("Carry-forward details")).toBeVisible();
 

@@ -42,7 +42,7 @@ const STAGES: StageCase[] = [
     path: "/review",
     assertLandmark: async (page) => {
       await expect(
-        page.getByRole("heading", { name: /Day closed clean|carry over/ }),
+        page.getByRole("heading", { name: /Ready to close|carry over/ }),
       ).toBeVisible();
     },
   },

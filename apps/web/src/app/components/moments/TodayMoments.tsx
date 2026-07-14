@@ -426,6 +426,24 @@ export function TodayMoments({
     [showToast],
   );
 
+  // #588: the only close-day path in this shell. "Day closed" is reported
+  // only after the review save actually persisted; local-only keeps the
+  // recovery-oriented fallback truth; failure shows recovery copy and never
+  // claims closure.
+  const handleCloseDay = useCallback(() => {
+    void saveReview().then((result) => {
+      if (result === "persisted") {
+        showToast("Day closed");
+        return;
+      }
+      if (result === "local-only") {
+        showToast("Day closed locally — account sync pending");
+        return;
+      }
+      showToast("Couldn't close the day — review not saved yet");
+    });
+  }, [saveReview, showToast]);
+
   const runPrimary = useCallback(() => {
     if (moment === "start") {
       if (startVM.firstMove) {
@@ -439,8 +457,7 @@ export function TodayMoments({
       }
       return;
     }
-    saveReview();
-    showToast("Day closed");
+    handleCloseDay();
   }, [
     moment,
     startVM.firstMove,
@@ -448,8 +465,7 @@ export function TodayMoments({
     session.activeTaskId,
     session.total,
     finishFocus,
-    saveReview,
-    showToast,
+    handleCloseDay,
   ]);
 
   // Ordering: palette -> capture -> sheet. In practice Escape while a sheet
@@ -651,8 +667,7 @@ export function TodayMoments({
           );
           break;
         case "close-day":
-          saveReview();
-          showToast("Day closed");
+          handleCloseDay();
           break;
         default:
           break;
@@ -663,8 +678,7 @@ export function TodayMoments({
       handleStartMove,
       finishFocus,
       pauseFocus,
-      saveReview,
-      showToast,
+      handleCloseDay,
     ],
   );
 
@@ -811,10 +825,7 @@ export function TodayMoments({
               confirmedWins={confirmedWins}
               pendingRollups={displayedRollups}
               approvedRollups={approvedRollups}
-              onCloseDay={() => {
-                saveReview();
-                showToast("Day closed");
-              }}
+              onCloseDay={handleCloseDay}
               onCarryForward={(taskId) => carryForwardTask(taskId)}
               onConfirmWin={handleConfirmWin}
               onSkipWin={handleSkipWin}

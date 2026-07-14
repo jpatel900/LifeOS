@@ -63,11 +63,11 @@ export function ReviewView({
               style={ringStyle(done, total, 86)}
             />
           </svg>
-          {/* #588: this headline renders before Save has been clicked (Save
-              navigates the shell away on click, so a "closed" verdict here
-              would always be a lie about persistence that hasn't happened
-              yet). Readiness copy only — never claim the day is closed from
-              this screen. */}
+          {/* #588: this headline renders before Save resolves — the closed
+              verdict is reported by the shell toast only after the awaited
+              saveReview() result comes back "persisted" (LifeOSCockpit).
+              Readiness copy only — never claim the day is closed from this
+              screen. */}
           <h1
             className="mt-4 text-4xl font-extrabold"
             data-testid="review-headline"

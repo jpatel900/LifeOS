@@ -196,9 +196,10 @@ describe("S9 golden-journey point 6b: override-pattern policy proposal", () => {
 
 describe("#588: review headline never claims closure before Save resolves", () => {
   // Verified finding: main showed "Day closed clean" on /review before Save
-  // was ever clicked. `saveReview` is fire-and-forget (WorkflowContext.tsx),
-  // so this screen has no way to know persistence has resolved — it must use
-  // readiness copy, never a completed verdict, regardless of clicks.
+  // was ever clicked. The resolved-save verdict lives in the shell toast
+  // (see reviewClosureTruth.test.tsx); this screen itself receives no
+  // persistence signal, so it must use readiness copy, never a completed
+  // verdict, regardless of clicks.
   function renderReview(onSave = () => {}) {
     render(
       <ReviewView
