@@ -11,108 +11,53 @@ import {
   useState,
 } from "react";
 import {
-  Phase2AmbiguityAssessmentResponseSchema,
-  Phase2CaptureItemSchema,
-  Phase2ProjectDraftSchema,
-  Phase2TaskDraftSchema,
-  Phase2TimeBlockProposalDraftSchema,
-  Phase2TimeBlockProposalSchema,
   type Area,
-  type CalendarBlock,
-  type CaptureItem,
-  type ExecutionSession,
-  type Person,
-  type Phase2TaskDraft,
-  type Phase2TimeBlockProposal,
-  type ReviewEntry,
   type RollupSummary,
   type RollupSummaryContent,
-  type Task,
-  type TimeBlockProposal as PersistedTimeBlockProposal,
 } from "@lifeos/schemas";
 import {
   acceptDraft,
-  acceptProjectDraft,
-  appendParsedWorkflowResult,
   acceptProposal,
-  addWorkflowArea,
-  applyGoogleCalendarCancelResult,
-  applyGoogleCalendarWriteResult,
   backlogDraft,
   carryForwardTask,
   createLocalProposalFromTask,
-  createInitialWorkflowState,
   deferTask,
   dropTask,
-  editDraft,
   markCurrentSession,
-  mergeDrafts,
   planTaskAtHour,
   promoteBacklogTask,
-  rejectDraft,
-  rejectPersonMention,
-  rejectProjectDraft,
   rejectProposal,
-  splitDraft,
+  saveReview,
   startExecutionSession,
-  submitRawCapture,
+  swapWipSlot,
   syncWorkflowIdCounterFromState,
   unplanTask,
   updateTaskFirstTinyStep,
-  updateWorkflowAreaColor,
   updateProposal,
-  saveReview,
-  swapWipSlot,
   clearWipRefusal,
-  approveTaskMapLocal,
-  toggleTaskMapNodeCompletionLocal,
   type WipRefusal,
   type WorkflowState,
 } from "./workflow";
 import {
-  acceptTimeBlockProposal,
-  applyTaskReviewTransition,
-  createCaptureItem,
-  syncQueuedCapture,
-  createExecutionSession,
-  createReviewEntry,
-  createWinRecord,
   createRollupSummary,
-  listRollupSummaries,
-  createTask,
-  createTimeBlockProposal,
-  editTimeBlockProposal,
-  findOrCreatePerson,
-  getOperatorProfile,
+  createWinRecord,
   listAreas,
-  listCaptureItems,
-  listPeople,
-  listExecutionReviewItems,
   listOverrideRecords,
-  listSuggestionRecords,
+  listRollupSummaries,
   listDurationProfiles,
   upsertDurationProfile,
   listPlanningItems,
-  markExecutionSession,
-  recordCommitmentProposal,
-  recordPersonLinkAcceptance,
-  recordPersonLinkRejection,
-  recordPersonMentionProposal,
-  recordWipEnforcementEvent,
-  recordRejectedTaskDraft,
-  recordPolicyProposalDecision,
+  listCaptureItems,
+  listExecutionReviewItems,
+  listSuggestionRecords,
   recordDurationRecalibrationDecision,
-  rejectTimeBlockProposal,
-  supersedePendingTimeBlockProposalsForTask,
-  unplanCalendarBlock,
-  approveTaskMap,
-  setTaskMapNodeCompletion,
+  recordPolicyProposalDecision,
+  recordRejectedTaskDraft,
+  recordPersonLinkRejection,
+  recordWipEnforcementEvent,
+  syncQueuedCapture,
   type MinimalSupabaseClient,
-  type ReviewTaskTargetStatus,
 } from "./data/workflow";
-import { requestTaskMapDraft as fetchTaskMapDraft } from "./ai/taskMapDraftClient";
-import { validateTaskMapForPersistence } from "./taskmap/persistence";
-import type { TaskMapGraph } from "./taskmap/graph";
 import {
   AREA_DURATION_TASK_TYPE,
   applyStoredDuration,
@@ -122,12 +67,7 @@ import {
   type ProposalRecalibrationVM,
 } from "./learning/learningSurface";
 import type { PolicyChangeCandidate } from "./learning/overrideScan";
-import type {
-  DurationProfile,
-  OverrideRecord,
-  SuggestionRecord,
-} from "@lifeos/schemas";
-import { normalizePersonName, resolvePersonMention } from "./data/personLinks";
+import type { DurationProfile, OverrideRecord } from "@lifeos/schemas";
 import {
   reviewEntryLine,
   toWorkflowBlock,
@@ -140,1013 +80,58 @@ import {
 import { createSupabaseBrowserClient } from "./supabase/browser";
 import {
   clearQueue,
-  enqueueCapture,
   listPendingCaptures,
   markCaptureSynced,
   pendingCaptureCount,
 } from "./capture/offlineQueue";
-import { isLifeOsOwnedGoogleEventIdShape } from "./cockpit/googleCalendarBridge";
-import type {
-  Phase2MockCalendarBlock,
-  Phase2MockExecutionSession,
-  Phase2MockTask,
-} from "./types";
+import type { Phase2MockExecutionSession } from "./types";
+import { workflowAreaIdForPersistedArea } from "./workflowAreaMapping";
 import {
-  buildParsedWorkflowResult,
-  type ParsedWorkflowResult,
-} from "./ai/parseCaptureWorkflow";
+  STORAGE_KEY,
+  createSyncedInitialState,
+  decidedPolicyKeysFromSuggestionRecords,
+  isUuid,
+  loadStoredStateFromSession,
+  mergePersistedCalendarBlocks,
+  NIL_UUID,
+  persistedAreaIdForWorkflowId,
+  persistedIdForLocalId,
+  persistedLoadFailureMessage,
+  persistedSaveFailureMessage,
+  persistedSyncFailureMessage,
+  policyDecisionKey,
+  workflowReducer,
+  type PersistedWorkflowPayload,
+} from "./workflowContext/reducerCore";
+import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
 import {
-  requestParseCapture,
-  type ParseCaptureClientStatus,
-  type ParseCaptureOperatorProfileContext,
-  type ParseCaptureParserMode,
-} from "./ai/parseCaptureClient";
+  createPersistenceSync,
+  type PersistenceSyncOps,
+} from "./workflowContext/persistenceSync";
+import { createCalendarApproval } from "./workflowContext/calendarApproval";
+import { createCaptureParseOps } from "./workflowContext/captureParse";
+import { useTaskMapDraftActions } from "./workflowContext/taskMapDraft";
 import {
-  persistedAreaIdForWorkflowAreaId,
-  workflowAreaIdForPersistedArea,
-} from "./workflowAreaMapping";
+  initialSyncStatus,
+  type CaptureParseState,
+  type GoogleCalendarBridgeResult,
+  type TaskMapDraftState,
+  type WorkflowContextValue,
+  type WorkflowSyncStatus,
+} from "./workflowContext/types";
 
-const STORAGE_KEY = "lifeos.phase2.workflow";
-
-type WorkflowAction =
-  | {
-      type: "hydrate";
-      state: WorkflowState;
-    }
-  | {
-      type: "syncAreas";
-      areas: WorkflowState["areas"];
-    }
-  | {
-      type: "syncPersistedWorkflow";
-      payload: PersistedWorkflowPayload;
-    }
-  | {
-      type: "addArea";
-      name: string;
-      color: string;
-    }
-  | {
-      type: "updateAreaColor";
-      areaId: string;
-      color: string;
-    }
-  | {
-      type: "appendParsedWorkflowResult";
-      parsed: ParsedWorkflowResult;
-    }
-  | {
-      type: "acceptDraft";
-      draftId: string;
-    }
-  | {
-      type: "backlogDraft";
-      draftId: string;
-    }
-  | {
-      type: "promoteBacklogTask";
-      taskId: string;
-    }
-  | {
-      type: "acceptProjectDraft";
-      draftId: string;
-    }
-  | {
-      type: "rejectDraft";
-      draftId: string;
-    }
-  | {
-      type: "rejectProjectDraft";
-      draftId: string;
-    }
-  | {
-      type: "editDraft";
-      draftId: string;
-      changes: Partial<
-        Pick<
-          Phase2TaskDraft,
-          "title" | "description" | "area_id" | "first_tiny_step"
-        >
-      >;
-    }
-  | {
-      type: "rejectPersonMention";
-      draftId: string;
-      mentionIndex: number;
-    }
-  | {
-      type: "splitDraft";
-      draftId: string;
-      titles: [string, string];
-    }
-  | {
-      type: "mergeDrafts";
-      primaryDraftId: string;
-      secondaryDraftId: string;
-    }
-  | {
-      type: "acceptProposal";
-      proposalId: string;
-    }
-  | {
-      type: "rejectProposal";
-      proposalId: string;
-    }
-  | {
-      type: "updateProposal";
-      proposalId: string;
-      changes: Pick<
-        Phase2TimeBlockProposal,
-        "proposed_start" | "proposed_end" | "rationale"
-      >;
-    }
-  | {
-      type: "createProposalFromTask";
-      taskId: string;
-      proposedStart: string;
-      proposedEnd: string;
-      rationale: string;
-    }
-  | {
-      type: "planTaskAtHour";
-      taskId: string;
-      hour: number;
-    }
-  | {
-      type: "updateTaskFirstTinyStep";
-      taskId: string;
-      firstTinyStep: string;
-    }
-  | {
-      type: "approveTaskMapLocal";
-      taskId: string;
-      graph: TaskMapGraph & { schema_version: string };
-    }
-  | {
-      type: "toggleTaskMapNodeCompletionLocal";
-      taskId: string;
-      nodeId: string;
-      nowIso: string;
-    }
-  | {
-      type: "unplanTask";
-      blockId: string;
-    }
-  | {
-      type: "startSession";
-      taskId: string;
-    }
-  | {
-      type: "markSession";
-      status: Phase2MockExecutionSession["status"];
-      actualMinutes?: number;
-      notes?: string | null;
-      capOutcome?: Phase2MockExecutionSession["cap_outcome"];
-    }
-  | {
-      type: "carryForwardTask";
-      taskId: string;
-    }
-  | {
-      type: "deferTask";
-      taskId: string;
-    }
-  | {
-      type: "dropTask";
-      taskId: string;
-    }
-  | {
-      type: "saveReview";
-    }
-  | {
-      type: "reset";
-    };
-
-/**
- * UI-facing status of the async capture parse round-trip. The raw capture is
- * already saved before this leaves "idle", so a failure never loses input.
- */
-export type CaptureParseState =
-  | { phase: "idle" }
-  | {
-      phase: "parsing";
-      captureId: string;
-      parserMode: ParseCaptureParserMode;
-    }
-  | {
-      phase: "parsed";
-      captureId: string;
-      parser: "ai" | "mock";
-      status: ParseCaptureClientStatus;
-    }
-  | {
-      phase: "failed";
-      captureId: string;
-      status: ParseCaptureClientStatus;
-      message: string;
-      canRetryWithMock: boolean;
-    };
-
-/**
- * FR-031 slice 5 — UI-facing status of the on-demand task-map draft
- * round-trip, keyed to the task it was drafted for so switching the
- * focused task never shows a stale draft. Generation is on-demand only
- * (NFR-001/NFR-005): entering "pending" always follows an explicit
- * `requestTaskMapDraft` call, never a background effect.
- */
-export type TaskMapDraftState =
-  | { phase: "idle" }
-  | { phase: "pending"; taskId: string }
-  | {
-      phase: "ready";
-      taskId: string;
-      draft: TaskMapGraph & { schema_version: "1.0" };
-      suggestionRecordId: string | null;
-    }
-  | { phase: "failed"; taskId: string; message: string };
-
-const SAFE_TASK_MAP_FAILURE_MESSAGE =
-  "Couldn't draft a map right now. Staying on the step list.";
-
-interface WorkflowContextValue {
-  state: WorkflowState;
-  selectedAreaId: string | null;
-  setSelectedAreaId: (areaId: string | null) => void;
-  syncStatus: WorkflowSyncStatus;
-  syncPersistedAreas: (areas: Area[]) => void;
-  refreshPersistedWorkflow: () => Promise<void>;
-  addArea: (name: string, color: string) => void;
-  updateAreaColor: (areaId: string, color: string) => void;
-  submitCaptureText: (
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
-  ) => void;
-  // G1 floor follow-up: persist the thought verbatim, skipping the AI parse
-  // (parsed later at triage). Same offline behavior as submitCaptureText.
-  submitCaptureRaw: (
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
-  ) => void;
-  captureParse: CaptureParseState;
-  retryCaptureParseWithMock: () => void;
-  // FR-031 slice 5: on-demand task-map draft + one-pass approve.
-  taskMapDraft: TaskMapDraftState;
-  requestTaskMapDraft: (taskId: string) => Promise<void>;
-  dismissTaskMapDraft: () => void;
-  approveTaskMapDraft: (
-    taskId: string,
-    graph: TaskMapGraph & { schema_version: "1.0" },
-  ) => Promise<void>;
-  // FR-031 slice 6: user-action-only, reversible node-completion toggle on
-  // an already-approved map. Never AI-invoked; not instrumented (a
-  // completion tap is not an AI suggestion resolution).
-  toggleTaskMapNodeCompletion: (
-    taskId: string,
-    nodeId: string,
-  ) => Promise<void>;
-  // FR-027 (F-G1a): number of raw captures saved offline and not yet synced to
-  // the spine (the queue-badge signal). Drains automatically on reconnect.
-  unsyncedCaptureCount: number;
-  // Purge device-local queued raw captures (call on logout — they are
-  // High-sensitivity and must not outlive the session on a shared device).
-  clearOfflineCaptures: () => Promise<void>;
-  addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
-  acceptTaskDraft: (draftId: string) => void;
-  backlogTaskDraft: (draftId: string) => void;
-  promoteBacklogTask: (taskId: string) => void;
-  acceptProjectDraft: (draftId: string) => void;
-  rejectTaskDraft: (draftId: string) => void;
-  rejectProjectDraft: (draftId: string) => void;
-  editTaskDraft: (
-    draftId: string,
-    changes: Partial<
-      Pick<
-        Phase2TaskDraft,
-        "title" | "description" | "area_id" | "first_tiny_step"
-      >
-    >,
-  ) => void;
-  rejectPersonLink: (draftId: string, mentionIndex: number) => void;
-  splitTaskDraft: (draftId: string, titles: [string, string]) => void;
-  mergeTaskDrafts: (primaryDraftId: string, secondaryDraftId: string) => void;
-  acceptLocalProposal: (proposalId: string) => void;
-  rejectLocalProposal: (proposalId: string) => void;
-  editLocalProposal: (
-    proposalId: string,
-    changes: Pick<
-      Phase2TimeBlockProposal,
-      "proposed_start" | "proposed_end" | "rationale"
-    >,
-  ) => void;
-  createLocalProposalForTask: (input: {
-    taskId: string;
-    proposedStart: string;
-    proposedEnd: string;
-    rationale: string;
-  }) => void;
-  planTaskAtHour: (taskId: string, hour: number) => void;
-  updateTaskFirstTinyStep: (taskId: string, firstTinyStep: string) => void;
-  unplanTask: (blockId: string) => void;
-  startTaskSession: (taskId: string) => void;
-  /**
-   * #572 (state truth, execute/review contract): resolves only once the
-   * outcome is persisted (or truthfully falls back to local-only). Local
-   * state updates synchronously/optimistically as before; callers that show
-   * a "closed"/verdict copy or navigate away MUST await this so that copy
-   * never claims a save that hasn't resolved.
-   */
-  markSession: (
-    status: Phase2MockExecutionSession["status"],
-    actualMinutes?: number,
-    notes?: string | null,
-    capOutcome?: Phase2MockExecutionSession["cap_outcome"],
-  ) => Promise<void>;
-  carryForwardTask: (taskId: string) => void;
-  deferTask: (taskId: string) => void;
-  dropTask: (taskId: string) => void;
-  saveReview: () => void;
-  confirmWin: (input: {
-    taskId: string;
-    title: string;
-    detail?: string | null;
-  }) => Promise<void>;
-  confirmRollup: (input: {
-    areaId: string;
-    periodType: "week" | "month";
-    periodStart: string;
-    periodEnd: string;
-    summary: RollupSummaryContent;
-  }) => Promise<void>;
-  // #486: read-only, workflow-area-scoped fetch of already-approved rollups
-  // (weekly and monthly), used for the monthly composer and month-over-month
-  // readback. See `listApprovedRollups` for the mapping/fallback details.
-  listApprovedRollups: () => Promise<RollupSummary[]>;
-  // S9 (#261) learning-loop consumer. Reads are derived from loaded
-  // override_records + execution-session actuals; decisions are propose->approve
-  // and NEVER auto-apply a default (the recorded decision is the only mutation).
-  overridePolicyProposals: PolicyChangeCandidate[];
-  decideOverridePolicyProposal: (
-    candidate: PolicyChangeCandidate,
-    decision: "accepted" | "declined",
-  ) => void;
-  recalibrationForProposal: (
-    areaId: string | null,
-    estimateMinutes: number,
-  ) => ProposalRecalibrationVM | null;
-  // The adjusted default duration for a task in `areaId` once its recalibration
-  // has been accepted, or null (planning uses the raw estimate). Apply-on-accept
-  // read side.
-  appliedDurationForArea: (
-    areaId: string | null,
-    estimateMinutes: number,
-  ) => number | null;
-  decideDurationRecalibration: (
-    input: {
-      proposalId: string;
-      proposedStart: string;
-      areaId: string | null;
-      recalibration: ProposalRecalibrationVM;
-    },
-    decision: "accepted" | "dismissed",
-  ) => void;
-  clearWipRefusal: () => void;
-  swapWipSlot: (slotTaskId: string) => void;
-  resetWorkflow: () => void;
-  approveProposalGoogleWrite: (
-    proposalId: string,
-    options?: { acknowledgeFirstWriteWarning?: boolean },
-  ) => Promise<GoogleCalendarBridgeResult>;
-  cancelGoogleCalendarBlock: (
-    blockId: string,
-  ) => Promise<GoogleCalendarBridgeResult>;
-}
-
-export interface GoogleCalendarBridgeResult {
-  outcome:
-    | "created"
-    | "cancelled"
-    | "first-write-warning"
-    | "unavailable"
-    | "failed";
-  message: string;
-}
-
-interface GoogleCalendarWriteRoutePayload {
-  ok?: boolean;
-  error?: string;
-  first_write_warning_required?: boolean;
-  google_event_id?: string;
-  block?: { id?: string };
-  event_already_gone?: boolean;
-}
+// Slice 4 (#590) re-exports — same public names, new homes. Every existing
+// `import { X } from "@/lib/WorkflowContext"` site keeps compiling unchanged.
+export type {
+  CaptureParseState,
+  GoogleCalendarBridgeResult,
+  TaskMapDraftState,
+  WorkflowContextValue,
+  WorkflowSyncStatus,
+};
+export { decidedPolicyKeysFromSuggestionRecords, mergePersistedCalendarBlocks };
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null);
-
-export interface WorkflowSyncStatus {
-  storage: "available" | "blocked";
-  account: "checking" | "synced" | "local-only" | "sync-error";
-  message: string | null;
-  pendingLocalChanges: boolean;
-}
-
-const initialSyncStatus: WorkflowSyncStatus = {
-  storage: "available",
-  account: "checking",
-  message: null,
-  pendingLocalChanges: false,
-};
-
-const persistedLoadFailureMessage =
-  "Saved workspace data could not load; local workflow remains usable, but saved account data may be missing from view.";
-const persistedSaveFailureMessage =
-  "Change saved locally, but account sync failed; it will stay local until sync recovers.";
-const serverCapabilityMissingMessage =
-  "Account sync needs a server update; the app and database look out of step. Check Health for the next step.";
-
-function isRecordValue(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function hasServerCapabilityMissingSignal(error: unknown): boolean {
-  if (!isRecordValue(error)) {
-    return false;
-  }
-
-  const code = error.code;
-  if (code === "PGRST202" || code === "42883" || code === "42703") {
-    return true;
-  }
-
-  const status = error.status;
-  if (status === 404) {
-    return true;
-  }
-
-  const message = error.message;
-  return (
-    typeof message === "string" &&
-    (message.includes("PGRST202") ||
-      message.includes("42883") ||
-      message.includes("42703") ||
-      message.includes("function") ||
-      message.includes("column"))
-  );
-}
-
-function persistedSyncFailureMessage(
-  error: unknown,
-  fallbackMessage: string,
-): string {
-  return hasServerCapabilityMissingSignal(error)
-    ? serverCapabilityMissingMessage
-    : fallbackMessage;
-}
-
-interface PersistedWorkflowPayload {
-  captures: WorkflowState["captureItems"];
-  tasks: WorkflowState["tasks"];
-  proposals: WorkflowState["timeBlockProposals"];
-  blocks: WorkflowState["calendarBlocks"];
-  sessions: WorkflowState["executionSessions"];
-  reviewLog: string[];
-  dropLocalIds: {
-    captures: Set<string>;
-    tasks: Set<string>;
-    proposals: Set<string>;
-    blocks: Set<string>;
-    sessions: Set<string>;
-  };
-}
-
-function createSyncedInitialState() {
-  const initial = createInitialWorkflowState();
-  syncWorkflowIdCounterFromState(initial);
-  return initial;
-}
-
-function isUuid(value: string | null | undefined) {
-  return Boolean(
-    value?.match(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    ),
-  );
-}
-
-// Placeholder user id for an optimistically-constructed local duration profile;
-// the real row's user_id is set server-side from auth (never sent from the
-// client), so this value is never persisted.
-const NIL_UUID = "00000000-0000-0000-0000-000000000000";
-
-function mergePersistedRows<T extends { id: string }>(
-  persistedRows: T[],
-  localRows: T[],
-  dropLocalIds: Set<string>,
-) {
-  const persistedIds = new Set(persistedRows.map((row) => row.id));
-  return [
-    ...persistedRows,
-    ...localRows.filter(
-      (row) =>
-        !persistedIds.has(row.id) &&
-        !dropLocalIds.has(row.id) &&
-        !isUuid(row.id),
-    ),
-  ];
-}
-
-/**
- * A local (optimistic) calendar block and its freshly persisted counterpart
- * briefly coexist: the local id map only catches up after the next sync
- * round-trip. Without this, the Today "Scheduled" band and Plan hour rail
- * double-count the same block for one request/response window.
- *
- * This drops a LOCAL block (non-UUID id) once a persisted row for the same
- * task_id arrives at the same start_at. It never dedups two persisted rows —
- * the DB is the source of truth and legitimate multiple blocks per task stay
- * allowed (see docs/KNOWN_ISSUES.md row 12 / issue #324).
- */
-export function mergePersistedCalendarBlocks(
-  persistedRows: Phase2MockCalendarBlock[],
-  localRows: Phase2MockCalendarBlock[],
-  dropLocalIds: Set<string>,
-): Phase2MockCalendarBlock[] {
-  const persistedIds = new Set(persistedRows.map((row) => row.id));
-  const isEchoOfPersisted = (localRow: Phase2MockCalendarBlock) =>
-    persistedRows.some(
-      (persistedRow) =>
-        persistedRow.task_id !== null &&
-        persistedRow.task_id === localRow.task_id &&
-        new Date(persistedRow.start_at).getTime() ===
-          new Date(localRow.start_at).getTime(),
-    );
-
-  return [
-    ...persistedRows,
-    ...localRows.filter(
-      (row) =>
-        !persistedIds.has(row.id) &&
-        !dropLocalIds.has(row.id) &&
-        !isUuid(row.id) &&
-        !isEchoOfPersisted(row),
-    ),
-  ];
-}
-
-function persistedAreaIdForWorkflowId(
-  workflowAreaId: string,
-  persistedAreas: Area[],
-) {
-  return persistedAreaIdForWorkflowAreaId(workflowAreaId, persistedAreas);
-}
-
-function persistedIdForLocalId(
-  id: string,
-  idMap: Map<string, string>,
-): string | null {
-  if (isUuid(id)) return id;
-  return idMap.get(id) ?? null;
-}
-
-const TASK_STATUSES = new Set([
-  "draft",
-  "active",
-  "backlog",
-  "scheduled",
-  "blocked",
-  "done",
-  "dropped",
-  "archived",
-]);
-const PROJECT_STATUSES = new Set([
-  "active",
-  "paused",
-  "done",
-  "dropped",
-  "archived",
-]);
-const CALENDAR_BLOCK_STATUSES = new Set([
-  "scheduled",
-  "running",
-  "completed",
-  "missed",
-  "cancelled",
-]);
-const EXECUTION_SESSION_STATUSES = new Set([
-  "running",
-  "paused",
-  "completed",
-  "missed",
-  "distracted",
-  "stuck",
-  "stopped",
-]);
-const EXECUTION_OUTCOMES = new Set([
-  "completed",
-  "partial",
-  "stopped",
-  "distracted",
-  "blocked",
-  "skipped",
-]);
-const HEALTH_SUBSYSTEMS = new Set([
-  "auth",
-  "database",
-  "ai_parsing",
-  "calendar_connector",
-  "scheduler",
-  "priority_model",
-  "duration_model",
-  "time_preferences",
-]);
-const HEALTH_STATUSES = new Set(["healthy", "watch", "critical"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isString(value: unknown): value is string {
-  return typeof value === "string";
-}
-
-function isNullableString(value: unknown): value is string | null {
-  return value === null || isString(value);
-}
-
-function isNullableNumber(value: unknown): value is number | null {
-  return value === null || typeof value === "number";
-}
-
-function isOptionalNullableNumber(
-  value: unknown,
-): value is number | null | undefined {
-  return value === undefined || isNullableNumber(value);
-}
-
-function isOneOf(value: unknown, allowed: Set<string>) {
-  return isString(value) && allowed.has(value);
-}
-
-function isArrayOf<T>(
-  value: unknown,
-  predicate: (item: unknown) => item is T,
-): value is T[] {
-  return Array.isArray(value) && value.every(predicate);
-}
-
-function isPhase2MockArea(
-  value: unknown,
-): value is WorkflowState["areas"][number] {
-  return (
-    isRecord(value) &&
-    isString(value.id) &&
-    isString(value.user_id) &&
-    isString(value.name) &&
-    isString(value.color) &&
-    isString(value.created_at)
-  );
-}
-
-function isPhase2MockTask(
-  value: unknown,
-): value is WorkflowState["tasks"][number] {
-  return (
-    isRecord(value) &&
-    isString(value.id) &&
-    isString(value.user_id) &&
-    isString(value.area_id) &&
-    isNullableString(value.project_id) &&
-    isNullableString(value.source_capture_item_id) &&
-    isString(value.title) &&
-    isNullableString(value.description) &&
-    isOneOf(value.status, TASK_STATUSES) &&
-    isNullableNumber(value.priority_score) &&
-    isNullableNumber(value.priority_confidence) &&
-    isNullableString(value.task_type) &&
-    (value.is_reversible === undefined ||
-      value.is_reversible === null ||
-      typeof value.is_reversible === "boolean") &&
-    isNullableString(value.energy_type) &&
-    isNullableNumber(value.estimated_minutes_low) &&
-    isNullableNumber(value.estimated_minutes_high) &&
-    isNullableString(value.due_at) &&
-    isNullableString(value.definition_of_done) &&
-    isNullableString(value.first_tiny_step) &&
-    isString(value.created_at) &&
-    isString(value.updated_at)
-  );
-}
-
-function isPhase2MockProject(
-  value: unknown,
-): value is WorkflowState["projects"][number] {
-  return (
-    isRecord(value) &&
-    isString(value.id) &&
-    isString(value.user_id) &&
-    isString(value.area_id) &&
-    isString(value.title) &&
-    isNullableString(value.description) &&
-    isOneOf(value.status, PROJECT_STATUSES) &&
-    isString(value.created_at) &&
-    isString(value.updated_at)
-  );
-}
-
-function isPhase2MockCalendarBlock(
-  value: unknown,
-): value is WorkflowState["calendarBlocks"][number] {
-  return (
-    isRecord(value) &&
-    isString(value.id) &&
-    isString(value.user_id) &&
-    isString(value.area_id) &&
-    isNullableString(value.proposal_id) &&
-    isNullableString(value.task_id) &&
-    isNullableString(value.google_event_id) &&
-    isString(value.start_at) &&
-    isString(value.end_at) &&
-    isOneOf(value.status, CALENDAR_BLOCK_STATUSES) &&
-    isString(value.created_at) &&
-    isString(value.updated_at)
-  );
-}
-
-function isPhase2MockExecutionSession(
-  value: unknown,
-): value is WorkflowState["executionSessions"][number] {
-  return (
-    isRecord(value) &&
-    isString(value.id) &&
-    isString(value.user_id) &&
-    isString(value.area_id) &&
-    isNullableString(value.task_id) &&
-    isNullableString(value.calendar_block_id) &&
-    isNullableNumber(value.planned_minutes) &&
-    isNullableNumber(value.actual_minutes) &&
-    isOptionalNullableNumber(value.paused_minutes) &&
-    isOptionalNullableNumber(value.distraction_minutes) &&
-    isOptionalNullableNumber(value.productivity_rating) &&
-    isOneOf(value.status, EXECUTION_SESSION_STATUSES) &&
-    isOneOf(value.outcome, EXECUTION_OUTCOMES) &&
-    (value.notes === undefined || isNullableString(value.notes))
-  );
-}
-
-function isPhase2MockHealthCheck(
-  value: unknown,
-): value is WorkflowState["healthChecks"][number] {
-  return (
-    isRecord(value) &&
-    isString(value.id) &&
-    isOneOf(value.subsystem, HEALTH_SUBSYSTEMS) &&
-    isOneOf(value.status, HEALTH_STATUSES) &&
-    typeof value.score === "number" &&
-    isString(value.summary)
-  );
-}
-
-function isStoredWorkflowState(value: unknown): value is WorkflowState {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  const state = value as Partial<Record<keyof WorkflowState, unknown>>;
-  return (
-    isArrayOf(state.areas, isPhase2MockArea) &&
-    isArrayOf(
-      state.captureItems,
-      (item): item is WorkflowState["captureItems"][number] =>
-        Phase2CaptureItemSchema.safeParse(item).success,
-    ) &&
-    isArrayOf(
-      state.taskDrafts,
-      (item): item is WorkflowState["taskDrafts"][number] =>
-        Phase2TaskDraftSchema.safeParse(item).success,
-    ) &&
-    isArrayOf(
-      state.projectDrafts,
-      (item): item is WorkflowState["projectDrafts"][number] =>
-        Phase2ProjectDraftSchema.safeParse(item).success,
-    ) &&
-    isArrayOf(
-      state.ambiguityAssessments,
-      (item): item is WorkflowState["ambiguityAssessments"][number] =>
-        Phase2AmbiguityAssessmentResponseSchema.safeParse(item).success,
-    ) &&
-    isArrayOf(
-      state.timeBlockProposalDrafts,
-      (item): item is WorkflowState["timeBlockProposalDrafts"][number] =>
-        Phase2TimeBlockProposalDraftSchema.safeParse(item).success,
-    ) &&
-    isArrayOf(state.projects, isPhase2MockProject) &&
-    isArrayOf(state.tasks, isPhase2MockTask) &&
-    isArrayOf(
-      state.timeBlockProposals,
-      (item): item is WorkflowState["timeBlockProposals"][number] =>
-        Phase2TimeBlockProposalSchema.safeParse(item).success,
-    ) &&
-    isArrayOf(state.calendarBlocks, isPhase2MockCalendarBlock) &&
-    isArrayOf(state.executionSessions, isPhase2MockExecutionSession) &&
-    isArrayOf(state.healthChecks, isPhase2MockHealthCheck) &&
-    isArrayOf(state.reviewLog, isString) &&
-    (state.wipRefusal === null ||
-      state.wipRefusal === undefined ||
-      isRecord(state.wipRefusal))
-  );
-}
-
-function normalizeStoredWorkflowState(value: unknown): unknown {
-  if (!isRecord(value)) {
-    return value;
-  }
-
-  return {
-    ...value,
-    projectDrafts: value.projectDrafts ?? [],
-    projects: value.projects ?? [],
-    wipRefusal: value.wipRefusal ?? null,
-  };
-}
-
-function workflowReducer(
-  state: WorkflowState,
-  action: WorkflowAction,
-): WorkflowState {
-  switch (action.type) {
-    case "hydrate":
-      return action.state;
-    case "syncAreas":
-      return {
-        ...state,
-        areas: action.areas,
-      };
-    case "syncPersistedWorkflow":
-      return {
-        ...state,
-        captureItems: mergePersistedRows(
-          action.payload.captures,
-          state.captureItems,
-          action.payload.dropLocalIds.captures,
-        ),
-        tasks: mergePersistedRows(
-          action.payload.tasks,
-          state.tasks,
-          action.payload.dropLocalIds.tasks,
-        ),
-        timeBlockProposals: mergePersistedRows(
-          action.payload.proposals,
-          state.timeBlockProposals,
-          action.payload.dropLocalIds.proposals,
-        ),
-        calendarBlocks: mergePersistedCalendarBlocks(
-          action.payload.blocks,
-          state.calendarBlocks,
-          action.payload.dropLocalIds.blocks,
-        ),
-        executionSessions: mergePersistedRows(
-          action.payload.sessions,
-          state.executionSessions,
-          action.payload.dropLocalIds.sessions,
-        ),
-        reviewLog: [
-          ...action.payload.reviewLog,
-          ...state.reviewLog.filter(
-            (line) => !action.payload.reviewLog.includes(line),
-          ),
-        ],
-      };
-    case "addArea":
-      return addWorkflowArea(state, { name: action.name, color: action.color });
-    case "updateAreaColor":
-      return updateWorkflowAreaColor(state, action.areaId, action.color);
-    case "appendParsedWorkflowResult":
-      return appendParsedWorkflowResult(state, action.parsed);
-    case "acceptDraft":
-      return acceptDraft(state, action.draftId);
-    case "backlogDraft":
-      return backlogDraft(state, action.draftId);
-    case "promoteBacklogTask":
-      return promoteBacklogTask(state, action.taskId);
-    case "acceptProjectDraft":
-      return acceptProjectDraft(state, action.draftId);
-    case "rejectDraft":
-      return rejectDraft(state, action.draftId);
-    case "rejectProjectDraft":
-      return rejectProjectDraft(state, action.draftId);
-    case "editDraft":
-      return editDraft(state, action.draftId, action.changes);
-    case "rejectPersonMention":
-      return rejectPersonMention(state, action.draftId, action.mentionIndex);
-    case "splitDraft":
-      return splitDraft(state, action.draftId, action.titles);
-    case "mergeDrafts":
-      return mergeDrafts(state, action.primaryDraftId, action.secondaryDraftId);
-    case "acceptProposal":
-      return acceptProposal(state, action.proposalId);
-    case "rejectProposal":
-      return rejectProposal(state, action.proposalId);
-    case "updateProposal":
-      return updateProposal(state, action.proposalId, action.changes);
-    case "createProposalFromTask":
-      return createLocalProposalFromTask(state, action.taskId, {
-        proposed_start: action.proposedStart,
-        proposed_end: action.proposedEnd,
-        rationale: action.rationale,
-      });
-    case "planTaskAtHour":
-      return planTaskAtHour(state, action.taskId, action.hour);
-    case "updateTaskFirstTinyStep":
-      return updateTaskFirstTinyStep(
-        state,
-        action.taskId,
-        action.firstTinyStep,
-      );
-    case "approveTaskMapLocal":
-      return approveTaskMapLocal(state, action.taskId, action.graph);
-    case "toggleTaskMapNodeCompletionLocal":
-      return toggleTaskMapNodeCompletionLocal(
-        state,
-        action.taskId,
-        action.nodeId,
-        action.nowIso,
-      );
-    case "unplanTask":
-      return unplanTask(state, action.blockId);
-    case "startSession":
-      return startExecutionSession(state, action.taskId);
-    case "markSession":
-      return markCurrentSession(state, action.status, {
-        actualMinutes: action.actualMinutes,
-        notes: action.notes,
-        capOutcome: action.capOutcome,
-      });
-    case "carryForwardTask":
-      return carryForwardTask(state, action.taskId);
-    case "deferTask":
-      return deferTask(state, action.taskId);
-    case "dropTask":
-      return dropTask(state, action.taskId);
-    case "saveReview":
-      return saveReview(state);
-    case "reset":
-      return createSyncedInitialState();
-    default:
-      return state;
-  }
-}
-
-function loadStoredStateFromSession(): {
-  state: WorkflowState | null;
-  storageBlocked: boolean;
-} {
-  if (typeof window === "undefined") {
-    return { state: null, storageBlocked: false };
-  }
-
-  try {
-    const stored = window.sessionStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      return { state: null, storageBlocked: false };
-    }
-
-    const parsed = normalizeStoredWorkflowState(JSON.parse(stored));
-    if (!isStoredWorkflowState(parsed)) {
-      return { state: null, storageBlocked: false };
-    }
-
-    syncWorkflowIdCounterFromState(parsed);
-    return { state: parsed, storageBlocked: false };
-  } catch {
-    return { state: null, storageBlocked: true };
-  }
-}
-
-// E2 (#261 follow-up): the stable (policy, area) key for a policy-change
-// proposal. Module-level so the persisted-decision seeding (in the load effect)
-// and the in-render policyProposalKey share ONE format — they must match or a
-// decided proposal would not stay suppressed across reloads.
-function policyDecisionKey(
-  policyIdentifier: string,
-  areaId: string | null,
-): string {
-  return `${policyIdentifier}::${areaId ?? ""}`;
-}
-
-// E2 (#261 follow-up): the (policy, area) keys the user has already decided,
-// derived from persisted `policy_change` suggestion_records. Every such record
-// IS a recorded decision (proposals are computed from override_records, never
-// persisted), so filtering by suggestion_type alone captures all decisions.
-export function decidedPolicyKeysFromSuggestionRecords(
-  records: SuggestionRecord[],
-): string[] {
-  return records
-    .filter((record) => record.suggestion_type === "policy_change")
-    .map((record) =>
-      policyDecisionKey(record.policy_identifier, record.area_id),
-    );
-}
 
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(
@@ -1316,7 +301,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           proposals: planningResult.proposals
             .map((proposal) => toWorkflowProposal(proposal, areas))
             .filter(
-              (proposal): proposal is Phase2TimeBlockProposal =>
+              (proposal): proposal is NonNullable<typeof proposal> =>
                 proposal !== null,
             ),
           blocks: executionResult.blocks.map((block) =>
@@ -1378,436 +363,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [buildDropLocalIds, markAccountSynced, markLocalOnly],
   );
 
-  async function persistCapture(
-    localCapture: WorkflowState["captureItems"][number],
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedAreaId = localCapture.area_id
-      ? persistedAreaIdForWorkflowId(
-          localCapture.area_id,
-          persistedAreasRef.current,
-        )
-      : null;
+  const applyWorkflowState = createApplyWorkflowState(stateRef, dispatch);
 
-    if (!client || (localCapture.area_id && !persistedAreaId)) {
-      markLocalOnly("Capture saved locally; account sync is not available.");
-      return;
-    }
-
-    const result = await createCaptureItem(client, {
-      raw_text: localCapture.raw_text,
-      return_hook: localCapture.return_hook ?? null,
-      area_id: persistedAreaId,
-    });
-    if (result.provider !== "supabase") {
-      return;
-    }
-
-    persistedCaptureIdByLocalIdRef.current.set(
-      localCapture.id,
-      result.capture.id,
-    );
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistAcceptedTaskDraft(
-    draft: Phase2TaskDraft,
-    localTask: Phase2MockTask,
-    localProposal: Phase2TimeBlockProposal | null,
-    status: "active" | "backlog",
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedAreaId = persistedAreaIdForWorkflowId(
-      draft.area_id,
-      persistedAreasRef.current,
-    );
-
-    if (!client || !persistedAreaId) {
-      markLocalOnly("Triage decision saved locally; account sync is pending.");
-      return;
-    }
-
-    const sourceCaptureId = persistedIdForLocalId(
-      draft.capture_item_id,
-      persistedCaptureIdByLocalIdRef.current,
-    );
-
-    // S3 (#255): resolve the approved person links before the task insert (FK
-    // ordering). A mention that survived to accept was not rejected, so it is
-    // user-approved. For each such mention we find-or-create the person
-    // (idempotent per normalized_name, re-checked at accept time), then write the
-    // link column for its role. Multiple mentions of one role map to a single
-    // column, so the first resolved id wins deterministically. role "mention" is
-    // informational — it creates the person but links no column. A find/create
-    // failure degrades that one link to no-link; the task still lands (NS-INV-4).
-    const acceptTime = new Date().toISOString();
-    let waitingOnPersonId: string | null = null;
-    let committedToPersonId: string | null = null;
-    const acceptedLinks: Array<{
-      name: string;
-      role: "waiting_on" | "committed_to" | "mention";
-      personId: string | null;
-    }> = [];
-
-    for (const mention of draft.person_mentions) {
-      // role "mention" is informational only (deliverable b): it links no column
-      // and creates no person row — approval to create a person (FR-017) comes
-      // only with a waiting_on / committed_to link. Its pending suggestion is
-      // still resolved to accepted below.
-      let personId: string | null = null;
-      if (mention.role === "waiting_on" || mention.role === "committed_to") {
-        try {
-          const personResult = await findOrCreatePerson(client, {
-            display_name: mention.name,
-            normalized_name: normalizePersonName(mention.name),
-          });
-          personId = personResult.person?.id ?? null;
-        } catch {
-          // A person find/create failure degrades this link to no-link; never
-          // block the task creation the user just approved.
-          personId = null;
-        }
-      }
-
-      if (personId) {
-        if (mention.role === "waiting_on" && !waitingOnPersonId) {
-          waitingOnPersonId = personId;
-        } else if (mention.role === "committed_to" && !committedToPersonId) {
-          committedToPersonId = personId;
-        }
-      }
-
-      acceptedLinks.push({ name: mention.name, role: mention.role, personId });
-    }
-
-    // committed_to link OR an approved commitment draft flag both set the task as
-    // a commitment (deliverable b honors draft.is_commitment without a person).
-    const isCommitment = draft.is_commitment || committedToPersonId !== null;
-
-    const taskResult = await createTask(client, {
-      area_id: persistedAreaId,
-      source_capture_item_id: sourceCaptureId,
-      title: draft.title,
-      description: draft.description,
-      status,
-      priority_confidence: draft.confidence,
-      task_type: draft.task_type ?? "task",
-      is_reversible:
-        draft.task_type === "decision" ? (draft.is_reversible ?? null) : null,
-      due_at: draft.due_at ?? null,
-      estimated_minutes_low: draft.estimated_minutes_low,
-      estimated_minutes_high: draft.estimated_minutes_high,
-      first_tiny_step: draft.first_tiny_step,
-      waiting_on_person_id: waitingOnPersonId,
-      waiting_on_since: waitingOnPersonId ? acceptTime : null,
-      is_commitment: isCommitment,
-      committed_to_person_id: committedToPersonId,
-    });
-
-    if (taskResult.provider !== "supabase") {
-      return;
-    }
-
-    // Resolve the pending person-link proposals to accepted (mirrors the
-    // rejection path). Fire-and-forget — a learning-write failure never affects
-    // the accept flow (NS-INV-3).
-    for (const link of acceptedLinks) {
-      recordPersonLinkAcceptance(client, {
-        area_id: persistedAreaId,
-        draft_id: draft.id,
-        name: link.name,
-        role: link.role,
-        matched_person_id: link.personId,
-      });
-    }
-
-    persistedTaskIdByLocalIdRef.current.set(localTask.id, taskResult.task.id);
-
-    if (localProposal && status === "active") {
-      const proposalResult = await createTimeBlockProposal(client, {
-        task_id: taskResult.task.id,
-        proposed_start: localProposal.proposed_start,
-        proposed_end: localProposal.proposed_end,
-        rationale_note: localProposal.rationale,
-      });
-      if (proposalResult.provider === "supabase") {
-        persistedProposalIdByLocalIdRef.current.set(
-          localProposal.id,
-          proposalResult.proposal.id,
-        );
-      }
-    }
-
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistPlannedTask(
-    localTaskId: string,
-    localProposal: Phase2TimeBlockProposal,
-    localBlock: Phase2MockCalendarBlock,
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedTaskId = persistedIdForLocalId(
-      localTaskId,
-      persistedTaskIdByLocalIdRef.current,
-    );
-
-    if (!client || !persistedTaskId) {
-      markLocalOnly("Plan saved locally; account sync is pending.");
-      return;
-    }
-
-    const proposalResult = await createTimeBlockProposal(client, {
-      task_id: persistedTaskId,
-      proposed_start: localProposal.proposed_start,
-      proposed_end: localProposal.proposed_end,
-      rationale_note: localProposal.rationale,
-    });
-    if (proposalResult.provider !== "supabase") {
-      return;
-    }
-
-    persistedProposalIdByLocalIdRef.current.set(
-      localProposal.id,
-      proposalResult.proposal.id,
-    );
-
-    const acceptResult = await acceptTimeBlockProposal(
-      client,
-      proposalResult.proposal.id,
-    );
-    if (acceptResult.provider === "supabase") {
-      persistedBlockIdByLocalIdRef.current.set(
-        localBlock.id,
-        acceptResult.block.id,
-      );
-    }
-
-    // #580: mirror the local supersede-on-place transition so a later sync
-    // cannot resurrect a pending proposal for the task just placed. Runs
-    // after the accept RPC, so the accepted proposal is already settled.
-    await supersedePendingTimeBlockProposalsForTask(client, persistedTaskId);
-
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistCreatedLocalProposal(
-    localProposal: Phase2TimeBlockProposal,
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedTaskId = persistedIdForLocalId(
-      localProposal.task_id,
-      persistedTaskIdByLocalIdRef.current,
-    );
-
-    if (!client || !persistedTaskId) {
-      markLocalOnly("Proposal created locally; account sync is pending.");
-      return;
-    }
-
-    const proposalResult = await createTimeBlockProposal(client, {
-      task_id: persistedTaskId,
-      proposed_start: localProposal.proposed_start,
-      proposed_end: localProposal.proposed_end,
-      rationale_note: localProposal.rationale,
-    });
-    if (proposalResult.provider !== "supabase") {
-      return;
-    }
-
-    persistedProposalIdByLocalIdRef.current.set(
-      localProposal.id,
-      proposalResult.proposal.id,
-    );
-
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistEditedLocalProposal(
-    localProposal: Phase2TimeBlockProposal,
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedProposalId = persistedIdForLocalId(
-      localProposal.id,
-      persistedProposalIdByLocalIdRef.current,
-    );
-
-    if (!client || !persistedProposalId) {
-      markLocalOnly("Proposal edit saved locally; account sync is pending.");
-      return;
-    }
-
-    await editTimeBlockProposal(client, persistedProposalId, {
-      proposed_start: localProposal.proposed_start,
-      proposed_end: localProposal.proposed_end,
-    });
-
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistRejectedLocalProposal(
-    localProposal: Phase2TimeBlockProposal,
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedProposalId = persistedIdForLocalId(
-      localProposal.id,
-      persistedProposalIdByLocalIdRef.current,
-    );
-
-    if (!client || !persistedProposalId) {
-      markLocalOnly("Proposal rejected locally; account sync is pending.");
-      return;
-    }
-
-    await rejectTimeBlockProposal(client, persistedProposalId);
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistAcceptedLocalProposal(
-    localProposal: Phase2TimeBlockProposal,
-    localBlock: Phase2MockCalendarBlock | null,
-  ) {
-    const client = createSupabaseBrowserClient();
-    let persistedProposalId = persistedIdForLocalId(
-      localProposal.id,
-      persistedProposalIdByLocalIdRef.current,
-    );
-
-    if (!client) {
-      markLocalOnly("Proposal accepted locally; account sync is pending.");
-      return;
-    }
-
-    if (!persistedProposalId) {
-      const persistedTaskId = persistedIdForLocalId(
-        localProposal.task_id,
-        persistedTaskIdByLocalIdRef.current,
-      );
-
-      if (!persistedTaskId) {
-        markLocalOnly("Proposal accepted locally; account sync is pending.");
-        return;
-      }
-
-      const proposalResult = await createTimeBlockProposal(client, {
-        task_id: persistedTaskId,
-        proposed_start: localProposal.proposed_start,
-        proposed_end: localProposal.proposed_end,
-        rationale_note: localProposal.rationale,
-      });
-      if (proposalResult.provider !== "supabase") {
-        return;
-      }
-      persistedProposalId = proposalResult.proposal.id;
-      persistedProposalIdByLocalIdRef.current.set(
-        localProposal.id,
-        proposalResult.proposal.id,
-      );
-    }
-
-    const acceptResult = await acceptTimeBlockProposal(
-      client,
-      persistedProposalId,
-    );
-    if (acceptResult.provider === "supabase" && localBlock) {
-      persistedBlockIdByLocalIdRef.current.set(
-        localBlock.id,
-        acceptResult.block.id,
-      );
-    }
-
-    // #580: mirror the local supersede-on-place transition (accept = place)
-    // so sibling pending proposal rows for the task cannot come back as
-    // active on the next sync. Runs after the accept RPC settles this one.
-    const persistedTaskIdForSupersede = persistedIdForLocalId(
-      localProposal.task_id,
-      persistedTaskIdByLocalIdRef.current,
-    );
-    if (persistedTaskIdForSupersede) {
-      await supersedePendingTimeBlockProposalsForTask(
-        client,
-        persistedTaskIdForSupersede,
-      );
-    }
-
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistUnplannedBlock(localBlockId: string) {
-    const client = createSupabaseBrowserClient();
-    const persistedBlockId = persistedIdForLocalId(
-      localBlockId,
-      persistedBlockIdByLocalIdRef.current,
-    );
-
-    if (!client || !persistedBlockId) {
-      markLocalOnly("Unplanned locally; account sync is pending.");
-      return;
-    }
-
-    await unplanCalendarBlock(client, persistedBlockId);
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistTaskReviewTransition(
-    localTaskId: string,
-    targetStatus: ReviewTaskTargetStatus,
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedTaskId = persistedIdForLocalId(
-      localTaskId,
-      persistedTaskIdByLocalIdRef.current,
-    );
-
-    if (!client || !persistedTaskId) {
-      markLocalOnly("Recovery choice saved locally; account sync is pending.");
-      return;
-    }
-
-    await applyTaskReviewTransition(client, persistedTaskId, targetStatus);
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistReviewEntry(next: WorkflowState) {
-    const client = createSupabaseBrowserClient();
-    const persistedAreaId = selectedAreaId
-      ? persistedAreaIdForWorkflowId(selectedAreaId, persistedAreasRef.current)
-      : null;
-
-    if (!client || (selectedAreaId && !persistedAreaId)) {
-      markLocalOnly("Review saved locally; account sync is pending.");
-      return;
-    }
-
-    const today = new Date().toISOString().slice(0, 10);
-    await createReviewEntry(client, {
-      review_type: "daily",
-      period_start: today,
-      period_end: today,
-      area_id: persistedAreaId,
-      summary_json: {
-        verdict: "saved",
-        completed_sessions: next.executionSessions.filter(
-          (session) => session.status === "completed",
-        ).length,
-        missed_sessions: next.executionSessions.filter(
-          (session) => session.status === "missed",
-        ).length,
-        distracted_sessions: next.executionSessions.filter(
-          (session) => session.status === "distracted",
-        ).length,
-        open_tasks: next.tasks.filter((task) =>
-          ["active", "backlog", "scheduled", "blocked"].includes(task.status),
-        ).length,
-        scheduled_blocks: next.calendarBlocks.filter((block) =>
-          ["scheduled", "running"].includes(block.status),
-        ).length,
-        recent_log: next.reviewLog.slice(0, 8),
-      },
-    });
-
-    await syncPersistedWorkflowRows(client);
-  }
+  const persistenceOps: PersistenceSyncOps = createPersistenceSync({
+    persistedAreasRef,
+    persistedCaptureIdByLocalIdRef,
+    persistedTaskIdByLocalIdRef,
+    persistedProposalIdByLocalIdRef,
+    persistedBlockIdByLocalIdRef,
+    persistedSessionIdByLocalIdRef,
+    selectedAreaId,
+    markLocalOnly,
+    syncPersistedWorkflowRows,
+  });
 
   // S7 (#259): persist a user-confirmed win. Only ever called on explicit
   // confirm (never on skip). Mirrors persistReviewEntry's local↔persisted id
@@ -1855,240 +423,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [markLocalOnly],
   );
 
-  // FR-031 slice 5: on-demand task-map draft generation (NFR-001/NFR-005 —
-  // only ever called from an explicit user action, never a background
-  // effect). Keyed to `taskId` so a stale draft from a previously focused
-  // task never renders against the wrong task.
-  const requestTaskMapDraftAction = useCallback(async (taskId: string) => {
-    const task = stateRef.current.tasks.find((item) => item.id === taskId);
-    if (!task) return;
-
-    const setDraft = (next: TaskMapDraftState) => {
-      taskMapDraftRef.current = next;
-      setTaskMapDraft(next);
-    };
-
-    setDraft({ phase: "pending", taskId });
-
-    // Best-effort bearer token; the route requires one and 401s (as an
-    // ordinary ok:false) without it, so a missing/expired session degrades
-    // to the usual failed-draft notice rather than throwing.
-    let authorization: string | undefined;
-    try {
-      const authClient = createSupabaseBrowserClient();
-      if (authClient) {
-        const { data } = await authClient.auth.getSession();
-        const accessToken = data.session?.access_token?.trim();
-        if (accessToken) {
-          authorization = `Bearer ${accessToken}`;
-        }
-      }
-    } catch {
-      // Tracing/auth is best-effort; fall through to an unauthenticated call.
-    }
-
-    const persistedAreaId = task.area_id
-      ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
-      : null;
-
-    // FR-031 slice 8: an already-approved map turns this generation call
-    // into a regeneration — send the current map (nodes/edges/completion)
-    // as data alongside the request so the prompt can offer it as context
-    // (contextAssembly.ts). The client already holds the approved graph
-    // locally; no extra read is needed.
-    let currentMap: NonNullable<
-      Parameters<typeof fetchTaskMapDraft>[0]["currentMap"]
-    > | null = null;
-    if (task.map_status === "approved" && task.progression_map) {
-      const validatedCurrent = validateTaskMapForPersistence(
-        task.progression_map,
-      );
-      if (validatedCurrent.ok) {
-        currentMap = {
-          nodes: validatedCurrent.graph.nodes.map((node) => ({
-            id: node.id,
-            title: node.title,
-            role: node.role,
-            done: node.done === true || Boolean(node.completed_at),
-            red_reason: node.red_reason ?? null,
-            red_condition: node.red_condition ?? null,
-          })),
-          edges: validatedCurrent.graph.edges.map((edge) => ({
-            from: edge.from,
-            to: edge.to,
-          })),
-        };
-      }
-    }
-
-    const result = await fetchTaskMapDraft({
-      taskId,
-      areaId: persistedAreaId,
-      title: task.title,
-      description: task.description ?? null,
-      definitionOfDone: task.definition_of_done ?? null,
-      firstTinyStep: task.first_tiny_step ?? null,
-      authorization,
-      currentMap,
-    });
-
-    // Ignore a stale response if the focused task changed mid-flight.
-    if (
-      taskMapDraftRef.current.phase !== "pending" ||
-      taskMapDraftRef.current.taskId !== taskId
-    ) {
-      return;
-    }
-
-    if (!result.ok) {
-      setDraft({
-        phase: "failed",
-        taskId,
-        message: SAFE_TASK_MAP_FAILURE_MESSAGE,
-      });
-      return;
-    }
-
-    setDraft({
-      phase: "ready",
-      taskId,
-      draft: result.draft,
-      suggestionRecordId: result.suggestionRecordId,
-    });
-  }, []);
-
-  const dismissTaskMapDraftAction = useCallback(() => {
-    taskMapDraftRef.current = { phase: "idle" };
-    setTaskMapDraft({ phase: "idle" });
-  }, []);
-
-  // FR-031 slice 5 one-pass approve (ADR 0002 D1). The local reducer patch
-  // flips the UI from the v0 rail to `TaskMapView` immediately; Supabase
-  // persistence (via `approveTaskMap`, which re-validates before writing)
-  // is best-effort, mirroring `confirmWin`/`confirmRollup`'s markLocalOnly
-  // fallback — a sync failure never loses the owner's approval decision.
-  const approveTaskMapDraftAction = useCallback(
-    async (taskId: string, graph: TaskMapGraph & { schema_version: "1.0" }) => {
-      const validated = validateTaskMapForPersistence(graph);
-      if (!validated.ok) {
-        markLocalOnly("Map couldn't be saved as edited; nothing changed.");
-        return;
-      }
-      const validatedGraph = validated.graph as TaskMapGraph & {
-        schema_version: string;
-      };
-
-      const priorDraft = taskMapDraftRef.current;
-      const aiDraftSource =
-        priorDraft.phase === "ready" && priorDraft.taskId === taskId
-          ? priorDraft
-          : null;
-
-      dispatch({
-        type: "approveTaskMapLocal",
-        taskId,
-        graph: validatedGraph,
-      });
-      taskMapDraftRef.current = { phase: "idle" };
-      setTaskMapDraft({ phase: "idle" });
-
-      const client = createSupabaseBrowserClient();
-      const persistedTaskId = persistedIdForLocalId(
-        taskId,
-        persistedTaskIdByLocalIdRef.current,
-      );
-
-      if (!client || !persistedTaskId) {
-        markLocalOnly("Map approved locally; account sync is pending.");
-        return;
-      }
-
-      const task = stateRef.current.tasks.find((item) => item.id === taskId);
-      const persistedAreaId = task?.area_id
-        ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
-        : null;
-
-      // FR-031 slice 8: `stateRef.current` lags a render behind (it's
-      // synced from `state` in an effect, line ~1237), so right after the
-      // `approveTaskMapLocal` dispatch above it still holds the PRE-dispatch
-      // task — exactly the prior approved map (if any) that
-      // `approveTaskMapLocal` itself carried completion forward from. Send
-      // it here too so the Supabase-persisted row applies the identical
-      // carry-forward rule (`carryForwardNodeCompletion`, shared helper).
-      const previousGraph =
-        task?.map_status === "approved" && task.progression_map
-          ? task.progression_map
-          : null;
-
-      try {
-        await approveTaskMap(client, {
-          task_id: persistedTaskId,
-          area_id: persistedAreaId,
-          graph: validatedGraph,
-          ai_draft: aiDraftSource
-            ? {
-                nodes: aiDraftSource.draft.nodes,
-                edges: aiDraftSource.draft.edges,
-              }
-            : null,
-          suggestion_record_id: aiDraftSource?.suggestionRecordId ?? null,
-          previous_graph: previousGraph,
-        });
-        await syncPersistedWorkflowRows(client);
-      } catch {
-        markLocalOnly("Map approved locally; account sync is pending.");
-      }
-    },
-    [markLocalOnly, syncPersistedWorkflowRows],
-  );
-
-  // FR-031 slice 6 — reversible node-completion toggle on an approved map.
-  // Same local-first pattern as `approveTaskMapDraftAction`: the reducer
-  // patch flips the UI immediately (and safely no-ops for a red/unknown
-  // node or a task with no approved map — `toggleTaskMapNodeCompletionLocal`
-  // guards all of that), and the Supabase persist is best-effort with the
-  // same markLocalOnly fallback.
-  const toggleTaskMapNodeCompletionAction = useCallback(
-    async (taskId: string, nodeId: string) => {
-      const nowIso = new Date().toISOString();
-
-      dispatch({
-        type: "toggleTaskMapNodeCompletionLocal",
-        taskId,
-        nodeId,
-        nowIso,
-      });
-
-      const client = createSupabaseBrowserClient();
-      const persistedTaskId = persistedIdForLocalId(
-        taskId,
-        persistedTaskIdByLocalIdRef.current,
-      );
-
-      if (!client || !persistedTaskId) {
-        markLocalOnly("Completion saved locally; account sync is pending.");
-        return;
-      }
-
-      const task = stateRef.current.tasks.find((item) => item.id === taskId);
-      if (!task?.progression_map) {
-        return;
-      }
-
-      try {
-        await setTaskMapNodeCompletion(client, {
-          task_id: persistedTaskId,
-          node_id: nodeId,
-          graph: task.progression_map,
-          now: nowIso,
-        });
-        await syncPersistedWorkflowRows(client);
-      } catch {
-        markLocalOnly("Completion saved locally; account sync is pending.");
-      }
-    },
-    [markLocalOnly, syncPersistedWorkflowRows],
-  );
+  // FR-031 slice 5 — task-map draft generation/approve/completion actions.
+  // Extracted to workflowContext/taskMapDraft.ts (issue #590 slice 4); this
+  // custom hook is a contiguous run of the same four useCallback hooks that
+  // used to live inline here, called unconditionally at this same position
+  // so the flattened hook order is unchanged.
+  const {
+    requestTaskMapDraftAction,
+    dismissTaskMapDraftAction,
+    approveTaskMapDraftAction,
+    toggleTaskMapNodeCompletionAction,
+  } = useTaskMapDraftActions({
+    dispatch,
+    taskMapDraftRef,
+    setTaskMapDraft,
+    stateRef,
+    persistedAreasRef,
+    persistedTaskIdByLocalIdRef,
+    markLocalOnly,
+    syncPersistedWorkflowRows,
+  });
 
   // S8 (#260, extended #486): persist a user-APPROVED rollup (NS-INV-4 —
   // dismissed drafts never reach here). `periodType` is caller-supplied
@@ -2323,372 +677,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         (proposal) => proposal.id === input.proposalId,
       ) ?? null;
     if (editedProposal) {
-      void persistEditedLocalProposal(editedProposal).catch((error) => {
-        markPersistedSaveFailure(error);
-      });
+      void persistenceOps
+        .persistEditedLocalProposal(editedProposal)
+        .catch((error) => {
+          markPersistedSaveFailure(error);
+        });
     }
   };
 
-  async function persistStartedSession(
-    localSession: Phase2MockExecutionSession,
-  ) {
-    if (!localSession.task_id) {
-      return;
-    }
-
-    const client = createSupabaseBrowserClient();
-    const persistedTaskId = persistedIdForLocalId(
-      localSession.task_id,
-      persistedTaskIdByLocalIdRef.current,
-    );
-    const persistedBlockId = localSession.calendar_block_id
-      ? persistedIdForLocalId(
-          localSession.calendar_block_id,
-          persistedBlockIdByLocalIdRef.current,
-        )
-      : null;
-
-    if (!client || !persistedTaskId) {
-      markLocalOnly(
-        "Execution session saved locally; account sync is pending.",
-      );
-      return;
-    }
-
-    const result = await createExecutionSession(client, {
-      task_id: persistedTaskId,
-      calendar_block_id: persistedBlockId,
-    });
-    if (result.provider !== "supabase") {
-      return;
-    }
-
-    persistedSessionIdByLocalIdRef.current.set(
-      localSession.id,
-      result.session.id,
-    );
-    if (result.block && localSession.calendar_block_id) {
-      persistedBlockIdByLocalIdRef.current.set(
-        localSession.calendar_block_id,
-        result.block.id,
-      );
-    }
-
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function persistMarkedSession(
-    localSession: Phase2MockExecutionSession,
-    status: Phase2MockExecutionSession["status"],
-    actualMinutes?: number,
-    notes?: string | null,
-    capOutcome?: Phase2MockExecutionSession["cap_outcome"],
-  ) {
-    const client = createSupabaseBrowserClient();
-    const persistedSessionId = persistedIdForLocalId(
-      localSession.id,
-      persistedSessionIdByLocalIdRef.current,
-    );
-
-    if (!client || !persistedSessionId) {
-      markLocalOnly("Session outcome saved locally; account sync is pending.");
-      return;
-    }
-
-    await markExecutionSession(client, persistedSessionId, {
-      // The persisted MarkExecutionSessionInput `status` enum
-      // (@lifeos/schemas) is a red-zone constant that doesn't carry
-      // "partial"/"skipped" — it has no DB column and is only used by
-      // `executionMarkPatch` to special-case "paused". "partial" and
-      // "skipped" map to any non-"paused" member so that branch is skipped
-      // and their real semantics ride entirely on `outcome` below, which
-      // already has both values (EXECUTION_SESSION_OUTCOMES).
-      status:
-        status === "completed"
-          ? "completed"
-          : status === "missed" || status === "skipped"
-            ? "missed"
-            : status === "distracted"
-              ? "distracted"
-              : status === "paused"
-                ? "paused"
-                : "stuck",
-      outcome:
-        status === "completed"
-          ? "completed"
-          : status === "missed"
-            ? "skipped"
-            : status === "distracted"
-              ? "distracted"
-              : status === "stuck"
-                ? "blocked"
-                : status === "partial"
-                  ? "partial"
-                  : status === "skipped"
-                    ? "skipped"
-                    : null,
-      actual_minutes:
-        status === "paused"
-          ? null
-          : (actualMinutes ?? localSession.actual_minutes ?? 0),
-      productivity_rating:
-        status === "paused" ? null : status === "completed" ? 4 : 1,
-      cap_outcome: capOutcome ?? null,
-      notes:
-        notes !== undefined
-          ? notes
-          : status === "stuck"
-            ? "Need a smaller next step."
-            : null,
-    });
-
-    await syncPersistedWorkflowRows(client);
-  }
-
-  async function getGoogleBridgeAccessToken(): Promise<
-    | { ok: true; accessToken: string }
-    | { ok: false; result: GoogleCalendarBridgeResult }
-  > {
-    const client = createSupabaseBrowserClient();
-
-    if (
-      !client ||
-      !client.auth ||
-      typeof client.auth.getSession !== "function"
-    ) {
-      return {
-        ok: false,
-        result: {
-          outcome: "unavailable",
-          message:
-            "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
-        },
-      };
-    }
-
-    const { data, error } = await client.auth.getSession();
-
-    if (error || !data.session?.access_token) {
-      return {
-        ok: false,
-        result: {
-          outcome: "unavailable",
-          message:
-            "Sign in before approving Google Calendar changes. Local planning keeps working.",
-        },
-      };
-    }
-
-    return { ok: true, accessToken: data.session.access_token };
-  }
-
-  async function postGoogleCalendarRoute(
-    path: string,
-    accessToken: string,
-    body: Record<string, unknown>,
-  ): Promise<
-    | {
-        ok: true;
-        response: Response;
-        payload: GoogleCalendarWriteRoutePayload | null;
-      }
-    | { ok: false; result: GoogleCalendarBridgeResult }
-  > {
-    try {
-      const response = await fetch(path, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      const payload = (await response
-        .json()
-        .catch(() => null)) as GoogleCalendarWriteRoutePayload | null;
-      return { ok: true, response, payload };
-    } catch {
-      return {
-        ok: false,
-        result: {
-          outcome: "failed",
-          message:
-            "The Google Calendar request could not be sent. Local plan data is unchanged.",
-        },
-      };
-    }
-  }
-
-  async function approveProposalGoogleWrite(
-    proposalId: string,
-    options?: { acknowledgeFirstWriteWarning?: boolean },
-  ): Promise<GoogleCalendarBridgeResult> {
-    const proposal = stateRef.current.timeBlockProposals.find(
-      (item) => item.id === proposalId,
-    );
-    if (!proposal) {
-      return {
-        outcome: "failed",
-        message: "This proposal is no longer part of the local plan.",
-      };
-    }
-
-    const session = await getGoogleBridgeAccessToken();
-    if (!session.ok) {
-      return session.result;
-    }
-
-    const persistedProposalId = persistedIdForLocalId(
-      proposalId,
-      persistedProposalIdByLocalIdRef.current,
-    );
-    if (!persistedProposalId) {
-      return {
-        outcome: "unavailable",
-        message:
-          "This proposal has not synced to your account yet, so it cannot be written to Google. Try again after sync.",
-      };
-    }
-
-    const sent = await postGoogleCalendarRoute(
-      "/api/google-calendar/create-event",
-      session.accessToken,
-      {
-        proposal_id: persistedProposalId,
-        approved: true,
-        acknowledge_first_write_warning: Boolean(
-          options?.acknowledgeFirstWriteWarning,
-        ),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-      },
-    );
-    if (!sent.ok) {
-      return sent.result;
-    }
-
-    const { response, payload } = sent;
-
-    if (response.status === 428 && payload?.first_write_warning_required) {
-      return {
-        outcome: "first-write-warning",
-        message:
-          payload.error ??
-          "Acknowledge the first Google Calendar write warning before creating the first event.",
-      };
-    }
-
-    if (
-      !response.ok ||
-      !payload?.ok ||
-      typeof payload.google_event_id !== "string"
-    ) {
-      return {
-        outcome: "failed",
-        message:
-          payload?.error ??
-          "Google Calendar write failed. The local proposal is unchanged.",
-      };
-    }
-
-    const previous = stateRef.current;
-    const next = applyGoogleCalendarWriteResult(
-      previous,
-      proposalId,
-      payload.google_event_id,
-    );
-    const localBlock =
-      next.calendarBlocks.find(
-        (block) =>
-          !previous.calendarBlocks.some((item) => item.id === block.id),
-      ) ?? null;
-    applyWorkflowState(next);
-
-    if (localBlock && typeof payload.block?.id === "string") {
-      persistedBlockIdByLocalIdRef.current.set(localBlock.id, payload.block.id);
-    }
-
-    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(
-      (error) => {
-        markPersistedLoadFailure(error);
-      },
-    );
-
-    return {
-      outcome: "created",
-      message: "Google Calendar event created from your approved proposal.",
-    };
-  }
-
-  async function cancelGoogleCalendarBlock(
-    blockId: string,
-  ): Promise<GoogleCalendarBridgeResult> {
-    const block = stateRef.current.calendarBlocks.find(
-      (item) => item.id === blockId,
-    );
-    if (!block || !isLifeOsOwnedGoogleEventIdShape(block.google_event_id)) {
-      return {
-        outcome: "failed",
-        message:
-          "Only calendar events created by LifeOS can be cancelled from the cockpit.",
-      };
-    }
-
-    const session = await getGoogleBridgeAccessToken();
-    if (!session.ok) {
-      return session.result;
-    }
-
-    const persistedBlockId = persistedIdForLocalId(
-      blockId,
-      persistedBlockIdByLocalIdRef.current,
-    );
-    if (!persistedBlockId) {
-      return {
-        outcome: "unavailable",
-        message:
-          "This block has not synced to your account yet, so its Google event cannot be cancelled from here.",
-      };
-    }
-
-    const sent = await postGoogleCalendarRoute(
-      "/api/google-calendar/cancel-event",
-      session.accessToken,
-      {
-        calendar_block_id: persistedBlockId,
-        approved: true,
-      },
-    );
-    if (!sent.ok) {
-      return sent.result;
-    }
-
-    const { response, payload } = sent;
-
-    if (!response.ok || !payload?.ok) {
-      return {
-        outcome: "failed",
-        message:
-          payload?.error ??
-          "Google Calendar cancel failed. Local block data is unchanged.",
-      };
-    }
-
-    const next = applyGoogleCalendarCancelResult(stateRef.current, blockId);
-    applyWorkflowState(next);
-
-    void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(
-      (error) => {
-        markPersistedLoadFailure(error);
-      },
-    );
-
-    return {
-      outcome: "cancelled",
-      message: payload.event_already_gone
-        ? "The Google event was already gone. The local block is now cancelled."
-        : "Google Calendar event cancelled. The task is back in the plannable pool.",
-    };
-  }
+  // Extracted to workflowContext/calendarApproval.ts (issue #590 slice 4) —
+  // these are plain functions (no hooks), so this factory call can sit here
+  // without affecting hook order. Binding invariant preserved unchanged: no
+  // external calendar write without explicit UI approval.
+  const calendarApprovalOps = createCalendarApproval({
+    stateRef,
+    persistedProposalIdByLocalIdRef,
+    persistedBlockIdByLocalIdRef,
+    applyWorkflowState,
+    syncPersistedWorkflowRows,
+    markPersistedLoadFailure,
+  });
 
   useEffect(() => {
     const restored = loadStoredStateFromSession();
@@ -2773,158 +781,6 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, [hasHydratedFromStorage, state]);
 
-  function applyWorkflowState(nextState: WorkflowState) {
-    stateRef.current = nextState;
-    syncWorkflowIdCounterFromState(nextState);
-    dispatch({ type: "hydrate", state: nextState });
-  }
-
-  async function parseCaptureIntoDrafts(
-    capture: WorkflowState["captureItems"][number],
-    parserMode: ParseCaptureParserMode,
-  ) {
-    activeParseCaptureIdRef.current = capture.id;
-    setCaptureParse({ phase: "parsing", captureId: capture.id, parserMode });
-
-    // Best-effort: attach the signed-in user's access token so the parse route
-    // can write a user-scoped, fire-and-forget AI call trace row (issue #288).
-    // Parsing itself never requires this token, so any failure here is ignored.
-    let authorization: string | undefined;
-    try {
-      const authClient = createSupabaseBrowserClient();
-      if (authClient) {
-        const { data } = await authClient.auth.getSession();
-        const accessToken = data.session?.access_token?.trim();
-        if (accessToken) {
-          authorization = `Bearer ${accessToken}`;
-        }
-      }
-    } catch {
-      // Tracing is optional; a missing/failed session must never block parsing.
-    }
-
-    // S3 (#255): live charter/profile read path. S2 landed the context-assembly
-    // module, storage, and injection; the request-time read was deferred to
-    // this slice. Read persisted charters + the operator profile and forward
-    // them through the S2 plumbing. An empty charter/profile leaves the prompt
-    // byte-identical to baseline (S2 parity), and any read failure degrades to
-    // the pre-S3 name-only context — personalization must never block parsing.
-    const persistedAreas = persistedAreasRef.current;
-    const charterBySlug = new Map(
-      persistedAreas.map((area) => [
-        area.slug,
-        typeof area.charter_text === "string" ? area.charter_text : null,
-      ]),
-    );
-
-    let operatorProfileContext: ParseCaptureOperatorProfileContext | undefined;
-    try {
-      const profileClient = createSupabaseBrowserClient();
-      if (profileClient) {
-        const profile = await getOperatorProfile(profileClient);
-        if (profile) {
-          operatorProfileContext = {
-            profileText: profile.profile_text,
-            compensationRules: profile.compensation_rules,
-          };
-        }
-      }
-    } catch {
-      // Personalization is best-effort; a failed profile read must never block
-      // parsing. Fall through with no operator profile (S2 empty-profile parity).
-    }
-
-    // S3 (#255): load existing people so a proposed mention can resolve against
-    // one (normalized_name matching) instead of always proposing a new person.
-    // Best-effort — a failed read degrades resolution to "new", never blocks.
-    let peopleForResolution: Person[] = [];
-    try {
-      peopleForResolution = await listPeople(createSupabaseBrowserClient());
-    } catch {
-      // People read is best-effort; fall through with no candidates.
-    }
-
-    const result = await requestParseCapture({
-      rawText: capture.raw_text,
-      areaContext: stateRef.current.areas.map((area) => {
-        const slug = area.name.toLowerCase().replace(/\s+/g, "-");
-        return {
-          slug,
-          name: area.name,
-          charterText: charterBySlug.get(slug) ?? null,
-        };
-      }),
-      operatorProfile: operatorProfileContext,
-      parserMode,
-      authorization,
-    });
-
-    if (result.ok) {
-      const parsed = buildParsedWorkflowResult({
-        response: result.response,
-        capture,
-        workflowAreaId: capture.area_id,
-      });
-      applyWorkflowState(appendParsedWorkflowResult(stateRef.current, parsed));
-
-      // Born instrumented (NS-INV-3): record person/commitment proposals as
-      // pending suggestions. Fire-and-forget — a learning-write failure must
-      // never affect parsing or triage. Nothing is persisted to `people` here;
-      // approval happens in triage (NS-INV-4).
-      const learningClient = createSupabaseBrowserClient();
-      for (const draft of parsed.taskDrafts) {
-        const area_id = persistedAreaIdForWorkflowId(
-          draft.area_id,
-          persistedAreasRef.current,
-        );
-        for (const mention of draft.person_mentions) {
-          // Resolve against existing people by normalized name; a match records
-          // the linked person id, otherwise the proposal is a new-person one.
-          const resolution = resolvePersonMention(mention, peopleForResolution);
-          recordPersonMentionProposal(learningClient, {
-            area_id,
-            draft_id: draft.id,
-            name: mention.name,
-            role: mention.role,
-            confidence: mention.confidence,
-            match: resolution.kind === "matched" ? "matched" : "new",
-            matched_person_id:
-              resolution.kind === "matched" ? resolution.person.id : null,
-          });
-        }
-        if (draft.is_commitment) {
-          recordCommitmentProposal(learningClient, {
-            area_id,
-            draft_id: draft.id,
-            title: draft.title,
-            confidence: draft.confidence,
-          });
-        }
-      }
-    }
-
-    if (activeParseCaptureIdRef.current !== capture.id) {
-      return;
-    }
-
-    setCaptureParse(
-      result.ok
-        ? {
-            phase: "parsed",
-            captureId: capture.id,
-            parser: result.parser,
-            status: result.status,
-          }
-        : {
-            phase: "failed",
-            captureId: capture.id,
-            status: result.status,
-            message: result.error,
-            canRetryWithMock: result.canRetryWithMock,
-          },
-    );
-  }
-
   // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
   const refreshUnsyncedCount = useCallback(async () => {
     try {
@@ -2995,106 +851,22 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("online", onOnline);
   }, [refreshUnsyncedCount, syncOfflineQueue]);
 
-  // FR-027: offline → save the raw capture to the durable device queue with NO
-  // parse wait and end synchronously as saved; it syncs to the spine on reconnect
-  // (parse happens later at triage). We deliberately do NOT stage it into local
-  // captureItems — it would double-appear once the reconnect sync loads the
-  // server row. Offline scope is raw capture only (no offline triage).
-  function enqueueOfflineCapture(
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
-  ) {
-    void enqueueCapture({ rawText, areaId, returnHook: returnHook ?? null })
-      .then(() => refreshUnsyncedCount())
-      .catch(() =>
-        markLocalOnly("Capture could not be saved offline; please try again."),
-      );
-  }
-
-  // Stage + persist the raw capture item WITHOUT parsing it. Shared by the
-  // parse-and-save path (submitCaptureText) and the explicit save-raw path
-  // (submitCaptureRaw); the caller decides whether to parse the returned item.
-  function stageAndPersistRawCapture(
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
-  ) {
-    const previous = stateRef.current;
-    const next = submitRawCapture(previous, { rawText, areaId, returnHook });
-    const localCapture = next.captureItems.find(
-      (capture) =>
-        !previous.captureItems.some((item) => item.id === capture.id),
-    );
-
-    // Raw capture is staged and persisted before any parse attempt.
-    applyWorkflowState(next);
-
-    if (localCapture) {
-      void persistCapture(localCapture).catch((error) => {
-        markPersistedSaveFailure(error);
-      });
-    }
-
-    return localCapture;
-  }
-
-  function submitCaptureText(
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
-  ) {
-    if (captureParse.phase === "parsing") {
-      stageAndPersistRawCapture(rawText, areaId, returnHook);
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      enqueueOfflineCapture(rawText, areaId, returnHook);
-      return;
-    }
-
-    const localCapture = stageAndPersistRawCapture(rawText, areaId, returnHook);
-    if (localCapture) {
-      void parseCaptureIntoDrafts(localCapture, "auto");
-    }
-  }
-
-  // G1 floor follow-up: explicit "save raw" — persist the thought verbatim and
-  // SKIP the AI parse. The raw capture item lands in the spine and is parsed
-  // later at triage, exactly like the offline→reconnect path. Gives the operator
-  // control (and speed: no parse wait) when a thought should not be auto-drafted.
-  function submitCaptureRaw(
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
-  ) {
-    if (captureParse.phase === "parsing") {
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      enqueueOfflineCapture(rawText, areaId, returnHook);
-      return;
-    }
-
-    stageAndPersistRawCapture(rawText, areaId, returnHook);
-  }
-
-  function retryCaptureParseWithMock() {
-    if (captureParse.phase !== "failed") {
-      return;
-    }
-
-    const capture = stateRef.current.captureItems.find(
-      (item) => item.id === captureParse.captureId,
-    );
-    if (!capture) {
-      return;
-    }
-
-    void parseCaptureIntoDrafts(capture, "mock");
-  }
+  // Extracted to workflowContext/captureParse.ts (issue #590 slice 4) — plain
+  // functions (no hooks), so this factory call is positioned after
+  // refreshUnsyncedCount (one of its dependencies) without affecting hook
+  // order (only actual hook calls above are order-sensitive).
+  const captureParseOps = createCaptureParseOps({
+    activeParseCaptureIdRef,
+    setCaptureParse,
+    captureParse,
+    stateRef,
+    persistedAreasRef,
+    applyWorkflowState,
+    persistCapture: persistenceOps.persistCapture,
+    markLocalOnly,
+    markPersistedSaveFailure,
+    refreshUnsyncedCount,
+  });
 
   function persistedAreaIdForWipRefusal(refusal: WipRefusal) {
     const task = stateRef.current.tasks.find(
@@ -3158,14 +930,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     recordWipRefusalIfNew(previous, next);
 
     if (draft && localTask) {
-      void persistAcceptedTaskDraft(
-        draft,
-        localTask,
-        localProposal,
-        status,
-      ).catch((error) => {
-        markPersistedSaveFailure(error);
-      });
+      void persistenceOps
+        .persistAcceptedTaskDraft(draft, localTask, localProposal, status)
+        .catch((error) => {
+          markPersistedSaveFailure(error);
+        });
     }
   }
 
@@ -3184,11 +953,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     recordWipRefusalIfNew(previous, next);
 
     if (localProposal && localBlock) {
-      void persistPlannedTask(taskId, localProposal, localBlock).catch(
-        (error) => {
+      void persistenceOps
+        .persistPlannedTask(taskId, localProposal, localBlock)
+        .catch((error) => {
           markPersistedSaveFailure(error);
-        },
-      );
+        });
     }
   }
 
@@ -3204,7 +973,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     recordWipRefusalIfNew(previous, next);
 
     if (localSession) {
-      void persistStartedSession(localSession).catch((error) => {
+      void persistenceOps.persistStartedSession(localSession).catch((error) => {
         markPersistedSaveFailure(error);
       });
     }
@@ -3234,7 +1003,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // (recorded via markPersistedSaveFailure), same as the local-only
       // fallback inside persistMarkedSession.
       try {
-        await persistMarkedSession(
+        await persistenceOps.persistMarkedSession(
           localSession,
           status,
           actualMinutes,
@@ -3259,10 +1028,10 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     addArea: (name, color) => dispatch({ type: "addArea", name, color }),
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
-    submitCaptureText,
-    submitCaptureRaw,
+    submitCaptureText: captureParseOps.submitCaptureText,
+    submitCaptureRaw: captureParseOps.submitCaptureRaw,
     captureParse,
-    retryCaptureParseWithMock,
+    retryCaptureParseWithMock: captureParseOps.retryCaptureParseWithMock,
     taskMapDraft,
     requestTaskMapDraft: requestTaskMapDraftAction,
     dismissTaskMapDraft: dismissTaskMapDraftAction,
@@ -3283,9 +1052,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordWipRefusalIfNew(previous, next);
 
       if (next !== previous && !next.wipRefusal) {
-        void persistTaskReviewTransition(taskId, "active").catch((error) => {
-          markPersistedSaveFailure(error);
-        });
+        void persistenceOps
+          .persistTaskReviewTransition(taskId, "active")
+          .catch((error) => {
+            markPersistedSaveFailure(error);
+          });
       }
     },
     acceptProjectDraft: (draftId) =>
@@ -3362,11 +1133,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordWipRefusalIfNew(previous, next);
 
       if (proposal && next !== previous && !next.wipRefusal) {
-        void persistAcceptedLocalProposal(proposal, localBlock).catch(
-          (error) => {
+        void persistenceOps
+          .persistAcceptedLocalProposal(proposal, localBlock)
+          .catch((error) => {
             markPersistedSaveFailure(error);
-          },
-        );
+          });
       }
     },
     rejectLocalProposal: (proposalId) => {
@@ -3379,9 +1150,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordWipRefusalIfNew(previous, next);
 
       if (proposal && next !== previous && !next.wipRefusal) {
-        void persistRejectedLocalProposal(proposal).catch((error) => {
-          markPersistedSaveFailure(error);
-        });
+        void persistenceOps
+          .persistRejectedLocalProposal(proposal)
+          .catch((error) => {
+            markPersistedSaveFailure(error);
+          });
       }
     },
     editLocalProposal: (proposalId, changes) => {
@@ -3393,9 +1166,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordWipRefusalIfNew(previous, next);
 
       if (proposal && next !== previous && !next.wipRefusal) {
-        void persistEditedLocalProposal(proposal).catch((error) => {
-          markPersistedSaveFailure(error);
-        });
+        void persistenceOps
+          .persistEditedLocalProposal(proposal)
+          .catch((error) => {
+            markPersistedSaveFailure(error);
+          });
       }
     },
     createLocalProposalForTask: ({
@@ -3420,9 +1195,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (localProposal) {
-        void persistCreatedLocalProposal(localProposal).catch((error) => {
-          markPersistedSaveFailure(error);
-        });
+        void persistenceOps
+          .persistCreatedLocalProposal(localProposal)
+          .catch((error) => {
+            markPersistedSaveFailure(error);
+          });
       }
     },
     planTaskAtHour: planTaskAtHourWithPersistence,
@@ -3441,7 +1218,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistUnplannedBlock(blockId).catch((error) => {
+        void persistenceOps.persistUnplannedBlock(blockId).catch((error) => {
           markPersistedSaveFailure(error);
         });
       }
@@ -3455,9 +1232,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       recordWipRefusalIfNew(previous, next);
 
       if (next !== previous && !next.wipRefusal) {
-        void persistTaskReviewTransition(taskId, "active").catch((error) => {
-          markPersistedSaveFailure(error);
-        });
+        void persistenceOps
+          .persistTaskReviewTransition(taskId, "active")
+          .catch((error) => {
+            markPersistedSaveFailure(error);
+          });
       }
     },
     deferTask: (taskId) => {
@@ -3466,9 +1245,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistTaskReviewTransition(taskId, "backlog").catch((error) => {
-          markPersistedSaveFailure(error);
-        });
+        void persistenceOps
+          .persistTaskReviewTransition(taskId, "backlog")
+          .catch((error) => {
+            markPersistedSaveFailure(error);
+          });
       }
     },
     dropTask: (taskId) => {
@@ -3477,9 +1258,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistTaskReviewTransition(taskId, "dropped").catch((error) => {
-          markPersistedSaveFailure(error);
-        });
+        void persistenceOps
+          .persistTaskReviewTransition(taskId, "dropped")
+          .catch((error) => {
+            markPersistedSaveFailure(error);
+          });
       }
     },
     saveReview: () => {
@@ -3487,7 +1270,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const next = saveReview(previous);
       applyWorkflowState(next);
 
-      void persistReviewEntry(next).catch((error) => {
+      void persistenceOps.persistReviewEntry(next).catch((error) => {
         markPersistedSaveFailure(error);
       });
     },
@@ -3525,8 +1308,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     },
     resetWorkflow: () => dispatch({ type: "reset" }),
-    approveProposalGoogleWrite,
-    cancelGoogleCalendarBlock,
+    approveProposalGoogleWrite: calendarApprovalOps.approveProposalGoogleWrite,
+    cancelGoogleCalendarBlock: calendarApprovalOps.cancelGoogleCalendarBlock,
   };
 
   return (

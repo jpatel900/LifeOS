@@ -119,9 +119,10 @@ describe("INV-4 module budgets", () => {
 
   // Grandfathered ceilings, set to each file's size when this guard landed.
   // Ceilings may be lowered as logic is extracted; they must never be raised.
-  const GRANDFATHERED_PAGE_BUDGETS: Record<string, number> = {
-    "apps/web/src/app/settings/areas/page.tsx": 943,
-  };
+  // #590 slice 5: settings/areas/page.tsx now fits the default budget after
+  // extracting CreateAreaForm, AreaRegistryCards, LocalResetPanel, and the
+  // useAreasLoadState hook — its grandfather entry is removed.
+  const GRANDFATHERED_PAGE_BUDGETS: Record<string, number> = {};
 
   it("keeps route pages within their line budgets", () => {
     const pages = walkRepoFiles("apps/web/src/app").filter((f) =>

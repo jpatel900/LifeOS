@@ -505,8 +505,14 @@ describe("source-of-truth boundaries", () => {
     const cockpit = normalizeWhitespace(
       readRepoFile("apps/web/src/app/components/LifeOSCockpit.tsx"),
     );
-    const settings = normalizeWhitespace(
-      readRepoFile("apps/web/src/app/settings/areas/page.tsx"),
+    // #590 slice 5: createAreaFeedback and colorFeedback now live in the
+    // extracted CreateAreaForm and AreaRegistryCards panels (settings/areas
+    // page.tsx is composition-only).
+    const createAreaForm = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/settings/areas/CreateAreaForm.tsx"),
+    );
+    const areaRegistryCards = normalizeWhitespace(
+      readRepoFile("apps/web/src/app/settings/areas/AreaRegistryCards.tsx"),
     );
     const loadingState = normalizeWhitespace(
       readRepoFile("apps/web/src/app/components/WorkflowLoadingState.tsx"),
@@ -514,10 +520,10 @@ describe("source-of-truth boundaries", () => {
 
     expect(cockpit).toContain('role="status"');
     expect(cockpit).toContain('aria-live="polite"');
-    expect(settings).toContain(
+    expect(createAreaForm).toContain(
       'createAreaFeedback.variant === "destructive" ? undefined : "polite"',
     );
-    expect(settings).toContain(
+    expect(areaRegistryCards).toContain(
       'colorFeedback.variant === "destructive" ? undefined : "polite"',
     );
     expect(loadingState).toContain('role="status"');
