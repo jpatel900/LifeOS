@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { useMomentKeyboard } from "./useMomentKeyboard";
 import { HIT_TARGET_ROW, HIT_TARGET_INVISIBLE } from "./hitTarget";
 import { buildStartVM, buildFlowVM, buildCloseVM } from "./momentsViewModel";
-import type { FirstMoveVM } from "./momentsViewModel";
 import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
 import { BottomNavigator } from "./BottomNavigator";
 import {
@@ -22,41 +21,37 @@ import { CaptureOverlay } from "./CaptureOverlay";
 import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
 import { StartMoment } from "./StartMoment";
 import { FlowMoment } from "./FlowMoment";
-import { CloseMoment, type CloseWinVM } from "./CloseMoment";
-import type {
-  ApprovedWeeklyRollupInput,
-  MonthlyRollupDraftVM,
-  PriorMonthRollupInput,
-  RollupDraftVM,
-} from "./momentsViewModel";
-import {
-  buildMonthlyRollupDrafts,
-  deriveMonthOverMonthReadback,
-} from "./momentsViewModel";
-import type { RollupSummary, RollupSummaryContent } from "@lifeos/schemas";
-import { requestRollupProse } from "@/lib/ai/rollupProseClient";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { CloseMoment } from "./CloseMoment";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 import { useOnboardingRitual } from "./useOnboardingRitual";
 import { OnboardingRitual } from "./OnboardingRitual";
 import { readDayShapePreferences } from "@/lib/onboarding/onboarding";
-import { buildProgressionNodes } from "./progressionNodes";
 import { buildPipelineCounts } from "./pipelineCounts";
-import type { TaskMapDraftUiState } from "./TaskMapSection";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
-import { EndSessionSheet, type EndSessionOutcome } from "./EndSessionSheet";
+import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
+import type { ToastAction } from "./toast";
+import { useFlowFocusSession } from "./useFlowFocusSession";
+import { useCloseMomentRollups } from "./useCloseMomentRollups";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
  *
  * Container that wires the P1 view-model builders and P2 presentation
  * primitives to WorkflowContext. Owns the moment/capture/palette UI state,
- * preferences persistence, and the interim local focus session (replaced
- * once packet P0 extracts useFocusSession from LifeOSCockpit). No fetches,
- * no new routes — this only renders on the dev-only /moments-preview route.
+ * preferences persistence, and cross-moment coordination (primary action,
+ * command palette, deep links, toast). No fetches, no new routes — this
+ * only renders on the dev-only /moments-preview route.
+ *
+ * #590 slice 3: Flow's focus-session/task-map wiring and Close's wins/rollup
+ * harvesting now live in `useFlowFocusSession` and `useCloseMomentRollups`
+ * respectively (screen logic + view-model section moved together, per
+ * moment). This file stays the thin composition root — it owns the
+ * moment/capture/palette/toast state that is genuinely shared across all
+ * three moments, and wires the two hooks' outputs into `<StartMoment>` /
+ * `<FlowMoment>` / `<CloseMoment>`.
  */
 
 const PREFERENCES_KEY = "lifeos.moments.preferences";
@@ -69,10 +64,7 @@ const TOAST_WITH_ACTION_DURATION_MS = 6000;
 const DEFAULT_FOCUS_MINUTES = 25;
 
 /** SP-6: the toast slot's action — a real, focusable (never auto-focused) Undo button. */
-export interface ToastAction {
-  label: string;
-  run(): void;
-}
+export type { ToastAction };
 
 interface ToastState {
   message: string;
@@ -264,63 +256,6 @@ export function TodayMoments({
     () => readDayShapePreferences()?.sessionMinutes ?? DEFAULT_FOCUS_MINUTES,
   );
 
-  // Interim local session state — replaced by useFocusSession when packet
-  // P0 extracts it from LifeOSCockpit.
-  const [session, setSession] = useState<{
-    activeTaskId: string | null;
-    running: boolean;
-    remaining: number;
-    total: number;
-  }>({ activeTaskId: null, running: false, remaining: 0, total: 0 });
-
-  const railTaskId = useMemo(
-    () => session.activeTaskId ?? startVM.firstMove?.taskId ?? null,
-    [session.activeTaskId, startVM.firstMove],
-  );
-  const progressionNodes = useMemo(
-    () => buildProgressionNodes(state, railTaskId),
-    [state, railTaskId],
-  );
-  // FR-031 slice 5: the same focused-task id the v0 rail derives from, so
-  // the map/rail switch and the rail never disagree about which task they
-  // describe.
-  const focusedTask = useMemo(
-    () => state.tasks.find((task) => task.id === railTaskId) ?? null,
-    [state.tasks, railTaskId],
-  );
-  const taskMapDraftForSection = useMemo<TaskMapDraftUiState>(() => {
-    if (taskMapDraft.phase === "idle") {
-      return { phase: "idle" };
-    }
-    if (taskMapDraft.taskId !== railTaskId) {
-      return { phase: "idle" };
-    }
-    if (taskMapDraft.phase === "pending") {
-      return { phase: "pending" };
-    }
-    if (taskMapDraft.phase === "ready") {
-      return { phase: "ready", draft: taskMapDraft.draft };
-    }
-    return { phase: "failed", message: taskMapDraft.message };
-  }, [taskMapDraft, railTaskId]);
-  const handleRequestTaskMapDraft = useCallback(() => {
-    if (!railTaskId) return;
-    void requestTaskMapDraft(railTaskId);
-  }, [railTaskId, requestTaskMapDraft]);
-  const handleApproveTaskMapDraft = useCallback(
-    (graph: Parameters<typeof approveTaskMapDraft>[1]) => {
-      if (!railTaskId) return;
-      void approveTaskMapDraft(railTaskId, graph);
-    },
-    [railTaskId, approveTaskMapDraft],
-  );
-  const handleToggleTaskMapNodeCompletion = useCallback(
-    (nodeId: string) => {
-      if (!railTaskId) return;
-      void toggleTaskMapNodeCompletion(railTaskId, nodeId);
-    },
-    [railTaskId, toggleTaskMapNodeCompletion],
-  );
   const pipelineCounts = useMemo(
     () => buildPipelineCounts(state, selectedAreaId, { now }),
     [state, selectedAreaId, now],
@@ -390,20 +325,6 @@ export function TodayMoments({
   }, [ritualActive, ritual.pending, onboardingActive, onboarding.pending]);
 
   useEffect(() => {
-    if (!session.running) return undefined;
-    const id = setInterval(() => {
-      setSession((current) => {
-        if (!current.running) return current;
-        if (current.remaining <= 0) {
-          return { ...current, running: false, remaining: 0 };
-        }
-        return { ...current, remaining: current.remaining - 1 };
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [session.running]);
-
-  useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
@@ -425,527 +346,70 @@ export function TodayMoments({
     );
   }, []);
 
-  // S7 (#259) wins harvest. Candidate wins come from closeVM; confirm/skip
-  // decisions live here for the session. Confirm persists through the context
-  // (real client only; mock/preview stays local) and moves the candidate into
-  // the reading list; skip dismisses it and writes nothing.
-  const [confirmedWins, setConfirmedWins] = useState<CloseWinVM[]>([]);
-  const [skippedWinIds, setSkippedWinIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const confirmedWinIds = useMemo(
-    () => new Set(confirmedWins.map((win) => win.taskId)),
-    [confirmedWins],
-  );
-  const pendingWins = useMemo(
-    () =>
-      closeVM.winCandidates.filter(
-        (win) =>
-          !skippedWinIds.has(win.taskId) && !confirmedWinIds.has(win.taskId),
-      ),
-    [closeVM.winCandidates, skippedWinIds, confirmedWinIds],
-  );
-  const handleConfirmWin = useCallback(
-    (taskId: string, title: string) => {
-      const candidate = closeVM.winCandidates.find(
-        (win) => win.taskId === taskId,
-      );
-      if (!candidate || title.length === 0) return;
-      setConfirmedWins((prev) => [
-        ...prev,
-        { taskId, title, areaLabel: candidate.areaLabel },
-      ]);
-      void confirmWin({ taskId, title });
-      showToast("Win logged");
-    },
-    [closeVM.winCandidates, confirmWin, showToast],
-  );
-  const handleSkipWin = useCallback((taskId: string) => {
-    setSkippedWinIds((prev) => {
-      const next = new Set(prev);
-      next.add(taskId);
-      return next;
-    });
-  }, []);
-
-  // S8 (#260) rollup approve/dismiss, keyed by area for the session. Approve
-  // persists through the context (real client only; mock/preview stays local)
-  // and moves the draft into the week-over-week readback; dismiss writes nothing.
-  const [approvedRollups, setApprovedRollups] = useState<
-    {
-      areaId: string;
-      areaLabel: string;
-      periodLabel: string;
-      counts: Record<string, number>;
-    }[]
-  >([]);
-  const [dismissedRollupAreaIds, setDismissedRollupAreaIds] = useState<
-    Set<string>
-  >(() => new Set());
-  const approvedRollupAreaIds = useMemo(
-    () => new Set(approvedRollups.map((rollup) => rollup.areaId)),
-    [approvedRollups],
-  );
-  const pendingRollups = useMemo(
-    () =>
-      closeVM.rollupDrafts.filter(
-        (draft) =>
-          !dismissedRollupAreaIds.has(draft.areaId) &&
-          !approvedRollupAreaIds.has(draft.areaId),
-      ),
-    [closeVM.rollupDrafts, dismissedRollupAreaIds, approvedRollupAreaIds],
-  );
-  // E3 (#260 follow-up): AI-prose enhancement for pending rollup drafts, keyed
-  // by area for the session. The server rephrases items 1:1 with counts held
-  // fixed; requestRollupProse falls back to the deterministic draft on any
-  // failure, so this is purely additive — the rollup always shows and stays
-  // approvable. Skipped entirely in demo/mock (no real account, no server key).
-  const [enhancedRollupSummaries, setEnhancedRollupSummaries] = useState<
-    Record<string, RollupSummaryContent>
-  >({});
-  // Areas already requested this session — a ref (not the state) so it can't be
-  // in the effect deps. Marking BEFORE the await dedupes across effect re-runs
-  // and prevents a second in-flight request per area (no duplicate AI calls /
-  // ai_call_traces rows).
-  const requestedRollupAreaIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const client = createSupabaseBrowserClient();
-    if (!client) {
-      return;
-    }
-    const toRequest = pendingRollups.filter(
-      (draft) => !requestedRollupAreaIdsRef.current.has(draft.areaId),
-    );
-    if (toRequest.length === 0) {
-      return;
-    }
-    for (const draft of toRequest) {
-      requestedRollupAreaIdsRef.current.add(draft.areaId);
-    }
-    let cancelled = false;
-    void (async () => {
-      const accessToken =
-        (await client.auth.getSession()).data.session?.access_token ?? null;
-      for (const draft of toRequest) {
-        if (cancelled) {
-          return;
-        }
-        const result = await requestRollupProse(
-          {
-            areaLabel: draft.areaLabel,
-            periodType: "week",
-            periodLabel: draft.periodLabel,
-            draft: draft.summary,
-          },
-          { accessToken },
-        );
-        if (cancelled) {
-          return;
-        }
-        // Only record — and badge as "AI-polished" — a genuinely AI-generated
-        // summary. On any deterministic fallback the card stays as-is with no
-        // provenance flag (the area is still marked requested, so we don't
-        // re-hit a degraded endpoint every render).
-        if (!result.enhanced) {
-          continue;
-        }
-        setEnhancedRollupSummaries((prev) =>
-          prev[draft.areaId]
-            ? prev
-            : { ...prev, [draft.areaId]: result.summary },
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingRollups]);
-  // E3 provenance: areas where the user chose to keep the deterministic wording
-  // over the AI-polished version this session. Approve persists exactly what is
-  // displayed, so toggling here also decides which version is recorded.
-  const [keptOriginalRollupAreaIds, setKeptOriginalRollupAreaIds] = useState<
-    Set<string>
-  >(() => new Set());
-  // Swap in the enhanced prose where it has resolved (unless the user kept the
-  // original); the deterministic draft shows until then (and stays if
-  // enhancement failed). `enhanced` = the displayed summary is AI-reworded;
-  // `hasEnhancement` = an AI alternative exists (a toggle is available). Approve
-  // persists exactly what is shown (counts are identical either way).
-  const displayedRollups = useMemo(
-    () =>
-      pendingRollups.map((draft) => {
-        const enhanced = enhancedRollupSummaries[draft.areaId];
-        const showingProse =
-          Boolean(enhanced) && !keptOriginalRollupAreaIds.has(draft.areaId);
-        return {
-          ...draft,
-          summary: showingProse && enhanced ? enhanced : draft.summary,
-          enhanced: showingProse,
-          hasEnhancement: Boolean(enhanced),
-        };
-      }),
-    [pendingRollups, enhancedRollupSummaries, keptOriginalRollupAreaIds],
-  );
-  const handleApproveRollup = useCallback(
-    (draft: RollupDraftVM) => {
-      setApprovedRollups((prev) => [
-        {
-          areaId: draft.areaId,
-          areaLabel: draft.areaLabel,
-          periodLabel: draft.periodLabel,
-          counts: draft.summary.counts,
-        },
-        ...prev,
-      ]);
-      void confirmRollup({
-        areaId: draft.areaId,
-        periodType: "week",
-        periodStart: draft.periodStart,
-        periodEnd: draft.periodEnd,
-        summary: draft.summary,
-      });
-      showToast("Rollup approved");
-    },
-    [confirmRollup, showToast],
-  );
-  const handleDismissRollup = useCallback((areaId: string) => {
-    setDismissedRollupAreaIds((prev) => {
-      const next = new Set(prev);
-      next.add(areaId);
-      return next;
-    });
-  }, []);
-  const handleToggleRollupProse = useCallback((areaId: string) => {
-    setKeptOriginalRollupAreaIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(areaId)) {
-        next.delete(areaId);
-      } else {
-        next.add(areaId);
-      }
-      return next;
-    });
-  }, []);
-
-  // #486 (S8 follow-up): monthly rollup, mirroring the S8 weekly flow above
-  // wholesale. Unlike weekly (composed live from `state.calendarBlocks`), the
-  // monthly draft composes from this month's already-APPROVED weekly rollups
-  // — persisted rows, fetched once via `listApprovedRollups` (real client
-  // only; mock/preview keeps `allRollupSummaries` empty, so no monthly card
-  // shows there, same "nothing to show" idiom as everywhere else in this
-  // surface). Composition and the month-over-month readback are pure
-  // (momentsViewModel); approve/dismiss/AI-prose state is kept independent of
-  // the weekly rollup state above so each rollup type is separately decided.
-  const [allRollupSummaries, setAllRollupSummaries] = useState<RollupSummary[]>(
-    [],
-  );
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const rollups = await listApprovedRollups();
-      if (!cancelled) setAllRollupSummaries(rollups);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [listApprovedRollups]);
-
-  const areaLabelForWorkflowId = useCallback(
-    (areaId: string) =>
-      state.areas.find((area) => area.id === areaId)?.name ?? "",
-    [state.areas],
-  );
-
-  const approvedWeeklyRollupsThisMonth = useMemo<ApprovedWeeklyRollupInput[]>(
-    () =>
-      allRollupSummaries
-        .filter((row) => row.period_type === "week")
-        .map((row) => ({
-          areaId: row.area_id,
-          areaLabel: areaLabelForWorkflowId(row.area_id),
-          periodStart: row.period_start,
-          summary: row.summary,
-        })),
-    [allRollupSummaries, areaLabelForWorkflowId],
-  );
-  const monthlyRollupDraftsRaw = useMemo(
-    () => buildMonthlyRollupDrafts(approvedWeeklyRollupsThisMonth, now),
-    [approvedWeeklyRollupsThisMonth, now],
-  );
-
-  const priorMonthRollups = useMemo<PriorMonthRollupInput[]>(
-    () =>
-      allRollupSummaries
-        .filter((row) => row.period_type === "month")
-        .map((row) => ({
-          areaId: row.area_id,
-          periodStart: row.period_start,
-          periodEnd: row.period_end,
-          summary: row.summary,
-        })),
-    [allRollupSummaries],
-  );
-  const monthOverMonthReadback = useMemo(
-    () => deriveMonthOverMonthReadback(priorMonthRollups, now),
-    [priorMonthRollups, now],
-  );
-
-  const [approvedMonthlyRollups, setApprovedMonthlyRollups] = useState<
-    {
-      areaId: string;
-      areaLabel: string;
-      periodLabel: string;
-      counts: Record<string, number>;
-    }[]
-  >([]);
-  const [dismissedMonthlyRollupAreaIds, setDismissedMonthlyRollupAreaIds] =
-    useState<Set<string>>(() => new Set());
-  const approvedMonthlyRollupAreaIds = useMemo(
-    () => new Set(approvedMonthlyRollups.map((rollup) => rollup.areaId)),
-    [approvedMonthlyRollups],
-  );
-  const pendingMonthlyRollups = useMemo(
-    () =>
-      monthlyRollupDraftsRaw.filter(
-        (draft) =>
-          !dismissedMonthlyRollupAreaIds.has(draft.areaId) &&
-          !approvedMonthlyRollupAreaIds.has(draft.areaId),
-      ),
-    [
-      monthlyRollupDraftsRaw,
-      dismissedMonthlyRollupAreaIds,
-      approvedMonthlyRollupAreaIds,
-    ],
-  );
-
-  // E3 parity: AI-prose enhancement for pending monthly rollup drafts, routed
-  // through the SAME choke point as weekly (`requestRollupProse`) with
-  // `periodType: "month"` — no new AI plumbing.
-  const [enhancedMonthlyRollupSummaries, setEnhancedMonthlyRollupSummaries] =
-    useState<Record<string, RollupSummaryContent>>({});
-  const requestedMonthlyRollupAreaIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const client = createSupabaseBrowserClient();
-    if (!client) {
-      return;
-    }
-    const toRequest = pendingMonthlyRollups.filter(
-      (draft) => !requestedMonthlyRollupAreaIdsRef.current.has(draft.areaId),
-    );
-    if (toRequest.length === 0) {
-      return;
-    }
-    for (const draft of toRequest) {
-      requestedMonthlyRollupAreaIdsRef.current.add(draft.areaId);
-    }
-    let cancelled = false;
-    void (async () => {
-      const accessToken =
-        (await client.auth.getSession()).data.session?.access_token ?? null;
-      for (const draft of toRequest) {
-        if (cancelled) {
-          return;
-        }
-        const result = await requestRollupProse(
-          {
-            areaLabel: draft.areaLabel,
-            periodType: "month",
-            periodLabel: draft.periodLabel,
-            draft: draft.summary,
-          },
-          { accessToken },
-        );
-        if (cancelled) {
-          return;
-        }
-        if (!result.enhanced) {
-          continue;
-        }
-        setEnhancedMonthlyRollupSummaries((prev) =>
-          prev[draft.areaId]
-            ? prev
-            : { ...prev, [draft.areaId]: result.summary },
-        );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pendingMonthlyRollups]);
-  const [
-    keptOriginalMonthlyRollupAreaIds,
-    setKeptOriginalMonthlyRollupAreaIds,
-  ] = useState<Set<string>>(() => new Set());
-  const displayedMonthlyRollups = useMemo(
-    () =>
-      pendingMonthlyRollups.map((draft) => {
-        const enhanced = enhancedMonthlyRollupSummaries[draft.areaId];
-        const showingProse =
-          Boolean(enhanced) &&
-          !keptOriginalMonthlyRollupAreaIds.has(draft.areaId);
-        return {
-          ...draft,
-          summary: showingProse && enhanced ? enhanced : draft.summary,
-          enhanced: showingProse,
-          hasEnhancement: Boolean(enhanced),
-        };
-      }),
-    [
-      pendingMonthlyRollups,
-      enhancedMonthlyRollupSummaries,
-      keptOriginalMonthlyRollupAreaIds,
-    ],
-  );
-  const handleApproveMonthlyRollup = useCallback(
-    (draft: MonthlyRollupDraftVM) => {
-      setApprovedMonthlyRollups((prev) => [
-        {
-          areaId: draft.areaId,
-          areaLabel: draft.areaLabel,
-          periodLabel: draft.periodLabel,
-          counts: draft.summary.counts,
-        },
-        ...prev,
-      ]);
-      void confirmRollup({
-        areaId: draft.areaId,
-        periodType: "month",
-        periodStart: draft.periodStart,
-        periodEnd: draft.periodEnd,
-        summary: draft.summary,
-      });
-      showToast("Rollup approved");
-    },
-    [confirmRollup, showToast],
-  );
-  const handleDismissMonthlyRollup = useCallback((areaId: string) => {
-    setDismissedMonthlyRollupAreaIds((prev) => {
-      const next = new Set(prev);
-      next.add(areaId);
-      return next;
-    });
-  }, []);
-  const handleToggleMonthlyRollupProse = useCallback((areaId: string) => {
-    setKeptOriginalMonthlyRollupAreaIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(areaId)) {
-        next.delete(areaId);
-      } else {
-        next.add(areaId);
-      }
-      return next;
-    });
-  }, []);
-
-  const startFocus = useCallback(
-    (taskId: string | null, minutes: number) => {
-      setSession({
-        activeTaskId: taskId,
-        running: true,
-        remaining: minutes * 60,
-        total: minutes * 60,
-      });
-      if (taskId) {
-        startTaskSession(taskId);
-      }
-    },
-    [startTaskSession],
-  );
-
-  // #572 (execute/review contract): ending a session no longer closes it
-  // instantly. "Done" opens the end sheet (outcome, actual duration,
-  // optional note) — the verdict/toast copy below only fires once
-  // `handleEndSessionSave` has awaited the save.
-  const [endSessionOpen, setEndSessionOpen] = useState(false);
-
-  const finishFocus = useCallback(() => {
-    if (session.activeTaskId === null && session.total === 0) return;
-    setEndSessionOpen(true);
-  }, [session.activeTaskId, session.total]);
-
-  const endSessionElapsedMinutes =
-    session.total > 0
-      ? Math.round((session.total - session.remaining) / 60)
-      : 0;
-
-  const handleEndSessionSave = useCallback(
-    async (
-      outcome: EndSessionOutcome,
-      actualMinutes: number,
-      note: string | null,
-    ) => {
-      // State truth (#551/#563): await the save before resetting the
-      // session/closing the sheet, so no verdict copy claims a save that
-      // hasn't resolved yet.
-      await markSession(outcome, actualMinutes, note);
-      setSession({
-        activeTaskId: null,
-        running: false,
-        remaining: 0,
-        total: 0,
-      });
-      setEndSessionOpen(false);
-      showToast(
-        outcome === "completed"
-          ? "Session complete"
-          : outcome === "partial"
-            ? "Partial progress saved"
-            : outcome === "skipped"
-              ? "Skipped — carried to review"
-              : "Stuck — logged for review",
-      );
-    },
-    [markSession, showToast],
-  );
-
-  const pauseFocus = useCallback(() => {
-    setSession((current) => ({ ...current, running: !current.running }));
-  }, []);
-
-  const extendFocus = useCallback((minutes: number) => {
-    setSession((current) => ({
-      ...current,
-      remaining: current.remaining + minutes * 60,
-      total: current.total + minutes * 60,
-    }));
-  }, []);
-
-  const handleStartMove = useCallback(
-    (move: FirstMoveVM) => {
-      startFocus(move.taskId, move.estMinutes || fallbackFocusMinutes);
-      setMoment("flow");
-    },
-    [startFocus, fallbackFocusMinutes],
-  );
-
-  const handleReclaimDrift = useCallback(() => {
-    const hasSession = session.activeTaskId !== null || session.total > 0;
-    if (hasSession) {
-      if (!session.running) {
-        pauseFocus();
-      }
-    } else if (startVM.firstMove) {
-      startFocus(
-        startVM.firstMove.taskId,
-        startVM.firstMove.estMinutes || fallbackFocusMinutes,
-      );
-    }
-    showToast("Block reclaimed");
-  }, [
-    session.activeTaskId,
-    session.total,
-    session.running,
+  // #590 slice 3: Flow moment's focus-session + task-map wiring, extracted
+  // to `useFlowFocusSession` (see its doc comment for the full contract).
+  const {
+    session,
+    progressionNodes,
+    focusedTask,
+    taskMapDraftForSection,
+    handleRequestTaskMapDraft,
+    handleApproveTaskMapDraft,
+    handleToggleTaskMapNodeCompletion,
+    finishFocus,
+    endSessionOpen,
+    setEndSessionOpen,
+    endSessionElapsedMinutes,
+    handleEndSessionSave,
     pauseFocus,
-    startVM.firstMove,
-    startFocus,
+    extendFocus,
+    handleStartMove,
+    handleReclaimDrift,
+    handleAbandonDrift,
+  } = useFlowFocusSession({
+    state,
+    now,
+    startVM,
     fallbackFocusMinutes,
     showToast,
-  ]);
+    setMoment,
+    startTaskSession,
+    markSession,
+    taskMapDraft,
+    requestTaskMapDraft,
+    dismissTaskMapDraft,
+    approveTaskMapDraft,
+    toggleTaskMapNodeCompletion,
+    updateTaskFirstTinyStep,
+  });
 
-  const handleAbandonDrift = useCallback(() => {
-    setMoment("start");
-    showToast("Fresh start — pick your next move");
-  }, [showToast]);
+  // #590 slice 3: Close moment's wins + rollup harvesting, extracted to
+  // `useCloseMomentRollups` (see its doc comment for the full contract).
+  const {
+    pendingWins,
+    confirmedWins,
+    handleConfirmWin,
+    handleSkipWin,
+    approvedRollups,
+    displayedRollups,
+    handleApproveRollup,
+    handleDismissRollup,
+    handleToggleRollupProse,
+    displayedMonthlyRollups,
+    approvedMonthlyRollups,
+    monthOverMonthReadback,
+    handleApproveMonthlyRollup,
+    handleDismissMonthlyRollup,
+    handleToggleMonthlyRollupProse,
+  } = useCloseMomentRollups({
+    state,
+    closeVM,
+    now,
+    showToast,
+    confirmWin,
+    confirmRollup,
+    listApprovedRollups,
+  });
 
   const handleDrillPipeline = useCallback(
     (stage: string) => {
