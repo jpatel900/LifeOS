@@ -29,6 +29,7 @@ import { useWorkflow } from "@/lib/WorkflowContext";
 import { AreaCharterPanel } from "./AreaCharterPanel";
 import { DataExportPanel } from "./DataExportPanel";
 import { GoogleCalendarConnectionPanel } from "./GoogleCalendarConnectionPanel";
+import { OnboardingRerunPanel } from "./OnboardingRerunPanel";
 import { OperatorProfilePanel } from "./OperatorProfilePanel";
 import { AREA_COLOR_PRESETS, buildAreaAccentStyle } from "@/lib/areaAccent";
 import { AreaAccentPicker } from "./AreaAccentPicker";
@@ -865,6 +866,10 @@ export default function AreasSettingsPage() {
 
       <DiagnosticsDisclosure title="Data export" contentClassName="mt-4">
         <DataExportPanel />
+      </DiagnosticsDisclosure>
+
+      <DiagnosticsDisclosure title="Run setup again" contentClassName="mt-4">
+        <OnboardingRerunPanel />
       </DiagnosticsDisclosure>
 
       <DiagnosticsDisclosure title="Local reset" contentClassName="mt-4">
