@@ -137,6 +137,40 @@ describe("OnboardingRitual (#581)", () => {
       expect(createdNames).toEqual(["Main Job", "Personal", "Side Project"]);
     });
 
+    it("mock-provider rerun keeps existing areas the chips never covered (nothing is deleted)", async () => {
+      // Demo/mock accounts don't prefill chips from rows, so an existing
+      // area absent from the default chips must still survive the sync —
+      // syncPersistedAreas replaces the whole list.
+      const seeded = [
+        areaRow("Main Job"),
+        areaRow("Personal"),
+        areaRow("Volunteer Work"),
+        areaRow("Side Project"),
+      ];
+      mocks.listAreas.mockResolvedValue({ provider: "mock", areas: seeded });
+      mocks.updateAreaColor.mockImplementation(
+        async (_client: unknown, input: { area_id: string; color: string }) => {
+          const area = seeded.find((row) => row.id === input.area_id)!;
+          return { provider: "mock", area: { ...area, color: input.color } };
+        },
+      );
+      const { props } = renderRitual();
+      await waitFor(() => expect(mocks.listAreas).toHaveBeenCalled());
+
+      fireEvent.click(screen.getByTestId("onboarding-areas-continue"));
+      await screen.findByTestId("onboarding-step-day");
+
+      const onAreasPersisted = props.onAreasPersisted as ReturnType<
+        typeof vi.fn
+      >;
+      const persistedNames = (onAreasPersisted.mock.calls[0][0] as Area[]).map(
+        (area) => area.name,
+      );
+      expect(persistedNames).toContain("Volunteer Work");
+      expect(mocks.softDeleteArea).not.toHaveBeenCalled();
+      expect(mocks.createArea).not.toHaveBeenCalled();
+    });
+
     it("surfaces a persistence failure and stays on the step", async () => {
       mocks.createArea.mockRejectedValue(new Error("no rows for you"));
       renderRitual();

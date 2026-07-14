@@ -246,6 +246,7 @@ export function OnboardingRitual({
 
     // Rerun case only: chips the user removed that are backed by persisted
     // rows go through the existing soft-delete (never a hard delete).
+    const deletedIds = new Set<string>();
     for (const area of existing) {
       const chipBacked = chipsToPersist.some(
         (chip) => chip.existing?.id === area.id,
@@ -253,6 +254,17 @@ export function OnboardingRitual({
       const wasPrefilled = chips.some((chip) => chip.existing?.id === area.id);
       if (!chipBacked && wasPrefilled && !keptExistingIds.has(area.id)) {
         await softDeleteArea(client, { area_id: area.id });
+        deletedIds.add(area.id);
+      }
+    }
+
+    // syncPersistedAreas REPLACES the workflow area list, so surviving
+    // existing areas the chips never covered (mock/demo prefill uses the
+    // defaults, not the account's rows) must ride along or they silently
+    // vanish from the cockpit until reload — violating "nothing is deleted".
+    for (const area of existing) {
+      if (!keptExistingIds.has(area.id) && !deletedIds.has(area.id)) {
+        finalAreas.push(area);
       }
     }
 
