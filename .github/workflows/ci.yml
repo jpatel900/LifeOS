@@ -44,6 +44,30 @@ jobs:
             echo "No apps/web or supabase changes: e2e + migrations-rls will be skipped for this PR."
           fi
 
+  automerge-policy-self-tests:
+    name: Safe-automerge policy self-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          # this job never installs pnpm, so setup-node must not try to use
+          # it for caching (it auto-detects the packageManager field)
+          package-manager-cache: false
+
+      # No pnpm install: both scripts are dependency-free by design so the
+      # Level-5 automerge policy gate can never be skipped for cost reasons.
+      - name: check-safe-automerge self-test
+        run: node scripts/agent/check-safe-automerge.mjs --self-test
+
+      - name: safe-automerge-demotion self-test
+        run: node scripts/agent/safe-automerge-demotion.mjs --self-test
+
   validate-monorepo:
     name: Monorepo Validation
     runs-on: ubuntu-latest
