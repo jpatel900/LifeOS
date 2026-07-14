@@ -4,6 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import { CaptureCore } from "./CaptureCore";
 import type { CaptureParseState } from "@/lib/WorkflowContext";
 
+// #594: every actionable control here reaches the shared >=44px hit-target
+// floor via hitTarget.ts (HIT_TARGET_MIN/HIT_TARGET_ROW/HIT_TARGET_INVISIBLE)
+// — never a raw min-h-10 (40px). jsdom does not compute layout, so this is a
+// className-level guard; the real geometric proof is the Playwright e2e at
+// 390px (tests/e2e/hit-targets-390.spec.ts).
+
 const IDLE: CaptureParseState = { phase: "idle" };
 
 /**
@@ -380,6 +386,68 @@ describe("CaptureCore", () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe("44px hit targets (#594)", () => {
+    // #594: covers every phase's actionable controls, including the
+    // degraded and conclusion ones an e2e run in mock-mode (which never
+    // fails a parse) can never reach.
+    it("return-hook input and save controls carry a 44px hit-target class in the idle phase", () => {
+      render(<ParseHarness />);
+
+      fireEvent.change(screen.getByTestId("capture-textarea"), {
+        target: { value: "Follow up with Alex" },
+      });
+
+      expect(screen.getByTestId("capture-return-hook").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("capture-save-raw").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("capture-save").className).toContain(
+        "min-h-11",
+      );
+    });
+
+    it("the degraded phase's retry-mock and keep-raw actions carry the 44px hit-target class", async () => {
+      render(<ParseHarness />);
+
+      fireEvent.change(screen.getByTestId("capture-textarea"), {
+        target: { value: "Follow up with Alex" },
+      });
+      fireEvent.keyDown(screen.getByTestId("capture-textarea"), {
+        key: "Enter",
+      });
+      fireEvent.click(screen.getByTestId("fail-parse"));
+
+      await screen.findByTestId("capture-degraded");
+      expect(screen.getByTestId("capture-retry-mock").className).toContain(
+        "min-h-[44px]",
+      );
+      expect(screen.getByTestId("capture-keep-raw").className).toContain(
+        "min-h-[44px]",
+      );
+    });
+
+    it("the conclusion 'back to' control carries the 44px hit-target class", async () => {
+      render(<ParseHarness />);
+
+      fireEvent.change(screen.getByTestId("capture-textarea"), {
+        target: { value: "Follow up with Alex" },
+      });
+      fireEvent.keyDown(screen.getByTestId("capture-textarea"), {
+        key: "Enter",
+      });
+      fireEvent.click(screen.getByTestId("resolve-parsed"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("capture-conclusion")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("capture-conclusion").className).toContain(
+        "min-h-[44px]",
+      );
     });
   });
 });

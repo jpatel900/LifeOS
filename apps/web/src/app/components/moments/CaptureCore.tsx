@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import type { CaptureParseState } from "@/lib/WorkflowContext";
+import {
+  HIT_TARGET_INVISIBLE,
+  HIT_TARGET_MIN,
+  HIT_TARGET_ROW,
+} from "./hitTarget";
 
 /**
  * #556 (FR-026 capture containment) — the ONE capture widget shared by all
@@ -348,7 +353,10 @@ export function CaptureCore({
             onChange={(event) => setReturnHook(event.target.value)}
             readOnly={locked}
             placeholder="What should you go back to afterward?"
-            className="min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={cn(
+              HIT_TARGET_ROW,
+              "rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            )}
             data-testid={`${id}-return-hook`}
           />
         </label>
@@ -378,7 +386,10 @@ export function CaptureCore({
               <button
                 type="button"
                 onClick={handleRetryWithMock}
-                className="min-h-10 rounded-full bg-primary px-4 text-primary-foreground"
+                className={cn(
+                  HIT_TARGET_MIN,
+                  "rounded-full bg-primary px-4 text-primary-foreground",
+                )}
                 data-testid={`${id}-retry-mock`}
               >
                 Parse with mock parser
@@ -387,7 +398,10 @@ export function CaptureCore({
             <button
               type="button"
               onClick={handleKeepAsRaw}
-              className="min-h-10 rounded-full border border-input px-4"
+              className={cn(
+                HIT_TARGET_MIN,
+                "rounded-full border border-input px-4",
+              )}
               data-testid={`${id}-keep-raw`}
             >
               Keep as raw
@@ -402,7 +416,10 @@ export function CaptureCore({
           role="status"
           aria-live="polite"
           onClick={() => finishResolved(phase.outcome)}
-          className="text-left text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline"
+          className={cn(
+            HIT_TARGET_INVISIBLE,
+            "justify-self-start text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline",
+          )}
           data-testid={`${id}-conclusion`}
         >
           back to: {phase.hookLabel}
@@ -420,7 +437,8 @@ export function CaptureCore({
             onClick={handleSaveRaw}
             disabled={!canSubmit || locked}
             className={cn(
-              "min-h-10 rounded-full px-4 text-xs font-semibold",
+              HIT_TARGET_INVISIBLE,
+              "rounded-full px-4 text-xs font-semibold",
               canSubmit && !locked
                 ? "text-muted-foreground hover:text-foreground"
                 : "cursor-not-allowed text-muted-foreground/50",
