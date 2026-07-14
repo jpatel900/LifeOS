@@ -111,7 +111,9 @@ test("capture saves raw thought and routes the item to triage", async ({
 }) => {
   await page.goto("/capture");
 
-  await page.getByRole("textbox").fill("Browser handoff proof capture item");
+  await page
+    .getByPlaceholder("Drop the thought here.")
+    .fill("Browser handoff proof capture item");
   await page.getByRole("button", { name: "Save thought" }).click();
 
   await expect(page).toHaveURL(/\/triage$/);
@@ -129,7 +131,9 @@ test("triage someday and do-today choices feed the plan screen", async ({
   page,
 }) => {
   await page.goto("/capture");
-  await page.getByRole("textbox").fill("Someday proof item");
+  await page
+    .getByPlaceholder("Drop the thought here.")
+    .fill("Someday proof item");
   await page.getByRole("button", { name: "Save thought" }).click();
   await page.getByRole("button", { name: "Someday" }).click();
 
@@ -143,7 +147,9 @@ test("triage someday and do-today choices feed the plan screen", async ({
   ).toBeVisible();
 
   await page.goto("/capture");
-  await page.getByRole("textbox").fill("Do today proof item");
+  await page
+    .getByPlaceholder("Drop the thought here.")
+    .fill("Do today proof item");
   await page.getByRole("button", { name: "Save thought" }).click();
   await page.getByRole("button", { name: "Do today" }).click();
 
@@ -162,7 +168,9 @@ test("plan hour rail creates local blocks and keeps Google writes secondary", as
   page,
 }) => {
   await page.goto("/capture");
-  await page.getByRole("textbox").fill("Plan rail proof item");
+  await page
+    .getByPlaceholder("Drop the thought here.")
+    .fill("Plan rail proof item");
   await page.getByRole("button", { name: "Save thought" }).click();
   await page.getByRole("button", { name: "Do today" }).click();
 

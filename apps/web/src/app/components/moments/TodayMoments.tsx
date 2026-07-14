@@ -59,7 +59,6 @@ const TOAST_DURATION_MS = 2500;
 // (6s) than a plain acknowledgement (2.5s) — the extra time is the reading
 // + decision budget for the one thing a mistake is worth reversing.
 const TOAST_WITH_ACTION_DURATION_MS = 6000;
-const CAPTURE_KINDS = ["Task", "Note", "Idea"];
 const DEFAULT_FOCUS_MINUTES = 25;
 
 /** SP-6: the toast slot's action — a real, focusable (never auto-focused) Undo button. */
@@ -182,6 +181,7 @@ export function TodayMoments({
     submitCaptureText,
     submitCaptureRaw,
     captureParse,
+    retryCaptureParseWithMock,
     startTaskSession,
     markSession,
     carryForwardTask,
@@ -1267,25 +1267,27 @@ export function TodayMoments({
 
       <CaptureOverlay
         open={captureOpen}
-        kinds={CAPTURE_KINDS}
+        captureParse={captureParse}
+        onRetryWithMock={retryCaptureParseWithMock}
         initialText={captureDraft}
         onDraftChange={(text) => {
           setCaptureDraft(text);
           writeStoredCaptureDraft(text);
         }}
-        onSave={(text, _kind, returnHook) => {
-          submitCaptureText(text, selectedAreaId, returnHook);
-          showToast("Captured");
+        onSave={(text, returnHook) =>
+          submitCaptureText(text, selectedAreaId, returnHook)
+        }
+        onSaveRaw={(text, returnHook) => {
+          submitCaptureRaw(text, selectedAreaId, returnHook);
+        }}
+        onResolved={(outcome) => {
+          // #556: the success toast only fires once the capture truly
+          // entered the pipeline (parsed, or a raw save the user actually
+          // resolved to) — never ahead of that truth.
+          showToast(outcome === "parsed" ? "Captured" : "Saved raw");
           setCaptureOpen(false);
           // Clear the draft only after a successful save — Esc/close must
           // preserve it, so this write happens nowhere else.
-          setCaptureDraft("");
-          writeStoredCaptureDraft("");
-        }}
-        onSaveRaw={(text, _kind, returnHook) => {
-          submitCaptureRaw(text, selectedAreaId, returnHook);
-          showToast("Saved raw");
-          setCaptureOpen(false);
           setCaptureDraft("");
           writeStoredCaptureDraft("");
         }}

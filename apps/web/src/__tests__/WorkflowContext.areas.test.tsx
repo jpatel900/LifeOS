@@ -266,7 +266,7 @@ describe("WorkflowProvider persisted area sync", () => {
       expect(screen.getByText("Create an area before capture")).toBeDefined();
     });
 
-    fireEvent.change(screen.getByRole("textbox"), {
+    fireEvent.change(screen.getByPlaceholderText("Drop the thought here."), {
       target: { value: "Capture should wait for a real area" },
     });
 

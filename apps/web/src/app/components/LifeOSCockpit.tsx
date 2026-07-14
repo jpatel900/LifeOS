@@ -46,6 +46,7 @@ import {
 import { cn } from "@/lib/utils";
 import { GoogleCalendarApprovalBridge } from "./GoogleCalendarApprovalBridge";
 import { useFocusSession } from "./moments/useFocusSession";
+import { CaptureCore, type CaptureCoreOutcome } from "./moments/CaptureCore";
 import { CutScopeCandidates } from "./moments/CutScopeCandidates";
 import {
   appendCutScopeNote,
@@ -129,6 +130,7 @@ export function LifeOSCockpit({
     syncStatus,
     syncPersistedAreas,
     submitCaptureText,
+    submitCaptureRaw,
     captureParse,
     retryCaptureParseWithMock,
     acceptTaskDraft,
@@ -170,16 +172,21 @@ export function LifeOSCockpit({
     () => new Set(),
   );
   const [dark, setDark] = useState(true);
-  const [captureText, setCaptureText] = useState("");
-  const [isCaptureSaving, setIsCaptureSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // #556 FR-026: true while the capture stage's CaptureCore is mid-
+  // containment (waiting/degraded/conclusion). The stage nav, area chips,
+  // and brand link disable in step so the user is genuinely held in
+  // context — and so a mid-parse navigation can never race the
+  // on-resolve navigate("triage") below. CaptureCore releases the lock on
+  // unmount, so this can never stick.
+  const [captureStageLocked, setCaptureStageLocked] = useState(false);
+  const navLocked = stage === "capture" && captureStageLocked;
   const [isAddingArea, setIsAddingArea] = useState(false);
   const [newAreaName, setNewAreaName] = useState("");
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const { activeTaskId, running, remaining, total, start, toggle, finish } =
     useFocusSession();
-  const captureSavingRef = useRef(false);
   const vm = useMemo(
     () => buildCockpitViewModel(state, selectedAreaId, dark),
     [dark, selectedAreaId, state],
@@ -306,25 +313,6 @@ export function LifeOSCockpit({
     }
   }
 
-  function handleSaveCapture() {
-    const text = captureText.trim();
-    if (!text || captureSavingRef.current) return;
-    if (!hasRealActiveArea) {
-      showToast("Create an area before capture");
-      return;
-    }
-    captureSavingRef.current = true;
-    setIsCaptureSaving(true);
-    submitCaptureText(text, activeArea.id);
-    setCaptureText("");
-    showToast("Saved; waiting in Triage");
-    navigate("triage");
-    window.setTimeout(() => {
-      captureSavingRef.current = false;
-      setIsCaptureSaving(false);
-    }, 500);
-  }
-
   function startFocus(taskId: string, minutes: number) {
     start(taskId, minutes);
   }
@@ -432,6 +420,11 @@ export function LifeOSCockpit({
     toggle();
   }
 
+  // #556: Execute side-capture is raw-save-only, never a background parse —
+  // FR-026 forbids a fire-and-forget async wait, and the issue explicitly
+  // allows this surface to satisfy containment trivially by never waiting on
+  // one (preserves focus on the running session). Parsed later at triage,
+  // same as the explicit "Save raw" action elsewhere.
   function saveSideCapture(text: string) {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -439,7 +432,7 @@ export function LifeOSCockpit({
       showToast("Create an area before capture");
       return;
     }
-    submitCaptureText(trimmed, activeArea.id);
+    submitCaptureRaw(trimmed, activeArea.id);
     showToast("Side thought saved");
   }
 
@@ -503,7 +496,8 @@ export function LifeOSCockpit({
           <button
             type="button"
             onClick={() => router.push("/")}
-            className="flex min-h-10 items-center gap-2 rounded-full px-2 text-[var(--ink)] sm:min-h-11 sm:px-3"
+            disabled={navLocked}
+            className="flex min-h-10 items-center gap-2 rounded-full px-2 text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-11 sm:px-3"
           >
             <span className="grid size-7 place-items-center rounded-full bg-[var(--acc)] text-[var(--on-acc)]">
               ◆
@@ -513,8 +507,9 @@ export function LifeOSCockpit({
           <button
             type="button"
             onClick={() => navigate("overview")}
+            disabled={navLocked}
             className={cn(
-              "min-h-10 rounded-full px-2 text-sm font-semibold sm:min-h-11 sm:px-3",
+              "min-h-10 rounded-full px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-11 sm:px-3",
               stage === "overview"
                 ? "bg-[var(--acc-sf)] text-[var(--ink)]"
                 : "text-[var(--mut)] hover:bg-[var(--sf3)]",
@@ -531,8 +526,9 @@ export function LifeOSCockpit({
                   setSelectedAreaId(area.id);
                   navigate("today");
                 }}
+                disabled={navLocked}
                 className={cn(
-                  "flex min-h-10 max-w-full shrink-0 items-center gap-2 rounded-full px-3 text-sm sm:min-h-11",
+                  "flex min-h-10 max-w-full shrink-0 items-center gap-2 rounded-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-11",
                   activeArea.id === area.id
                     ? "bg-[var(--acc-sf)] text-[var(--ink)]"
                     : "text-[var(--mut)] hover:bg-[var(--sf3)]",
@@ -611,10 +607,17 @@ export function LifeOSCockpit({
 
         <SyncNotice status={syncStatus} />
 
-        <CaptureParseNotice
-          state={captureParse}
-          onRetryWithMock={retryCaptureParseWithMock}
-        />
+        {/* #556: the capture stage shows its own containment sequence
+            (raw text + parsing/degraded/conclusion) inline via CaptureCore —
+            this global banner would just duplicate it, so it's suppressed
+            there and still covers every other stage (e.g. a retry from
+            triage). */}
+        {stage !== "capture" ? (
+          <CaptureParseNotice
+            state={captureParse}
+            onRetryWithMock={retryCaptureParseWithMock}
+          />
+        ) : null}
 
         <nav
           className="relative grid grid-cols-6 gap-2 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2"
@@ -626,7 +629,8 @@ export function LifeOSCockpit({
               key={item}
               type="button"
               onClick={() => navigate(item)}
-              className="relative z-10 flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl text-xs text-[var(--mut)] hover:bg-[var(--sf3)]"
+              disabled={navLocked}
+              className="relative z-10 flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl text-xs text-[var(--mut)] hover:bg-[var(--sf3)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span
                 className={cn(
@@ -656,11 +660,32 @@ export function LifeOSCockpit({
           ) : null}
           {stage === "capture" ? (
             <CaptureView
-              value={captureText}
-              onChange={setCaptureText}
-              saving={isCaptureSaving}
               hasArea={hasRealActiveArea}
-              onSave={handleSaveCapture}
+              captureParse={captureParse}
+              onLockChange={setCaptureStageLocked}
+              onRetryWithMock={retryCaptureParseWithMock}
+              onSubmitParse={(text, returnHook) =>
+                submitCaptureText(text, activeArea.id, returnHook)
+              }
+              onSubmitRaw={(text, returnHook) =>
+                submitCaptureRaw(text, activeArea.id, returnHook)
+              }
+              onResolved={(outcome) => {
+                // #556: truth-based nav/toast — only fires once the capture
+                // actually resolved, never ahead of that (the old code
+                // navigated and toasted "waiting in Triage" the instant
+                // Save was clicked, before anything existed there). Only a
+                // parsed capture puts a draft in the Triage inbox, so only
+                // that outcome navigates there; a raw save is parsed later
+                // at triage and would land on "Inbox clear" today, so it
+                // stays here, ready for the next thought.
+                if (outcome === "parsed") {
+                  showToast("Saved; waiting in Triage");
+                  navigate("triage");
+                } else {
+                  showToast("Saved raw");
+                }
+              }}
             />
           ) : null}
           {stage === "triage" ? (
@@ -1006,59 +1031,52 @@ function TodayView({
   );
 }
 
+// #556: the /capture route composes the same shared CaptureCore as the
+// moments overlay and Execute side-capture. This keeps its page-specific
+// chrome (the large borderless hero textarea, the "Saves raw text
+// first"/"Create an area before capture" caption) but delegates the raw-save,
+// parse-wait containment, degraded-parse offer, and "back to: <hook>"
+// conclusion to CaptureCore — the same logic, not a reimplementation of it.
 function CaptureView({
-  value,
-  onChange,
-  saving,
   hasArea,
-  onSave,
+  captureParse,
+  onLockChange,
+  onRetryWithMock,
+  onSubmitParse,
+  onSubmitRaw,
+  onResolved,
 }: {
-  value: string;
-  onChange: (value: string) => void;
-  saving: boolean;
   hasArea: boolean;
-  onSave: () => void;
+  captureParse: CaptureParseState;
+  onLockChange: (locked: boolean) => void;
+  onRetryWithMock: () => void;
+  onSubmitParse: (text: string, returnHook: string | null) => void;
+  onSubmitRaw: (text: string, returnHook: string | null) => void;
+  onResolved: (outcome: CaptureCoreOutcome) => void;
 }) {
-  const canSave = value.trim().length > 0 && !saving && hasArea;
-
   return (
     <Panel className="grid min-h-[560px] place-items-center">
       <div className="w-full max-w-2xl">
         <h1 className="sr-only">Capture</h1>
-        <textarea
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-              onSave();
-            }
-          }}
-          autoFocus
-          aria-label="Capture thought"
+        <CaptureCore
+          mode="parse"
+          testIdPrefix="capture-page"
+          submitShortcut="mod-enter"
           placeholder="Drop the thought here."
-          className="min-h-64 w-full resize-none border-0 bg-transparent text-3xl font-semibold leading-tight text-[var(--ink)] outline-none placeholder:text-[var(--fnt)] focus:caret-[var(--acc)]"
+          textareaClassName="min-h-64 resize-none border-0 bg-transparent text-3xl font-semibold leading-tight text-[var(--ink)] outline-none placeholder:text-[var(--fnt)] focus-visible:ring-0 focus:caret-[var(--acc)]"
+          saveButtonClassName="min-h-12 rounded-full px-6 font-bold bg-[var(--acc)] text-[var(--on-acc)] disabled:cursor-not-allowed disabled:bg-[var(--sf3)] disabled:text-[var(--fnt)]"
+          saveRawButtonClassName="text-[var(--mut)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:text-[var(--fnt)]"
+          disabledReason={hasArea ? null : "Create an area before capture"}
+          hint={
+            hasArea ? "Saves raw text first" : "Create an area before capture"
+          }
+          captureParse={captureParse}
+          onLockChange={onLockChange}
+          onRetryWithMock={onRetryWithMock}
+          onSubmitParse={onSubmitParse}
+          onSubmitRaw={onSubmitRaw}
+          onResolved={onResolved}
         />
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm font-semibold text-[var(--mut)]">
-            {hasArea ? "Saves raw text first" : "Create an area before capture"}
-          </span>
-          <div className="flex items-center gap-3">
-            <span className="mono text-sm text-[var(--fnt)]">⌘↵</span>
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={!canSave}
-              className={cn(
-                "min-h-12 rounded-full px-6 font-bold",
-                canSave
-                  ? "bg-[var(--acc)] text-[var(--on-acc)]"
-                  : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
-              )}
-            >
-              {saving ? "Saving" : "Save thought"}
-            </button>
-          </div>
-        </div>
       </div>
     </Panel>
   );
@@ -1911,7 +1929,6 @@ export function ExecuteView({
   const active = vm.planned.find((item) => item.task.id === activeTaskId);
   const minutes = Math.floor(remaining / 60);
   const seconds = `${remaining % 60}`.padStart(2, "0");
-  const [sideCapture, setSideCapture] = useState("");
   // FR-031 slice 7: text draft for the DoD-cap CUT SCOPE moment, built up
   // by tapping "ready-made cuts from your map" candidates. Reset whenever
   // the active task changes so a stale note never bleeds into a different
@@ -2056,29 +2073,23 @@ export function ExecuteView({
             )}
           </div>
           {active ? (
-            <div className="mx-auto mt-7 grid max-w-md gap-2 text-left">
-              <input
-                value={sideCapture}
-                onChange={(event) => setSideCapture(event.target.value)}
+            // #556: raw-save-only (mode="raw-only") — Execute side-capture
+            // never waits on a parse (issue #556 explicitly allows this;
+            // see the CaptureView comment above and the #556 report). Same
+            // shared CaptureCore as the other two surfaces, just without the
+            // parse-wait it would otherwise contain.
+            <div className="mx-auto mt-7 max-w-md text-left">
+              <CaptureCore
+                mode="raw-only"
+                compact
+                autoFocus={false}
+                testIdPrefix="capture-side"
                 placeholder="Capture without leaving focus."
-                className="min-h-12 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] px-4 text-[var(--ink)] outline-none placeholder:text-[var(--fnt)]"
+                saveLabel="Save side thought"
+                textareaClassName="min-h-12 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] px-4 text-[var(--ink)] outline-none placeholder:text-[var(--fnt)]"
+                saveButtonClassName="min-h-11 rounded-full px-4 text-sm font-bold bg-[var(--btn)] text-[var(--btn-fg)] disabled:cursor-not-allowed disabled:bg-[var(--sf3)] disabled:text-[var(--fnt)]"
+                onSubmitRaw={(text) => onSideCapture(text)}
               />
-              <button
-                type="button"
-                disabled={!sideCapture.trim()}
-                onClick={() => {
-                  onSideCapture(sideCapture);
-                  setSideCapture("");
-                }}
-                className={cn(
-                  "min-h-11 rounded-full px-4 text-sm font-bold",
-                  sideCapture.trim()
-                    ? "bg-[var(--btn)] text-[var(--btn-fg)]"
-                    : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
-                )}
-              >
-                Save side thought
-              </button>
             </div>
           ) : null}
         </div>

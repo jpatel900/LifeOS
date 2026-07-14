@@ -9,8 +9,12 @@ async function goToStage(page: Page, stage: RegExp) {
 
 async function captureTask(page: Page, title: string) {
   await page.goto("/capture");
-  await page.getByRole("textbox").fill(title);
+  await page.getByPlaceholder("Drop the thought here.").fill(title);
   await page.getByRole("button", { name: "Save thought" }).click();
+  // #556 FR-026: saving no longer navigates instantly — wait for the parse
+  // wait to resolve and land on Triage before the caller proceeds. 30s: the
+  // first capture-submit of a dev run can hit multi-second cold compiles.
+  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
 }
 
 test("google approval bridge is visible but safely disabled in mock mode while local approve works", async ({

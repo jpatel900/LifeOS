@@ -136,7 +136,13 @@ describe("TodayMoments", () => {
     restoreFetch();
   });
 
-  it("capture-during-flow: pressing C opens capture from Flow, saving keeps the moment on Flow", () => {
+  // #556 FR-026: the overlay now holds the user through the parse wait
+  // (raw text + hook stay visible, no second submit possible) instead of
+  // closing the instant Enter is pressed — this drives that wait through to
+  // its "back to: <hook>" conclusion before asserting the old post-save
+  // assertions (overlay closed, toast shown).
+  it("capture-during-flow: pressing C opens capture from Flow, saving keeps the moment on Flow", async () => {
+    const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "flow" });
 
     expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
@@ -152,11 +158,23 @@ describe("TodayMoments", () => {
       key: "Enter",
     });
 
-    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+    // Held in context through the wait, not released the instant Enter is
+    // pressed.
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+    expect(screen.getByTestId("capture-overlay-parsing")).toBeVisible();
+
+    await waitFor(
+      () => {
+        expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
     expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
     expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
       "Captured",
     );
+
+    restoreFetch();
   });
 
   it("close-day journey: Close moment renders counts and Close the day fires without crashing", () => {
@@ -996,7 +1014,8 @@ describe("TodayMoments — P6 deep-link shims", () => {
   // the durable contract. The container node is asserted `fixed` both before
   // and after a real toast mounts inside it, proving the same out-of-flow
   // node hosts the content rather than a fresh in-flow element appearing.
-  it("toast slot is fixed-positioned so mounting a toast never reflows the page", () => {
+  it("toast slot is fixed-positioned so mounting a toast never reflows the page", async () => {
+    const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
 
     const toast = screen.getByTestId("today-moments-toast");
@@ -1011,14 +1030,22 @@ describe("TodayMoments — P6 deep-link shims", () => {
       key: "Enter",
     });
 
-    const toastAfter = screen.getByTestId("today-moments-toast");
-    expect(toastAfter).toHaveClass("fixed");
-    expect(within(toastAfter).getByText("Captured")).toBeInTheDocument();
+    await waitFor(
+      () => {
+        const toastAfter = screen.getByTestId("today-moments-toast");
+        expect(toastAfter).toHaveClass("fixed");
+        expect(within(toastAfter).getByText("Captured")).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
+
+    restoreFetch();
   });
 
   // SP-4: the toast message pill uses motion tokens (not a literal ms
   // value) and falls back to no motion for prefers-reduced-motion users.
-  it("toast message pill uses motion tokens with a reduced-motion fallback", () => {
+  it("toast message pill uses motion tokens with a reduced-motion fallback", async () => {
+    const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
 
     fireEvent.keyDown(window, { key: "c" });
@@ -1029,15 +1056,19 @@ describe("TodayMoments — P6 deep-link shims", () => {
       key: "Enter",
     });
 
-    const toastMessage = within(
-      screen.getByTestId("today-moments-toast"),
-    ).getByText("Captured");
+    const toastMessage = await waitFor(
+      () =>
+        within(screen.getByTestId("today-moments-toast")).getByText("Captured"),
+      { timeout: 5000 },
+    );
     expect(toastMessage).toHaveClass("motion-reduce:transition-none");
     expect(toastMessage).toHaveClass("motion-reduce:duration-0");
     expect(toastMessage.style.transitionDuration).toBe("var(--motion-base)");
     expect(toastMessage.style.transitionTimingFunction).toBe(
       "var(--motion-ease)",
     );
+
+    restoreFetch();
   });
 });
 
@@ -1103,6 +1134,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
   });
 
   it("clears the draft only after a successful save, and the captured text reaches workflow state", async () => {
+    const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
 
     fireEvent.keyDown(window, { key: "c" });
@@ -1112,7 +1144,17 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
     });
     fireEvent.keyDown(textarea, { key: "Enter" });
 
-    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+    // Held in context through the wait — the draft is cleared and the
+    // overlay closes only once the parse truly resolves, never the instant
+    // Enter is pressed.
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+
+    await waitFor(
+      () => {
+        expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
     expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
       "Captured",
     );
@@ -1128,6 +1170,8 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
     expect(
       screen.queryByTestId("capture-overlay-draft-restored"),
     ).not.toBeInTheDocument();
+
+    restoreFetch();
   });
 
   it("fresh mount with empty sessionStorage shows an empty box and no false restored hint", () => {

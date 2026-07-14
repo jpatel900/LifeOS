@@ -27,6 +27,12 @@ describe("Capture cockpit", () => {
     restoreFetch();
   });
 
+  // #556 FR-026: saving no longer navigates instantly — the capture stage
+  // holds the user through the parse wait (raw text stays visible, no
+  // second submit possible) and only navigates/toasts once the parse
+  // actually resolves ("back to: <hook>" conclusion), never ahead of that
+  // truth. This test now drives that full wait instead of asserting the old
+  // instant-navigate behavior.
   it("saves a thought through the single primary action and routes it to triage", async () => {
     render(
       <AppShell>
@@ -42,7 +48,18 @@ describe("Capture cockpit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
 
-    expect(await screen.findByText("Saved; waiting in Triage")).toBeDefined();
+    // Held in context through the wait: raw text stays visible, save
+    // controls lock, no premature toast/navigation yet.
+    expect(screen.getByPlaceholderText("Drop the thought here.")).toHaveValue(
+      "Draft agenda for the planning meeting",
+    );
+    expect(screen.queryByText("Saved; waiting in Triage")).toBeNull();
+
+    expect(
+      await screen.findByText("Saved; waiting in Triage", undefined, {
+        timeout: 5000,
+      }),
+    ).toBeDefined();
     expect(
       await screen.findByText("Draft agenda for the planning meeting"),
     ).toBeDefined();
