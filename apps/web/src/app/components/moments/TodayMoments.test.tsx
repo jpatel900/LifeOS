@@ -79,6 +79,19 @@ describe("TodayMoments", () => {
     window.history.replaceState(null, "", "/");
   });
 
+  // #592: login now routes an authenticated user straight to this
+  // component (`/`), so this is the route-level guarantee that an existing
+  // account — the seeded demo state has areas — is never forced back into
+  // the onboarding ritual. The zero-state-only trigger itself is unit
+  // tested in useOnboardingRitual.test.ts; this confirms it holds when
+  // TodayMoments is mounted the way the real `/` route mounts it.
+  it("does not show the onboarding ritual for an authenticated existing user landing on Today", () => {
+    renderToday({ initialMoment: "start" });
+
+    expect(screen.queryByTestId("onboarding-ritual")).not.toBeInTheDocument();
+    expect(screen.getByTestId("today-moments")).toBeInTheDocument();
+  });
+
   it("prefills the capture overlay from a share-target ?shared_text= param", async () => {
     window.history.replaceState(
       null,

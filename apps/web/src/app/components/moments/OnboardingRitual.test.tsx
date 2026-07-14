@@ -171,16 +171,36 @@ describe("OnboardingRitual (#581)", () => {
       expect(mocks.createArea).not.toHaveBeenCalled();
     });
 
-    it("surfaces a persistence failure and stays on the step", async () => {
-      mocks.createArea.mockRejectedValue(new Error("no rows for you"));
+    it("surfaces a sanitized, recovery-oriented failure and stays on the step (#592: raw error is diagnostics-only)", async () => {
+      const consoleError = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const rawError = new Error(
+        "duplicate key value violates unique constraint areas_user_id_slug_key",
+      );
+      mocks.createArea.mockRejectedValue(rawError);
       renderRitual();
 
       fireEvent.click(screen.getByTestId("onboarding-areas-continue"));
 
-      expect(
-        await screen.findByTestId("onboarding-areas-error"),
-      ).toHaveTextContent("no rows for you");
+      const errorNode = await screen.findByTestId("onboarding-areas-error");
+      expect(errorNode).toHaveTextContent(
+        "Areas could not be saved right now.",
+      );
+      expect(errorNode).toHaveTextContent(/retry/i);
+      expect(errorNode).toHaveTextContent(/skip/i);
+      // The raw Supabase/db error text never reaches the DOM.
+      expect(errorNode).not.toHaveTextContent(
+        "duplicate key value violates unique constraint",
+      );
       expect(screen.getByTestId("onboarding-step-areas")).toBeInTheDocument();
+
+      // Raw details still reach diagnostics.
+      expect(consoleError).toHaveBeenCalledWith(
+        expect.stringContaining("area persistence failed"),
+        rawError,
+      );
+      consoleError.mockRestore();
     });
   });
 

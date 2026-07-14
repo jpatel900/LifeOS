@@ -106,6 +106,15 @@ function presetLabel(color: string): string {
   );
 }
 
+// #592: raw persistence errors (Supabase error text, network failures, etc.)
+// are diagnostics-only — logged to the console, never rendered. The user
+// sees one sanitized, recovery-oriented message that states the blast
+// radius (nothing was lost) and the two ways forward, matching the
+// established canned-copy pattern in GoogleCalendarConnectionPanel's
+// normalizePanelFailure.
+const AREA_PERSIST_FAILURE_MESSAGE =
+  "Areas could not be saved right now. Nothing was lost — you can retry, or skip and set areas up later in Settings.";
+
 const WORK_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
 function formatHour(hour: number): string {
@@ -278,12 +287,12 @@ export function OnboardingRitual({
       setPersistState({ status: "idle" });
       setStep("day");
     } catch (error) {
+      // Diagnostics-only: the raw error (Supabase message, network failure,
+      // etc.) is never rendered to the user — see AREA_PERSIST_FAILURE_MESSAGE.
+      console.error("[OnboardingRitual] area persistence failed", error);
       setPersistState({
         status: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Areas could not be saved right now.",
+        message: AREA_PERSIST_FAILURE_MESSAGE,
       });
     }
   }
@@ -424,8 +433,7 @@ export function OnboardingRitual({
               className="text-sm text-muted-foreground"
               data-testid="onboarding-areas-error"
             >
-              {persistState.message} You can retry, or skip and set areas up
-              later in Settings.
+              {persistState.message}
             </p>
           ) : null}
 

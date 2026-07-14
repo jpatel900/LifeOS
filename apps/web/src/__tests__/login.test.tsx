@@ -68,7 +68,11 @@ describe("LoginPage", () => {
     expect(mocks.signInWithPassword).not.toHaveBeenCalled();
   });
 
-  it("submits credentials and routes to areas when sign-in succeeds", async () => {
+  // #592: successful auth routes to Today (`/`), not Settings — Today owns
+  // the first-use decision via the deterministic zero-state predicate
+  // (lib/onboarding/onboarding.ts), which routing straight to Settings
+  // used to bypass entirely.
+  it("submits credentials and routes to Today when sign-in succeeds", async () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
@@ -79,7 +83,7 @@ describe("LoginPage", () => {
       });
     });
     await waitFor(() => {
-      expect(mocks.push).toHaveBeenCalledWith("/settings/areas");
+      expect(mocks.push).toHaveBeenCalledWith("/");
     });
   });
 
