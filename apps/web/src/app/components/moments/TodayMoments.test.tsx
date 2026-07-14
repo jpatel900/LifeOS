@@ -109,6 +109,31 @@ describe("TodayMoments", () => {
     expect(screen.getByTestId("start-moment")).toBeInTheDocument();
   });
 
+  // #574: the <640px bottom navigator renders alongside (not instead of) the
+  // header switcher, sharing the same moment/setMoment state — no forked
+  // state, so switching from either instance keeps both in sync.
+  it("renders the bottom navigator wired to the same moment state as the header switcher", () => {
+    renderToday({ initialMoment: "start" });
+
+    expect(screen.getByTestId("bottom-navigator")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("moment-switcher-bottom-nav-start"),
+    ).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.click(screen.getByTestId("moment-switcher-bottom-nav-close"));
+
+    // Both instances reflect the change — one shared `moment` state, not a
+    // forked local one on the navigator.
+    expect(screen.getByTestId("close-moment")).toBeInTheDocument();
+    expect(screen.getByTestId("moment-switcher-close")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(
+      screen.getByTestId("moment-switcher-bottom-nav-close"),
+    ).toHaveAttribute("aria-selected", "true");
+  });
+
   it("start-to-first-move journey: Start now switches to Flow with a running countdown", async () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });

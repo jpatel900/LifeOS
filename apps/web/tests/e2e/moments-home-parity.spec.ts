@@ -257,6 +257,67 @@ test.describe("moments home capture pill clears the Areas card (#553)", () => {
   }
 });
 
+// #574 (epic #555 item 6, mobile shell): below 640px a fixed bottom
+// navigator (BottomNavigator.tsx) now carries the Start/Flow/Close switch +
+// Settings link into the thumb zone. Mirrors the #553 pill/Areas-card
+// overlap guard above: visibility at the issue's literal 390x844 viewport,
+// plus a geometric non-intersection check against the capture pill (the
+// other fixed bottom-band element) once scrolled to the true end of the
+// page — same "reached the bottom of a short page" rationale #477/#553
+// already established for why that's the meaningful check for two
+// viewport-fixed elements.
+test.describe("moments home bottom navigator (#574)", () => {
+  test("bottom navigator is visible at 390x844 and never overlaps the capture pill", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await page.keyboard.press("1");
+    await expect(page.getByTestId("start-moment")).toBeVisible();
+
+    const nav = page.getByTestId("bottom-navigator");
+    const pill = page.getByTestId("capture-affordance");
+    await expect(nav).toBeVisible();
+    await expect(pill).toBeVisible();
+
+    // Thumb-zone reachability: both the moment switch and Settings are in
+    // the bottom navigator, with no scroll required.
+    await expect(
+      page.getByTestId("moment-switcher-bottom-nav-start"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("bottom-navigator-settings-link"),
+    ).toBeVisible();
+
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+
+    const navBox = await nav.boundingBox();
+    const pillBox = await pill.boundingBox();
+    expect(navBox).not.toBeNull();
+    expect(pillBox).not.toBeNull();
+
+    const intersects =
+      navBox!.x < pillBox!.x + pillBox!.width &&
+      navBox!.x + navBox!.width > pillBox!.x &&
+      navBox!.y < pillBox!.y + pillBox!.height &&
+      navBox!.y + navBox!.height > pillBox!.y;
+
+    expect(intersects).toBe(false);
+  });
+
+  test("bottom navigator is not rendered at 1280px (desktop keeps the header switcher only)", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("bottom-navigator")).toBeHidden();
+  });
+});
+
 // MANUAL VERIFICATION NOTE (#553): what this guard does not, and cannot,
 // prove — on the Start moment's default *unscrolled* load at 390px, the
 // pill still visibly sits over the bottom of the Areas card (verified by

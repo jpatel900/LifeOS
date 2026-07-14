@@ -519,7 +519,12 @@ export function LifeOSCockpit({
             type="button"
             onClick={() => router.push("/")}
             disabled={navLocked}
-            className="flex min-h-10 items-center gap-2 rounded-full px-2 text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-11 sm:px-3"
+            // #574: min-h-11 (44px) at ALL widths — this was min-h-10 (40px)
+            // below `sm`, exactly the audit's sub-44px mobile header finding
+            // (ux-audit-2026-07-13-codex.md); same for the header controls
+            // below. touch-manipulation drops the 300ms double-tap delay on
+            // coarse pointers (same pattern as components/moments/hitTarget).
+            className="flex min-h-11 touch-manipulation items-center gap-2 rounded-full px-2 text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
           >
             <span className="grid size-7 place-items-center rounded-full bg-[var(--acc)] text-[var(--on-acc)]">
               ◆
@@ -531,7 +536,7 @@ export function LifeOSCockpit({
             onClick={() => navigate("overview")}
             disabled={navLocked}
             className={cn(
-              "min-h-10 rounded-full px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-11 sm:px-3",
+              "min-h-11 touch-manipulation rounded-full px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:px-3",
               stage === "overview"
                 ? "bg-[var(--acc-sf)] text-[var(--ink)]"
                 : "text-[var(--mut)] hover:bg-[var(--sf3)]",
@@ -550,7 +555,7 @@ export function LifeOSCockpit({
                 }}
                 disabled={navLocked}
                 className={cn(
-                  "flex min-h-10 max-w-full shrink-0 items-center gap-2 rounded-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-11",
+                  "flex min-h-11 max-w-full shrink-0 touch-manipulation items-center gap-2 rounded-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50",
                   activeArea.id === area.id
                     ? "bg-[var(--acc-sf)] text-[var(--ink)]"
                     : "text-[var(--mut)] hover:bg-[var(--sf3)]",
@@ -587,7 +592,7 @@ export function LifeOSCockpit({
             <button
               type="button"
               onClick={() => setIsAddingArea(true)}
-              className="grid min-h-10 min-w-10 place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)] sm:min-h-11 sm:min-w-11"
+              className="grid min-h-11 min-w-11 touch-manipulation place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)]"
               aria-label="Add area"
             >
               <Plus size={18} />
@@ -597,7 +602,7 @@ export function LifeOSCockpit({
             <button
               type="button"
               onClick={() => setIsPaletteOpen((value) => !value)}
-              className="grid min-h-10 min-w-10 place-items-center rounded-full border border-[var(--ln2)] sm:min-h-11 sm:min-w-11"
+              className="grid min-h-11 min-w-11 touch-manipulation place-items-center rounded-full border border-[var(--ln2)]"
               aria-label="Change active area color"
             >
               <span className="size-5 rounded-full bg-[var(--acc)]" />
@@ -620,7 +625,7 @@ export function LifeOSCockpit({
           <button
             type="button"
             onClick={() => setDark((value) => !value)}
-            className="grid min-h-10 min-w-10 place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)] sm:min-h-11 sm:min-w-11"
+            className="grid min-h-11 min-w-11 touch-manipulation place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)]"
             aria-label="Toggle theme"
           >
             {dark ? <Moon size={18} /> : <Sun size={18} />}
