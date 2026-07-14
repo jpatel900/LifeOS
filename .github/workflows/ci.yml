@@ -56,6 +56,9 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 22.13.0
+          # this job never installs pnpm, so setup-node must not try to use
+          # it for caching (it auto-detects the packageManager field)
+          package-manager-cache: false
 
       # No pnpm install: both scripts are dependency-free by design so the
       # Level-5 automerge policy gate can never be skipped for cost reasons.
