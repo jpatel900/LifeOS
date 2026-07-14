@@ -92,6 +92,43 @@ describe("FlowMoment first tiny step (#572)", () => {
     );
   });
 
+  it("rejects a whitespace-only Save — keeps edit mode open, shows validation, never blanks the value (#589)", () => {
+    const onUpdateFirstTinyStep = vi.fn();
+    render(
+      <FlowMoment
+        {...baseProps({
+          firstTinyStep: "Open the draft doc",
+          onUpdateFirstTinyStep,
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("first-tiny-step-card"));
+    const input = screen.getByTestId("first-tiny-step-input");
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.click(screen.getByTestId("first-tiny-step-save"));
+
+    // No persistence of a blank value.
+    expect(onUpdateFirstTinyStep).not.toHaveBeenCalled();
+    // Edit mode stays open — no blank display card is rendered.
+    expect(screen.getByTestId("first-tiny-step-input")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("first-tiny-step-value"),
+    ).not.toBeInTheDocument();
+    // A calm, actionable validation state is surfaced.
+    expect(screen.getByTestId("first-tiny-step-error")).toBeInTheDocument();
+
+    // Typing again clears the validation state, and a valid save still works.
+    fireEvent.change(input, { target: { value: "Write the first sentence" } });
+    expect(
+      screen.queryByTestId("first-tiny-step-error"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("first-tiny-step-save"));
+    expect(onUpdateFirstTinyStep).toHaveBeenCalledWith(
+      "Write the first sentence",
+    );
+  });
+
   it("does not render the first-tiny-step card when there is no active session", () => {
     render(
       <FlowMoment

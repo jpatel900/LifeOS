@@ -22,18 +22,28 @@ export function FirstTinyStepCard({ value, onSave }: FirstTinyStepCardProps) {
   const trimmed = value?.trim() ?? "";
   const [editing, setEditing] = useState(!trimmed);
   const [draft, setDraft] = useState(trimmed);
+  const [invalid, setInvalid] = useState(false);
 
   useEffect(() => {
     setDraft(trimmed);
     setEditing(!trimmed);
+    setInvalid(false);
   }, [trimmed]);
 
   function commit() {
     const next = draft.trim();
-    if (next && next !== trimmed) {
+    if (!next) {
+      // Blank Save must never replace the fallback/display with blank
+      // content — keep edit mode open and surface a calm, actionable
+      // validation state instead of silently discarding the step (#589).
+      setInvalid(true);
+      return;
+    }
+    if (next !== trimmed) {
       onSave(next);
     }
     setEditing(false);
+    setInvalid(false);
   }
 
   if (editing) {
@@ -51,7 +61,12 @@ export function FirstTinyStepCard({ value, onSave }: FirstTinyStepCardProps) {
             autoFocus
             value={draft}
             placeholder="Define your first move — the smallest physical action to start."
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              if (invalid) {
+                setInvalid(false);
+              }
+            }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -59,7 +74,11 @@ export function FirstTinyStepCard({ value, onSave }: FirstTinyStepCardProps) {
               }
             }}
             data-testid="first-tiny-step-input"
-            className="min-h-11 flex-1 rounded-xl border border-[var(--ln)] bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-invalid={invalid}
+            aria-describedby={invalid ? "first-tiny-step-error" : undefined}
+            className={`min-h-11 flex-1 rounded-xl border bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              invalid ? "border-[var(--state-risk)]" : "border-[var(--ln)]"
+            }`}
           />
           <button
             type="button"
@@ -70,6 +89,16 @@ export function FirstTinyStepCard({ value, onSave }: FirstTinyStepCardProps) {
             Save
           </button>
         </div>
+        {invalid ? (
+          <p
+            id="first-tiny-step-error"
+            role="alert"
+            data-testid="first-tiny-step-error"
+            className="mt-2 text-xs font-medium text-[var(--state-risk)]"
+          >
+            Enter a first move before saving — it can&apos;t be blank.
+          </p>
+        ) : null}
       </div>
     );
   }
