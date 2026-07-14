@@ -69,6 +69,7 @@ describe("TodayMoments", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   afterEach(() => {
@@ -76,6 +77,7 @@ describe("TodayMoments", () => {
     vi.unstubAllEnvs();
     vi.useRealTimers();
     window.localStorage.clear();
+    window.sessionStorage.clear();
     window.history.replaceState(null, "", "/");
   });
 
@@ -171,6 +173,71 @@ describe("TodayMoments", () => {
       /\d+:\d{2}/,
     );
 
+    restoreFetch();
+  });
+
+  it("keeps the Moments end sheet draft open when the cap decision is cancelled", async () => {
+    vi.useFakeTimers();
+    const restoreFetch = stubParseCaptureFetch();
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByTestId("seed-submit"));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("seed-draft-count")).toHaveTextContent("1");
+    });
+    fireEvent.click(screen.getByTestId("seed-accept"));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("first-move-card")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("first-move-start"));
+
+    act(() => {
+      vi.advanceTimersByTime(25 * 60 * 1000 + 1000);
+    });
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.change(screen.getByTestId("end-session-note"), {
+      target: { value: "Keep my working note" },
+    });
+    fireEvent.click(screen.getByTestId("end-session-save"));
+    await act(async () => {});
+
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("end-session-note")).toHaveValue(
+      "Keep my working note",
+    );
+    restoreFetch();
+  });
+
+  it("closes the Moments sheet with split truth when the session saves but deferral is unconfirmed", async () => {
+    vi.useFakeTimers();
+    const restoreFetch = stubParseCaptureFetch();
+    vi.spyOn(window, "prompt")
+      .mockReturnValueOnce("defer")
+      .mockReturnValueOnce("Continue tomorrow");
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByTestId("seed-submit"));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("seed-draft-count")).toHaveTextContent("1");
+    });
+    fireEvent.click(screen.getByTestId("seed-accept"));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("first-move-card")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("first-move-start"));
+    act(() => {
+      vi.advanceTimersByTime(25 * 60 * 1000 + 1000);
+    });
+    fireEvent.click(screen.getByTestId("current-block-hero-done"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
+    await act(async () => {});
+
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+      "Session saved — deferral not yet confirmed",
+    );
     restoreFetch();
   });
 

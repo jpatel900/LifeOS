@@ -13,6 +13,7 @@ import {
 } from "../moments/EndSessionSheet";
 import { FirstTinyStepCard } from "../moments/FirstTinyStepCard";
 import { estimate, formatHour, Panel, ringStyle } from "./shared";
+import type { EndSessionResult } from "../moments/endSessionPolicy";
 
 // Execute stage screen (extracted from LifeOSCockpit.tsx, issue #590 slice 2
 // — mechanical split, no behavior change). Exported (not just the default
@@ -44,7 +45,7 @@ export function ExecuteView({
     actualMinutes: number,
     note: string | null,
     cutScopeNoteDraft?: string,
-  ) => Promise<void>;
+  ) => Promise<EndSessionResult>;
   onPlan: () => void;
   onCapture: () => void;
   onSideCapture: (text: string) => void;
@@ -75,8 +76,13 @@ export function ExecuteView({
     actualMinutes: number,
     note: string | null,
   ) {
-    await onFinish(outcome, actualMinutes, note, cutScopeNoteDraft);
-    setEndSessionOpen(false);
+    const result = await onFinish(
+      outcome,
+      actualMinutes,
+      note,
+      cutScopeNoteDraft,
+    );
+    if (result.status !== "aborted") setEndSessionOpen(false);
   }
 
   return (

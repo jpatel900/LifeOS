@@ -10,6 +10,7 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
 import type { MomentValue } from "./MomentSwitcher";
 import type { EndSessionOutcome } from "./EndSessionSheet";
 import type { ToastAction } from "./toast";
+import { runEndSessionPolicy } from "./endSessionPolicy";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -38,6 +39,7 @@ interface UseFlowFocusSessionOptions {
   setMoment(moment: MomentValue): void;
   startTaskSession: ReturnType<typeof useWorkflow>["startTaskSession"];
   markSession: ReturnType<typeof useWorkflow>["markSession"];
+  deferTask: ReturnType<typeof useWorkflow>["deferTask"];
   taskMapDraft: ReturnType<typeof useWorkflow>["taskMapDraft"];
   requestTaskMapDraft: ReturnType<typeof useWorkflow>["requestTaskMapDraft"];
   dismissTaskMapDraft: ReturnType<typeof useWorkflow>["dismissTaskMapDraft"];
@@ -59,6 +61,7 @@ export function useFlowFocusSession({
   setMoment,
   startTaskSession,
   markSession,
+  deferTask,
   taskMapDraft,
   requestTaskMapDraft,
   dismissTaskMapDraft,
@@ -178,7 +181,41 @@ export function useFlowFocusSession({
       // State truth (#551/#563): await the save before resetting the
       // session/closing the sheet, so no verdict copy claims a save that
       // hasn't resolved yet.
-      await markSession(outcome, actualMinutes, note);
+      const result = await runEndSessionPolicy(
+        {
+          outcome,
+          actualMinutes,
+          note,
+          capReached: session.remaining <= 0,
+          task: focusedTask
+            ? {
+                id: focusedTask.id,
+                definitionOfDone: focusedTask.definition_of_done,
+                taskType: focusedTask.task_type,
+              }
+            : null,
+        },
+        {
+          prompt: (message, defaultValue) =>
+            defaultValue === undefined
+              ? window.prompt(message)
+              : window.prompt(message, defaultValue),
+          markSession,
+          deferTask,
+        },
+      );
+      if (result.status === "aborted") {
+        showToast(
+          result.reason === "missing_cut_scope"
+            ? "Write the cut scope before closing"
+            : result.reason === "missing_carry_note"
+              ? "Write a carry note before deferring"
+              : result.reason === "missing_decision"
+                ? "Decision choice is required before closing"
+                : "Choose cut scope or defer at the cap",
+        );
+        return;
+      }
       setSession({
         activeTaskId: null,
         running: false,
@@ -187,16 +224,22 @@ export function useFlowFocusSession({
       });
       setEndSessionOpen(false);
       showToast(
-        outcome === "completed"
-          ? "Session complete"
-          : outcome === "partial"
-            ? "Partial progress saved"
-            : outcome === "skipped"
-              ? "Skipped — carried to review"
-              : "Stuck — logged for review",
+        result.status === "split"
+          ? result.resolution === "defer_failed"
+            ? "Session saved — deferral failed; move it from Review"
+            : "Session saved — deferral not yet confirmed"
+          : result.resolution === "cut_scope"
+            ? "Scope cut and session closed"
+            : outcome === "completed"
+              ? "Session complete"
+              : outcome === "partial"
+                ? "Partial progress saved"
+                : outcome === "skipped"
+                  ? "Skipped — carried to review"
+                  : "Stuck — logged for review",
       );
     },
-    [markSession, showToast],
+    [deferTask, focusedTask, markSession, session.remaining, showToast],
   );
 
   const pauseFocus = useCallback(() => {

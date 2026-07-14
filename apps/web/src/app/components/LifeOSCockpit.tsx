@@ -19,6 +19,10 @@ import {
 import { cn } from "@/lib/utils";
 import { useFocusSession } from "./moments/useFocusSession";
 import {
+  runEndSessionPolicy,
+  type EndSessionResult,
+} from "./moments/endSessionPolicy";
+import {
   CaptureParseNotice,
   SyncNotice,
   WipRefusalPanel,
@@ -142,8 +146,16 @@ export function LifeOSCockpit({
   const [newAreaName, setNewAreaName] = useState("");
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const { activeTaskId, running, remaining, total, start, toggle, finish } =
-    useFocusSession();
+  const {
+    activeTaskId,
+    running,
+    remaining,
+    total,
+    start,
+    toggle,
+    finish,
+    reset,
+  } = useFocusSession();
   const vm = useMemo(
     () => buildCockpitViewModel(state, selectedAreaId, dark),
     [dark, selectedAreaId, state],
@@ -286,7 +298,7 @@ export function LifeOSCockpit({
     actualMinutes: number,
     note: string | null,
     cutScopeNoteDraft?: string,
-  ) {
+  ): Promise<EndSessionResult> {
     const currentSession = state.executionSessions[0] ?? null;
     const currentTask = currentSession?.task_id
       ? state.tasks.find((task) => task.id === currentSession.task_id)
@@ -296,98 +308,66 @@ export function LifeOSCockpit({
       currentTask?.definition_of_done?.trim(),
     );
 
-    if (status === "completed" && capHit && hasDefinitionOfDone) {
-      const choice = window
-        .prompt(
-          "The time cap is here. If the definition of done is not true yet, choose: 1 cut scope and close done, or 2 defer with a carry note.",
-        )
-        ?.trim()
-        .toLowerCase();
+    const result = await runEndSessionPolicy(
+      {
+        outcome: status,
+        actualMinutes,
+        note,
+        capReached: capHit && hasDefinitionOfDone,
+        task: currentTask
+          ? {
+              id: currentTask.id,
+              definitionOfDone: currentTask.definition_of_done,
+              taskType: currentTask.task_type,
+            }
+          : null,
+        cutScopeNoteDraft,
+      },
+      {
+        prompt: (message, defaultValue) =>
+          defaultValue === undefined
+            ? window.prompt(message)
+            : window.prompt(message, defaultValue),
+        markSession: (outcome, minutes, composedNote, capOutcome) =>
+          capOutcome
+            ? markSession(outcome, minutes, composedNote, capOutcome)
+            : finish(outcome, minutes, composedNote),
+        deferTask,
+      },
+    );
 
-      if (choice === "1" || choice === "cut" || choice === "cut scope") {
-        // FR-031 slice 7: prefill with whatever the operator tapped from the
-        // "ready-made cuts from your map" list, if anything -- the map
-        // itself is never mutated (NS-INV-4), only this text default. A
-        // task with no map (or no candidates tapped) calls window.prompt
-        // with exactly its original single argument, so that path is
-        // unchanged, not just equivalent.
-        const revisedDod = (
-          cutScopeNoteDraft
-            ? window.prompt(
-                "Cut scope: write the definition of done that is true now.",
-                cutScopeNoteDraft,
-              )
-            : window.prompt(
-                "Cut scope: write the definition of done that is true now.",
-              )
-        )?.trim();
-        if (!revisedDod) {
-          showToast("Write the cut scope before closing");
-          return;
-        }
-        await markSession(
-          "completed",
-          actualMinutes,
-          `dod_cap.v1 cut_scope: ${revisedDod}`,
-          "cut_scope",
-        );
-        showToast("Scope cut and session closed");
-        navigate("review");
-        return;
-      }
-
-      if (choice === "2" || choice === "defer" || choice === "deferred") {
-        const carryNote = window
-          .prompt("Defer: write one carry note for the next block or backlog.")
-          ?.trim();
-        if (!carryNote) {
-          showToast("Write a carry note before deferring");
-          return;
-        }
-        await markSession(
-          "stuck",
-          actualMinutes,
-          `dod_cap.v1 deferred: ${carryNote}`,
-          "deferred",
-        );
-        if (currentTask) {
-          deferTask(currentTask.id);
-        }
-        showToast("Carried forward to backlog");
-        navigate("review");
-        return;
-      }
-
-      showToast("Choose cut scope or defer at the cap");
-      return;
+    if (result.status === "aborted") {
+      showToast(
+        result.reason === "missing_cut_scope"
+          ? "Write the cut scope before closing"
+          : result.reason === "missing_carry_note"
+            ? "Write a carry note before deferring"
+            : result.reason === "missing_decision"
+              ? "Decision choice is required before closing"
+              : "Choose cut scope or defer at the cap",
+      );
+      return result;
     }
 
-    const decisionChoice =
-      status === "completed" && currentTask?.task_type === "decision"
-        ? window
-            .prompt("Record the decision choice as free text before closing.")
-            ?.trim()
-        : undefined;
+    reset();
 
-    if (status === "completed" && currentTask?.task_type === "decision") {
-      if (!decisionChoice) {
-        showToast("Decision choice is required before closing");
-        return;
-      }
-      await markSession(status, actualMinutes, decisionChoice);
-    } else {
-      await finish(status, actualMinutes, note);
-    }
     showToast(
-      status === "completed"
-        ? "Session complete"
-        : status === "partial"
-          ? "Partial progress saved"
-          : status === "skipped"
-            ? "Skipped — carried to review"
-            : "Stuck — logged for review",
+      result.status === "split"
+        ? result.resolution === "defer_failed"
+          ? "Session saved — deferral failed; move it from Review"
+          : "Session saved — deferral not yet confirmed"
+        : result.resolution === "cut_scope"
+          ? "Scope cut and session closed"
+          : status === "completed"
+            ? "Session complete"
+            : status === "partial"
+              ? "Partial progress saved"
+              : status === "skipped"
+                ? "Skipped — carried to review"
+                : "Stuck — logged for review",
     );
     navigate("review");
+    return result;
   }
 
   function toggleFocus() {

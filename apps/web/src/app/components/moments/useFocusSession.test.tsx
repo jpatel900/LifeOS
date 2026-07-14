@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import * as WorkflowContext from "@/lib/WorkflowContext";
 import { useFocusSession } from "./useFocusSession";
 
 /**
@@ -25,7 +26,36 @@ describe("useFocusSession", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
+  });
+
+  it("reset clears an expired cap session without issuing another workflow write", () => {
+    const startTaskSession = vi.fn();
+    const markSession = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(WorkflowContext, "useWorkflow").mockReturnValue({
+      startTaskSession,
+      markSession,
+    } as unknown as ReturnType<typeof WorkflowContext.useWorkflow>);
+    const { result } = renderHook(() => useFocusSession());
+
+    act(() => {
+      result.current.start("task-1", 1);
+      vi.advanceTimersByTime(60_000);
+    });
+    startTaskSession.mockClear();
+    markSession.mockClear();
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.activeTaskId).toBeNull();
+    expect(result.current.running).toBe(false);
+    expect(result.current.remaining).toBe(0);
+    expect(result.current.total).toBe(0);
+    expect(startTaskSession).not.toHaveBeenCalled();
+    expect(markSession).not.toHaveBeenCalled();
   });
 
   it("starts a session with the given minutes and ticks remaining down every second", () => {

@@ -56,6 +56,8 @@ export interface UseFocusSessionResult {
     actualMinutes?: number,
     notes?: string | null,
   ): Promise<void>;
+  /** Clears only local clock state after another orchestrator persisted closure. */
+  reset(): void;
   /** Adds `minutes` to both remaining and total without touching workflow state. */
   extend(minutes: number): void;
 }
@@ -179,6 +181,14 @@ export function useFocusSession(
     return result;
   }
 
+  function reset() {
+    setRunning(false);
+    setRemaining(0);
+    setTotal(0);
+    endsAtRef.current = null;
+    setActiveTaskId(null);
+  }
+
   function toggle() {
     if (running) {
       const actualMinutes = Math.max(0, Math.ceil((total - remaining) / 60));
@@ -209,6 +219,7 @@ export function useFocusSession(
     start,
     toggle,
     finish,
+    reset,
     extend,
   };
 }
