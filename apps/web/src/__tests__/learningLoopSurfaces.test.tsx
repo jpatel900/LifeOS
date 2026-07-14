@@ -193,3 +193,46 @@ describe("S9 golden-journey point 6b: override-pattern policy proposal", () => {
     expect(screen.queryByTestId("policy-proposals")).toBeNull();
   });
 });
+
+describe("#588: review headline never claims closure before Save resolves", () => {
+  // Verified finding: main showed "Day closed clean" on /review before Save
+  // was ever clicked. `saveReview` is fire-and-forget (WorkflowContext.tsx),
+  // so this screen has no way to know persistence has resolved — it must use
+  // readiness copy, never a completed verdict, regardless of clicks.
+  function renderReview(onSave = () => {}) {
+    render(
+      <ReviewView
+        vm={buildWorkflowCockpitViewModel(workflowSeed())}
+        policyProposals={[]}
+        onDecidePolicy={() => {}}
+        onCarryForward={() => {}}
+        onDefer={() => {}}
+        onDrop={() => {}}
+        onSave={onSave}
+      />,
+    );
+  }
+
+  it("shows readiness copy, not a completed verdict, before Save is clicked", () => {
+    renderReview();
+    expect(screen.getByTestId("review-headline")).toHaveTextContent(
+      "Ready to close",
+    );
+    expect(screen.queryByText("Day closed clean")).toBeNull();
+  });
+
+  it("still shows readiness copy immediately after clicking Save (no persistence result available yet)", () => {
+    const onSave = vi.fn();
+    renderReview(onSave);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save review" }));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    // The click only requests a save; this component receives no signal that
+    // persistence has resolved, so it must not flip to a closed verdict.
+    expect(screen.getByTestId("review-headline")).toHaveTextContent(
+      "Ready to close",
+    );
+    expect(screen.queryByText("Day closed clean")).toBeNull();
+  });
+});

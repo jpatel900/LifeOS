@@ -63,8 +63,16 @@ export function ReviewView({
               style={ringStyle(done, total, 86)}
             />
           </svg>
-          <h1 className="mt-4 text-4xl font-extrabold">
-            {carry === 0 ? "Day closed clean" : `${carry} carry over`}
+          {/* #588: this headline renders before Save has been clicked (Save
+              navigates the shell away on click, so a "closed" verdict here
+              would always be a lie about persistence that hasn't happened
+              yet). Readiness copy only — never claim the day is closed from
+              this screen. */}
+          <h1
+            className="mt-4 text-4xl font-extrabold"
+            data-testid="review-headline"
+          >
+            {carry === 0 ? "Ready to close" : `${carry} carry over`}
           </h1>
         </div>
         <button
