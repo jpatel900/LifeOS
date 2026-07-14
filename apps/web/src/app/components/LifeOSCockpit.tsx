@@ -1756,153 +1756,150 @@ function PlanView({
           </div>
           <div className="mt-4 grid gap-2">
             {vm.proposals.length ? (
-              vm.proposals.map(
-                ({ allDayContexts, proposal, task, hour }) => (
-                  <div
-                    key={proposal.id}
-                    className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-bold">{task.title}</p>
-                        <p
-                          data-testid="proposal-duration"
-                          className="mono mt-1 text-sm text-[var(--fnt)]"
-                        >
-                          {formatHour(hour)} · {proposalMinutes(proposal)}m ·{" "}
-                          {proposal.status}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={!task.first_tiny_step?.trim()}
-                          onClick={() =>
-                            task.first_tiny_step?.trim()
-                              ? onAcceptProposal(proposal.id)
-                              : undefined
-                          }
-                          className={cn(
-                            "min-h-9 rounded-full px-3 text-sm font-bold",
-                            task.first_tiny_step?.trim()
-                              ? "bg-[var(--acc)] text-[var(--on-acc)]"
-                              : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
-                          )}
-                        >
-                          Accept local
-                        </button>
-                      </div>
+              vm.proposals.map(({ allDayContexts, proposal, task, hour }) => (
+                <div
+                  key={proposal.id}
+                  className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold">{task.title}</p>
+                      <p
+                        data-testid="proposal-duration"
+                        className="mono mt-1 text-sm text-[var(--fnt)]"
+                      >
+                        {formatHour(hour)} · {proposalMinutes(proposal)}m ·{" "}
+                        {proposal.status}
+                      </p>
                     </div>
-                    {/* #580: the "already has a scheduled block / accepting
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={!task.first_tiny_step?.trim()}
+                        onClick={() =>
+                          task.first_tiny_step?.trim()
+                            ? onAcceptProposal(proposal.id)
+                            : undefined
+                        }
+                        className={cn(
+                          "min-h-9 rounded-full px-3 text-sm font-bold",
+                          task.first_tiny_step?.trim()
+                            ? "bg-[var(--acc)] text-[var(--on-acc)]"
+                            : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
+                        )}
+                      >
+                        Accept local
+                      </button>
+                    </div>
+                  </div>
+                  {/* #580: the "already has a scheduled block / accepting
                         adds another one" warning is gone — placement now
                         supersedes pending proposals atomically, so this state
                         is unreachable. */}
-                    {/* E1 (issue 456): sourced duration recalibration from this
+                  {/* E1 (issue 456): sourced duration recalibration from this
                         area's real actuals. Accepting APPLIES it — records the
                         decision (NS-INV-3), retimes this pending block to the
                         adjusted duration now, and stores a per-area profile so
                         future blocks in the area default to it (the card then
                         stops re-nagging). Keep keeps the original estimate. */}
-                    {(() => {
-                      const recal = recalibrationForProposal(
-                        proposal.area_id,
-                        estimate(task),
-                      );
-                      if (!recal || decidedRecalIds.has(proposal.id))
-                        return null;
-                      const decideInput = {
-                        proposalId: proposal.id,
-                        proposedStart: proposal.proposed_start,
-                        areaId: proposal.area_id,
-                        recalibration: recal,
-                      };
-                      return (
-                        <div
-                          data-testid="proposal-recalibration"
-                          className="mt-3 rounded-xl border border-[var(--ln)] bg-[var(--sf3)] px-3 py-2 text-sm"
-                        >
-                          <p className="font-semibold">{recal.label}</p>
-                          <p className="mono mt-1 text-[var(--fnt)]">
-                            Based on {recal.recalibration.sampleCount} completed
-                            sessions in this area.
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onDecideRecalibration(
-                                  proposal.id,
-                                  decideInput,
-                                  "accepted",
-                                )
-                              }
-                              className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
-                            >
-                              Use {recal.adjustedMinutes}m
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onDecideRecalibration(
-                                  proposal.id,
-                                  decideInput,
-                                  "dismissed",
-                                )
-                              }
-                              className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-bold text-[var(--fnt)]"
-                            >
-                              Keep {recal.estimateMinutes}m
-                            </button>
-                          </div>
+                  {(() => {
+                    const recal = recalibrationForProposal(
+                      proposal.area_id,
+                      estimate(task),
+                    );
+                    if (!recal || decidedRecalIds.has(proposal.id)) return null;
+                    const decideInput = {
+                      proposalId: proposal.id,
+                      proposedStart: proposal.proposed_start,
+                      areaId: proposal.area_id,
+                      recalibration: recal,
+                    };
+                    return (
+                      <div
+                        data-testid="proposal-recalibration"
+                        className="mt-3 rounded-xl border border-[var(--ln)] bg-[var(--sf3)] px-3 py-2 text-sm"
+                      >
+                        <p className="font-semibold">{recal.label}</p>
+                        <p className="mono mt-1 text-[var(--fnt)]">
+                          Based on {recal.recalibration.sampleCount} completed
+                          sessions in this area.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onDecideRecalibration(
+                                proposal.id,
+                                decideInput,
+                                "accepted",
+                              )
+                            }
+                            className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                          >
+                            Use {recal.adjustedMinutes}m
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onDecideRecalibration(
+                                proposal.id,
+                                decideInput,
+                                "dismissed",
+                              )
+                            }
+                            className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-bold text-[var(--fnt)]"
+                          >
+                            Keep {recal.estimateMinutes}m
+                          </button>
                         </div>
-                      );
-                    })()}
-                    {task.first_tiny_step?.trim() ? (
-                      <p className="mt-3 rounded-xl bg-[var(--acc-sf)] px-3 py-2 text-sm font-semibold text-[var(--acc2)]">
-                        First move: {task.first_tiny_step}
-                      </p>
-                    ) : (
-                      <div className="mt-3">
-                        <LaunchStepPrompt
-                          taskId={task.id}
-                          value={firstMoveDrafts[task.id] ?? ""}
-                          onChange={(value) =>
-                            setFirstMoveDrafts((current) => ({
-                              ...current,
-                              [task.id]: value,
-                            }))
-                          }
-                          onSave={() => saveFirstMove(task.id)}
-                        />
                       </div>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {allDayContexts.map((context) => (
-                        <span
-                          key={`${proposal.id}:${context.id}`}
-                          className="rounded-full border border-[var(--ln2)] bg-[var(--sf3)] px-3 py-2 text-sm font-semibold text-[var(--mut)]"
-                        >
-                          All-day: {context.summary}
-                        </span>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => onNudgeProposal(proposal.id)}
-                        className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-semibold text-[var(--ink)]"
-                      >
-                        Move later
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onRejectProposal(proposal.id)}
-                        className="min-h-9 rounded-full border border-[var(--ln2)] px-3 text-sm font-semibold text-[var(--mut)]"
-                      >
-                        Reject
-                      </button>
+                    );
+                  })()}
+                  {task.first_tiny_step?.trim() ? (
+                    <p className="mt-3 rounded-xl bg-[var(--acc-sf)] px-3 py-2 text-sm font-semibold text-[var(--acc2)]">
+                      First move: {task.first_tiny_step}
+                    </p>
+                  ) : (
+                    <div className="mt-3">
+                      <LaunchStepPrompt
+                        taskId={task.id}
+                        value={firstMoveDrafts[task.id] ?? ""}
+                        onChange={(value) =>
+                          setFirstMoveDrafts((current) => ({
+                            ...current,
+                            [task.id]: value,
+                          }))
+                        }
+                        onSave={() => saveFirstMove(task.id)}
+                      />
                     </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {allDayContexts.map((context) => (
+                      <span
+                        key={`${proposal.id}:${context.id}`}
+                        className="rounded-full border border-[var(--ln2)] bg-[var(--sf3)] px-3 py-2 text-sm font-semibold text-[var(--mut)]"
+                      >
+                        All-day: {context.summary}
+                      </span>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => onNudgeProposal(proposal.id)}
+                      className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-semibold text-[var(--ink)]"
+                    >
+                      Move later
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRejectProposal(proposal.id)}
+                      className="min-h-9 rounded-full border border-[var(--ln2)] px-3 text-sm font-semibold text-[var(--mut)]"
+                    >
+                      Reject
+                    </button>
                   </div>
-                ),
-              )
+                </div>
+              ))
             ) : (
               <p className="text-[var(--mut)]">
                 {vm.today.length > 1

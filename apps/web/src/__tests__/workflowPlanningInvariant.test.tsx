@@ -26,12 +26,8 @@ const PENDING = ["proposed", "edited"];
  * every step, so no surface can recreate the split.
  */
 function PlanningInvariantProbe() {
-  const {
-    state,
-    planTaskAtHour,
-    acceptLocalProposal,
-    editLocalProposal,
-  } = useWorkflow();
+  const { state, planTaskAtHour, acceptLocalProposal, editLocalProposal } =
+    useWorkflow();
 
   const violations = state.tasks.filter(
     (task) =>
@@ -46,9 +42,8 @@ function PlanningInvariantProbe() {
       ),
   );
   const taskId =
-    state.tasks.find((task) =>
-      ["active", "scheduled"].includes(task.status),
-    )?.id ?? null;
+    state.tasks.find((task) => ["active", "scheduled"].includes(task.status))
+      ?.id ?? null;
   const pendingForTask = state.timeBlockProposals.filter(
     (proposal) =>
       proposal.task_id === taskId && PENDING.includes(proposal.status),

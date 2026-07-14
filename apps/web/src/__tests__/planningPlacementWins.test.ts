@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   acceptProposal,
   applyGoogleCalendarWriteResult,
-  createLocalProposalFromTask,
   planTaskAtHour,
   updateProposal,
-  type WorkflowState,
 } from "@/lib/workflow";
 import {
-  acceptLatestDraft,
-  captureWorkflow,
-  workflowSeed,
+  activeTaskFor as activeTask,
+  pendingProposalsFor,
+  scheduledBlocksFor,
+  seedTaskWithTwoPendingProposals as seedTaskWithPendingProposals,
+  supersededProposalsFor,
 } from "./helpers/workflowReachability";
 
 /**
@@ -23,49 +23,6 @@ import {
  * deleted; (2) accepting a proposal IS placement — one code path, identical
  * end state.
  */
-
-const PENDING = ["proposed", "edited"];
-
-function activeTask(state: WorkflowState) {
-  const task = state.tasks.find((item) => item.status === "active");
-  if (!task) throw new Error("No active task in fixture.");
-  return task;
-}
-
-function pendingProposalsFor(state: WorkflowState, taskId: string) {
-  return state.timeBlockProposals.filter(
-    (item) => item.task_id === taskId && PENDING.includes(item.status),
-  );
-}
-
-function supersededProposalsFor(state: WorkflowState, taskId: string) {
-  return state.timeBlockProposals.filter(
-    (item) => item.task_id === taskId && item.status === "superseded",
-  );
-}
-
-function scheduledBlocksFor(state: WorkflowState, taskId: string) {
-  return state.calendarBlocks.filter(
-    (block) => block.task_id === taskId && block.status === "scheduled",
-  );
-}
-
-function seedTaskWithPendingProposals(): WorkflowState {
-  let state = workflowSeed();
-  state = captureWorkflow(state, "Placement wins proof task.");
-  // acceptLatestDraft folds in the parse-created proposal draft as a pending
-  // proposal — the audit's exact "parsing auto-creates a proposal" shape.
-  state = acceptLatestDraft(state);
-  const task = activeTask(state);
-  const start = new Date();
-  start.setHours(14, 0, 0, 0);
-  const end = new Date(start.getTime() + 45 * 60 * 1000);
-  return createLocalProposalFromTask(state, task.id, {
-    proposed_start: start.toISOString(),
-    proposed_end: end.toISOString(),
-    rationale: "Second pending suggestion for the same task.",
-  });
-}
 
 describe("#580 placement supersedes pending proposals", () => {
   it("direct placement marks ALL pending proposals for the task superseded in the same transition", () => {
@@ -87,9 +44,9 @@ describe("#580 placement supersedes pending proposals", () => {
     );
     expect(placed.timeBlockProposals).toHaveLength(totalProposalsBefore + 1);
     // Task moved to scheduled through the placement path.
-    expect(
-      placed.tasks.find((item) => item.id === task.id)?.status,
-    ).toBe("scheduled");
+    expect(placed.tasks.find((item) => item.id === task.id)?.status).toBe(
+      "scheduled",
+    );
   });
 
   it("accepting a proposal supersedes the task's other pending proposals in the same transition", () => {
@@ -104,8 +61,7 @@ describe("#580 placement supersedes pending proposals", () => {
     expect(scheduledBlocksFor(placed, task.id)).toHaveLength(1);
     expect(pendingProposalsFor(placed, task.id)).toHaveLength(0);
     expect(
-      placed.timeBlockProposals.find((item) => item.id === accepted.id)
-        ?.status,
+      placed.timeBlockProposals.find((item) => item.id === accepted.id)?.status,
     ).toBe("accepted");
     for (const sibling of siblings) {
       expect(
@@ -154,9 +110,9 @@ describe("#580 accept = place (one code path)", () => {
     expect(block.proposal_id).toBe(proposal.id);
     // Same terminal shape as a direct placement: scheduled task, one block,
     // zero active proposals.
-    expect(
-      viaAccept.tasks.find((item) => item.id === task.id)?.status,
-    ).toBe("scheduled");
+    expect(viaAccept.tasks.find((item) => item.id === task.id)?.status).toBe(
+      "scheduled",
+    );
     expect(pendingProposalsFor(viaAccept, task.id)).toHaveLength(0);
   });
 

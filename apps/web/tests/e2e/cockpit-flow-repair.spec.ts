@@ -268,9 +268,7 @@ test("placing a task supersedes its parse-created proposal — one block, zero a
   ).toBeVisible();
 
   // The dual-model warning copy is dead.
-  await expect(
-    page.getByText(/already has a scheduled block/i),
-  ).toHaveCount(0);
+  await expect(page.getByText(/already has a scheduled block/i)).toHaveCount(0);
   await expect(page.getByText(/Accepting adds/i)).toHaveCount(0);
 });
 
