@@ -42,7 +42,9 @@ export interface Phase2MockExecutionSession {
     | "missed"
     | "distracted"
     | "stuck"
-    | "stopped";
+    | "stopped"
+    | "partial"
+    | "skipped";
   outcome:
     | "completed"
     | "partial"

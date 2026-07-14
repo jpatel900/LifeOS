@@ -80,7 +80,10 @@ function vmWithTask(task: Phase2MockTask) {
   } as unknown as ReturnType<typeof buildCockpitViewModel>;
 }
 
-function renderExecuteView(task: Phase2MockTask, onFinish = vi.fn()) {
+function renderExecuteView(
+  task: Phase2MockTask,
+  onFinish = vi.fn().mockResolvedValue(undefined),
+) {
   render(
     <ExecuteView
       vm={vmWithTask(task)}
@@ -94,6 +97,7 @@ function renderExecuteView(task: Phase2MockTask, onFinish = vi.fn()) {
       onPlan={vi.fn()}
       onCapture={vi.fn()}
       onSideCapture={vi.fn()}
+      onUpdateFirstTinyStep={vi.fn()}
     />,
   );
   return onFinish;
@@ -126,7 +130,7 @@ describe("ExecuteView cut-scope cap moment (FR-031 slice 7)", () => {
     expect(screen.getByText(/Time cap reached/)).toBeInTheDocument();
   });
 
-  it("tapping a candidate appends its title to the note and Complete forwards it to onFinish", () => {
+  it("tapping a candidate appends its title to the note and Save forwards it to onFinish", async () => {
     const onFinish = renderExecuteView(approvedMapTask);
 
     fireEvent.click(screen.getByTestId("cut-scope-candidate-opt-1"));
@@ -139,19 +143,25 @@ describe("ExecuteView cut-scope cap moment (FR-031 slice 7)", () => {
       "Cut note: Add localized subject lines; A/B test the send time",
     );
 
-    fireEvent.click(screen.getByText("Complete"));
+    // #572: "Complete" is now reached via the end sheet ("End session" ->
+    // outcome "Done" (preselected) -> Save), not an instant button.
+    fireEvent.click(screen.getByTestId("cockpit-end-session"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
 
     expect(onFinish).toHaveBeenCalledWith(
       "completed",
+      25,
+      null,
       "Add localized subject lines; A/B test the send time",
     );
   });
 
-  it("Complete forwards an empty note when nothing was tapped -- cap flow behaves as before", () => {
+  it("Save forwards an empty cut-scope draft when nothing was tapped -- cap flow behaves as before", () => {
     const onFinish = renderExecuteView(approvedMapTask);
 
-    fireEvent.click(screen.getByText("Complete"));
+    fireEvent.click(screen.getByTestId("cockpit-end-session"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
 
-    expect(onFinish).toHaveBeenCalledWith("completed", "");
+    expect(onFinish).toHaveBeenCalledWith("completed", 25, null, "");
   });
 });

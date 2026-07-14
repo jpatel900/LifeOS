@@ -40,6 +40,7 @@ import { buildPipelineCounts } from "./pipelineCounts";
 import type { TaskMapDraftUiState } from "./TaskMapSection";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
+import { EndSessionSheet, type EndSessionOutcome } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 
 /**
@@ -184,6 +185,7 @@ export function TodayMoments({
     retryCaptureParseWithMock,
     startTaskSession,
     markSession,
+    updateTaskFirstTinyStep,
     carryForwardTask,
     saveReview,
     confirmWin,
@@ -819,15 +821,51 @@ export function TodayMoments({
     [startTaskSession],
   );
 
+  // #572 (execute/review contract): ending a session no longer closes it
+  // instantly. "Done" opens the end sheet (outcome, actual duration,
+  // optional note) — the verdict/toast copy below only fires once
+  // `handleEndSessionSave` has awaited the save.
+  const [endSessionOpen, setEndSessionOpen] = useState(false);
+
   const finishFocus = useCallback(() => {
-    const elapsedMinutes =
-      session.total > 0
-        ? Math.round((session.total - session.remaining) / 60)
-        : 0;
-    markSession("completed", elapsedMinutes);
-    setSession({ activeTaskId: null, running: false, remaining: 0, total: 0 });
-    showToast("Focus session logged");
-  }, [markSession, session.remaining, session.total, showToast]);
+    if (session.activeTaskId === null && session.total === 0) return;
+    setEndSessionOpen(true);
+  }, [session.activeTaskId, session.total]);
+
+  const endSessionElapsedMinutes =
+    session.total > 0
+      ? Math.round((session.total - session.remaining) / 60)
+      : 0;
+
+  const handleEndSessionSave = useCallback(
+    async (
+      outcome: EndSessionOutcome,
+      actualMinutes: number,
+      note: string | null,
+    ) => {
+      // State truth (#551/#563): await the save before resetting the
+      // session/closing the sheet, so no verdict copy claims a save that
+      // hasn't resolved yet.
+      await markSession(outcome, actualMinutes, note);
+      setSession({
+        activeTaskId: null,
+        running: false,
+        remaining: 0,
+        total: 0,
+      });
+      setEndSessionOpen(false);
+      showToast(
+        outcome === "completed"
+          ? "Session complete"
+          : outcome === "partial"
+            ? "Partial progress saved"
+            : outcome === "skipped"
+              ? "Skipped — carried to review"
+              : "Stuck — logged for review",
+      );
+    },
+    [markSession, showToast],
+  );
 
   const pauseFocus = useCallback(() => {
     setSession((current) => ({ ...current, running: !current.running }));
@@ -1226,6 +1264,11 @@ export function TodayMoments({
               onDismissTaskMapDraft={dismissTaskMapDraft}
               onApproveTaskMapDraft={handleApproveTaskMapDraft}
               onToggleTaskMapNodeCompletion={handleToggleTaskMapNodeCompletion}
+              firstTinyStep={focusedTask?.first_tiny_step ?? null}
+              onUpdateFirstTinyStep={(value) => {
+                if (!focusedTask) return;
+                updateTaskFirstTinyStep(focusedTask.id, value);
+              }}
             />
           ) : null}
 
@@ -1313,6 +1356,16 @@ export function TodayMoments({
         blocks={startVM.blocks}
         timeDisplay={timeDisplay}
         now={now}
+      />
+
+      <EndSessionSheet
+        open={endSessionOpen}
+        taskTitle={
+          focusedTask?.title ?? flowVM.currentBlock?.title ?? "Focus session"
+        }
+        elapsedMinutes={endSessionElapsedMinutes}
+        onCancel={() => setEndSessionOpen(false)}
+        onSave={handleEndSessionSave}
       />
 
       <div

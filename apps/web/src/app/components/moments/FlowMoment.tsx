@@ -2,6 +2,7 @@
 
 import { CurrentBlockHero } from "./CurrentBlockHero";
 import { DriftRecoveryCard } from "./DriftRecoveryCard";
+import { FirstTinyStepCard } from "./FirstTinyStepCard";
 import {
   TaskMapSection,
   type TaskMapDraftUiState,
@@ -50,6 +51,9 @@ export interface FlowMomentProps {
   onDismissTaskMapDraft(): void;
   onApproveTaskMapDraft(graph: TaskMapGraph & { schema_version: "1.0" }): void;
   onToggleTaskMapNodeCompletion(nodeId: string): void;
+  /** #572: the active task's committed opening move, or null when unset. */
+  firstTinyStep: string | null;
+  onUpdateFirstTinyStep(value: string): void;
 }
 
 export function FlowMoment({
@@ -70,6 +74,8 @@ export function FlowMoment({
   onDismissTaskMapDraft,
   onApproveTaskMapDraft,
   onToggleTaskMapNodeCompletion,
+  firstTinyStep,
+  onUpdateFirstTinyStep,
 }: FlowMomentProps) {
   const hasActiveSession = session.activeTaskId !== null || session.total > 0;
 
@@ -104,6 +110,13 @@ export function FlowMoment({
           No block running — start your first move from Start.
         </p>
       )}
+
+      {hasActiveSession ? (
+        <FirstTinyStepCard
+          value={firstTinyStep}
+          onSave={onUpdateFirstTinyStep}
+        />
+      ) : null}
 
       {vm.drift ? (
         <DriftRecoveryCard
