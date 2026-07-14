@@ -34,6 +34,28 @@ describe("LoginPage", () => {
     mocks.signInWithPassword.mockResolvedValue({ error: null });
   });
 
+  // #581 login-copy cleanup: no more "Local Supabase Login" / "test saved
+  // account flows" framing — the page reads as the product's sign-in.
+  it("presents calm product copy, not test-harness framing", () => {
+    render(<LoginPage />);
+
+    expect(
+      screen.getByRole("heading", { name: "Sign in" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Local Supabase Login")).toBeNull();
+    expect(screen.queryByText(/test saved account flows/i)).toBeNull();
+  });
+
+  // #581: the dev credential prefill stays behind the NODE_ENV production
+  // guard — under vitest (non-production) the fields keep the local test
+  // account, which the submit tests below rely on.
+  it("prefills the local dev credentials outside production", () => {
+    render(<LoginPage />);
+
+    expect(screen.getByLabelText("Email")).toHaveValue("user_a@example.test");
+    expect(screen.getByLabelText("Password")).toHaveValue("password123");
+  });
+
   it("shows the config error when the browser client is unavailable", async () => {
     mocks.createSupabaseBrowserClient.mockReturnValue(null);
 

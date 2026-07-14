@@ -38,6 +38,9 @@ import { requestRollupProse } from "@/lib/ai/rollupProseClient";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
+import { useOnboardingRitual } from "./useOnboardingRitual";
+import { OnboardingRitual } from "./OnboardingRitual";
+import { readDayShapePreferences } from "@/lib/onboarding/onboarding";
 import { buildProgressionNodes } from "./progressionNodes";
 import { buildPipelineCounts } from "./pipelineCounts";
 import type { TaskMapDraftUiState } from "./TaskMapSection";
@@ -182,6 +185,7 @@ export function TodayMoments({
     state,
     selectedAreaId,
     setSelectedAreaId,
+    syncPersistedAreas,
     submitCaptureText,
     submitCaptureRaw,
     captureParse,
@@ -205,9 +209,17 @@ export function TodayMoments({
     toggleTaskMapNodeCompletion,
   } = useWorkflow();
 
+  // #581: the onboarding ritual owns the screen ahead of everything else on
+  // a zero-state (or Settings-rerun) session. The re-entry ritual is
+  // disabled while onboarding is eligible/active — a brand-new account has
+  // nothing to be welcomed back to.
+  const onboarding = useOnboardingRitual({ state });
+  const onboardingActive = onboarding.active;
+
   const ritual = useReEntryRitual({
     state,
     now,
+    enabled: !onboardingActive && !onboarding.pending,
     refreshPersistedWorkflow,
   });
   const ritualActive =
@@ -243,6 +255,14 @@ export function TodayMoments({
   );
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // #581 (onboarding step 2): the day-shape preference, when the user has
+  // saved one, feeds the default focus-session length used whenever a move
+  // has no estimate of its own. No saved preference -> the pre-existing
+  // 25-minute default, unchanged. Read once at mount (localStorage).
+  const [fallbackFocusMinutes] = useState(
+    () => readDayShapePreferences()?.sessionMinutes ?? DEFAULT_FOCUS_MINUTES,
+  );
 
   // Interim local session state — replaced by useFocusSession when packet
   // P0 extracts it from LifeOSCockpit.
@@ -325,13 +345,20 @@ export function TodayMoments({
     if (!deepLink) return;
     if (deepLinkAppliedRef.current) return;
     if (ritualActive || ritual.pending) return;
+    if (onboardingActive || onboarding.pending) return;
 
     deepLinkAppliedRef.current = true;
     if (deepLink.moment) setMoment(deepLink.moment);
     if (deepLink.overlay === "capture") setCaptureOpen(true);
     if (deepLink.overlay === "palette") setPaletteOpen(true);
     if (deepLink.sheet) setActiveSheet(deepLink.sheet);
-  }, [deepLink, ritualActive, ritual.pending]);
+  }, [
+    deepLink,
+    ritualActive,
+    ritual.pending,
+    onboardingActive,
+    onboarding.pending,
+  ]);
 
   // FR-027 (F-G1b) share target: text shared into the installed PWA lands on
   // the moments home as ?shared_text=. Open the capture overlay prefilled with
@@ -341,6 +368,7 @@ export function TodayMoments({
   useEffect(() => {
     if (sharedTextAppliedRef.current) return;
     if (ritualActive || ritual.pending) return;
+    if (onboardingActive || onboarding.pending) return;
     if (typeof window === "undefined") return;
 
     const params = new URLSearchParams(window.location.search);
@@ -359,7 +387,7 @@ export function TodayMoments({
       "",
       `${window.location.pathname}${query ? `?${query}` : ""}`,
     );
-  }, [ritualActive, ritual.pending]);
+  }, [ritualActive, ritual.pending, onboardingActive, onboarding.pending]);
 
   useEffect(() => {
     if (!session.running) return undefined;
@@ -884,10 +912,10 @@ export function TodayMoments({
 
   const handleStartMove = useCallback(
     (move: FirstMoveVM) => {
-      startFocus(move.taskId, move.estMinutes || DEFAULT_FOCUS_MINUTES);
+      startFocus(move.taskId, move.estMinutes || fallbackFocusMinutes);
       setMoment("flow");
     },
-    [startFocus],
+    [startFocus, fallbackFocusMinutes],
   );
 
   const handleReclaimDrift = useCallback(() => {
@@ -899,7 +927,7 @@ export function TodayMoments({
     } else if (startVM.firstMove) {
       startFocus(
         startVM.firstMove.taskId,
-        startVM.firstMove.estMinutes || DEFAULT_FOCUS_MINUTES,
+        startVM.firstMove.estMinutes || fallbackFocusMinutes,
       );
     }
     showToast("Block reclaimed");
@@ -910,6 +938,7 @@ export function TodayMoments({
     pauseFocus,
     startVM.firstMove,
     startFocus,
+    fallbackFocusMinutes,
     showToast,
   ]);
 
@@ -1051,7 +1080,12 @@ export function TodayMoments({
     onPalette: () => setPaletteOpen(true),
     onPrimary: runPrimary,
     onEscape: closeTopOverlay,
-    enabled: !captureOpen && !paletteOpen && !activeSheet && !ritualActive,
+    enabled:
+      !captureOpen &&
+      !paletteOpen &&
+      !activeSheet &&
+      !ritualActive &&
+      !onboardingActive,
   });
 
   const paletteActions = useMemo<CommandPaletteAction[]>(() => {
@@ -1172,7 +1206,32 @@ export function TodayMoments({
 
   return (
     <div className="grid gap-6" data-testid="today-moments">
-      {ritualActive && ritual.summary && ritual.plan ? (
+      {onboardingActive ? (
+        // #581: the onboarding ritual stands in for the moments content the
+        // same way the re-entry ritual does; completing (or skipping) it
+        // unmounts onto the Start moment, where the #551 state-truth
+        // surfaces show whatever was just captured.
+        <OnboardingRitual
+          captureParse={captureParse}
+          onSubmitParse={(text, hook) =>
+            submitCaptureText(text, selectedAreaId, hook)
+          }
+          onSubmitRaw={(text, hook) =>
+            submitCaptureRaw(text, selectedAreaId, hook)
+          }
+          onRetryWithMock={retryCaptureParseWithMock}
+          onAreasPersisted={syncPersistedAreas}
+          onComplete={(outcome) => {
+            onboarding.complete();
+            setMoment("start");
+            showToast(
+              outcome === "captured"
+                ? "Captured — you're set up"
+                : "You're set up",
+            );
+          }}
+        />
+      ) : ritualActive && ritual.summary && ritual.plan ? (
         <ReEntryRitual
           summary={ritual.summary}
           plan={ritual.plan}

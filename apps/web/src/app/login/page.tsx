@@ -20,10 +20,20 @@ type LoginState =
   | { status: "submitting" }
   | { status: "error"; message: string };
 
+// #581 (audit "first-use experience"): the local test credentials prefill
+// only outside production — the same NODE_ENV production guard the Google
+// OAuth config uses (lib/googleCalendar/oauth.ts). A real deployment gets
+// empty fields; local dev and tests keep the one-click sign-in.
+const DEV_CREDENTIAL_PREFILL = process.env.NODE_ENV !== "production";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("user_a@example.test");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState(
+    DEV_CREDENTIAL_PREFILL ? "user_a@example.test" : "",
+  );
+  const [password, setPassword] = useState(
+    DEV_CREDENTIAL_PREFILL ? "password123" : "",
+  );
   const [state, setState] = useState<LoginState>({ status: "idle" });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,12 +68,13 @@ export default function LoginPage() {
     <main className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-md items-center">
       <Card className="workflow-primary-card workflow-flagship-card w-full">
         <CardHeader className="space-y-3">
-          <p className="workflow-surface-kicker">Persisted paths</p>
+          <p className="workflow-surface-kicker">Welcome</p>
           <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
-            Local Supabase Login
+            Sign in
           </CardTitle>
           <CardDescription className="workflow-surface-body text-sm">
-            Sign in to test saved account flows instead of local-only mode.
+            Sign in to keep your areas and captures saved to your account and in
+            sync wherever you use LifeOS.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
