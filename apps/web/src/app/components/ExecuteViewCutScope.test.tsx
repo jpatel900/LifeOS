@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExecuteView } from "./LifeOSCockpit";
 import type { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import type { Phase2MockCalendarBlock, Phase2MockTask } from "@/lib/types";
+import type { EndSessionResult } from "./moments/endSessionPolicy";
 
 /**
  * FR-031 slice 7 wiring test.
@@ -82,7 +83,9 @@ function vmWithTask(task: Phase2MockTask) {
 
 function renderExecuteView(
   task: Phase2MockTask,
-  onFinish = vi.fn().mockResolvedValue(undefined),
+  onFinish = vi
+    .fn()
+    .mockResolvedValue({ status: "closed", resolution: "ordinary" }),
 ) {
   render(
     <ExecuteView
@@ -164,4 +167,40 @@ describe("ExecuteView cut-scope cap moment (FR-031 slice 7)", () => {
 
     expect(onFinish).toHaveBeenCalledWith("completed", 25, null, "");
   });
+
+  it("keeps the sheet and its draft open when orchestration aborts", async () => {
+    const onFinish = vi
+      .fn<() => Promise<EndSessionResult>>()
+      .mockResolvedValue({ status: "aborted", reason: "invalid_cap_choice" });
+    renderExecuteView(approvedMapTask, onFinish);
+
+    fireEvent.click(screen.getByTestId("cockpit-end-session"));
+    fireEvent.change(screen.getByTestId("end-session-note"), {
+      target: { value: "Keep this draft" },
+    });
+    fireEvent.click(screen.getByTestId("end-session-save"));
+
+    expect(await screen.findByTestId("end-session-sheet")).toBeInTheDocument();
+    expect(screen.getByTestId("end-session-note")).toHaveValue(
+      "Keep this draft",
+    );
+    expect(onFinish).toHaveBeenCalledOnce();
+  });
+
+  it.each(["defer_unconfirmed", "defer_failed"] as const)(
+    "closes the sheet after the session write settles with split result %s",
+    async (resolution) => {
+      const onFinish = vi
+        .fn<() => Promise<EndSessionResult>>()
+        .mockResolvedValue({ status: "split", resolution });
+      renderExecuteView(approvedMapTask, onFinish);
+
+      fireEvent.click(screen.getByTestId("cockpit-end-session"));
+      fireEvent.click(screen.getByTestId("end-session-save"));
+
+      await screen.findByText("Focus queue");
+      expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+      expect(onFinish).toHaveBeenCalledOnce();
+    },
+  );
 });
