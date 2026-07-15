@@ -238,4 +238,37 @@ describe("AreaSelector", () => {
     expect(trigger).toHaveClass("px-2.5");
     expect(trigger.className).not.toMatch(/\bpx-3\b/);
   });
+
+  // R3-C (#483 round 3): a padding trim alone wasn't enough — an initial
+  // fix (measured only against the demo's shortest area name, "Main Job")
+  // still wrapped the masthead to 2 rows for real, longer area names
+  // ("Volunteer Work", "Side Project" — both in this same demo data).
+  // The label's original `max-w-[9rem]` (144px) was too generous to ever
+  // engage truncation for realistic names, so the AreaSelector's rendered
+  // width scaled with the selected area's name length with no hard ceiling.
+  // Fixed with a real bound: `max-w-[5rem]` (80px, empirically verified
+  // in-browser to keep the masthead single-row for every demo area,
+  // including the two long ones, with margin to spare) plus `min-w-0` —
+  // required because a `truncate` span nested inside an `inline-flex`
+  // button won't actually shrink below its own content's intrinsic width
+  // without it (the classic flexbox `min-width: auto` trap; `max-w` alone
+  // is silently ignored in that position). Regression: both classes must
+  // stay together, and the cap must not silently widen back past 80px —
+  // otherwise a long real area name reopens the wrap this packet exists to
+  // close, not just the short demo default.
+  it("the label span is capped at max-w-[5rem] with min-w-0, so long area names truncate instead of growing the trigger unbounded (round-3 regression)", () => {
+    render(
+      <AreaSelector
+        areas={[{ id: "area-1", name: "Volunteer Work", color: "#6d8bff" }]}
+        value="area-1"
+        onChange={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByTestId("today-moments-area-switcher");
+    const label = trigger.querySelector("span:not([aria-hidden])")!;
+    expect(label).toHaveClass("max-w-[5rem]");
+    expect(label).toHaveClass("min-w-0");
+    expect(label).toHaveClass("truncate");
+    expect(label.className).not.toMatch(/\bmax-w-\[9rem\]\b/);
+  });
 });

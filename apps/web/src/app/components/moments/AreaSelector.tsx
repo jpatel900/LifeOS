@@ -262,7 +262,7 @@ export function AreaSelector({
             style={NEUTRAL_SWATCH_STYLE}
           />
         )}
-        <span className="max-w-[9rem] truncate">{selected.name}</span>
+        <span className="min-w-0 max-w-[5rem] truncate">{selected.name}</span>
         <kbd className={kbdHintClass()}>{momentKeyLabel("cycle-area")}</kbd>
       </button>
 

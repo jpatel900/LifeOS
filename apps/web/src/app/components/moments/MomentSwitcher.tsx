@@ -73,7 +73,12 @@ export function MomentSwitcher({
             onClick={() => onChange(tab.value)}
             className={cn(
               HIT_TARGET_ROW,
-              "group flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
+              // R3-C (#483 round 3): px-3 -> px-2.5 is a small share of the
+              // masthead's Inter-reflow claw-back — see TodayMoments.tsx's
+              // header comment. MomentSwitcher stays the visually dominant
+              // control (only accent fill, still the widest by a wide
+              // margin) — this is a padding harmonization, not a demotion.
+              "group flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm font-semibold outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
               selected
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",
