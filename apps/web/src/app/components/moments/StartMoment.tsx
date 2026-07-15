@@ -97,6 +97,39 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * it was bare text with no boundary), so the bottom of the page reads as
  * two card-terminated columns instead of one column trailing into empty
  * canvas.
+ *
+ * R2-B (premium push #483, round 2) — two fixes an adversarial critic found
+ * in D-8/D-2's own hero:
+ *   1. Duplicated empty-state copy: D-8's empty-state card (state 3 above)
+ *      restated `vm.daySynthesis` verbatim across its eyebrow/title/body —
+ *      the same two facts ("nothing queued", "capture something") said
+ *      four times in ~300px. `buildDaySynthesis` (start.ts) now states the
+ *      fact once, plainly, with no capture call-to-action; this card now
+ *      spends its eyebrow/title/body entirely on the single action
+ *      ("Quick capture" / "Capture a thought" / the `C` shortcut) instead
+ *      of re-describing the empty state. States 1 and 2
+ *      above (a real first move, or a promoted pending-triage item) were
+ *      already fine and are untouched.
+ *   2. Inverted type hierarchy: `.moments-greeting` (the page's own h1) was
+ *      a fixed 1.875rem with no clamp, while nested card titles
+ *      (`.workflow-surface-title`, shared by FirstMoveCard and this file's
+ *      other flagship cards) scale via `clamp(1.5rem, 1.1rem + 1vw, 2.4rem)`
+ *      — so the card title out-sized the page h1 above ~1240px (28% larger
+ *      by 2560px). `.moments-greeting` now scales too
+ *      (`clamp(2rem, 1.5rem + 1vw, 3rem)`, weight 700) — the same 1vw slope
+ *      as `.workflow-surface-title` plus a fixed offset, so the h1 leads by
+ *      a constant, growing margin across the full 412–2560px range instead
+ *      of crossing over. `.workflow-surface-title` itself is untouched
+ *      (shared by CurrentBlockHero/DriftRecoveryCard/FirstMoveCard/
+ *      PipelineOverview/StartMoment — out of blast-radius budget here).
+ *      Folded in: "Today's focus"/"Today's schedule" section labels moved
+ *      from `.moments-label` to `.workflow-page-eyebrow` — the same class
+ *      already used by every card eyebrow in this column (First move,
+ *      Decide this next, Quick capture, Yesterday) — so the main column
+ *      reads as one eyebrow system instead of two with 3x different
+ *      tracking and different greys. `.moments-label` itself is untouched
+ *      (SideRail's "Waiting on"/"Areas" headings still use it — SideRail.tsx
+ *      is another agent's file this round).
  */
 
 export interface StartMomentProps {
@@ -231,16 +264,16 @@ export function StartMoment({
               data-testid="start-moment-empty"
             >
               <CardContent className="grid gap-3 p-5 sm:p-6">
-                <p className="workflow-page-eyebrow m-0">Nothing queued</p>
+                <p className="workflow-page-eyebrow m-0">Quick capture</p>
                 <h2 className="workflow-surface-title moments-card-title">
-                  Capture something to get moving
+                  Capture a thought
                 </h2>
                 <p className="workflow-surface-body text-sm text-muted-foreground">
-                  Nothing queued — capture something with{" "}
+                  Press{" "}
                   <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
                     C
-                  </kbd>
-                  .
+                  </kbd>{" "}
+                  to open capture.
                 </p>
               </CardContent>
             </Card>
@@ -249,7 +282,7 @@ export function StartMoment({
           {vm.focusItems.length > 1 || vm.deferredItems.length > 0 ? (
             <section className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="moments-label text-sm font-semibold text-muted-foreground">
+                <h2 className="workflow-page-eyebrow m-0">
                   Today&apos;s focus
                 </h2>
                 <span
@@ -326,7 +359,7 @@ export function StartMoment({
             data-testid="start-schedule-card"
           >
             <CardContent className="grid gap-3 p-4 sm:p-5">
-              <h2 className="moments-label text-sm font-semibold text-muted-foreground">
+              <h2 className="workflow-page-eyebrow m-0">
                 Today&apos;s schedule
               </h2>
               <ScheduleList

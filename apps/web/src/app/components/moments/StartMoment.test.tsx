@@ -20,8 +20,7 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     recoveryNudge: null,
     topPendingTriageItem: null,
     greeting: "Good morning.",
-    daySynthesis:
-      "Nothing on the calendar and nothing queued — capture something to get moving.",
+    daySynthesis: "Nothing on the calendar, and nothing queued yet.",
     ...overrides,
   };
 }
@@ -802,6 +801,101 @@ describe("StartMoment — D-8 hero composition (#483)", () => {
     const card = screen.getByTestId("start-pending-triage-card");
     expect(card.className).toContain("workflow-flagship-card");
     expect(card.className).toContain("moments-card--emphasis");
+  });
+});
+
+describe("StartMoment — R2-B empty-state copy is not a restatement of the day-synthesis line (#483 round 2)", () => {
+  it("the empty-state hero card's copy does not echo vm.daySynthesis", () => {
+    const daySynthesis = "Nothing on the calendar, and nothing queued yet.";
+    const vm = baseVM({ daySynthesis });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const synthesisLine = screen.getByTestId("start-day-synthesis");
+    expect(synthesisLine).toHaveTextContent(daySynthesis);
+
+    const card = screen.getByTestId("start-moment-empty");
+    // The card must not restate the sentence that already ran above it —
+    // neither the whole sentence nor its constituent facts ("nothing
+    // queued", "nothing on the calendar").
+    expect(card.textContent).not.toContain(daySynthesis);
+    expect(card.textContent?.toLowerCase()).not.toContain("nothing queued");
+    expect(card.textContent?.toLowerCase()).not.toContain(
+      "nothing on the calendar",
+    );
+  });
+
+  it("the empty-state hero card spends its content on the single capture action, not a fact restatement", () => {
+    const vm = baseVM();
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const card = screen.getByTestId("start-moment-empty");
+    expect(card).toHaveTextContent("Quick capture");
+    expect(card).toHaveTextContent("Capture a thought");
+    expect(card).toHaveTextContent("C");
+  });
+});
+
+describe("StartMoment — R2-B eyebrow system unification (#483 round 2)", () => {
+  it("'Today's focus' and 'Today's schedule' use the same eyebrow class as the card eyebrows in this column, not the separate moments-label system", () => {
+    const first = {
+      title: "Write report",
+      why: "Oldest active commitment",
+      areaLabel: "Work",
+      estMinutes: 25,
+      taskId: "t1",
+    };
+    const deferred = {
+      title: "Second task",
+      why: "Next up",
+      areaLabel: "Work",
+      estMinutes: 15,
+      taskId: "t2",
+    };
+    const vm = baseVM({
+      firstMove: first,
+      focusItems: [first],
+      deferredItems: [deferred],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const focusHeading = screen.getByText("Today's focus");
+    const scheduleHeading = screen.getByText("Today's schedule");
+    const cardEyebrow = screen.getByTestId("first-move-card").querySelector(
+      ".workflow-page-eyebrow",
+    );
+
+    expect(cardEyebrow).not.toBeNull();
+    expect(focusHeading.className).toContain("workflow-page-eyebrow");
+    expect(focusHeading.className).not.toContain("moments-label");
+    expect(scheduleHeading.className).toContain("workflow-page-eyebrow");
+    expect(scheduleHeading.className).not.toContain("moments-label");
   });
 });
 

@@ -1527,9 +1527,19 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         deferredCount: 0,
         pendingTriageCount: 0,
       }),
-    ).toBe(
-      "Nothing on the calendar and nothing queued — capture something to get moving.",
-    );
+    ).toBe("Nothing on the calendar, and nothing queued yet.");
+  });
+
+  it("R2-B (#483 round 2): the empty-day sentence states the fact only — no capture call-to-action (the hero card owns that)", () => {
+    const sentence = buildDaySynthesis({
+      todayBlockCount: 0,
+      focusFilledCount: 0,
+      focusBudget: 2,
+      deferredCount: 0,
+      pendingTriageCount: 0,
+    });
+    expect(sentence).not.toContain("capture");
+    expect(sentence).not.toContain("Capture");
   });
 
   it("singularizes 1 block and 1 focus slot", () => {
@@ -1603,9 +1613,7 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         deferredCount: 0,
         pendingTriageCount: 0,
       }),
-    ).toBe(
-      "Nothing on the calendar and nothing queued — capture something to get moving.",
-    );
+    ).toBe("Nothing on the calendar, and nothing queued yet.");
     expect(
       buildDaySynthesis({
         todayBlockCount: 2,
