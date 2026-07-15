@@ -156,17 +156,21 @@ describe("PipelineOverview", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
-  // R2-D (issue #483 round 2): D-9's tint/weight/separator fixes left the
-  // rail force-stretched across the full desktop content column (five
-  // `flex-1` cells, each mostly empty flex-grow space) — round-2 critics
-  // flagged the objective as still unmet. At `sm:` and up the rail now
-  // shrinks to its own five cells' content width instead of stretching to
-  // fill whatever column it sits in. Below `sm:` it deliberately keeps the
-  // original `flex-1`/full-width behavior — the rail's intrinsic content
-  // width doesn't shrink with the viewport, so unconditionally hugging it
-  // would overflow a 390px screen (confirmed by measurement during the
-  // round-2 visual check).
-  it("shrinks the rail to its own content width at sm: and up, without dropping the mobile full-width fallback", () => {
+  // R2-D (issue #483 round 2), superseded at the breakpoint boundary by R5
+  // (round 5, blocker 1): D-9's tint/weight/separator fixes left the rail
+  // force-stretched across the full desktop content column (five `flex-1`
+  // cells, each mostly empty flex-grow space) — round-2 critics flagged the
+  // objective as still unmet. R2-D's fix hugged the rail's own content width
+  // at `sm:` (640px) and up, but R5 found that boundary itself caused silent
+  // clipping — at exactly 640px, explain mode's longer label+caption content
+  // doesn't fit hugged into one row, and the flex cells no longer shrink
+  // (`flex-none`) to make room, so content was clipped by the (now-removed)
+  // `overflow-hidden`. The hug now starts at `lg:` (1024px) instead — plenty
+  // of room there for one row at every measured viewport including the
+  // owner's 1366px — and everything from base up to `lg:` is a wrapping
+  // grid (see the next test), so nothing between 375px and 1024px can ever
+  // clip.
+  it("shrinks the rail to its own content width at lg: and up, without dropping the narrower wrapping-grid fallback", () => {
     render(
       <PipelineOverview
         counts={{ capture: 0, triage: 0, plan: 0, execute: 0, review: 0 }}
@@ -175,20 +179,47 @@ describe("PipelineOverview", () => {
     );
 
     const rail = screen.getByTestId("pipeline-overview");
-    expect(rail.className).toMatch(/\bsm:w-fit\b/);
+    expect(rail.className).toMatch(/\blg:w-fit\b/);
     expect(rail.className).toMatch(/\bw-full\b/);
+    expect(rail.className).toMatch(/\bgrid\b/);
+    expect(rail.className).toMatch(/\blg:flex\b/);
 
     for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
       const cell = screen.getByTestId(`pipeline-overview-stage-${stage}`);
-      expect(cell.className).toMatch(/\bsm:flex-none\b/);
+      expect(cell.className).toMatch(/\blg:flex-none\b/);
+    }
+  });
+
+  // R5 (#483 round 5, blocker 1): below `lg:` the rail is a wrapping grid,
+  // not a single unshrinkable row — the structural fix for R4-A's measured
+  // clipping (196px hidden at 640px width in explain mode, whole stages
+  // gone). Every stage cell must always be present and never removed from
+  // the DOM regardless of mode — jsdom can't measure real clipping, but it
+  // can prove nothing is conditionally omitted.
+  it("keeps every stage cell present in the DOM (the wrapping-grid fix never conditionally omits one)", () => {
+    render(
+      <PipelineOverview
+        counts={{ capture: 0, triage: 0, plan: 0, execute: 0, review: 0 }}
+        onDrill={() => {}}
+      />,
+    );
+
+    for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
+      expect(
+        screen.getByTestId(`pipeline-overview-stage-${stage}`),
+      ).toBeInTheDocument();
     }
   });
 
   // D-9 (#483): the rail renders as one composed strip — a decorative
   // chevron sits between each pair of stages (4 separators for 5 stages),
   // hidden from assistive tech since it carries no information beyond the
-  // visual joint between nodes.
-  it("renders a decorative chevron between each pair of stages", () => {
+  // visual joint between nodes. R5 (round 5): the chevron now lives inside
+  // its following cell's own `<li>` (so it travels with that cell across a
+  // wrap instead of becoming an orphaned grid item) and is only shown at
+  // `lg:`, where the rail is back to a single row and "between" is
+  // unambiguous — still exactly 4 for 5 stages.
+  it("renders a decorative chevron folded into each non-first cell, hidden below lg:", () => {
     render(
       <PipelineOverview
         counts={{ capture: 0, triage: 0, plan: 0, execute: 0, review: 0 }}
@@ -201,6 +232,8 @@ describe("PipelineOverview", () => {
     expect(chevrons).toHaveLength(4);
     for (const chevron of chevrons) {
       expect(chevron).toHaveTextContent("›");
+      expect(chevron.className).toMatch(/\bhidden\b/);
+      expect(chevron.className).toMatch(/\blg:flex\b/);
     }
   });
 });
@@ -301,16 +334,39 @@ describe("PipelineOverview — empty pipeline (explain mode, #483 round 4)", () 
   // Structural regressions this mode must not re-introduce: R4-A defect 3
   // (the deleted LoopOrientation's node rail re-committed R2-D's
   // force-stretch defect one card up) — explain mode reuses the exact same
-  // sm:w-fit/sm:flex-none skeleton as counts mode, so it inherits the
-  // content-sized rail rather than a `flex-1`/`justify-between` stretch.
-  it("stays content-sized (sm:w-fit / sm:flex-none), the same as counts mode", () => {
+  // lg:w-fit/lg:flex-none skeleton as counts mode (R5: moved from sm: to
+  // lg:, see the round-5 test above), so it inherits the content-sized rail
+  // at desktop rather than a `flex-1`/`justify-between` stretch, and the
+  // wrapping grid below lg: rather than R4-A's own measured clipping.
+  it("stays content-sized (lg:w-fit / lg:flex-none), the same as counts mode", () => {
     render(<PipelineOverview counts={ALL_ZERO} onDrill={() => {}} />);
 
     const rail = screen.getByTestId("pipeline-overview");
-    expect(rail.className).toMatch(/\bsm:w-fit\b/);
+    expect(rail.className).toMatch(/\blg:w-fit\b/);
     for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
       const cell = screen.getByTestId(`pipeline-overview-stage-${stage}`);
-      expect(cell.className).toMatch(/\bsm:flex-none\b/);
+      expect(cell.className).toMatch(/\blg:flex-none\b/);
+    }
+  });
+
+  // R5 (#483 round 5, blocker 1): the actual defect this round fixes — every
+  // stage cell (and its caption) must always be present in the DOM, in
+  // explain mode, regardless of viewport. jsdom can't reproduce real
+  // overflow clipping, but the fix removes the DOM/CSS mechanism that could
+  // clip content (overflow-hidden + non-wrapping/non-shrinking flex) rather
+  // than relying on a breakpoint that happened to work for the tested
+  // widths, so this asserts the structural precondition: nothing is ever
+  // conditionally omitted.
+  it("never omits a stage cell or its caption in explain mode, at any mode this component renders", () => {
+    render(<PipelineOverview counts={ALL_ZERO} onDrill={() => {}} />);
+
+    for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
+      expect(
+        screen.getByTestId(`pipeline-overview-label-${stage}`),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId(`pipeline-overview-caption-${stage}`),
+      ).toBeInTheDocument();
     }
   });
 

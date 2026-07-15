@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   PIPELINE_OVERVIEW_STAGES,
@@ -111,7 +111,42 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * much taller `text-xl`/`text-2xl` numeral, and the whole `LoopOrientation`
  * card (~150px, its own `moments-card` padding + a second heading) is gone
  * — part of the fix for the capture pill sitting on top of the last card's
- * caption at 1366x768 (see StartMoment.tsx and the extended e2e guard). */
+ * caption at 1366x768 (see StartMoment.tsx and the extended e2e guard).
+ *
+ * R5 (premium push #483 round 5, blocker 1): the R2-D/R4-A skeleton above —
+ * `sm:w-fit` hug + `sm:flex-none` cells, `overflow-hidden` on the outer
+ * `<ul>`, `flex-1`/full-width with no wrap below `sm:` — silently CLIPPED
+ * stages instead of showing them. Below `sm:`, `flex-1` cells shrink
+ * (flex-shrink:1) but never wrap, so once five cells' min-content can't fit
+ * the viewport, the excess is squeezed past readability and, past that,
+ * past the `overflow-hidden` boundary — measured at 375/390/430px in
+ * explain mode (longer label+caption content than a bare numeral) losing
+ * 44-81px of the Review cell. At exactly `sm:` (640px) the cells stop
+ * shrinking at all (`flex-none`) while the container tries to hug
+ * unshrinkable content wider than the viewport — measured losing 196px,
+ * Execute AND Review entirely gone. This app's core doctrine is surfaces
+ * never lie; an empty day's first screen silently presenting a four-stage
+ * pipeline for a five-stage loop is exactly that lie, worse on a phone
+ * where it's the ONLY screen a first-time user sees.
+ * Fix is structural, not a scroll affordance: below `lg:` (1024px) the rail
+ * is a `grid` (2 columns below `sm:`, 3 at `sm:`-`lg:`) instead of a single
+ * flex row, so five cells wrap across 2-3 rows instead of being squeezed or
+ * clipped in one. Nothing is ever hidden — every stage is always fully
+ * rendered and readable, chosen over a scroll-with-affordance because it's
+ * strictly better where it's achievable (no interaction required to
+ * perceive all five stages) and this rail's five-cell content is short
+ * enough that wrapping never grows the page unreasonably tall. `lg:` and up
+ * keeps the exact R2-D/D-9 single-row hug (desktop, including the owner's
+ * 1366px viewport, is untouched — plenty of room for one row there). The
+ * decorative chevron (D-9) moves from a standalone flex/grid item between
+ * cells to a sibling of its following cell's button, inside that cell's own
+ * `<li>` — a chevron as a separate grid item would either become an
+ * orphaned single-glyph grid cell when wrapping kicks in, or force
+ * uneven/unpredictable column tracks; folded into the cell it precedes, it
+ * travels with that cell across any wrap and simply hides below `lg:`
+ * (`hidden lg:flex`) where the wrapped grid's 2D layout makes a
+ * left-to-right "flow" glyph inapplicable anyway (row 1's last cell doesn't
+ * sit "before" row 2's first cell the way adjacent cells in one row do). */
 
 export interface PipelineOverviewProps {
   counts: Record<string, number>;
@@ -153,74 +188,72 @@ export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
 
   return (
     <ul
-      className="moments-card flex w-full items-stretch overflow-hidden border border-border p-1 sm:w-fit"
+      className="moments-card grid w-full grid-cols-2 items-stretch gap-1.5 border border-border p-1 sm:grid-cols-3 lg:flex lg:w-fit lg:gap-0"
       data-testid="pipeline-overview"
       aria-label="Pipeline stages"
     >
       {PIPELINE_OVERVIEW_STAGES.map((stage, index) => {
         const active = activeStage === stage;
         return (
-          <Fragment key={stage}>
+          <li key={stage} className="flex items-stretch lg:flex-none">
             {index > 0 ? (
-              <li
+              <span
                 aria-hidden="true"
-                className="flex flex-none items-center justify-center px-0.5 text-sm text-muted-foreground/70"
+                className="hidden shrink-0 items-center justify-center px-0.5 text-sm text-muted-foreground/70 lg:flex"
               >
                 {"›"}
-              </li>
+              </span>
             ) : null}
-            <li className="flex flex-1 items-stretch sm:flex-none">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveStage(stage);
-                  onDrill(stage);
-                }}
-                aria-current={active ? "step" : undefined}
-                className={cn(
-                  HIT_TARGET_ROW,
-                  "flex flex-1 flex-col gap-0.5 rounded-[var(--surface-radius-sm)] px-3.5 py-2.5 text-left transition-colors duration-[var(--motion-base)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0 sm:flex-none sm:px-4",
-                  active ? "bg-[var(--blu-sf)]" : "hover:bg-muted/60",
-                )}
-                data-testid={`pipeline-overview-stage-${stage}`}
-              >
-                {isEmpty ? (
-                  <>
-                    <span
-                      className={cn(
-                        "text-sm font-[650] leading-none tracking-tight sm:text-base",
-                        active ? "text-[var(--blu-fg)]" : "text-foreground",
-                      )}
-                      data-testid={`pipeline-overview-label-${stage}`}
-                    >
-                      {STAGE_LABELS[stage]}
-                    </span>
-                    <span
-                      className="text-[11px] leading-snug text-muted-foreground"
-                      data-testid={`pipeline-overview-caption-${stage}`}
-                    >
-                      {STAGE_CAPTION[stage]}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span
-                      className={cn(
-                        "min-w-[2ch] text-xl font-[650] leading-none tracking-tight tabular-nums lining-nums sm:text-2xl",
-                        active ? "text-[var(--blu-fg)]" : "text-foreground",
-                      )}
-                      data-testid={`pipeline-overview-count-${stage}`}
-                    >
-                      {counts[stage] ?? 0}
-                    </span>
-                    <span className="text-[11.5px] font-medium text-muted-foreground">
-                      {STAGE_LABELS[stage]}
-                    </span>
-                  </>
-                )}
-              </button>
-            </li>
-          </Fragment>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveStage(stage);
+                onDrill(stage);
+              }}
+              aria-current={active ? "step" : undefined}
+              className={cn(
+                HIT_TARGET_ROW,
+                "flex flex-1 flex-col gap-0.5 rounded-[var(--surface-radius-sm)] px-3.5 py-2.5 text-left transition-colors duration-[var(--motion-base)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0 lg:flex-none lg:px-4",
+                active ? "bg-[var(--blu-sf)]" : "hover:bg-muted/60",
+              )}
+              data-testid={`pipeline-overview-stage-${stage}`}
+            >
+              {isEmpty ? (
+                <>
+                  <span
+                    className={cn(
+                      "text-sm font-[650] leading-none tracking-tight sm:text-base",
+                      active ? "text-[var(--blu-fg)]" : "text-foreground",
+                    )}
+                    data-testid={`pipeline-overview-label-${stage}`}
+                  >
+                    {STAGE_LABELS[stage]}
+                  </span>
+                  <span
+                    className="text-[11px] leading-snug text-muted-foreground"
+                    data-testid={`pipeline-overview-caption-${stage}`}
+                  >
+                    {STAGE_CAPTION[stage]}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className={cn(
+                      "min-w-[2ch] text-xl font-[650] leading-none tracking-tight tabular-nums lining-nums sm:text-2xl",
+                      active ? "text-[var(--blu-fg)]" : "text-foreground",
+                    )}
+                    data-testid={`pipeline-overview-count-${stage}`}
+                  >
+                    {counts[stage] ?? 0}
+                  </span>
+                  <span className="text-[11.5px] font-medium text-muted-foreground">
+                    {STAGE_LABELS[stage]}
+                  </span>
+                </>
+              )}
+            </button>
+          </li>
         );
       })}
     </ul>
