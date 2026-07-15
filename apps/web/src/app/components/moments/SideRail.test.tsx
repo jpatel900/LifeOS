@@ -4,7 +4,7 @@ import { SideRail } from "./SideRail";
 import type { AreaHealthVM, WaitingVM } from "./momentsViewModel";
 
 const AREAS: AreaHealthVM[] = [
-  { id: "a1", name: "Work", status: "ok", note: "3 open" },
+  { id: "a1", name: "Work", status: "ok", note: "3 open", color: "#2563eb" },
 ];
 
 const WAITING: WaitingVM[] = [

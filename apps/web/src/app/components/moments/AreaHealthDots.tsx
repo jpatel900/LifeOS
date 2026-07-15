@@ -1,5 +1,6 @@
 "use client";
 
+import { buildAreaAccentStyle } from "@/lib/areaAccent";
 import type { AreaHealthVM } from "./momentsViewModel";
 
 /**
@@ -13,11 +14,17 @@ import type { AreaHealthVM } from "./momentsViewModel";
  * prototype-2's `.area-row` list — one row per area, colored dot on the
  * left, a visible status word on the right (previously that same word only
  * lived in the dot's `aria-label`; now it's on-screen text too, still
- * backed by the same `STATUS_LABEL` map, no new data). The prototype's
- * per-area color *swatch* (`.aswatch`, a distinct hue per area for
- * identity) is not ported: `AreaHealthVM` carries no area color today —
- * only status — so a swatch here would mean inventing a color per area
- * rather than reading one that exists.
+ * backed by the same `STATUS_LABEL` map, no new data).
+ *
+ * D-11 (design alignment, #483): ports the prototype's per-area color
+ * *swatch* (`.aswatch`) — a distinct identity hue per area, separate from
+ * the status dot — using `AreaHealthVM.color` (now threaded through from
+ * `Phase2MockArea.color`, the same real per-area color Settings already
+ * renders). The swatch sits via the existing `--area-accent` token family
+ * (`buildAreaAccentStyle`, same helper the area registry/onboarding use),
+ * never a hardcoded hex. It is `aria-hidden`: identity color is redundant
+ * with the visible area-name text next to it, and the status dot remains
+ * the sole accessible status signal (its aria-label is unchanged).
  */
 
 export interface AreaHealthDotsProps {
@@ -59,6 +66,12 @@ export function AreaHealthDots({ areas }: AreaHealthDotsProps) {
           data-testid={`area-health-row-${area.id}`}
         >
           <span className="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="size-2.5 shrink-0 rounded-full border border-border/60 bg-[var(--area-accent)]"
+              style={buildAreaAccentStyle(area.color)}
+              data-testid={`area-health-swatch-${area.id}`}
+            />
             <span
               aria-label={`${area.name}: ${STATUS_LABEL[area.status]} — ${area.note}`}
               role="img"

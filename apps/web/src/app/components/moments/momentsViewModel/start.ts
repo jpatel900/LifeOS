@@ -81,6 +81,14 @@ export interface AreaHealthVM {
   name: string;
   status: "ok" | "watch" | "risk" | "idle";
   note: string;
+  /**
+   * D-11 (design alignment, #483): the area's identity hue, read straight
+   * from `Phase2MockArea.color` (see `lib/types.ts`) — the same real value
+   * Settings' area registry already renders via `buildAreaAccentStyle`
+   * (`lib/areaAccent.ts`). Not a new signal: every area already carries this
+   * color; this VM previously just didn't pass it through.
+   */
+  color: string;
 }
 
 /**
@@ -360,21 +368,45 @@ function buildAreaHealth(
     const note = noteParts.join(" · ");
 
     if (openTasks.length === 0 && todayBlocks.length === 0) {
-      return { id: area.id, name: area.name, status: "idle", note };
+      return {
+        id: area.id,
+        name: area.name,
+        status: "idle",
+        note,
+        color: area.color,
+      };
     }
 
     if (areaWaiting.some((entry) => entry.status === "risk")) {
-      return { id: area.id, name: area.name, status: "risk", note };
+      return {
+        id: area.id,
+        name: area.name,
+        status: "risk",
+        note,
+        color: area.color,
+      };
     }
 
     if (
       pendingTriage.length > 0 ||
       areaWaiting.some((entry) => entry.status === "watch")
     ) {
-      return { id: area.id, name: area.name, status: "watch", note };
+      return {
+        id: area.id,
+        name: area.name,
+        status: "watch",
+        note,
+        color: area.color,
+      };
     }
 
-    return { id: area.id, name: area.name, status: "ok", note };
+    return {
+      id: area.id,
+      name: area.name,
+      status: "ok",
+      note,
+      color: area.color,
+    };
   });
 }
 
