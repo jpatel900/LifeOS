@@ -103,7 +103,9 @@ export function MastheadThemeToggle({
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={cn(
         HIT_TARGET_MIN,
-        "group gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm font-semibold text-muted-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:duration-0",
+        // R3-C (#483 round 3): px-3 -> px-2.5 is part of the masthead's
+        // Inter-reflow claw-back — see TodayMoments.tsx's header comment.
+        "group gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-sm font-semibold text-muted-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:duration-0",
       )}
       data-testid="masthead-theme-toggle"
     >

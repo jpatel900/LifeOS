@@ -59,7 +59,12 @@ export function CountdownClockToggle({
             onClick={() => onChange(segment.value)}
             className={cn(
               HIT_TARGET_ROW,
-              "flex items-center rounded-full px-3 py-1 text-xs font-semibold outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
+              // R3-C (#483 round 3): px-3 -> px-2 (two steps) is part of the
+              // masthead's Inter-reflow claw-back — see TodayMoments.tsx's
+              // header comment. This is the "quietest" secondary control
+              // (a display-format preference, not primary nav or context),
+              // so it absorbs the largest single share of the claw-back.
+              "flex items-center rounded-full px-2 py-1 text-xs font-semibold outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
               active
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",

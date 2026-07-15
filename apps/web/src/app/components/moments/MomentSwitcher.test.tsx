@@ -103,4 +103,20 @@ describe("MomentSwitcher", () => {
     expect(tab).toHaveClass("focus-visible:ring-ring");
     expect(tab).toHaveClass("focus-visible:ring-offset-2");
   });
+
+  // R3-C (#483 round 3): self-hosting Inter reopened the masthead's
+  // right-cluster row-1 overflow (measured 18.41px over budget at desktop
+  // widths — see TodayMoments.tsx's header comment), and the AreaSelector's
+  // worst-case (long area name) claw-back needed more than the secondary
+  // cluster alone could give up. This tab padding drops one step,
+  // `px-3`->`px-2.5` — still visually dominant (only accent fill, still by
+  // far the widest control) but a small, deliberate contributor to the
+  // claw-back. Regression: a future padding bump here silently reopens the
+  // 2-row wrap for realistic (not just the shortest demo) area names.
+  it("tabs use the tightened px-2.5 padding, not the pre-Inter-reflow px-3 (round-3 regression)", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const tab = screen.getByTestId("moment-switcher-flow");
+    expect(tab).toHaveClass("px-2.5");
+    expect(tab.className).not.toMatch(/\bpx-3\b/);
+  });
 });

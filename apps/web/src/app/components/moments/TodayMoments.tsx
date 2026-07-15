@@ -788,7 +788,47 @@ export function TodayMoments({
               the same ~44-46px line (was a 57px/44px, 13px split — see
               MomentSwitcher.tsx/CountdownClockToggle.tsx's own comments for
               the `.workflow-shell__nav` root cause) via a tightened `gap-2`
-              instead of the previous `gap-3`. */}
+              instead of the previous `gap-3`.
+
+              R3-C (#483 round 3, Inter reflow): self-hosting Inter (wider
+              metrics than the Segoe fallback) reopened the row-1 overflow
+              round 2 had just barely closed — measured 18.41px over budget
+              at desktop widths (732.13px needed vs 713.72px available) with
+              the shortest demo area ("Main Job") selected, wrapping the
+              Settings icon alone to a second line.
+
+              First pass shaved only the secondary cluster (gap-2->gap-1.5,
+              AreaSelector/CountdownClockToggle/MastheadThemeToggle each one
+              padding step) and verified clean against that shortest-name
+              case — but AreaSelector's rendered width scales with the
+              selected area's name, and this demo data's own longer names
+              ("Volunteer Work", "Side Project") still wrapped the row: the
+              first pass's margin (~13.75px) was real but smaller than the
+              width swing between the shortest and longest demo names
+              (~50px), so it only ever covered the case it was measured
+              against.
+
+              Two more changes close the real (name-independent) gap:
+              1. AreaSelector's label span caps at `max-w-[5rem]` (was
+                 `max-w-[9rem]`, effectively never engaging for realistic
+                 names) + `min-w-0` (a `truncate` span inside an
+                 `inline-flex` button doesn't actually shrink below its own
+                 content's width without it — flexbox's `min-width: auto`
+                 default silently wins over `max-w` otherwise). This bounds
+                 AreaSelector's contribution to the row regardless of how
+                 long a real (user-created) area name is — verified
+                 in-browser across all 4 demo areas, with margin, not just
+                 the shortest one.
+              2. MomentSwitcher and CountdownClockToggle each give up one
+                 more padding step (`px-3`->`px-2.5` / `px-3`->`px-2`) to
+                 fund that 80px label budget without also truncating the
+                 common short-name case ("Main Job"/"Personal" both render
+                 in full at this cap; only names longer than ~80px worth of
+                 text truncate). CountdownClockToggle (the "quietest"
+                 secondary control) absorbs the larger of the two cuts;
+                 MomentSwitcher's is a small padding harmonization, not a
+                 demotion — it's still the only accent-filled control and
+                 remains by far the widest. */}
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="text-sm font-semibold tracking-tight">
@@ -805,7 +845,7 @@ export function TodayMoments({
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <div
                 className="hidden sm:contents"
                 data-testid="masthead-momentswitcher-slot"

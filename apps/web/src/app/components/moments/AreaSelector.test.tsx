@@ -226,4 +226,64 @@ describe("AreaSelector", () => {
 
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  // R3-C (#483 round 3): self-hosting Inter reopened the masthead's
+  // right-cluster row-1 overflow (measured 18.41px over budget at desktop
+  // widths — see TodayMoments.tsx's header comment). Part of the claw-back
+  // is this trigger dropping one padding step (`px-3`->`px-2.5`).
+  // Regression: a future padding bump here silently reopens the 2-row wrap.
+  it("the trigger uses the tightened px-2.5 padding, not the pre-Inter-reflow px-3 (round-3 regression)", () => {
+    render(<AreaSelector areas={AREAS} value="area-1" onChange={vi.fn()} />);
+    const trigger = screen.getByTestId("today-moments-area-switcher");
+    expect(trigger).toHaveClass("px-2.5");
+    expect(trigger.className).not.toMatch(/\bpx-3\b/);
+  });
+
+  // R3-C (#483 round 3): a padding trim alone wasn't enough — an initial
+  // fix (measured only against the demo's shortest area name, "Main Job")
+  // still wrapped the masthead to 2 rows for real, longer area names
+  // ("Volunteer Work", "Side Project" — both in this same demo data).
+  // The label's original `max-w-[9rem]` (144px) was too generous to ever
+  // engage truncation for realistic names, so the AreaSelector's rendered
+  // width scaled with the selected area's name length with no hard ceiling.
+  // Fixed with a real bound: `sm:max-w-[5rem]` (80px at `sm`+, empirically
+  // verified in-browser to keep the masthead single-row for every demo
+  // area, including the two long ones, with margin to spare) plus
+  // `min-w-0` — required because a `truncate` span nested inside an
+  // `inline-flex` button won't actually shrink below its own content's
+  // intrinsic width without it (the classic flexbox `min-width: auto`
+  // trap; `max-w` alone is silently ignored in that position).
+  //
+  // The cap is `sm:`-scoped, NOT applied below `sm`: mobile's AreaSelector
+  // sits in its own dedicated 2-control row (with MastheadThemeToggle)
+  // with no comparable space pressure, so the base `max-w-[9rem]` (this
+  // component's original, pre-R3 value) still applies there — an earlier
+  // draft of this fix applied the tight cap unconditionally and truncated
+  // long area names on mobile with a quarter of the 390px viewport still
+  // empty to the right of the control, reopening the exact "only verified
+  // the short name" gap this packet exists to close, just on a different
+  // viewport.
+  //
+  // Regression: the desktop cap must stay `sm:`-scoped (never bare
+  // `max-w-[5rem]`, which would re-truncate mobile), the base must stay
+  // `max-w-[9rem]`, and `min-w-0` must stay paired with it.
+  it("the label span truncates at max-w-[9rem] on mobile and sm:max-w-[5rem] at sm+, both with min-w-0 (round-3 regression)", () => {
+    render(
+      <AreaSelector
+        areas={[{ id: "area-1", name: "Volunteer Work", color: "#6d8bff" }]}
+        value="area-1"
+        onChange={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByTestId("today-moments-area-switcher");
+    const label = trigger.querySelector("span:not([aria-hidden])")!;
+    expect(label).toHaveClass("max-w-[9rem]");
+    expect(label).toHaveClass("sm:max-w-[5rem]");
+    expect(label).toHaveClass("min-w-0");
+    expect(label).toHaveClass("truncate");
+    // A bare (unscoped) `max-w-[5rem]` would re-truncate mobile; the two
+    // `toHaveClass` assertions above already fail if the sm:-scoped class
+    // is dropped or replaced, so a revert to the unscoped form is caught
+    // there rather than needing its own (fragile) negative-match regex.
+  });
 });

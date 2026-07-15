@@ -206,6 +206,28 @@ describe("TodayMoments", () => {
     });
   });
 
+  // R3-C (#483 round 3): self-hosting Inter (wider metrics than the Segoe
+  // fallback) reopened the right-cluster row-1 overflow round 2 had just
+  // closed — measured 18.41px over budget at desktop widths (732.13px
+  // needed vs 713.72px available), wrapping the Settings icon alone to a
+  // second line. Closed with a `gap-2`->`gap-1.5` claw-back on this row
+  // (paired with a padding step down in AreaSelector/CountdownClockToggle/
+  // MastheadThemeToggle — see each file's own regression test). Regression:
+  // a future gap bump back to `gap-2` on this row silently reopens the wrap
+  // now that Inter is the shipping font.
+  describe("masthead right-cluster gap (#483 round 3, Inter reflow)", () => {
+    it("uses the tightened gap-1.5, not the pre-Inter-reflow gap-2", () => {
+      renderToday({ initialMoment: "start" });
+
+      const momentSwitcherSlot = screen.getByTestId(
+        "masthead-momentswitcher-slot",
+      );
+      const rightCluster = momentSwitcherSlot.parentElement!;
+      expect(rightCluster).toHaveClass("gap-1.5");
+      expect(rightCluster.className).not.toMatch(/\bgap-2\b/);
+    });
+  });
+
   it("start-to-first-move journey: Start now switches to Flow with a running countdown", async () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
