@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CurrentBlockHero } from "./CurrentBlockHero";
 import { DriftRecoveryCard } from "./DriftRecoveryCard";
 import { FirstTinyStepCard } from "./FirstTinyStepCard";
+import { FlowIdleOrientation } from "./FlowIdleOrientation";
 import {
   TaskMapSection,
   type TaskMapDraftUiState,
@@ -36,6 +37,14 @@ import { momentKeyLabel } from "@/lib/keys/keymap";
  * rather than a composed hero replaced by nothing at all. Copy stays
  * factual (no block exists, here is the one real way to start one); no
  * block or session detail is fabricated.
+ *
+ * R4-B (premium push #483, round 4): R3-B fixed the card; the page around
+ * it was still unfinished — on a fully quiet day (no drift, no first-move
+ * task) nothing rendered below that one small card, leaving ~543px of void
+ * at 1440x900. `FlowIdleOrientation` (see its doc comment) fills that with
+ * evergreen, data-free "what Flow is" content whenever there's no active
+ * session — the same "fill with orientation content" ruling the owner
+ * already applied to Start's empty day.
  */
 
 export interface FlowMomentSession {
@@ -135,6 +144,8 @@ export function FlowMoment({
           </CardContent>
         </Card>
       )}
+
+      {!hasActiveSession ? <FlowIdleOrientation /> : null}
 
       {hasActiveSession ? (
         <FirstTinyStepCard
