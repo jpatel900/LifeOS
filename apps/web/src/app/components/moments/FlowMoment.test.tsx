@@ -149,3 +149,37 @@ describe("FlowMoment first tiny step (#572)", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// R3-B (premium push #483, round 3): the no-active-block state used to be a
+// bare muted text line with zero card/border treatment. It must now use the
+// same flagship card shell as the populated CurrentBlockHero, never a bare
+// paragraph, and never fabricate a block.
+describe("FlowMoment — R3-B no-active-block composition", () => {
+  function emptyProps(overrides: Partial<FlowMomentProps> = {}) {
+    return baseProps({
+      session: { activeTaskId: null, running: false, remaining: 0, total: 0 },
+      vm: { currentBlock: null, drift: null },
+      ...overrides,
+    });
+  }
+
+  it("composes the empty state as a card, not a bare text line", () => {
+    render(<FlowMoment {...emptyProps()} />);
+    const empty = screen.getByTestId("flow-moment-empty");
+    expect(empty.tagName).not.toBe("P");
+    expect(empty.className).toMatch(/\bworkflow-flagship-card\b/);
+    expect(empty.className).toMatch(/\bmoments-card\b/);
+  });
+
+  it("states plainly that no block is running without implying one exists", () => {
+    render(<FlowMoment {...emptyProps()} />);
+    const empty = screen.getByTestId("flow-moment-empty");
+    expect(empty).toHaveTextContent("No block running");
+    expect(screen.queryByTestId("current-block-hero")).not.toBeInTheDocument();
+  });
+
+  it("does not render the empty state once a block/session is active", () => {
+    render(<FlowMoment {...baseProps()} />);
+    expect(screen.queryByTestId("flow-moment-empty")).not.toBeInTheDocument();
+  });
+});

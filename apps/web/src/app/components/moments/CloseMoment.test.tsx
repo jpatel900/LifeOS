@@ -53,29 +53,31 @@ function renderClose(
   return props;
 }
 
-// R2-D (issue #483 round 2): the stats card used to be a hard
-// `grid grid-cols-2` full-bleed box holding exactly two numbers — a
+// R2-D (issue #483 round 2) then R3-B (round 3): the stats card used to be
+// a hard `grid grid-cols-2` full-bleed box holding exactly two numbers — a
 // full-bleed box whose content fills only ~56% of it reads as
-// sparse-by-accident. The fix constrains the card to its own content
-// (`w-fit` at desktop) instead of stretching it to the page's content
-// column, and separates the two stats with a hairline divider rather than
-// a bare grid gap. jsdom has no layout engine, so this asserts the classes
-// that drive that composition rather than measured pixels (measured with
-// Playwright separately — see the round-2 visual self-check).
-describe("CloseMoment — R2-D stats card composition", () => {
-  it("does not force the stats card into a full-bleed two-column grid", () => {
+// sparse-by-accident. R2-D fixed the hollowness by hugging the stats row to
+// its own content, but that turned into a *new* regression: on a quiet day
+// the hugging stats card, the full-width Carry forward panel, and the
+// standalone "Close the day" button stacked as three unrelated block
+// widths with no shared card boundary. R3-B folds stats + carry forward +
+// tomorrow's first move + the close action into ONE flagship card (the
+// closing ritual) so there is exactly one boundary, not three. jsdom has no
+// layout engine, so this asserts the classes/DOM nesting that drive that
+// composition rather than measured pixels (measured with Playwright
+// separately — see the round-3 visual self-check).
+describe("CloseMoment — R2-D/R3-B stats + close composition", () => {
+  it("does not force the stats row into a full-bleed two-column grid", () => {
     renderClose();
     const stats = screen.getByTestId("close-moment-stats");
     expect(stats.className).not.toMatch(/\bgrid-cols-2\b/);
     expect(stats.className).not.toMatch(/\bgrid\b/);
   });
 
-  it("constrains the stats card to its own content width on desktop", () => {
+  it("hugs the stats row to its own content width, never stretched", () => {
     renderClose();
     const stats = screen.getByTestId("close-moment-stats");
-    const card = stats.closest(".moments-card");
-    expect(card).not.toBeNull();
-    expect(card?.className).toMatch(/\bsm:w-fit\b/);
+    expect(stats.className).toMatch(/\bw-fit\b/);
   });
 
   it("separates the two stats with a hairline divider, not just a gap", () => {
@@ -92,6 +94,124 @@ describe("CloseMoment — R2-D stats card composition", () => {
     expect(screen.getByTestId("close-moment-missed")).toHaveClass(
       "tabular-nums",
     );
+  });
+
+  // R3-B regression coverage: stats, carry forward, and the close action
+  // must share one card boundary — never three disconnected block widths.
+  it("shares one card boundary across stats, carry forward, and the close action", () => {
+    renderClose();
+    const summary = screen.getByTestId("close-moment-summary");
+    expect(
+      summary.contains(screen.getByTestId("close-moment-stats")),
+    ).toBe(true);
+    expect(
+      summary.contains(screen.getByTestId("close-moment-carry-forward-empty")),
+    ).toBe(true);
+    expect(
+      summary.contains(screen.getByTestId("close-moment-close-day")),
+    ).toBe(true);
+  });
+
+  it("nests tomorrow's first move inside the same summary card when present", () => {
+    renderClose({
+      vm: {
+        ...baseVm,
+        tomorrowFirstMove: {
+          title: "Draft the proposal",
+          why: "Highest leverage",
+          areaLabel: "Main Job",
+          estMinutes: 25,
+          taskId: "t-tomorrow",
+        },
+      },
+    });
+    const summary = screen.getByTestId("close-moment-summary");
+    expect(
+      summary.contains(screen.getByTestId("close-moment-tomorrow-first-move")),
+    ).toBe(true);
+  });
+
+  it("always states what closing does, paired with the action (not gated on empty)", () => {
+    renderClose();
+    expect(screen.getByTestId("close-moment-orientation")).toHaveTextContent(
+      /closing saves today's counts/i,
+    );
+
+    renderClose({
+      vm: { ...baseVm, completedToday: 5, missedToday: 1 },
+      pendingWins: [win],
+    });
+    expect(
+      screen.getAllByTestId("close-moment-orientation")[1],
+    ).toHaveTextContent(/closing saves today's counts/i);
+  });
+
+  it("keeps the wins card above the summary card, and preserves stats -> carry forward -> tomorrow -> action order within it on a populated day", () => {
+    renderClose({
+      pendingWins: [win],
+      vm: {
+        ...baseVm,
+        carryForward: [{ taskId: "t-cf", title: "Missed review" }],
+        tomorrowFirstMove: {
+          title: "Draft the proposal",
+          why: "Highest leverage",
+          areaLabel: "Main Job",
+          estMinutes: 25,
+          taskId: "t-tomorrow",
+        },
+      },
+    });
+
+    const winsHeading = screen.getByText("Wins & evidence");
+    const summary = screen.getByTestId("close-moment-summary");
+    // The wins card (a sibling section above the summary card) must still
+    // precede the summary card in document order — the R3-B merge folded
+    // stats/carry-forward/tomorrow/action together, but must not have
+    // silently reordered the summary card ahead of the review sections.
+    expect(
+      winsHeading.compareDocumentPosition(summary) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const stats = screen.getByTestId("close-moment-stats");
+    const carryList = screen.getByTestId("close-moment-carry-forward-list");
+    const tomorrow = screen.getByTestId("close-moment-tomorrow-first-move");
+    const closeBtn = screen.getByTestId("close-moment-close-day");
+
+    expect(
+      stats.compareDocumentPosition(carryList) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      carryList.compareDocumentPosition(tomorrow) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      tomorrow.compareDocumentPosition(closeBtn) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("uses one eyebrow system (moments-label) for both summary sub-sections", () => {
+    renderClose({
+      vm: {
+        ...baseVm,
+        tomorrowFirstMove: {
+          title: "Draft the proposal",
+          why: "Highest leverage",
+          areaLabel: "Main Job",
+          estMinutes: 25,
+          taskId: "t-tomorrow",
+        },
+      },
+    });
+    const summary = screen.getByTestId("close-moment-summary");
+    const headings = summary.querySelectorAll("h3");
+    expect(headings.length).toBeGreaterThan(0);
+    headings.forEach((heading) => {
+      expect(heading.className).toMatch(/\bmoments-label\b/);
+      expect(heading.className).not.toMatch(/\bworkflow-page-eyebrow\b/);
+    });
   });
 });
 
