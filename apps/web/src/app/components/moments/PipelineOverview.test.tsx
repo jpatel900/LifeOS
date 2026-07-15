@@ -135,6 +135,34 @@ describe("PipelineOverview", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
+  // R2-D (issue #483 round 2): D-9's tint/weight/separator fixes left the
+  // rail force-stretched across the full desktop content column (five
+  // `flex-1` cells, each mostly empty flex-grow space) — round-2 critics
+  // flagged the objective as still unmet. At `sm:` and up the rail now
+  // shrinks to its own five cells' content width instead of stretching to
+  // fill whatever column it sits in. Below `sm:` it deliberately keeps the
+  // original `flex-1`/full-width behavior — the rail's intrinsic content
+  // width doesn't shrink with the viewport, so unconditionally hugging it
+  // would overflow a 390px screen (confirmed by measurement during the
+  // round-2 visual check).
+  it("shrinks the rail to its own content width at sm: and up, without dropping the mobile full-width fallback", () => {
+    render(
+      <PipelineOverview
+        counts={{ capture: 0, triage: 0, plan: 0, execute: 0, review: 0 }}
+        onDrill={() => {}}
+      />,
+    );
+
+    const rail = screen.getByTestId("pipeline-overview");
+    expect(rail.className).toMatch(/\bsm:w-fit\b/);
+    expect(rail.className).toMatch(/\bw-full\b/);
+
+    for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
+      const cell = screen.getByTestId(`pipeline-overview-stage-${stage}`);
+      expect(cell.className).toMatch(/\bsm:flex-none\b/);
+    }
+  });
+
   // D-9 (#483): the rail renders as one composed strip — a decorative
   // chevron sits between each pair of stages (4 separators for 5 stages),
   // hidden from assistive tech since it carries no information beyond the

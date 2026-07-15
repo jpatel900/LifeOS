@@ -102,27 +102,43 @@ export function CloseMoment({
 
   return (
     <div className="grid gap-6" data-testid="close-moment">
-      <Card className="workflow-support-card moments-card">
-        <CardContent className="grid grid-cols-2 gap-4 pt-5 sm:grid-cols-2">
-          <div className="grid gap-0.5">
+      {/* R2-D (issue #483 round 2): the stats card used to be a hard
+          `grid grid-cols-2` full-bleed box holding exactly two numbers —
+          identically hollow at 952px (content desktop width) whether the
+          values were 0 or 127; ~56% of the box was dead padding. A
+          `justify-between` label-left/value-right row was considered and
+          rejected: at 952px it only relocates the empty space to the
+          center rather than removing it. Instead the card is now a
+          content-hugging cluster (`w-fit` desktop, matching the critic's
+          "constrain the box to its content" remedy) — two tabular-figure
+          stat blocks separated by a hairline divider, sized to their own
+          ink rather than stretched to the page's content column. Mobile
+          keeps the full-width two-up split (still `flex-1`, still one row)
+          since a 390px viewport doesn't have spare width to hollow out —
+          the two breakpoints are now deliberately different treatments,
+          not the same `grid-cols-2` value repeated. */}
+      <Card className="workflow-support-card moments-card w-full justify-self-start sm:w-fit">
+        <CardContent
+          className="flex items-stretch divide-x divide-border/60 p-0"
+          data-testid="close-moment-stats"
+        >
+          <div className="flex flex-1 flex-col gap-1 px-4 py-4 sm:flex-none sm:px-6 sm:py-5">
             <span
-              className="text-2xl font-semibold tabular-nums"
+              className="text-3xl leading-none font-[650] tracking-tight tabular-nums lining-nums"
               data-testid="close-moment-completed"
             >
               {vm.completedToday}
             </span>
-            <span className="text-xs text-muted-foreground">
-              Completed today
-            </span>
+            <span className="moments-label">Completed today</span>
           </div>
-          <div className="grid gap-0.5">
+          <div className="flex flex-1 flex-col gap-1 px-4 py-4 sm:flex-none sm:px-6 sm:py-5">
             <span
-              className="text-2xl font-semibold tabular-nums"
+              className="text-3xl leading-none font-[650] tracking-tight tabular-nums lining-nums"
               data-testid="close-moment-missed"
             >
               {vm.missedToday}
             </span>
-            <span className="text-xs text-muted-foreground">Missed today</span>
+            <span className="moments-label">Missed today</span>
           </div>
         </CardContent>
       </Card>

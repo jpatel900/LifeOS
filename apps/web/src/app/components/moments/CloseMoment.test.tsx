@@ -53,6 +53,48 @@ function renderClose(
   return props;
 }
 
+// R2-D (issue #483 round 2): the stats card used to be a hard
+// `grid grid-cols-2` full-bleed box holding exactly two numbers — a
+// full-bleed box whose content fills only ~56% of it reads as
+// sparse-by-accident. The fix constrains the card to its own content
+// (`w-fit` at desktop) instead of stretching it to the page's content
+// column, and separates the two stats with a hairline divider rather than
+// a bare grid gap. jsdom has no layout engine, so this asserts the classes
+// that drive that composition rather than measured pixels (measured with
+// Playwright separately — see the round-2 visual self-check).
+describe("CloseMoment — R2-D stats card composition", () => {
+  it("does not force the stats card into a full-bleed two-column grid", () => {
+    renderClose();
+    const stats = screen.getByTestId("close-moment-stats");
+    expect(stats.className).not.toMatch(/\bgrid-cols-2\b/);
+    expect(stats.className).not.toMatch(/\bgrid\b/);
+  });
+
+  it("constrains the stats card to its own content width on desktop", () => {
+    renderClose();
+    const stats = screen.getByTestId("close-moment-stats");
+    const card = stats.closest(".moments-card");
+    expect(card).not.toBeNull();
+    expect(card?.className).toMatch(/\bsm:w-fit\b/);
+  });
+
+  it("separates the two stats with a hairline divider, not just a gap", () => {
+    renderClose();
+    const stats = screen.getByTestId("close-moment-stats");
+    expect(stats.className).toMatch(/\bdivide-x\b/);
+  });
+
+  it("renders both stat figures with tabular numerals", () => {
+    renderClose();
+    expect(screen.getByTestId("close-moment-completed")).toHaveClass(
+      "tabular-nums",
+    );
+    expect(screen.getByTestId("close-moment-missed")).toHaveClass(
+      "tabular-nums",
+    );
+  });
+});
+
 describe("CloseMoment — S7 wins harvest", () => {
   it("hides the wins card entirely when there is nothing to harvest or show", () => {
     renderClose();
