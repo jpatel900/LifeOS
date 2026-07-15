@@ -1,6 +1,6 @@
 # LifeOS
 
-Area-scoped personal workflow cockpit. The current shipped surface includes Today/Home Cockpit v1, Supabase-backed areas and workflow slices, AI parse-capture routing, Google Calendar connection/free-busy/approval-gated event creation, observability wrappers, and broad UX hardening, while the Phase 2 mock vertical slice remains available for local triage.
+Area-scoped personal workflow cockpit. V1 is the shipped baseline, not the product ceiling. The current surface includes Today/Home Cockpit v1, Supabase-backed areas and workflow slices, AI parse-capture routing, Google Calendar connection/free-busy/approval-gated event creation, observability wrappers, and broad UX hardening, while the Phase 2 mock vertical slice remains available for local triage. Reviewed evolution follows [ADR 0005](docs/adr/0005-staged-evolution-after-v1.md).
 
 Project documentation lives in `docs/`. For bounded agent/developer orientation, search first, use `pnpm agent:context <area>` when helpful, then read `docs/PROJECT_STATE.md` and the relevant authority docs only as needed. These helpers do not replace authority docs.
 
@@ -9,7 +9,7 @@ Project documentation lives in `docs/`. For bounded agent/developer orientation,
 Authority decreases down the list. Higher entries override lower ones when they conflict.
 
 1. **AGENTS.md** — Agent operating rules; highest authority for Cursor/Codex behavior.
-2. **REQUIREMENTS.md** — Product requirements and V1 scope.
+2. **REQUIREMENTS.md** — Product requirements, permanent boundaries, and approved evolution scope.
 3. **ARCHITECTURE.md** — Technical architecture and boundaries.
 4. **DATA_MODEL.md** — Canonical domain and data model.
 5. **ENGINEERING_INVARIANTS.md** — System-level engineering guarantees and their enforcement.

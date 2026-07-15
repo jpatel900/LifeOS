@@ -1,15 +1,14 @@
 # Vision Execution Companion — for mid-tier agents
 
-Converts vision-fable-final-pass.md + vision-fable-deeper-pass.md into
-executable contracts. **You (the reading agent) do NOT need to understand
-the vision prose to act correctly — this file is sufficient.** Rules that
-bind you: (1) every item enters through doctrine first (REQUIREMENTS.md FR
-via docs PR, or STAGE_BRIEFS.md ¶, or a comment on issue #292/#293) —
-NEVER code-first; (2) nothing here jumps the active queue (S5–S9 into the
-moments shell finishes first); (3) respect stage gates — an item marked
-Stage 2 waits for the #292 gate; (4) uncertainty escalates to the owner,
-never merges; (5) when this file conflicts with merged doctrine on main,
-main wins — flag the conflict, don't resolve it.
+Converts the important LifeOS vision passes into candidate contracts. Read the
+source vision when product intent or taste matters; this companion makes the
+candidate mechanics easier to review but is not standalone implementation
+authority. Rules that bind you: (1) every item enters through requirements or
+an ADR before code; (2) respect current issue ownership and real dependencies;
+(3) apply ADR 0005 — stage labels order dependency and risk, while only
+evidence-dependent behavior waits for relevant usage evidence; (4) uncertainty
+escalates to the owner; (5) merged doctrine wins conflicts, which must be
+surfaced rather than silently resolved.
 
 Ordered by priority. Each item: WHAT / WHERE IT LANDS / WHEN / SPEC /
 DONE-WHEN / NEVER.
@@ -83,24 +82,27 @@ SPEC:
 WHAT: Second trust ladder governing WHEN the system may speak, per
 surface class. I0 asked-only; I1 user-initiated moments only; I2 mid-day
 in-app interjection, budgeted; I3 outside-app contact.
-LANDS: NOW as doctrine (cheap): FR reservation in REQUIREMENTS ("FR —
+LANDS: NOW as doctrine (cheap): FR contract in REQUIREMENTS ("FR —
 Initiative ladder; all current surfaces are I1-capped") + ¶ in
-STAGE_BRIEFS Stage 3/4 sections + note on #293. Code later (Stage 3+).
+STAGE_BRIEFS initiative sections + note on #293. I2+ code waits for its
+per-class evidence, reviewed contract, and explicit trust graduation.
 SPEC (doctrine text to write verbatim-ish):
 
 - Every proactive surface declares an initiative class in code/config.
-- Stage 1–2 hard cap: nothing above I1. I2 unlocks Stage 3 (budget: max 1
-  interjection/day, evidence-strong classes only). I3 unlocks Stage 4,
-  per-class graduation: >= 20 I2-rung acceptances with dismiss-rate <
-  20%, shadow-rehearsed first (log would-have-interjected, measure
-  would-have-been-welcome via next-action data).
+- Every class starts capped at I1. I2 eligibility requires shadow rehearsal,
+  at least 20 eligible I1/shadow opportunities, acceptance or welcome rate >=
+  80%, dismiss-rate < 20%, and explicit graduation approval; budget remains
+  max 1 interjection/day. I3 additionally requires a separately reviewed
+  external-channel/write contract and >= 20 accepted I2 interjections for the
+  class.
 - Demotion automatic: 3 dismissals of a class in 7 days → class drops one
   rung, 14-day cooldown before re-graduation eligibility.
 - Hermes/notification work MUST cite this FR; the "no notifications"
   non-goal becomes "capped at I1 until graduation," not deleted.
   DONE-WHEN (doctrine phase): FR merged with the numbers above; #293 note
   links it; graveyard unchanged.
-  NEVER: implement I2+ before Stage 3 gate; exempt any surface class;
+  NEVER: implement I2+ before class-specific evidence, reviewed contract, and
+  explicit trust graduation; exempt any surface class;
   let delight events (item 7) bypass this ladder.
 
 ## 4. TRUST KERNEL (one primitive under all ladders)
@@ -327,9 +329,10 @@ perimeter-horizon ¶+household-boundary graveyard line. All words, no
 code. Owner reviews once.
 Batch B (small code, after S5–S9): item 6 (context diet guard), Compost,
 Life Archive export.
-Batch C (Stage 2 gate opens): Triggers, Mirror v1, Rehearsal, sanctuary
-mark build, Rupture Protocol.
-Batch D (Stage 3/4 gates): everything else, per its ¶.
+Batch C (after each capability's named dependencies and evidence gates are met):
+Triggers, Mirror v1, Rehearsal, sanctuary mark build, Rupture Protocol.
+Batch D (higher-risk or evidence-dependent capabilities): everything else, per
+its paragraph and ADR 0005 classification.
 
 Every batch: work in an isolated worktree; issue-body contract first
 (copy the relevant item block into the issue verbatim); suggestion/

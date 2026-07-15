@@ -27,7 +27,7 @@ Scale validation to the change. Docs-only work needs doc/guard tests and formatt
 
 ## Architecture snapshot
 
-LifeOS is a single-user, area-scoped personal workflow cockpit: capture → AI parse → triage → time-block planning → approval-gated Google Calendar write → execute → review → health. V1 server logic lives in Next.js Route Handlers / Server Actions in `apps/web`; Supabase provides Auth/Postgres/RLS; shared schemas live in `packages/schemas`; app-local UI primitives live in `apps/web/src/components/ui` with tokens in `apps/web/src/app/globals.css`.
+LifeOS is a single-user, area-scoped personal workflow cockpit: capture → AI parse → triage → time-block planning → approval-gated Google Calendar write → execute → review → health. The shipped V1 baseline is the foundation for reviewed evolution, not a ceiling; ADR 0005 distinguishes evidence-dependent gates from data-independent foundations. Current server logic lives in Next.js Route Handlers / Server Actions in `apps/web`; Supabase provides Auth/Postgres/RLS; shared schemas live in `packages/schemas`; app-local UI primitives live in `apps/web/src/components/ui` with tokens in `apps/web/src/app/globals.css`.
 
 ## Binding invariants
 

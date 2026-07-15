@@ -41,7 +41,6 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/OBSERVABILITY_RUNBOOK.md",
   "docs/VERCEL_PRODUCTION_CHECKLIST.md",
   "docs/agent/CODEX_PROMPT_TEMPLATE.md",
-  "docs/agent/HANDOVER.md",
   "docs/vision/vision-fable-final-pass.md",
   "docs/vision/vision-fable-deeper-pass.md",
   "docs/vision/vision-fable-wider-pass.md",

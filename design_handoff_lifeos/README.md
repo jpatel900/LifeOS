@@ -1,5 +1,7 @@
 # Handoff: LifeOS — calm, glanceable workflow cockpit
 
+> **Status:** Historical design reference. This bundle preserves important visual intent, but it does not authorize product scope or override the repository's `AGENTS.md`, requirements, UX contract, or ADRs. Reuse its ideas through reviewed current contracts.
+
 ## Overview
 LifeOS is a personal GTD-style cockpit: a thought flows **Capture → Triage → Plan → Execute → Review**, with **Health** as a system check and an **All areas** cross-cutting overview. This redesign keeps every existing feature but cuts cognitive load: one primary action per screen, progressive disclosure, state said once, quiet chrome. The guiding bar is **glanceability** — meaning should land pre-cognitively (size-by-load bars, color-by-area cards, count-bearing nav, progress rings), not after reading.
 
