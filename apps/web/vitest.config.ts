@@ -10,6 +10,13 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
+      // D-13 (#483): next/font/local is rewritten by the Next SWC plugin at
+      // build time and is not callable under vitest, so importing app/layout.tsx
+      // throws without this. See the stub for the full rationale.
+      "next/font/local": resolve(
+        __dirname,
+        "./src/testing/nextFontLocalStub.ts",
+      ),
     },
   },
   test: {

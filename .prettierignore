@@ -12,6 +12,11 @@ pnpm-lock.yaml
 # wholesale rather than fix real drift. See PR for chore/ci-cost-hardening.
 design_handoff_lifeos/**
 docs/implementation-planning/ui-handoff-conflicts/**
+# D-13 (#483): self-hosted Inter binaries + their OFL notice. Prettier has no
+# .woff2 parser so it skips them anyway, but the format gate is blocking and
+# these are vendored-verbatim files (reformatting the licence text would also
+# breach the OFL's requirement that the notice travel unmodified).
+apps/web/src/app/fonts/**
 # Vendored skill-hub content synced verbatim by the daily sync workflow —
 # externally authored, and some files are prettier-non-idempotent (format
 # then check still fails), which redded main on 2026-07-10 (#496 -> revert

@@ -2,6 +2,33 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* D-13 (issue #483): the sans typeface token — the single source of truth for
+   every sans surface in the app. Before this, the stack was hardcoded verbatim
+   at five sites (body, .lifeos-cockpit, .workflow-page-title,
+   .workflow-metric-value, h1-h4); they now all read `var(--font-sans)`.
+
+   `--font-inter` is emitted by next/font/local (see app/layout.tsx) onto <html>
+   and already carries BOTH the face and its auto-generated metric-matched
+   fallback, so no layout shift on swap. It is deliberately a different name
+   from --font-sans: next/font's class lands on <html>, the same element :root
+   selects, so reusing one name would put two equal-specificity declarations on
+   one element and let injection order pick the winner.
+
+   The in-var fallback is the pre-D-13 stack verbatim, so if the face ever fails
+   to load or the loader class is absent (e.g. a bare jsdom render), text
+   degrades to exactly what shipped before rather than to the browser default —
+   which is what a bare `var(--font-sans)` with no fallback would do, since an
+   undefined var makes the whole declaration invalid at computed-value time.
+
+   The dead `Inter` entry that used to sit after "Segoe UI" is gone: nothing
+   self-hosted the face, so it never matched and never loaded. It is now real
+   and lives at the front of the chain. */
+:root {
+  --font-sans:
+    var(--font-inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto),
+    sans-serif;
+}
+
 :root {
   /* D-7a (issue #483): light-theme values port prototype-2-today-home.html's
      light axis verbatim (hex -> oklch, Björn Ottosson's sRGB->OKLab formulas)
@@ -191,11 +218,10 @@ body {
   @apply bg-background text-foreground antialiased;
   margin: 0;
   min-height: 100vh;
-  /* D-7b (issue #483): prototype-2-today-home.html's system font stack,
-     ported verbatim (--font). No webfont load — first-paint text renders
-     in the OS UI font on every platform. */
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  /* D-13 (issue #483): self-hosted Inter via the --font-sans token. Supersedes
+     D-7b's system-only stack — the face is now committed and loaded locally, so
+     first paint no longer depends on the OS UI font. */
+  font-family: var(--font-sans);
   background:
     radial-gradient(
       circle at top center,
@@ -294,9 +320,8 @@ body {
   min-height: 100vh;
   background: var(--bd);
   color: var(--ink);
-  /* D-7b (issue #483): prototype-2-today-home.html's system font stack. */
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  /* D-13 (issue #483): self-hosted Inter via the --font-sans token. */
+  font-family: var(--font-sans);
   transition:
     background-color 0.25s ease,
     color 0.25s ease;
@@ -680,8 +705,7 @@ summary {
 
 .workflow-page-title {
   margin: 0;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  font-family: var(--font-sans);
   font-size: clamp(1.9rem, 2vw + 1.2rem, 2.9rem);
   line-height: 0.98;
   letter-spacing: -0.03em;
@@ -1149,8 +1173,7 @@ summary {
 
 .workflow-metric-value {
   margin-top: 0.45rem;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  font-family: var(--font-sans);
   font-size: clamp(1.55rem, 2vw + 0.65rem, 2.2rem);
   line-height: 0.95;
   letter-spacing: -0.03em;
@@ -1377,8 +1400,7 @@ h1,
 h2,
 h3,
 h4 {
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: -0.01em;
 }
 
@@ -1484,9 +1506,20 @@ health-*/review-* classes above stay untouched so the
   line-height: 1.15;
 }
 
+/* D-13 (issue #483): the measure was `62ch`, and `ch` is the advance of the
+   font's OWN '0' glyph — so it silently re-tunes itself whenever the face
+   changes. Under Segoe UI 62ch resolved to ~535px; under Inter the same 62ch
+   would resolve to ~626px, visibly re-wrapping this subhead purely as a
+   side-effect of the font swap.
+   Pinned to a font-independent rem measure holding the width Segoe rendered,
+   which is the wrap D-2 actually designed against. This is also the better
+   typographic answer, not just the conservative one: at this 15.2px size ~535px
+   is a ~70-character line, inside the 45-75 comfortable-measure range, whereas
+   Inter's 62ch (~626px, ~82 chars) would overshoot it. The `ch` intent was
+   never "62 zeros wide" — it was "one comfortable line". */
 .moments-daysynthesis {
   margin: 0;
-  max-width: 62ch;
+  max-width: 33.5rem;
   font-size: 0.95rem;
   color: var(--muted-foreground);
 }
