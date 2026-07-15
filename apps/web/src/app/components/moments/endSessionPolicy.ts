@@ -9,9 +9,16 @@ export type EndSessionAbortReason =
 export type EndSessionResult =
   | {
       status: "closed";
-      resolution: "ordinary" | "cut_scope" | "decision";
+      // #613: "deferred" is the atomic cap-DEFER outcome — the session and
+      // the task deferral committed as one transaction, so it is a truthful
+      // unified close (see apply_execution_session_defer / #587's
+      // collision-resolution carve-out that this issue upgrades).
+      resolution: "ordinary" | "cut_scope" | "decision" | "deferred";
     }
   | {
+      // Preserved for the local-only/failure paths: the split truth still
+      // stands when the transaction did not durably commit (offline, or the
+      // RPC threw) — a unified "closed" would lie in those cases.
       status: "split";
       resolution: "defer_unconfirmed" | "defer_failed";
     }
@@ -40,7 +47,14 @@ interface EndSessionPolicyDependencies {
     note: string | null,
     capOutcome?: "cut_scope" | "deferred",
   ): Promise<void>;
-  deferTask(taskId: string): void;
+  // #613: the atomic cap-DEFER path — replaces the prior markSession(cap
+  // "deferred") + deferTask(taskId) two-call split with one transactional
+  // call that reports which of the three real outcomes happened.
+  deferTaskWithSession(
+    taskId: string,
+    actualMinutes: number,
+    notes: string | null,
+  ): Promise<"persisted" | "local-only" | "failure">;
 }
 
 export function composeEndSessionNote(
@@ -99,18 +113,23 @@ export async function runEndSessionPolicy(
       if (!carryNote)
         return { status: "aborted", reason: "missing_carry_note" };
 
-      await dependencies.markSession(
-        "stuck",
+      // #613: one transactional call carries the session outcome AND the
+      // task deferral together — the result IS the truth this policy
+      // reports, never an assumed/optimistic "split".
+      const deferResult = await dependencies.deferTaskWithSession(
+        input.task.id,
         input.actualMinutes,
         composeEndSessionNote(input.note, `dod_cap.v1 deferred: ${carryNote}`),
-        "deferred",
       );
-      try {
-        dependencies.deferTask(input.task.id);
-        return { status: "split", resolution: "defer_unconfirmed" };
-      } catch {
-        return { status: "split", resolution: "defer_failed" };
+
+      if (deferResult === "persisted") {
+        return { status: "closed", resolution: "deferred" };
       }
+      return {
+        status: "split",
+        resolution:
+          deferResult === "local-only" ? "defer_unconfirmed" : "defer_failed",
+      };
     }
 
     return { status: "aborted", reason: "invalid_cap_choice" };

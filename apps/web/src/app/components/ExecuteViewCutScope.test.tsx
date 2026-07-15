@@ -203,4 +203,21 @@ describe("ExecuteView cut-scope cap moment (FR-031 slice 7)", () => {
       expect(onFinish).toHaveBeenCalledOnce();
     },
   );
+
+  // #613: the atomic cap-DEFER upgrade — a persisted defer now resolves as a
+  // unified closed/deferred result, not the interim split. The sheet must
+  // close on this outcome exactly like every other "closed" resolution.
+  it("closes the sheet after an atomic DEFER settles with closed/deferred", async () => {
+    const onFinish = vi
+      .fn<() => Promise<EndSessionResult>>()
+      .mockResolvedValue({ status: "closed", resolution: "deferred" });
+    renderExecuteView(approvedMapTask, onFinish);
+
+    fireEvent.click(screen.getByTestId("cockpit-end-session"));
+    fireEvent.click(screen.getByTestId("end-session-save"));
+
+    await screen.findByText("Focus queue");
+    expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
+    expect(onFinish).toHaveBeenCalledOnce();
+  });
 });

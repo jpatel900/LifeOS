@@ -39,7 +39,9 @@ interface UseFlowFocusSessionOptions {
   setMoment(moment: MomentValue): void;
   startTaskSession: ReturnType<typeof useWorkflow>["startTaskSession"];
   markSession: ReturnType<typeof useWorkflow>["markSession"];
-  deferTask: ReturnType<typeof useWorkflow>["deferTask"];
+  // #613: atomic cap-DEFER path (replaces the interim markSession+deferTask
+  // split for this one outcome; see endSessionPolicy.ts).
+  deferTaskWithSession: ReturnType<typeof useWorkflow>["deferTaskWithSession"];
   taskMapDraft: ReturnType<typeof useWorkflow>["taskMapDraft"];
   requestTaskMapDraft: ReturnType<typeof useWorkflow>["requestTaskMapDraft"];
   dismissTaskMapDraft: ReturnType<typeof useWorkflow>["dismissTaskMapDraft"];
@@ -61,7 +63,7 @@ export function useFlowFocusSession({
   setMoment,
   startTaskSession,
   markSession,
-  deferTask,
+  deferTaskWithSession,
   taskMapDraft,
   requestTaskMapDraft,
   dismissTaskMapDraft,
@@ -201,7 +203,7 @@ export function useFlowFocusSession({
               ? window.prompt(message)
               : window.prompt(message, defaultValue),
           markSession,
-          deferTask,
+          deferTaskWithSession,
         },
       );
       if (result.status === "aborted") {
@@ -230,16 +232,24 @@ export function useFlowFocusSession({
             : "Session saved — deferral not yet confirmed"
           : result.resolution === "cut_scope"
             ? "Scope cut and session closed"
-            : outcome === "completed"
-              ? "Session complete"
-              : outcome === "partial"
-                ? "Partial progress saved"
-                : outcome === "skipped"
-                  ? "Skipped — carried to review"
-                  : "Stuck — logged for review",
+            : result.resolution === "deferred"
+              ? "Deferred — saved and moved to backlog"
+              : outcome === "completed"
+                ? "Session complete"
+                : outcome === "partial"
+                  ? "Partial progress saved"
+                  : outcome === "skipped"
+                    ? "Skipped — carried to review"
+                    : "Stuck — logged for review",
       );
     },
-    [deferTask, focusedTask, markSession, session.remaining, showToast],
+    [
+      deferTaskWithSession,
+      focusedTask,
+      markSession,
+      session.remaining,
+      showToast,
+    ],
   );
 
   const pauseFocus = useCallback(() => {

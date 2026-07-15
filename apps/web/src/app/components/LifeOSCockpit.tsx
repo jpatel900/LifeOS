@@ -113,6 +113,7 @@ export function LifeOSCockpit({
     unplanTask,
     carryForwardTask,
     deferTask,
+    deferTaskWithSession,
     dropTask,
     saveReview,
     clearWipRefusal,
@@ -332,7 +333,7 @@ export function LifeOSCockpit({
           capOutcome
             ? markSession(outcome, minutes, composedNote, capOutcome)
             : finish(outcome, minutes, composedNote),
-        deferTask,
+        deferTaskWithSession,
       },
     );
 
@@ -358,13 +359,15 @@ export function LifeOSCockpit({
           : "Session saved — deferral not yet confirmed"
         : result.resolution === "cut_scope"
           ? "Scope cut and session closed"
-          : status === "completed"
-            ? "Session complete"
-            : status === "partial"
-              ? "Partial progress saved"
-              : status === "skipped"
-                ? "Skipped — carried to review"
-                : "Stuck — logged for review",
+          : result.resolution === "deferred"
+            ? "Deferred — saved and moved to backlog"
+            : status === "completed"
+              ? "Session complete"
+              : status === "partial"
+                ? "Partial progress saved"
+                : status === "skipped"
+                  ? "Skipped — carried to review"
+                  : "Stuck — logged for review",
     );
     navigate("review");
     return result;

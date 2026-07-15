@@ -7,7 +7,10 @@ function dependencies(promptAnswers: Array<string | null> = []) {
   return {
     prompt: vi.fn(() => promptAnswers.shift() ?? null),
     markSession: vi.fn().mockResolvedValue(undefined),
-    deferTask: vi.fn(),
+    // #613: the atomic cap-DEFER path. Defaults to "persisted" (the common
+    // case); individual tests override the resolved value to exercise the
+    // local-only/failure split-truth branches.
+    deferTaskWithSession: vi.fn().mockResolvedValue("persisted"),
   };
 }
 
@@ -40,11 +43,14 @@ describe("runEndSessionPolicy", () => {
         "Operator note\n\ndod_cap.v1 cut_scope: Smaller DoD",
         "cut_scope",
       );
-      expect(deps.deferTask).not.toHaveBeenCalled();
+      expect(deps.deferTaskWithSession).not.toHaveBeenCalled();
     },
   );
 
-  it("maps DEFER to one stuck write and exactly one task deferral", async () => {
+  // #613: DEFER now goes through ONE atomic call — no separate markSession
+  // write for the session outcome, so a persisted result is a truthful
+  // unified "closed", not the interim split.
+  it("maps a persisted DEFER to one atomic call and a unified closed/deferred result", async () => {
     const deps = dependencies(["defer", "Continue from section two"]);
 
     const result = await runEndSessionPolicy(
@@ -62,26 +68,45 @@ describe("runEndSessionPolicy", () => {
       deps,
     );
 
+    expect(result).toEqual({ status: "closed", resolution: "deferred" });
+    expect(deps.markSession).not.toHaveBeenCalled();
+    expect(deps.deferTaskWithSession).toHaveBeenCalledOnce();
+    expect(deps.deferTaskWithSession).toHaveBeenCalledWith(
+      "task-1",
+      25,
+      "Good first pass\n\ndod_cap.v1 deferred: Continue from section two",
+    );
+  });
+
+  it("reports the split unconfirmed truth when the atomic defer resolves local-only", async () => {
+    const deps = dependencies(["defer", "Continue from section two"]);
+    deps.deferTaskWithSession.mockResolvedValue("local-only");
+
+    const result = await runEndSessionPolicy(
+      {
+        outcome: "partial",
+        actualMinutes: 25,
+        note: null,
+        capReached: true,
+        task: {
+          id: "task-1",
+          definitionOfDone: "Original DoD",
+          taskType: null,
+        },
+      },
+      deps,
+    );
+
     expect(result).toEqual({
       status: "split",
       resolution: "defer_unconfirmed",
     });
-    expect(deps.markSession).toHaveBeenCalledOnce();
-    expect(deps.markSession).toHaveBeenCalledWith(
-      "stuck",
-      25,
-      "Good first pass\n\ndod_cap.v1 deferred: Continue from section two",
-      "deferred",
-    );
-    expect(deps.deferTask).toHaveBeenCalledOnce();
-    expect(deps.deferTask).toHaveBeenCalledWith("task-1");
+    expect(deps.deferTaskWithSession).toHaveBeenCalledOnce();
   });
 
-  it("reports a saved session plus failed deferral when defer throws synchronously", async () => {
+  it("reports the split failed truth when the atomic defer rejects/fails", async () => {
     const deps = dependencies(["defer", "Continue from section two"]);
-    deps.deferTask.mockImplementation(() => {
-      throw new Error("defer failed");
-    });
+    deps.deferTaskWithSession.mockResolvedValue("failure");
 
     const result = await runEndSessionPolicy(
       {
@@ -99,8 +124,7 @@ describe("runEndSessionPolicy", () => {
     );
 
     expect(result).toEqual({ status: "split", resolution: "defer_failed" });
-    expect(deps.markSession).toHaveBeenCalledOnce();
-    expect(deps.deferTask).toHaveBeenCalledOnce();
+    expect(deps.deferTaskWithSession).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -128,7 +152,7 @@ describe("runEndSessionPolicy", () => {
 
     expect(result.status).toBe("aborted");
     expect(deps.markSession).not.toHaveBeenCalled();
-    expect(deps.deferTask).not.toHaveBeenCalled();
+    expect(deps.deferTaskWithSession).not.toHaveBeenCalled();
   });
 
   it("preserves an ordinary non-cap outcome, duration, and note", async () => {
