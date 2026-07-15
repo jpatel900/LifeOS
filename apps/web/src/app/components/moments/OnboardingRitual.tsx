@@ -22,6 +22,7 @@ import {
   type SessionLengthMinutes,
 } from "@/lib/onboarding/onboarding";
 import { CaptureCore } from "./CaptureCore";
+import { HIT_TARGET_MIN, HIT_TARGET_ROW } from "./hitTarget";
 import { useFocusTrap } from "./useFocusTrap";
 import { useReturnFocus } from "./useReturnFocus";
 
@@ -379,7 +380,10 @@ export function OnboardingRitual({
                   onClick={() => handleCycleColor(chip.key)}
                   disabled={saving}
                   aria-label={`Change color for ${chip.name || "new area"} (now ${presetLabel(chip.color)})`}
-                  className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-card"
+                  className={cn(
+                    HIT_TARGET_MIN,
+                    "shrink-0 rounded-full border border-border bg-card",
+                  )}
                   data-testid="onboarding-area-color"
                 >
                   <span
@@ -397,6 +401,7 @@ export function OnboardingRitual({
                   disabled={saving}
                   placeholder="Area name"
                   aria-label="Area name"
+                  className={cn(HIT_TARGET_ROW, "min-w-0")}
                   data-testid="onboarding-area-name"
                 />
                 <Button
@@ -406,6 +411,7 @@ export function OnboardingRitual({
                   onClick={() => handleRemoveChip(chip.key)}
                   disabled={saving}
                   aria-label={`Remove ${chip.name || "new area"}`}
+                  className={cn(HIT_TARGET_MIN, "shrink-0")}
                   data-testid="onboarding-area-remove"
                 >
                   Remove
@@ -421,6 +427,7 @@ export function OnboardingRitual({
               size="sm"
               onClick={handleAddChip}
               disabled={saving}
+              className={HIT_TARGET_MIN}
               data-testid="onboarding-area-add"
             >
               Add area
@@ -443,6 +450,7 @@ export function OnboardingRitual({
               variant="ghost"
               onClick={() => void handleAreasSubmit(prefilledChipsRef.current)}
               disabled={saving}
+              className={HIT_TARGET_MIN}
               data-testid="onboarding-areas-skip"
             >
               Skip — keep the defaults
@@ -451,6 +459,7 @@ export function OnboardingRitual({
               type="button"
               onClick={() => void handleAreasSubmit(trimmedChips)}
               disabled={saving || trimmedChips.length === 0}
+              className={HIT_TARGET_MIN}
               data-testid="onboarding-areas-continue"
             >
               {saving ? "Saving..." : "Continue"}
@@ -473,7 +482,10 @@ export function OnboardingRitual({
                 onChange={(event) =>
                   setWorkStartHour(Number(event.target.value))
                 }
-                className="min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground"
+                className={cn(
+                  HIT_TARGET_ROW,
+                  "rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground",
+                )}
                 data-testid="onboarding-day-start"
               >
                 {WORK_HOURS.map((hour) => (
@@ -492,7 +504,10 @@ export function OnboardingRitual({
               <select
                 value={workEndHour}
                 onChange={(event) => setWorkEndHour(Number(event.target.value))}
-                className="min-h-10 rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground"
+                className={cn(
+                  HIT_TARGET_ROW,
+                  "rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground",
+                )}
                 data-testid="onboarding-day-end"
               >
                 {WORK_HOURS.map((hour) => (
@@ -519,7 +534,8 @@ export function OnboardingRitual({
                   type="button"
                   onClick={() => setSessionMinutes(minutes)}
                   className={cn(
-                    "min-h-10 rounded-full border px-4 text-sm font-semibold",
+                    HIT_TARGET_MIN,
+                    "rounded-full border px-4 text-sm font-semibold",
                     sessionMinutes === minutes
                       ? "border-transparent bg-primary text-primary-foreground"
                       : "border-input text-muted-foreground hover:text-foreground",
@@ -552,6 +568,7 @@ export function OnboardingRitual({
               type="button"
               variant="ghost"
               onClick={() => setStep("capture")}
+              className={HIT_TARGET_MIN}
               data-testid="onboarding-day-skip"
             >
               Skip — keep the defaults
@@ -559,6 +576,7 @@ export function OnboardingRitual({
             <Button
               type="button"
               onClick={handleDayContinue}
+              className={HIT_TARGET_MIN}
               data-testid="onboarding-day-continue"
             >
               Continue
@@ -592,6 +610,7 @@ export function OnboardingRitual({
               type="button"
               variant="ghost"
               onClick={() => onComplete("skipped")}
+              className={HIT_TARGET_MIN}
               data-testid="onboarding-capture-skip"
             >
               Skip for now
