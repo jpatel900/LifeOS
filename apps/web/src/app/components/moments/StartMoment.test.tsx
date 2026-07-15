@@ -21,11 +21,6 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     topPendingTriageItem: null,
     greeting: "Good morning.",
     daySynthesis: "Nothing on the calendar, and nothing queued yet.",
-    // Defaults false: most existing fixtures below don't care about R3-A's
-    // orientation gate, and this keeps every test that doesn't explicitly
-    // opt in from silently disagreeing with a populated firstMove/focusItems
-    // override (real buildStartVM would compute false for any of those).
-    dayIsEmpty: false,
     ...overrides,
   };
 }
@@ -998,48 +993,17 @@ describe("StartMoment — D-8-POLISH composition (#483)", () => {
   });
 });
 
-describe("StartMoment — R3-A LoopOrientation gate (#483 round 3)", () => {
-  it("renders the loop-orientation diagram when the day is genuinely empty", () => {
-    const vm = baseVM({ dayIsEmpty: true });
-
-    render(
-      <StartMoment
-        vm={vm}
-        timeDisplay="clock"
-        now={NOW}
-        pipelineCounts={{}}
-        {...NOOP_HANDLERS}
-      />,
-    );
-
-    expect(screen.getByTestId("start-loop-orientation")).toBeInTheDocument();
-  });
-
-  it("does not render the loop-orientation diagram when dayIsEmpty is false, even with the truthful empty hero showing", () => {
-    // firstMove/topPendingTriageItem both null (state-3 empty hero) but
-    // dayIsEmpty explicitly false — e.g. a schedule block exists in a state
-    // deriveFirstMove didn't pick. The two gates are deliberately separate.
-    const vm = baseVM({ dayIsEmpty: false });
-
-    render(
-      <StartMoment
-        vm={vm}
-        timeDisplay="clock"
-        now={NOW}
-        pipelineCounts={{}}
-        {...NOOP_HANDLERS}
-      />,
-    );
-
-    expect(screen.getByTestId("start-moment-empty")).toBeInTheDocument();
-    expect(
-      screen.queryByTestId("start-loop-orientation"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("recedes when a real firstMove exists, even if dayIsEmpty were somehow true (defense in depth against an inconsistent VM)", () => {
+describe("StartMoment — pipeline rail (#483 round 4, post-LoopOrientation)", () => {
+  // R4-A: LoopOrientation (and the `vm.dayIsEmpty` gate that rendered it)
+  // is deleted — the ratified orientation content now lives inside
+  // PipelineOverview itself as an empty-pipeline state driven by
+  // `pipelineCounts`, not by a day-level VM flag. See
+  // PipelineOverview.test.tsx for that behaviour's coverage. StartMoment's
+  // own job is just to always render the rail and forward the live counts,
+  // regardless of the hero state (empty, promoted-triage, or a real
+  // firstMove) — proven once here rather than three times per hero state.
+  it("always renders exactly one pipeline rail, forwarding pipelineCounts through untouched", () => {
     const vm = baseVM({
-      dayIsEmpty: true,
       firstMove: {
         title: "Write report",
         why: "Oldest active commitment",
@@ -1063,47 +1027,20 @@ describe("StartMoment — R3-A LoopOrientation gate (#483 round 3)", () => {
         vm={vm}
         timeDisplay="clock"
         now={NOW}
-        pipelineCounts={{}}
+        pipelineCounts={{ capture: 2, triage: 0, plan: 0, execute: 0, review: 0 }}
         {...NOOP_HANDLERS}
       />,
     );
 
-    // The gate is a straight `vm.dayIsEmpty` read (see StartMoment.tsx) —
-    // this documents that StartMoment trusts the VM rather than
-    // re-deriving; production `buildStartVM` never produces this
-    // combination (see momentsViewModel.test.ts's dayIsEmpty coverage).
-    expect(screen.getByTestId("start-loop-orientation")).toBeInTheDocument();
-  });
-
-  it("recedes when a pending-triage item is promoted into the hero", () => {
-    const vm = baseVM({
-      dayIsEmpty: false,
-      counts: { pendingTriage: 1, activeTasks: 0, todayBlocks: 0 },
-      topPendingTriageItem: {
-        id: "c1",
-        summary: "Reply to the vendor email",
-        areaLabel: "Work",
-      },
-    });
-
-    render(
-      <StartMoment
-        vm={vm}
-        timeDisplay="clock"
-        now={NOW}
-        pipelineCounts={{}}
-        {...NOOP_HANDLERS}
-      />,
-    );
-
-    expect(screen.getByTestId("start-pending-triage-card")).toBeInTheDocument();
+    expect(screen.getByTestId("start-moment-pipeline-rail")).toBeInTheDocument();
+    expect(screen.getAllByTestId("pipeline-overview")).toHaveLength(1);
     expect(
-      screen.queryByTestId("start-loop-orientation"),
-    ).not.toBeInTheDocument();
+      screen.getByTestId("pipeline-overview-count-capture"),
+    ).toHaveTextContent("2");
   });
 
-  it("renders every pipeline stage, in order, as a short fragment (not a sentence)", () => {
-    const vm = baseVM({ dayIsEmpty: true });
+  it("the empty hero and the rail's own empty-pipeline caption mode can coexist without a second, duplicate diagram", () => {
+    const vm = baseVM();
 
     render(
       <StartMoment
@@ -1115,37 +1052,12 @@ describe("StartMoment — R3-A LoopOrientation gate (#483 round 3)", () => {
       />,
     );
 
-    const nodes = screen.getAllByTestId(/^start-loop-orientation-stage-/);
-    expect(nodes.map((node) => node.dataset.testid)).toEqual([
-      "start-loop-orientation-stage-capture",
-      "start-loop-orientation-stage-triage",
-      "start-loop-orientation-stage-plan",
-      "start-loop-orientation-stage-execute",
-      "start-loop-orientation-stage-review",
-    ]);
-    // No node's text should run long enough to read as a sentence — the
-    // diagram (position + connector), not prose, carries the sequence.
-    for (const node of nodes) {
-      expect((node.textContent ?? "").length).toBeLessThan(40);
-    }
-  });
-
-  it("never implies a state change: no node claims anything is done/scheduled/in progress", () => {
-    const vm = baseVM({ dayIsEmpty: true });
-
-    render(
-      <StartMoment
-        vm={vm}
-        timeDisplay="clock"
-        now={NOW}
-        pipelineCounts={{}}
-        {...NOOP_HANDLERS}
-      />,
-    );
-
-    const loop = screen.getByTestId("start-loop-orientation");
-    expect(loop.textContent?.toLowerCase()).not.toMatch(
-      /done|scheduled|in progress|completed|current/,
-    );
+    expect(screen.getByTestId("start-moment-empty")).toBeInTheDocument();
+    // Exactly one rail, in its own caption/explain mode (no counts prop
+    // means every stage defaults to 0) — never a second stacked element.
+    expect(screen.getAllByTestId("pipeline-overview")).toHaveLength(1);
+    expect(
+      screen.getByTestId("pipeline-overview-caption-capture"),
+    ).toBeInTheDocument();
   });
 });

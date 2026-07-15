@@ -78,7 +78,40 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * available space), so hugging it unconditionally would overflow a 390px
  * screen — confirmed by measurement during the round-2 visual check, this
  * is why mobile keeps the original stretched layout while desktop gets the
- * new hugged one, not the same treatment at both sizes. */
+ * new hugged one, not the same treatment at both sizes.
+ *
+ * R4-A (premium push #483 round 4): a critic found the rail duplicated by
+ * R3-A's `LoopOrientation` card, ~350px below it in the same main column —
+ * two renderings of the same five-stage taxonomy on one screen (the rail's
+ * `0 Capture · 0 Triage · 0 Plan · 0 Execute · 0 Review` on an empty day,
+ * then "The loop: Capture · Triage · Plan · Execute · Review" underneath).
+ * `LoopOrientation` is deleted; its ratified content (a short, cold-read-safe
+ * caption per stage, sourced from the same `PIPELINE_OVERVIEW_STAGES`) now
+ * lives HERE as this rail's own empty-pipeline state — one element, two
+ * states, not two elements stacked:
+ *  - Some stage has a nonzero count ("counts mode", today's/unchanged
+ *    behaviour): every cell shows its numeral + label, exactly as before.
+ *  - Every stage is zero ("explain mode"): the rail has nothing to count, so
+ *    each cell instead shows its label + a plain-language caption of what
+ *    the stage means. This is an all-or-nothing switch, not a per-cell one —
+ *    a row mixing bare zeros with prose captions would read as two
+ *    inconsistent visual languages side by side, worse than either alone.
+ *    `isEmpty` is derived from the same `counts` prop this rail already
+ *    owns (not `StartVM.dayIsEmpty`, a broader, differently-scoped signal
+ *    over blocks/focus/deferred/triage that this presentation-only rail has
+ *    no reason to depend on) — self-contained, so this component's
+ *    behaviour is fully explained by the one prop it already takes.
+ * Reusing the existing `sm:w-fit`/`sm:flex-none` skeleton in both modes
+ * means explain mode inherits R2-D's content-sized rail for free — it does
+ * NOT re-introduce a `flex-1`/`sm:justify-between` force-stretch (the defect
+ * R2-D removed from this exact rail, which `LoopOrientation`'s own node list
+ * had separately re-committed one card down).
+ * This also shrinks the empty-day page's height: explain mode's two short
+ * text lines (label + caption) sit inside the same cell that used to hold a
+ * much taller `text-xl`/`text-2xl` numeral, and the whole `LoopOrientation`
+ * card (~150px, its own `moments-card` padding + a second heading) is gone
+ * — part of the fix for the capture pill sitting on top of the last card's
+ * caption at 1366x768 (see StartMoment.tsx and the extended e2e guard). */
 
 export interface PipelineOverviewProps {
   counts: Record<string, number>;
@@ -93,8 +126,30 @@ const STAGE_LABELS: Record<PipelineOverviewStage, string> = {
   review: "Review",
 };
 
+// R4-A: explain-mode captions, shown per stage only when every stage's count
+// is zero (see the file doc comment). Plain language, 2-4 words, meant to
+// survive a cold read with no app context — no jargon like the deleted
+// LoopOrientation's "time-blocked, locally" (unclear what "locally" refers
+// to without already knowing the app). Grounded in docs/UX_FLOWS.md: Flow 2
+// (capture saves raw text and decides nothing -> arrives unsorted), Flow 4
+// (triage's real choices are accept/edit/reject), Flow 5 (planning proposals
+// stay local/unwritten until an explicit calendar write is approved -> a
+// "proposed", not confirmed, time block), Flow 7 (execute shows one task at
+// a time), Flow 9 (daily review is where the user sees what happened to
+// today's blocks/captures and decides what moves to tomorrow).
+const STAGE_CAPTION: Record<PipelineOverviewStage, string> = {
+  capture: "not sorted yet",
+  triage: "accept, edit, reject",
+  plan: "proposed time blocks",
+  execute: "one task, one focus",
+  review: "how today went",
+};
+
 export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
   const [activeStage, setActiveStage] = useState<string | null>(null);
+  const isEmpty = PIPELINE_OVERVIEW_STAGES.every(
+    (stage) => (counts[stage] ?? 0) === 0,
+  );
 
   return (
     <ul
@@ -129,18 +184,40 @@ export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
                 )}
                 data-testid={`pipeline-overview-stage-${stage}`}
               >
-                <span
-                  className={cn(
-                    "min-w-[2ch] text-xl font-[650] leading-none tracking-tight tabular-nums lining-nums sm:text-2xl",
-                    active ? "text-[var(--blu-fg)]" : "text-foreground",
-                  )}
-                  data-testid={`pipeline-overview-count-${stage}`}
-                >
-                  {counts[stage] ?? 0}
-                </span>
-                <span className="text-[11.5px] font-medium text-muted-foreground">
-                  {STAGE_LABELS[stage]}
-                </span>
+                {isEmpty ? (
+                  <>
+                    <span
+                      className={cn(
+                        "text-sm font-[650] leading-none tracking-tight sm:text-base",
+                        active ? "text-[var(--blu-fg)]" : "text-foreground",
+                      )}
+                      data-testid={`pipeline-overview-label-${stage}`}
+                    >
+                      {STAGE_LABELS[stage]}
+                    </span>
+                    <span
+                      className="text-[11px] leading-snug text-muted-foreground"
+                      data-testid={`pipeline-overview-caption-${stage}`}
+                    >
+                      {STAGE_CAPTION[stage]}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      className={cn(
+                        "min-w-[2ch] text-xl font-[650] leading-none tracking-tight tabular-nums lining-nums sm:text-2xl",
+                        active ? "text-[var(--blu-fg)]" : "text-foreground",
+                      )}
+                      data-testid={`pipeline-overview-count-${stage}`}
+                    >
+                      {counts[stage] ?? 0}
+                    </span>
+                    <span className="text-[11.5px] font-medium text-muted-foreground">
+                      {STAGE_LABELS[stage]}
+                    </span>
+                  </>
+                )}
               </button>
             </li>
           </Fragment>

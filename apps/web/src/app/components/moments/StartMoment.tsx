@@ -8,7 +8,6 @@ import { ScheduleList } from "./ScheduleList";
 import { SideRail } from "./SideRail";
 import { PipelineOverview } from "./PipelineOverview";
 import { FocusList } from "./FocusList";
-import { LoopOrientation } from "./LoopOrientation";
 import type { FirstMoveVM, StartVM } from "./momentsViewModel";
 
 /**
@@ -137,16 +136,19 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * (below Pipeline, ~200-250px of unexplained void at 1440x900 on an empty
  * day) survived three rounds of composition-only fixes because the empty
  * state genuinely had nothing else to say. The owner ratified the fix on
- * #478 directly: give it a real job. `vm.dayIsEmpty` (momentsViewModel/
- * start.ts — mirrors buildDaySynthesis's own "genuinely nothing" branch)
- * gates a new `LoopOrientation` section at the foot of the main column: a
- * map-first (position + shape, not prose) explanation of the five pipeline
- * stages a captured thought moves through, sourced from the same
- * `PIPELINE_OVERVIEW_STAGES` and `keymap.ts` singles-of-truth
- * `PipelineOverview`/`KeyboardLegend` already use — see LoopOrientation.tsx
- * for the full rationale. It renders only on the genuinely empty day and
- * disappears the instant any real block/focus/pending-triage signal
- * exists, so it can never compete with real data.
+ * #478 directly: give the empty day a real job — explain the five pipeline
+ * stages a captured thought moves through.
+ *
+ * R4-A (premium push #483, round 4) superseded R3-A's execution: the
+ * ratified orientation content landed as a *second*, separately-carded
+ * `LoopOrientation` section restating the live `PipelineOverview` rail's
+ * exact taxonomy ~350px below it in this same column — one screen, two
+ * renderings of "Capture · Triage · Plan · Execute · Review". `LoopOrientation`
+ * is deleted; the ratified content now lives INSIDE `PipelineOverview`
+ * itself, as that rail's own empty-pipeline state (every stage's count at
+ * zero) — see PipelineOverview.tsx's R4-A doc comment. This column no
+ * longer renders anything keyed off "is the day empty"; the rail decides
+ * its own presentation from the `pipelineCounts` prop it already receives.
  */
 
 export interface StartMomentProps {
@@ -386,8 +388,6 @@ export function StartMoment({
               />
             </CardContent>
           </Card>
-
-          {vm.dayIsEmpty ? <LoopOrientation /> : null}
         </div>
 
         <SideRail

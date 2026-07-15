@@ -203,6 +203,91 @@ test.describe("moments home capture pill clears the Pipeline row (#477)", () => 
   }
 });
 
+// R4-A (premium push #483 round 4): the #477 guard above only ever checked
+// one viewport (1280x900) at the scrolled-to-the-true-end position. Neither
+// caught the actual round-3 regression — at 1366x768 (the owner's real
+// laptop viewport), R3-A's LoopOrientation card grew the empty-day page
+// just tall enough that the pill covered real content (the last card's
+// caption row, mid-word) at the NATURAL, unscrolled load — not a scroll
+// position the trailing shell padding (MomentsThemeShell's pb-*, scoped to
+// the true scroll end) can ever reach. R4-A deleted LoopOrientation (merged
+// its content into the pipeline rail's own empty state, see
+// PipelineOverview.tsx), which is most of the fix, but the guarantee this
+// extends to prove is content-height-independent: on the genuinely-empty
+// Start day, at EVERY one of these desktop heights, in BOTH scroll
+// positions, the pill must never cover the rail, the schedule card, or the
+// Areas card. Unlike the #593 mobile-band guard's `endsAboveFold` carve-out
+// (written for content that's still reachable by scrolling further), scroll
+// ZERO here gets a STRICT check: the empty day is short enough that there's
+// nothing further below to scroll to reveal — a covered caption at rest is
+// exactly the "tim" cut-off bug, whether or not the user could later scroll
+// clear of it.
+test.describe("moments home capture pill clears content on the empty Start day at every desktop height (#483 round 4)", () => {
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1280, height: 800 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`pill never covers the rail/schedule/areas card at ${viewport.width}x${viewport.height}, scroll 0 and end`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const pill = page.getByTestId("capture-affordance");
+      const rail = page.getByTestId("start-moment-pipeline-rail");
+      const schedule = page.getByTestId("start-schedule-card");
+      const areas = page.getByTestId("side-rail-areas-card");
+      await expect(pill).toBeVisible();
+      await expect(rail).toBeVisible();
+      await expect(schedule).toBeVisible();
+      await expect(areas).toBeVisible();
+
+      // Truthful-data precondition: this guard is about the genuinely-empty
+      // day (the only state the deleted LoopOrientation ever rendered for),
+      // proven by the rail itself sitting in explain mode — a caption cell,
+      // not a numeral badge.
+      await expect(
+        page.getByTestId("pipeline-overview-caption-capture"),
+      ).toBeVisible();
+
+      const intersects = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y;
+
+      for (const position of ["zero", "end"] as const) {
+        await page.evaluate((pos) => {
+          window.scrollTo(
+            0,
+            pos === "zero" ? 0 : document.documentElement.scrollHeight,
+          );
+        }, position);
+
+        const pillBox = await pill.boundingBox();
+        expect(pillBox, `pill box at scroll ${position}`).not.toBeNull();
+
+        for (const [name, locator] of [
+          ["pipeline rail", rail],
+          ["schedule card", schedule],
+          ["areas card", areas],
+        ] as const) {
+          const box = await locator.boundingBox();
+          expect(box, `${name} box at scroll ${position}`).not.toBeNull();
+          expect(
+            intersects(pillBox!, box!),
+            `pill intersects ${name} at scroll ${position} (${viewport.width}x${viewport.height})`,
+          ).toBe(false);
+        }
+      }
+    });
+  }
+});
+
 // #553 (2026-07-13 owner-lens audit): at 390x844 the pill visibly covered two
 // rows of the Areas card (side-rail-areas-card, SideRail.tsx) on the Start
 // moment's default empty-state load. As #477's comment above documents, a
