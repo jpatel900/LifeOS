@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Settings as SettingsIcon } from "lucide-react";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { momentKeyLabel } from "@/lib/keys/keymap";
 import { cn } from "@/lib/utils";
 import { useMomentKeyboard } from "./useMomentKeyboard";
-import { HIT_TARGET_ROW, HIT_TARGET_INVISIBLE } from "./hitTarget";
+import { HIT_TARGET_MIN } from "./hitTarget";
 import { buildStartVM, buildFlowVM, buildCloseVM } from "./momentsViewModel";
 import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
 import { BottomNavigator } from "./BottomNavigator";
@@ -15,6 +16,9 @@ import {
   CountdownClockToggle,
   type CountdownClockValue,
 } from "./CountdownClockToggle";
+import { AreaSelector } from "./AreaSelector";
+import { MastheadThemeToggle } from "./MastheadThemeToggle";
+import { formatMastheadDate } from "./formatMastheadDate";
 import { CaptureAffordance } from "./CaptureAffordance";
 import { KeyboardLegend } from "./KeyboardLegend";
 import { CaptureOverlay } from "./CaptureOverlay";
@@ -556,18 +560,21 @@ export function TodayMoments({
     showToast("Welcome back");
   }, [ritual, showToast]);
 
+  // D-10 (#483): shared gate for the masthead's own guarded shortcuts (area
+  // cycle "A", theme toggle "D") — identical expression to
+  // useMomentKeyboard's `enabled` below, so neither shortcut can fire
+  // behind a modal/ritual/onboarding, matching every other global shortcut
+  // in this file.
+  const topbarShortcutsEnabled =
+    !captureOpen && !paletteOpen && !activeSheet && !ritualActive && !onboardingActive;
+
   useMomentKeyboard({
     onSwitchMoment: setMoment,
     onCapture: () => setCaptureOpen(true),
     onPalette: () => setPaletteOpen(true),
     onPrimary: runPrimary,
     onEscape: closeTopOverlay,
-    enabled:
-      !captureOpen &&
-      !paletteOpen &&
-      !activeSheet &&
-      !ritualActive &&
-      !onboardingActive,
+    enabled: topbarShortcutsEnabled,
   });
 
   const paletteActions = useMemo<CommandPaletteAction[]>(() => {
@@ -724,47 +731,62 @@ export function TodayMoments({
         />
       ) : (
         <>
+          {/* D-10 (#483): one composed masthead bar — brand+date on the
+              left, every control (moments, area, time display, theme,
+              settings) in a single tightened-gap cluster on the right,
+              replacing the previous two-separate-pills-plus-a-bare-link
+              layout the audit flagged as "loose grouping" (finding #4).
+              CountdownClockToggle and MomentSwitcher keep their own
+              existing pill shells byte-for-byte (out of this packet's file
+              ownership) — the regroup happens at this container level:
+              consistent control height (every control keeps its own
+              44px-floor hit target) and a tightened `gap-2` instead of the
+              previous `gap-3`. */}
           <header className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-baseline gap-3">
               <span className="text-sm font-semibold tracking-tight">
                 LifeOS · Today
               </span>
-              <select
-                aria-label="Area"
-                value={selectedAreaId ?? ""}
-                onChange={(event) =>
-                  setSelectedAreaId(event.target.value || null)
-                }
-                className={cn(
-                  HIT_TARGET_ROW,
-                  "rounded-md border border-border bg-background px-2 py-1 text-sm",
-                )}
-                data-testid="today-moments-area-switcher"
+              {/* Finding #2: the masthead had no date. Derived from the
+                  real `now` this component already threads through every
+                  other time-aware surface — never a fixed/fake string. */}
+              <span
+                className="text-sm text-muted-foreground"
+                data-testid="today-moments-date"
               >
-                <option value="">All areas</option>
-                {state.areas.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
-                ))}
-              </select>
+                {formatMastheadDate(now)}
+              </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <MomentSwitcher value={moment} onChange={setMoment} />
+              {/* Finding #1: native <select> replaced by a custom pill
+                  combobox — swatch + label + a real "A" kbd hint. */}
+              <AreaSelector
+                areas={state.areas}
+                value={selectedAreaId}
+                onChange={setSelectedAreaId}
+                shortcutEnabled={topbarShortcutsEnabled}
+              />
               <CountdownClockToggle
                 value={timeDisplay}
                 onChange={setTimeDisplay}
               />
-              <MomentSwitcher value={moment} onChange={setMoment} />
+              {/* Finding #3: topbar theme toggle, wired to the existing
+                  next-themes setup — a real "D" kbd hint. */}
+              <MastheadThemeToggle shortcutEnabled={topbarShortcutsEnabled} />
+              {/* Finding #4: demoted from a bare text link to an
+                  icon-weighted pill matching the rest of the cluster. */}
               <Link
                 href="/settings/areas"
+                aria-label="Settings"
                 className={cn(
-                  HIT_TARGET_INVISIBLE,
-                  "text-sm font-medium text-muted-foreground hover:text-foreground",
+                  HIT_TARGET_MIN,
+                  "rounded-full border border-border bg-muted/40 text-muted-foreground transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 hover:text-foreground motion-reduce:transition-none motion-reduce:duration-0",
                 )}
                 data-testid="moments-settings-link"
               >
-                Settings
+                <SettingsIcon className="size-4" aria-hidden="true" />
               </Link>
             </div>
           </header>

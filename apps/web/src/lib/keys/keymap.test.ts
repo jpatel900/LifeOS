@@ -45,6 +45,18 @@ describe("moment keymap", () => {
         },
         {
           "caseInsensitive": true,
+          "id": "cycle-area",
+          "key": "a",
+          "label": "A",
+        },
+        {
+          "caseInsensitive": true,
+          "id": "toggle-theme",
+          "key": "d",
+          "label": "D",
+        },
+        {
+          "caseInsensitive": true,
           "chord": {
             "metaOrCtrl": true,
           },
