@@ -178,19 +178,6 @@ export interface StartVM {
    */
   greeting: string;
   daySynthesis: string;
-  /**
-   * R3-A (design alignment, #483 round 3): true only for the genuinely
-   * empty day — no blocks today, no in-budget or deferred focus items, and
-   * nothing pending triage. Same predicate `buildDaySynthesis` already uses
-   * for its "Nothing on the calendar, and nothing queued yet." branch (see
-   * below) — not a new signal, just the existing one named and exposed so
-   * `StartMoment` can gate orientation content on it without re-deriving.
-   * Deliberately does NOT factor in `staleProject`/`recoveryNudge`: those
-   * describe yesterday, not today, so a stale-project note or a recovery
-   * nudge can still surface on an otherwise-empty day without suppressing
-   * this flag.
-   */
-  dayIsEmpty: boolean;
 }
 
 interface StartVMOptions {
@@ -730,15 +717,6 @@ export function buildStartVM(
     pendingTriageCount: pendingTriage,
   });
 
-  // R3-A (#483 round 3): mirrors buildDaySynthesis's own "genuinely
-  // nothing" branch condition exactly, so the flag can never disagree with
-  // the sentence already being shown above it.
-  const dayIsEmpty =
-    blocks.length === 0 &&
-    focusItems.length === 0 &&
-    deferredItems.length === 0 &&
-    pendingTriage === 0;
-
   return {
     firstMove,
     blocks,
@@ -758,6 +736,5 @@ export function buildStartVM(
     topPendingTriageItem,
     greeting,
     daySynthesis,
-    dayIsEmpty,
   };
 }
