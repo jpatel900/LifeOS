@@ -1507,19 +1507,21 @@ health-*/review-* classes above stay untouched so the
 }
 
 /* D-13 (issue #483): the measure was `62ch`, and `ch` is the advance of the
-   font's OWN '0' glyph — so it silently re-tunes itself whenever the face
-   changes. Under Segoe UI 62ch resolved to ~535px; under Inter the same 62ch
-   would resolve to ~626px, visibly re-wrapping this subhead purely as a
-   side-effect of the font swap.
-   Pinned to a font-independent rem measure holding the width Segoe rendered,
-   which is the wrap D-2 actually designed against. This is also the better
-   typographic answer, not just the conservative one: at this 15.2px size ~535px
-   is a ~70-character line, inside the 45-75 comfortable-measure range, whereas
-   Inter's 62ch (~626px, ~82 chars) would overshoot it. The `ch` intent was
-   never "62 zeros wide" — it was "one comfortable line". */
+   font's OWN '0' glyph — so it silently re-tuned itself whenever the face
+   changed, which made it font-coupled rather than designed.
+   Measured at this element's real 15.2px (0.95rem), 1ch is 8.192px under Segoe
+   UI and 9.589px under Inter, so 62ch resolves to 507.9px vs 594.5px — an ~87px
+   swing that would visibly re-wrap this subhead purely as a side-effect of the
+   font swap.
+   Pinned to 31.75rem (508px) = the width Segoe actually rendered, which is the
+   wrap D-2 designed against, so the measure survives the swap unchanged. This is
+   also the better typographic answer, not merely the conservative one: 508px at
+   15.2px is a ~67-character line, inside the 45-75 comfortable-measure range,
+   whereas Inter's own 62ch (594.5px, ~78 chars) would overshoot it. The `ch`
+   intent was never "62 zeros wide" — it was "one comfortable line". */
 .moments-daysynthesis {
   margin: 0;
-  max-width: 33.5rem;
+  max-width: 31.75rem;
   font-size: 0.95rem;
   color: var(--muted-foreground);
 }
