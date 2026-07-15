@@ -178,6 +178,32 @@ describe("AreaHealthDots", () => {
     ).not.toBeInTheDocument();
   });
 
+  // R6 (#483 round 6, regression fix): R5 shipped AREAS_SCROLL_THRESHOLD=3,
+  // one below the real demo seed's 4 areas — so the "protect the pill" cap
+  // hid 2 of the owner's 4 real areas at every viewport, including roomy
+  // ones (1440x900 measured ~187px of unused canvas below the card while
+  // the list still scrolled). The threshold is now 4: the real seed's own
+  // area count must never trigger the cap, regardless of how much room
+  // exists. See SideRail.tsx and this file's R6 doc comments for the
+  // measured clearance tradeoff (28.78px at 1366x768 scroll-zero, all 4
+  // areas visible, vs. R5's 55.78px with only 2 of 4 visible).
+  it("does not cap or add any overflow affordance at the real demo seed's area count (4)", () => {
+    render(<AreaHealthDots areas={buildAreas(4)} />);
+    const list = screen.getByTestId("area-health-dots");
+    expect(list.className).not.toMatch(/\bmoments-rail-scroll\b/);
+    expect(
+      screen.queryByTestId("area-health-dots-overflow-hint"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-health-dots-fade"),
+    ).not.toBeInTheDocument();
+    for (let index = 0; index < 4; index += 1) {
+      expect(
+        screen.getByTestId(`area-health-row-area-${index}`),
+      ).toBeVisible();
+    }
+  });
+
   // Honest affordance, at zero extra layout height (a first version that
   // added a dedicated on-screen hint row cost more card height than a tight
   // cap saved, going net negative on the pill clearance this fix exists to

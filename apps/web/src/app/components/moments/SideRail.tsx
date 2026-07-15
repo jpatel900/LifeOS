@@ -32,6 +32,27 @@ import type { AreaHealthVM, WaitingVM } from "./momentsViewModel";
  * count), the header is the zero-extra-height place to still state the true
  * total truthfully, rather than a dedicated hint row that costs more height
  * than the cap saves.
+ *
+ * R6 (premium push #483 round 6, regression fix): R5's cap was applied
+ * unconditionally (threshold one below the real 4-area demo seed), so it
+ * hid 2 of the owner's 4 real areas at EVERY viewport — including 1440x900,
+ * which measured ~187px of empty canvas below the card while the list
+ * still scrolled. The Areas list is a primary at-a-glance surface for a
+ * map-first owner; hiding half of it to protect a floating pill's
+ * clearance was backwards. Fixed in AreaHealthDots.tsx (threshold raised
+ * from 3 to 4, so the real seed's 4 areas render at natural, uncapped
+ * height — see its R6 doc comment for the full measured tradeoff). This
+ * file's own contribution: the Areas card's `CardContent` gap/padding
+ * (`gap-3 pt-0` -> `gap-2 pt-0 pb-4`) trims ~12px so the uncapped 4-area
+ * case clears the pill by a real, measured 28.78px at 1366x768 scroll-zero
+ * (up from a razor-thin 4.78px if left untrimmed) instead of relying on the
+ * cap to buy that margin back. This also removes the "hollow gap" the
+ * fixed-height cap produced (list capped shorter than the card, fade eating
+ * into a real row, dead space before "View area health →") — the card now
+ * always sizes to its actual content, capped or not. `--rail-areas-max-h`
+ * itself is untouched: once area count actually exceeds the threshold (5+),
+ * the same cap still applies and the same (in fact slightly larger,
+ * courtesy of the same padding trim) clearance margin R5 proved holds.
  */
 
 export interface SideRailProps {
@@ -133,7 +154,7 @@ export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
             ) : null}
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 pt-0">
+        <CardContent className="grid gap-2 pt-0 pb-4">
           <AreaHealthDots areas={areas} />
           <Button
             type="button"

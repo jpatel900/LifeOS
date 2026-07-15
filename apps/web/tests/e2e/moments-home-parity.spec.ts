@@ -623,6 +623,68 @@ test.describe("moments home capture pill keeps a real clearance margin under the
   }
 });
 
+// R6 (premium push #483 round 6, regression fix): the fix above shipped an
+// unconditional cap (AREAS_SCROLL_THRESHOLD one below the real demo seed's
+// 4 areas), so it hid 2 of the owner's 4 real areas at EVERY viewport,
+// including roomy ones — 1440x900 measured ~187px of unused canvas below
+// the card while the list still scrolled and only 2 of 4 areas showed. The
+// owner is map-first; the Areas list is a primary at-a-glance surface, so
+// hiding half of it to protect a floating pill's clearance was backwards.
+// This guard proves the actual fix: at both the owner's real desktop
+// viewports, all 4 real areas render with zero internal scrolling — no
+// `moments-rail-scroll` cap class, no scrollable overflow, no "more below"
+// fade (a fade here would be a lie: there's nothing more to scroll to).
+// The R5 guard above still holds (clearance now measures 28.78px at
+// 1366x768/scroll-zero, safely above its >20 floor) — this is additive,
+// not a replacement.
+test.describe("moments home shows every real area unscrolled, at the owner's real viewports (#483 round 6)", () => {
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`all 4 demo areas are visible with no internal scroll at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.evaluate(() => localStorage.setItem("theme", "dark"));
+      await page.reload();
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const areasCard = page.getByTestId("side-rail-areas-card");
+      await expect(areasCard).toBeVisible();
+
+      const rows = page.locator('[data-testid^="area-health-row-"]');
+      await expect(rows).toHaveCount(4);
+      for (let i = 0; i < 4; i += 1) {
+        await expect(rows.nth(i)).toBeVisible();
+      }
+
+      const list = page.getByTestId("area-health-dots");
+      expect(await list.getAttribute("class")).not.toMatch(
+        /\bmoments-rail-scroll\b/,
+      );
+      await expect(
+        page.getByTestId("area-health-dots-fade"),
+      ).not.toBeAttached();
+      await expect(
+        page.getByTestId("area-health-dots-overflow-hint"),
+      ).not.toBeAttached();
+
+      // No genuine internal overflow either, independent of which class
+      // implements it — the list must actually fit its own box.
+      const [scrollHeight, clientHeight] = await list.evaluate((el) => [
+        el.scrollHeight,
+        el.clientHeight,
+      ]);
+      expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
+    });
+  }
+});
+
 // D-6 (#483): the bottom-left keyboard legend (KeyboardLegend.tsx) must never
 // overlap or crowd the fixed capture pill. The legend hides below `sm`
 // (matching the prototype's own <720px cutoff) so mobile is a visibility

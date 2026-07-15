@@ -318,14 +318,23 @@ body {
     0 24px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
   --surface-glow: 0.34;
   /* R5 (#483 round 5, blocker 2): caps SideRail's Areas list (AreaHealthDots)
-     to a fixed height regardless of area count, so the fixed capture pill's
-     clearance under the card stops depending on how many areas exist — see
-     AreaHealthDots.tsx's R5 doc comment for the measured arithmetic. Deliberately
-     tight (~2 rows, real rows measured ~27-33px each at 1366x768) rather than
-     the ~3 rows first tried: a looser cap saved less card height than the
-     honest affordance itself cost, which went net negative on the very
-     clearance this fix exists to protect — measured, not assumed; see
-     AreaHealthDots.tsx. Doesn't vary by theme (a height, not a color). */
+     to a fixed height once area count exceeds AREAS_SCROLL_THRESHOLD, so the
+     fixed capture pill's clearance under the card stops scaling down as area
+     count grows — see AreaHealthDots.tsx's R5/R6 doc comments for the
+     measured arithmetic. Deliberately tight (~2 rows, real rows measured
+     ~27-33px each at 1366x768) rather than the ~3 rows first tried: a looser
+     cap saved less card height than the honest affordance itself cost, which
+     went net negative on the very clearance this fix exists to protect —
+     measured, not assumed; see AreaHealthDots.tsx. Doesn't vary by theme (a
+     height, not a color).
+     R6 (round 6, regression fix): this VALUE is unchanged — the regression
+     R5 introduced was in AREAS_SCROLL_THRESHOLD (applied the cap below the
+     real demo's own 4 areas, hiding half of them at every viewport), not in
+     this height. The threshold now excludes the real 4-area case entirely
+     (list renders at natural height instead), so this cap only ever engages
+     once an owner genuinely has 5+ areas — where it keeps delivering the
+     same real margin R5 proved (see AreaHealthDots.tsx's R6 doc comment for
+     the re-measured numbers). */
   --rail-areas-max-h: 4.25rem;
   min-height: 100vh;
   background: var(--bd);

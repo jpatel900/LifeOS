@@ -70,16 +70,50 @@ import type { AreaHealthVM } from "./momentsViewModel";
  * scrollable pane; (3) an `sr-only` note (zero visual footprint) gives
  * screen reader users the same "N total, scrollable" fact explicitly
  * instead of relying on them to infer it while reading through the list.
+ *
+ * R6 (premium push #483 round 6, regression fix): R5's cap was
+ * unconditional — `AREAS_SCROLL_THRESHOLD` was 3, one less than the real
+ * demo seed's 4 areas, so the "protect the pill" fix hid HALF the owner's
+ * real areas at every viewport, including roomy ones (1440x900 measured
+ * ~187px of dead canvas below the card while only 2 of 4 areas showed, plus
+ * a visible hollow gap where the capped list's fade ate into the second
+ * row). The owner is MAP-FIRST — the Areas list is a primary at-a-glance
+ * surface, so hiding it to protect a floating button's clearance was
+ * backwards (see SideRail.tsx's R6 doc comment for the full regression
+ * writeup).
+ * Fix, measured empirically (not assumed) against the real 1366x768/dark
+ * render: `AREAS_SCROLL_THRESHOLD` moves from 3 to 4, so the cap no longer
+ * engages for the real seed's 4 areas at all — the list renders at its
+ * natural, uncapped height (confirmed: no `moments-rail-scroll` class, no
+ * fade, no sr-only hint, `scrollHeight === clientHeight`). That alone left
+ * only 4.78px of pill clearance at 1366x768 scroll-zero (R4-A's original,
+ * still-thin number) — too close to the ~2.5px cross-browser font-metric
+ * noise band R5 itself measured to trust. Paired with a per-row padding
+ * trim (`py-1.5` -> `py-1`, ~4px/row) and SideRail's matching CardContent
+ * trim (gap-3 -> gap-2, pb-6 -> pb-4; see SideRail.tsx), measured clearance
+ * at 1366x768/scroll-zero is now 28.78px (verified via Playwright
+ * boundingBox against the live demo seed) — comfortably above both the
+ * noise band and R5's own 20px guard floor, with all 4 areas fully visible
+ * and zero internal scrolling.
+ * `--rail-areas-max-h` (globals.css) is UNCHANGED at 4.25rem: the cap
+ * still exists, unmodified, for whenever an owner actually has 5+ areas —
+ * measured with 5, 8, and 12 synthetic areas (temporary seed edit, reverted
+ * before commit — see the e2e/manual verification notes), clearance stays
+ * 67.78px (scroll zero) / 107.78px (scroll end), *better* than R5's
+ * original 55.78px because of the same padding trim. The area-count
+ * independence R5 established for the capped case is fully preserved,
+ * untouched.
  */
 
-// R5: area count at which the list starts scrolling instead of growing the
-// card. Deliberately small — the demo seed's 4 areas already exceed it, so
-// the scroll mechanism is exercised by real seed data, not only by areas
-// beyond what anyone has today. The actual visible height is
-// --rail-areas-max-h (globals.css); this only decides *whether* the cap
-// applies (unnecessary below this many areas — nothing to gain by capping a
-// list shorter than the cap already allows).
-const AREAS_SCROLL_THRESHOLD = 3;
+// R6: area count at which the list starts scrolling instead of growing the
+// card. Raised from R5's 3 to 4 so the real demo seed (4 areas) never
+// triggers the cap — every area the owner actually has today is always
+// fully visible, never scrolled behind an internal pane. The cap still
+// exists and is unchanged (--rail-areas-max-h, globals.css) for whenever
+// area count exceeds this: measured with 5/8/12 areas, it keeps the same
+// (in fact slightly better) clearance margin R5 proved. See this file's R6
+// doc comment for the measured numbers behind both sides of this trade.
+const AREAS_SCROLL_THRESHOLD = 4;
 
 export interface AreaHealthDotsProps {
   areas: AreaHealthVM[];
@@ -131,7 +165,7 @@ export function AreaHealthDots({ areas }: AreaHealthDotsProps) {
         {areas.map((area) => (
           <li
             key={area.id}
-            className="flex items-center justify-between gap-2 py-1.5 text-sm first:pt-0 last:pb-0"
+            className="flex items-center justify-between gap-2 py-1 text-sm first:pt-0 last:pb-0"
             data-testid={`area-health-row-${area.id}`}
           >
             <span className="flex min-w-0 items-center gap-2">
