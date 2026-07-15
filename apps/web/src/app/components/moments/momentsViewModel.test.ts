@@ -657,6 +657,17 @@ describe("buildStartVM — area health precedence", () => {
     expect(vm.areas[0].status).toBe("ok");
     expect(vm.areas[0].note).toBe("1 open");
   });
+
+  // D-11 (#483): area health carries the area's real identity color
+  // straight from Phase2MockArea.color — not a fabricated per-status hue.
+  it("carries the area's real color through, unchanged from Phase2MockArea", () => {
+    const state = stateWith({
+      areas: [makeArea({ id: "area-1", color: "#9333ea" })],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.areas[0].color).toBe("#9333ea");
+  });
 });
 
 describe("buildFlowVM", () => {

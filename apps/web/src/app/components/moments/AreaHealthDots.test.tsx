@@ -4,10 +4,22 @@ import { AreaHealthDots } from "./AreaHealthDots";
 import type { AreaHealthVM } from "./momentsViewModel";
 
 const AREAS: AreaHealthVM[] = [
-  { id: "a1", name: "Work", status: "ok", note: "3 open" },
-  { id: "a2", name: "Health", status: "watch", note: "1 waiting" },
-  { id: "a3", name: "Finance", status: "risk", note: "2 waiting" },
-  { id: "a4", name: "Home", status: "idle", note: "0 open" },
+  { id: "a1", name: "Work", status: "ok", note: "3 open", color: "#2563eb" },
+  {
+    id: "a2",
+    name: "Health",
+    status: "watch",
+    note: "1 waiting",
+    color: "#16a34a",
+  },
+  {
+    id: "a3",
+    name: "Finance",
+    status: "risk",
+    note: "2 waiting",
+    color: "#9333ea",
+  },
+  { id: "a4", name: "Home", status: "idle", note: "0 open", color: "#f97316" },
 ];
 
 describe("AreaHealthDots", () => {
@@ -59,6 +71,30 @@ describe("AreaHealthDots", () => {
     );
     expect(screen.getByTestId("area-health-status-a3")).toHaveTextContent(
       "at risk",
+    );
+  });
+
+  // D-11 (#483): each row carries its area's real identity swatch (from
+  // AreaHealthVM.color, sourced from Phase2MockArea.color) via the existing
+  // --area-accent token, distinct from the status dot's --state-* color.
+  it("renders each area's identity swatch with its real color via --area-accent", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    expect(screen.getByTestId("area-health-swatch-a1")).toHaveStyle({
+      "--area-accent": "#2563eb",
+    });
+    expect(screen.getByTestId("area-health-swatch-a3")).toHaveStyle({
+      "--area-accent": "#9333ea",
+    });
+  });
+
+  // The swatch is identity, not a status signal — it stays out of the
+  // accessibility tree so screen readers get the status dot's aria-label
+  // once per row, not twice.
+  it("marks the identity swatch aria-hidden, leaving the status dot as the sole accessible signal", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    expect(screen.getByTestId("area-health-swatch-a1")).toHaveAttribute(
+      "aria-hidden",
+      "true",
     );
   });
 });
