@@ -262,7 +262,19 @@ export function AreaSelector({
             style={NEUTRAL_SWATCH_STYLE}
           />
         )}
-        <span className="min-w-0 max-w-[5rem] truncate">{selected.name}</span>
+        {/* R3-C (#483 round 3): the tight 5rem cap is desktop-only
+            (`sm:max-w-[5rem]`) — it exists purely to bound this control's
+            contribution to the sm+ masthead row's fixed width budget (see
+            TodayMoments.tsx's header comment). Below `sm`, AreaSelector is
+            one of only two controls in its own dedicated mobile row (with
+            MastheadThemeToggle) with no comparable space pressure — the
+            base `max-w-[9rem]` (this component's original, pre-R3 value)
+            still applies there, so a long area name renders in full on
+            mobile instead of truncating with a quarter of the viewport
+            still empty to its right. */}
+        <span className="min-w-0 max-w-[9rem] truncate sm:max-w-[5rem]">
+          {selected.name}
+        </span>
         <kbd className={kbdHintClass()}>{momentKeyLabel("cycle-area")}</kbd>
       </button>
 

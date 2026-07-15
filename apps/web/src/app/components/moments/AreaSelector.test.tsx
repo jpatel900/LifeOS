@@ -246,17 +246,28 @@ describe("AreaSelector", () => {
   // The label's original `max-w-[9rem]` (144px) was too generous to ever
   // engage truncation for realistic names, so the AreaSelector's rendered
   // width scaled with the selected area's name length with no hard ceiling.
-  // Fixed with a real bound: `max-w-[5rem]` (80px, empirically verified
-  // in-browser to keep the masthead single-row for every demo area,
-  // including the two long ones, with margin to spare) plus `min-w-0` —
-  // required because a `truncate` span nested inside an `inline-flex`
-  // button won't actually shrink below its own content's intrinsic width
-  // without it (the classic flexbox `min-width: auto` trap; `max-w` alone
-  // is silently ignored in that position). Regression: both classes must
-  // stay together, and the cap must not silently widen back past 80px —
-  // otherwise a long real area name reopens the wrap this packet exists to
-  // close, not just the short demo default.
-  it("the label span is capped at max-w-[5rem] with min-w-0, so long area names truncate instead of growing the trigger unbounded (round-3 regression)", () => {
+  // Fixed with a real bound: `sm:max-w-[5rem]` (80px at `sm`+, empirically
+  // verified in-browser to keep the masthead single-row for every demo
+  // area, including the two long ones, with margin to spare) plus
+  // `min-w-0` — required because a `truncate` span nested inside an
+  // `inline-flex` button won't actually shrink below its own content's
+  // intrinsic width without it (the classic flexbox `min-width: auto`
+  // trap; `max-w` alone is silently ignored in that position).
+  //
+  // The cap is `sm:`-scoped, NOT applied below `sm`: mobile's AreaSelector
+  // sits in its own dedicated 2-control row (with MastheadThemeToggle)
+  // with no comparable space pressure, so the base `max-w-[9rem]` (this
+  // component's original, pre-R3 value) still applies there — an earlier
+  // draft of this fix applied the tight cap unconditionally and truncated
+  // long area names on mobile with a quarter of the 390px viewport still
+  // empty to the right of the control, reopening the exact "only verified
+  // the short name" gap this packet exists to close, just on a different
+  // viewport.
+  //
+  // Regression: the desktop cap must stay `sm:`-scoped (never bare
+  // `max-w-[5rem]`, which would re-truncate mobile), the base must stay
+  // `max-w-[9rem]`, and `min-w-0` must stay paired with it.
+  it("the label span truncates at max-w-[9rem] on mobile and sm:max-w-[5rem] at sm+, both with min-w-0 (round-3 regression)", () => {
     render(
       <AreaSelector
         areas={[{ id: "area-1", name: "Volunteer Work", color: "#6d8bff" }]}
@@ -266,9 +277,10 @@ describe("AreaSelector", () => {
     );
     const trigger = screen.getByTestId("today-moments-area-switcher");
     const label = trigger.querySelector("span:not([aria-hidden])")!;
-    expect(label).toHaveClass("max-w-[5rem]");
+    expect(label).toHaveClass("max-w-[9rem]");
+    expect(label).toHaveClass("sm:max-w-[5rem]");
     expect(label).toHaveClass("min-w-0");
     expect(label).toHaveClass("truncate");
-    expect(label.className).not.toMatch(/\bmax-w-\[9rem\]\b/);
+    expect(label.className).not.toMatch(/(?<!sm:)max-w-\[5rem\]\b/);
   });
 });
