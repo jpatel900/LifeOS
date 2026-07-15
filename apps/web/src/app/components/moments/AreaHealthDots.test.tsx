@@ -128,4 +128,82 @@ describe("AreaHealthDots", () => {
     // ...and is not a sibling of the identity swatch.
     expect(swatch.parentElement).not.toContainElement(dot);
   });
+
+  // R5 (#483 round 5, blocker 2): the list used to render one row per area
+  // with no cap, which made the Areas card's own height — and so the fixed
+  // capture pill's clearance under it — scale with area count (R4-A measured
+  // the demo seed's 4 areas clearing the pill by single-digit px at
+  // 1366x768; a 5th area went negative). It's now a bounded internal scroll
+  // pane. The binding truthfulness requirement: every area must still be in
+  // the DOM — capping must never mean silently dropping an area the user
+  // configured, only scrolling to see it.
+  function buildAreas(count: number): AreaHealthVM[] {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `area-${index}`,
+      name: `Area ${index}`,
+      status: "ok" as const,
+      note: "0 open",
+      color: "#2563eb",
+    }));
+  }
+
+  it("keeps every area in the DOM even when the list scrolls (never silently hides one)", () => {
+    for (const count of [4, 5, 8, 12]) {
+      const { unmount } = render(<AreaHealthDots areas={buildAreas(count)} />);
+      for (let index = 0; index < count; index += 1) {
+        expect(
+          screen.getByTestId(`area-health-row-area-${index}`),
+        ).toBeInTheDocument();
+      }
+      unmount();
+    }
+  });
+
+  it("caps the list to a bounded scroll pane once area count exceeds the visible-row budget", () => {
+    render(<AreaHealthDots areas={buildAreas(5)} />);
+    const list = screen.getByTestId("area-health-dots");
+    expect(list.className).toMatch(/\bmoments-rail-scroll\b/);
+    expect(list.className).toMatch(/\boverflow-y-auto\b/);
+  });
+
+  it("does not cap or add any overflow affordance when area count is within the scroll threshold", () => {
+    render(<AreaHealthDots areas={buildAreas(3)} />);
+    const list = screen.getByTestId("area-health-dots");
+    expect(list.className).not.toMatch(/\bmoments-rail-scroll\b/);
+    expect(
+      screen.queryByTestId("area-health-dots-overflow-hint"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-health-dots-fade"),
+    ).not.toBeInTheDocument();
+  });
+
+  // Honest affordance, at zero extra layout height (a first version that
+  // added a dedicated on-screen hint row cost more card height than a tight
+  // cap saved, going net negative on the pill clearance this fix exists to
+  // protect — see the R5 doc comment). Three parts once capped: (1) an
+  // sr-only note (zero visual footprint) states the real count for screen
+  // readers, (2) a decorative bottom fade signals "more below" without
+  // adding layout height (absolutely positioned), (3) the real count also
+  // surfaces in SideRail's card header (SideRail.test.tsx), which costs no
+  // extra height since it reuses an existing text line.
+  it("gives capped lists a zero-height overflow affordance: an sr-only count note and a decorative fade", () => {
+    render(<AreaHealthDots areas={buildAreas(8)} />);
+
+    const hint = screen.getByTestId("area-health-dots-overflow-hint");
+    expect(hint.textContent).toContain("8");
+    expect(hint.className).toMatch(/\bsr-only\b/);
+
+    const fade = screen.getByTestId("area-health-dots-fade");
+    expect(fade).toHaveAttribute("aria-hidden", "true");
+    expect(fade.className).toMatch(/\babsolute\b/);
+    expect(fade.className).toMatch(/\bpointer-events-none\b/);
+
+    const wrap = screen.getByTestId("area-health-dots-wrap");
+    const list = screen.getByTestId("area-health-dots");
+    expect(wrap).toContainElement(hint);
+    expect(wrap).toContainElement(fade);
+    expect(list).not.toContainElement(hint);
+    expect(list).not.toContainElement(fade);
+  });
 });

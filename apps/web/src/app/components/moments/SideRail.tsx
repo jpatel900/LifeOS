@@ -24,6 +24,14 @@ import type { AreaHealthVM, WaitingVM } from "./momentsViewModel";
  * no `people` store), so porting the avatar would mean inventing a name
  * and a color per row. The row keeps the task title as its single line
  * instead.
+ *
+ * R5 (premium push #483 round 5, blocker 2): the Areas card header now
+ * shows the real area count ("Areas · N") — see AreaHealthDots.tsx's R5 doc
+ * comment for why: once its row list bounds itself to a fixed height
+ * (protecting the fixed capture pill's clearance from scaling with area
+ * count), the header is the zero-extra-height place to still state the true
+ * total truthfully, rather than a dedicated hint row that costs more height
+ * than the cap saves.
  */
 
 export interface SideRailProps {
@@ -115,6 +123,14 @@ export function SideRail({ waitingOn, areas, onOpenHealth }: SideRailProps) {
         <CardHeader className="pb-2">
           <CardTitle className="moments-label text-sm tracking-tight">
             Areas
+            {areas.length > 0 ? (
+              <span
+                className="ml-1 normal-case tracking-normal text-muted-foreground"
+                data-testid="side-rail-areas-count"
+              >
+                · {areas.length}
+              </span>
+            ) : null}
           </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 pt-0">

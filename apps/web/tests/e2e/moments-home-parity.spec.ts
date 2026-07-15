@@ -467,6 +467,162 @@ test.describe("mobile bottom band never intersects content (#593)", () => {
   }
 });
 
+// R5 (premium push #483 round 5, blocker 1): the explain-mode rail
+// (PipelineOverview.tsx, all-zero counts) used to silently clip stages at
+// narrow/mid viewports — measured before the fix: 196px hidden at 640px
+// width (Execute AND Review gone entirely), 44-81px hidden at 375-430px
+// (Review clipped). This app's truthfulness doctrine treats silently
+// dropped content as worse than an imperfect display, so the fix is
+// structural (a wrapping grid below `lg:`, see the component's R5 doc
+// comment), not a scroll affordance — every stage must be FULLY visible
+// (not just present in the DOM) at every one of these widths. This guard
+// checks both rail modes: explain mode (the default empty day) and counts
+// mode (after a real capture moves a stage off zero), since the pre-fix bug
+// affected both, just by different amounts.
+test.describe("moments home Pipeline rail never clips a stage, in either mode (#483 round 5, blocker 1)", () => {
+  for (const width of [375, 390, 430, 640, 1366]) {
+    test(`explain mode: every stage cell is fully within the viewport at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect(
+        page.getByTestId("pipeline-overview-caption-capture"),
+      ).toBeVisible();
+
+      for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
+        const cell = page.getByTestId(`pipeline-overview-stage-${stage}`);
+        await expect(cell).toBeVisible();
+        const box = await cell.boundingBox();
+        expect(box, `${stage} cell box at ${width}px`).not.toBeNull();
+        expect(box!.width, `${stage} cell has real width at ${width}px`).toBeGreaterThan(0);
+        expect(
+          box!.x + box!.width,
+          `${stage} cell's right edge stays within the ${width}px viewport`,
+        ).toBeLessThanOrEqual(width + 1);
+        expect(
+          box!.x,
+          `${stage} cell's left edge stays within the ${width}px viewport`,
+        ).toBeGreaterThanOrEqual(0);
+      }
+
+      // The rail must never force the page itself wider than the viewport.
+      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    });
+  }
+
+  test("counts mode: every stage cell is fully within the viewport at every width, after a real capture", async ({
+    page,
+  }) => {
+    // Perform one real capture (parity with the mock-mode capture test
+    // above) so every stage cell renders a numeral badge, not a caption —
+    // the pre-fix bug's smaller ~18-81px counts-mode clip at narrow widths.
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await page.keyboard.press("1");
+    await page.getByTestId("capture-affordance").click();
+    const textarea = page.getByTestId("capture-overlay-textarea");
+    await expect(textarea).toBeVisible();
+    await textarea.fill("Round 5 counts-mode rail guard capture");
+    await textarea.press("Enter");
+    await expect(
+      page.getByTestId("capture-overlay-textarea"),
+    ).toBeHidden();
+
+    for (const width of [375, 390, 430, 640, 1366]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.reload();
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect(
+        page.getByTestId("pipeline-overview-count-capture"),
+      ).toBeVisible();
+
+      for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
+        const cell = page.getByTestId(`pipeline-overview-stage-${stage}`);
+        const box = await cell.boundingBox();
+        expect(box, `${stage} cell box at ${width}px (counts mode)`).not.toBeNull();
+        expect(
+          box!.x + box!.width,
+          `${stage} cell's right edge stays within ${width}px (counts mode)`,
+        ).toBeLessThanOrEqual(width + 1);
+      }
+    }
+  });
+});
+
+// R5 (premium push #483 round 5, blocker 2): R4-A's own honest disclosure —
+// clearance under SideRail's Areas card was only 4.78-7.33px with the demo
+// seed's 4 areas, and arithmetic proved a 5th area would go negative (each
+// row ~32.8px, no cap existed). The fix bounds the Areas list to a fixed
+// height (AreaHealthDots.tsx/globals.css's --rail-areas-max-h) regardless of
+// area count, so this guard asserts a real numeric MARGIN — not just
+// non-intersection — at the owner's real 1366x768 viewport, in both scroll
+// positions and both themes, with the real (currently 4-area) demo seed.
+// >=20px is a deliberately generous floor versus the ~55.78px this fix
+// measured in development: real-browser/headless font-metric variance was
+// itself ~2.5px on the OLD single-digit-px baseline (see R4-A), so a floor
+// well above that noise band is what actually proves the fix, not a bare
+// `> 0`.
+test.describe("moments home capture pill keeps a real clearance margin under the Areas card, regardless of theme (#483 round 5, blocker 2)", () => {
+  for (const theme of ["light", "dark"] as const) {
+    test(`pill clears the Areas card by a real margin at 1366x768 in ${theme} theme, scroll 0 and end`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1366, height: 768 });
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.evaluate((t) => localStorage.setItem("theme", t), theme);
+      await page.reload();
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const pill = page.getByTestId("capture-affordance");
+      const areasCard = page.getByTestId("side-rail-areas-card");
+      await expect(pill).toBeVisible();
+      await expect(areasCard).toBeVisible();
+
+      // Truthfulness precondition: capping the list must never remove an
+      // area from the DOM. The demo seed's real area count stays reachable
+      // regardless of the internal scroll pane.
+      const areaRowCount = await page
+        .locator('[data-testid^="area-health-row-"]')
+        .count();
+      expect(areaRowCount).toBeGreaterThan(0);
+
+      for (const position of ["zero", "end"] as const) {
+        await page.evaluate((pos) => {
+          window.scrollTo(
+            0,
+            pos === "zero" ? 0 : document.documentElement.scrollHeight,
+          );
+        }, position);
+
+        const pillBox = await pill.boundingBox();
+        const areasBox = await areasCard.boundingBox();
+        expect(pillBox, `pill box at scroll ${position}`).not.toBeNull();
+        expect(areasBox, `areas box at scroll ${position}`).not.toBeNull();
+
+        const clearance = pillBox!.y - (areasBox!.y + areasBox!.height);
+        expect(
+          clearance,
+          `pill-to-areas-card clearance at scroll ${position} (${theme} theme) was ${clearance}px`,
+        ).toBeGreaterThan(20);
+      }
+    });
+  }
+});
+
 // D-6 (#483): the bottom-left keyboard legend (KeyboardLegend.tsx) must never
 // overlap or crowd the fixed capture pill. The legend hides below `sm`
 // (matching the prototype's own <720px cutoff) so mobile is a visibility

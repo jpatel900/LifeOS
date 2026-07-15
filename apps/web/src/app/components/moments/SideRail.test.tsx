@@ -95,4 +95,32 @@ describe("SideRail", () => {
       screen.queryByRole("img", { name: /contract redline/i }),
     ).not.toBeInTheDocument();
   });
+
+  // R5 (#483 round 5, blocker 2): the Areas card header states the real
+  // area count truthfully, at zero extra height (it reuses the existing
+  // header line rather than a dedicated row) — this is the affordance that
+  // replaces a taller on-screen "N areas" hint the list itself used to
+  // carry (see AreaHealthDots.tsx's R5 doc comment).
+  it("shows the real area count in the Areas card header", () => {
+    const manyAreas: AreaHealthVM[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `a${i}`,
+      name: `Area ${i}`,
+      status: "ok",
+      note: "0 open",
+      color: "#2563eb",
+    }));
+    render(
+      <SideRail waitingOn={[]} areas={manyAreas} onOpenHealth={vi.fn()} />,
+    );
+    expect(screen.getByTestId("side-rail-areas-count")).toHaveTextContent(
+      "7",
+    );
+  });
+
+  it("omits the area count when there are no areas (truthful, not a stray '· 0')", () => {
+    render(<SideRail waitingOn={[]} areas={[]} onOpenHealth={vi.fn()} />);
+    expect(
+      screen.queryByTestId("side-rail-areas-count"),
+    ).not.toBeInTheDocument();
+  });
 });
