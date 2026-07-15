@@ -130,6 +130,43 @@ describe("CloseMoment — R2-D/R3-B stats + close composition", () => {
       summary.contains(screen.getByTestId("close-moment-tomorrow-first-move")),
     ).toBe(true);
   });
+
+  it("always states what closing does, paired with the action (not gated on empty)", () => {
+    renderClose();
+    expect(screen.getByTestId("close-moment-orientation")).toHaveTextContent(
+      /closing saves today's counts/i,
+    );
+
+    renderClose({
+      vm: { ...baseVm, completedToday: 5, missedToday: 1 },
+      pendingWins: [win],
+    });
+    expect(
+      screen.getAllByTestId("close-moment-orientation")[1],
+    ).toHaveTextContent(/closing saves today's counts/i);
+  });
+
+  it("uses one eyebrow system (moments-label) for both summary sub-sections", () => {
+    renderClose({
+      vm: {
+        ...baseVm,
+        tomorrowFirstMove: {
+          title: "Draft the proposal",
+          why: "Highest leverage",
+          areaLabel: "Main Job",
+          estMinutes: 25,
+          taskId: "t-tomorrow",
+        },
+      },
+    });
+    const summary = screen.getByTestId("close-moment-summary");
+    const headings = summary.querySelectorAll("h3");
+    expect(headings.length).toBeGreaterThan(0);
+    headings.forEach((heading) => {
+      expect(heading.className).toMatch(/\bmoments-label\b/);
+      expect(heading.className).not.toMatch(/\bworkflow-page-eyebrow\b/);
+    });
+  });
 });
 
 describe("CloseMoment — S7 wins harvest", () => {
