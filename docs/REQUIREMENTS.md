@@ -6,10 +6,12 @@
 
 Use these labels:
 
-- **MUST**: required for V1
-- **SHOULD**: strong V1.5 candidate
-- **COULD**: later enhancement
-- **WON'T V1**: explicitly excluded for now
+- **MUST**: required contract
+- **SHOULD**: strong approved candidate
+- **COULD**: optional enhancement requiring an owner-ratified slice
+- **WON'T BASELINE**: excluded from the shipped V1 baseline; not automatically approved later
+
+V1 is the shipped baseline, not the product ceiling. Under ADR 0005, stage labels express dependency and risk order. Data-independent foundations may proceed through an owner-ratified issue when they preserve all invariants. Usage evidence remains mandatory for personalization conclusions, initiative or autonomy graduation, proactive interruption, external channels or writes, and data-derived policy changes. Permanent non-goals remain binding at every stage.
 
 ## 2. Core Functional Requirements
 
@@ -53,13 +55,13 @@ Acceptance criteria:
 
 ### FR-003 — Audio Capture
 
-**Priority:** SHOULD for V1, can be deferred if time is tight
+**Priority:** SHOULD; submit-based audio only unless a reviewed requirement explicitly expands the contract
 
 Audio should be implemented as record/upload → transcribe on submit → parse transcript.
 
 Acceptance criteria:
 
-- No live realtime voice in V1.
+- Live realtime voice remains unapproved; adding it requires explicit requirements review and must preserve the privacy, cost, and consent boundaries.
 - Audio is not continuously streamed.
 - Transcript is shown before or alongside parsed output.
 - Failed transcription does not delete the audio/transcript attempt.
@@ -656,7 +658,7 @@ Non-goals:
 
 **Priority:** MUST
 
-**Stage:** Stage 1, post-S3 additive slice — chain S2 → S3 (#255) → FR-031 per `docs/implementation-planning/plan-task-map-contract.md`. This entry lands the docs-first requirements text only (issue #484); no build slice starts until this FR is owner-ratified (merge of this PR is the ratification).
+**Stage:** Approved contract — owner-ratified through issue #484 and PR #487. Implementation follows the S2 → S3 (#255) → FR-031 dependency chain in `docs/implementation-planning/plan-task-map-contract.md` and requires an issue-scoped build contract.
 
 Rationale: real work branches and converges — forcing every breakdown into a single ordered list either flattens genuine parallel/optional structure or invites the operator to fake a linear order to fit the tool. The owner's 2026-07-09 extension of the original task-map draft (recorded in the STATUS line of `plan-task-map-contract.md`) requires a true DAG, and requires the headline "critical path" to be a deterministic, code-computed traversal of the approved graph rather than an AI-asserted flag — the overplanning governor (one-pass approve, collapse-to-critical-path default, draft-until-approved diffs) is worthless if the thing being approved and collapsed to is itself an ungrounded AI guess. Optional nodes give the operator a legible, pre-approved fallback for FR-025's cut-scope moment instead of an ad hoc DoD edit under time pressure. Red nodes give the map a cheap, capped way to record known dead ends and gated moves without turning it into a full risk register.
 
@@ -681,30 +683,30 @@ Non-goals:
 
 ---
 
-### FR-032 (reservation) — Initiative Ladder
+### FR-032 (approved contract) — Initiative Ladder
 
 **Priority:** SHOULD
 
-**Stage:** Doctrine reservation now; I2+ code is Stage 3+.
+**Stage:** Evidence-dependent trust graduation; doctrine is approved now, while I2+ code requires per-class evidence and explicit graduation.
 
 Rationale: the trust ladder (ADR 0002 D1) governs what the system may _do_; nothing yet governs when it may _speak_. Attention is the scarcest resource in the dyad, and every proactive surface (brief, aging nudges, recovery proposals, future Hermes presence, future notifications) draws on one unpriced account. Interruption rights must be earned the same way autonomy is.
 
-Acceptance criteria (reservation-grade — this entry freezes the model; per-rung code lands later):
+Acceptance criteria (contract-grade — rung implementation proceeds only when its class-specific evidence, dependencies, reviewed contract, and explicit graduation are satisfied):
 
 - Interruption rights form a ladder parallel to the trust ladder: **I0** answers only when asked; **I1** surfaces only at user-initiated moments (Start / Flow / Close, the brief); **I2** may interject mid-day within an explicit budget (default max 1/day) for evidence-strong classes only; **I3** may initiate outside the app (notification, channel).
-- Every proactive surface declares an initiative class. **Through Stage 2, nothing exceeds I1** (hard cap).
-- I2 unlocks at Stage 3; I3 at Stage 4, per-class, graduated on accumulated acceptance (e.g. ≥ 20 I2 acceptances, dismiss-rate < 20%, shadow-rehearsed first) and **demoted automatically** on dismissal spikes (e.g. 3 dismissals of a class in 7 days → drop one rung, cooldown before re-eligibility).
+- Every proactive surface declares an initiative class and starts capped at I1.
+- I2 eligibility is per class: shadow-rehearse first, record at least 20 eligible I1/shadow opportunities, demonstrate an acceptance or welcome rate of at least 80%, keep dismissals below 20%, and obtain explicit graduation approval. I3 additionally requires a separately reviewed external-channel/write contract plus at least 20 accepted I2 interjections for that class. Graduated classes are **demoted automatically** on dismissal spikes (e.g. 3 dismissals of a class in 7 days → drop one rung, cooldown before re-eligibility).
 - The FR-019 "notifications" non-goal is hereby reframed as **I1-capped until graduation**, not a permanent never. Any future notification/Hermes surface must cite this FR and its rung.
 
 Non-goals (binding):
 
-- Any I2+ surface before the Stage 3 gate.
+- Any I2+ surface before its class has the required evidence, reviewed contract, and explicit trust graduation.
 - Exempting any proactive surface (delight, health, Hermes) from the ladder.
 - Engagement-driven interruption (variable-reward timing, streak pressure) — see permanent non-goals.
 
 ---
 
-### FR-033 (reservation) — Purpose Gauge
+### FR-033 (approved contract) — Purpose Gauge
 
 **Priority:** SHOULD
 
@@ -726,7 +728,7 @@ Non-goals (binding):
 
 ---
 
-### FR-034 (reservation) — Sanctuary (what the system must not see)
+### FR-034 (approved contract) — Sanctuary (what the system must not see)
 
 **Priority:** SHOULD
 
@@ -751,7 +753,7 @@ Non-goals (binding):
 
 **Priority:** SHOULD
 
-**Stage:** With the wins/rollup era — the gating condition is now met: weekly rollups (Stage 1 slice S8) and the monthly rollup surface (issue #486, merged #512) are live, and wins (`win_records`, slice S7) are live. This entry lands the docs-first requirements text only; no build slice starts until this FR is owner-ratified (merge of this PR is the ratification), same precedent as FR-031 (#484/#487). Build slices remain issue-gated.
+**Stage:** Approved contract — owner ratification is complete. Its product dependencies are met: weekly rollups (Stage 1 slice S8), the monthly rollup surface (issue #486, merged #512), and wins (`win_records`, slice S7) are live. Implementation remains issue-gated.
 
 Rationale: the one-in-one-out load rule has no graceful exit; today projects and areas end by silent abandonment, which is exactly how guilt accretes. Quitting well is a skill the operator's profile records as never taught; the system can make it a ceremony instead of a shame.
 
@@ -774,7 +776,7 @@ Non-goals (binding):
 
 ---
 
-### FR-036 (reservation) — Compost (guilt-free capture aging)
+### FR-036 (approved contract) — Compost (guilt-free capture aging)
 
 **Priority:** SHOULD
 
@@ -794,7 +796,7 @@ Non-goals (binding):
 
 ---
 
-### FR-037 (reservation) — Adaptive Surface Area (rupture protocol)
+### FR-037 (approved contract) — Adaptive Surface Area (rupture protocol)
 
 **Priority:** SHOULD
 
@@ -816,7 +818,7 @@ Non-goals (binding):
 
 ---
 
-### FR-038 (reservation) — Portable Life Archive (extends FR-016)
+### FR-038 (approved contract) — Portable Life Archive (extends FR-016)
 
 **Priority:** SHOULD
 
@@ -836,7 +838,7 @@ Non-goals (binding):
 
 ---
 
-> FR-039 through FR-045 are the 2026-07-10 framework-gap reservations: a section-by-section audit of the General Productivity Framework against this document found these as the only prescriptions with neither shipped code nor an existing reservation. They follow the FR-031 docs-first pattern — this text is the requirement; no build slice starts before its stage gate opens and the owner ratifies the slice.
+> FR-039 through FR-045 are the 2026-07-10 framework-gap reservations: a section-by-section audit of the General Productivity Framework against this document found these as the only prescriptions with neither shipped code nor an existing reservation. They follow the FR-031 docs-first pattern — this text is the requirement; each build slice needs owner ratification and its actual dependencies. Under ADR 0005, only capabilities that depend on personal evidence wait for that evidence; the shared Stage label is not a blanket hold on data-independent foundations.
 
 ### FR-039 (reservation) — State-Based Task Menus (sharp / functional / fried)
 
@@ -995,7 +997,7 @@ Non-goals (binding):
 
 **Priority:** SHOULD
 
-**Stage:** Stage 3, rung 1 — owner-accelerated (2026-07-09 backlog ratification, issue #485). This entry is the docs-first scope expansion; no build slice starts until this FR is owner-ratified (merge of this PR is the ratification). Build order after ratification: pure composer/sender module (Codex-lane candidate), then env-gated wiring.
+**Stage:** Approved external-channel contract — owner-ratified 2026-07-09 through issue #485. Implementation still depends on FR-032's class-specific evidence and trust graduation, external-channel security review, explicit credential opt-in, and the declared build order: pure composer/sender module first, then env-gated wiring.
 
 Rationale: the daily brief only reduces anxiety if it is seen, and the owner's day does not start inside the app. Pushing the same deterministic brief the Start moment already renders to a channel the owner already opens (Telegram) moves the brief to where attention already is, without adding an AI voice, an inbound command surface, or a second system of record. This is deliberately the smallest possible outbound rung: one message, one recipient, fixed cadence, wholly inert unless the owner has physically wired the channel.
 
@@ -1004,7 +1006,7 @@ Acceptance criteria:
 - **Content parity, no AI prose:** the message body is composed by pure code from the same deterministic day-synthesis data the Start moment renders (blocks, focus budget, waiting-on, first move) — no LLM call anywhere in the path (usability > enjoyability precedent; FR-022 enforcement-in-code precedent).
 - **Owner-only, outbound-only:** the sender posts to exactly one chat id (`TELEGRAM_CHAT_ID`) via the owner's own bot token (`TELEGRAM_BOT_TOKEN`). No inbound message is read, parsed, stored, or acted on at this rung — inbound handling is a later trust-ladder rung requiring its own FR. Ignoring inbound also closes the prompt-injection surface (INV-8 posture) by construction.
 - **Wholly inert without opt-in:** if either secret is absent the feature does not run, log, warn, or render — physical credential provision is the standing consent that unlocks it, and deleting either secret is the standing revocation (demotion path).
-- **Initiative-ladder reconciliation (FR-032):** by channel this is an I3-class surface arriving ahead of graduated I2 acceptance data. It is unlocked by explicit owner ratification of this FR plus the credential opt-in above — recorded here as the FR-032-required citation — and stays inside I3's spirit by being **at most once per day on a fixed schedule**, never event-triggered, never engagement-timed. Any second message class (nudges, alerts, replies) requires a new FR and the FR-032 rung then in effect.
+- **Initiative-ladder reconciliation (FR-032):** this is an I3-class surface. Owner ratification approves the contract but does not substitute for class-specific evidence or explicit trust graduation; credential opt-in is necessary consent, not sufficient graduation evidence. Once those gates are met, the surface remains **at most once per day on a fixed schedule**, never event-triggered or engagement-timed. Any second message class (nudges, alerts, replies) requires a new FR and the FR-032 rung then in effect.
 - **Failure isolation:** send failures are caught, logged server-side, and never affect app health, the brief's in-app rendering, or any other surface. Timeouts are bounded; the sender never throws into a caller.
 - **Secrets discipline:** both values are server-side environment variables per SECURITY_PRIVACY §9 — never committed, never client-visible, never sent to AI, rotated if exposed.
 
@@ -1018,15 +1020,15 @@ Non-goals (binding):
 
 ---
 
-### Constraint Layer — Deferred Capabilities
+### Constraint Layer — Explicitly Unapproved Capabilities
 
-The following feel productive to build and are explicitly deferred (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires reopening this section first.
+The following feel productive to build but remain unapproved (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires an explicit requirements amendment; ADR 0005 does not silently authorize them.
 
 ---
 
 ### Product Loop and Autonomy Boundary
 
-The V1 product loop is: capture messy input, diagnose ambiguity, bound the work, slice it into a reversible next move, discover missing information, act, and review the outcome. Requirements that support AI assistance must preserve this ambiguity-to-motion loop instead of turning LifeOS into a generic task list or autonomous agent.
+The baseline product loop is: capture messy input, diagnose ambiguity, bound the work, slice it into a reversible next move, discover missing information, act, and review the outcome. Requirements that support AI assistance must preserve this ambiguity-to-motion loop instead of turning LifeOS into a generic task list or autonomous agent.
 
 Autonomy is intentionally tiered:
 
@@ -1041,9 +1043,9 @@ When work is uncertain, the system should help the user distinguish facts, assum
 ### NFR-001 — Low Cost
 
 - Use free/low-cost hosting where possible.
-- Avoid realtime voice in V1.
+- Avoid realtime voice unless explicitly approved through requirements review.
 - Avoid web search in app runtime.
-- Avoid vector database in V1.
+- Avoid vector databases unless a reviewed requirement proves simpler storage cannot meet the need.
 - Use cost-optimized AI model tier for routine classification/parsing.
 - Use stronger model tier only for complex review or admin/prompt evaluation.
 
@@ -1093,7 +1095,7 @@ Acceptance criteria:
 
 ### NFR-005 — Simplicity
 
-- No more than **six primary workflow screens** in V1: Capture, Triage, Calendar / Planning, Execute, Review, Health. **Settings** (areas, policies, integrations) is **secondary / admin** and does not count toward this limit.
+- Keep the baseline at **six primary workflow screens**: Capture, Triage, Calendar / Planning, Execute, Review, Health. **Settings** (areas, policies, integrations) is **secondary / admin** and does not count toward this limit. Expanding primary navigation requires an explicit UX and requirements decision, not merely a later stage label.
 - No background job is allowed unless tied to a clear user value.
 - No autonomous external actions.
 - No generalized plugin system.
@@ -1112,7 +1114,7 @@ If an issue, prompt, or plan for operating-layer work asks for behavior outside 
 
 ## 4. Explicit Non-Goals
 
-V1 will not include:
+The shipped baseline excludes the following. They remain unapproved until a reviewed requirements amendment explicitly admits a bounded slice:
 
 - team collaboration
 - email/message ingestion

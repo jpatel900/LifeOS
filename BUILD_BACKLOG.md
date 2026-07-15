@@ -15,6 +15,8 @@ This backlog is derived from:
 It is organized into small implementation tickets in dependency order.  
 Each ticket includes goal, likely files, dependencies, acceptance criteria, required checks, and execution safety.
 
+This is a baseline implementation catalog, not the active roadmap or a V1 ceiling. Confirm shipped status on `main` and use owner-ratified issues plus `docs/REQUIREMENTS.md` and ADR 0005 for new work. Stage labels order dependencies and risk; only evidence-dependent behavior waits for the relevant usage evidence.
+
 ---
 
 ## 1) Foundation

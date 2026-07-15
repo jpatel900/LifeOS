@@ -1,6 +1,6 @@
 # LifeOS — agent build guide
 
-You are implementing the LifeOS UI in this repository. **Read `README.md` first** — it is the self-sufficient spec. Use `tokens.css` / `tokens.json` for exact values and `accent.js` for color derivation. The `LifeOS Prototype.dc.html` is the visual source of truth (open in a browser with `support.js` alongside).
+This bundle is a historical design reference, not current product or implementation authority. Start with the repository root `AGENTS.md`, `docs/REQUIREMENTS.md`, `docs/UX_FLOWS.md`, and applicable ADRs; use this bundle to inform visual intent only. Use `tokens.css` / `tokens.json` for reference values and `accent.js` for color derivation. The `LifeOS Prototype.dc.html` is a prototype reference (open in a browser with `support.js` alongside), not a source of truth.
 
 ## Non-negotiables
 - **Recreate the designs in this codebase's environment** (its framework, component library, state store). The bundled `.dc.html` files are references, not code to copy.

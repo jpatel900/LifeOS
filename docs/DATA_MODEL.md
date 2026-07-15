@@ -9,8 +9,10 @@
 3. AI recommendations are separate from user decisions.
 4. External writes are audit-logged.
 5. Use JSON fields for evolving policy payloads, but not for core relational structure.
-6. Keep V1 relational schema simple.
+6. Keep the relational schema simple as the shipped baseline evolves.
 7. Prefer soft archive over destructive delete.
+
+Stage labels on target entities express dependency and risk order, not a blanket prohibition on owner-ratified, data-independent schema foundations. Every schema change still requires its normal migration, RLS, export, and multi-user proof.
 
 ## 2. Core Entity Groups
 

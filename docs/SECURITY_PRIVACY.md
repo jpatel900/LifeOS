@@ -6,6 +6,8 @@
 
 This is a one-user personal app, but it stores sensitive life/work data. Treat it like a private productivity vault.
 
+These controls bind every stage of product evolution. ADR 0005 changes roadmap gating, not privacy, RLS, least-privilege, external-write approval, or data-minimization requirements.
+
 Security goals:
 
 1. only authenticated user can access data
@@ -65,7 +67,7 @@ Rules:
 
 ## 5. OAuth / Google Calendar
 
-### 5.1 Allowed V1 Calendar Operations
+### 5.1 Allowed Calendar Operations
 
 - free/busy read
 - insert approved app-created events
