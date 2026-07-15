@@ -58,6 +58,23 @@ async function assertAtLeast44(
   expect(box!.width, `${testId} width`).toBeGreaterThanOrEqual(44);
 }
 
+async function assertButtonAtLeast44(
+  page: import("@playwright/test").Page,
+  name: string | RegExp,
+  options?: { exact?: boolean },
+) {
+  const box = await page
+    .getByRole("button", { name, exact: options?.exact })
+    .first()
+    .boundingBox();
+  expect(
+    box,
+    `"${name}" button should be visible with a bounding box`,
+  ).not.toBeNull();
+  expect(box!.height, `"${name}" button height`).toBeGreaterThanOrEqual(44);
+  expect(box!.width, `"${name}" button width`).toBeGreaterThanOrEqual(44);
+}
+
 test.describe("44px hit-target inventory at 390px (#594) — onboarding", () => {
   // Zero-state seed (mirrors onboarding-ritual.spec.ts): the ritual only
   // ever shows with zero areas AND zero captures.
@@ -158,6 +175,95 @@ test.describe("44px hit-target inventory at 390px (#594) — /capture route", ()
     await assertAtLeast44(page, "capture-page-return-hook");
     await assertAtLeast44(page, "capture-page-save");
     await assertAtLeast44(page, "capture-page-save-raw");
+
+    await assertNoHorizontalOverflow(page);
+  });
+});
+
+/**
+ * #615 — bounded follow-on to #594: verifies the same >=44x44 CSS px
+ * hit-target contract at 390px for the legacy cockpit stage screens
+ * (PlanView.tsx, ReviewView.tsx). Reachable-by-e2e scope only: PlanView's
+ * launch-step prompt (missing first_tiny_step), backlog "Move to today",
+ * and sourced-recalibration Use/Keep buttons, StatusBanners' parse-retry
+ * and WIP-refusal controls, ReviewView's Defer/Drop/policy-proposal
+ * buttons, and TriageView's "Not this person" control are all unreachable
+ * through the demo-mode mock parser/WIP-limit/override-threshold in a
+ * single run — those get className-level unit-test coverage instead (see
+ * PlanView.test.tsx, StatusBanners.test.tsx, TriageView.test.tsx, and the
+ * "#615" describes in learningLoopSurfaces.test.tsx).
+ */
+
+async function goToStage(page: import("@playwright/test").Page, stage: RegExp) {
+  await page
+    .getByRole("navigation", { name: "Workflow stages" })
+    .getByRole("button", { name: stage })
+    .click();
+}
+
+async function captureTask(
+  page: import("@playwright/test").Page,
+  title: string,
+) {
+  await page.goto("/capture");
+  await page.getByPlaceholder("Drop the thought here.").fill(title);
+  await page.getByRole("button", { name: "Save thought" }).click();
+  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
+}
+
+test.describe("44px hit-target inventory at 390px (#615) — Plan stage", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+  });
+
+  test("Plan stage's proposal controls meet the 44px floor with no horizontal overflow", async ({
+    page,
+  }) => {
+    const title = "Plan 44px repair item";
+    await captureTask(page, title);
+    await page.getByRole("button", { name: "Do today" }).click();
+    await goToStage(page, /Plan/);
+
+    // The parse-created proposal is pending — Accept local/Move
+    // later/Reject are all live on it without any further action.
+    await assertButtonAtLeast44(page, "Accept local", { exact: true });
+    await assertButtonAtLeast44(page, "Move later");
+    await assertButtonAtLeast44(page, "Reject");
+
+    // Selecting the task enables Draft block.
+    await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
+    await assertButtonAtLeast44(page, "Draft block");
+
+    await assertNoHorizontalOverflow(page);
+  });
+});
+
+test.describe("44px hit-target inventory at 390px (#615) — Review stage", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+  });
+
+  test("Review stage's recovery-queue Carry forward control meets the 44px floor with no horizontal overflow", async ({
+    page,
+  }) => {
+    const title = "Review 44px repair item";
+    await captureTask(page, title);
+    await page.getByRole("button", { name: "Do today" }).click();
+    await goToStage(page, /Plan/);
+    await page.getByRole("button", { name: new RegExp(`^${title}`) }).click();
+    // #580: below `sm:` empty hour rows collapse behind a disclosure — reveal
+    // them before placing at 8am.
+    await page.getByTestId("show-empty-hours-toggle").click();
+    await page.getByRole("button", { name: /8a\s+Drop here/ }).click();
+    await page.getByRole("button", { name: "Start focusing" }).click();
+    await expect(page).toHaveURL(/\/execute$/, { timeout: 15_000 });
+    await page.getByRole("button", { name: new RegExp(title) }).click();
+    await page.getByTestId("cockpit-end-session").click();
+    await page.getByTestId("end-session-outcome-stuck").click();
+    await page.getByTestId("end-session-save").click();
+    await expect(page).toHaveURL(/\/review$/, { timeout: 15_000 });
+
+    await assertButtonAtLeast44(page, "Carry forward");
 
     await assertNoHorizontalOverflow(page);
   });

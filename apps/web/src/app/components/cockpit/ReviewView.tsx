@@ -1,5 +1,7 @@
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import type { PolicyChangeCandidate } from "@/lib/learning/overrideScan";
+import { cn } from "@/lib/utils";
+import { HIT_TARGET_MIN } from "../moments/hitTarget";
 import { Panel, ringStyle } from "./shared";
 
 // Review stage screen (extracted from LifeOSCockpit.tsx, issue #590 slice 2
@@ -146,21 +148,30 @@ export function ReviewView({
                     <button
                       type="button"
                       onClick={() => onCarryForward(item.task.id)}
-                      className="min-h-10 rounded-full bg-[var(--acc)] px-4 text-sm font-bold text-[var(--on-acc)]"
+                      className={cn(
+                        HIT_TARGET_MIN,
+                        "rounded-full bg-[var(--acc)] px-4 text-sm font-bold text-[var(--on-acc)]",
+                      )}
                     >
                       Carry forward
                     </button>
                     <button
                       type="button"
                       onClick={() => onDefer(item.task.id)}
-                      className="min-h-10 rounded-full bg-[var(--blu-sf)] px-4 text-sm font-semibold text-[var(--blu-fg)]"
+                      className={cn(
+                        HIT_TARGET_MIN,
+                        "rounded-full bg-[var(--blu-sf)] px-4 text-sm font-semibold text-[var(--blu-fg)]",
+                      )}
                     >
                       Defer
                     </button>
                     <button
                       type="button"
                       onClick={() => onDrop(item.task.id)}
-                      className="min-h-10 rounded-full border border-[var(--ln2)] px-4 text-sm text-[var(--mut)]"
+                      className={cn(
+                        HIT_TARGET_MIN,
+                        "rounded-full border border-[var(--ln2)] px-4 text-sm text-[var(--mut)]",
+                      )}
                     >
                       Drop
                     </button>
@@ -236,14 +247,20 @@ export function ReviewView({
                     <button
                       type="button"
                       onClick={() => onDecidePolicy(candidate, "accepted")}
-                      className="min-h-10 rounded-full bg-[var(--acc)] px-4 text-sm font-bold text-[var(--on-acc)]"
+                      className={cn(
+                        HIT_TARGET_MIN,
+                        "rounded-full bg-[var(--acc)] px-4 text-sm font-bold text-[var(--on-acc)]",
+                      )}
                     >
                       Approve change
                     </button>
                     <button
                       type="button"
                       onClick={() => onDecidePolicy(candidate, "declined")}
-                      className="min-h-10 rounded-full border border-[var(--ln2)] px-4 text-sm text-[var(--mut)]"
+                      className={cn(
+                        HIT_TARGET_MIN,
+                        "rounded-full border border-[var(--ln2)] px-4 text-sm text-[var(--mut)]",
+                      )}
                     >
                       Keep as is
                     </button>

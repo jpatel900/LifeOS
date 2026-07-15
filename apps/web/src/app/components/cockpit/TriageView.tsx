@@ -3,6 +3,7 @@ import { Check, Circle } from "lucide-react";
 import type { Phase2TaskDraft } from "@lifeos/schemas";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import { cn } from "@/lib/utils";
+import { HIT_TARGET_MIN } from "../moments/hitTarget";
 import { Panel } from "./shared";
 
 // Triage stage screen (extracted from LifeOSCockpit.tsx, issue #590 slice 2
@@ -166,7 +167,10 @@ export function TriageView({
                   <button
                     type="button"
                     onClick={() => onRejectPersonLink(current.id, index)}
-                    className="mono min-h-8 rounded-full border border-[var(--ln)] px-3 text-xs text-[var(--mut)]"
+                    className={cn(
+                      HIT_TARGET_MIN,
+                      "mono rounded-full border border-[var(--ln)] px-3 text-xs text-[var(--mut)]",
+                    )}
                   >
                     Not this person
                   </button>
