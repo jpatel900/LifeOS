@@ -137,4 +137,17 @@ describe("MastheadThemeToggle", () => {
 
     expect(setThemeMock).not.toHaveBeenCalled();
   });
+
+  // R3-C (#483 round 3): self-hosting Inter reopened the masthead's
+  // right-cluster row-1 overflow (measured 18.41px over budget at desktop
+  // widths — see TodayMoments.tsx's header comment). Part of the claw-back
+  // is this control dropping one padding step (`px-3`->`px-2.5`).
+  // Regression: a future padding bump here silently reopens the 2-row wrap.
+  it("uses the tightened px-2.5 padding, not the pre-Inter-reflow px-3 (round-3 regression)", async () => {
+    useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
+    render(<MastheadThemeToggle />);
+    const button = await screen.findByTestId("masthead-theme-toggle");
+    expect(button).toHaveClass("px-2.5");
+    expect(button.className).not.toMatch(/\bpx-3\b/);
+  });
 });

@@ -788,7 +788,24 @@ export function TodayMoments({
               the same ~44-46px line (was a 57px/44px, 13px split — see
               MomentSwitcher.tsx/CountdownClockToggle.tsx's own comments for
               the `.workflow-shell__nav` root cause) via a tightened `gap-2`
-              instead of the previous `gap-3`. */}
+              instead of the previous `gap-3`.
+
+              R3-C (#483 round 3, Inter reflow): self-hosting Inter (wider
+              metrics than the Segoe fallback) reopened the row-1 overflow
+              round 2 had just barely closed — measured 18.41px over budget
+              at desktop widths (732.13px needed vs 713.72px available),
+              wrapping the Settings icon alone to a second line. Closed by
+              shaving the SECONDARY cluster only (Area/Countdown/Theme/
+              Settings — deliberately the "quieter" family per the visual-
+              rank comment above), never MomentSwitcher: this row's gap
+              drops `gap-2`->`gap-1.5` (-10px across 5 gaps) and
+              AreaSelector/CountdownClockToggle/MastheadThemeToggle each
+              drop one padding step, `px-3`->`px-2.5` (-4/-8/-4px). Total
+              claw-back ~26px against an 18.41px need — a deliberate margin,
+              not a hairline fit, so normal Inter hinting/rounding variance
+              across browsers doesn't reopen the wrap. MomentSwitcher (the
+              one accent-filled, primary control) keeps its original
+              padding and full visual weight. */}
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="text-sm font-semibold tracking-tight">
@@ -805,7 +822,7 @@ export function TodayMoments({
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               <div
                 className="hidden sm:contents"
                 data-testid="masthead-momentswitcher-slot"

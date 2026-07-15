@@ -240,7 +240,9 @@ export function AreaSelector({
         onKeyDown={handleTriggerKeyDown}
         className={cn(
           HIT_TARGET_MIN,
-          "group gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm font-semibold text-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
+          // R3-C (#483 round 3): px-3 -> px-2.5 is part of the masthead's
+          // Inter-reflow claw-back — see TodayMoments.tsx's header comment.
+          "group gap-2 rounded-full border border-border bg-muted/40 px-2.5 py-1.5 text-sm font-semibold text-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
         )}
         data-testid="today-moments-area-switcher"
       >
