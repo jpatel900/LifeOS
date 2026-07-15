@@ -736,13 +736,60 @@ export function TodayMoments({
               settings) in a single tightened-gap cluster on the right,
               replacing the previous two-separate-pills-plus-a-bare-link
               layout the audit flagged as "loose grouping" (finding #4).
-              CountdownClockToggle and MomentSwitcher keep their own
-              existing pill shells byte-for-byte (out of this packet's file
-              ownership) — the regroup happens at this container level:
-              consistent control height (every control keeps its own
-              44px-floor hit target) and a tightened `gap-2` instead of the
-              previous `gap-3`. */}
-          <header className="flex flex-wrap items-center justify-between gap-3">
+
+              D-10 R2 (#483 round 2): round 1 shipped this as one
+              `flex flex-wrap` row unconditionally. Below `sm` that meant
+              *two* copies of the Start/Flow/Close switcher on screen at
+              once (this row's MomentSwitcher plus the fixed BottomNavigator
+              — "no taste argument for it") and, once that's fixed, a
+              5-control row with nowhere to go but a ragged flex-wrap
+              staircase (measured at 206px tall / 24% of a 390x844
+              viewport, terminating at three different right edges). Fixed
+              with a real two-part mobile composition instead of emergent
+              wrapping:
+              - Row 1 (always): brand + date.
+              - Row 2 (mobile, `flex flex-col` below `sm`): only the two
+                controls with no mobile equivalent anywhere else on the
+                page — AreaSelector (which area's data you're looking at —
+                context, not a preference) and MastheadThemeToggle (the
+                ONLY theme control in the app; no settings-page fallback
+                exists, so it can never be dropped from a viewport). Both
+                already stayed under `sm:` visibility flags for nothing —
+                they simply render.
+              - MomentSwitcher and the Settings link are `hidden sm:contents`
+                below `sm`: BottomNavigator already carries an identical
+                moment switch and a Settings link into the thumb zone, so
+                rendering them here too on mobile is the exact duplicate
+                the critics flagged. `sm:contents` (not `sm:flex`/
+                `sm:inline-flex`) means the wrapper itself never becomes a
+                layout box at `sm`+ either — the wrapped control's own root
+                participates in the row exactly as if unwrapped.
+              - CountdownClockToggle is the same `hidden sm:contents` — a
+                "minor display-FORMAT preference" (round-1 critic's own
+                framing) is the one control this composition can't fit
+                robustly next to a full-length area name on a 390px row
+                without risking the staircase reappearing; FlowMoment
+                already exposes its own time-display toggle for the one
+                moment where the format matters most, and the desktop/
+                tablet masthead keeps full access at `sm`+.
+              At `sm`+ the whole header becomes one `sm:flex-row` line and
+              every control renders — nothing is lost above the mobile
+              breakpoint.
+
+              Visual rank ("primary nav > context > preferences", per
+              round-1 critics): a hairline divider now separates
+              MomentSwitcher (the only accent-filled, i.e. primary, control
+              in the bar) from the secondary cluster (Area/Countdown/Theme/
+              Settings — context + preferences, deliberately quieter and
+              visually one family). The divider itself is `sm:` only —
+              MomentSwitcher isn't in the mobile row for it to divide from.
+
+              Height lock: every control in the row is now height-locked to
+              the same ~44-46px line (was a 57px/44px, 13px split — see
+              MomentSwitcher.tsx/CountdownClockToggle.tsx's own comments for
+              the `.workflow-shell__nav` root cause) via a tightened `gap-2`
+              instead of the previous `gap-3`. */}
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-baseline gap-3">
               <span className="text-sm font-semibold tracking-tight">
                 LifeOS · Today
@@ -759,7 +806,17 @@ export function TodayMoments({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <MomentSwitcher value={moment} onChange={setMoment} />
+              <div
+                className="hidden sm:contents"
+                data-testid="masthead-momentswitcher-slot"
+              >
+                <MomentSwitcher value={moment} onChange={setMoment} />
+              </div>
+              <span
+                aria-hidden="true"
+                data-testid="masthead-divider"
+                className="hidden h-6 w-px shrink-0 bg-border sm:block"
+              />
               {/* Finding #1: native <select> replaced by a custom pill
                   combobox — swatch + label + a real "A" kbd hint. */}
               <AreaSelector
@@ -768,26 +825,36 @@ export function TodayMoments({
                 onChange={setSelectedAreaId}
                 shortcutEnabled={topbarShortcutsEnabled}
               />
-              <CountdownClockToggle
-                value={timeDisplay}
-                onChange={setTimeDisplay}
-              />
+              <div
+                className="hidden sm:contents"
+                data-testid="masthead-countdowntoggle-slot"
+              >
+                <CountdownClockToggle
+                  value={timeDisplay}
+                  onChange={setTimeDisplay}
+                />
+              </div>
               {/* Finding #3: topbar theme toggle, wired to the existing
                   next-themes setup — a real "D" kbd hint. */}
               <MastheadThemeToggle shortcutEnabled={topbarShortcutsEnabled} />
               {/* Finding #4: demoted from a bare text link to an
                   icon-weighted pill matching the rest of the cluster. */}
-              <Link
-                href="/settings/areas"
-                aria-label="Settings"
-                className={cn(
-                  HIT_TARGET_MIN,
-                  "rounded-full border border-border bg-muted/40 text-muted-foreground transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 hover:text-foreground motion-reduce:transition-none motion-reduce:duration-0",
-                )}
-                data-testid="moments-settings-link"
+              <div
+                className="hidden sm:contents"
+                data-testid="masthead-settingslink-slot"
               >
-                <SettingsIcon className="size-4" aria-hidden="true" />
-              </Link>
+                <Link
+                  href="/settings/areas"
+                  aria-label="Settings"
+                  className={cn(
+                    HIT_TARGET_MIN,
+                    "rounded-full border border-border bg-muted/40 text-muted-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
+                  )}
+                  data-testid="moments-settings-link"
+                >
+                  <SettingsIcon className="size-4" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
           </header>
 

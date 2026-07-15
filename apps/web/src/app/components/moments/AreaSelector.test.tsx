@@ -179,6 +179,33 @@ describe("AreaSelector", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  // D-10 R2 (#483 round 2, blocker #4): real focus-visible ring using the
+  // app's own --ring token, and upgraded to HIT_TARGET_MIN so a very short
+  // area name can never shrink the trigger under the 44px hit-target floor
+  // once the kbd hint drops out of the mobile layout.
+  it("the trigger carries the app's focus-visible ring token and a min-width floor", () => {
+    render(<AreaSelector areas={AREAS} value="area-1" onChange={vi.fn()} />);
+    const trigger = screen.getByTestId("today-moments-area-switcher");
+    expect(trigger).toHaveClass("outline-none");
+    expect(trigger).toHaveClass("focus-visible:ring-2");
+    expect(trigger).toHaveClass("focus-visible:ring-ring");
+    expect(trigger).toHaveClass("focus-visible:ring-offset-2");
+    expect(trigger).toHaveClass("min-w-[44px]");
+  });
+
+  // D-10 R2 (#483 round 2, blocker #6): the "A" kbd hint now shares
+  // kbdChip.ts's single treatment — hidden below `sm` (no keyboard on
+  // touch) and hover/focus-revealed above it, not permanently stamped.
+  it("the 'A' kbd hint is hidden below sm and only reveals on hover/focus of the trigger", () => {
+    render(<AreaSelector areas={AREAS} value="area-1" onChange={vi.fn()} />);
+    const hint = screen
+      .getByTestId("today-moments-area-switcher")
+      .querySelector("kbd")!;
+    expect(hint).toHaveClass("hidden");
+    expect(hint).toHaveClass("opacity-0");
+    expect(hint).toHaveClass("sm:group-hover:opacity-100");
+  });
+
   it("does not cycle on 'A' while a button elsewhere has focus (typing-target guard, matches useMomentKeyboard's convention)", () => {
     const onChange = vi.fn();
     render(

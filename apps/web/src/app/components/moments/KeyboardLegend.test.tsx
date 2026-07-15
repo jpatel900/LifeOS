@@ -64,4 +64,25 @@ describe("KeyboardLegend", () => {
       "pointer-events-none",
     );
   });
+
+  // D-10 R2 (#483 round 2, blocker #6 — kbd chip inconsistency): round 1
+  // shipped this legend's own chip at a different size (text-xs / 12px,
+  // via `py-0.5` + `bg-background` + full-opacity `border-border`) than the
+  // masthead's per-control hints (text-[0.65rem] / 10.4px, `bg-black/5` +
+  // `border-border/60`) — three font sizes total across the page.
+  // Regression: every chip here now shares kbdChip.ts's single
+  // `KBD_CHIP_NEUTRAL` treatment, matching the masthead hints' size/border/
+  // background exactly (this legend just never takes the hover-reveal
+  // wrapper — it's the one permanent, always-visible reference).
+  it("every chip shares the single kbd-chip size/border/background treatment", () => {
+    render(<KeyboardLegend />);
+    const legend = screen.getByTestId("keyboard-legend");
+    const chips = Array.from(legend.querySelectorAll("kbd"));
+    expect(chips.length).toBeGreaterThan(0);
+    for (const chip of chips) {
+      expect(chip).toHaveClass("text-[0.65rem]");
+      expect(chip).toHaveClass("border-border/60");
+      expect(chip).toHaveClass("bg-black/5");
+    }
+  });
 });
