@@ -596,8 +596,13 @@ export interface DaySynthesisInput {
  *
  * Rules (in order):
  * 1. Nothing scheduled AND nothing queued for focus -> a single truthful
- *    empty-day sentence pointing at capture (mirrors `StartMoment`'s
- *    existing UX-INV-6 empty-first-move copy).
+ *    empty-day sentence stating the fact only. It deliberately stops short
+ *    of a capture call-to-action: R2-B (#483 round 2) found the hero card
+ *    directly below (`StartMoment`'s `start-moment-empty` branch) restating
+ *    this exact sentence — eyebrow/title/body all paraphrasing "nothing
+ *    queued, capture something" — so the same page said the same two facts
+ *    four times in ~300px. The fact now lives here, once; the card owns the
+ *    single action (see StartMoment's empty-state doc comment).
  * 2. Otherwise, two clauses joined by an em dash: block count today
  *    ("No blocks…" / "1 block…" / "N blocks…"), then focus-slot fill
  *    ("nothing queued for focus" / "N of BUDGET focus slot(s) filled"),
@@ -630,7 +635,7 @@ export function buildDaySynthesis(input: DaySynthesisInput): string {
     if (pendingTriageCount > 0) {
       return `Nothing on the calendar yet — ${pendingSentence}`;
     }
-    return "Nothing on the calendar and nothing queued — capture something to get moving.";
+    return "Nothing on the calendar, and nothing queued yet.";
   }
 
   const blocksPart =

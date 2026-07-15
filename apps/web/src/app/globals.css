@@ -1475,13 +1475,28 @@ health-*/review-* classes above stay untouched so the
 /* D-2 (#483) start-moment hero: greeting + deterministic day-synthesis
    line, porting prototype-2's `.greeting h1` (30px/620/-0.02em) and
    `.subline` (15px/muted/62ch) scale verbatim. Foreground/muted only — no
-   new color axis; this text is data, not area/state signaling. */
+   new color axis; this text is data, not area/state signaling.
+
+   R2-B (#483 round 2): the ported 30px was fixed with no clamp, so it
+   never moved while `.workflow-surface-title` (nested card titles, e.g.
+   FirstMoveCard) scales via `clamp(1.5rem, 1.1rem + 1vw, 2.4rem)` — the
+   card title overtook the page's own h1 above ~1240px viewport width (28%
+   larger by 2560px), inverting the hierarchy. Fixed by giving the greeting
+   the same 1vw slope as `.workflow-surface-title` plus a +0.4rem offset
+   (and matching +0.5rem on both the clamp floor and ceiling), so the h1
+   leads by a constant, widening margin across the whole range instead of
+   crossing over — verified by computed-style sweep at 412/1024/1240/1440/
+   1920/2560px (see StartMoment.test.tsx). `.moments-card-title` (shared,
+   untouched) is weight 620; bumping the greeting to 700 here adds a second
+   axis — not just size — on which the page h1 outranks nested card
+   titles. `.workflow-surface-title` itself is untouched (shared by other
+   surfaces outside this file's ownership). */
 .moments-greeting {
   margin: 0;
-  font-size: 1.875rem;
-  font-weight: 620;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  font-size: clamp(2rem, 1.5rem + 1vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
 .moments-daysynthesis {
