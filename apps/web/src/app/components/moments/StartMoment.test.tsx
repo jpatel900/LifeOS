@@ -804,3 +804,97 @@ describe("StartMoment — D-8 hero composition (#483)", () => {
     expect(card.className).toContain("moments-card--emphasis");
   });
 });
+
+describe("StartMoment — D-8-POLISH composition (#483)", () => {
+  it("never lets the two-column grid stretch a column's cards to match the other column's height (items-start on both the grid and the main column)", () => {
+    const vm = baseVM();
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    // This is the fix for the hollow-hero-card / oversized-label-gap defects:
+    // the default grid `align-items: stretch` was forcing the shorter
+    // column's nested `grid` rows to absorb the taller column's leftover
+    // height, padding out the hero card and the schedule label's gap
+    // instead of landing anywhere deliberate.
+    expect(screen.getByTestId("start-moment-grid").className).toContain(
+      "items-start",
+    );
+    expect(
+      screen.getByTestId("start-moment-main-column").className,
+    ).toContain("items-start");
+  });
+
+  it("wraps Today's schedule in the same moments-card surface treatment SideRail's cards use, so the column ends at a boxed edge instead of trailing off as bare text", () => {
+    const vm = baseVM();
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const scheduleCard = screen.getByTestId("start-schedule-card");
+    expect(scheduleCard).toBeInTheDocument();
+    expect(scheduleCard.className).toContain("moments-card");
+    expect(scheduleCard).toHaveTextContent("Today's schedule");
+    expect(scheduleCard).toHaveTextContent(
+      "Nothing on today's schedule yet",
+    );
+  });
+
+  it("keeps the schedule card in place (after the hero, before SideRail) whether the hero is FirstMoveCard or the empty state", () => {
+    const vm = baseVM({
+      firstMove: {
+        title: "Write report",
+        why: "Oldest active commitment",
+        areaLabel: "Work",
+        estMinutes: 25,
+        taskId: "t1",
+      },
+      focusItems: [
+        {
+          title: "Write report",
+          why: "Oldest active commitment",
+          areaLabel: "Work",
+          estMinutes: 25,
+          taskId: "t1",
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const firstMoveCard = screen.getByTestId("first-move-card");
+    const scheduleCard = screen.getByTestId("start-schedule-card");
+    const sideRail = screen.getByTestId("side-rail");
+
+    expect(
+      firstMoveCard.compareDocumentPosition(scheduleCard) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      scheduleCard.compareDocumentPosition(sideRail) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});
