@@ -3,6 +3,7 @@ import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import type { ProposalRecalibrationVM } from "@/lib/learning/learningSurface";
 import { cn } from "@/lib/utils";
 import { GoogleCalendarApprovalBridge } from "../GoogleCalendarApprovalBridge";
+import { HIT_TARGET_MIN } from "../moments/hitTarget";
 import { estimate, formatHour, Panel, proposalMinutes } from "./shared";
 
 const HOURS = Array.from({ length: 11 }, (_, index) => index + 8);
@@ -41,7 +42,8 @@ function LaunchStepPrompt({
         disabled={!canSave}
         onClick={onSave}
         className={cn(
-          "mt-3 min-h-10 rounded-full px-4 text-sm font-bold",
+          HIT_TARGET_MIN,
+          "mt-3 rounded-full px-4 text-sm font-bold",
           canSave
             ? "bg-[var(--acc)] text-[var(--on-acc)]"
             : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
@@ -283,7 +285,8 @@ export function PlanView({
                         : undefined
                     }
                     className={cn(
-                      "min-h-10 text-left font-semibold",
+                      HIT_TARGET_MIN,
+                      "justify-start text-left font-semibold",
                       task.first_tiny_step?.trim()
                         ? "text-[var(--blu-fg)]"
                         : "cursor-not-allowed text-[var(--fnt)]",
@@ -325,7 +328,8 @@ export function PlanView({
                 onCreateProposal(taskIdToPlace, firstOpenHour)
               }
               className={cn(
-                "min-h-10 rounded-full px-4 text-sm font-bold",
+                HIT_TARGET_MIN,
+                "rounded-full px-4 text-sm font-bold",
                 taskIdToPlace && !missingLaunchStep
                   ? "bg-[var(--blu-sf)] text-[var(--blu-fg)]"
                   : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
@@ -362,7 +366,8 @@ export function PlanView({
                             : undefined
                         }
                         className={cn(
-                          "min-h-9 rounded-full px-3 text-sm font-bold",
+                          HIT_TARGET_MIN,
+                          "rounded-full px-3 text-sm font-bold",
                           task.first_tiny_step?.trim()
                             ? "bg-[var(--acc)] text-[var(--on-acc)]"
                             : "cursor-not-allowed bg-[var(--sf3)] text-[var(--fnt)]",
@@ -414,7 +419,10 @@ export function PlanView({
                                 "accepted",
                               )
                             }
-                            className="min-h-9 rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]"
+                            className={cn(
+                              HIT_TARGET_MIN,
+                              "rounded-full bg-[var(--acc)] px-3 text-sm font-bold text-[var(--on-acc)]",
+                            )}
                           >
                             Use {recal.adjustedMinutes}m
                           </button>
@@ -427,7 +435,10 @@ export function PlanView({
                                 "dismissed",
                               )
                             }
-                            className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-bold text-[var(--fnt)]"
+                            className={cn(
+                              HIT_TARGET_MIN,
+                              "rounded-full bg-[var(--sf3)] px-3 text-sm font-bold text-[var(--fnt)]",
+                            )}
                           >
                             Keep {recal.estimateMinutes}m
                           </button>
@@ -466,14 +477,20 @@ export function PlanView({
                     <button
                       type="button"
                       onClick={() => onNudgeProposal(proposal.id)}
-                      className="min-h-9 rounded-full bg-[var(--sf3)] px-3 text-sm font-semibold text-[var(--ink)]"
+                      className={cn(
+                        HIT_TARGET_MIN,
+                        "rounded-full bg-[var(--sf3)] px-3 text-sm font-semibold text-[var(--ink)]",
+                      )}
                     >
                       Move later
                     </button>
                     <button
                       type="button"
                       onClick={() => onRejectProposal(proposal.id)}
-                      className="min-h-9 rounded-full border border-[var(--ln2)] px-3 text-sm font-semibold text-[var(--mut)]"
+                      className={cn(
+                        HIT_TARGET_MIN,
+                        "rounded-full border border-[var(--ln2)] px-3 text-sm font-semibold text-[var(--mut)]",
+                      )}
                     >
                       Reject
                     </button>

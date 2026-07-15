@@ -192,6 +192,84 @@ describe("S9 golden-journey point 6b: override-pattern policy proposal", () => {
     renderReview([]);
     expect(screen.queryByTestId("policy-proposals")).toBeNull();
   });
+
+  // #615: the policy-proposal decision buttons reach the shared >=44px
+  // hit-target floor via hitTarget.ts (HIT_TARGET_MIN) — never a raw
+  // min-h-10 (40px). Unreachable via the demo-mode e2e oracle (needs 3+ of
+  // the last 5 decisions to override the same policy, which no single e2e
+  // run builds up), so this is a className-level guard.
+  it("Approve change / Keep as is carry the 44px hit-target class", () => {
+    renderReview([candidate]);
+
+    const card = screen.getByTestId("policy-proposal");
+    expect(
+      within(card).getByRole("button", { name: "Approve change" }).className,
+    ).toContain("min-h-[44px]");
+    expect(
+      within(card).getByRole("button", { name: "Keep as is" }).className,
+    ).toContain("min-h-[44px]");
+  });
+});
+
+describe("#615: review recovery-queue 44px hit targets", () => {
+  // Unreachable via the demo-mode e2e oracle for Defer/Drop specifically —
+  // cockpit-flow-repair.spec.ts only ever exercises Carry forward on a
+  // stuck/skipped item (the real geometric proof for that button is the
+  // Playwright e2e at 390px). jsdom does not compute layout, so this is a
+  // className-level guard for Defer/Drop.
+  function renderReviewWithRecoveryItem() {
+    let state = workflowSeed();
+    state = captureWorkflow(state, "Recover this stuck item.");
+    state = acceptLatestDraft(state);
+    const task = state.tasks.find((item) => item.status === "active")!;
+    state = {
+      ...state,
+      executionSessions: [
+        {
+          id: "session-stuck-1",
+          user_id: "user-demo",
+          area_id: GOLDEN_AREA_ID,
+          task_id: task.id,
+          calendar_block_id: null,
+          planned_minutes: 30,
+          actual_minutes: 10,
+          paused_minutes: 0,
+          distraction_minutes: 0,
+          productivity_rating: null,
+          status: "stuck",
+          outcome: "blocked",
+          cap_outcome: null,
+          notes: null,
+        },
+      ],
+    };
+
+    render(
+      <ReviewView
+        vm={buildWorkflowCockpitViewModel(state)}
+        policyProposals={[]}
+        onDecidePolicy={() => {}}
+        onCarryForward={() => {}}
+        onDefer={() => {}}
+        onDrop={() => {}}
+        onSave={() => {}}
+      />,
+    );
+  }
+
+  it("Carry forward / Defer / Drop all carry the 44px hit-target class", () => {
+    renderReviewWithRecoveryItem();
+
+    expect(
+      screen.getByRole("button", { name: "Carry forward" }).className,
+    ).toContain("min-h-[44px]");
+    expect(screen.getByRole("button", { name: "Defer" }).className).toContain(
+      "min-h-[44px]",
+    );
+    expect(screen.getByRole("button", { name: "Drop" }).className).toContain(
+      "min-h-[44px]",
+    );
+  });
 });
 
 describe("#588: review headline never claims closure before Save resolves", () => {

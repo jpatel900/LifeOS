@@ -4,6 +4,7 @@ import type {
   useWorkflow,
   WorkflowSyncStatus,
 } from "@/lib/WorkflowContext";
+import { HIT_TARGET_MIN } from "../moments/hitTarget";
 
 // Shell-level status banners (extracted from LifeOSCockpit.tsx, issue #590
 // slice 2 — mechanical split, no behavior change). Rendered above the stage
@@ -74,7 +75,10 @@ export function CaptureParseNotice({
         <button
           type="button"
           onClick={onRetryWithMock}
-          className="min-h-10 rounded-full bg-[var(--btn)] px-4 font-bold text-[var(--btn-fg)]"
+          className={cn(
+            HIT_TARGET_MIN,
+            "rounded-full bg-[var(--btn)] px-4 font-bold text-[var(--btn-fg)]",
+          )}
         >
           Parse with mock parser
         </button>
@@ -110,7 +114,10 @@ export function WipRefusalPanel({
         <button
           type="button"
           onClick={onDismiss}
-          className="min-h-10 rounded-full border border-current px-4 text-sm font-bold"
+          className={cn(
+            HIT_TARGET_MIN,
+            "rounded-full border border-current px-4 text-sm font-bold",
+          )}
         >
           Keep refused
         </button>
