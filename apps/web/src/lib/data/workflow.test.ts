@@ -19,6 +19,7 @@ import {
   syncQueuedCapture,
   createExecutionSession,
   createTask,
+  deferExecutionSessionWithTask,
   editTimeBlockProposal,
   findOrCreatePerson,
   listExecutionReviewItems,
@@ -1852,6 +1853,68 @@ describe("workflow data provider", () => {
     expect(result.session.outcome).toBe("skipped");
     expect(result.block?.status).toBe("missed");
     expect(result.task).toBeNull();
+  });
+
+  // #613: the atomic cap-DEFER RPC — one call carries both the session
+  // outcome (blocked/deferred) and the task deferral (backlog) so a caller
+  // never sees a state where one committed and the other didn't.
+  it("defers a task and its execution session atomically via rpc", async () => {
+    const deferredSession = {
+      ...runningSessionRow,
+      outcome: "blocked",
+      cap_outcome: "deferred",
+      actual_minutes: 25,
+      notes: "dod_cap.v1 deferred: Continue from section two.",
+    };
+    const backlogTask = { ...taskRow, status: "backlog" };
+    const rpc = vi.fn().mockResolvedValue({
+      data: { session: deferredSession, task: backlogTask },
+      error: null,
+    });
+    const client = {
+      ...authenticatedClient(vi.fn()),
+      rpc,
+    } as MinimalSupabaseClient;
+
+    const result = await deferExecutionSessionWithTask(
+      client,
+      sessionId,
+      taskId,
+      {
+        actual_minutes: 25,
+        notes: "dod_cap.v1 deferred: Continue from section two.",
+      },
+    );
+
+    expect(rpc).toHaveBeenCalledWith("apply_execution_session_defer", {
+      p_session_id: sessionId,
+      p_task_id: taskId,
+      p_actual_minutes: 25,
+      p_paused_minutes: 0,
+      p_distraction_minutes: 0,
+      p_notes: "dod_cap.v1 deferred: Continue from section two.",
+    });
+    expect(result.session.outcome).toBe("blocked");
+    expect(result.session.cap_outcome).toBe("deferred");
+    expect(result.task.status).toBe("backlog");
+  });
+
+  it("surfaces atomic defer rpc errors without a partial write", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "Execution session was not found." },
+    });
+    const client = {
+      ...authenticatedClient(vi.fn()),
+      rpc,
+    } as MinimalSupabaseClient;
+
+    await expect(
+      deferExecutionSessionWithTask(client, sessionId, taskId, {
+        actual_minutes: 10,
+        notes: null,
+      }),
+    ).rejects.toThrow("Execution session was not found.");
   });
 
   it("unplans a persisted local block atomically via rpc", async () => {

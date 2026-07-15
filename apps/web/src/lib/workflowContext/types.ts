@@ -165,6 +165,21 @@ export interface WorkflowContextValue {
   ) => Promise<void>;
   carryForwardTask: (taskId: string) => void;
   deferTask: (taskId: string) => void;
+  /**
+   * #613 (atomic cap-DEFER, upgrades #587's interim split): persists the
+   * execution session outcome (blocked/deferred) AND the task deferral
+   * (status=backlog) as ONE transaction via apply_execution_session_defer,
+   * so a "persisted" result is a truthful unified close — never a state
+   * where the session committed but the task didn't. Local state still
+   * updates synchronously/optimistically first. Additive to `deferTask`
+   * (kept for non-cap deferral call sites, e.g. the review recovery
+   * action) — this is the cap-DEFER-specific path.
+   */
+  deferTaskWithSession: (
+    taskId: string,
+    actualMinutes: number,
+    notes: string | null,
+  ) => Promise<DeferTaskWithSessionResult>;
   dropTask: (taskId: string) => void;
   /**
    * #588 (review closure truth): resolves with the actual persistence
@@ -238,6 +253,17 @@ export interface WorkflowContextValue {
  * - "failure": the persisted write threw; local state kept, nothing synced.
  */
 export type ReviewSaveResult = "persisted" | "local-only" | "failure";
+
+/**
+ * #613: how the atomic cap-DEFER transaction actually resolved.
+ * - "persisted": the session + task deferral committed together (Supabase
+ *   RPC succeeded) — the only outcome that may claim a unified "closed".
+ * - "local-only": no real client/persisted session or task yet — saved
+ *   locally, sync pending; report the split (unconfirmed) truth.
+ * - "failure": the RPC threw; local state kept, nothing synced; report the
+ *   split (failed) truth.
+ */
+export type DeferTaskWithSessionResult = "persisted" | "local-only" | "failure";
 
 export interface GoogleCalendarBridgeResult {
   outcome:

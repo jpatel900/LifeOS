@@ -114,6 +114,7 @@ import { useTaskMapDraftActions } from "./workflowContext/taskMapDraft";
 import {
   initialSyncStatus,
   type CaptureParseState,
+  type DeferTaskWithSessionResult,
   type GoogleCalendarBridgeResult,
   type TaskMapDraftState,
   type WorkflowContextValue,
@@ -1016,6 +1017,44 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // #613: atomic cap-DEFER — one transactional boundary for the session
+  // outcome AND the task deferral, replacing the prior two-call split
+  // (markSessionWithPersistence("stuck", ..., "deferred") awaited, then a
+  // separate fire-and-forget deferTask persistence) that could commit the
+  // session while the task deferral failed. Local state still updates
+  // synchronously/optimistically (session mark + task defer reducers), then
+  // ONE persistence call carries both writes atomically via
+  // apply_execution_session_defer.
+  async function deferTaskWithSessionWithPersistence(
+    taskId: string,
+    actualMinutes: number,
+    notes: string | null,
+  ): Promise<DeferTaskWithSessionResult> {
+    const previous = stateRef.current;
+    const localSession = previous.executionSessions[0];
+    const sessionApplied = markCurrentSession(previous, "stuck", {
+      actualMinutes,
+      notes,
+      capOutcome: "deferred",
+    });
+    const next = deferTask(sessionApplied, taskId);
+
+    applyWorkflowState(next);
+    recordWipRefusalIfNew(previous, next);
+
+    try {
+      return await persistenceOps.persistDeferredTaskWithSession(
+        localSession,
+        taskId,
+        actualMinutes,
+        notes,
+      );
+    } catch (error) {
+      markPersistedSaveFailure(error);
+      return "failure";
+    }
+  }
+
   const value: WorkflowContextValue = {
     state,
     selectedAreaId,
@@ -1252,6 +1291,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           });
       }
     },
+    deferTaskWithSession: deferTaskWithSessionWithPersistence,
     dropTask: (taskId) => {
       const previous = stateRef.current;
       const next = dropTask(previous, taskId);
