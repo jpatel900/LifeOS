@@ -2,11 +2,13 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { momentKeyLabel } from "@/lib/keys/keymap";
 import { FirstMoveCard, type FirstMoveCardMove } from "./FirstMoveCard";
 import { ScheduleList } from "./ScheduleList";
 import { SideRail } from "./SideRail";
 import { PipelineOverview } from "./PipelineOverview";
 import { FocusList } from "./FocusList";
+import { LoopOrientation } from "./LoopOrientation";
 import type { FirstMoveVM, StartVM } from "./momentsViewModel";
 
 /**
@@ -130,6 +132,21 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  *      tracking and different greys. `.moments-label` itself is untouched
  *      (SideRail's "Waiting on"/"Areas" headings still use it — SideRail.tsx
  *      is another agent's file this round).
+ *
+ * R3-A (premium push #483, round 3) — issue #478's dead-space finding
+ * (below Pipeline, ~200-250px of unexplained void at 1440x900 on an empty
+ * day) survived three rounds of composition-only fixes because the empty
+ * state genuinely had nothing else to say. The owner ratified the fix on
+ * #478 directly: give it a real job. `vm.dayIsEmpty` (momentsViewModel/
+ * start.ts — mirrors buildDaySynthesis's own "genuinely nothing" branch)
+ * gates a new `LoopOrientation` section at the foot of the main column: a
+ * map-first (position + shape, not prose) explanation of the five pipeline
+ * stages a captured thought moves through, sourced from the same
+ * `PIPELINE_OVERVIEW_STAGES` and `keymap.ts` singles-of-truth
+ * `PipelineOverview`/`KeyboardLegend` already use — see LoopOrientation.tsx
+ * for the full rationale. It renders only on the genuinely empty day and
+ * disappears the instant any real block/focus/pending-triage signal
+ * exists, so it can never compete with real data.
  */
 
 export interface StartMomentProps {
@@ -271,7 +288,7 @@ export function StartMoment({
                 <p className="workflow-surface-body text-sm text-muted-foreground">
                   Press{" "}
                   <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
-                    C
+                    {momentKeyLabel("open-capture")}
                   </kbd>{" "}
                   to open capture.
                 </p>
@@ -369,6 +386,8 @@ export function StartMoment({
               />
             </CardContent>
           </Card>
+
+          {vm.dayIsEmpty ? <LoopOrientation /> : null}
         </div>
 
         <SideRail

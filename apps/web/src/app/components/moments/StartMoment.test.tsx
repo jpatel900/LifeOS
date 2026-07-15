@@ -21,6 +21,11 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     topPendingTriageItem: null,
     greeting: "Good morning.",
     daySynthesis: "Nothing on the calendar, and nothing queued yet.",
+    // Defaults false: most existing fixtures below don't care about R3-A's
+    // orientation gate, and this keeps every test that doesn't explicitly
+    // opt in from silently disagreeing with a populated firstMove/focusItems
+    // override (real buildStartVM would compute false for any of those).
+    dayIsEmpty: false,
     ...overrides,
   };
 }
