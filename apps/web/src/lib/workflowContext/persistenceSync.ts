@@ -23,6 +23,7 @@ import {
   createReviewEntry,
   createTask,
   createTimeBlockProposal,
+  deferExecutionSessionWithTask,
   editTimeBlockProposal,
   findOrCreatePerson,
   markExecutionSession,
@@ -627,6 +628,51 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     await syncPersistedWorkflowRows(client);
   }
 
+  // #613: atomic cap-DEFER — persists the execution session outcome AND the
+  // task deferral in one transaction (apply_execution_session_defer), so the
+  // caller can report a truthful unified "persisted" result instead of the
+  // prior split (session awaited, task fire-and-forget). Mirrors
+  // persistReviewEntry's #588 discriminated-result shape: "persisted" only
+  // after the Supabase RPC commits, "local-only" on the recovery-oriented
+  // local fallback when there is no real client/persisted session or task
+  // yet. Failures still throw (the caller maps them to "failure").
+  async function persistDeferredTaskWithSession(
+    localSession: Phase2MockExecutionSession | undefined,
+    localTaskId: string,
+    actualMinutes: number,
+    notes: string | null,
+  ): Promise<"persisted" | "local-only"> {
+    const client = createSupabaseBrowserClient();
+    const persistedSessionId = localSession
+      ? persistedIdForLocalId(
+          localSession.id,
+          persistedSessionIdByLocalIdRef.current,
+        )
+      : null;
+    const persistedTaskId = persistedIdForLocalId(
+      localTaskId,
+      persistedTaskIdByLocalIdRef.current,
+    );
+
+    if (!client || !persistedSessionId || !persistedTaskId) {
+      markLocalOnly("Deferral saved locally; account sync is pending.");
+      return "local-only";
+    }
+
+    await deferExecutionSessionWithTask(
+      client,
+      persistedSessionId,
+      persistedTaskId,
+      {
+        actual_minutes: actualMinutes ?? localSession?.actual_minutes ?? 0,
+        notes: notes ?? "Need a smaller next step.",
+      },
+    );
+
+    await syncPersistedWorkflowRows(client);
+    return "persisted";
+  }
+
   return {
     persistCapture,
     persistAcceptedTaskDraft,
@@ -640,6 +686,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     persistReviewEntry,
     persistStartedSession,
     persistMarkedSession,
+    persistDeferredTaskWithSession,
   };
 }
 
