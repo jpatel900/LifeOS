@@ -146,6 +146,52 @@ describe("CloseMoment — R2-D/R3-B stats + close composition", () => {
     ).toHaveTextContent(/closing saves today's counts/i);
   });
 
+  it("keeps the wins card above the summary card, and preserves stats -> carry forward -> tomorrow -> action order within it on a populated day", () => {
+    renderClose({
+      pendingWins: [win],
+      vm: {
+        ...baseVm,
+        carryForward: [{ taskId: "t-cf", title: "Missed review" }],
+        tomorrowFirstMove: {
+          title: "Draft the proposal",
+          why: "Highest leverage",
+          areaLabel: "Main Job",
+          estMinutes: 25,
+          taskId: "t-tomorrow",
+        },
+      },
+    });
+
+    const winsHeading = screen.getByText("Wins & evidence");
+    const summary = screen.getByTestId("close-moment-summary");
+    // The wins card (a sibling section above the summary card) must still
+    // precede the summary card in document order — the R3-B merge folded
+    // stats/carry-forward/tomorrow/action together, but must not have
+    // silently reordered the summary card ahead of the review sections.
+    expect(
+      winsHeading.compareDocumentPosition(summary) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    const stats = screen.getByTestId("close-moment-stats");
+    const carryList = screen.getByTestId("close-moment-carry-forward-list");
+    const tomorrow = screen.getByTestId("close-moment-tomorrow-first-move");
+    const closeBtn = screen.getByTestId("close-moment-close-day");
+
+    expect(
+      stats.compareDocumentPosition(carryList) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      carryList.compareDocumentPosition(tomorrow) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      tomorrow.compareDocumentPosition(closeBtn) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("uses one eyebrow system (moments-label) for both summary sub-sections", () => {
     renderClose({
       vm: {
