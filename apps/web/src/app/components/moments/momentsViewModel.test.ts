@@ -1792,3 +1792,91 @@ describe("buildStartVM — D-8 topPendingTriageItem (#483)", () => {
     expect(vm.topPendingTriageItem?.areaLabel).toBe("");
   });
 });
+
+describe("buildStartVM — R3-A dayIsEmpty (#483 round 3)", () => {
+  it("true for a genuinely empty state: no blocks, no tasks, no captures", () => {
+    const vm = buildStartVM(stateWith({}), { now: NOW });
+    expect(vm.dayIsEmpty).toBe(true);
+  });
+
+  it("false when an active task exists (feeds focusItems)", () => {
+    const state = stateWith({
+      tasks: [makeTask({ id: "t1", title: "Write report" })],
+    });
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.dayIsEmpty).toBe(false);
+  });
+
+  it("false when a block is scheduled today", () => {
+    const state = stateWith({
+      calendarBlocks: [makeBlock({ id: "b1" })],
+    });
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.dayIsEmpty).toBe(false);
+  });
+
+  it("false when a capture is pending triage", () => {
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c1",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: "Something to sort",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: daysBefore(1),
+        },
+      ],
+    });
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.dayIsEmpty).toBe(false);
+  });
+
+  it("stays true even with a stale project and a recovery nudge — those describe yesterday, not today", () => {
+    const state = stateWith({
+      projects: [
+        makeProject({
+          id: "p1",
+          title: "Stale project",
+          updated_at: daysBefore(10),
+        }),
+      ],
+      calendarBlocks: [
+        makeBlock({
+          id: "missed-yesterday",
+          task_id: "t-missed",
+          status: "missed",
+          start_at: daysBefore(1),
+          end_at: daysBefore(1),
+        }),
+      ],
+      tasks: [
+        makeTask({ id: "t-missed", title: "Missed task", status: "done" }),
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.staleProject).not.toBeNull();
+    expect(vm.recoveryNudge).not.toBeNull();
+    expect(vm.dayIsEmpty).toBe(true);
+  });
+
+  it("agrees exactly with buildDaySynthesis's own 'genuinely nothing' branch", () => {
+    const empty = buildStartVM(stateWith({}), { now: NOW });
+    expect(empty.dayIsEmpty).toBe(true);
+    expect(empty.daySynthesis).toBe(
+      "Nothing on the calendar, and nothing queued yet.",
+    );
+
+    const populated = buildStartVM(
+      stateWith({ tasks: [makeTask({ id: "t1", title: "Write report" })] }),
+      { now: NOW },
+    );
+    expect(populated.dayIsEmpty).toBe(false);
+    expect(populated.daySynthesis).not.toBe(
+      "Nothing on the calendar, and nothing queued yet.",
+    );
+  });
+});

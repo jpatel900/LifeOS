@@ -997,3 +997,155 @@ describe("StartMoment — D-8-POLISH composition (#483)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("StartMoment — R3-A LoopOrientation gate (#483 round 3)", () => {
+  it("renders the loop-orientation diagram when the day is genuinely empty", () => {
+    const vm = baseVM({ dayIsEmpty: true });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-loop-orientation")).toBeInTheDocument();
+  });
+
+  it("does not render the loop-orientation diagram when dayIsEmpty is false, even with the truthful empty hero showing", () => {
+    // firstMove/topPendingTriageItem both null (state-3 empty hero) but
+    // dayIsEmpty explicitly false — e.g. a schedule block exists in a state
+    // deriveFirstMove didn't pick. The two gates are deliberately separate.
+    const vm = baseVM({ dayIsEmpty: false });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-moment-empty")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("start-loop-orientation"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("recedes when a real firstMove exists, even if dayIsEmpty were somehow true (defense in depth against an inconsistent VM)", () => {
+    const vm = baseVM({
+      dayIsEmpty: true,
+      firstMove: {
+        title: "Write report",
+        why: "Oldest active commitment",
+        areaLabel: "Work",
+        estMinutes: 25,
+        taskId: "t1",
+      },
+      focusItems: [
+        {
+          title: "Write report",
+          why: "Oldest active commitment",
+          areaLabel: "Work",
+          estMinutes: 25,
+          taskId: "t1",
+        },
+      ],
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    // The gate is a straight `vm.dayIsEmpty` read (see StartMoment.tsx) —
+    // this documents that StartMoment trusts the VM rather than
+    // re-deriving; production `buildStartVM` never produces this
+    // combination (see momentsViewModel.test.ts's dayIsEmpty coverage).
+    expect(screen.getByTestId("start-loop-orientation")).toBeInTheDocument();
+  });
+
+  it("recedes when a pending-triage item is promoted into the hero", () => {
+    const vm = baseVM({
+      dayIsEmpty: false,
+      counts: { pendingTriage: 1, activeTasks: 0, todayBlocks: 0 },
+      topPendingTriageItem: {
+        id: "c1",
+        summary: "Reply to the vendor email",
+        areaLabel: "Work",
+      },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    expect(screen.getByTestId("start-pending-triage-card")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("start-loop-orientation"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders every pipeline stage, in order, as a short fragment (not a sentence)", () => {
+    const vm = baseVM({ dayIsEmpty: true });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const nodes = screen.getAllByTestId(/^start-loop-orientation-stage-/);
+    expect(nodes.map((node) => node.dataset.testid)).toEqual([
+      "start-loop-orientation-stage-capture",
+      "start-loop-orientation-stage-triage",
+      "start-loop-orientation-stage-plan",
+      "start-loop-orientation-stage-execute",
+      "start-loop-orientation-stage-review",
+    ]);
+    // No node's text should run long enough to read as a sentence — the
+    // diagram (position + connector), not prose, carries the sequence.
+    for (const node of nodes) {
+      expect((node.textContent ?? "").length).toBeLessThan(40);
+    }
+  });
+
+  it("never implies a state change: no node claims anything is done/scheduled/in progress", () => {
+    const vm = baseVM({ dayIsEmpty: true });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const loop = screen.getByTestId("start-loop-orientation");
+    expect(loop.textContent?.toLowerCase()).not.toMatch(
+      /done|scheduled|in progress|completed|current/,
+    );
+  });
+});

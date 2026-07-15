@@ -1,12 +1,11 @@
 "use client";
 
 import { Fragment } from "react";
-import { momentKeyLabel } from "@/lib/keys/keymap";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   PIPELINE_OVERVIEW_STAGES,
   type PipelineOverviewStage,
 } from "./pipelineCounts";
-import { KBD_CHIP_NEUTRAL } from "./kbdChip";
 
 /**
  * R3-A (design alignment, #483 round 3) — orientation content for the
@@ -38,9 +37,11 @@ import { KBD_CHIP_NEUTRAL } from "./kbdChip";
  * TRUTHFUL, GROUNDED: stage ids/order come from `PIPELINE_OVERVIEW_STAGES`
  * (pipelineCounts.ts) — the same single source `PipelineOverview` reads, so
  * this can never list a stage that doesn't exist or in a different order.
- * The capture keybinding is read from `momentKeyLabel("open-capture")`
- * (keymap.ts), not hardcoded, so it can never drift from what "C" actually
- * does. The per-stage captions are static prose, but every one is a
+ * The capture keybinding itself is not re-stated here (the "C" real
+ * affordance, sourced from `keymap.ts`, already lives one card up in the
+ * empty-state hero — see StartMoment.tsx — and again in the bottom-left
+ * KeyboardLegend; a third copy in this diagram would be visual noise, not
+ * new truth). The per-stage captions are static prose, but every one is a
  * verifiable fact about the app's real, shipped mechanics (docs/
  * UX_FLOWS.md Flows 2-9: capture saves raw text and decides nothing;
  * triage's real choices include accept/edit/reject; planning proposals
@@ -75,8 +76,8 @@ const STAGE_LABEL: Record<PipelineOverviewStage, string> = {
 // carries the sequence; these two-to-four words carry only what a numeral
 // alone can't. Grounded in docs/UX_FLOWS.md — see the file doc comment.
 const STAGE_CAPTION: Record<PipelineOverviewStage, string> = {
-  capture: "goes in, unsorted",
-  triage: "accept, edit, or reject",
+  capture: "unsorted",
+  triage: "accept, edit, reject",
   plan: "time-blocked, locally",
   execute: "one task, one focus",
   review: "see what moved",
@@ -84,50 +85,47 @@ const STAGE_CAPTION: Record<PipelineOverviewStage, string> = {
 
 export function LoopOrientation() {
   return (
-    <section
-      className="grid gap-3"
-      aria-label="How a captured thought moves through the loop"
+    <Card
+      className="workflow-support-card moments-card"
       data-testid="start-loop-orientation"
     >
-      <h2 className="workflow-page-eyebrow m-0">The loop</h2>
-      <ol
-        className="flex flex-wrap items-start justify-center gap-x-3 gap-y-4 sm:flex-nowrap sm:justify-between sm:gap-0"
-        data-testid="start-loop-orientation-nodes"
-      >
-        {PIPELINE_OVERVIEW_STAGES.map((stage, index) => (
-          <Fragment key={stage}>
-            {index > 0 ? (
-              <li
-                aria-hidden="true"
-                className="hidden h-px flex-1 bg-border sm:mt-3.5 sm:block"
-              />
-            ) : null}
-            <li
-              className="flex basis-[28%] flex-col items-center gap-1.5 px-1 text-center sm:flex-1 sm:basis-0"
-              data-testid={`start-loop-orientation-stage-${stage}`}
-            >
-              <span
-                aria-hidden="true"
-                className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-[11px] font-semibold text-muted-foreground"
-              >
-                {index + 1}
-              </span>
-              <span className="text-xs font-medium">{STAGE_LABEL[stage]}</span>
-              <span className="text-[11px] leading-snug text-muted-foreground">
-                {STAGE_CAPTION[stage]}
-              </span>
-              {stage === "capture" ? (
-                <kbd
-                  className={KBD_CHIP_NEUTRAL}
-                  data-testid="start-loop-orientation-capture-key"
+      <CardContent className="grid gap-2.5 p-4">
+        <section aria-label="How a captured thought moves through the loop">
+          <h2 className="workflow-page-eyebrow m-0">The loop</h2>
+          <ol
+            className="mt-2.5 flex flex-wrap items-start justify-center gap-x-3 gap-y-3 sm:flex-nowrap sm:justify-between sm:gap-0"
+            data-testid="start-loop-orientation-nodes"
+          >
+            {PIPELINE_OVERVIEW_STAGES.map((stage, index) => (
+              <Fragment key={stage}>
+                {index > 0 ? (
+                  <li
+                    aria-hidden="true"
+                    className="hidden h-px flex-1 bg-border sm:mt-3.5 sm:block"
+                  />
+                ) : null}
+                <li
+                  className="flex basis-[28%] flex-col items-center gap-1 px-1 text-center sm:flex-none sm:basis-auto"
+                  data-testid={`start-loop-orientation-stage-${stage}`}
                 >
-                  {momentKeyLabel("open-capture")}
-                </kbd>
-              ) : null}
-            </li>
-          </Fragment>
-        ))}
-      </ol>
-    </section>
+                  <span
+                    aria-hidden="true"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40 text-[11px] font-semibold text-muted-foreground"
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="text-xs font-medium">
+                    {STAGE_LABEL[stage]}
+                  </span>
+                  <span className="text-[11px] leading-snug text-muted-foreground">
+                    {STAGE_CAPTION[stage]}
+                  </span>
+                </li>
+              </Fragment>
+            ))}
+          </ol>
+        </section>
+      </CardContent>
+    </Card>
   );
 }
