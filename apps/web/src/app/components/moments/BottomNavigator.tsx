@@ -10,37 +10,54 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * #574 (epic #555 item 6) — mobile shell: a compact bottom navigator, visible
  * only below the `sm` breakpoint (<640px), so the Start/Flow/Close moment
  * switch and Settings are reachable in the thumb zone without scrolling to
- * the header at the top of the viewport. The header's own MomentSwitcher +
- * Settings link (TodayMoments.tsx) are unchanged and keep working at every
- * width — this is an additional, mobile-only affordance, not a replacement.
+ * the header at the top of the viewport.
+ *
+ * D-10 R2 (#483 round 2, blocker #1 — "no taste argument for it"): the
+ * header's own MomentSwitcher and Settings link used to render
+ * unconditionally at every width too, which meant <640px showed the
+ * identical Start/Flow/Close control twice — this bar's, plus the header's
+ * (the header's copy additionally stamped keyboard hints on a device with
+ * no keyboard). TodayMoments.tsx now wraps its header MomentSwitcher,
+ * CountdownClockToggle, and Settings link in a `hidden sm:contents` slot
+ * each, so this bar is the ONLY moment switch / Settings link rendered
+ * below `sm`, and the header is the only one at `sm`+ (this bar is
+ * `sm:hidden`) — a clean split, never both at once.
  *
  * State: this component owns none. It renders the SAME MomentSwitcher
  * component the header uses, wired to the SAME `value`/`onChange` pair
  * (TodayMoments' `moment`/`setMoment`), passed straight through as props —
  * there is no forked/local moment state here, just a second view onto the
  * one source of truth. `idPrefix="bottom-nav"` only changes the rendered
- * `data-testid`s (see MomentSwitcher.tsx) so the two simultaneous DOM
- * instances (header + this bar) don't collide on existing
- * `getByTestId("moment-switcher-*")` queries.
+ * `data-testid`s (see MomentSwitcher.tsx) so the two DOM instances (one per
+ * breakpoint, never both mounted-and-visible at once post round-2) don't
+ * collide on existing `getByTestId("moment-switcher-*")` queries.
  *
  * Height math (kept in sync with CaptureAffordance's mobile bottom offset
  * and MomentsThemeShell's reserved bottom padding — see the cross-reference
  * comments in both, and MOBILE_NAV_CONTENT_HEIGHT_PX below):
  *   pt-2 (8px)
- *   + MomentSwitcher row: 44px button floor (HIT_TARGET_ROW) + 2x0.35rem
- *     wrapper padding (`.workflow-shell__nav` in globals.css overrides the
- *     component's Tailwind `p-1` — 0.35rem = 5.6px/side) + 2x1px border
- *     = ~57.2px (the Settings link's HIT_TARGET_MIN 44px floor is shorter,
- *     so the switcher is the row's binding height)
+ *   + MomentSwitcher row: 44px button floor (HIT_TARGET_ROW), no extra
+ *     wrapper padding or border contribution — D-10 R2 dropped the
+ *     `.workflow-shell__nav` class this track used to carry (see
+ *     MomentSwitcher.tsx's own comment: its unlayered `padding: 0.35rem`
+ *     was inflating the pill to ~57px against every other masthead
+ *     control's 44px floor) — measured live at 46px (44 + this pill's own
+ *     2px border, border-box).
  *   + pb 0.5rem (8px, before the safe-area-inset-bottom term composed into
  *     the same `pb-[calc(env(...)+0.5rem)]` declaration)
- *   = ~73.2px, rounded up to 74. Verified against the real rendered height
- *   by the #574 e2e overlap guard (tests/e2e/moments-home-parity.spec.ts) —
- *   a first cut of this constant assumed the Tailwind `p-1` and
- *   undercounted at 60px, which that guard caught as an actual 390x844
- *   pill/navigator intersection.
+ *   = 8 + 46 + 8 = 62px, measured live (getBoundingClientRect) at 63px.
+ *   Was ~73.2px/74 before D-10 R2's height-lock fix — MomentsThemeShell's
+ *   reserved end-of-scroll clearance (`pb-7rem` = 112px, sized against the
+ *   OLD 74px figure with a ~38px buffer) is untouched by this packet
+ *   (that file isn't in this packet's ownership) and is now simply more
+ *   generous than the 63px band strictly needs — safe, just not
+ *   re-tightened. Originally verified against the real rendered height by
+ *   the #574 e2e overlap guard (tests/e2e/moments-home-parity.spec.ts) — a
+ *   first cut of this constant assumed the Tailwind `p-1` and undercounted
+ *   at 60px, which that guard caught as an actual 390x844 pill/navigator
+ *   intersection.
  */
-export const MOBILE_NAV_CONTENT_HEIGHT_PX = 74;
+export const MOBILE_NAV_CONTENT_HEIGHT_PX = 63;
 
 export interface BottomNavigatorProps {
   value: MomentValue;

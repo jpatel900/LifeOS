@@ -88,6 +88,35 @@ describe("MastheadThemeToggle", () => {
     expect(setThemeMock).not.toHaveBeenCalled();
   });
 
+  // D-10 R2 (#483 round 2, blocker #4): this is the ONLY theme control in
+  // the app (no settings-page fallback), so it carries a real focus-visible
+  // ring using the app's own --ring token, and HIT_TARGET_MIN so it can
+  // never shrink under the 44px hit-target floor once the kbd hint drops
+  // out of the mobile layout (icon-only on touch viewports).
+  it("carries the app's focus-visible ring token and a min-width floor", async () => {
+    useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
+    render(<MastheadThemeToggle />);
+    const button = await screen.findByTestId("masthead-theme-toggle");
+    expect(button).toHaveClass("outline-none");
+    expect(button).toHaveClass("focus-visible:ring-2");
+    expect(button).toHaveClass("focus-visible:ring-ring");
+    expect(button).toHaveClass("focus-visible:ring-offset-2");
+    expect(button).toHaveClass("min-w-[44px]");
+  });
+
+  // D-10 R2 (#483 round 2, blocker #6): the "D" kbd hint now shares
+  // kbdChip.ts's single treatment — hidden below `sm` and hover/focus
+  // revealed above it, not permanently stamped.
+  it("the 'D' kbd hint is hidden below sm and only reveals on hover/focus", async () => {
+    useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
+    render(<MastheadThemeToggle />);
+    const button = await screen.findByTestId("masthead-theme-toggle");
+    const hint = button.querySelector("kbd")!;
+    expect(hint).toHaveClass("hidden");
+    expect(hint).toHaveClass("opacity-0");
+    expect(hint).toHaveClass("sm:group-hover:opacity-100");
+  });
+
   it("does not toggle on 'D' while a button elsewhere has focus (typing-target guard)", async () => {
     useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
 

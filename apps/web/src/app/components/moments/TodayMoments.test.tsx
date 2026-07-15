@@ -149,6 +149,63 @@ describe("TodayMoments", () => {
     ).toHaveAttribute("aria-selected", "true");
   });
 
+  // D-10 R2 (#483 round 2, blocker #1 — "no taste argument for it"): round 1
+  // rendered the header's MomentSwitcher unconditionally at every viewport,
+  // so <640px showed the identical Start/Flow/Close control twice — once in
+  // the header (with keyboard hints, on a device with no keyboard) and once
+  // in BottomNavigator. The header instance (and the two other controls
+  // BottomNavigator already covers — CountdownClockToggle, Settings) are now
+  // wrapped in a `hidden sm:contents` slot: gone below `sm`, and at `sm`+ the
+  // wrapper contributes no box of its own (`display: contents`), so the
+  // control renders exactly as it did before this fix. jsdom doesn't apply
+  // real CSS, so this asserts the actual class strings rather than computed
+  // visibility — the guarantee is "the responsive classes are present and
+  // correct," which is what a real browser then acts on.
+  describe("masthead mobile composition (#483 round 2)", () => {
+    it("wraps the header MomentSwitcher, CountdownClockToggle, and Settings link in a hidden-below-sm slot", () => {
+      renderToday({ initialMoment: "start" });
+
+      for (const testid of [
+        "masthead-momentswitcher-slot",
+        "masthead-countdowntoggle-slot",
+        "masthead-settingslink-slot",
+      ]) {
+        const slot = screen.getByTestId(testid);
+        expect(slot).toHaveClass("hidden");
+        expect(slot).toHaveClass("sm:contents");
+      }
+
+      // The header's own MomentSwitcher instance still exists in the DOM
+      // (so `sm:contents` has something to un-hide at `sm`+) — it just
+      // lives inside the hidden slot, distinct from BottomNavigator's
+      // always-mobile-visible instance.
+      expect(screen.getByTestId("moment-switcher-start")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("moment-switcher-bottom-nav-start"),
+      ).toBeInTheDocument();
+    });
+
+    it("never hides AreaSelector or MastheadThemeToggle — neither has a mobile equivalent anywhere else on the page", () => {
+      renderToday({ initialMoment: "start" });
+
+      // Neither control's own root (nor an ancestor up to the masthead
+      // cluster) carries a `hidden` class — they render at every viewport.
+      const area = screen.getByTestId("today-moments-area-switcher");
+      const theme = screen.getByTestId("masthead-theme-toggle");
+      expect(area.className).not.toMatch(/\bhidden\b/);
+      expect(theme.className).not.toMatch(/\bhidden\b/);
+    });
+
+    it("renders a primary/secondary divider that itself is hidden below sm (nothing in the mobile row for it to divide)", () => {
+      renderToday({ initialMoment: "start" });
+
+      const divider = screen.getByTestId("masthead-divider");
+      expect(divider).toHaveClass("hidden");
+      expect(divider).toHaveClass("sm:block");
+      expect(divider).toHaveAttribute("aria-hidden", "true");
+    });
+  });
+
   it("start-to-first-move journey: Start now switches to Flow with a running countdown", async () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });

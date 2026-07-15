@@ -7,7 +7,8 @@ import {
   momentKeyBindingById,
   momentKeyLabel,
 } from "@/lib/keys/keymap";
-import { HIT_TARGET_ROW } from "./hitTarget";
+import { HIT_TARGET_MIN, HIT_TARGET_ROW } from "./hitTarget";
+import { kbdHintClass } from "./kbdChip";
 
 /**
  * D-10 (#483, masthead audit finding #1 — "the single most off-language
@@ -38,6 +39,15 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * Implemented as this component's own guarded window listener (not routed
  * through `useMomentKeyboard`, which this packet doesn't own) — see
  * keymap.ts's "cycle-area" binding for the collision-checked definition.
+ *
+ * D-10 R2 (#483 round 2): the trigger now carries a real focus-visible ring
+ * (the app's own `--ring` token, applied everywhere else in the masthead —
+ * a DOM scan of the Start page found this control, like its siblings,
+ * falling through to the bare browser default outline on Tab) and switched
+ * from HIT_TARGET_ROW to HIT_TARGET_MIN so a very short area name can never
+ * shrink the trigger under the 44px hit-target floor once the kbd hint's
+ * width drops out of the mobile layout (kbdChip.ts's HINT_REVEAL — hidden
+ * below `sm`, hover/focus-revealed above it).
  */
 
 export interface AreaSelectorOption {
@@ -229,8 +239,8 @@ export function AreaSelector({
         onClick={() => setOpen((current) => !current)}
         onKeyDown={handleTriggerKeyDown}
         className={cn(
-          HIT_TARGET_ROW,
-          "inline-flex items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm font-semibold text-foreground transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 motion-reduce:transition-none motion-reduce:duration-0",
+          HIT_TARGET_MIN,
+          "group gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm font-semibold text-foreground outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
         )}
         data-testid="today-moments-area-switcher"
       >
@@ -251,9 +261,7 @@ export function AreaSelector({
           />
         )}
         <span className="max-w-[9rem] truncate">{selected.name}</span>
-        <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.65rem] font-semibold text-muted-foreground">
-          {momentKeyLabel("cycle-area")}
-        </kbd>
+        <kbd className={kbdHintClass()}>{momentKeyLabel("cycle-area")}</kbd>
       </button>
 
       {open ? (
