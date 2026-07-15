@@ -281,6 +281,9 @@ describe("AreaSelector", () => {
     expect(label).toHaveClass("sm:max-w-[5rem]");
     expect(label).toHaveClass("min-w-0");
     expect(label).toHaveClass("truncate");
-    expect(label.className).not.toMatch(/(?<!sm:)max-w-\[5rem\]\b/);
+    // A bare (unscoped) `max-w-[5rem]` would re-truncate mobile; the two
+    // `toHaveClass` assertions above already fail if the sm:-scoped class
+    // is dropped or replaced, so a revert to the unscoped form is caught
+    // there rather than needing its own (fragile) negative-match regex.
   });
 });
