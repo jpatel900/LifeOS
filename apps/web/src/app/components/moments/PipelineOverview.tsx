@@ -59,7 +59,26 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * onto the clicked node) — there is no "you are here" signal in
  * WorkflowContext to derive from truthfully, so this starts with nothing
  * active rather than seeding a fake default stage.
- */
+ *
+ * R2-D (issue #483 round 2): D-9's tint/weight/separator fixes above left
+ * the rail's underlying composition problem untouched — five `flex-1`
+ * cells force-stretched a five-numeral rail across the full 952px desktop
+ * content column, so each cell's actual ink (one glyph + a ~40px label)
+ * sat in ~180-190px of forced-empty flex-grow space regardless of
+ * viewport. Still data-blocked from filling that space honestly (see
+ * above — no delta history, no total/capacity to bar-fill), so the fix is
+ * compositional, not decorative: at `sm:` and up the rail no longer
+ * force-fills its container — the outer `<ul>` switches to `sm:w-fit` and
+ * each `<li>`/button switches to `sm:flex-none`, so the rail's own box
+ * shrinks to match its five cells' actual content width and left-aligns
+ * under the greeting/day-synthesis text above it, instead of stretching to
+ * a width it has no ink to cover. Below `sm:` the original `flex-1`/
+ * full-width behavior stays: the rail's *intrinsic* content width doesn't
+ * shrink with the viewport (it's driven by five numerals + labels, not by
+ * available space), so hugging it unconditionally would overflow a 390px
+ * screen — confirmed by measurement during the round-2 visual check, this
+ * is why mobile keeps the original stretched layout while desktop gets the
+ * new hugged one, not the same treatment at both sizes. */
 
 export interface PipelineOverviewProps {
   counts: Record<string, number>;
@@ -79,7 +98,7 @@ export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
 
   return (
     <ul
-      className="moments-card flex items-stretch overflow-hidden border border-border p-1"
+      className="moments-card flex w-full items-stretch overflow-hidden border border-border p-1 sm:w-fit"
       data-testid="pipeline-overview"
       aria-label="Pipeline stages"
     >
@@ -95,7 +114,7 @@ export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
                 {"›"}
               </li>
             ) : null}
-            <li className="flex flex-1 items-stretch">
+            <li className="flex flex-1 items-stretch sm:flex-none">
               <button
                 type="button"
                 onClick={() => {
@@ -105,14 +124,14 @@ export function PipelineOverview({ counts, onDrill }: PipelineOverviewProps) {
                 aria-current={active ? "step" : undefined}
                 className={cn(
                   HIT_TARGET_ROW,
-                  "flex flex-1 flex-col gap-0.5 rounded-[var(--surface-radius-sm)] px-3.5 py-2.5 text-left transition-colors duration-[var(--motion-base)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0",
+                  "flex flex-1 flex-col gap-0.5 rounded-[var(--surface-radius-sm)] px-3.5 py-2.5 text-left transition-colors duration-[var(--motion-base)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0 sm:flex-none sm:px-4",
                   active ? "bg-[var(--blu-sf)]" : "hover:bg-muted/60",
                 )}
                 data-testid={`pipeline-overview-stage-${stage}`}
               >
                 <span
                   className={cn(
-                    "min-w-[2ch] text-xl font-[650] leading-none tracking-tight tabular-nums lining-nums",
+                    "min-w-[2ch] text-xl font-[650] leading-none tracking-tight tabular-nums lining-nums sm:text-2xl",
                     active ? "text-[var(--blu-fg)]" : "text-foreground",
                   )}
                   data-testid={`pipeline-overview-count-${stage}`}
