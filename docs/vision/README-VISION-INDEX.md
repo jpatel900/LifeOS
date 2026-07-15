@@ -1,26 +1,28 @@
-# README — Index of C:\Users\jaypa\LifeOS-plans\ (start here)
+# README — LifeOS vision and roadmap corpus
 
-For ANY agent (any capability tier) or human entering this folder.
-Last full update: 2026-07-05 (Fable's final session).
+This curated corpus is important strategic input for LifeOS: it preserves the long-horizon product vision, pressure-tests current doctrine, and supplies candidate roadmap contracts. It is not disposable history. It also is not direct implementation authority: `docs/REQUIREMENTS.md` and ADRs govern builds, and vision ideas enter implementation only through reviewed contract changes. ADR 0005 governs that path.
+
+Last governance reconciliation: 2026-07-15.
 
 ## If you are here to BUILD LifeOS things
 
 Read in this order, nothing else first:
 
-1. **vision-execution-companion.md** — BINDING contracts for every vision
-   item: WHAT/LANDS/WHEN/SPEC/DONE-WHEN/NEVER + Batch order A–D. This is
-   your work source. The vision prose files are background only.
+1. **vision-execution-companion.md** — curated candidate contracts for every
+   vision item: WHAT/LANDS/WHEN/SPEC/DONE-WHEN/NEVER + suggested batch order.
+   Use it to prepare requirements and issues, never as standalone build authority.
 2. The LifeOS repo's own doctrine (SYSTEM_MAP.md → AGENTS.md → ADR 0002/
    0003 via `git show origin/main:<path>`). Repo doctrine OUTRANKS this
    folder wherever they conflict — flag conflicts, never resolve them.
 3. The active plan file for your packet (below), if any.
 
 Hard rules that bind you in every file here: doctrine-first (REQUIREMENTS
-/STAGE_BRIEFS/#292/#293 before code), respect stage gates, respect the
-active queue (S5–S9 into the moments shell first), isolated worktrees,
-uncertainty escalates to the owner and never merges.
+/ADRs before code), respect ADR 0005's capability-specific evidence gates,
+respect current issue ownership and dependency order, use isolated worktrees,
+and escalate unresolved conflicts. Stage labels do not impose blanket waits on
+owner-ratified, data-independent foundations.
 
-## If you are here to UNDERSTAND the vision (background)
+## If you are here to UNDERSTAND the vision
 
 The four-pass triptych+1, in reading order:
 

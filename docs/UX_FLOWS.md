@@ -6,6 +6,8 @@ Read when: Changing or reviewing workflow UX behavior
 Do not use for: Active implementation queue, shipped change log, or historical proof by itself
 Superseded by: n/a
 
+Evolution note: V1 is the shipped UX baseline. Stage labels below express dependency and risk order under ADR 0005; they do not block owner-ratified, data-independent foundations. Personalization, proactive interruption, autonomy, and external-write behavior still require their relevant evidence and approval gates.
+
 # UX Flows — Area-Scoped Personal Workflow Cockpit
 
 ## 1. UX Principles

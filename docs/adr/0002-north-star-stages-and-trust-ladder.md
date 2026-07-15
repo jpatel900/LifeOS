@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (owner sign-off 2026-07-02, merged via PR #250; this ADR is a one-way-door doctrine document)
+Accepted, with D3's blanket usage gate superseded by ADR 0005 (owner sign-off 2026-07-02, merged via PR #250). The trust ladder, spine/perimeter doctrine, stage dependency order, and cross-slice invariants remain accepted.
 
 ## Context
 

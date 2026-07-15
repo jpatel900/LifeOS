@@ -2,7 +2,7 @@
 
 ## Mission
 
-LifeOS is a private, one-user, low-cost AI-assisted workflow cockpit. It turns messy input into structured work, stages scheduling decisions for approval, learns by area, and monitors health. Keep it simple, maintainable, safe, and V1-scoped.
+LifeOS is a private, one-user, low-cost AI-assisted workflow cockpit. It turns messy input into structured work, stages scheduling decisions for approval, learns by area, and monitors health. Keep it simple, maintainable, safe, and deliberately evolved from the shipped V1 baseline.
 
 ## Authority
 
@@ -15,7 +15,7 @@ LifeOS is a private, one-user, low-cost AI-assisted workflow cockpit. It turns m
 - Area is a first-class scope object; learning is area-scoped unless explicitly global.
 - Health scores are rule-based, not AI-invented; deterministic product logic stays in code/config, not prompts.
 - AI may suggest policy changes; the user approves core policy changes.
-- Do not build broad autonomous agent behavior in V1.
+- Do not build broad autonomous agent behavior; initiative and autonomy remain evidence-earned under the trust ladder.
 - Do not add background jobs, vendors, or hosted services unless requirements and docs justify them.
 - No feature is done until required tests pass; never weaken schemas, guard tests, validators, or RLS to make tests pass.
 - Every implementation task defines acceptance criteria before coding and stays within `docs/REQUIREMENTS.md` unless requirements are reviewed first.
@@ -23,11 +23,13 @@ LifeOS is a private, one-user, low-cost AI-assisted workflow cockpit. It turns m
 - User-owned tables require `id`, `user_id`, timestamps where appropriate, RLS, policies, indexes, and export coverage.
 - Persisted multi-table transitions go through one transactional server boundary, never sequenced client writes.
 
-## V1 scope control
+## Evolution scope control
 
-Build only the approved V1 cockpit: areas, capture, optional submit-based audio transcription, AI parsing into drafts, ambiguity/sense-making, triage, tasks/projects, local time-block proposals, approval-gated Google Calendar write, execute, missed-block recovery, daily/weekly review, health, audit logs, and basic meta-learning logs.
+Treat the approved V1 cockpit as the shipped baseline, not the product ceiling: areas, capture, optional submit-based audio transcription, AI parsing into drafts, ambiguity/sense-making, triage, tasks/projects, local time-block proposals, approval-gated Google Calendar write, execute, missed-block recovery, daily/weekly review, health, audit logs, and basic meta-learning logs.
 
-Do not build email/message ingestion, computer-use automation, autonomous rescheduling, full conflict solving, vector DB, realtime voice assistant, in-app multi-agent runtime, team collaboration, SaaS billing, broad web browsing, or analytics before workflows. If a change resembles these, stop until `docs/REQUIREMENTS.md` is reviewed and updated.
+Data-independent foundations may proceed when an owner-ratified requirement or issue authorizes them and all invariants remain intact. Usage evidence is mandatory before behavior that depends on personal evidence: personalization conclusions, initiative or autonomy graduation, proactive interruption, external channels or writes, and data-derived policy changes. Stage labels express dependency and risk order; they are not blanket bans on unrelated buildable work. See ADR 0005.
+
+Do not build email/message ingestion, computer-use automation, autonomous rescheduling, full conflict solving, vector DB, realtime voice assistant, in-app multi-agent runtime, team collaboration, SaaS billing, broad web browsing, or analytics without explicit requirements review. Permanent non-goals remain binding regardless of stage.
 
 ## Forbidden changes without human review
 

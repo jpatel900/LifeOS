@@ -11,7 +11,7 @@ The app must be tested around four risks:
 3. AI output invalidity
 4. privacy/security errors
 
-The V1 test strategy should favor practical coverage over perfection.
+The test strategy should favor practical coverage over perfection. V1 is the shipped baseline; every later slice retains these invariant checks and adds focused proof for its new contract under ADR 0005.
 
 ## 2. Test Types
 

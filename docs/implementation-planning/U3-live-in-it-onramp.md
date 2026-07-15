@@ -1,6 +1,6 @@
 # U3 → live-in-it week: the on-ramp
 
-_The one gate everything downstream waits on. This turns "populate real data" into a concrete, ordered path, and names what each step lights up. Grounded in the actual surfaces (verified 2026-07-08, session 9). Keep it a brain-dump-and-go, not a planning ritual — the point is to start living in it, not to perfect the data._
+_The on-ramp for evidence-dependent behavior, not a blanket gate on all downstream engineering. This turns "populate real data" into a concrete, ordered path and names what each step lights up. Grounded in the actual surfaces (verified 2026-07-08, session 9; governance reconciled 2026-07-15). Keep it a brain-dump-and-go, not a planning ritual — the point is to start living in it, not to perfect the data._
 
 ## Two prerequisites (both quick)
 
@@ -31,7 +31,7 @@ _The one gate everything downstream waits on. This turns "populate real data" in
 
 ## What "it's working" looks like (the honest enjoyment signal)
 
-By end of week: capture feels faster than a notes app, the plan reflects your real day, recalibration has corrected at least one area's estimates, and a weekly rollup reads back something true you'd forgotten. That's the first honest read on whether LifeOS is worth living in — and the input that shapes Stage 2. Nothing before this week is a real signal.
+By end of week: capture feels faster than a notes app, the plan reflects your real day, recalibration has corrected at least one area's estimates, and a weekly rollup reads back something true you'd forgotten. That is the first honest read on whether LifeOS is worth living in and valid evidence for personalization, policy learning, initiative, and autonomy decisions. Deterministic, owner-ratified foundations that do not depend on this evidence may proceed under ADR 0005.
 
 ## Notes
 

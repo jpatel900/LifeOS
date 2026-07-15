@@ -17,18 +17,20 @@ Optimize for:
 
 The architecture should be boring on purpose.
 
+V1 describes the shipped architecture baseline, not a freeze on data-independent foundations. Reviewed evolution follows ADR 0005; the safety, privacy, transaction, and external-write boundaries below remain binding.
+
 ## 2. Recommended Stack
 
-| Layer                           | Choice                                                              | Reason                                                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Frontend                        | Next.js                                                             | Common, agent-friendly, deploys easily                                                                                        |
-| Hosting                         | Vercel Hobby initially                                              | Low fixed cost, simple deployment                                                                                             |
-| Database/Auth                   | Supabase                                                            | Postgres + Auth + RLS + local DB dev via Supabase tooling                                                                     |
-| Server logic (V1)               | Next.js Route Handlers + Server Actions                             | Single app server surface; secrets and integrations stay in `apps/web`                                                        |
-| Server logic (V1.5+ / optional) | Supabase Edge Functions                                             | Deferred by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`) |
-| AI                              | OpenAI Responses API + Structured Outputs                           | Typed AI output and tool-ready interaction model                                                                              |
-| Calendar                        | Google Calendar API                                                 | Free/busy checks and approved event writes                                                                                    |
-| Background jobs                 | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity                                                                                                   |
+| Layer                        | Choice                                                              | Reason                                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Frontend                     | Next.js                                                             | Common, agent-friendly, deploys easily                                                                                        |
+| Hosting                      | Vercel Hobby initially                                              | Low fixed cost, simple deployment                                                                                             |
+| Database/Auth                | Supabase                                                            | Postgres + Auth + RLS + local DB dev via Supabase tooling                                                                     |
+| Server logic (baseline)      | Next.js Route Handlers + Server Actions                             | Single app server surface; secrets and integrations stay in `apps/web`                                                        |
+| Server logic (ADR exception) | Supabase Edge Functions                                             | Optional by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`) |
+| AI                           | OpenAI Responses API + Structured Outputs                           | Typed AI output and tool-ready interaction model                                                                              |
+| Calendar                     | Google Calendar API                                                 | Free/busy checks and approved event writes                                                                                    |
+| Background jobs              | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity                                                                                                   |
 
 ## 3. Runtime Architecture
 
@@ -52,11 +54,11 @@ Next.js server (Route Handlers + Server Actions)
       └─ Google Calendar API
 ```
 
-Optional **V1.5+** (not the default V1 path): **Supabase Edge Functions** for scheduled jobs or specific integrations — see `docs/adr/0001-v1-server-boundary.md`.
+Optional, not the default path: **Supabase Edge Functions** for scheduled jobs or specific integrations — see `docs/adr/0001-v1-server-boundary.md`.
 
-## 4. Why No Separate Backend in V1
+## 4. Why No Separate Backend by Default
 
-Do not add a separate Node/Express/Nest backend. Application logic lives in **Next.js** (Route Handlers and Server Actions). **Supabase** provides the database, auth, RLS, and migrations; it is not a second application server for core CRUD and AI flows in V1.
+Do not add a separate Node/Express/Nest backend without a superseding reviewed ADR. Application logic lives in **Next.js** (Route Handlers and Server Actions). **Supabase** provides the database, auth, RLS, and migrations; it is not a second application server for core CRUD and AI flows.
 
 Supabase still provides:
 
@@ -98,7 +100,7 @@ Adding another backend beyond Next + Supabase data would increase cost, deployme
   SECURITY_PRIVACY.md
 ```
 
-Core workflows in V1 are implemented under `apps/web` (not under `supabase/functions`). Edge Functions under `/supabase/functions` are **V1.5+ / optional**, unless an ADR documents a V1 exception (cron or integration).
+Core workflows in the current baseline are implemented under `apps/web` (not under `supabase/functions`). Edge Functions under `/supabase/functions` are **optional and default-no**, unless an ADR documents a justified exception (cron or integration).
 
 ## 6. Core Architectural Components
 
@@ -313,21 +315,21 @@ Do not log:
 
 Architecture Decision Records live under `/docs/adr/`.
 
-| ADR                                         | Decision                                                                                                                  | Status   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------- |
-| [0001](docs/adr/0001-v1-server-boundary.md) | V1 server boundary: Next.js Route Handlers + Server Actions; Supabase Edge Functions not the default (V1.5+ / exceptions) | Accepted |
+| ADR                                         | Decision                                                                                                                                         | Status   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| [0001](docs/adr/0001-v1-server-boundary.md) | Baseline server boundary: Next.js Route Handlers + Server Actions; Supabase Edge Functions remain default-no except for justified ADR exceptions | Accepted |
 
 Additional invariants:
 
-| Decision                                                         | Status   |
-| ---------------------------------------------------------------- | -------- |
-| Use Supabase for data/auth instead of a separate backend service | Accepted |
-| Use local proposals before calendar writes                       | Accepted |
-| Keep external writes approval-gated                              | Accepted |
-| Use strict schemas for AI output                                 | Accepted |
-| Avoid multi-agent runtime in app                                 | Accepted |
-| Avoid realtime voice in V1                                       | Accepted |
-| Avoid full calendar sync                                         | Accepted |
+| Decision                                                                                                     | Status   |
+| ------------------------------------------------------------------------------------------------------------ | -------- |
+| Use Supabase for data/auth instead of a separate backend service                                             | Accepted |
+| Use local proposals before calendar writes                                                                   | Accepted |
+| Keep external writes approval-gated                                                                          | Accepted |
+| Use strict schemas for AI output                                                                             | Accepted |
+| Avoid multi-agent runtime in app                                                                             | Accepted |
+| Keep realtime voice unapproved unless a reviewed requirement preserves privacy, cost, and consent boundaries | Accepted |
+| Avoid full calendar sync                                                                                     | Accepted |
 
 ## 12. Architecture Risks
 

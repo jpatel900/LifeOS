@@ -7,15 +7,16 @@ Sections: Current objective / Decisions in effect / Constraints / Open questions
 
 ## Current objective
 
-Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing narrow, issue-driven follow-up work. Current shipped surface includes areas, capture, optional AI/mock parse capture, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and the handoff cockpit UI model.
+Evolve LifeOS from the shipped V1 personal workflow cockpit through narrow, owner-ratified, issue-driven work. V1 is the baseline, not the ceiling. Current shipped surface includes areas, capture, optional AI/mock parse capture, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, and audit-oriented persistence.
 
 ## Decisions in effect
 
 - Safety boundaries are unchanged: no silent external writes, no autonomous rescheduling, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
 - Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification` (2026-07-03); GitHub auto-merge gates on these. The T0 safe auto-merge allowlist includes `.agents/skills/**` (owner-approved, 2026-07-03).
-- The app remains one deployable Next.js app for V1 server logic; Supabase Edge Functions are later/default-no unless a specific scheduled or integration constraint justifies them.
+- The app remains one deployable Next.js app for current server logic; Supabase Edge Functions are default-no unless a specific scheduled or integration constraint justifies them.
 - Persistence is intentionally mixed: authenticated Supabase paths are used where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
-- The handoff cockpit is the active UI model. `design_handoff_lifeos/README.md` remains the active design reference; old Pass 7 visual-contract docs are history only.
+- `design_handoff_lifeos/README.md` is preserved as a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
+- ADR 0005 governs staged evolution: stage labels order dependencies and risk, data-independent foundations may proceed when owner-ratified, and evidence-dependent behavior remains gated by relevant usage evidence.
 - Google Calendar update/cancel, all-day conflict handling, and AI/env-dependent paths remain explicit follow-on scope, not implied fixes.
 - Governance docs are budgeted: `AGENTS.md` and `CLAUDE.md` stay small; detailed rulebooks live in `.agents/skills`; `docs/agent/` keeps only `CODEX_PROMPT_TEMPLATE.md`.
 - Production Supabase migrations are applied manually (never by deploys); the `Migration Drift` workflow red-flags unapplied migrations on every `main` push, and the response procedure is `.agents/skills/lifeos-migration-drift-response/SKILL.md` (armed and proven 2026-07-04 after KNOWN_ISSUES row 11).
@@ -38,7 +39,7 @@ Keep LifeOS focused on the shipped V1 personal workflow cockpit while completing
 
 ## Next action
 
-Continue the smallest issue-scoped work that preserves V1 boundaries. For cockpit flow work, consult `docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md` and implement only the explicitly approved slice. For governance work, keep `AGENTS.md`/`CLAUDE.md` stable and move detailed procedures into skills.
+Continue the smallest owner-ratified issue-scoped work that preserves permanent boundaries and applies ADR 0005. For cockpit flow work, consult `docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md` and implement only the explicitly approved slice. For governance work, keep `AGENTS.md`/`CLAUDE.md` stable and move detailed procedures into skills.
 
 ## Do-not-repeat
 
