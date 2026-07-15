@@ -97,4 +97,35 @@ describe("AreaHealthDots", () => {
       "true",
     );
   });
+
+  // R2-C (#483 round 2, regression): D-11 rendered the identity swatch and
+  // the status dot as two same-size circles (`rounded-full`) with nothing
+  // separating them, which read as a duplication bug rather than
+  // "identity + status". The swatch must now be a non-circular bar so the
+  // two marks can never be confused for each other, even if they ever end
+  // up adjacent again.
+  it("renders the identity swatch as a non-circular bar, distinct in shape from the round status dot", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    const swatch = screen.getByTestId("area-health-swatch-a1");
+    const dot = screen.getByTestId("area-health-dot-a1");
+    expect(swatch.className).not.toMatch(/rounded-full/);
+    expect(dot.className).toMatch(/rounded-full/);
+  });
+
+  // R2-C (#483 round 2, regression): the two marks must not be visual
+  // neighbors — the status dot sits against the status word it labels
+  // (opposite end of the row from the identity swatch), not beside the
+  // identity swatch.
+  it("keeps the status dot adjacent to the status word, not adjacent to the identity swatch", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    const dot = screen.getByTestId("area-health-dot-a1");
+    const statusGroup = screen.getByTestId("area-health-status-a1");
+    const swatch = screen.getByTestId("area-health-swatch-a1");
+
+    // The dot lives inside the same group as the visible status word...
+    expect(statusGroup).toContainElement(dot);
+    expect(statusGroup).toHaveTextContent("on track");
+    // ...and is not a sibling of the identity swatch.
+    expect(swatch.parentElement).not.toContainElement(dot);
+  });
 });

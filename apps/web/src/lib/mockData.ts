@@ -12,33 +12,36 @@ import type {
 
 export const MOCK_USER_ID = "00000000-0000-0000-0000-000000000001";
 
+// R2-C (#483 round 2): colors match the retuned AREA_COLOR_PRESETS in
+// lib/areaAccent.ts (Ocean/Forest/Violet/Clay) — see that file for why the
+// raw Tailwind seed hues moved to a shared OKLCH lightness/chroma budget.
 export const areas: Phase2MockArea[] = [
   {
     id: "area-main-job",
     user_id: MOCK_USER_ID,
     name: "Main Job",
-    color: "#2563eb",
+    color: "#4c80cd",
     created_at: new Date().toISOString(),
   },
   {
     id: "area-personal",
     user_id: MOCK_USER_ID,
     name: "Personal",
-    color: "#16a34a",
+    color: "#439458",
     created_at: new Date().toISOString(),
   },
   {
     id: "area-volunteer",
     user_id: MOCK_USER_ID,
     name: "Volunteer Work",
-    color: "#9333ea",
+    color: "#8965ba",
     created_at: new Date().toISOString(),
   },
   {
     id: "area-side-project",
     user_id: MOCK_USER_ID,
     name: "Side Project",
-    color: "#f97316",
+    color: "#d87248",
     created_at: new Date().toISOString(),
   },
 ];

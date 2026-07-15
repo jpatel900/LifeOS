@@ -11,10 +11,10 @@ import type { AreaHealthVM } from "./momentsViewModel";
  * status plus its note so the same information survives without color.
  *
  * D-4 (design alignment, #483): restyles the flex-wrap chip row to
- * prototype-2's `.area-row` list — one row per area, colored dot on the
- * left, a visible status word on the right (previously that same word only
- * lived in the dot's `aria-label`; now it's on-screen text too, still
- * backed by the same `STATUS_LABEL` map, no new data).
+ * prototype-2's `.area-row` list — one row per area, a visible status word
+ * on the right (previously that same word only lived in the dot's
+ * `aria-label`; now it's on-screen text too, still backed by the same
+ * `STATUS_LABEL` map, no new data).
  *
  * D-11 (design alignment, #483): ports the prototype's per-area color
  * *swatch* (`.aswatch`) — a distinct identity hue per area, separate from
@@ -25,6 +25,18 @@ import type { AreaHealthVM } from "./momentsViewModel";
  * never a hardcoded hex. It is `aria-hidden`: identity color is redundant
  * with the visible area-name text next to it, and the status dot remains
  * the sole accessible status signal (its aria-label is unchanged).
+ *
+ * R2-C (#483 round 2): D-11 shipped the identity swatch as a same-size
+ * circle sitting ~8px from the status dot — two identical circles with
+ * unrelated meaning read as a duplication bug, not "identity + status"
+ * (confirmed regression vs the D-8 evidence shot, which had one dot per
+ * row). Fixed by differentiating shape *and* position rather than adding a
+ * third element: the identity mark is now a small rounded bar (never a
+ * circle, so it can never be mistaken for a status dot at a glance) next to
+ * the area name, and the status dot moved to sit directly against the
+ * status word it labels on the right — the two marks no longer neighbor
+ * each other anywhere in the row. Same tokens, same aria-label, same
+ * testids; only shape and position changed.
  */
 
 export interface AreaHealthDotsProps {
@@ -68,24 +80,24 @@ export function AreaHealthDots({ areas }: AreaHealthDotsProps) {
           <span className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden="true"
-              className="size-2.5 shrink-0 rounded-full border border-border/60 bg-[var(--area-accent)]"
+              className="h-3.5 w-1 shrink-0 rounded-sm bg-[var(--area-accent)]"
               style={buildAreaAccentStyle(area.color)}
               data-testid={`area-health-swatch-${area.id}`}
-            />
-            <span
-              aria-label={`${area.name}: ${STATUS_LABEL[area.status]} — ${area.note}`}
-              role="img"
-              className="inline-block size-2.5 shrink-0 rounded-full"
-              style={{ background: STATUS_VAR[area.status] }}
-              data-testid={`area-health-dot-${area.id}`}
             />
             <span className="truncate text-muted-foreground">{area.name}</span>
           </span>
           <span
-            className="shrink-0 text-xs font-medium"
+            className="flex shrink-0 items-center gap-1.5 text-xs font-medium"
             style={{ color: STATUS_VAR[area.status] }}
             data-testid={`area-health-status-${area.id}`}
           >
+            <span
+              aria-label={`${area.name}: ${STATUS_LABEL[area.status]} — ${area.note}`}
+              role="img"
+              className="inline-block size-1.5 shrink-0 rounded-full"
+              style={{ background: STATUS_VAR[area.status] }}
+              data-testid={`area-health-dot-${area.id}`}
+            />
             {STATUS_LABEL[area.status]}
           </span>
         </li>

@@ -37,11 +37,13 @@ describe("handoff cockpit area accents", () => {
     );
 
     const cockpit = await screen.findByTestId("lifeos-cockpit");
-    expect(cockpit.style.getPropertyValue("--acc")).toBe("#2563eb");
+    // R2-C (#483 round 2): mock area colors retuned off raw Tailwind seed
+    // hues — see lib/mockData.ts and lib/areaAccent.ts.
+    expect(cockpit.style.getPropertyValue("--acc")).toBe("#4c80cd");
 
     fireEvent.click(screen.getByRole("button", { name: "Volunteer Work" }));
 
-    expect(cockpit.style.getPropertyValue("--acc")).toBe("#9333ea");
+    expect(cockpit.style.getPropertyValue("--acc")).toBe("#8965ba");
   });
 
   it("keeps Areas admin outside the cockpit visual system", async () => {
