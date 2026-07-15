@@ -384,7 +384,11 @@ describe("StartMoment — S6 daily brief (#258)", () => {
     const card = screen.getByTestId("start-recovery-nudge");
     expect(card).toBeInTheDocument();
     expect(card.textContent).toContain("Draft the proposal");
-    expect(card.getAttribute("style") ?? "").toContain("--state-watch");
+    // Side-tab antipattern removal (#483): the card no longer carries an
+    // inline border accent — the --state-watch signal now comes from the
+    // whole-card background tint class plus the eyebrow's own inline color.
+    expect(card.className).toContain("moments-card--tint-watch");
+    expect(card.innerHTML).toContain("--state-watch");
     expect(card.innerHTML).not.toContain("--state-risk");
 
     expect(screen.getByTestId("start-recovery-nudge-open")).toBeInTheDocument();

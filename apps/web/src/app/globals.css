@@ -1455,15 +1455,34 @@ health-*/review-* classes above stay untouched so the
 
 /* Base elevated surface — prototype's shared `.card`/`.sched`/`.firstmove`
    treatment: flat surface color, hairline border, soft shadow, prototype's
-   16px radius. `border-color` only (never the `border` shorthand): the
-   flagship cards carry a `border-l-4`/`border-t-4` Tailwind width on top
-   of the shadcn Card's 1px base border for their accent-colored edge —
-   a shorthand here would reset that side's width back to 1px. */
+   16px radius. `border-color` only (never the `border` shorthand): some
+   hero-slot cards (CurrentBlockHero, CloseMoment, FlowMoment) still carry a
+   top-edge accent width on top of the shadcn Card's 1px base border, and a
+   handful of others (FirstMoveCard, DriftRecoveryCard, StartMoment's
+   promoted/empty/recovery-nudge cards, ReEntryRitual's recovery proposal)
+   override `border-color` inline to tint the full 1px perimeter with their
+   semantic accent instead of a thick single-edge stripe (side-tab
+   antipattern removal, issue #483) — either way, a shorthand here would
+   clobber that width or color override. */
 .moments-card {
   background: var(--sf);
   border-color: var(--ln);
   border-radius: var(--surface-radius);
   box-shadow: var(--surface-shadow-sm);
+}
+
+/* Support-tier watch tint (side-tab antipattern removal, issue #483) — the
+   Start moment's "Yesterday" recovery nudge is a secondary surface, not a
+   hero card, so it earns its --state-watch signal from a soft whole-card
+   background wash rather than any accent border (stripe or full). Placed
+   after `.moments-card`/`.workflow-support-card` so its tint wins the
+   background cascade on the same element. */
+.moments-card--tint-watch {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--state-watch) 10%, var(--card)) 0%,
+    color-mix(in oklch, var(--card) 96%, var(--muted)) 100%
+  );
 }
 
 /* Nested row surface (schedule/focus-list rows) — one elevation step up

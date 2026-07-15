@@ -234,8 +234,8 @@ export function ReEntryRitual({
 
       {recovery ? (
         <Card
-          className="workflow-flagship-card border-l-4 p-0"
-          style={{ borderLeftColor: "var(--acc)" }}
+          className="workflow-flagship-card p-0"
+          style={{ borderColor: "var(--acc)" }}
           data-testid="re-entry-ritual-recovery"
         >
           <CardContent className="grid gap-3 p-5">

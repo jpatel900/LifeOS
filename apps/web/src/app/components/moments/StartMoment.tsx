@@ -243,8 +243,8 @@ export function StartMoment({
             </>
           ) : topPendingTriageItem ? (
             <Card
-              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
-              style={{ borderLeftColor: "var(--acc)" }}
+              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden p-0"
+              style={{ borderColor: "var(--acc)" }}
               data-testid="start-pending-triage-card"
             >
               <CardContent className="grid gap-3 p-5 sm:p-6">
@@ -278,8 +278,8 @@ export function StartMoment({
             </Card>
           ) : (
             <Card
-              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
-              style={{ borderLeftColor: "var(--acc)" }}
+              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden p-0"
+              style={{ borderColor: "var(--acc)" }}
               data-testid="start-moment-empty"
             >
               <CardContent className="grid gap-3 p-5 sm:p-6">
@@ -329,8 +329,7 @@ export function StartMoment({
 
           {recoveryNudge ? (
             <Card
-              className="workflow-support-card moments-card relative overflow-hidden border-l-4 p-0"
-              style={{ borderLeftColor: "var(--state-watch)" }}
+              className="workflow-support-card moments-card moments-card--tint-watch relative overflow-hidden p-0"
               data-testid="start-recovery-nudge"
             >
               <CardContent className="grid gap-2 p-4 sm:p-5">
