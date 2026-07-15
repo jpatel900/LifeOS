@@ -80,6 +80,23 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * under the hero, above the two-column grid, matching
  * docs/vision/prototypes/prototype-2-today-home.html's greeting -> pipe ->
  * grid order — it no longer sits in its own trailing section.
+ *
+ * D-8-POLISH (design alignment, #483) — the hero card and the schedule
+ * label had accidental blank space, not deliberate whitespace. Root cause:
+ * the two-column grid (`lg:grid-cols-[minmax(0,1fr)_20rem]`) defaults to
+ * `align-items: stretch`, so whenever the SideRail column was taller than
+ * the main column, the main column's nested `grid` divs were stretched to
+ * match — and being `auto`-tracked grids themselves, that leftover height
+ * bled into their own rows (padding out the hero card's bottom, and
+ * widening the gap under "Today's schedule") rather than landing as a
+ * single, intentional gap anywhere. Fix: `items-start` on both the
+ * two-column grid and the main column's own `grid` wrapper, so every card
+ * sizes to its own content — no fabricated height, no shrink-to-cramped.
+ * Today's schedule is also now wrapped in the same `Card`/`moments-card`
+ * treatment SideRail's "Waiting on"/"Areas" cards already use (previously
+ * it was bare text with no boundary), so the bottom of the page reads as
+ * two card-terminated columns instead of one column trailing into empty
+ * canvas.
  */
 
 export interface StartMomentProps {
@@ -157,8 +174,11 @@ export function StartMoment({
         <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="grid gap-6">
+      <div
+        className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
+        data-testid="start-moment-grid"
+      >
+        <div className="grid items-start gap-6" data-testid="start-moment-main-column">
           {cardMove && vm.firstMove ? (
             <>
               <FirstMoveCard
@@ -301,16 +321,21 @@ export function StartMoment({
             </p>
           ) : null}
 
-          <section className="grid gap-3">
-            <h2 className="moments-label text-sm font-semibold text-muted-foreground">
-              Today&apos;s schedule
-            </h2>
-            <ScheduleList
-              blocks={vm.blocks}
-              timeDisplay={timeDisplay}
-              now={now}
-            />
-          </section>
+          <Card
+            className="workflow-support-card moments-card"
+            data-testid="start-schedule-card"
+          >
+            <CardContent className="grid gap-3 p-4 sm:p-5">
+              <h2 className="moments-label text-sm font-semibold text-muted-foreground">
+                Today&apos;s schedule
+              </h2>
+              <ScheduleList
+                blocks={vm.blocks}
+                timeDisplay={timeDisplay}
+                now={now}
+              />
+            </CardContent>
+          </Card>
         </div>
 
         <SideRail
