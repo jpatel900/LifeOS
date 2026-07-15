@@ -157,11 +157,17 @@ Cite these by name. They are decided.
    it refuses. Build refusals, caps, and gates BEFORE features. If the
    operator's bottleneck is over-activation, refusal IS the feature.
 2. **One system of record.** Nothing else may remember the core truth.
-3. **Usage-gated growth.** Never build stage N+1 until stage N is actually
-   USED, with measurable gates (not enthusiasm). Habit before capability.
-4. **Rolling-wave planning.** Fully plan only the active stage; keep ONE
-   non-binding card for the next; nothing beyond. Plans decay with
-   distance; filing ahead of the wave produces stale, wrong work.
+3. **Dependency- and evidence-gated growth.** Build owner-ratified,
+   data-independent foundations when their structural prerequisites are
+   ready. Require measured usage and trust evidence before behavior whose
+   effectiveness or safety depends on personal evidence: personalization,
+   initiative/autonomy, proactive interruption, external writes, and
+   data-derived policy. Stage labels order risk; they are not blanket bans.
+4. **Disposition-led rolling waves.** Keep every strategic candidate in one
+   auditable disposition tracker so distant vision is preserved and can
+   inform sequencing. Fully contract and file only the next owner-ratified
+   items against current reality; distant plans remain strategic input,
+   never executable scope by themselves.
 5. **Trust ladder, symmetric.** Propose → approve → auto, per action class,
    graduated on evidence, demoted automatically, irreversible classes never
    graduate. (Applies equally to AI autonomy and human delegation.)
@@ -203,7 +209,7 @@ section of the future north-star record.
 
 **Phase 1 — Doctrine before anything.**
 Write the north-star decision record: staged roadmap (Stage 0 = smallest
-spine; each later stage gated on USAGE metrics of the previous), trust
+spine; later capability-specific behavior gated on the evidence it needs), trust
 ladder definition, spine/perimeter rule, invariants list. Write
 REQUIREMENTS in house format with non-goals + graveyard. Write the SYSTEM
 MAP skeleton. Nothing is built yet. (For an org: this is the operating
@@ -237,10 +243,11 @@ periodically verify a mid-tier successor (junior person, smaller model)
 can operate and extend the system from artifacts alone. If they can't,
 the missing judgment gets discharged into artifacts until they can.
 
-**Then: rolling waves.** Each stage boundary re-runs a small ritual —
-check the usage gate, harvest lessons, author the next stage's contracts
-fresh against current reality (never from stale plans), file the work,
-proceed.
+**Then: rolling waves.** For each next owner-ratified candidate, classify
+its structural dependencies and capability-specific evidence gates,
+harvest lessons, and author a bounded contract fresh against current
+reality. Preserve each strategic item until it receives IMPLEMENT, MERGE,
+REJECT-with-rationale, or DEFER-on-a-named-dependency disposition.
 
 ---
 
@@ -271,8 +278,9 @@ The method is identical; only the nouns change.
 
 ## PART VI — FAILURE MODES (pre-paid lessons; do not re-purchase)
 
-1. **Building ahead of habit.** Unused capability is pure maintenance debt.
-   The gate is usage, never excitement.
+1. **Building behavior ahead of evidence.** Evidence-dependent capability
+   without usage or trust signal is maintenance and relationship debt.
+   Deterministic foundations still require a named dependency and owner-ratified contract.
 2. **Two systems of record.** The fragmentation death. One spine.
 3. **Silent policy mutation.** All recalibration through visible proposals.
 4. **Building on stale state.** Verify against reality first, always.

@@ -1,7 +1,7 @@
 # Plan — Dual Critical Path (Usability × Enjoyability)
 
-**Adopted:** 2026-07-06 (owner-directed). **Live tracker:** `C:\Users\jaypa\LifeOS-work-map.html` (top two ★ lanes).
-**This doc is the stable operating contract** — path definitions, leverage rule, cadence, safety rails. It holds nothing that changes per cycle; per-cycle status lives on the map, not here (one source of truth, no drift).
+**Preserved strategy:** 2026-07-06 (owner-directed). **Status:** non-authoritative planning snapshot.
+The path definitions and feature ideas remain active strategic input for one-by-one disposition. Current shipped status lives in `docs/PROJECT_STATE.md`; implementation authority lives in REQUIREMENTS, ADRs, and live owner-ratified issues. Do not use the external work map or this snapshot as current execution state.
 
 ---
 
@@ -10,18 +10,18 @@
 **Strict: ★ Usability > ★ Enjoyability > everything else.**
 
 - **Usability** = _functionality as a baseline_ + _ease-of-use, but only up to the point where it doesn't balloon implementation time/cost._ Ship the baseline; add ease-of-use where it's cheap; do **not** gold-plate.
-- Because usability's remaining work is largely owner-gated, agent build-capacity serves usability first via the agent-buildable usability items (U4 icons, U2b drift-prevention) and by keeping the owner queue crisp — **then** enjoyability (E1→E3).
+- Historical allocation (2026-07-06): usability was assessed as largely owner-gated, with U4 icons and U2b drift-prevention identified as agent-buildable before enjoyability E1→E3. Reclassify every remaining item against current `PROJECT_STATE`, live claims/issues, ADR 0005, and the vision-disposition protocol before assigning owner or agent work.
 - The parked-work rotation is a **small capped slice, subordinate to both paths** — it exists so set-aside work doesn't rot ("due share from time to time"), never ahead of a path item.
 
 ## The two fronts
 
 **★ Usability** — _"Can I live in it, on my real data, without breakage or lies?"_
-Foundation (reliability floor G1–G4) is DONE. What remains is **owner-gated at the root**, so "pushing usability" means keeping the owner queue crisp and unblocking Jay — not agent build-work.
+Historical snapshot: the reliability floor G1–G4 was recorded as done and the remaining usability work as owner-gated. This is not a current restriction on agent build-work; verify shipped state and classify each candidate's real dependencies and risk gates before disposition.
 
 **★ Enjoyability** — _"Does it act for me? Do I reach for it unprompted?"_
-Foundation (moments surface + SP-1..10 polish) is DONE. What remains is **agent-buildable now**: make the system _act_ on decisions instead of just recording them, remove nagging, make the brief worth opening.
+Historical snapshot: the moments surface + SP-1..10 polish was recorded as done and the remaining enjoyability work as agent-buildable. Re-verify each claim and candidate against current code, `PROJECT_STATE`, and live issues before contracting it.
 
-These are **not two symmetric tracks.** Usability's next moves are owner actions; enjoyability's are build work. The map tags every ★ card with its leverage so this asymmetry stays visible:
+The original plan treated these as asymmetric tracks and tagged each card with its then-current leverage. Those tags are historical classifications, not standing assignments; the disposition protocol determines current ownership and gates:
 `OWNER-DRIVEN` · `AGENT-BUILDABLE` · `USAGE-GATED`.
 
 ## The shared linchpin — the live-in-it week
@@ -33,14 +33,14 @@ Both fronts converge on **one week of Jay as daily driver**. It cannot start unt
 
 Build enjoyability features before the week; **validate both fronts during it.**
 
-## Ordered paths (detail + live status on the map)
+## Ordered paths (historical proposal; re-verify before contracting)
 
 **Usability:** U1 ratify+close #251 (owner) → U2 apply 4 prod migrations, Drift RED (owner) → U3 populate real context (usage) → U4 PNG PWA icons (agent) → U2b migration-drift prevention (agent; record the learning only after U2 is green, per owner).
 **Enjoyability:** E1 close the learning loop / apply-to-planning via additive `duration_profiles` (agent) → E2 scan reads `suggestion_records`, stop re-nagging (agent) → E3 brief worth opening / AI prose drafts (agent) → E4 outbound brief push, Telegram rung-1 (usage / Stage-3 candidate).
 
 ## Cadence — due share for parked work
 
-Primary thrust = the two ★ paths. **Each cycle also pulls exactly ONE parked item forward** so nothing rots. Rotation queue (current pick tracked on the map):
+The proposal used the two ★ paths as its primary thrust and pulled one parked item per cycle. Preserve this queue as candidates; select each future item through the current vision-disposition and issue protocol:
 distillation #289 → task-map v1 #292 → automation graduations → systems-dynamics guards → orientation-as-surfaces → INV-8 delimiter hardening #448 (owner-gated).
 
 ## Safety rails (don't break anything)
@@ -53,4 +53,4 @@ distillation #289 → task-map v1 #292 → automation graduations → systems-dy
 
 ## Scope note
 
-This restructure lives in the **map + this doc**. GitHub issues (#293 tracker, #292 Stage-2 card) are **not** rewritten — propagating the two-front framing into the issues is a separate, owner-gated step.
+This snapshot does not update GitHub issues or current status. Reconcile each candidate with current REQUIREMENTS, ADR 0005, and live issues before implementation.

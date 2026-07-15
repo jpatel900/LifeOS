@@ -1,6 +1,6 @@
 # Templates — stage contract, epic, and slice issues
 
-Fill-in-the-blanks skeletons. The canonical worked examples are LIVE artifacts: issue #252 (S0 contract with appendix), epic #251 (campaign file), issues #253–#261 (slices). When a template is ambiguous, imitate the worked example — do not invent structure. These templates exist so that a less capable model can author a correct stage by transcription and checklist, not judgment.
+Fill-in-the-blanks skeletons. Prior artifacts #252, #251, and #253–#261 illustrate the shape but are not current authority. Resolve ambiguity from current REQUIREMENTS, ADRs, and the governing issue; escalate missing decisions instead of copying stale scope. These templates help an executor preserve structure without replacing judgment.
 
 ## 1. S0 contract issue skeleton
 
@@ -10,7 +10,7 @@ Gate: <owner review | Claude fidelity review per epic decision log>.**
 
 ## Context
 
-<2-4 sentences: what the stage adds; cite ADR 0002 D3 row and NS-INV-2.>
+<2-4 sentences: what the capability wave adds; cite current REQUIREMENTS, ADR 0005, applicable invariants, and any capability-specific evidence gate.>
 
 ## Scope (binding)
 
@@ -56,7 +56,7 @@ map_view: <hosting moment / state tokens / collapsed+expanded representation>
 Required sections IN ORDER — the relay workflow and driver parse some headings verbatim:
 
 1. Header paragraph: governing ADR, "body = frozen scope + relay order; decision log = comment thread (append-only)"; re-entry instruction.
-2. `## Entry gate (hard)` — previous epic CLOSED; gate-metric evidence pasted; S0 gate defined.
+2. `## Entry prerequisites (hard)` — structural dependencies verified; capability-specific evidence pasted where required; S0 gate defined. Do not require unrelated prior-stage usage.
 3. `## Success criterion (frozen <date>)` — numbered golden-journey behaviors + `CHECK:` line naming the spec/evidence.
 4. `## Relay order` — table: slice, issue, name, depends-on. One slice in flight (NS-INV-6).
 5. `## Standing agent rules for every issue in this epic` — **this heading text is load-bearing**: pipeline-advance.yml kick comments cite it verbatim. Copy the #251 section and adapt; never rename the heading.
