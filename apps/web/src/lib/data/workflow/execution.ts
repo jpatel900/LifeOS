@@ -11,6 +11,7 @@ import {
   type CalendarBlockUnplanResult,
   type ExecutionReviewItemsResult,
   type ExecutionSessionCreateResult,
+  type ExecutionSessionDeferResult,
   type ExecutionSessionMarkResult,
   type MinimalSupabaseClient,
   type ReviewEntryCreateResult,
@@ -277,6 +278,57 @@ export async function markExecutionSession(
     session: parseExecutionSession(result.session),
     block: result.block ? parseCalendarBlock(result.block) : null,
     task: result.task ? parseTask(result.task) : null,
+  };
+}
+
+// #613: atomic cap-DEFER — persists the execution session (outcome=blocked,
+// cap_outcome=deferred) AND the task deferral (status=backlog) as one
+// transaction via apply_execution_session_defer, following the exact
+// SECURITY INVOKER / RLS pattern of acceptTimeBlockProposal /
+// markExecutionSession above (see the migration comment for the precedent
+// citation). Replaces the prior two-call split (markExecutionSession then a
+// separate applyTaskReviewTransition) for this one outcome.
+export async function deferExecutionSessionWithTask(
+  client: MinimalSupabaseClient | null,
+  sessionId: string,
+  taskId: string,
+  input: {
+    actual_minutes: number;
+    paused_minutes?: number;
+    distraction_minutes?: number;
+    notes: string | null;
+  },
+): Promise<ExecutionSessionDeferResult> {
+  if (!client) {
+    throw new Error("Mock cap-defer uses the local workflow context.");
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before deferring at the time cap.",
+  );
+
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
+  }
+
+  const { data, error } = await client.rpc("apply_execution_session_defer", {
+    p_session_id: sessionId,
+    p_task_id: taskId,
+    p_actual_minutes: input.actual_minutes,
+    p_paused_minutes: input.paused_minutes ?? 0,
+    p_distraction_minutes: input.distraction_minutes ?? 0,
+    p_notes: input.notes,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const result = (data ?? {}) as Record<string, unknown>;
+  return {
+    provider: "supabase",
+    session: parseExecutionSession(result.session),
+    task: parseTask(result.task),
   };
 }
 

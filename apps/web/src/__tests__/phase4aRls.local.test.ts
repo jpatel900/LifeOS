@@ -967,6 +967,96 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     }
   });
 
+  // #613: the atomic cap-DEFER transition — session outcome AND task
+  // deferral committed as one transaction. Mirrors the
+  // apply_execution_session_outcome coverage above exactly (same cross-user
+  // denial shape via "for update" + RLS row invisibility), plus the same-user
+  // success path proving BOTH rows land together.
+  it("defers a task and its execution session atomically via rpc with cross-user denial", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-rpc-defer-task-${suffix}`;
+    let taskId = "";
+
+    try {
+      const { data: task, error: taskError } = await userAClient
+        .from("tasks")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title: taskTitle,
+          status: "active",
+        })
+        .select("id")
+        .single();
+      expect(taskError).toBeNull();
+      taskId = task!.id;
+
+      const { data: session, error: sessionError } = await userAClient
+        .from("execution_sessions")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          task_id: taskId,
+          outcome: "partial",
+        })
+        .select("id")
+        .single();
+      expect(sessionError).toBeNull();
+
+      const { error: crossUserError } = await userBClient.rpc(
+        "apply_execution_session_defer",
+        {
+          p_session_id: session!.id,
+          p_task_id: taskId,
+          p_actual_minutes: 25,
+          p_paused_minutes: 0,
+          p_distraction_minutes: 0,
+          p_notes: "cross-user attempt",
+        },
+      );
+      expect(crossUserError?.message).toMatch(/was not found/i);
+
+      // Cross-user denial must not have left a partial write on either row.
+      const { data: untouchedTask } = await userAClient
+        .from("tasks")
+        .select("status")
+        .eq("id", taskId)
+        .single();
+      expect(untouchedTask?.status).toBe("active");
+
+      const { data: deferred, error: deferError } = await userAClient.rpc(
+        "apply_execution_session_defer",
+        {
+          p_session_id: session!.id,
+          p_task_id: taskId,
+          p_actual_minutes: 25,
+          p_paused_minutes: 0,
+          p_distraction_minutes: 0,
+          p_notes: "dod_cap.v1 deferred: RLS rpc defer",
+        },
+      );
+      expect(deferError).toBeNull();
+      expect(deferred.session.outcome).toBe("blocked");
+      expect(deferred.session.cap_outcome).toBe("deferred");
+      expect(deferred.session.actual_minutes).toBe(25);
+      expect(deferred.task.status).toBe("backlog");
+
+      const { data: persistedTask } = await userAClient
+        .from("tasks")
+        .select("status")
+        .eq("id", taskId)
+        .single();
+      expect(persistedTask?.status).toBe("backlog");
+    } finally {
+      if (taskId) {
+        await deleteSessionByTaskId(userAClient, taskId);
+      }
+      await deleteTaskByTitle(userAClient, taskTitle);
+    }
+  });
+
   it("starts execution sessions atomically via rpc with cross-user denial", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);

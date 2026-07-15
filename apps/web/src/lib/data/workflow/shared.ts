@@ -143,6 +143,14 @@ export interface ExecutionSessionMarkResult {
   task: Task | null;
 }
 
+// #613: result of the atomic cap-DEFER transition — session outcome and task
+// deferral committed as one transaction (see apply_execution_session_defer).
+export interface ExecutionSessionDeferResult {
+  provider: DataProvider;
+  session: ExecutionSession;
+  task: Task;
+}
+
 export interface ReviewEntryCreateResult {
   provider: DataProvider;
   reviewEntry: ReviewEntry;
