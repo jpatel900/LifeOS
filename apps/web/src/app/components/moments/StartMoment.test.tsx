@@ -18,6 +18,7 @@ function baseVM(overrides: Partial<StartVM> = {}): StartVM {
     deferredItems: [],
     staleProject: null,
     recoveryNudge: null,
+    topPendingTriageItem: null,
     greeting: "Good morning.",
     daySynthesis:
       "Nothing on the calendar and nothing queued — capture something to get moving.",
@@ -574,9 +575,14 @@ describe("StartMoment — state truth for pending triage (#551)", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("replaces the empty state with a singular pending-triage line when pendingTriage is 1 and there is no firstMove", () => {
+  it("promotes the top pending-triage item into an accent hero card when pendingTriage is 1 and there is no firstMove", () => {
     const vm = baseVM({
       counts: { pendingTriage: 1, activeTasks: 0, todayBlocks: 0 },
+      topPendingTriageItem: {
+        id: "c1",
+        summary: "Reply to the vendor email",
+        areaLabel: "Work",
+      },
     });
 
     render(
@@ -589,9 +595,10 @@ describe("StartMoment — state truth for pending triage (#551)", () => {
       />,
     );
 
-    expect(screen.getByTestId("start-pending-triage")).toHaveTextContent(
-      "1 thought waiting for a decision.",
-    );
+    const card = screen.getByTestId("start-pending-triage-card");
+    expect(card).toBeInTheDocument();
+    expect(card).toHaveTextContent("Reply to the vendor email");
+    expect(card).toHaveTextContent("1 thought waiting for a decision.");
     expect(screen.queryByTestId("start-moment-empty")).not.toBeInTheDocument();
   });
 
@@ -632,10 +639,26 @@ describe("StartMoment — state truth for pending triage (#551)", () => {
     );
   });
 
-  it("calls onOpenTriage when the pending-triage line is clicked", () => {
+  it("calls onOpenTriage when the pending-triage line is clicked (firstMove present)", () => {
     const onOpenTriage = vi.fn();
     const vm = baseVM({
       counts: { pendingTriage: 2, activeTasks: 0, todayBlocks: 0 },
+      firstMove: {
+        title: "Write report",
+        why: "Oldest active commitment",
+        areaLabel: "Work",
+        estMinutes: 25,
+        taskId: "t1",
+      },
+      focusItems: [
+        {
+          title: "Write report",
+          why: "Oldest active commitment",
+          areaLabel: "Work",
+          estMinutes: 25,
+          taskId: "t1",
+        },
+      ],
     });
 
     render(
@@ -651,5 +674,133 @@ describe("StartMoment — state truth for pending triage (#551)", () => {
 
     screen.getByTestId("start-pending-triage").click();
     expect(onOpenTriage).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onOpenTriage from the promoted hero card's action when there is no firstMove", () => {
+    const onOpenTriage = vi.fn();
+    const vm = baseVM({
+      counts: { pendingTriage: 2, activeTasks: 0, todayBlocks: 0 },
+      topPendingTriageItem: {
+        id: "c1",
+        summary: "Reply to the vendor email",
+        areaLabel: "Work",
+      },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+        onOpenTriage={onOpenTriage}
+      />,
+    );
+
+    screen.getByTestId("start-pending-triage-action").click();
+    expect(onOpenTriage).toHaveBeenCalledTimes(1);
+  });
+
+  it("never implies the promoted item is scheduled — no 'scheduled'/'booked' copy", () => {
+    const vm = baseVM({
+      counts: { pendingTriage: 1, activeTasks: 0, todayBlocks: 0 },
+      topPendingTriageItem: {
+        id: "c1",
+        summary: "Reply to the vendor email",
+        areaLabel: "Work",
+      },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const card = screen.getByTestId("start-pending-triage-card");
+    expect(card.textContent?.toLowerCase()).not.toMatch(
+      /scheduled|booked|on your calendar/,
+    );
+  });
+});
+
+describe("StartMoment — D-8 hero composition (#483)", () => {
+  it("never collapses the hero to a bare text line: fully-empty state renders an accent hero card, not a bare paragraph", () => {
+    const vm = baseVM();
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const card = screen.getByTestId("start-moment-empty");
+    expect(card.className).toContain("workflow-flagship-card");
+    expect(card.className).toContain("moments-card--emphasis");
+    expect(card.textContent?.toLowerCase()).not.toMatch(
+      /you failed|you didn't|blame|should have/,
+    );
+  });
+
+  it("renders the Pipeline rail above the two-column grid, directly under the hero", () => {
+    const vm = baseVM();
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const hero = screen.getByTestId("start-hero");
+    const pipelineRail = screen.getByTestId("start-moment-pipeline-rail");
+    const scheduleHeading = screen.getByText("Today's schedule");
+
+    // Hero -> Pipeline -> everything else (the two-column grid).
+    expect(
+      hero.compareDocumentPosition(pipelineRail) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      pipelineRail.compareDocumentPosition(scheduleHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("the promoted pending-triage hero card carries the same visual weight as FirstMoveCard", () => {
+    const vm = baseVM({
+      counts: { pendingTriage: 1, activeTasks: 0, todayBlocks: 0 },
+      topPendingTriageItem: {
+        id: "c1",
+        summary: "Reply to the vendor email",
+        areaLabel: "Work",
+      },
+    });
+
+    render(
+      <StartMoment
+        vm={vm}
+        timeDisplay="clock"
+        now={NOW}
+        pipelineCounts={{}}
+        {...NOOP_HANDLERS}
+      />,
+    );
+
+    const card = screen.getByTestId("start-pending-triage-card");
+    expect(card.className).toContain("workflow-flagship-card");
+    expect(card.className).toContain("moments-card--emphasis");
   });
 });

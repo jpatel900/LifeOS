@@ -1667,3 +1667,109 @@ describe("buildStartVM — D-2 hero wiring (#483)", () => {
     );
   });
 });
+
+describe("buildStartVM — D-8 topPendingTriageItem (#483)", () => {
+  it("is null when nothing is pending triage", () => {
+    const state = stateWith({});
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem).toBeNull();
+  });
+
+  it("picks the oldest pending-triage capture (created_at ascending)", () => {
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c-newer",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: "Newer capture",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: daysBefore(1),
+        },
+        {
+          id: "c-older",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: "Older capture, waiting longest",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "triage_required",
+          created_at: daysBefore(5),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem).toEqual({
+      id: "c-older",
+      summary: "Older capture, waiting longest",
+      areaLabel: "Area area-1",
+    });
+  });
+
+  it("ignores resolved/archived/parsed captures", () => {
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c-done",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: "Already resolved",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "resolved",
+          created_at: daysBefore(10),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem).toBeNull();
+  });
+
+  it("truncates a long raw_text summary rather than rendering it in full", () => {
+    const longText = "x".repeat(200);
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c1",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: longText,
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: daysBefore(1),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem?.summary.length).toBeLessThan(
+      longText.length,
+    );
+    expect(vm.topPendingTriageItem?.summary.endsWith("…")).toBe(true);
+  });
+
+  it("resolves an empty areaLabel when the capture has no area_id", () => {
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c1",
+          user_id: "user-1",
+          area_id: null,
+          raw_text: "No area",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: daysBefore(1),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem?.areaLabel).toBe("");
+  });
+});

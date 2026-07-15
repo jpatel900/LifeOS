@@ -105,6 +105,21 @@ export interface RecoveryNudgeVM {
   taskId: string;
 }
 
+/**
+ * D-8 (design alignment, #483): the single oldest capture still awaiting a
+ * triage decision (same `status === "new" || "triage_required"` filter that
+ * already feeds `counts.pendingTriage` — one source, no new signal). Used to
+ * promote a real item into the Start hero when there is no `firstMove`, so
+ * the main column never collapses to a bare text line. `summary` is the raw
+ * capture text truncated for card display; `areaLabel` is `""` when the
+ * capture has no `area_id` (same convention as `areaName`).
+ */
+export interface PendingTriageItemVM {
+  id: string;
+  summary: string;
+  areaLabel: string;
+}
+
 export interface StartVM {
   firstMove: FirstMoveVM | null;
   blocks: ScheduleBlockVM[];
@@ -139,6 +154,12 @@ export interface StartVM {
    */
   staleProject: StaleProjectVM | null;
   recoveryNudge: RecoveryNudgeVM | null;
+  /**
+   * D-8 (design alignment, #483): the oldest pending-triage capture, or null
+   * when nothing is waiting in triage. Only meaningful for the hero when
+   * `firstMove` is null — see `StartMoment`'s hero-promotion branch.
+   */
+  topPendingTriageItem: PendingTriageItemVM | null;
   /**
    * D-2 (design alignment, #483): start-moment hero copy, porting
    * prototype-2's "Good morning, Jay." + subline. Both are pure derivations
@@ -448,6 +469,51 @@ function deriveRecoveryNudge(
   };
 }
 
+/**
+ * D-8 (#483) hero card summary length: long enough to read as a real thing
+ * to decide on, short enough that the promoted card never grows taller than
+ * FirstMoveCard's own title+why. Matches no existing constant — this is a
+ * new, purely presentational truncation point.
+ */
+const PENDING_TRIAGE_SUMMARY_MAX_LENGTH = 140;
+
+function summarizeRawText(rawText: string): string {
+  const trimmed = rawText.trim();
+  if (trimmed.length <= PENDING_TRIAGE_SUMMARY_MAX_LENGTH) return trimmed;
+  return `${trimmed.slice(0, PENDING_TRIAGE_SUMMARY_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+/**
+ * D-8 (#483): the oldest capture item still awaiting a triage decision
+ * (`created_at` ascending, same "oldest first" idiom `oldestActiveTask`
+ * already uses) — the item that has been waiting longest is the truthful
+ * "decide this next" pick. Ties break on `id` ascending for a deterministic
+ * result. Returns null when nothing is pending (mirrors `counts.pendingTriage
+ * === 0`).
+ */
+function deriveTopPendingTriageItem(
+  state: WorkflowState,
+): PendingTriageItemVM | null {
+  const pending = state.captureItems.filter(
+    (item) => item.status === "new" || item.status === "triage_required",
+  );
+  if (pending.length === 0) return null;
+
+  const sorted = [...pending].sort((a, b) => {
+    const aTime = new Date(a.created_at).getTime();
+    const bTime = new Date(b.created_at).getTime();
+    if (aTime !== bTime) return aTime - bTime;
+    return a.id.localeCompare(b.id);
+  });
+
+  const oldest = sorted[0];
+  return {
+    id: oldest.id,
+    summary: summarizeRawText(oldest.raw_text),
+    areaLabel: areaName(state.areas, oldest.area_id),
+  };
+}
+
 export type GreetingPeriod = "morning" | "afternoon" | "evening";
 
 /**
@@ -596,6 +662,11 @@ export function buildStartVM(
   const staleProject = deriveStaleProject(state, now);
   const recoveryNudge = deriveRecoveryNudge(state, now);
 
+  // D-8 (#483): only meaningful when there is no firstMove — computed
+  // unconditionally anyway since it's a cheap pure derivation and callers
+  // besides StartMoment may want to know what's next regardless.
+  const topPendingTriageItem = deriveTopPendingTriageItem(state);
+
   // D-2 (#483) start-moment hero copy — pure over the values already
   // computed above; see `buildGreeting`/`buildDaySynthesis` doc comments.
   const greeting = buildGreeting(now, userName);
@@ -625,6 +696,7 @@ export function buildStartVM(
     deferredItems,
     staleProject,
     recoveryNudge,
+    topPendingTriageItem,
     greeting,
     daySynthesis,
   };

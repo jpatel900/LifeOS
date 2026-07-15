@@ -63,6 +63,23 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * `vm.counts.pendingTriage > 0` now renders a clickable "N thought(s)
  * waiting for a decision." line (`onOpenTriage`) so the Start column stops
  * claiming "Nothing queued" right after the user just queued something.
+ *
+ * D-8 (design alignment, #483) — the hero (main/start) column must never
+ * collapse to a bare text line. Three states, same card weight throughout
+ * (`workflow-flagship-card moments-card moments-card--emphasis`, the exact
+ * classes FirstMoveCard uses):
+ *   1. `vm.firstMove` present -> FirstMoveCard, unchanged.
+ *   2. No firstMove, `vm.topPendingTriageItem` present -> that item promoted
+ *      into an accent "decide this next" card. Its single action is the
+ *      existing `onOpenTriage` handler (opens the existing TriageSheet —
+ *      see TodayMoments.tsx) — no new handler, no new navigation, no new
+ *      copy implying the item is scheduled.
+ *   3. Neither -> an accent empty-state card (same weight), calm
+ *      capture-shortcut copy, no guilt/urgency language.
+ * D-8 also hoists PipelineOverview from the bottom of the page to directly
+ * under the hero, above the two-column grid, matching
+ * docs/vision/prototypes/prototype-2-today-home.html's greeting -> pipe ->
+ * grid order — it no longer sits in its own trailing section.
  */
 
 export interface StartMomentProps {
@@ -118,6 +135,8 @@ export function StartMoment({
       </button>
     ) : null;
 
+  const topPendingTriageItem = vm.topPendingTriageItem;
+
   return (
     <div className="grid gap-6" data-testid="start-moment">
       <div className="grid gap-1" data-testid="start-hero">
@@ -128,6 +147,15 @@ export function StartMoment({
           {vm.daySynthesis}
         </p>
       </div>
+
+      <section
+        aria-label="Pipeline"
+        data-testid="start-moment-pipeline-rail"
+        className="grid gap-2"
+      >
+        <h2 className="sr-only">Pipeline</h2>
+        <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="grid gap-6">
@@ -141,19 +169,61 @@ export function StartMoment({
               />
               {pendingTriageLine}
             </>
-          ) : pendingTriageLine ? (
-            pendingTriageLine
+          ) : topPendingTriageItem ? (
+            <Card
+              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
+              style={{ borderLeftColor: "var(--acc)" }}
+              data-testid="start-pending-triage-card"
+            >
+              <CardContent className="grid gap-3 p-5 sm:p-6">
+                <p className="workflow-page-eyebrow m-0 tabular-nums">
+                  Decide this next
+                  {topPendingTriageItem.areaLabel
+                    ? ` · ${topPendingTriageItem.areaLabel}`
+                    : ""}
+                </p>
+                <h2 className="workflow-surface-title moments-card-title">
+                  {topPendingTriageItem.summary}
+                </h2>
+                <p className="workflow-surface-body text-sm text-muted-foreground">
+                  {pendingTriage === 1
+                    ? "1 thought waiting for a decision."
+                    : `${pendingTriage} thoughts waiting for a decision.`}
+                </p>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={onOpenTriage}
+                    className="min-h-[44px] touch-manipulation gap-2"
+                    data-testid="start-pending-triage-action"
+                  >
+                    Decide now
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            <p
-              className="workflow-surface-body text-sm text-muted-foreground"
+            <Card
+              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
+              style={{ borderLeftColor: "var(--acc)" }}
               data-testid="start-moment-empty"
             >
-              Nothing queued — capture something with{" "}
-              <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
-                C
-              </kbd>
-              .
-            </p>
+              <CardContent className="grid gap-3 p-5 sm:p-6">
+                <p className="workflow-page-eyebrow m-0">Nothing queued</p>
+                <h2 className="workflow-surface-title moments-card-title">
+                  Capture something to get moving
+                </h2>
+                <p className="workflow-surface-body text-sm text-muted-foreground">
+                  Nothing queued — capture something with{" "}
+                  <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
+                    C
+                  </kbd>
+                  .
+                </p>
+              </CardContent>
+            </Card>
           )}
 
           {vm.focusItems.length > 1 || vm.deferredItems.length > 0 ? (
@@ -249,15 +319,6 @@ export function StartMoment({
           onOpenHealth={onOpenHealth}
         />
       </div>
-
-      <section
-        aria-label="Pipeline"
-        data-testid="start-moment-pipeline-rail"
-        className="grid gap-2"
-      >
-        <h2 className="sr-only">Pipeline</h2>
-        <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
-      </section>
     </div>
   );
 }
