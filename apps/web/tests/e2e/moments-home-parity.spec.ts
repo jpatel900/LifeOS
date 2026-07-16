@@ -76,11 +76,16 @@ test.describe("moments home parity (/)", () => {
 
     // #551 state truth: the capture just landed in triage as a pending
     // draft, so the Start column must show that visibly rather than still
-    // reading "Nothing queued".
-    await expect(page.getByTestId("start-pending-triage")).toBeVisible();
-    await expect(page.getByTestId("start-pending-triage")).toHaveText(
-      /waiting for a decision/,
-    );
+    // reading "Nothing queued". With no first move queued (empty demo
+    // state), the pending item is PROMOTED into the flagship card
+    // (start-pending-triage-card); with a first move present it renders as
+    // the start-pending-triage line under the card. Either is the truth —
+    // assert the surface that actually hosts it.
+    const pendingTriageSurface = page
+      .getByTestId("start-pending-triage-card")
+      .or(page.getByTestId("start-pending-triage"));
+    await expect(pendingTriageSurface).toBeVisible();
+    await expect(pendingTriageSurface).toContainText(/waiting for a decision/);
   });
 
   // Parity with the golden-journey / cockpit-flow-repair "start -> execute ->
@@ -254,7 +259,10 @@ test.describe("moments home capture pill clears content on the empty Start day a
         page.getByTestId("pipeline-overview-caption-capture"),
       ).toBeVisible();
 
-      const intersects = (a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }) =>
+      const intersects = (
+        a: { x: number; y: number; width: number; height: number },
+        b: { x: number; y: number; width: number; height: number },
+      ) =>
         a.x < b.x + b.width &&
         a.x + a.width > b.x &&
         a.y < b.y + b.height &&
@@ -498,7 +506,10 @@ test.describe("moments home Pipeline rail never clips a stage, in either mode (#
         await expect(cell).toBeVisible();
         const box = await cell.boundingBox();
         expect(box, `${stage} cell box at ${width}px`).not.toBeNull();
-        expect(box!.width, `${stage} cell has real width at ${width}px`).toBeGreaterThan(0);
+        expect(
+          box!.width,
+          `${stage} cell has real width at ${width}px`,
+        ).toBeGreaterThan(0);
         expect(
           box!.x + box!.width,
           `${stage} cell's right edge stays within the ${width}px viewport`,
@@ -533,9 +544,7 @@ test.describe("moments home Pipeline rail never clips a stage, in either mode (#
     await expect(textarea).toBeVisible();
     await textarea.fill("Round 5 counts-mode rail guard capture");
     await textarea.press("Enter");
-    await expect(
-      page.getByTestId("capture-overlay-textarea"),
-    ).toBeHidden();
+    await expect(page.getByTestId("capture-overlay-textarea")).toBeHidden();
 
     for (const width of [375, 390, 430, 640, 1366]) {
       await page.setViewportSize({ width, height: 900 });
@@ -550,7 +559,10 @@ test.describe("moments home Pipeline rail never clips a stage, in either mode (#
       for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
         const cell = page.getByTestId(`pipeline-overview-stage-${stage}`);
         const box = await cell.boundingBox();
-        expect(box, `${stage} cell box at ${width}px (counts mode)`).not.toBeNull();
+        expect(
+          box,
+          `${stage} cell box at ${width}px (counts mode)`,
+        ).not.toBeNull();
         expect(
           box!.x + box!.width,
           `${stage} cell's right edge stays within ${width}px (counts mode)`,
