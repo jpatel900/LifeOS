@@ -1,6 +1,6 @@
 # End-to-end slice map — north star, complete path
 
-**NON-BINDING planning map (rolling-wave compliant).** Slices for FUTURE stages exist here as names + one-line intents + authoring packets ONLY. They become implementable issues exclusively through the stage-boundary ritual (SKILL.md), authored against current main at that time, within STAGE_BRIEFS.md constraints. Filing a future-stage slice issue directly from this map is a wrong-path (see tracker #293). Expect slice names/counts below to change at contract time; that is intended, not drift.
+**NON-BINDING strategic map.** Future slices are active vision candidates, not current status or automatic code authorization. Pick them up one-by-one through `SKILL.md`: reconcile with current REQUIREMENTS/ADRs, record IMPLEMENT/MERGE/REJECT/DEFER disposition, and create a bounded issue only for the next owner-ratified work. Data-independent foundations may proceed when structural prerequisites are met; capability-specific evidence, trust, safety, privacy, and external-write gates remain binding. Expect names and counts to change at contract time.
 
 Status legend: FILED = live GitHub issue. NAMED = exists only here.
 
@@ -62,22 +62,22 @@ S0 #252 contract · S1 #253 people/commitments schema · S2 #254 context choke p
 | 4.S5 | Autonomy digest surface (daily "what ran autonomously" panel)                                                     |
 | 4.S6 | Stage-4 golden journey: graduation -> execution -> undo -> auto-demotion cycle; closes epic                       |
 
-## Boundary sessions (not slices — rituals per SKILL.md)
+## Contract sessions (not slices — rituals per SKILL.md)
 
-R1: 1→2 boundary (gate evidence -> author Wave 2 contract + epic + slices, file Stage 3 card). R2: 2→3. R3: 3→4. Each runs steps 1–7 of SKILL.md; under degraded model capability apply MODEL_DEGRADATION_RUNBOOK.md.
+R1: Wave 2 contract session. R2: Wave 3. R3: Wave 4. Each runs steps 1–7 of SKILL.md, including structural prerequisites and only the evidence gates applicable to its capabilities; under degraded model capability apply MODEL_DEGRADATION_RUNBOOK.md.
 
 ## Work packets for delegated (Opus-class) sessions
 
-Every packet below is self-contained for a cold session. Universal rules: read AGENTS.md + this skill directory first; work in an isolated worktree, never the shared checkout; numbers/paths from current main, never from memory; missing information = STOP and comment on the governing issue, never invent; do NOT file future-stage slice issues.
+Every packet below is self-contained for a cold session. Universal rules: read AGENTS.md + this skill directory first; work in an isolated worktree, never the shared checkout; numbers/paths from current main, never from memory; missing information = STOP and comment on the governing issue, never invent; file only the next owner-ratified feature issues.
 
 **Packet P1 — Notion deep pass (2.INV). Runnable NOW.** Read stage card #292. Using the Notion connector (read-only), enumerate every Tasks-like database, count open vs stale items, extract identity-bucket candidate text (goals/missions/principles), propose four-bucket assignments per STAGE_BRIEFS Stage-2 decision rules. Deliverable: a report comment on #292. No writes to Notion, no imports.
 
 **Packet P2 — Hardening issues #286, #287, #288 (one session each). Runnable NOW.** Each issue body is the binding contract. #287 first (it is the degradation prerequisite). Standard delivery: worktree branch -> PR citing the issue -> CI green -> review per CONTRACT_REVIEW_CHECKLIST.md sections A–D. #286/#297 touch workflows = T2, owner review on the PR.
 
-**Packet P3 — Stage boundary ritual (R1/R2/R3). Runnable ONLY when the gate opens.** Follow SKILL.md steps 1–7 exactly: gate evidence -> next-phase-gate-review -> harvest -> author contract via TEMPLATES.md within STAGE_BRIEFS.md constraints -> file epic + slices -> rewire driver + tracker + next stage card -> log. Under degraded capability: cross-model red-team the contract, reactivate S0 owner review, confirm #287 is implemented before starting.
+**Packet P3 — Contract ritual (R1/R2/R3). Runnable when owner-ratified structural prerequisites and applicable capability-specific gates are satisfied.** Follow SKILL.md steps 1–7: classify prerequisites -> review -> harvest and disposition -> author against current authority -> file the next bounded epic/slices -> rewire driver + tracker -> log. Under degraded capability: cross-model red-team the contract, reactivate S0 owner review, and apply the model-degradation prerequisites.
 
 **Packet P4 — Slice implementation. Continuous.** Normally Codex via the relay kick; any competent coding agent may substitute (MODEL_DEGRADATION_RUNBOOK.md "If Codex unavailable"): implement exactly the kicked issue body, smallest change, PR with closing keyword, then the driver reviews per checklist.
 
 ## Rot warning
 
-This map was written 2026-07-03 against epic #243 in flight and Stage 1 filed. The FILED waves are authoritative in their issues, not here. The NAMED waves are intents; reconcile against ADR 0002 + STAGE_BRIEFS at each boundary. If this file contradicts a live epic or the ADR, the live artifact wins — update this map, never the other way around.
+This map was written 2026-07-03 and its statuses are historical. Live issues own filed scope; current PROJECT_STATE reports shipped state; REQUIREMENTS and ADRs own implementation truth. NAMED waves remain active candidates until dispositioned. Reconcile them against current authority, including ADR 0005, before implementation; update this map when it drifts.

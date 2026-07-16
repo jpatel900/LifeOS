@@ -91,6 +91,27 @@ Checked against:
 - branch <branch> / commit <sha> / touch set <summary>
 ```
 
+### Pre-ACK (blocking-latency rule, owner-directed 2026-07-16)
+
+A blocked lane is wasted lane capacity. Two mechanisms keep waits near zero:
+
+1. **Pre-ACK in the contract.** When the issue body is authored by the
+   Claude root and freezes an exact touch set, it may include a `PRE-ACK`
+   line: _"Pre-ACKed: a CLAIM whose expected touch set exactly matches this
+   manifest needs no further ACK — post the CLAIM and proceed."_ The overlap
+   check happens once, at contract-authoring time, against live PRs/claims/
+   red zones. A CLAIM that deviates from the frozen manifest in ANY way
+   (extra file, widened glob, new dependency) forfeits the pre-ACK and waits
+   for a normal ACK/COLLISION. Pre-ACK never applies to red-zone files or
+   migrations/RLS.
+2. **Response SLA.** The Claude lane answers pending CLAIM / BLOCKER /
+   HANDOFF comments as the FIRST action of every session, at every session
+   checkpoint, and in the daily driver run — before starting or resuming its
+   own work. Harvesting a delivered HANDOFF outranks in-progress Claude-lane
+   work. If an answer needs an owner decision, the Claude lane says so on
+   the issue explicitly (so the blocked lane knows the wait is owner-side,
+   not protocol-side).
+
 ### COLLISION v1 (instead of ACK when overlap exists)
 
 ```text
