@@ -1,26 +1,26 @@
-STATUS: RESERVED — FR-031 placeholder; NOT built. Owner extended the design 2026-07-09 (true DAG: branching/merging, critical-path highlight, optional nodes feeding DoD, red do-not/only-if nodes). Post-test-plan.
+STATUS SPLIT: v1 is SHIPPED as FR-031. Current evidence includes `supabase/migrations/20260711120000_add_task_progression_map.sql`, `packages/schemas/src/entities.ts`, `apps/web/src/lib/data/workflow/taskMap.ts`, and its focused tests. v2 is an ACTIVE VISION CANDIDATE — not built and not implementation authority. Owner extended the v2 design 2026-07-09 (true DAG: branching/merging, critical-path highlight, optional nodes feeding DoD, red do-not/only-if nodes). Reconcile v2 with current REQUIREMENTS/ADRs and a bounded owner-ratified issue before implementation.
 
 # Task Node Map / Progression — v1/v2 Contract
 
-Status: Product/data architecture contract, ready for owner sign-off. Read-only planning artifact.
-Author role: Product/Data Architect. Scope: FR-022 (v1), v2 sketch, sequencing, risks.
-Binding source: owner-ratified staging note in issue #292 comment (2026-07-05); ADR 0002 (NS-INV-1/2/3/4, D1 trust ladder, D3 usage gate, D5 process); ADR 0003 (moments, missed-block collapse doctrine); existing parse breakdown contract (`packages/schemas/src/parse-capture.ts`).
+Status: v1 shipped; the remaining v2 product/data architecture proposal awaits explicit IMPLEMENT/MERGE/REJECT/DEFER disposition. Read-only planning artifact; current code, REQUIREMENTS, and ADRs override stale v1 proposal details below.
+Author role: Product/Data Architect. Scope: FR-031 (v1), v2 sketch, sequencing, risks.
+Strategic sources: owner-ratified staging note in issue #292 comment (2026-07-05), ADR 0002's trust ladder/invariants as amended by ADR 0005, ADR 0003, and the parse breakdown contract (`packages/schemas/src/parse-capture.ts`). Current REQUIREMENTS and ADRs remain implementation authority.
 
 ## 0. Framing decisions (load-bearing — read first)
 
 1. **v1 is an annotation + persistence layer over the EXISTING `ParseCaptureBreakdownSchema`, not a parallel node model.** The breakdown already delivers 2–7 ordered steps (matches the ~7-node cap), `depends_on_orders`, `on_critical_path`, and `kickstart_step`. The map REUSES those. v1 adds only three per-node fields (`is_speculative`, `is_optional`, `refrain_note`), the one-pass approve gate, and persistence. The v0 progression rail (render of the raw breakdown) is therefore literally the v1 failure-degradation target: **map = breakdown superset**.
-2. **One-pass approve is L1, not L2.** Approving the whole map once = a single L1 approval of one suggestion _instance_; each AI-proposed revision is a fresh L1 approval (propose → validate → approve → persist). This is spelled out in FR-022 so no reviewer reads "one-tap approve" as an L2 (pre-filled default + auto-execute) violation of D1's "no slice ships at L2+ on day one."
+2. **One-pass approve is L1, not L2.** Approving the whole map once = a single L1 approval of one suggestion _instance_; each AI-proposed revision is a fresh L1 approval (propose → validate → approve → persist). This is spelled out in FR-031 so no reviewer reads "one-tap approve" as an L2 (pre-filled default + auto-execute) violation of D1's "no slice ships at L2+ on day one."
 3. **The v2 gate metric dictates v1 instrumentation granularity.** The proposed gate "breakdown-node acceptance >= 70%" is _per-node_, so v1 MUST record node-level resolution, not just a map-level approve. Gate formula frozen here (§4.4) and wired to the §3.4 writes.
 4. **Sequencing: v1 waits for S3 (#255) and lands additively on top; it does NOT ride S3's schema bump.** Same parse surface; #255 warns parallel work "guarantees conflict." Chain: **S2 → S3 (#255) → v1**. v1 is its own FR + DATA_MODEL amendment (§5).
 5. **Data model: a jsonb field on `tasks` for v1; a normalized `task_edges` table for v2.** Caps (7 nodes, depth 1) make a denormalized `progression_map jsonb` correct and additive (NS-INV-2). Breakdown is currently ephemeral parse output with no `tasks` column, so persisting the approved map at triage-accept is a genuine new additive column.
 
 ---
 
-## 1. FR-022 — AI-Drafted Task Node Map (v1)
+## 1. FR-031 — AI-Drafted Task Node Map (v1)
 
 _(exact REQUIREMENTS.md FR format)_
 
-### FR-022 — AI-Drafted Task Node Map
+### FR-031 — AI-Drafted Task Node Map
 
 **Priority:** MUST
 
@@ -76,7 +76,7 @@ Existing fields reused as-is (do NOT duplicate): `on_critical_path` IS the "crit
 
 Breakdown is currently **ephemeral** parse output — there is no column persisting it on `tasks`. Persisting the _approved_ map at triage-accept is therefore a genuine new additive column on the existing `tasks` table (section 4.5), preferred over a new table per section 10/11 ("prefer fields"). Caps (7 nodes, depth 1) keep it small and denormalized.
 
-### 4.5 `tasks` — additive columns (target shape, FR-022 / task-map v1)
+### 4.5 `tasks` — additive columns (target shape, FR-031 / task-map v1)
 
 Adds to the existing `tasks` table without altering or renaming any existing column (NS-INV-2). Export coverage is inherited automatically — `tasks` is already in `USER_DATA_EXPORT_TABLES` (INV-2), so no new export registration is needed; the guard test in `engineeringInvariants.test.ts` stays green.
 
@@ -97,7 +97,7 @@ Adds to the existing `tasks` table without altering or renaming any existing col
 
 ### 3.1 Prompt contract (versioned)
 
-- The map does **not** get its own prompt/model call in the common path. The breakdown is already produced by `parse_capture.v3` (the post-S3 version — see §5); FR-022 adds map-annotation instructions to that same prompt so `is_speculative` / `is_optional` / `refrain_note` come back in the same structured response. Refrain content is injected via `contextAssembly.ts` (NS-INV-1), not hand-plumbed into the prompt file.
+- The map does **not** get its own prompt/model call in the common path. The breakdown is already produced by `parse_capture.v3` (the post-S3 version — see §5); FR-031 adds map-annotation instructions to that same prompt so `is_speculative` / `is_optional` / `refrain_note` come back in the same structured response. Refrain content is injected via `contextAssembly.ts` (NS-INV-1), not hand-plumbed into the prompt file.
 - Only the explicit user-requested **regeneration** path issues a distinct call, under prompt id `task_map_regen.v1`, reusing the parse response format. `store: false` (NFR-003), cost-optimized model tier (NFR-001).
 
 ### 3.2 Strict response zod schema (`packages/schemas`)
@@ -170,7 +170,7 @@ A node approved **unchanged** produces no override row. Acceptance counts only _
 
 ## 4. v2 Contract Sketch (rolling-wave — NOT full detail)
 
-v2 is a **Stage 2 candidate, usage-gated on v1 evidence** (issue #292 stage card). Do not implement from this section; it is authored fully only when the gate opens, via the stage-contract ritual.
+v2 is a **Stage 2 candidate genuinely dependent on v1 evidence** (issue #292 stage card). Preserve this capability-specific gate: do not implement v2 from this section until v1 evidence satisfies §4.4 and a current contract adopts it.
 
 ### 4.1 `task_edges` (additive DAG, sketch)
 
@@ -197,7 +197,7 @@ AI proposes map diffs from execution evidence at: **(a) node completion** (was t
 
 ### 4.4 Measurable usage gate (frozen formula)
 
-v2 may not start until, over the gate window (proposed: any rolling 3-week window post-v1, aligned to the #292 Stage 1 gate style):
+v2 behavior may not start until, over the gate window (proposed: any rolling 3-week window post-v1):
 
 ```
 breakdown_node_acceptance =
@@ -208,25 +208,25 @@ where nodes_accepted_unchanged = nodes_proposed
                                  AND override_type IN (node_removed, node_edited))
 ```
 
-computed by SQL over `suggestion_records` (`policy_id = "task_map.v1"`, `node_count`) and the matching `override_records`. **`node_added` overrides are excluded** — they are not proposed nodes and adding one must never depress acceptance (they feed the separate under-drafting signal). This is why §3.4 records node-level resolution. If the window never qualifies, that is a product signal that the map is over/under-drafting — review v1 usefulness, not skip the gate (ADR 0002 D3).
+computed by SQL over `suggestion_records` (`policy_id = "task_map.v1"`, `node_count`) and the matching `override_records`. **`node_added` overrides are excluded** — they are not proposed nodes and adding one must never depress acceptance (they feed the separate under-drafting signal). This is why §3.4 records node-level resolution. If the window never qualifies, that is a product signal that the map is over/under-drafting — review v1 usefulness, not skip this evidence-dependent gate.
 
 ---
 
 ## 5. Sequencing
 
-**Chain: S2 → S3 (#255) → FR-022 v1.** Reconciliation with S3 (extraction slice #255), which touches the same parse surface:
+**Historical proposed chain: S2 → S3 (#255) → FR-031 v1.** The original draft called this feature FR-022; ADR 0004/current REQUIREMENTS resolved that collision, and the feature was adopted and shipped as FR-031. The original sequencing analysis was:
 
 - **v1 must NOT ride S3's schema bump.** #255's scope is frozen ("MAY touch … extend, not reshape — NS-INV-2; MUST NOT touch … the context-assembly module's interface"). Bundling map fields into S3 widens its frozen scope and its `schema_version` literal semantics. S3 bumps `parse_capture` for `person_mentions` (call it `parse_capture.v3` / `schema_version "1.1"` per S3's own choice); **v1 takes the _next_ additive increment after S3 merges** (`schema_version "1.2"` / prompt `parse_capture.v3+`). Same additive mechanism, separate slice, separate version.
 - **v1 depends on S2** because refrain annotations require `contextAssembly.ts` to exist (NS-INV-1). v1 also inherits the S2 charter/operator-profile context via that module's extension point — it wires none of its own.
 - **v0** (progression-rail render of the raw breakdown) is prototype-lane / UX-only, no new surface, already in flight; it is v1's degradation target and can proceed independently.
 
-**Owner sign-off required for:**
+**Completed historical adoption gates:**
 
-- Adopting FR-022 into REQUIREMENTS.md and the §2 DATA_MODEL amendment (new FR + additive `tasks` columns) — a slice-0-style contract change per ADR 0002 D5, human-gated.
-- A **dated decision-log entry in epic #251** recording the additive extension of the frozen S3 parse-result shape and the new `tasks` columns (NS-INV-2 enforcement: any deviation/extension of a frozen shape requires a logged decision before proceeding).
-- The proposed v2 gate threshold (0.70) as the binding number.
+- FR-031 and the §2 DATA_MODEL amendment were adopted before implementation; the additive task-map migration and v1 implementation are now shipped.
+- The original contract required a dated decision-log entry for extending the frozen S3 parse-result shape and adding task columns; current git history and live artifacts, not this plan, are the evidence of completion.
+- The v2 gate threshold (0.70) remains a future capability-specific evidence gate and is not satisfied merely because v1 shipped.
 
-**Goes through REQUIREMENTS.md first (AGENTS.md rule 13):** FR-022 text (§1) and the DATA_MODEL amendments (§2) land before any implementation slice — the contract all later work builds against.
+**Goes through current implementation authority first:** adopt and renumber the applicable FR text (§1) and DATA_MODEL amendments (§2) through REQUIREMENTS/ADR review before any implementation slice.
 
 ---
 
@@ -239,14 +239,14 @@ computed by SQL over `suggestion_records` (`policy_id = "task_map.v1"`, `node_co
 | **Prompt cost** (extra LLM spend)                                                | Map annotation rides the **existing** parse call — no second decomposition (NFR-001). Only explicit regeneration spends a call.                                                                              | On-demand generation only; never background. Cost-optimized model tier; `store: false`.                                                                                             |
 | **Map staleness** (plan drifts from reality mid-execution)                       | v1 is **static-after-approve** by design; execution-evidence auto-revision is deferred to v2 behind the usage gate — no stale auto-updates to trust.                                                         | v1: manual user-requested regen only; show `map_approved_at` so age is visible. v2 map-maintenance loop is the real fix, gated on evidence.                                         |
 | **Overplanning regression** (owner lingers in the map — the exact governor risk) | Instrument **dwell** (`map_approved_at` → first node `completed_at`/execution-start) and **revision/edit count per task**; rising dwell or edit-churn is the governor's own alarm, visible in decision data. | Collapsed-to-next-node default + one-pass approve are the structural mitigations. If measured dwell trends up, that is a signal to tighten the approve UX, not to add map features. |
-| **L2 misread** (reviewer flags one-tap approve as premature autonomy)            | FR-022 explicitly reconciles one-pass approve as L1 (§0.2 / §1 MUST).                                                                                                                                        | Keep every revision a fresh explicit approval; never pre-fill-and-auto-execute.                                                                                                     |
-| **Scope creep into v2 during v1 build**                                          | v2 items enumerated as FR-022 Non-goals; `task_edges`, multi-task, maintenance-loop all named as out-of-scope.                                                                                               | Reject any v1 PR that adds cross-task edges, depth > 1, or evidence-triggered revision.                                                                                             |
+| **L2 misread** (reviewer flags one-tap approve as premature autonomy)            | FR-031 explicitly reconciles one-pass approve as L1 (§0.2 / §1 MUST).                                                                                                                                        | Keep every revision a fresh explicit approval; never pre-fill-and-auto-execute.                                                                                                     |
+| **Scope creep into v2 during v1 build**                                          | v2 items enumerated as FR-031 Non-goals; `task_edges`, multi-task, maintenance-loop all named as out-of-scope.                                                                                               | Reject any v1 PR that adds cross-task edges, depth > 1, or evidence-triggered revision.                                                                                             |
 
 ---
 
 ## Executive summary (10 lines)
 
-1. v1 (**FR-022**) is a thin annotation + persistence layer over the _existing_ `ParseCaptureBreakdown`, not a new node model — the map is a breakdown superset; the v0 rail is its failure-fallback.
+1. v1 (**FR-031**) is a thin annotation + persistence layer over the _existing_ `ParseCaptureBreakdown`, not a new node model — the map is a breakdown superset; the v0 rail is its failure-fallback.
 2. It adds only three optional per-step fields (`is_speculative`, `is_optional`, `refrain_note`); `on_critical_path` and `kickstart_step`/`first_tiny_step` are reused as the critical flag and two-minute move.
 3. Hard caps regardless of trust rung: ~7 nodes, depth 1, on-demand generation, collapsed-to-next-node default.
 4. One-pass approve is explicitly **L1** (single suggestion instance), reconciled in the FR so it isn't misread as an L2 autonomy violation of ADR 0002 D1.
@@ -255,4 +255,4 @@ computed by SQL over `suggestion_records` (`policy_id = "task_map.v1"`, `node_co
 7. Born instrumented (NS-INV-3): stable policy id `task_map.v1`, node-level `suggestion_records`/`override_records` so the v2 gate is computable.
 8. v2 gate frozen: `Σ nodes_accepted_unchanged / Σ nodes_proposed >= 0.70` — this per-node metric is _why_ v1 logs node-level resolution.
 9. v2 (rolling-wave, usage-gated): normalized `task_edges` DAG, multi-task-per-capture, and the execution-evidence map-maintenance loop (node completion / block close / blocker) — all v1 Non-goals.
-10. Sequencing: **S2 → S3 (#255) → v1**; v1 lands as its _own_ additive schema increment after S3 (does not ride S3's bump), needs REQUIREMENTS.md-first, owner sign-off, and a dated #251 decision-log entry.
+10. Historical sequencing: **S2 → S3 (#255) → v1**; v1 landed as its own additive schema increment after S3, following REQUIREMENTS-first adoption and the governing review process.

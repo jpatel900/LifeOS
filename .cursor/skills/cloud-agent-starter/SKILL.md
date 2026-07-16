@@ -26,14 +26,14 @@ The highest-risk invariants are:
 
 Before changing behavior, read `AGENTS.md`, `docs/PROJECT_STATE.md`, plus the relevant docs:
 
-- Product and scope: `docs/PROJECT_BRIEF.md`, `docs/REQUIREMENTS.md`, `docs/LIFE_OS_WIKI.md`
+- Product and scope: `docs/REQUIREMENTS.md`, `docs/PROJECT_STATE.md`, and `docs/adr/0005-staged-evolution-after-v1.md`
 - Architecture and data: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`
 - UX and tests: `docs/UX_FLOWS.md`, `docs/TEST_PLAN.md`
 - Security: `docs/SECURITY_PRIVACY.md`
 
-After every major update, refresh `docs/PROJECT_STATE.md` with the current status, recently completed work, known issues, next recommended tasks, and important implementation notes.
+Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance guidance materially changes, following `AGENTS.md`.
 
-Current repo note: at the time this skill was created, the repository is documentation-only. There is no `package.json`, `apps/web`, `supabase/config.toml`, lockfile, or runnable test suite yet. If that is still true, validate documentation changes with `git diff --check` and targeted review instead of inventing app commands.
+The repo is a pnpm monorepo with the Next.js app in `apps/web`. Discover current scripts and services from the checked-out repo; do not rely on scaffold-era assumptions.
 
 ## 2. Repository and environment discovery
 
@@ -83,7 +83,7 @@ git diff --check
 rg -n "silent calendar|disable RLS|service-role|production|autonomous rescheduling|vector database|realtime voice" .
 ```
 
-Review against `AGENTS.md` and make sure new docs do not broaden V1 scope, weaken approval gates, or bypass schema/RLS requirements.
+Review against `AGENTS.md`, current REQUIREMENTS, and ADR 0005. Owner-ratified data-independent foundations may proceed when structurally ready; do not weaken capability-specific usage/trust gates, approval gates, schema validation, privacy, transactions, or RLS requirements.
 
 ### 4.2 Web app, auth, and UI flows
 

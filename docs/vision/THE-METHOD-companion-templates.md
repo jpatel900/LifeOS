@@ -37,11 +37,13 @@ Spine (sole holder of action truth + approval gates): [name it].
 Perimeter systems: [list], each via a one-way written contract.
 Rule: no second system of record, ever.
 
-## D3. Stages (usage-gated)
-Stage 0: [smallest complete value loop] — gate to Stage 1: [measurable
-usage, e.g. "used 4+ days/week for 3 weeks"].
-Stage 1: [next nouns] — gate: [...]. (One non-binding card for Stage 2;
-NOTHING planned beyond.)
+## D3. Stages (dependency/risk ordered)
+Stage 0: [smallest complete value loop].
+Stage 1: [next nouns]. Structural gate: [named prerequisite].
+Capability-specific evidence gate: [only where behavior depends on usage,
+trust, interruption rights, external writes, or personal evidence].
+Strategic candidates remain in the vision-disposition tracker; contract
+only the next owner-ratified items.
 
 ## D4. Invariants (each ships WITH its guard)
 INV-1: [statement] — enforced by [test/checklist/audit].
@@ -126,13 +128,17 @@ When: [situation trigger]. Do: [steps]. Proven: [dates/instances].
 ## Named principles: [the axioms you actually cite, one line each]
 ```
 
-## T9 — Stage card (the ONE allowed forward plan)
+## T9 — Strategic candidate card (planning input, not authority)
 
 ```
-Stage [n+1] — [theme]. NON-BINDING.
-Usage gate to open: [3-4 measurable metrics over a fixed window].
+Stage [n+1] — [theme]. NON-BINDING strategic input.
+Structural prerequisites: [named dependencies].
+Capability-specific evidence gate: [metrics over a fixed window, or N/A
+for a data-independent foundation].
 Candidate nouns: [list]. Known constraints: [list].
-Contracts get authored fresh at the boundary — never from this card.
+Disposition: [IMPLEMENT | MERGE | REJECT with rationale | DEFER on named dependency].
+Contracts derive from current REQUIREMENTS/ADRs and owner-ratified issues,
+never from this card alone.
 ```
 
 ---
@@ -184,8 +190,9 @@ gentle escalation ladder. Perimeter: accounting software receives exports
 one-way; email is send-only. Trust ladder: invoice DRAFTING graduates to L2
 quickly (reversible); SENDING stays L1 until override rate ~0 for N sends;
 ESCALATION TONE never passes L1 (relationship-irreversible). Graveyard: no
-time tracking, no CRM, no multi-user. Stage gate: don't build payment-watch
-until drafting is used for 10 real invoices.
+time tracking, no CRM, no multi-user. Evidence gate: don't enable proactive
+payment-watch behavior until drafting is used for 10 real invoices; its
+deterministic data foundation may be contracted earlier if independently useful.
 
 **Organization — a 3-person consulting studio.** Purpose: "deliver senior
 judgment without founder burnout." Unit of survival: founder–studio
