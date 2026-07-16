@@ -230,7 +230,10 @@ export function StartMoment({
         className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
         data-testid="start-moment-grid"
       >
-        <div className="grid items-start gap-6" data-testid="start-moment-main-column">
+        <div
+          className="grid items-start gap-6"
+          data-testid="start-moment-main-column"
+        >
           {cardMove && vm.firstMove ? (
             <>
               <FirstMoveCard

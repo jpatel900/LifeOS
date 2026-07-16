@@ -151,8 +151,8 @@ export function AreaHealthDots({ areas }: AreaHealthDotsProps) {
     <div className="relative" data-testid="area-health-dots-wrap">
       {overflowing ? (
         <p className="sr-only" data-testid="area-health-dots-overflow-hint">
-          Showing a scrollable list of {areas.length} areas — scroll to see
-          all of them.
+          Showing a scrollable list of {areas.length} areas — scroll to see all
+          of them.
         </p>
       ) : null}
       <ul

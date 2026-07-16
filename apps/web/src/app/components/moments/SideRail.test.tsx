@@ -112,9 +112,7 @@ describe("SideRail", () => {
     render(
       <SideRail waitingOn={[]} areas={manyAreas} onOpenHealth={vi.fn()} />,
     );
-    expect(screen.getByTestId("side-rail-areas-count")).toHaveTextContent(
-      "7",
-    );
+    expect(screen.getByTestId("side-rail-areas-count")).toHaveTextContent("7");
   });
 
   it("omits the area count when there are no areas (truthful, not a stray '· 0')", () => {

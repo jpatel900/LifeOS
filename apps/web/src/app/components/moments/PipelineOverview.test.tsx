@@ -51,12 +51,7 @@ describe("PipelineOverview", () => {
   });
 
   it("defaults a missing stage count to 0 in counts mode, when a sibling stage is nonzero", () => {
-    render(
-      <PipelineOverview
-        counts={{ capture: 3 }}
-        onDrill={() => {}}
-      />,
-    );
+    render(<PipelineOverview counts={{ capture: 3 }} onDrill={() => {}} />);
     expect(
       screen.getByTestId("pipeline-overview-count-triage"),
     ).toHaveTextContent("0");
@@ -138,9 +133,10 @@ describe("PipelineOverview", () => {
     }
 
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-plan"));
-    expect(
-      screen.getByTestId("pipeline-overview-stage-plan"),
-    ).toHaveAttribute("aria-current", "step");
+    expect(screen.getByTestId("pipeline-overview-stage-plan")).toHaveAttribute(
+      "aria-current",
+      "step",
+    );
     for (const stage of ["capture", "triage", "execute", "review"]) {
       expect(
         screen.getByTestId(`pipeline-overview-stage-${stage}`),
@@ -254,9 +250,7 @@ describe("PipelineOverview — empty pipeline (explain mode, #483 round 4)", () 
     const stages = ["capture", "triage", "plan", "execute", "review"];
     for (const stage of stages) {
       const label = screen.getByTestId(`pipeline-overview-label-${stage}`);
-      const caption = screen.getByTestId(
-        `pipeline-overview-caption-${stage}`,
-      );
+      const caption = screen.getByTestId(`pipeline-overview-caption-${stage}`);
       expect(label).toBeInTheDocument();
       expect(caption.textContent?.trim().length).toBeGreaterThan(0);
     }

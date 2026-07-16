@@ -35,8 +35,12 @@ describe("kbdChip", () => {
     const accentHint = kbdHintClass(true);
 
     for (const cls of KBD_HINT_REVEAL.split(" ")) {
-      expect(neutralHint).toMatch(new RegExp(`(^|\\s)${cls.replace(/[[\]/]/g, "\\$&")}(\\s|$)`));
-      expect(accentHint).toMatch(new RegExp(`(^|\\s)${cls.replace(/[[\]/]/g, "\\$&")}(\\s|$)`));
+      expect(neutralHint).toMatch(
+        new RegExp(`(^|\\s)${cls.replace(/[[\]/]/g, "\\$&")}(\\s|$)`),
+      );
+      expect(accentHint).toMatch(
+        new RegExp(`(^|\\s)${cls.replace(/[[\]/]/g, "\\$&")}(\\s|$)`),
+      );
     }
     expect(neutralHint).toMatch(/text-muted-foreground/);
     expect(accentHint).toMatch(/text-primary-foreground\/90/);

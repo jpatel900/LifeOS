@@ -114,9 +114,7 @@ export function MastheadThemeToggle({
       ) : (
         <MoonStar className="size-4" aria-hidden="true" />
       )}
-      <kbd className={kbdHintClass()}>
-        {momentKeyLabel("toggle-theme")}
-      </kbd>
+      <kbd className={kbdHintClass()}>{momentKeyLabel("toggle-theme")}</kbd>
     </button>
   );
 }

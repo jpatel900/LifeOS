@@ -198,9 +198,7 @@ describe("AreaHealthDots", () => {
       screen.queryByTestId("area-health-dots-fade"),
     ).not.toBeInTheDocument();
     for (let index = 0; index < 4; index += 1) {
-      expect(
-        screen.getByTestId(`area-health-row-area-${index}`),
-      ).toBeVisible();
+      expect(screen.getByTestId(`area-health-row-area-${index}`)).toBeVisible();
     }
   });
 

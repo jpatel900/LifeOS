@@ -566,7 +566,11 @@ export function TodayMoments({
   // behind a modal/ritual/onboarding, matching every other global shortcut
   // in this file.
   const topbarShortcutsEnabled =
-    !captureOpen && !paletteOpen && !activeSheet && !ritualActive && !onboardingActive;
+    !captureOpen &&
+    !paletteOpen &&
+    !activeSheet &&
+    !ritualActive &&
+    !onboardingActive;
 
   useMomentKeyboard({
     onSwitchMoment: setMoment,

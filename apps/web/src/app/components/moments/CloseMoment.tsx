@@ -507,8 +507,7 @@ export function CloseMoment({
                 className="text-sm text-muted-foreground"
                 data-testid="close-moment-carry-forward-empty"
               >
-                Nothing to carry forward — today&apos;s missed blocks are
-                clear.
+                Nothing to carry forward — today&apos;s missed blocks are clear.
               </p>
             ) : (
               <ul
@@ -542,9 +541,7 @@ export function CloseMoment({
               className="grid gap-1 border-t border-border/50 pt-4"
               data-testid="close-moment-tomorrow-first-move"
             >
-              <h3 className="moments-label m-0">
-                Tomorrow&apos;s first move
-              </h3>
+              <h3 className="moments-label m-0">Tomorrow&apos;s first move</h3>
               <p className="text-sm font-medium">
                 {vm.tomorrowFirstMove.title}
               </p>
@@ -560,8 +557,8 @@ export function CloseMoment({
               className="text-xs text-muted-foreground"
               data-testid="close-moment-orientation"
             >
-              Closing saves today&apos;s counts as reviewed and carries
-              forward anything still open.
+              Closing saves today&apos;s counts as reviewed and carries forward
+              anything still open.
             </p>
             <div>
               <Button

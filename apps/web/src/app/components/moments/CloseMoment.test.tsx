@@ -101,15 +101,15 @@ describe("CloseMoment — R2-D/R3-B stats + close composition", () => {
   it("shares one card boundary across stats, carry forward, and the close action", () => {
     renderClose();
     const summary = screen.getByTestId("close-moment-summary");
-    expect(
-      summary.contains(screen.getByTestId("close-moment-stats")),
-    ).toBe(true);
+    expect(summary.contains(screen.getByTestId("close-moment-stats"))).toBe(
+      true,
+    );
     expect(
       summary.contains(screen.getByTestId("close-moment-carry-forward-empty")),
     ).toBe(true);
-    expect(
-      summary.contains(screen.getByTestId("close-moment-close-day")),
-    ).toBe(true);
+    expect(summary.contains(screen.getByTestId("close-moment-close-day"))).toBe(
+      true,
+    );
   });
 
   it("nests tomorrow's first move inside the same summary card when present", () => {

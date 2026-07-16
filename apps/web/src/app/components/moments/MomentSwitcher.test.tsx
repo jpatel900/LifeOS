@@ -77,8 +77,12 @@ describe("MomentSwitcher", () => {
   // hover/focus-revealed above it, rather than permanently stamped.
   it("kbd hints are hidden below sm and only reveal on hover/focus of their own tab", () => {
     render(<MomentSwitcher value="start" onChange={vi.fn()} />);
-    const selectedHint = screen.getByTestId("moment-switcher-start").querySelector("kbd")!;
-    const unselectedHint = screen.getByTestId("moment-switcher-flow").querySelector("kbd")!;
+    const selectedHint = screen
+      .getByTestId("moment-switcher-start")
+      .querySelector("kbd")!;
+    const unselectedHint = screen
+      .getByTestId("moment-switcher-flow")
+      .querySelector("kbd")!;
 
     for (const hint of [selectedHint, unselectedHint]) {
       expect(hint).toHaveClass("hidden");

@@ -891,9 +891,9 @@ describe("StartMoment — R2-B eyebrow system unification (#483 round 2)", () =>
 
     const focusHeading = screen.getByText("Today's focus");
     const scheduleHeading = screen.getByText("Today's schedule");
-    const cardEyebrow = screen.getByTestId("first-move-card").querySelector(
-      ".workflow-page-eyebrow",
-    );
+    const cardEyebrow = screen
+      .getByTestId("first-move-card")
+      .querySelector(".workflow-page-eyebrow");
 
     expect(cardEyebrow).not.toBeNull();
     expect(focusHeading.className).toContain("workflow-page-eyebrow");
@@ -925,9 +925,9 @@ describe("StartMoment — D-8-POLISH composition (#483)", () => {
     expect(screen.getByTestId("start-moment-grid").className).toContain(
       "items-start",
     );
-    expect(
-      screen.getByTestId("start-moment-main-column").className,
-    ).toContain("items-start");
+    expect(screen.getByTestId("start-moment-main-column").className).toContain(
+      "items-start",
+    );
   });
 
   it("wraps Today's schedule in the same moments-card surface treatment SideRail's cards use, so the column ends at a boxed edge instead of trailing off as bare text", () => {
@@ -947,9 +947,7 @@ describe("StartMoment — D-8-POLISH composition (#483)", () => {
     expect(scheduleCard).toBeInTheDocument();
     expect(scheduleCard.className).toContain("moments-card");
     expect(scheduleCard).toHaveTextContent("Today's schedule");
-    expect(scheduleCard).toHaveTextContent(
-      "Nothing on today's schedule yet",
-    );
+    expect(scheduleCard).toHaveTextContent("Nothing on today's schedule yet");
   });
 
   it("keeps the schedule card in place (after the hero, before SideRail) whether the hero is FirstMoveCard or the empty state", () => {
@@ -1031,12 +1029,20 @@ describe("StartMoment — pipeline rail (#483 round 4, post-LoopOrientation)", (
         vm={vm}
         timeDisplay="clock"
         now={NOW}
-        pipelineCounts={{ capture: 2, triage: 0, plan: 0, execute: 0, review: 0 }}
+        pipelineCounts={{
+          capture: 2,
+          triage: 0,
+          plan: 0,
+          execute: 0,
+          review: 0,
+        }}
         {...NOOP_HANDLERS}
       />,
     );
 
-    expect(screen.getByTestId("start-moment-pipeline-rail")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("start-moment-pipeline-rail"),
+    ).toBeInTheDocument();
     expect(screen.getAllByTestId("pipeline-overview")).toHaveLength(1);
     expect(
       screen.getByTestId("pipeline-overview-count-capture"),

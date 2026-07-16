@@ -199,9 +199,7 @@ describe("FlowMoment — R4-B idle-canvas orientation", () => {
 
   it("renders the idle orientation card when no block/session is active", () => {
     render(<FlowMoment {...emptyProps()} />);
-    expect(
-      screen.getByTestId("flow-idle-orientation"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("flow-idle-orientation")).toBeInTheDocument();
   });
 
   it("recedes once a block/session is active — never doubles up with the populated hero", () => {
@@ -219,9 +217,7 @@ describe("FlowMoment — R4-B idle-canvas orientation", () => {
         })}
       />,
     );
-    expect(
-      screen.getByTestId("flow-idle-orientation"),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("flow-idle-orientation")).toBeInTheDocument();
     expect(screen.getByTestId("drift-recovery-card")).toBeInTheDocument();
   });
 });

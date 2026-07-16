@@ -9,9 +9,7 @@ const AREAS = [
 
 describe("AreaSelector", () => {
   it("renders the selected area's name, swatch, and a real 'A' kbd hint", () => {
-    render(
-      <AreaSelector areas={AREAS} value="area-1" onChange={vi.fn()} />,
-    );
+    render(<AreaSelector areas={AREAS} value="area-1" onChange={vi.fn()} />);
 
     const trigger = screen.getByTestId("today-moments-area-switcher");
     expect(trigger).toHaveTextContent("Product");
@@ -35,9 +33,7 @@ describe("AreaSelector", () => {
   });
 
   it("opens the listbox on click, listing 'All areas' plus every area, with the current value marked selected", () => {
-    render(
-      <AreaSelector areas={AREAS} value="area-2" onChange={vi.fn()} />,
-    );
+    render(<AreaSelector areas={AREAS} value="area-2" onChange={vi.fn()} />);
 
     fireEvent.click(screen.getByTestId("today-moments-area-switcher"));
 
@@ -46,12 +42,13 @@ describe("AreaSelector", () => {
     expect(screen.getByTestId("area-selector-option-all")).toHaveTextContent(
       "All areas",
     );
-    expect(
-      screen.getByTestId("area-selector-option-area-1"),
-    ).toHaveTextContent("Product");
-    expect(
-      screen.getByTestId("area-selector-option-area-2"),
-    ).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("area-selector-option-area-1")).toHaveTextContent(
+      "Product",
+    );
+    expect(screen.getByTestId("area-selector-option-area-2")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("selecting an option calls onChange with that area's id and closes the popup", () => {
@@ -62,7 +59,9 @@ describe("AreaSelector", () => {
     fireEvent.click(screen.getByTestId("area-selector-option-area-2"));
 
     expect(onChange).toHaveBeenCalledWith("area-2");
-    expect(screen.queryByTestId("area-selector-listbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-selector-listbox"),
+    ).not.toBeInTheDocument();
   });
 
   it("selecting an option survives the real mousedown-then-click sequence a real mouse click produces (regression: mousedown on a non-focusable option used to blur the trigger and close/unmount the popup before the click landed, so nothing was ever selected)", () => {
@@ -85,7 +84,9 @@ describe("AreaSelector", () => {
     fireEvent.click(option);
 
     expect(onChange).toHaveBeenCalledWith("area-2");
-    expect(screen.queryByTestId("area-selector-listbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-selector-listbox"),
+    ).not.toBeInTheDocument();
   });
 
   it("selecting 'All areas' calls onChange with null", () => {
@@ -113,7 +114,9 @@ describe("AreaSelector", () => {
     fireEvent.keyDown(trigger, { key: "Enter" });
 
     expect(onChange).toHaveBeenCalledWith("area-2");
-    expect(screen.queryByTestId("area-selector-listbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-selector-listbox"),
+    ).not.toBeInTheDocument();
   });
 
   it("keyboard: Escape closes without changing the selection", () => {
@@ -127,7 +130,9 @@ describe("AreaSelector", () => {
 
     fireEvent.keyDown(trigger, { key: "Escape" });
 
-    expect(screen.queryByTestId("area-selector-listbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-selector-listbox"),
+    ).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -145,7 +150,9 @@ describe("AreaSelector", () => {
     expect(screen.getByTestId("area-selector-listbox")).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByTestId("outside"));
-    expect(screen.queryByTestId("area-selector-listbox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-selector-listbox"),
+    ).not.toBeInTheDocument();
   });
 
   it("the global 'A' key cycles All areas -> area-1 -> area-2 -> All areas", () => {
