@@ -66,6 +66,66 @@ export interface ParseCaptureMessage {
   content: string;
 }
 
+export type AiContextSurfaceId = "parse" | "rollup" | "task_map_draft";
+
+export interface AiContextSurfaceDeclaration {
+  builderName:
+    | "buildParseCaptureMessages"
+    | "buildRollupProseMessages"
+    | "buildTaskMapDraftMessages";
+  fixtureId: string;
+  measuredTokensEstimated: number;
+  maxTokensEstimated: number;
+  justification: string;
+}
+
+/**
+ * Deterministic context-size estimate for the INV-9 representative fixtures.
+ * It counts Unicode code points in message content and applies chars / 4,
+ * rounded up. Roles, transport framing, and provider tokenizer overhead are
+ * intentionally excluded; this is a regression heuristic, not token billing.
+ */
+export function estimateAiContextTokens(
+  messages: ReadonlyArray<Pick<ParseCaptureMessage, "content">>,
+): number {
+  const contentCodePoints = messages.reduce(
+    (total, message) => total + Array.from(message.content).length,
+    0,
+  );
+  return Math.ceil(contentCodePoints / 4);
+}
+
+/**
+ * INV-9 audit trail. Measurements are frozen from the named representative
+ * fixtures in contextAssembly.budget.test.ts; they are not runtime input caps.
+ */
+export const AI_CONTEXT_SURFACE_DECLARATIONS = {
+  parse: {
+    builderName: "buildParseCaptureMessages",
+    fixtureId: "parse.full-context.v1",
+    measuredTokensEstimated: 816,
+    maxTokensEstimated: 980,
+    justification:
+      "fixture_id=parse.full-context.v1; measured_tokens_est=816; max_tokens_est=980; rationale=Exercises every optional personalization block with reviewed headroom for prompt maintenance.",
+  },
+  rollup: {
+    builderName: "buildRollupProseMessages",
+    fixtureId: "rollup.full-draft.v1",
+    measuredTokensEstimated: 396,
+    maxTokensEstimated: 475,
+    justification:
+      "fixture_id=rollup.full-draft.v1; measured_tokens_est=396; max_tokens_est=475; rationale=Exercises both item lists and authoritative counts with reviewed headroom for prompt maintenance.",
+  },
+  task_map_draft: {
+    builderName: "buildTaskMapDraftMessages",
+    fixtureId: "task-map.max-structural-shape.v1",
+    measuredTokensEstimated: 1020,
+    maxTokensEstimated: 1225,
+    justification:
+      "fixture_id=task-map.max-structural-shape.v1; measured_tokens_est=1020; max_tokens_est=1225; rationale=Exercises task fields, maximum graph shape, breakdown, and revision metadata with reviewed headroom for prompt maintenance.",
+  },
+} as const satisfies Record<AiContextSurfaceId, AiContextSurfaceDeclaration>;
+
 const systemPrompt = [
   "You parse one private LifeOS capture into structured draft objects.",
   `Return schema_version ${PARSE_CAPTURE_SCHEMA_VERSION} and prompt_version ${PARSE_CAPTURE_PROMPT_VERSION}.`,
