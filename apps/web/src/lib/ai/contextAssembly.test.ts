@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PARSE_CAPTURE_PROMPT_VERSION,
+  TRUSTED_CONTEXT_HEADER,
   buildParseCaptureMessages,
   buildTaskMapDraftMessages,
   type ParseCaptureAreaContext,
@@ -101,7 +102,7 @@ describe("contextAssembly parse prompt", () => {
     ).toEqual(baselineMessages({ rawText, areaContext: areas }));
   });
 
-  it("appends an area-charter block scoped to chartered areas only", () => {
+  it("emits an area-charter block, scoped to chartered areas only, in a role-separated trusted-context message BEFORE the capture (#448)", () => {
     const rawText = "Plan the sprint review.";
     const withCharter: ParseCaptureAreaContext[] = [
       {
@@ -112,22 +113,34 @@ describe("contextAssembly parse prompt", () => {
       { slug: "personal", name: "Personal", charterText: null },
     ];
 
-    const [, userMessage] = buildParseCaptureMessages({
+    const messages = buildParseCaptureMessages({
       rawText,
       areaContext: withCharter,
     });
 
-    expect(userMessage.content).toContain("Area charters:");
-    expect(userMessage.content).toContain(
+    expect(messages).toHaveLength(3);
+    const [, trustedMessage, captureMessage] = messages;
+    expect(trustedMessage.role).toBe("user");
+    expect(trustedMessage.content.startsWith(TRUSTED_CONTEXT_HEADER)).toBe(
+      true,
+    );
+    expect(trustedMessage.content).toContain("Area charters:");
+    expect(trustedMessage.content).toContain(
       "- main-job: Ship the cockpit; protect deep-work mornings.",
     );
     // The uncharted area must not appear in the charter block.
-    expect(userMessage.content).not.toMatch(/Area charters:[\s\S]*personal:/);
+    expect(trustedMessage.content).not.toMatch(
+      /Area charters:[\s\S]*personal:/,
+    );
+    // The capture message stays the baseline shape, after the trusted context.
+    expect(captureMessage.content).toEqual(
+      baselineMessages({ rawText, areaContext: areas })[1].content,
+    );
   });
 
-  it("appends an operator-profile block with profile text and compensation rules", () => {
+  it("emits the operator-profile block in the trusted-context message, never appended to the capture (#448)", () => {
     const rawText = "Outline the migration.";
-    const [systemMessage, userMessage] = buildParseCaptureMessages({
+    const messages = buildParseCaptureMessages({
       rawText,
       areaContext: areas,
       operatorProfile: {
@@ -139,15 +152,22 @@ describe("contextAssembly parse prompt", () => {
       },
     });
 
-    expect(userMessage.content).toContain("Operator profile:");
-    expect(userMessage.content).toContain(
+    expect(messages).toHaveLength(3);
+    const [systemMessage, trustedMessage, captureMessage] = messages;
+    expect(trustedMessage.content).toContain("Operator profile:");
+    expect(trustedMessage.content).toContain(
       "Strong at synthesis, weak at starting.",
     );
-    expect(userMessage.content).toContain(
+    expect(trustedMessage.content).toContain(
       "- starting friction: require a concrete first move",
     );
-    expect(userMessage.content).toContain(
+    expect(trustedMessage.content).toContain(
       "- time blindness: use countdown framing",
+    );
+    // The capture message carries no personalization block.
+    expect(captureMessage.content).not.toContain("Operator profile:");
+    expect(captureMessage.content).toEqual(
+      baselineMessages({ rawText, areaContext: areas })[1].content,
     );
     // System prompt is untouched by personalization context.
     expect(systemMessage.content).toEqual(
@@ -176,9 +196,9 @@ describe("contextAssembly parse prompt", () => {
     ).toEqual(baselineMessages({ rawText }));
   });
 
-  it("injects approved rollups as a context source (S8 #260)", () => {
+  it("injects approved rollups as a context source in the trusted-context message (S8 #260, #448)", () => {
     const rawText = "What should I focus on this week?";
-    const [, userMessage] = buildParseCaptureMessages({
+    const messages = buildParseCaptureMessages({
       rawText,
       areaContext: areas,
       rollupContext: [
@@ -192,10 +212,13 @@ describe("contextAssembly parse prompt", () => {
       ],
     });
 
-    expect(userMessage.content).toContain("Recent rollups:");
-    expect(userMessage.content).toContain(
+    expect(messages).toHaveLength(3);
+    const [, trustedMessage, captureMessage] = messages;
+    expect(trustedMessage.content).toContain("Recent rollups:");
+    expect(trustedMessage.content).toContain(
       "- main-job (week 2026-05-01–2026-05-07): highlights: Shipped the cockpit; Cleared the triage backlog | misses: Skipped two deep-work mornings",
     );
+    expect(captureMessage.content).not.toContain("Recent rollups:");
   });
 });
 
