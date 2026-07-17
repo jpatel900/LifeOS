@@ -267,3 +267,125 @@ describe("lifeos areas + today (#642)", () => {
     expect(JSON.parse(lines[0]).ok).toBe(false);
   });
 });
+
+describe("lifeos capture --parse (#641)", () => {
+  const captureOkBody = {
+    ok: true,
+    api_version: "1",
+    data: { capture: { id: "c1", status: "new" } },
+  };
+
+  it("saves the capture FIRST, then parses; envelope carries both results", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, captureOkBody))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          ok: true,
+          data: { areas: [{ slug: "work", name: "Work" }] },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          ok: true,
+          parser: "mock",
+          response: { summary: "draft" },
+        }),
+      );
+    const { lines, io } = makeIo();
+
+    const outcome = await runCli(
+      ["capture", "note", "--parse", "--parser", "mock"],
+      io,
+      config,
+    );
+
+    expect(outcome.exitCode).toBe(0);
+    const calls = fetchMock.mock.calls.map((call) => new URL(call[0]).pathname);
+    // Ordering IS the raw-save-first invariant: captures before parse.
+    expect(calls).toEqual([
+      "/api/v1/captures",
+      "/api/v1/areas",
+      "/api/parse-capture",
+    ]);
+    const parsePayload = JSON.parse(fetchMock.mock.calls[2][1].body);
+    expect(parsePayload.parserMode).toBe("mock");
+    expect(parsePayload.areaContext).toEqual([{ slug: "work", name: "Work" }]);
+    expect(parsePayload.rawText).toBe("note");
+
+    const envelope = JSON.parse(lines[0]);
+    expect(envelope.ok).toBe(true);
+    expect(envelope.capture.data.capture.id).toBe("c1");
+    expect(envelope.parse.parser).toBe("mock");
+  });
+
+  it("NEVER parses when the capture save failed; exits 1", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(500, { ok: false, error: "save failed" }),
+    );
+    const { lines, io } = makeIo();
+
+    const outcome = await runCli(["capture", "note", "--parse"], io, config);
+
+    expect(outcome.exitCode).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(new URL(fetchMock.mock.calls[0][0]).pathname).toBe(
+      "/api/v1/captures",
+    );
+    expect(JSON.parse(lines[0]).parse).toBeNull();
+  });
+
+  it("a parse failure leaves the saved capture as the outcome: exit 0, parse error inside", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, captureOkBody))
+      .mockResolvedValueOnce(
+        jsonResponse(200, { ok: true, data: { areas: [] } }),
+      )
+      .mockRejectedValueOnce(new Error("network down"));
+    const { lines, io } = makeIo();
+
+    const outcome = await runCli(["capture", "note", "--parse"], io, config);
+
+    expect(outcome.exitCode).toBe(0);
+    const envelope = JSON.parse(lines[0]);
+    expect(envelope.ok).toBe(true);
+    expect(envelope.capture.data.capture.id).toBe("c1");
+    expect(envelope.parse.ok).toBe(false);
+  });
+
+  it("an areas-read failure is silent enrichment loss: parse still runs without context", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, captureOkBody))
+      .mockRejectedValueOnce(new Error("areas unavailable"))
+      .mockResolvedValueOnce(jsonResponse(200, { ok: true, parser: "mock" }));
+    const { lines, io } = makeIo();
+
+    const outcome = await runCli(["capture", "note", "--parse"], io, config);
+
+    expect(outcome.exitCode).toBe(0);
+    const parsePayload = JSON.parse(fetchMock.mock.calls[2][1].body);
+    expect(parsePayload.areaContext).toBeUndefined();
+    expect(JSON.parse(lines[0]).parse.ok).toBe(true);
+  });
+
+  it("rejects an invalid --parser value before any network work", async () => {
+    const { lines, io } = makeIo();
+    const outcome = await runCli(
+      ["capture", "note", "--parse", "--parser", "gpt"],
+      io,
+      config,
+    );
+    expect(outcome.exitCode).toBe(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(JSON.parse(lines[0]).ok).toBe(false);
+  });
+
+  it("without --parse the behavior is unchanged: one request, api envelope verbatim", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, captureOkBody));
+    const { io } = makeIo();
+
+    const outcome = await runCli(["capture", "note"], io, config);
+
+    expect(outcome.exitCode).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
