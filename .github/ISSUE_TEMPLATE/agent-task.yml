@@ -131,8 +131,7 @@ body:
       description: List the minimum required context for the agent before editing.
       value: |
         - AGENTS.md
-        - docs/CODEX_SKILL_ROUTING.md
-        - docs/agent/CONTEXT_INDEX.md
+        - docs/SYSTEM_MAP.md
         - README.md
         - docs/PROJECT_STATE.md only if current status or implementation notes are needed
     validations:
@@ -156,7 +155,7 @@ body:
     id: validation_commands
     attributes:
       label: Validation commands
-      description: List the exact commands the agent must run before claiming completion. Choose commands from the touched surface plus `docs/agent/VALIDATION_MATRIX.md` and the highest applicable T0-T4 tier in `.github/AGENT_AUTOMATION_POLICY.md` instead of defaulting every docs-only task to full repo validation.
+      description: List the exact commands the agent must run before claiming completion. Choose commands from the touched surface plus `docs/TEST_PLAN.md` (and CLAUDE.md's scale-validation-to-the-change guidance) and the highest applicable T0-T4 tier in `.github/AGENT_AUTOMATION_POLICY.md` instead of defaulting every docs-only task to full repo validation.
       value: |
         pnpm format:check
         git diff --check

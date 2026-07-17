@@ -10,13 +10,12 @@ Trust boundaries:
 
 Start with the smallest relevant context:
 
-1. Read `AGENTS.md`.
-2. Read `docs/CODEX_SKILL_ROUTING.md`.
-3. Read `docs/agent/CONTEXT_INDEX.md`.
-4. Read `.github/ISSUE_TEMPLATE/agent-task.yml`.
-5. Read `README.md`.
-6. Read `.git/codex/low-risk-issue.md`.
-7. Read `docs/PROJECT_STATE.md` only if needed for current status or implementation notes.
+1. Read `AGENTS.md` (routing and scope authority; skills live under `.agents/skills/`).
+2. Read `docs/SYSTEM_MAP.md` (orientation, where truth lives; use `pnpm agent:context <area>` for on-demand area context).
+3. Read `.github/ISSUE_TEMPLATE/agent-task.yml`.
+4. Read `README.md`.
+5. Read `.git/codex/low-risk-issue.md`.
+6. Read `docs/PROJECT_STATE.md` only if needed for current status or implementation notes.
 
 Operating constraints:
 

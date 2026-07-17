@@ -11,12 +11,11 @@ Trust boundaries:
 Read first:
 
 1. `.git/codex/trusted-agents.md`
-2. `.git/codex/trusted-skill-routing.md`
-3. `.git/codex/trusted-context-index.md`
-4. `.git/codex/trusted-package.json`
-5. `.git/codex/trusted-ci.yml`
-6. `.git/codex/ci-failure-context.md`
-7. `.git/codex/trusted-low-risk-implementation.md` if it exists
+2. `.git/codex/trusted-context-index.md` (docs/SYSTEM_MAP.md — orientation and where truth lives)
+3. `.git/codex/trusted-package.json`
+4. `.git/codex/trusted-ci.yml`
+5. `.git/codex/ci-failure-context.md`
+6. `.git/codex/trusted-low-risk-implementation.md` if it exists
 
 Operating constraints:
 

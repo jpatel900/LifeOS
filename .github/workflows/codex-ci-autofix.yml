@@ -209,13 +209,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Guard trusted context paths
+        shell: bash
+        run: node scripts/agent/trusted-context-paths.test.mjs
+
       - name: Export trusted prompt and context
         shell: bash
         run: |
           mkdir -p .git/codex
           git show HEAD:AGENTS.md > .git/codex/trusted-agents.md
-          git show HEAD:docs/CODEX_SKILL_ROUTING.md > .git/codex/trusted-skill-routing.md
-          git show HEAD:docs/agent/CONTEXT_INDEX.md > .git/codex/trusted-context-index.md
+          # The old skill-routing and context-index docs were deleted; their
+          # roles are covered by AGENTS.md (routing/scope) and
+          # docs/SYSTEM_MAP.md (orientation + where truth lives). See #640.
+          git show HEAD:docs/SYSTEM_MAP.md > .git/codex/trusted-context-index.md
           git show HEAD:package.json > .git/codex/trusted-package.json
           git show HEAD:.github/workflows/ci.yml > .git/codex/trusted-ci.yml
           git show HEAD:.github/codex/prompts/ci-autofix.md > .git/codex/ci-autofix-prompt.md
