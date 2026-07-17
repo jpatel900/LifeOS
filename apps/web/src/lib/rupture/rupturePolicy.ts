@@ -97,39 +97,96 @@ export function createFullAdaptiveSurfaceState(): AdaptiveSurfaceState {
   return { mode: "full", reasons: [], restoredSurfaceIds: [] };
 }
 
-function isValidRuptureAssessment(assessment: RuptureAssessment): boolean {
+function snapshotValidRuptureAssessment(
+  assessment: RuptureAssessment,
+): readonly RuptureReason[] | null {
   if (!assessment || typeof assessment !== "object") {
-    return false;
+    return null;
   }
 
   try {
+    const rupturedDescriptor = Object.getOwnPropertyDescriptor(
+      assessment,
+      "ruptured",
+    );
+    const suppressedByDescriptor = Object.getOwnPropertyDescriptor(
+      assessment,
+      "suppressedBy",
+    );
+    const reasonsDescriptor = Object.getOwnPropertyDescriptor(
+      assessment,
+      "reasons",
+    );
+
     if (
-      assessment.ruptured !== true ||
-      !Array.isArray(assessment.suppressedBy) ||
-      assessment.suppressedBy.length !== 0 ||
-      !Array.isArray(assessment.reasons) ||
-      assessment.reasons.length === 0
+      !rupturedDescriptor ||
+      !("value" in rupturedDescriptor) ||
+      rupturedDescriptor.value !== true ||
+      !suppressedByDescriptor ||
+      !("value" in suppressedByDescriptor) ||
+      !reasonsDescriptor ||
+      !("value" in reasonsDescriptor)
     ) {
-      return false;
+      return null;
+    }
+
+    const suppressedBy = suppressedByDescriptor.value as unknown;
+    const suppressedLength = Array.isArray(suppressedBy)
+      ? Object.getOwnPropertyDescriptor(suppressedBy, "length")
+      : undefined;
+    if (
+      !suppressedLength ||
+      !("value" in suppressedLength) ||
+      suppressedLength.value !== 0
+    ) {
+      return null;
+    }
+
+    const reasons = reasonsDescriptor.value as unknown;
+    const reasonsLength = Array.isArray(reasons)
+      ? Object.getOwnPropertyDescriptor(reasons, "length")
+      : undefined;
+    if (
+      !reasonsLength ||
+      !("value" in reasonsLength) ||
+      typeof reasonsLength.value !== "number" ||
+      !Number.isInteger(reasonsLength.value) ||
+      reasonsLength.value <= 0
+    ) {
+      return null;
     }
 
     const expectedOrder: readonly RuptureReason[] = [
       "absence",
       "dismissal_spike",
     ];
+    const snapshot: RuptureReason[] = [];
     let previousIndex = -1;
 
-    for (const reason of assessment.reasons) {
+    for (let position = 0; position < reasonsLength.value; position += 1) {
+      const reasonDescriptor = Object.getOwnPropertyDescriptor(
+        reasons,
+        String(position),
+      );
+      if (!reasonDescriptor || !("value" in reasonDescriptor)) {
+        return null;
+      }
+
+      const reason = reasonDescriptor.value as unknown;
+      if (reason !== "absence" && reason !== "dismissal_spike") {
+        return null;
+      }
       const index = expectedOrder.indexOf(reason);
       if (index <= previousIndex) {
-        return false;
+        return null;
       }
+      snapshot.push(reason);
       previousIndex = index;
     }
 
-    return true;
+    return Object.freeze(snapshot);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -142,13 +199,14 @@ export function transitionAdaptiveSurface(
   }
 
   if (event.type === "rupture_detected") {
-    if (!isValidRuptureAssessment(event.assessment)) {
+    const reasons = snapshotValidRuptureAssessment(event.assessment);
+    if (!reasons) {
       return state;
     }
 
     return {
       mode: "minimal",
-      reasons: [...event.assessment.reasons],
+      reasons: [...reasons],
       restoredSurfaceIds: [],
     };
   }
