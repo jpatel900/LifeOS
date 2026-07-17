@@ -88,7 +88,7 @@ export function TaskMapDraftReview({
       className="workflow-flagship-card moments-card grid gap-3 rounded-xl border p-4"
       data-testid="taskmap-draft-review"
     >
-      <p className="workflow-page-eyebrow m-0">
+      <p className="m-0 text-sm font-semibold">
         {isRevision ? "Revised map draft" : "Task map draft"}
       </p>
       <p className="text-sm text-muted-foreground">

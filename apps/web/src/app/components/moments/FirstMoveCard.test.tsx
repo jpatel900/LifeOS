@@ -57,10 +57,12 @@ describe("FirstMoveCard", () => {
     expect(onSwap).toHaveBeenCalledTimes(1);
   });
 
-  // SP-3 numeric steadiness: the estimated-minutes eyebrow must not jiggle,
-  // so it renders with tabular figures.
-  it("renders the estMinutes eyebrow with tabular-nums", () => {
-    render(
+  // SP-3 numeric steadiness: the estimated-minutes meta line must not jiggle,
+  // so it renders with tabular figures. (Impeccable follow-up: the uppercase
+  // "First move" eyebrow is gone — the est/area data lives in a quiet meta
+  // line under the title.)
+  it("renders the estMinutes meta line with tabular-nums and no eyebrow", () => {
+    const { container } = render(
       <FirstMoveCard
         move={makeMove()}
         onStart={vi.fn()}
@@ -68,9 +70,10 @@ describe("FirstMoveCard", () => {
         onSwap={vi.fn()}
       />,
     );
-    expect(screen.getByText(/First move · 25 min · Work/)).toHaveClass(
-      "tabular-nums",
-    );
+    expect(screen.getByText(/25 min · Work/)).toHaveClass("tabular-nums");
+    expect(
+      container.querySelector(".workflow-page-eyebrow"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders followOn only when present", () => {
