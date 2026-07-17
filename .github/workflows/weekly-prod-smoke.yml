@@ -138,6 +138,89 @@ jobs:
           console.log(`capabilities contract OK (${body.capabilities.length} advertised)`);
           CONTRACT
 
+      - name: Build @lifeos/cli (#643, ADR 0006)
+        run: pnpm --filter @lifeos/cli build
+
+      # Authenticated CLI consumer leg (#643, ADR 0006): proves the REAL
+      # @lifeos/cli -- the same package external consumers install -- can
+      # authenticate against the deployed app and read through the
+      # versioned /api/v1 contracts as a genuine external client, not just
+      # the in-repo Playwright journey. READS ONLY: login, three list/read
+      # commands, logout. No capture/write call is made against production.
+      #
+      # Secret safety:
+      #   - The password is read by the CLI from $LIFEOS_PASSWORD (its
+      #     documented --password-env default) and is never passed as an
+      #     argv flag, so it cannot appear in `ps`, argv, or step logs.
+      #   - `lifeos login`'s JSON response contains only { signed_in, email
+      #     } -- no access/refresh token -- so asserting on it below cannot
+      #     echo a token either.
+      #   - The session file (refresh token) is written to $RUNNER_TEMP via
+      #     LIFEOS_SESSION_FILE, never the repo checkout, and is removed by
+      #     the always-run cleanup step below regardless of outcome.
+      #   - Command stdout is only ever piped into the node assertion
+      #     parser below, never echoed/cat'd, so a malformed or unexpected
+      #     response body never lands in the public run log.
+      - name: Authenticated CLI consumer smoke (#643, ADR 0006)
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          LIFEOS_API_URL: ${{ secrets.SMOKE_BASE_URL }}
+          LIFEOS_SESSION_FILE: ${{ runner.temp }}/lifeos-cli-session.json
+          LIFEOS_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          if [ -z "$SMOKE_BASE_URL" ] || [ -z "$SMOKE_EMAIL" ] || [ -z "$SMOKE_PASSWORD" ] || [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::warning::SMOKE_BASE_URL/SMOKE_EMAIL/SMOKE_PASSWORD secrets or NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY vars are not fully set; skipping the authenticated CLI consumer smoke."
+            exit 0
+          fi
+
+          CLI_BIN="$(pwd)/packages/cli/dist/index.js"
+
+          assert_ok() {
+            local label="$1"
+            shift
+            local output
+            if ! output="$(node "$CLI_BIN" "$@")"; then
+              echo "::error::$label: lifeos CLI exited non-zero"
+              exit 1
+            fi
+            if ! node --input-type=module -e '
+              let raw = "";
+              process.stdin.on("data", (chunk) => { raw += chunk; });
+              process.stdin.on("end", () => {
+                let body;
+                try {
+                  body = JSON.parse(raw);
+                } catch (error) {
+                  console.error("stdout was not valid JSON: " + error.message);
+                  process.exitCode = 1;
+                  return;
+                }
+                if (body === null || typeof body !== "object" || body.ok !== true) {
+                  console.error("expected a single JSON object with ok:true");
+                  process.exitCode = 1;
+                }
+              });
+            ' <<< "$output"; then
+              echo "::error::$label: response did not satisfy a single JSON object with ok:true"
+              exit 1
+            fi
+            echo "$label: OK"
+          }
+
+          assert_ok "login" login --email "$SMOKE_EMAIL"
+          assert_ok "tasks list" tasks list
+          assert_ok "areas list" areas list
+          assert_ok "today" today
+          assert_ok "logout" logout
+
+      - name: Clean up CLI session file (#643)
+        if: always()
+        run: rm -f "${{ runner.temp }}/lifeos-cli-session.json"
+
       - name: Run production smoke
         id: smoke
         env:
