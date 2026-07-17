@@ -49,6 +49,24 @@ export function listTasks(config: CliConfig, accessToken: string) {
   return request(config, "GET", "/api/v1/tasks", { accessToken });
 }
 
+export function listAreas(
+  config: CliConfig,
+  accessToken: string,
+  options: { includeInactive?: boolean } = {},
+) {
+  const query = options.includeInactive ? "?include_inactive=1" : "";
+  return request(config, "GET", `/api/v1/areas${query}`, { accessToken });
+}
+
+export function listBlocks(
+  config: CliConfig,
+  accessToken: string,
+  window: { start: string; end: string },
+) {
+  const query = new URLSearchParams(window).toString();
+  return request(config, "GET", `/api/v1/blocks?${query}`, { accessToken });
+}
+
 export function createCapture(
   config: CliConfig,
   accessToken: string,

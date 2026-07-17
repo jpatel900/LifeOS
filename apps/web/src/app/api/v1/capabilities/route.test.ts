@@ -14,6 +14,8 @@ describe("GET /api/v1/capabilities", () => {
       "capabilities.read",
       "tasks.list",
       "captures.create",
+      "areas.list",
+      "blocks.list",
     ]);
     expect(body.auth.scheme).toBe("bearer");
   });
