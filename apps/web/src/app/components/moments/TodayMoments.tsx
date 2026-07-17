@@ -28,6 +28,11 @@ import { FlowMoment } from "./FlowMoment";
 import { CloseMoment } from "./CloseMoment";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
+import {
+  createBriefViewRecorder,
+  type BriefViewRecorder,
+} from "@/lib/reEntry/briefView";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useOnboardingRitual } from "./useOnboardingRitual";
 import { OnboardingRitual } from "./OnboardingRitual";
 import { readDayShapePreferences } from "@/lib/onboarding/onboarding";
@@ -269,6 +274,32 @@ export function TodayMoments({
   useEffect(() => {
     writeStoredPreferences({ moment, timeDisplay });
   }, [moment, timeDisplay]);
+
+  // #292 Stage-2 entry gate instrumentation: "brief viewed >= 4 days/week"
+  // needs a signal on the surface a returning user actually sees daily —
+  // the Start moment (S6 #258's "daily brief additions"), not only the rare
+  // post-absence re-entry ritual (useReEntryRitual.ts already records its
+  // own view separately). This fires once per local day the Start moment is
+  // the actually-rendered surface (below: `moment === "start"` AND neither
+  // the onboarding nor the re-entry ritual is standing in front of it,
+  // mirroring the exact render condition below). Fire-and-forget and
+  // failure-silent by construction (lib/reEntry/briefView.ts); demo mode
+  // (no Supabase client) is skipped silently inside the recorder.
+  const briefViewRecorderRef = useRef<BriefViewRecorder | null>(null);
+  if (briefViewRecorderRef.current === null) {
+    briefViewRecorderRef.current = createBriefViewRecorder();
+  }
+  const startMomentShowing =
+    !onboardingActive &&
+    !(ritualActive && ritual.summary && ritual.plan) &&
+    moment === "start";
+  useEffect(() => {
+    if (!startMomentShowing) return;
+    briefViewRecorderRef.current?.recordIfNeeded(
+      createSupabaseBrowserClient(),
+      now,
+    );
+  }, [startMomentShowing, now]);
 
   // P6 deep-link shims: apply the incoming deepLink target exactly once. If
   // the re-entry ritual is active OR merely eligible-but-not-yet-latched

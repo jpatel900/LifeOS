@@ -161,12 +161,16 @@ export function useReEntryRitual(
     async function run() {
       const client = createSupabaseBrowserClient();
 
-      // #292 gate instrumentation: the ritual is about to own the screen
-      // (ritualActive in TodayMoments gates on status "deferring"/"ready",
-      // both set below) — record today's brief view now, once per local
-      // day. Fire-and-forget and failure-silent by construction; see
-      // lib/reEntry/briefView.ts. Demo mode (client === null) is skipped
-      // silently inside the recorder.
+      // #292 gate instrumentation, secondary source: the ritual is about to
+      // own the screen in place of the normal Start moment (ritualActive in
+      // TodayMoments gates on status "deferring"/"ready", both set below),
+      // so this counts as a brief view too. The primary source is
+      // TodayMoments' own recorder on the Start moment itself (the surface
+      // a non-absent, daily-engaged user actually sees) — this hook only
+      // fires on the rarer post-absence path, and would under-count the
+      // gate's "4 days/week" metric on its own. Fire-and-forget and
+      // failure-silent by construction; see lib/reEntry/briefView.ts. Demo
+      // mode (client === null) is skipped silently inside the recorder.
       briefViewRecorderRef.current?.recordIfNeeded(client, now);
 
       if (!client) {
