@@ -114,10 +114,10 @@ export const AI_CONTEXT_SURFACE_DECLARATIONS = {
   parse: {
     builderName: "buildParseCaptureMessages",
     fixtureId: "parse.full-context.v1",
-    measuredTokensEstimated: 816,
+    measuredTokensEstimated: 838,
     maxTokensEstimated: 980,
     justification:
-      "fixture_id=parse.full-context.v1; measured_tokens_est=816; max_tokens_est=980; rationale=Exercises every optional personalization block with reviewed headroom for prompt maintenance.",
+      "fixture_id=parse.full-context.v1; measured_tokens_est=838; max_tokens_est=980; rationale=Exercises every optional personalization block with reviewed headroom for prompt maintenance; re-measured for the #448 role-separated trusted-context message (header line added; max unchanged).",
   },
   rollup: {
     builderName: "buildRollupProseMessages",

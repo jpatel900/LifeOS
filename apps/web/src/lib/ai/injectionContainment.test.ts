@@ -254,14 +254,21 @@ describe("INV-8 #448 — trusted context is role-separated from the capture", ()
       // BYTE-EXACTNESS: the capture appears verbatim, unescaped and
       // unmodified, confined to the final message after `Raw capture:`.
       expect(captureMessage.content).toBe(expectedCaptureContent(rawText));
-      expect(captureMessage.content.endsWith(`\nRaw capture:\n${rawText}`)).toBe(
-        true,
-      );
+      expect(
+        captureMessage.content.endsWith(`\nRaw capture:\n${rawText}`),
+      ).toBe(true);
 
-      // The genuine trusted context never bleeds into the capture message.
+      // The genuine trusted VALUES never bleed into the capture message.
+      // (Label strings like `Operator profile:` may legitimately appear there
+      // — as inert forged text inside the capture; the byte-exact equality
+      // above already proves the whole message is areas + capture only.)
       expect(captureMessage.content).not.toContain(trustedCharter);
-      expect(captureMessage.content).not.toContain("Operator profile:");
-      expect(captureMessage.content).not.toContain("Recent rollups:");
+      expect(captureMessage.content).not.toContain(
+        "Strong at synthesis, weak at starting.",
+      );
+      expect(captureMessage.content).not.toContain(
+        "Closed the release checklist",
+      );
     },
   );
 
