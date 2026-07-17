@@ -6,6 +6,7 @@ import {
   createFullAdaptiveSurfaceState,
   transitionAdaptiveSurface,
   type AdaptiveSurfaceState,
+  type RuptureAssessment,
   type RuptureSignals,
 } from "./rupturePolicy";
 
@@ -329,6 +330,187 @@ describe("transitionAdaptiveSurface", () => {
         assessment: { ruptured: true } as never,
       }),
     ).toBe(state);
+  });
+
+  it("rejects assessment accessors without executing them", () => {
+    const state = createFullAdaptiveSurfaceState();
+    let reads = 0;
+    const assessment = Object.defineProperties(
+      {},
+      {
+        ruptured: {
+          get() {
+            reads += 1;
+            return true;
+          },
+        },
+        suppressedBy: { value: [] },
+        reasons: { value: ["absence"] },
+      },
+    );
+
+    expect(
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment: assessment as never,
+      }),
+    ).toBe(state);
+    expect(reads).toBe(0);
+  });
+
+  it("cannot validate one getter value and transition with another", () => {
+    const state = createFullAdaptiveSurfaceState();
+    let reads = 0;
+    const assessment = Object.defineProperties(
+      {},
+      {
+        ruptured: { value: true },
+        suppressedBy: { value: [] },
+        reasons: {
+          get() {
+            reads += 1;
+            return reads === 1 ? ["absence"] : ["dismissal_spike"];
+          },
+        },
+      },
+    );
+
+    expect(
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment: assessment as never,
+      }),
+    ).toBe(state);
+    expect(reads).toBe(0);
+  });
+
+  it("inspects each assessment field once and transitions from the snapshot", () => {
+    const state = createFullAdaptiveSurfaceState();
+    const descriptorReads = new Map<PropertyKey, number>();
+    const sourceReasons = ["absence"] as const;
+    const assessment = new Proxy(
+      {
+        ruptured: true,
+        suppressedBy: [],
+        reasons: sourceReasons,
+      },
+      {
+        get() {
+          throw new Error("assessment values must not be read directly");
+        },
+        getOwnPropertyDescriptor(target, key) {
+          descriptorReads.set(key, (descriptorReads.get(key) ?? 0) + 1);
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+      },
+    );
+
+    const next = transitionAdaptiveSurface(state, {
+      type: "rupture_detected",
+      assessment,
+    });
+
+    expect(next).toEqual({
+      mode: "minimal",
+      reasons: ["absence"],
+      restoredSurfaceIds: [],
+    });
+    expect(next.reasons).not.toBe(sourceReasons);
+    expect(Object.fromEntries(descriptorReads)).toEqual({
+      ruptured: 1,
+      suppressedBy: 1,
+      reasons: 1,
+    });
+  });
+
+  it("returns the original state when descriptor inspection throws", () => {
+    const state = createFullAdaptiveSurfaceState();
+    const assessment = new Proxy(ruptureAssessment, {
+      getOwnPropertyDescriptor() {
+        throw new Error("blocked descriptor inspection");
+      },
+    });
+
+    expect(() =>
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment,
+      }),
+    ).not.toThrow();
+    expect(
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment,
+      }),
+    ).toBe(state);
+  });
+
+  it("returns the original state for a revoked assessment proxy", () => {
+    const state = createFullAdaptiveSurfaceState();
+    const { proxy, revoke } = Proxy.revocable(ruptureAssessment, {});
+    revoke();
+
+    expect(() =>
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment: proxy,
+      }),
+    ).not.toThrow();
+    expect(
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment: proxy,
+      }),
+    ).toBe(state);
+  });
+
+  it("fails visible when a nested reasons snapshot cannot be inspected", () => {
+    const state = createFullAdaptiveSurfaceState();
+    const { proxy: reasons, revoke } = Proxy.revocable(["absence"], {});
+    const assessment = {
+      ruptured: true,
+      suppressedBy: [],
+      reasons,
+    } as unknown as RuptureAssessment;
+    revoke();
+
+    expect(() =>
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment,
+      }),
+    ).not.toThrow();
+    expect(
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment,
+      }),
+    ).toBe(state);
+  });
+
+  it("does not execute accessors inside the reasons snapshot", () => {
+    const state = createFullAdaptiveSurfaceState();
+    let reads = 0;
+    const reasons = Object.defineProperty([], "0", {
+      configurable: true,
+      get() {
+        reads += 1;
+        return "absence";
+      },
+    });
+    const assessment = {
+      ruptured: true,
+      suppressedBy: [],
+      reasons,
+    } as unknown as RuptureAssessment;
+
+    expect(
+      transitionAdaptiveSurface(state, {
+        type: "rupture_detected",
+        assessment,
+      }),
+    ).toBe(state);
+    expect(reads).toBe(0);
   });
 
   it("returns canonical full state immediately for show_all", () => {
