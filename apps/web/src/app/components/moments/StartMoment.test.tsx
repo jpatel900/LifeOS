@@ -385,11 +385,14 @@ describe("StartMoment — S6 daily brief (#258)", () => {
     expect(card).toBeInTheDocument();
     expect(card.textContent).toContain("Draft the proposal");
     // Side-tab antipattern removal (#483): the card no longer carries an
-    // inline border accent — the --state-watch signal now comes from the
-    // whole-card background tint class plus the eyebrow's own inline color.
+    // inline border accent. Impeccable follow-up: the "Yesterday" eyebrow is
+    // gone too (the body copy already says "yesterday") — the --state-watch
+    // signal is carried entirely by the whole-card background tint class.
     expect(card.className).toContain("moments-card--tint-watch");
-    expect(card.innerHTML).toContain("--state-watch");
     expect(card.innerHTML).not.toContain("--state-risk");
+    expect(
+      card.querySelector(".workflow-page-eyebrow"),
+    ).not.toBeInTheDocument();
 
     expect(screen.getByTestId("start-recovery-nudge-open")).toBeInTheDocument();
   });
@@ -601,7 +604,12 @@ describe("StartMoment — state truth for pending triage (#551)", () => {
     const card = screen.getByTestId("start-pending-triage-card");
     expect(card).toBeInTheDocument();
     expect(card).toHaveTextContent("Reply to the vendor email");
-    expect(card).toHaveTextContent("1 thought waiting for a decision.");
+    // Impeccable follow-up: the "Decide this next" eyebrow is gone; the
+    // area rides the count line instead.
+    expect(card).toHaveTextContent("1 thought waiting for a decision · Work");
+    expect(
+      card.querySelector(".workflow-page-eyebrow"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("start-moment-empty")).not.toBeInTheDocument();
   });
 
@@ -851,14 +859,19 @@ describe("StartMoment — R2-B empty-state copy is not a restatement of the day-
     );
 
     const card = screen.getByTestId("start-moment-empty");
-    expect(card).toHaveTextContent("Quick capture");
+    // Impeccable follow-up: no "Quick capture" eyebrow — the title IS the
+    // action.
+    expect(card).not.toHaveTextContent("Quick capture");
     expect(card).toHaveTextContent("Capture a thought");
     expect(card).toHaveTextContent("C");
+    expect(
+      card.querySelector(".workflow-page-eyebrow"),
+    ).not.toBeInTheDocument();
   });
 });
 
-describe("StartMoment — R2-B eyebrow system unification (#483 round 2)", () => {
-  it("'Today's focus' and 'Today's schedule' use the same eyebrow class as the card eyebrows in this column, not the separate moments-label system", () => {
+describe("StartMoment — eyebrow discipline (#483 impeccable follow-up)", () => {
+  it("section headers keep the eyebrow class, but no CARD inside the main column carries one — the eyebrow-per-card grammar is gone", () => {
     const first = {
       title: "Write report",
       why: "Oldest active commitment",
@@ -891,15 +904,21 @@ describe("StartMoment — R2-B eyebrow system unification (#483 round 2)", () =>
 
     const focusHeading = screen.getByText("Today's focus");
     const scheduleHeading = screen.getByText("Today's schedule");
-    const cardEyebrow = screen
-      .getByTestId("first-move-card")
-      .querySelector(".workflow-page-eyebrow");
 
-    expect(cardEyebrow).not.toBeNull();
+    // Section headers are navigation — they keep the quiet uppercase class.
     expect(focusHeading.className).toContain("workflow-page-eyebrow");
     expect(focusHeading.className).not.toContain("moments-label");
     expect(scheduleHeading.className).toContain("workflow-page-eyebrow");
     expect(scheduleHeading.className).not.toContain("moments-label");
+
+    // Cards must NOT wear label eyebrows. Label grammar was always a <p>
+    // (First move / Decide this next / Quick capture / Yesterday); section
+    // headers are real headings — so the guard is: no <p> eyebrows anywhere
+    // in the main column.
+    const mainColumn = screen.getByTestId("start-moment-main-column");
+    expect(mainColumn.querySelectorAll("p.workflow-page-eyebrow")).toHaveLength(
+      0,
+    );
   });
 });
 

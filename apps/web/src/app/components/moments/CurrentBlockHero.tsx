@@ -70,12 +70,12 @@ export function CurrentBlockHero({
       data-testid="current-block-hero"
     >
       <CardContent className="grid gap-3 p-5 sm:p-6">
-        <p className="workflow-page-eyebrow m-0">
-          Current block · deep work · {block.areaLabel}
-        </p>
         <h2 className="workflow-surface-title moments-card-title">
           {block.title}
         </h2>
+        <p className="m-0 text-xs text-muted-foreground">
+          deep work · {block.areaLabel}
+        </p>
 
         <div className="mt-1 flex flex-wrap items-end gap-2">
           {timeDisplay === "clock" ? (

@@ -44,12 +44,6 @@ export function DriftRecoveryCard({
       data-testid="drift-recovery-card"
     >
       <CardContent className="grid gap-3 p-5 sm:p-6">
-        <p
-          className="workflow-page-eyebrow m-0"
-          style={{ color: "var(--state-warn)" }}
-        >
-          Drift recovery
-        </p>
         <h2 className="workflow-surface-title moments-card-title tabular-nums">
           {headline}
         </h2>

@@ -251,19 +251,16 @@ export function StartMoment({
               data-testid="start-pending-triage-card"
             >
               <CardContent className="grid gap-3 p-5 sm:p-6">
-                <p className="workflow-page-eyebrow m-0 tabular-nums">
-                  Decide this next
-                  {topPendingTriageItem.areaLabel
-                    ? ` · ${topPendingTriageItem.areaLabel}`
-                    : ""}
-                </p>
                 <h2 className="workflow-surface-title moments-card-title">
                   {topPendingTriageItem.summary}
                 </h2>
-                <p className="workflow-surface-body text-sm text-muted-foreground">
+                <p className="workflow-surface-body text-sm text-muted-foreground tabular-nums">
                   {pendingTriage === 1
-                    ? "1 thought waiting for a decision."
-                    : `${pendingTriage} thoughts waiting for a decision.`}
+                    ? "1 thought waiting for a decision"
+                    : `${pendingTriage} thoughts waiting for a decision`}
+                  {topPendingTriageItem.areaLabel
+                    ? ` · ${topPendingTriageItem.areaLabel}`
+                    : ""}
                 </p>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -286,7 +283,6 @@ export function StartMoment({
               data-testid="start-moment-empty"
             >
               <CardContent className="grid gap-3 p-5 sm:p-6">
-                <p className="workflow-page-eyebrow m-0">Quick capture</p>
                 <h2 className="workflow-surface-title moments-card-title">
                   Capture a thought
                 </h2>
@@ -336,12 +332,6 @@ export function StartMoment({
               data-testid="start-recovery-nudge"
             >
               <CardContent className="grid gap-2 p-4 sm:p-5">
-                <p
-                  className="workflow-page-eyebrow m-0"
-                  style={{ color: "var(--state-watch)" }}
-                >
-                  Yesterday
-                </p>
                 <p className="text-sm">
                   A block got missed yesterday:{" "}
                   <span className="font-medium">

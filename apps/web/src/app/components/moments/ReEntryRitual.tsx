@@ -239,7 +239,6 @@ export function ReEntryRitual({
           data-testid="re-entry-ritual-recovery"
         >
           <CardContent className="grid gap-3 p-5">
-            <p className="workflow-page-eyebrow m-0">Recovery proposal</p>
             <h2 className="workflow-surface-title text-lg font-semibold">
               {recovery.title}
             </h2>
