@@ -99,6 +99,45 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @lifeos/web exec playwright install --with-deps msedge
 
+      - name: API v1 capabilities contract check (#643, ADR 0006)
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+        run: |
+          if [ -z "$SMOKE_BASE_URL" ]; then
+            echo "::warning::SMOKE_BASE_URL secret is not set; skipping the capabilities contract check."
+            exit 0
+          fi
+          node --input-type=module - <<'CONTRACT'
+          const url = `${process.env.SMOKE_BASE_URL.replace(/\/$/, "")}/api/v1/capabilities`;
+          const required = [
+            "capabilities.read",
+            "tasks.list",
+            "captures.create",
+            "areas.list",
+            "blocks.list",
+          ];
+          const response = await fetch(url, { headers: { accept: "application/json" } });
+          if (response.status !== 200) {
+            throw new Error(`capabilities returned HTTP ${response.status}`);
+          }
+          const body = await response.json();
+          if (body.ok !== true) throw new Error("capabilities body.ok !== true");
+          if (body.api_version !== "1") throw new Error(`api_version ${body.api_version}`);
+          for (const capability of required) {
+            if (!body.capabilities?.includes(capability)) {
+              throw new Error(`missing advertised capability: ${capability}`);
+            }
+          }
+          if (body.auth?.scheme !== "bearer") throw new Error("auth scheme drifted");
+          const serialized = JSON.stringify(body).toLowerCase();
+          for (const forbidden of ["service_role", "password", "eyj"]) {
+            if (serialized.includes(forbidden)) {
+              throw new Error(`capabilities payload leaks: ${forbidden}`);
+            }
+          }
+          console.log(`capabilities contract OK (${body.capabilities.length} advertised)`);
+          CONTRACT
+
       - name: Run production smoke
         id: smoke
         env:
