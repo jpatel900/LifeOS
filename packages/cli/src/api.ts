@@ -67,6 +67,32 @@ export function listBlocks(
   return request(config, "GET", `/api/v1/blocks?${query}`, { accessToken });
 }
 
+/**
+ * /api/parse-capture is OUTSIDE the /api/v1 surface: it is the existing
+ * stateless parse service the web capture overlay uses. It persists nothing;
+ * the bearer token is attached only for AI-call tracing (#288). Area
+ * slug/name context improves area matching; charter personalization is a
+ * web-only concern and is deliberately not passed here (#641).
+ */
+export function parseCapture(
+  config: CliConfig,
+  accessToken: string,
+  input: {
+    rawText: string;
+    parserMode?: "auto" | "mock";
+    areaContext?: ReadonlyArray<{ slug: string; name: string }>;
+  },
+) {
+  return request(config, "POST", "/api/parse-capture", {
+    accessToken,
+    body: {
+      rawText: input.rawText,
+      ...(input.parserMode ? { parserMode: input.parserMode } : {}),
+      ...(input.areaContext ? { areaContext: input.areaContext } : {}),
+    },
+  });
+}
+
 export function createCapture(
   config: CliConfig,
   accessToken: string,

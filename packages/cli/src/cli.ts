@@ -9,7 +9,7 @@ import { loadConfig, type CliConfig } from "./config";
  *   lifeos tasks list
  *   lifeos areas list [--include-inactive]
  *   lifeos today [--date YYYY-MM-DD]
- *   lifeos capture <text> [--return-hook <hook>] [--area-id <uuid>] [--client-capture-id <uuid>]
+ *   lifeos capture <text> [--return-hook <hook>] [--area-id <uuid>] [--client-capture-id <uuid>] [--parse] [--parser auto|mock]
  *   lifeos login --email <email> [--password-env <VAR>]
  *   lifeos logout
  *   lifeos whoami
@@ -168,16 +168,95 @@ export async function runCli(
         if (!rawText.trim()) {
           return emitError(io, "capture requires non-empty text.");
         }
+        const wantsParse = flags.parse === "true";
+        const parserMode = flags.parser;
+        if (
+          parserMode !== undefined &&
+          parserMode !== "auto" &&
+          parserMode !== "mock"
+        ) {
+          return emitError(io, "capture --parser must be auto or mock.");
+        }
+
         const token = await auth.getAccessToken(config);
-        return emitApiResult(
+        const captureResult = await api.createCapture(config, token, {
+          raw_text: rawText,
+          return_hook: flags["return-hook"] ?? null,
+          area_id: flags["area-id"] ?? null,
+          client_capture_id: flags["client-capture-id"] ?? crypto.randomUUID(),
+        });
+
+        if (!wantsParse) {
+          return emitApiResult(io, captureResult);
+        }
+
+        // Raw-save-first (#641): the parse step runs ONLY after the capture
+        // persisted. A parse (or areas-read) failure never un-saves the
+        // capture and never fails the command — the capture is the primary
+        // operation; the parse result carries its own ok/error. Nothing
+        // about the parse is persisted anywhere: it is a proposal for the
+        // caller, and the capture surfaces in web triage exactly like any
+        // other unparsed capture.
+        const captureOk =
+          typeof captureResult.body === "object" &&
+          captureResult.body !== null &&
+          (captureResult.body as { ok?: unknown }).ok === true;
+
+        if (!captureOk) {
+          return emit(
+            io,
+            { ok: false, capture: captureResult.body, parse: null },
+            1,
+          );
+        }
+
+        let parseBody: unknown;
+        try {
+          let areaContext: Array<{ slug: string; name: string }> | undefined;
+          try {
+            const areasResult = await api.listAreas(config, token);
+            const areasBody = areasResult.body as {
+              ok?: unknown;
+              data?: { areas?: Array<{ slug?: unknown; name?: unknown }> };
+            };
+            if (
+              areasBody?.ok === true &&
+              Array.isArray(areasBody.data?.areas)
+            ) {
+              areaContext = areasBody.data.areas
+                .filter(
+                  (area) =>
+                    typeof area.slug === "string" &&
+                    typeof area.name === "string",
+                )
+                .map((area) => ({
+                  slug: area.slug as string,
+                  name: area.name as string,
+                }));
+            }
+          } catch {
+            // Area context is an enrichment, not a requirement: parse
+            // proceeds without it.
+          }
+
+          const parseResult = await api.parseCapture(config, token, {
+            rawText,
+            ...(parserMode ? { parserMode } : {}),
+            ...(areaContext && areaContext.length > 0 ? { areaContext } : {}),
+          });
+          parseBody = parseResult.body;
+        } catch (error) {
+          parseBody = {
+            ok: false,
+            error:
+              error instanceof Error ? error.message : "Parse request failed.",
+          };
+        }
+
+        return emit(
           io,
-          await api.createCapture(config, token, {
-            raw_text: rawText,
-            return_hook: flags["return-hook"] ?? null,
-            area_id: flags["area-id"] ?? null,
-            client_capture_id:
-              flags["client-capture-id"] ?? crypto.randomUUID(),
-          }),
+          { ok: true, capture: captureResult.body, parse: parseBody },
+          0,
         );
       }
 
