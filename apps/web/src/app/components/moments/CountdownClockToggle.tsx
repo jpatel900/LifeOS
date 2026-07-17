@@ -8,6 +8,22 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  *
  * Two-segment control switching the schedule's time column between
  * relative countdown labels and wall-clock time.
+ *
+ * D-10 R2 (#483 round 2, "accent discipline" — the round-1 critics' single
+ * clearest "would not ship in Linear" call): this control used to paint its
+ * selected segment with the identical full-saturation `--primary` fill as
+ * MomentSwitcher's Start/Flow/Close tabs, ~500px away in the same masthead
+ * row. A display-FORMAT preference (countdown vs. clock labels) carrying
+ * the same visual weight as the primary moment nav means the accent stops
+ * ranking anything. The selected segment is now a neutral raised chip
+ * (bg-background + hairline shadow, the same "pressed nub on a track"
+ * idiom AreaSelector's bg-muted/40 trigger already uses) — MomentSwitcher
+ * is left as the ONLY accent-filled control in the masthead.
+ *
+ * Track sizing also drops `.workflow-shell__nav` for the same reason
+ * MomentSwitcher.tsx does — see that file's comment; the unlayered
+ * `padding: 0.35rem` it carries was inflating this pill to ~57px against
+ * the rest of the masthead's 44px-locked controls.
  */
 
 export type CountdownClockValue = "countdown" | "clock";
@@ -28,7 +44,7 @@ export function CountdownClockToggle({
 }: CountdownClockToggleProps) {
   return (
     <div
-      className="workflow-shell__nav inline-flex items-center gap-1 border border-border bg-muted/40 p-1"
+      className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40"
       role="group"
       aria-label="Time display"
       data-testid="countdown-clock-toggle"
@@ -43,9 +59,14 @@ export function CountdownClockToggle({
             onClick={() => onChange(segment.value)}
             className={cn(
               HIT_TARGET_ROW,
-              "flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] motion-reduce:transition-none motion-reduce:duration-0",
+              // R3-C (#483 round 3): px-3 -> px-2 (two steps) is part of the
+              // masthead's Inter-reflow claw-back — see TodayMoments.tsx's
+              // header comment. This is the "quietest" secondary control
+              // (a display-format preference, not primary nav or context),
+              // so it absorbs the largest single share of the claw-back.
+              "flex items-center rounded-full px-2 py-1 text-xs font-semibold outline-none transition-colors duration-[var(--motion-fast)] ease-[var(--motion-ease)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:duration-0",
               active
-                ? "bg-primary text-primary-foreground"
+                ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
             data-testid={`countdown-clock-toggle-${segment.value}`}

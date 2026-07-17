@@ -4,10 +4,22 @@ import { AreaHealthDots } from "./AreaHealthDots";
 import type { AreaHealthVM } from "./momentsViewModel";
 
 const AREAS: AreaHealthVM[] = [
-  { id: "a1", name: "Work", status: "ok", note: "3 open" },
-  { id: "a2", name: "Health", status: "watch", note: "1 waiting" },
-  { id: "a3", name: "Finance", status: "risk", note: "2 waiting" },
-  { id: "a4", name: "Home", status: "idle", note: "0 open" },
+  { id: "a1", name: "Work", status: "ok", note: "3 open", color: "#2563eb" },
+  {
+    id: "a2",
+    name: "Health",
+    status: "watch",
+    note: "1 waiting",
+    color: "#16a34a",
+  },
+  {
+    id: "a3",
+    name: "Finance",
+    status: "risk",
+    note: "2 waiting",
+    color: "#9333ea",
+  },
+  { id: "a4", name: "Home", status: "idle", note: "0 open", color: "#f97316" },
 ];
 
 describe("AreaHealthDots", () => {
@@ -60,5 +72,162 @@ describe("AreaHealthDots", () => {
     expect(screen.getByTestId("area-health-status-a3")).toHaveTextContent(
       "at risk",
     );
+  });
+
+  // D-11 (#483): each row carries its area's real identity swatch (from
+  // AreaHealthVM.color, sourced from Phase2MockArea.color) via the existing
+  // --area-accent token, distinct from the status dot's --state-* color.
+  it("renders each area's identity swatch with its real color via --area-accent", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    expect(screen.getByTestId("area-health-swatch-a1")).toHaveStyle({
+      "--area-accent": "#2563eb",
+    });
+    expect(screen.getByTestId("area-health-swatch-a3")).toHaveStyle({
+      "--area-accent": "#9333ea",
+    });
+  });
+
+  // The swatch is identity, not a status signal — it stays out of the
+  // accessibility tree so screen readers get the status dot's aria-label
+  // once per row, not twice.
+  it("marks the identity swatch aria-hidden, leaving the status dot as the sole accessible signal", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    expect(screen.getByTestId("area-health-swatch-a1")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+  });
+
+  // R2-C (#483 round 2, regression): D-11 rendered the identity swatch and
+  // the status dot as two same-size circles (`rounded-full`) with nothing
+  // separating them, which read as a duplication bug rather than
+  // "identity + status". The swatch must now be a non-circular bar so the
+  // two marks can never be confused for each other, even if they ever end
+  // up adjacent again.
+  it("renders the identity swatch as a non-circular bar, distinct in shape from the round status dot", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    const swatch = screen.getByTestId("area-health-swatch-a1");
+    const dot = screen.getByTestId("area-health-dot-a1");
+    expect(swatch.className).not.toMatch(/rounded-full/);
+    expect(dot.className).toMatch(/rounded-full/);
+  });
+
+  // R2-C (#483 round 2, regression): the two marks must not be visual
+  // neighbors — the status dot sits against the status word it labels
+  // (opposite end of the row from the identity swatch), not beside the
+  // identity swatch.
+  it("keeps the status dot adjacent to the status word, not adjacent to the identity swatch", () => {
+    render(<AreaHealthDots areas={AREAS} />);
+    const dot = screen.getByTestId("area-health-dot-a1");
+    const statusGroup = screen.getByTestId("area-health-status-a1");
+    const swatch = screen.getByTestId("area-health-swatch-a1");
+
+    // The dot lives inside the same group as the visible status word...
+    expect(statusGroup).toContainElement(dot);
+    expect(statusGroup).toHaveTextContent("on track");
+    // ...and is not a sibling of the identity swatch.
+    expect(swatch.parentElement).not.toContainElement(dot);
+  });
+
+  // R5 (#483 round 5, blocker 2): the list used to render one row per area
+  // with no cap, which made the Areas card's own height — and so the fixed
+  // capture pill's clearance under it — scale with area count (R4-A measured
+  // the demo seed's 4 areas clearing the pill by single-digit px at
+  // 1366x768; a 5th area went negative). It's now a bounded internal scroll
+  // pane. The binding truthfulness requirement: every area must still be in
+  // the DOM — capping must never mean silently dropping an area the user
+  // configured, only scrolling to see it.
+  function buildAreas(count: number): AreaHealthVM[] {
+    return Array.from({ length: count }, (_, index) => ({
+      id: `area-${index}`,
+      name: `Area ${index}`,
+      status: "ok" as const,
+      note: "0 open",
+      color: "#2563eb",
+    }));
+  }
+
+  it("keeps every area in the DOM even when the list scrolls (never silently hides one)", () => {
+    for (const count of [4, 5, 8, 12]) {
+      const { unmount } = render(<AreaHealthDots areas={buildAreas(count)} />);
+      for (let index = 0; index < count; index += 1) {
+        expect(
+          screen.getByTestId(`area-health-row-area-${index}`),
+        ).toBeInTheDocument();
+      }
+      unmount();
+    }
+  });
+
+  it("caps the list to a bounded scroll pane once area count exceeds the visible-row budget", () => {
+    render(<AreaHealthDots areas={buildAreas(5)} />);
+    const list = screen.getByTestId("area-health-dots");
+    expect(list.className).toMatch(/\bmoments-rail-scroll\b/);
+    expect(list.className).toMatch(/\boverflow-y-auto\b/);
+  });
+
+  it("does not cap or add any overflow affordance when area count is within the scroll threshold", () => {
+    render(<AreaHealthDots areas={buildAreas(3)} />);
+    const list = screen.getByTestId("area-health-dots");
+    expect(list.className).not.toMatch(/\bmoments-rail-scroll\b/);
+    expect(
+      screen.queryByTestId("area-health-dots-overflow-hint"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-health-dots-fade"),
+    ).not.toBeInTheDocument();
+  });
+
+  // R6 (#483 round 6, regression fix): R5 shipped AREAS_SCROLL_THRESHOLD=3,
+  // one below the real demo seed's 4 areas — so the "protect the pill" cap
+  // hid 2 of the owner's 4 real areas at every viewport, including roomy
+  // ones (1440x900 measured ~187px of unused canvas below the card while
+  // the list still scrolled). The threshold is now 4: the real seed's own
+  // area count must never trigger the cap, regardless of how much room
+  // exists. See SideRail.tsx and this file's R6 doc comments for the
+  // measured clearance tradeoff (28.78px at 1366x768 scroll-zero, all 4
+  // areas visible, vs. R5's 55.78px with only 2 of 4 visible).
+  it("does not cap or add any overflow affordance at the real demo seed's area count (4)", () => {
+    render(<AreaHealthDots areas={buildAreas(4)} />);
+    const list = screen.getByTestId("area-health-dots");
+    expect(list.className).not.toMatch(/\bmoments-rail-scroll\b/);
+    expect(
+      screen.queryByTestId("area-health-dots-overflow-hint"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("area-health-dots-fade"),
+    ).not.toBeInTheDocument();
+    for (let index = 0; index < 4; index += 1) {
+      expect(screen.getByTestId(`area-health-row-area-${index}`)).toBeVisible();
+    }
+  });
+
+  // Honest affordance, at zero extra layout height (a first version that
+  // added a dedicated on-screen hint row cost more card height than a tight
+  // cap saved, going net negative on the pill clearance this fix exists to
+  // protect — see the R5 doc comment). Three parts once capped: (1) an
+  // sr-only note (zero visual footprint) states the real count for screen
+  // readers, (2) a decorative bottom fade signals "more below" without
+  // adding layout height (absolutely positioned), (3) the real count also
+  // surfaces in SideRail's card header (SideRail.test.tsx), which costs no
+  // extra height since it reuses an existing text line.
+  it("gives capped lists a zero-height overflow affordance: an sr-only count note and a decorative fade", () => {
+    render(<AreaHealthDots areas={buildAreas(8)} />);
+
+    const hint = screen.getByTestId("area-health-dots-overflow-hint");
+    expect(hint.textContent).toContain("8");
+    expect(hint.className).toMatch(/\bsr-only\b/);
+
+    const fade = screen.getByTestId("area-health-dots-fade");
+    expect(fade).toHaveAttribute("aria-hidden", "true");
+    expect(fade.className).toMatch(/\babsolute\b/);
+    expect(fade.className).toMatch(/\bpointer-events-none\b/);
+
+    const wrap = screen.getByTestId("area-health-dots-wrap");
+    const list = screen.getByTestId("area-health-dots");
+    expect(wrap).toContainElement(hint);
+    expect(wrap).toContainElement(fade);
+    expect(list).not.toContainElement(hint);
+    expect(list).not.toContainElement(fade);
   });
 });

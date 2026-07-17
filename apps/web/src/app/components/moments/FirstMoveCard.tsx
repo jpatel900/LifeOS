@@ -35,8 +35,8 @@ export function FirstMoveCard({
 }: FirstMoveCardProps) {
   return (
     <Card
-      className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
-      style={{ borderLeftColor: "var(--acc)" }}
+      className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden p-0"
+      style={{ borderColor: "var(--acc)" }}
       data-testid="first-move-card"
     >
       <CardContent className="grid gap-3 p-5 sm:p-6">

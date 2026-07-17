@@ -39,8 +39,8 @@ export function DriftRecoveryCard({
 
   return (
     <Card
-      className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-l-4 p-0"
-      style={{ borderLeftColor: "var(--state-warn)" }}
+      className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden p-0"
+      style={{ borderColor: "var(--state-warn)" }}
       data-testid="drift-recovery-card"
     >
       <CardContent className="grid gap-3 p-5 sm:p-6">

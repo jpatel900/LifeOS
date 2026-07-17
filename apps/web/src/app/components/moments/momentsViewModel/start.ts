@@ -81,6 +81,14 @@ export interface AreaHealthVM {
   name: string;
   status: "ok" | "watch" | "risk" | "idle";
   note: string;
+  /**
+   * D-11 (design alignment, #483): the area's identity hue, read straight
+   * from `Phase2MockArea.color` (see `lib/types.ts`) — the same real value
+   * Settings' area registry already renders via `buildAreaAccentStyle`
+   * (`lib/areaAccent.ts`). Not a new signal: every area already carries this
+   * color; this VM previously just didn't pass it through.
+   */
+  color: string;
 }
 
 /**
@@ -103,6 +111,21 @@ export interface StaleProjectVM {
 export interface RecoveryNudgeVM {
   blockTitle: string;
   taskId: string;
+}
+
+/**
+ * D-8 (design alignment, #483): the single oldest capture still awaiting a
+ * triage decision (same `status === "new" || "triage_required"` filter that
+ * already feeds `counts.pendingTriage` — one source, no new signal). Used to
+ * promote a real item into the Start hero when there is no `firstMove`, so
+ * the main column never collapses to a bare text line. `summary` is the raw
+ * capture text truncated for card display; `areaLabel` is `""` when the
+ * capture has no `area_id` (same convention as `areaName`).
+ */
+export interface PendingTriageItemVM {
+  id: string;
+  summary: string;
+  areaLabel: string;
 }
 
 export interface StartVM {
@@ -139,6 +162,12 @@ export interface StartVM {
    */
   staleProject: StaleProjectVM | null;
   recoveryNudge: RecoveryNudgeVM | null;
+  /**
+   * D-8 (design alignment, #483): the oldest pending-triage capture, or null
+   * when nothing is waiting in triage. Only meaningful for the hero when
+   * `firstMove` is null — see `StartMoment`'s hero-promotion branch.
+   */
+  topPendingTriageItem: PendingTriageItemVM | null;
   /**
    * D-2 (design alignment, #483): start-moment hero copy, porting
    * prototype-2's "Good morning, Jay." + subline. Both are pure derivations
@@ -339,21 +368,45 @@ function buildAreaHealth(
     const note = noteParts.join(" · ");
 
     if (openTasks.length === 0 && todayBlocks.length === 0) {
-      return { id: area.id, name: area.name, status: "idle", note };
+      return {
+        id: area.id,
+        name: area.name,
+        status: "idle",
+        note,
+        color: area.color,
+      };
     }
 
     if (areaWaiting.some((entry) => entry.status === "risk")) {
-      return { id: area.id, name: area.name, status: "risk", note };
+      return {
+        id: area.id,
+        name: area.name,
+        status: "risk",
+        note,
+        color: area.color,
+      };
     }
 
     if (
       pendingTriage.length > 0 ||
       areaWaiting.some((entry) => entry.status === "watch")
     ) {
-      return { id: area.id, name: area.name, status: "watch", note };
+      return {
+        id: area.id,
+        name: area.name,
+        status: "watch",
+        note,
+        color: area.color,
+      };
     }
 
-    return { id: area.id, name: area.name, status: "ok", note };
+    return {
+      id: area.id,
+      name: area.name,
+      status: "ok",
+      note,
+      color: area.color,
+    };
   });
 }
 
@@ -448,6 +501,51 @@ function deriveRecoveryNudge(
   };
 }
 
+/**
+ * D-8 (#483) hero card summary length: long enough to read as a real thing
+ * to decide on, short enough that the promoted card never grows taller than
+ * FirstMoveCard's own title+why. Matches no existing constant — this is a
+ * new, purely presentational truncation point.
+ */
+const PENDING_TRIAGE_SUMMARY_MAX_LENGTH = 140;
+
+function summarizeRawText(rawText: string): string {
+  const trimmed = rawText.trim();
+  if (trimmed.length <= PENDING_TRIAGE_SUMMARY_MAX_LENGTH) return trimmed;
+  return `${trimmed.slice(0, PENDING_TRIAGE_SUMMARY_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+/**
+ * D-8 (#483): the oldest capture item still awaiting a triage decision
+ * (`created_at` ascending, same "oldest first" idiom `oldestActiveTask`
+ * already uses) — the item that has been waiting longest is the truthful
+ * "decide this next" pick. Ties break on `id` ascending for a deterministic
+ * result. Returns null when nothing is pending (mirrors `counts.pendingTriage
+ * === 0`).
+ */
+function deriveTopPendingTriageItem(
+  state: WorkflowState,
+): PendingTriageItemVM | null {
+  const pending = state.captureItems.filter(
+    (item) => item.status === "new" || item.status === "triage_required",
+  );
+  if (pending.length === 0) return null;
+
+  const sorted = [...pending].sort((a, b) => {
+    const aTime = new Date(a.created_at).getTime();
+    const bTime = new Date(b.created_at).getTime();
+    if (aTime !== bTime) return aTime - bTime;
+    return a.id.localeCompare(b.id);
+  });
+
+  const oldest = sorted[0];
+  return {
+    id: oldest.id,
+    summary: summarizeRawText(oldest.raw_text),
+    areaLabel: areaName(state.areas, oldest.area_id),
+  };
+}
+
 export type GreetingPeriod = "morning" | "afternoon" | "evening";
 
 /**
@@ -498,8 +596,13 @@ export interface DaySynthesisInput {
  *
  * Rules (in order):
  * 1. Nothing scheduled AND nothing queued for focus -> a single truthful
- *    empty-day sentence pointing at capture (mirrors `StartMoment`'s
- *    existing UX-INV-6 empty-first-move copy).
+ *    empty-day sentence stating the fact only. It deliberately stops short
+ *    of a capture call-to-action: R2-B (#483 round 2) found the hero card
+ *    directly below (`StartMoment`'s `start-moment-empty` branch) restating
+ *    this exact sentence — eyebrow/title/body all paraphrasing "nothing
+ *    queued, capture something" — so the same page said the same two facts
+ *    four times in ~300px. The fact now lives here, once; the card owns the
+ *    single action (see StartMoment's empty-state doc comment).
  * 2. Otherwise, two clauses joined by an em dash: block count today
  *    ("No blocks…" / "1 block…" / "N blocks…"), then focus-slot fill
  *    ("nothing queued for focus" / "N of BUDGET focus slot(s) filled"),
@@ -532,7 +635,7 @@ export function buildDaySynthesis(input: DaySynthesisInput): string {
     if (pendingTriageCount > 0) {
       return `Nothing on the calendar yet — ${pendingSentence}`;
     }
-    return "Nothing on the calendar and nothing queued — capture something to get moving.";
+    return "Nothing on the calendar, and nothing queued yet.";
   }
 
   const blocksPart =
@@ -596,6 +699,11 @@ export function buildStartVM(
   const staleProject = deriveStaleProject(state, now);
   const recoveryNudge = deriveRecoveryNudge(state, now);
 
+  // D-8 (#483): only meaningful when there is no firstMove — computed
+  // unconditionally anyway since it's a cheap pure derivation and callers
+  // besides StartMoment may want to know what's next regardless.
+  const topPendingTriageItem = deriveTopPendingTriageItem(state);
+
   // D-2 (#483) start-moment hero copy — pure over the values already
   // computed above; see `buildGreeting`/`buildDaySynthesis` doc comments.
   const greeting = buildGreeting(now, userName);
@@ -625,6 +733,7 @@ export function buildStartVM(
     deferredItems,
     staleProject,
     recoveryNudge,
+    topPendingTriageItem,
     greeting,
     daySynthesis,
   };

@@ -149,3 +149,75 @@ describe("FlowMoment first tiny step (#572)", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+// R3-B (premium push #483, round 3): the no-active-block state used to be a
+// bare muted text line with zero card/border treatment. It must now use the
+// same flagship card shell as the populated CurrentBlockHero, never a bare
+// paragraph, and never fabricate a block.
+describe("FlowMoment — R3-B no-active-block composition", () => {
+  function emptyProps(overrides: Partial<FlowMomentProps> = {}) {
+    return baseProps({
+      session: { activeTaskId: null, running: false, remaining: 0, total: 0 },
+      vm: { currentBlock: null, drift: null },
+      ...overrides,
+    });
+  }
+
+  it("composes the empty state as a card, not a bare text line", () => {
+    render(<FlowMoment {...emptyProps()} />);
+    const empty = screen.getByTestId("flow-moment-empty");
+    expect(empty.tagName).not.toBe("P");
+    expect(empty.className).toMatch(/\bworkflow-flagship-card\b/);
+    expect(empty.className).toMatch(/\bmoments-card\b/);
+  });
+
+  it("states plainly that no block is running without implying one exists", () => {
+    render(<FlowMoment {...emptyProps()} />);
+    const empty = screen.getByTestId("flow-moment-empty");
+    expect(empty).toHaveTextContent("No block running");
+    expect(screen.queryByTestId("current-block-hero")).not.toBeInTheDocument();
+  });
+
+  it("does not render the empty state once a block/session is active", () => {
+    render(<FlowMoment {...baseProps()} />);
+    expect(screen.queryByTestId("flow-moment-empty")).not.toBeInTheDocument();
+  });
+});
+
+// R4-B (premium push #483, round 4): the empty state's card was correct but
+// the rest of the canvas was still blank on a fully quiet day (no drift, no
+// first-move task) — FlowIdleOrientation fills it, gated on the same
+// !hasActiveSession condition as the empty card itself.
+describe("FlowMoment — R4-B idle-canvas orientation", () => {
+  function emptyProps(overrides: Partial<FlowMomentProps> = {}) {
+    return baseProps({
+      session: { activeTaskId: null, running: false, remaining: 0, total: 0 },
+      vm: { currentBlock: null, drift: null },
+      ...overrides,
+    });
+  }
+
+  it("renders the idle orientation card when no block/session is active", () => {
+    render(<FlowMoment {...emptyProps()} />);
+    expect(screen.getByTestId("flow-idle-orientation")).toBeInTheDocument();
+  });
+
+  it("recedes once a block/session is active — never doubles up with the populated hero", () => {
+    render(<FlowMoment {...baseProps()} />);
+    expect(
+      screen.queryByTestId("flow-idle-orientation"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still renders alongside drift recovery — a derailed Flow with no active session is still a quiet canvas", () => {
+    render(
+      <FlowMoment
+        {...emptyProps({
+          vm: { currentBlock: null, drift: { minutes: 5, reason: "stuck" } },
+        })}
+      />,
+    );
+    expect(screen.getByTestId("flow-idle-orientation")).toBeInTheDocument();
+    expect(screen.getByTestId("drift-recovery-card")).toBeInTheDocument();
+  });
+});

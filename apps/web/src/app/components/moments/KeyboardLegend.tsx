@@ -3,6 +3,7 @@ import {
   type MomentKeyActionId,
   momentKeyLabel,
 } from "@/lib/keys/keymap";
+import { KBD_CHIP_NEUTRAL } from "./kbdChip";
 
 /**
  * D-6 (#483) — quiet bottom-left keyboard legend, ported from the prototype's
@@ -32,6 +33,14 @@ import {
  * surfacing, not a fabricated one: every id below still exists in
  * `MOMENT_KEY_BINDINGS` and every glyph rendered still comes from
  * `momentKeyLabel`, so it can't drift from what a keypress actually does.
+ *
+ * D-10 R2 (#483 round 2): the chip itself now shares kbdChip.ts's single
+ * `KBD_CHIP_NEUTRAL` treatment (round 1 shipped five different kbd chip
+ * looks across the masthead + this legend — three font sizes, inconsistent
+ * borders/backgrounds). This legend's chips stay permanently visible (no
+ * hover-reveal wrapper) — unlike the per-control masthead hints, which now
+ * only appear on hover/focus of their own control, this bottom-left strip
+ * is deliberately the one always-on reference.
  */
 
 const DISPLAYED_ACTION_IDS: readonly MomentKeyActionId[] = [
@@ -90,10 +99,7 @@ export function KeyboardLegend() {
       {LEGEND_GROUPS.map((group) => (
         <span key={group.description} className="flex items-center gap-1.5">
           {group.ids.map((id) => (
-            <kbd
-              key={id}
-              className="rounded border border-border bg-background px-1.5 py-0.5 font-semibold text-foreground/80"
-            >
+            <kbd key={id} className={KBD_CHIP_NEUTRAL}>
               {momentKeyLabel(id)}
             </kbd>
           ))}

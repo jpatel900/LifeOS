@@ -149,6 +149,85 @@ describe("TodayMoments", () => {
     ).toHaveAttribute("aria-selected", "true");
   });
 
+  // D-10 R2 (#483 round 2, blocker #1 — "no taste argument for it"): round 1
+  // rendered the header's MomentSwitcher unconditionally at every viewport,
+  // so <640px showed the identical Start/Flow/Close control twice — once in
+  // the header (with keyboard hints, on a device with no keyboard) and once
+  // in BottomNavigator. The header instance (and the two other controls
+  // BottomNavigator already covers — CountdownClockToggle, Settings) are now
+  // wrapped in a `hidden sm:contents` slot: gone below `sm`, and at `sm`+ the
+  // wrapper contributes no box of its own (`display: contents`), so the
+  // control renders exactly as it did before this fix. jsdom doesn't apply
+  // real CSS, so this asserts the actual class strings rather than computed
+  // visibility — the guarantee is "the responsive classes are present and
+  // correct," which is what a real browser then acts on.
+  describe("masthead mobile composition (#483 round 2)", () => {
+    it("wraps the header MomentSwitcher, CountdownClockToggle, and Settings link in a hidden-below-sm slot", () => {
+      renderToday({ initialMoment: "start" });
+
+      for (const testid of [
+        "masthead-momentswitcher-slot",
+        "masthead-countdowntoggle-slot",
+        "masthead-settingslink-slot",
+      ]) {
+        const slot = screen.getByTestId(testid);
+        expect(slot).toHaveClass("hidden");
+        expect(slot).toHaveClass("sm:contents");
+      }
+
+      // The header's own MomentSwitcher instance still exists in the DOM
+      // (so `sm:contents` has something to un-hide at `sm`+) — it just
+      // lives inside the hidden slot, distinct from BottomNavigator's
+      // always-mobile-visible instance.
+      expect(screen.getByTestId("moment-switcher-start")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("moment-switcher-bottom-nav-start"),
+      ).toBeInTheDocument();
+    });
+
+    it("never hides AreaSelector or MastheadThemeToggle — neither has a mobile equivalent anywhere else on the page", () => {
+      renderToday({ initialMoment: "start" });
+
+      // Neither control's own root (nor an ancestor up to the masthead
+      // cluster) carries a `hidden` class — they render at every viewport.
+      const area = screen.getByTestId("today-moments-area-switcher");
+      const theme = screen.getByTestId("masthead-theme-toggle");
+      expect(area.className).not.toMatch(/\bhidden\b/);
+      expect(theme.className).not.toMatch(/\bhidden\b/);
+    });
+
+    it("renders a primary/secondary divider that itself is hidden below sm (nothing in the mobile row for it to divide)", () => {
+      renderToday({ initialMoment: "start" });
+
+      const divider = screen.getByTestId("masthead-divider");
+      expect(divider).toHaveClass("hidden");
+      expect(divider).toHaveClass("sm:block");
+      expect(divider).toHaveAttribute("aria-hidden", "true");
+    });
+  });
+
+  // R3-C (#483 round 3): self-hosting Inter (wider metrics than the Segoe
+  // fallback) reopened the right-cluster row-1 overflow round 2 had just
+  // closed — measured 18.41px over budget at desktop widths (732.13px
+  // needed vs 713.72px available), wrapping the Settings icon alone to a
+  // second line. Closed with a `gap-2`->`gap-1.5` claw-back on this row
+  // (paired with a padding step down in AreaSelector/CountdownClockToggle/
+  // MastheadThemeToggle — see each file's own regression test). Regression:
+  // a future gap bump back to `gap-2` on this row silently reopens the wrap
+  // now that Inter is the shipping font.
+  describe("masthead right-cluster gap (#483 round 3, Inter reflow)", () => {
+    it("uses the tightened gap-1.5, not the pre-Inter-reflow gap-2", () => {
+      renderToday({ initialMoment: "start" });
+
+      const momentSwitcherSlot = screen.getByTestId(
+        "masthead-momentswitcher-slot",
+      );
+      const rightCluster = momentSwitcherSlot.parentElement!;
+      expect(rightCluster).toHaveClass("gap-1.5");
+      expect(rightCluster.className).not.toMatch(/\bgap-2\b/);
+    });
+  });
+
   it("start-to-first-move journey: Start now switches to Flow with a running countdown", async () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });

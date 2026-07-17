@@ -88,10 +88,15 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
     await expect(page.getByTestId("onboarding-ritual")).toBeHidden();
     await expect(page.getByTestId("start-moment")).toBeVisible();
     await expect(page.getByTestId("start-hero")).toBeVisible();
-    await expect(page.getByTestId("start-pending-triage")).toBeVisible();
-    await expect(page.getByTestId("start-pending-triage")).toHaveText(
-      /waiting for a decision/,
-    );
+    // With no first move queued (zero state), the pending item is PROMOTED
+    // into the flagship card (start-pending-triage-card); with a first move
+    // it renders as the start-pending-triage line. Either surface is the
+    // #551 truth.
+    const pendingTriageSurface = page
+      .getByTestId("start-pending-triage-card")
+      .or(page.getByTestId("start-pending-triage"));
+    await expect(pendingTriageSurface).toBeVisible();
+    await expect(pendingTriageSurface).toContainText(/waiting for a decision/);
 
     // Second visit: reload the same context — the ritual never re-shows.
     await page.reload();

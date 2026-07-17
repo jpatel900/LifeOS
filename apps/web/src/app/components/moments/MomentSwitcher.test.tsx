@@ -55,4 +55,72 @@ describe("MomentSwitcher", () => {
     expect(tab).toHaveClass("min-h-[44px]");
     expect(tab).toHaveClass("touch-manipulation");
   });
+
+  // D-10 R2 (#483 round 2, blocker #3 — mixed control heights): the track's
+  // `.workflow-shell__nav` class carried an *unlayered* `padding: 0.35rem`
+  // (globals.css) that Tailwind's cascade layers always rank above the
+  // layered `p-1` utility it used to pair with, inflating this pill to
+  // ~57px against the masthead's other 44px-floor controls — a 13px visible
+  // height mismatch. Regression: the track no longer carries that class or
+  // any of its own padding, so the tab's own `min-h-[44px]` is the only
+  // contributor to the pill's height.
+  it("the track carries no padding and does not use the workflow-shell__nav class (round-1 height-mismatch regression)", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const track = screen.getByTestId("moment-switcher");
+    expect(track.className).not.toMatch(/\bworkflow-shell__nav\b/);
+    expect(track.className).not.toMatch(/\bp-1\b/);
+  });
+
+  // D-10 R2 (#483 round 2, blocker #6 — kbd chip inconsistency + "busy"
+  // permanent stamps): every tab's kbd hint now shares kbdChip.ts's single
+  // treatment and is hidden below `sm` (no physical keyboard on touch) and
+  // hover/focus-revealed above it, rather than permanently stamped.
+  it("kbd hints are hidden below sm and only reveal on hover/focus of their own tab", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const selectedHint = screen
+      .getByTestId("moment-switcher-start")
+      .querySelector("kbd")!;
+    const unselectedHint = screen
+      .getByTestId("moment-switcher-flow")
+      .querySelector("kbd")!;
+
+    for (const hint of [selectedHint, unselectedHint]) {
+      expect(hint).toHaveClass("hidden");
+      expect(hint).toHaveClass("opacity-0");
+      expect(hint).toHaveClass("sm:group-hover:opacity-100");
+      expect(hint).toHaveClass("sm:group-focus-within:opacity-100");
+    }
+    // The selected tab's hint uses the on-accent contrast variant (it sits
+    // on a bg-primary fill); the unselected tab's uses the neutral one.
+    expect(selectedHint.className).toMatch(/text-primary-foreground\/90/);
+    expect(unselectedHint.className).toMatch(/text-muted-foreground/);
+  });
+
+  // D-10 R2: real focus-visible ring using the app's own --ring token,
+  // replacing the bare browser default outline every masthead control fell
+  // through to on Tab (round-1 blocker #4).
+  it("tabs carry the app's focus-visible ring token, not the browser default", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const tab = screen.getByTestId("moment-switcher-flow");
+    expect(tab).toHaveClass("outline-none");
+    expect(tab).toHaveClass("focus-visible:ring-2");
+    expect(tab).toHaveClass("focus-visible:ring-ring");
+    expect(tab).toHaveClass("focus-visible:ring-offset-2");
+  });
+
+  // R3-C (#483 round 3): self-hosting Inter reopened the masthead's
+  // right-cluster row-1 overflow (measured 18.41px over budget at desktop
+  // widths — see TodayMoments.tsx's header comment), and the AreaSelector's
+  // worst-case (long area name) claw-back needed more than the secondary
+  // cluster alone could give up. This tab padding drops one step,
+  // `px-3`->`px-2.5` — still visually dominant (only accent fill, still by
+  // far the widest control) but a small, deliberate contributor to the
+  // claw-back. Regression: a future padding bump here silently reopens the
+  // 2-row wrap for realistic (not just the shortest demo) area names.
+  it("tabs use the tightened px-2.5 padding, not the pre-Inter-reflow px-3 (round-3 regression)", () => {
+    render(<MomentSwitcher value="start" onChange={vi.fn()} />);
+    const tab = screen.getByTestId("moment-switcher-flow");
+    expect(tab).toHaveClass("px-2.5");
+    expect(tab.className).not.toMatch(/\bpx-3\b/);
+  });
 });

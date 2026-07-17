@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { momentKeyLabel } from "@/lib/keys/keymap";
 import { FirstMoveCard, type FirstMoveCardMove } from "./FirstMoveCard";
 import { ScheduleList } from "./ScheduleList";
 import { SideRail } from "./SideRail";
@@ -63,6 +64,91 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
  * `vm.counts.pendingTriage > 0` now renders a clickable "N thought(s)
  * waiting for a decision." line (`onOpenTriage`) so the Start column stops
  * claiming "Nothing queued" right after the user just queued something.
+ *
+ * D-8 (design alignment, #483) — the hero (main/start) column must never
+ * collapse to a bare text line. Three states, same card weight throughout
+ * (`workflow-flagship-card moments-card moments-card--emphasis`, the exact
+ * classes FirstMoveCard uses):
+ *   1. `vm.firstMove` present -> FirstMoveCard, unchanged.
+ *   2. No firstMove, `vm.topPendingTriageItem` present -> that item promoted
+ *      into an accent "decide this next" card. Its single action is the
+ *      existing `onOpenTriage` handler (opens the existing TriageSheet —
+ *      see TodayMoments.tsx) — no new handler, no new navigation, no new
+ *      copy implying the item is scheduled.
+ *   3. Neither -> an accent empty-state card (same weight), calm
+ *      capture-shortcut copy, no guilt/urgency language.
+ * D-8 also hoists PipelineOverview from the bottom of the page to directly
+ * under the hero, above the two-column grid, matching
+ * docs/vision/prototypes/prototype-2-today-home.html's greeting -> pipe ->
+ * grid order — it no longer sits in its own trailing section.
+ *
+ * D-8-POLISH (design alignment, #483) — the hero card and the schedule
+ * label had accidental blank space, not deliberate whitespace. Root cause:
+ * the two-column grid (`lg:grid-cols-[minmax(0,1fr)_20rem]`) defaults to
+ * `align-items: stretch`, so whenever the SideRail column was taller than
+ * the main column, the main column's nested `grid` divs were stretched to
+ * match — and being `auto`-tracked grids themselves, that leftover height
+ * bled into their own rows (padding out the hero card's bottom, and
+ * widening the gap under "Today's schedule") rather than landing as a
+ * single, intentional gap anywhere. Fix: `items-start` on both the
+ * two-column grid and the main column's own `grid` wrapper, so every card
+ * sizes to its own content — no fabricated height, no shrink-to-cramped.
+ * Today's schedule is also now wrapped in the same `Card`/`moments-card`
+ * treatment SideRail's "Waiting on"/"Areas" cards already use (previously
+ * it was bare text with no boundary), so the bottom of the page reads as
+ * two card-terminated columns instead of one column trailing into empty
+ * canvas.
+ *
+ * R2-B (premium push #483, round 2) — two fixes an adversarial critic found
+ * in D-8/D-2's own hero:
+ *   1. Duplicated empty-state copy: D-8's empty-state card (state 3 above)
+ *      restated `vm.daySynthesis` verbatim across its eyebrow/title/body —
+ *      the same two facts ("nothing queued", "capture something") said
+ *      four times in ~300px. `buildDaySynthesis` (start.ts) now states the
+ *      fact once, plainly, with no capture call-to-action; this card now
+ *      spends its eyebrow/title/body entirely on the single action
+ *      ("Quick capture" / "Capture a thought" / the `C` shortcut) instead
+ *      of re-describing the empty state. States 1 and 2
+ *      above (a real first move, or a promoted pending-triage item) were
+ *      already fine and are untouched.
+ *   2. Inverted type hierarchy: `.moments-greeting` (the page's own h1) was
+ *      a fixed 1.875rem with no clamp, while nested card titles
+ *      (`.workflow-surface-title`, shared by FirstMoveCard and this file's
+ *      other flagship cards) scale via `clamp(1.5rem, 1.1rem + 1vw, 2.4rem)`
+ *      — so the card title out-sized the page h1 above ~1240px (28% larger
+ *      by 2560px). `.moments-greeting` now scales too
+ *      (`clamp(2rem, 1.5rem + 1vw, 3rem)`, weight 700) — the same 1vw slope
+ *      as `.workflow-surface-title` plus a fixed offset, so the h1 leads by
+ *      a constant, growing margin across the full 412–2560px range instead
+ *      of crossing over. `.workflow-surface-title` itself is untouched
+ *      (shared by CurrentBlockHero/DriftRecoveryCard/FirstMoveCard/
+ *      PipelineOverview/StartMoment — out of blast-radius budget here).
+ *      Folded in: "Today's focus"/"Today's schedule" section labels moved
+ *      from `.moments-label` to `.workflow-page-eyebrow` — the same class
+ *      already used by every card eyebrow in this column (First move,
+ *      Decide this next, Quick capture, Yesterday) — so the main column
+ *      reads as one eyebrow system instead of two with 3x different
+ *      tracking and different greys. `.moments-label` itself is untouched
+ *      (SideRail's "Waiting on"/"Areas" headings still use it — SideRail.tsx
+ *      is another agent's file this round).
+ *
+ * R3-A (premium push #483, round 3) — issue #478's dead-space finding
+ * (below Pipeline, ~200-250px of unexplained void at 1440x900 on an empty
+ * day) survived three rounds of composition-only fixes because the empty
+ * state genuinely had nothing else to say. The owner ratified the fix on
+ * #478 directly: give the empty day a real job — explain the five pipeline
+ * stages a captured thought moves through.
+ *
+ * R4-A (premium push #483, round 4) superseded R3-A's execution: the
+ * ratified orientation content landed as a *second*, separately-carded
+ * `LoopOrientation` section restating the live `PipelineOverview` rail's
+ * exact taxonomy ~350px below it in this same column — one screen, two
+ * renderings of "Capture · Triage · Plan · Execute · Review". `LoopOrientation`
+ * is deleted; the ratified content now lives INSIDE `PipelineOverview`
+ * itself, as that rail's own empty-pipeline state (every stage's count at
+ * zero) — see PipelineOverview.tsx's R4-A doc comment. This column no
+ * longer renders anything keyed off "is the day empty"; the rail decides
+ * its own presentation from the `pipelineCounts` prop it already receives.
  */
 
 export interface StartMomentProps {
@@ -118,6 +204,8 @@ export function StartMoment({
       </button>
     ) : null;
 
+  const topPendingTriageItem = vm.topPendingTriageItem;
+
   return (
     <div className="grid gap-6" data-testid="start-moment">
       <div className="grid gap-1" data-testid="start-hero">
@@ -129,8 +217,23 @@ export function StartMoment({
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="grid gap-6">
+      <section
+        aria-label="Pipeline"
+        data-testid="start-moment-pipeline-rail"
+        className="grid gap-2"
+      >
+        <h2 className="sr-only">Pipeline</h2>
+        <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
+      </section>
+
+      <div
+        className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]"
+        data-testid="start-moment-grid"
+      >
+        <div
+          className="grid items-start gap-6"
+          data-testid="start-moment-main-column"
+        >
           {cardMove && vm.firstMove ? (
             <>
               <FirstMoveCard
@@ -141,25 +244,67 @@ export function StartMoment({
               />
               {pendingTriageLine}
             </>
-          ) : pendingTriageLine ? (
-            pendingTriageLine
+          ) : topPendingTriageItem ? (
+            <Card
+              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden p-0"
+              style={{ borderColor: "var(--acc)" }}
+              data-testid="start-pending-triage-card"
+            >
+              <CardContent className="grid gap-3 p-5 sm:p-6">
+                <p className="workflow-page-eyebrow m-0 tabular-nums">
+                  Decide this next
+                  {topPendingTriageItem.areaLabel
+                    ? ` · ${topPendingTriageItem.areaLabel}`
+                    : ""}
+                </p>
+                <h2 className="workflow-surface-title moments-card-title">
+                  {topPendingTriageItem.summary}
+                </h2>
+                <p className="workflow-surface-body text-sm text-muted-foreground">
+                  {pendingTriage === 1
+                    ? "1 thought waiting for a decision."
+                    : `${pendingTriage} thoughts waiting for a decision.`}
+                </p>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="default"
+                    onClick={onOpenTriage}
+                    className="min-h-[44px] touch-manipulation gap-2"
+                    data-testid="start-pending-triage-action"
+                  >
+                    Decide now
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            <p
-              className="workflow-surface-body text-sm text-muted-foreground"
+            <Card
+              className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden p-0"
+              style={{ borderColor: "var(--acc)" }}
               data-testid="start-moment-empty"
             >
-              Nothing queued — capture something with{" "}
-              <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
-                C
-              </kbd>
-              .
-            </p>
+              <CardContent className="grid gap-3 p-5 sm:p-6">
+                <p className="workflow-page-eyebrow m-0">Quick capture</p>
+                <h2 className="workflow-surface-title moments-card-title">
+                  Capture a thought
+                </h2>
+                <p className="workflow-surface-body text-sm text-muted-foreground">
+                  Press{" "}
+                  <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
+                    {momentKeyLabel("open-capture")}
+                  </kbd>{" "}
+                  to open capture.
+                </p>
+              </CardContent>
+            </Card>
           )}
 
           {vm.focusItems.length > 1 || vm.deferredItems.length > 0 ? (
             <section className="grid gap-3">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="moments-label text-sm font-semibold text-muted-foreground">
+                <h2 className="workflow-page-eyebrow m-0">
                   Today&apos;s focus
                 </h2>
                 <span
@@ -187,8 +332,7 @@ export function StartMoment({
 
           {recoveryNudge ? (
             <Card
-              className="workflow-support-card moments-card relative overflow-hidden border-l-4 p-0"
-              style={{ borderLeftColor: "var(--state-watch)" }}
+              className="workflow-support-card moments-card moments-card--tint-watch relative overflow-hidden p-0"
               data-testid="start-recovery-nudge"
             >
               <CardContent className="grid gap-2 p-4 sm:p-5">
@@ -231,16 +375,21 @@ export function StartMoment({
             </p>
           ) : null}
 
-          <section className="grid gap-3">
-            <h2 className="moments-label text-sm font-semibold text-muted-foreground">
-              Today&apos;s schedule
-            </h2>
-            <ScheduleList
-              blocks={vm.blocks}
-              timeDisplay={timeDisplay}
-              now={now}
-            />
-          </section>
+          <Card
+            className="workflow-support-card moments-card"
+            data-testid="start-schedule-card"
+          >
+            <CardContent className="grid gap-3 p-4 sm:p-5">
+              <h2 className="workflow-page-eyebrow m-0">
+                Today&apos;s schedule
+              </h2>
+              <ScheduleList
+                blocks={vm.blocks}
+                timeDisplay={timeDisplay}
+                now={now}
+              />
+            </CardContent>
+          </Card>
         </div>
 
         <SideRail
@@ -249,15 +398,6 @@ export function StartMoment({
           onOpenHealth={onOpenHealth}
         />
       </div>
-
-      <section
-        aria-label="Pipeline"
-        data-testid="start-moment-pipeline-rail"
-        className="grid gap-2"
-      >
-        <h2 className="sr-only">Pipeline</h2>
-        <PipelineOverview counts={pipelineCounts} onDrill={onDrillPipeline} />
-      </section>
     </div>
   );
 }

@@ -5,6 +5,8 @@ export type MomentKeyActionId =
   | "switch-flow"
   | "switch-close"
   | "open-capture"
+  | "cycle-area"
+  | "toggle-theme"
   | "open-command-palette"
   | "primary-action"
   | "escape";
@@ -28,6 +30,27 @@ export const MOMENT_KEY_BINDINGS = [
     id: "open-capture",
     key: "c",
     label: "C",
+    caseInsensitive: true,
+  },
+  // D-10 (#483): the masthead area picker (AreaSelector.tsx) cycles through
+  // "All areas" + each area on "A" — mirrors the design prototype's
+  // cycleArea() binding. Not wired through useMomentKeyboard (that hook's
+  // ownership sits outside this packet's file list); AreaSelector attaches
+  // its own guarded window listener, matching this same collision-checked
+  // definition.
+  {
+    id: "cycle-area",
+    key: "a",
+    label: "A",
+    caseInsensitive: true,
+  },
+  // D-10 (#483): the masthead theme toggle (MastheadThemeToggle.tsx) flips
+  // light/dark on "D" — mirrors the design prototype's toggleTheme()
+  // binding. Same not-through-useMomentKeyboard note as cycle-area above.
+  {
+    id: "toggle-theme",
+    key: "d",
+    label: "D",
     caseInsensitive: true,
   },
   {

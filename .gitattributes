@@ -1,1 +1,9 @@
 * text=auto eol=lf
+
+# D-13 (#483): pin the self-hosted font binaries as binary. `text=auto` above
+# would otherwise leave it to git's NUL-byte heuristic, and this repo also runs
+# core.autocrlf=true — a woff2 that ever got line-ending-converted would be
+# silently corrupted (the face fails to decode, and the app falls back with no
+# build error). Explicit beats heuristic for a file whose corruption is invisible
+# until render.
+*.woff2 binary

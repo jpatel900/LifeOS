@@ -102,31 +102,45 @@ export function CloseMoment({
 
   return (
     <div className="grid gap-6" data-testid="close-moment">
-      <Card className="workflow-support-card moments-card">
-        <CardContent className="grid grid-cols-2 gap-4 pt-5 sm:grid-cols-2">
-          <div className="grid gap-0.5">
-            <span
-              className="text-2xl font-semibold tabular-nums"
-              data-testid="close-moment-completed"
-            >
-              {vm.completedToday}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              Completed today
-            </span>
-          </div>
-          <div className="grid gap-0.5">
-            <span
-              className="text-2xl font-semibold tabular-nums"
-              data-testid="close-moment-missed"
-            >
-              {vm.missedToday}
-            </span>
-            <span className="text-xs text-muted-foreground">Missed today</span>
-          </div>
-        </CardContent>
-      </Card>
+      {/* R3-B (issue #483 round 3): R2-D correctly de-hollowed the stats
+          card (952px full-bleed -> `w-fit` content-hugging) but that fix
+          created a new regression — the stats card, the full-width Carry
+          forward panel, and the standalone pill "Close the day" button
+          then stacked as three unrelated block widths with no shared card
+          boundary, on a quiet day sitting atop a large empty canvas. The
+          fix here is compositional, not another width tweak: stats, carry
+          forward, tomorrow's first move (when present), and the close
+          action are now ONE flagship card — the closing ritual, told as a
+          single deliberate arrangement, mirroring the "one hero card per
+          moment" idiom Start (FirstMoveCard) and Flow (CurrentBlockHero)
+          already use. The stats row itself keeps the round-2 fix (hugs its
+          own content via divide-x, never stretched to the card's full
+          width) — it isn't hollow anymore because the same card also
+          carries real carry-forward/action content below it, not because
+          the row itself got wider. Sub-section headers ("Carry forward",
+          "Tomorrow's first move") use `.moments-label` — the same eyebrow
+          class the sibling Wins/Weekly-rollup/Monthly-rollup CardTitles in
+          this file already use — not `.workflow-page-eyebrow` (a different
+          tracking/color system used elsewhere), so the merged card doesn't
+          reintroduce the "two eyebrow systems in one view" defect round 2
+          removed from StartMoment.
 
+          Empty-canvas judgment (round 3 asked to choose orientation copy
+          vs. a shrunk canvas): StartMoment's own empty-state card (`Quick
+          capture`, state 3) is NOT gated on first-run — it renders every
+          time Start has nothing queued — so "Close's empty state recurs
+          daily" isn't a reason to withhold orientation copy that Start
+          didn't also face. Matching that precedent: `close-moment-
+          orientation` below is a brief, always-present, truthful line
+          pairing the action with what it does (mirrors Start's "Press C to
+          open capture" pattern) — not gated behind an "empty" check, so it
+          can't drift out of sync with a real vs. quiet day. It does not by
+          itself fill the ~495px of canvas still visible below this card at
+          1440x900 on a fully quiet day — most of that gap is
+          `MomentsThemeShell`'s shared `min-h-dvh` wrapper (documented there
+          for mobile-Safari capture-pill clearance, applied identically to
+          Start/Flow/Close), which sits outside this packet's file list and
+          is not touched here. */}
       {pendingWins.length > 0 || confirmedWins.length > 0 ? (
         <Card className="workflow-support-card moments-card">
           <CardHeader className="pb-2">
@@ -456,79 +470,113 @@ export function CloseMoment({
         </Card>
       ) : null}
 
-      <Card className="workflow-support-card moments-card">
-        <CardHeader className="pb-2">
-          <CardTitle className="moments-label text-sm tracking-tight">
-            Carry forward
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {vm.carryForward.length === 0 ? (
-            <p
-              className="text-sm text-muted-foreground"
-              data-testid="close-moment-carry-forward-empty"
-            >
-              Nothing to carry forward — today&apos;s missed blocks are clear.
-            </p>
-          ) : (
-            <ul
-              className="grid gap-2"
-              data-testid="close-moment-carry-forward-list"
-            >
-              {vm.carryForward.map((entry) => (
-                <li
-                  key={entry.taskId}
-                  className="flex items-center justify-between gap-2 text-sm"
-                >
-                  <span className="min-w-0 truncate">{entry.title}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onCarryForward(entry.taskId)}
-                    className="min-h-[44px] touch-manipulation"
-                    data-testid={`close-moment-carry-forward-${entry.taskId}`}
+      <Card
+        className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-t-4 p-0"
+        style={{ borderTopColor: "var(--acc)" }}
+        data-testid="close-moment-summary"
+      >
+        <CardContent className="grid gap-4 p-5 sm:p-6">
+          <div
+            className="flex w-fit items-stretch divide-x divide-border/60"
+            data-testid="close-moment-stats"
+          >
+            <div className="flex flex-col gap-1 pr-5">
+              <span
+                className="text-3xl leading-none font-[650] tracking-tight tabular-nums lining-nums"
+                data-testid="close-moment-completed"
+              >
+                {vm.completedToday}
+              </span>
+              <span className="moments-label">Completed today</span>
+            </div>
+            <div className="flex flex-col gap-1 pl-5">
+              <span
+                className="text-3xl leading-none font-[650] tracking-tight tabular-nums lining-nums"
+                data-testid="close-moment-missed"
+              >
+                {vm.missedToday}
+              </span>
+              <span className="moments-label">Missed today</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2 border-t border-border/50 pt-4">
+            <h3 className="moments-label m-0">Carry forward</h3>
+            {vm.carryForward.length === 0 ? (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="close-moment-carry-forward-empty"
+              >
+                Nothing to carry forward — today&apos;s missed blocks are clear.
+              </p>
+            ) : (
+              <ul
+                className="grid gap-2"
+                data-testid="close-moment-carry-forward-list"
+              >
+                {vm.carryForward.map((entry) => (
+                  <li
+                    key={entry.taskId}
+                    className="flex items-center justify-between gap-2 text-sm"
                   >
-                    Carry forward
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
+                    <span className="min-w-0 truncate">{entry.title}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onCarryForward(entry.taskId)}
+                      className="min-h-[44px] touch-manipulation"
+                      data-testid={`close-moment-carry-forward-${entry.taskId}`}
+                    >
+                      Carry forward
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {vm.tomorrowFirstMove ? (
+            <div
+              className="grid gap-1 border-t border-border/50 pt-4"
+              data-testid="close-moment-tomorrow-first-move"
+            >
+              <h3 className="moments-label m-0">Tomorrow&apos;s first move</h3>
+              <p className="text-sm font-medium">
+                {vm.tomorrowFirstMove.title}
+              </p>
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {vm.tomorrowFirstMove.why} · {vm.tomorrowFirstMove.areaLabel} ·{" "}
+                {vm.tomorrowFirstMove.estMinutes} min
+              </p>
+            </div>
+          ) : null}
+
+          <div className="grid gap-2 border-t border-border/50 pt-4">
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="close-moment-orientation"
+            >
+              Closing saves today&apos;s counts as reviewed and carries forward
+              anything still open.
+            </p>
+            <div>
+              <Button
+                type="button"
+                variant="default"
+                onClick={onCloseDay}
+                className="min-h-[44px] touch-manipulation gap-2"
+                data-testid="close-moment-close-day"
+              >
+                Close the day
+                <kbd className="rounded border border-border/60 bg-black/10 px-1.5 py-0.5 text-[0.7rem] font-semibold">
+                  ↵
+                </kbd>
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
-
-      {vm.tomorrowFirstMove ? (
-        <Card className="workflow-support-card moments-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="moments-label text-sm tracking-tight">
-              Tomorrow&apos;s first move
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-1 pt-0">
-            <p className="text-sm font-medium">{vm.tomorrowFirstMove.title}</p>
-            <p className="text-xs tabular-nums text-muted-foreground">
-              {vm.tomorrowFirstMove.why} · {vm.tomorrowFirstMove.areaLabel} ·{" "}
-              {vm.tomorrowFirstMove.estMinutes} min
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div>
-        <Button
-          type="button"
-          variant="default"
-          onClick={onCloseDay}
-          className="min-h-[44px] touch-manipulation gap-2"
-          data-testid="close-moment-close-day"
-        >
-          Close the day
-          <kbd className="rounded border border-border/60 bg-black/10 px-1.5 py-0.5 text-[0.7rem] font-semibold">
-            ↵
-          </kbd>
-        </Button>
-      </div>
     </div>
   );
 }

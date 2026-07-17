@@ -1,8 +1,10 @@
 "use client";
 
+import { Card, CardContent } from "@/components/ui/card";
 import { CurrentBlockHero } from "./CurrentBlockHero";
 import { DriftRecoveryCard } from "./DriftRecoveryCard";
 import { FirstTinyStepCard } from "./FirstTinyStepCard";
+import { FlowIdleOrientation } from "./FlowIdleOrientation";
 import {
   TaskMapSection,
   type TaskMapDraftUiState,
@@ -11,6 +13,7 @@ import {
 import type { FlowVM } from "./momentsViewModel";
 import type { ProgressionNode } from "./progressionNodes";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
+import { momentKeyLabel } from "@/lib/keys/keymap";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -24,6 +27,24 @@ import type { TaskMapGraph } from "@/lib/taskmap/graph";
  * state pointing back to Start (UX-INV-6 — no dead ends). When `vm.drift`
  * is present, the recovery card renders regardless of hero/empty state
  * (UX-INV-3 — a derailed Flow is never a dead end).
+ *
+ * R3-B (premium push #483, round 3): the no-active-block state used to be
+ * a bare muted text line with zero card/border treatment, floating on an
+ * otherwise empty page. It now uses the exact same card shell as
+ * CurrentBlockHero (`workflow-flagship-card moments-card
+ * moments-card--emphasis`, accent top border) so the empty and populated
+ * states read as the same hero slot — one composed, the other quiet —
+ * rather than a composed hero replaced by nothing at all. Copy stays
+ * factual (no block exists, here is the one real way to start one); no
+ * block or session detail is fabricated.
+ *
+ * R4-B (premium push #483, round 4): R3-B fixed the card; the page around
+ * it was still unfinished — on a fully quiet day (no drift, no first-move
+ * task) nothing rendered below that one small card, leaving ~543px of void
+ * at 1440x900. `FlowIdleOrientation` (see its doc comment) fills that with
+ * evergreen, data-free "what Flow is" content whenever there's no active
+ * session — the same "fill with orientation content" ruling the owner
+ * already applied to Start's empty day.
  */
 
 export interface FlowMomentSession {
@@ -103,13 +124,28 @@ export function FlowMoment({
           onToggleTime={onToggleTime}
         />
       ) : (
-        <p
-          className="workflow-surface-body text-sm text-muted-foreground"
+        <Card
+          className="workflow-flagship-card moments-card moments-card--emphasis relative overflow-hidden border-t-4 p-0"
+          style={{ borderTopColor: "var(--acc)" }}
           data-testid="flow-moment-empty"
         >
-          No block running — start your first move from Start.
-        </p>
+          <CardContent className="grid gap-3 p-5 sm:p-6">
+            <p className="workflow-page-eyebrow m-0">Flow</p>
+            <h2 className="workflow-surface-title moments-card-title">
+              No block running
+            </h2>
+            <p className="workflow-surface-body text-sm text-muted-foreground">
+              Start your first move from Start —{" "}
+              <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
+                {momentKeyLabel("switch-start")}
+              </kbd>{" "}
+              switches moments.
+            </p>
+          </CardContent>
+        </Card>
       )}
+
+      {!hasActiveSession ? <FlowIdleOrientation /> : null}
 
       {hasActiveSession ? (
         <FirstTinyStepCard

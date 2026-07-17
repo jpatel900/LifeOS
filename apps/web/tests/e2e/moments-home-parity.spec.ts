@@ -76,11 +76,16 @@ test.describe("moments home parity (/)", () => {
 
     // #551 state truth: the capture just landed in triage as a pending
     // draft, so the Start column must show that visibly rather than still
-    // reading "Nothing queued".
-    await expect(page.getByTestId("start-pending-triage")).toBeVisible();
-    await expect(page.getByTestId("start-pending-triage")).toHaveText(
-      /waiting for a decision/,
-    );
+    // reading "Nothing queued". With no first move queued (empty demo
+    // state), the pending item is PROMOTED into the flagship card
+    // (start-pending-triage-card); with a first move present it renders as
+    // the start-pending-triage line under the card. Either is the truth —
+    // assert the surface that actually hosts it.
+    const pendingTriageSurface = page
+      .getByTestId("start-pending-triage-card")
+      .or(page.getByTestId("start-pending-triage"));
+    await expect(pendingTriageSurface).toBeVisible();
+    await expect(pendingTriageSurface).toContainText(/waiting for a decision/);
   });
 
   // Parity with the golden-journey / cockpit-flow-repair "start -> execute ->
@@ -199,6 +204,94 @@ test.describe("moments home capture pill clears the Pipeline row (#477)", () => 
         pillBox!.y + pillBox!.height > pipelineBox!.y;
 
       expect(intersects).toBe(false);
+    });
+  }
+});
+
+// R4-A (premium push #483 round 4): the #477 guard above only ever checked
+// one viewport (1280x900) at the scrolled-to-the-true-end position. Neither
+// caught the actual round-3 regression — at 1366x768 (the owner's real
+// laptop viewport), R3-A's LoopOrientation card grew the empty-day page
+// just tall enough that the pill covered real content (the last card's
+// caption row, mid-word) at the NATURAL, unscrolled load — not a scroll
+// position the trailing shell padding (MomentsThemeShell's pb-*, scoped to
+// the true scroll end) can ever reach. R4-A deleted LoopOrientation (merged
+// its content into the pipeline rail's own empty state, see
+// PipelineOverview.tsx), which is most of the fix, but the guarantee this
+// extends to prove is content-height-independent: on the genuinely-empty
+// Start day, at EVERY one of these desktop heights, in BOTH scroll
+// positions, the pill must never cover the rail, the schedule card, or the
+// Areas card. Unlike the #593 mobile-band guard's `endsAboveFold` carve-out
+// (written for content that's still reachable by scrolling further), scroll
+// ZERO here gets a STRICT check: the empty day is short enough that there's
+// nothing further below to scroll to reveal — a covered caption at rest is
+// exactly the "tim" cut-off bug, whether or not the user could later scroll
+// clear of it.
+test.describe("moments home capture pill clears content on the empty Start day at every desktop height (#483 round 4)", () => {
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1280, height: 800 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`pill never covers the rail/schedule/areas card at ${viewport.width}x${viewport.height}, scroll 0 and end`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const pill = page.getByTestId("capture-affordance");
+      const rail = page.getByTestId("start-moment-pipeline-rail");
+      const schedule = page.getByTestId("start-schedule-card");
+      const areas = page.getByTestId("side-rail-areas-card");
+      await expect(pill).toBeVisible();
+      await expect(rail).toBeVisible();
+      await expect(schedule).toBeVisible();
+      await expect(areas).toBeVisible();
+
+      // Truthful-data precondition: this guard is about the genuinely-empty
+      // day (the only state the deleted LoopOrientation ever rendered for),
+      // proven by the rail itself sitting in explain mode — a caption cell,
+      // not a numeral badge.
+      await expect(
+        page.getByTestId("pipeline-overview-caption-capture"),
+      ).toBeVisible();
+
+      const intersects = (
+        a: { x: number; y: number; width: number; height: number },
+        b: { x: number; y: number; width: number; height: number },
+      ) =>
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y;
+
+      for (const position of ["zero", "end"] as const) {
+        await page.evaluate((pos) => {
+          window.scrollTo(
+            0,
+            pos === "zero" ? 0 : document.documentElement.scrollHeight,
+          );
+        }, position);
+
+        const pillBox = await pill.boundingBox();
+        expect(pillBox, `pill box at scroll ${position}`).not.toBeNull();
+
+        for (const [name, locator] of [
+          ["pipeline rail", rail],
+          ["schedule card", schedule],
+          ["areas card", areas],
+        ] as const) {
+          const box = await locator.boundingBox();
+          expect(box, `${name} box at scroll ${position}`).not.toBeNull();
+          expect(
+            intersects(pillBox!, box!),
+            `pill intersects ${name} at scroll ${position} (${viewport.width}x${viewport.height})`,
+          ).toBe(false);
+        }
+      }
     });
   }
 });
@@ -378,6 +471,228 @@ test.describe("mobile bottom band never intersects content (#593)", () => {
           ).toBe(false);
         }
       }
+    });
+  }
+});
+
+// R5 (premium push #483 round 5, blocker 1): the explain-mode rail
+// (PipelineOverview.tsx, all-zero counts) used to silently clip stages at
+// narrow/mid viewports — measured before the fix: 196px hidden at 640px
+// width (Execute AND Review gone entirely), 44-81px hidden at 375-430px
+// (Review clipped). This app's truthfulness doctrine treats silently
+// dropped content as worse than an imperfect display, so the fix is
+// structural (a wrapping grid below `lg:`, see the component's R5 doc
+// comment), not a scroll affordance — every stage must be FULLY visible
+// (not just present in the DOM) at every one of these widths. This guard
+// checks both rail modes: explain mode (the default empty day) and counts
+// mode (after a real capture moves a stage off zero), since the pre-fix bug
+// affected both, just by different amounts.
+test.describe("moments home Pipeline rail never clips a stage, in either mode (#483 round 5, blocker 1)", () => {
+  for (const width of [375, 390, 430, 640, 1366]) {
+    test(`explain mode: every stage cell is fully within the viewport at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect(
+        page.getByTestId("pipeline-overview-caption-capture"),
+      ).toBeVisible();
+
+      for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
+        const cell = page.getByTestId(`pipeline-overview-stage-${stage}`);
+        await expect(cell).toBeVisible();
+        const box = await cell.boundingBox();
+        expect(box, `${stage} cell box at ${width}px`).not.toBeNull();
+        expect(
+          box!.width,
+          `${stage} cell has real width at ${width}px`,
+        ).toBeGreaterThan(0);
+        expect(
+          box!.x + box!.width,
+          `${stage} cell's right edge stays within the ${width}px viewport`,
+        ).toBeLessThanOrEqual(width + 1);
+        expect(
+          box!.x,
+          `${stage} cell's left edge stays within the ${width}px viewport`,
+        ).toBeGreaterThanOrEqual(0);
+      }
+
+      // The rail must never force the page itself wider than the viewport.
+      const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    });
+  }
+
+  test("counts mode: every stage cell is fully within the viewport at every width, after a real capture", async ({
+    page,
+  }) => {
+    // Perform one real capture (parity with the mock-mode capture test
+    // above) so every stage cell renders a numeral badge, not a caption —
+    // the pre-fix bug's smaller ~18-81px counts-mode clip at narrow widths.
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.goto("/");
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await page.keyboard.press("1");
+    await page.getByTestId("capture-affordance").click();
+    const textarea = page.getByTestId("capture-overlay-textarea");
+    await expect(textarea).toBeVisible();
+    await textarea.fill("Round 5 counts-mode rail guard capture");
+    await textarea.press("Enter");
+    await expect(page.getByTestId("capture-overlay-textarea")).toBeHidden();
+
+    for (const width of [375, 390, 430, 640, 1366]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.reload();
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+      await expect(
+        page.getByTestId("pipeline-overview-count-capture"),
+      ).toBeVisible();
+
+      for (const stage of ["capture", "triage", "plan", "execute", "review"]) {
+        const cell = page.getByTestId(`pipeline-overview-stage-${stage}`);
+        const box = await cell.boundingBox();
+        expect(
+          box,
+          `${stage} cell box at ${width}px (counts mode)`,
+        ).not.toBeNull();
+        expect(
+          box!.x + box!.width,
+          `${stage} cell's right edge stays within ${width}px (counts mode)`,
+        ).toBeLessThanOrEqual(width + 1);
+      }
+    }
+  });
+});
+
+// R5 (premium push #483 round 5, blocker 2): R4-A's own honest disclosure —
+// clearance under SideRail's Areas card was only 4.78-7.33px with the demo
+// seed's 4 areas, and arithmetic proved a 5th area would go negative (each
+// row ~32.8px, no cap existed). The fix bounds the Areas list to a fixed
+// height (AreaHealthDots.tsx/globals.css's --rail-areas-max-h) regardless of
+// area count, so this guard asserts a real numeric MARGIN — not just
+// non-intersection — at the owner's real 1366x768 viewport, in both scroll
+// positions and both themes, with the real (currently 4-area) demo seed.
+// >=20px is a deliberately generous floor versus the ~55.78px this fix
+// measured in development: real-browser/headless font-metric variance was
+// itself ~2.5px on the OLD single-digit-px baseline (see R4-A), so a floor
+// well above that noise band is what actually proves the fix, not a bare
+// `> 0`.
+test.describe("moments home capture pill keeps a real clearance margin under the Areas card, regardless of theme (#483 round 5, blocker 2)", () => {
+  for (const theme of ["light", "dark"] as const) {
+    test(`pill clears the Areas card by a real margin at 1366x768 in ${theme} theme, scroll 0 and end`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1366, height: 768 });
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.evaluate((t) => localStorage.setItem("theme", t), theme);
+      await page.reload();
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const pill = page.getByTestId("capture-affordance");
+      const areasCard = page.getByTestId("side-rail-areas-card");
+      await expect(pill).toBeVisible();
+      await expect(areasCard).toBeVisible();
+
+      // Truthfulness precondition: capping the list must never remove an
+      // area from the DOM. The demo seed's real area count stays reachable
+      // regardless of the internal scroll pane.
+      const areaRowCount = await page
+        .locator('[data-testid^="area-health-row-"]')
+        .count();
+      expect(areaRowCount).toBeGreaterThan(0);
+
+      for (const position of ["zero", "end"] as const) {
+        await page.evaluate((pos) => {
+          window.scrollTo(
+            0,
+            pos === "zero" ? 0 : document.documentElement.scrollHeight,
+          );
+        }, position);
+
+        const pillBox = await pill.boundingBox();
+        const areasBox = await areasCard.boundingBox();
+        expect(pillBox, `pill box at scroll ${position}`).not.toBeNull();
+        expect(areasBox, `areas box at scroll ${position}`).not.toBeNull();
+
+        const clearance = pillBox!.y - (areasBox!.y + areasBox!.height);
+        expect(
+          clearance,
+          `pill-to-areas-card clearance at scroll ${position} (${theme} theme) was ${clearance}px`,
+        ).toBeGreaterThan(20);
+      }
+    });
+  }
+});
+
+// R6 (premium push #483 round 6, regression fix): the fix above shipped an
+// unconditional cap (AREAS_SCROLL_THRESHOLD one below the real demo seed's
+// 4 areas), so it hid 2 of the owner's 4 real areas at EVERY viewport,
+// including roomy ones — 1440x900 measured ~187px of unused canvas below
+// the card while the list still scrolled and only 2 of 4 areas showed. The
+// owner is map-first; the Areas list is a primary at-a-glance surface, so
+// hiding half of it to protect a floating pill's clearance was backwards.
+// This guard proves the actual fix: at both the owner's real desktop
+// viewports, all 4 real areas render with zero internal scrolling — no
+// `moments-rail-scroll` cap class, no scrollable overflow, no "more below"
+// fade (a fade here would be a lie: there's nothing more to scroll to).
+// The R5 guard above still holds (clearance now measures 28.78px at
+// 1366x768/scroll-zero, safely above its >20 floor) — this is additive,
+// not a replacement.
+test.describe("moments home shows every real area unscrolled, at the owner's real viewports (#483 round 6)", () => {
+  for (const viewport of [
+    { width: 1366, height: 768 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`all 4 demo areas are visible with no internal scroll at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.evaluate(() => localStorage.setItem("theme", "dark"));
+      await page.reload();
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+      await page.keyboard.press("1");
+      await expect(page.getByTestId("start-moment")).toBeVisible();
+
+      const areasCard = page.getByTestId("side-rail-areas-card");
+      await expect(areasCard).toBeVisible();
+
+      const rows = page.locator('[data-testid^="area-health-row-"]');
+      await expect(rows).toHaveCount(4);
+      for (let i = 0; i < 4; i += 1) {
+        await expect(rows.nth(i)).toBeVisible();
+      }
+
+      const list = page.getByTestId("area-health-dots");
+      expect(await list.getAttribute("class")).not.toMatch(
+        /\bmoments-rail-scroll\b/,
+      );
+      await expect(
+        page.getByTestId("area-health-dots-fade"),
+      ).not.toBeAttached();
+      await expect(
+        page.getByTestId("area-health-dots-overflow-hint"),
+      ).not.toBeAttached();
+
+      // No genuine internal overflow either, independent of which class
+      // implements it — the list must actually fit its own box.
+      const [scrollHeight, clientHeight] = await list.evaluate((el) => [
+        el.scrollHeight,
+        el.clientHeight,
+      ]);
+      expect(scrollHeight).toBeLessThanOrEqual(clientHeight + 1);
     });
   }
 });

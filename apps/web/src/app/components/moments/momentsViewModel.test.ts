@@ -657,6 +657,17 @@ describe("buildStartVM — area health precedence", () => {
     expect(vm.areas[0].status).toBe("ok");
     expect(vm.areas[0].note).toBe("1 open");
   });
+
+  // D-11 (#483): area health carries the area's real identity color
+  // straight from Phase2MockArea.color — not a fabricated per-status hue.
+  it("carries the area's real color through, unchanged from Phase2MockArea", () => {
+    const state = stateWith({
+      areas: [makeArea({ id: "area-1", color: "#9333ea" })],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.areas[0].color).toBe("#9333ea");
+  });
 });
 
 describe("buildFlowVM", () => {
@@ -1516,9 +1527,19 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         deferredCount: 0,
         pendingTriageCount: 0,
       }),
-    ).toBe(
-      "Nothing on the calendar and nothing queued — capture something to get moving.",
-    );
+    ).toBe("Nothing on the calendar, and nothing queued yet.");
+  });
+
+  it("R2-B (#483 round 2): the empty-day sentence states the fact only — no capture call-to-action (the hero card owns that)", () => {
+    const sentence = buildDaySynthesis({
+      todayBlockCount: 0,
+      focusFilledCount: 0,
+      focusBudget: 2,
+      deferredCount: 0,
+      pendingTriageCount: 0,
+    });
+    expect(sentence).not.toContain("capture");
+    expect(sentence).not.toContain("Capture");
   });
 
   it("singularizes 1 block and 1 focus slot", () => {
@@ -1592,9 +1613,7 @@ describe("buildDaySynthesis — D-2 (#483)", () => {
         deferredCount: 0,
         pendingTriageCount: 0,
       }),
-    ).toBe(
-      "Nothing on the calendar and nothing queued — capture something to get moving.",
-    );
+    ).toBe("Nothing on the calendar, and nothing queued yet.");
     expect(
       buildDaySynthesis({
         todayBlockCount: 2,
@@ -1667,3 +1686,119 @@ describe("buildStartVM — D-2 hero wiring (#483)", () => {
     );
   });
 });
+
+describe("buildStartVM — D-8 topPendingTriageItem (#483)", () => {
+  it("is null when nothing is pending triage", () => {
+    const state = stateWith({});
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem).toBeNull();
+  });
+
+  it("picks the oldest pending-triage capture (created_at ascending)", () => {
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c-newer",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: "Newer capture",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: daysBefore(1),
+        },
+        {
+          id: "c-older",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: "Older capture, waiting longest",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "triage_required",
+          created_at: daysBefore(5),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem).toEqual({
+      id: "c-older",
+      summary: "Older capture, waiting longest",
+      areaLabel: "Area area-1",
+    });
+  });
+
+  it("ignores resolved/archived/parsed captures", () => {
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c-done",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: "Already resolved",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "resolved",
+          created_at: daysBefore(10),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem).toBeNull();
+  });
+
+  it("truncates a long raw_text summary rather than rendering it in full", () => {
+    const longText = "x".repeat(200);
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c1",
+          user_id: "user-1",
+          area_id: "area-1",
+          raw_text: longText,
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: daysBefore(1),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem?.summary.length).toBeLessThan(
+      longText.length,
+    );
+    expect(vm.topPendingTriageItem?.summary.endsWith("…")).toBe(true);
+  });
+
+  it("resolves an empty areaLabel when the capture has no area_id", () => {
+    const state = stateWith({
+      captureItems: [
+        {
+          id: "c1",
+          user_id: "user-1",
+          area_id: null,
+          raw_text: "No area",
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: daysBefore(1),
+        },
+      ],
+    });
+
+    const vm = buildStartVM(state, { now: NOW });
+    expect(vm.topPendingTriageItem?.areaLabel).toBe("");
+  });
+});
+
+// R3-A's `dayIsEmpty` flag (its own describe block used to live here) was
+// removed in R4-A (#483 round 4): its only consumer was `LoopOrientation`'s
+// gate in StartMoment.tsx, and that component is gone — its ratified content
+// now lives inside PipelineOverview as an empty-pipeline state driven
+// directly by `pipelineCounts`, not by this broader day-level signal. See
+// PipelineOverview.tsx's R4-A doc comment and PipelineOverview.test.tsx's
+// "explain mode" coverage for the replacement behaviour/tests. The
+// `buildDaySynthesis` "genuinely nothing" sentence itself is unchanged and
+// still covered above.
