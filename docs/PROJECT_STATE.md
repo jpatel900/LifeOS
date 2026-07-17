@@ -13,7 +13,7 @@ Evolve LifeOS from the shipped V1 personal workflow cockpit through narrow, owne
 
 - Safety boundaries are unchanged: no silent external writes, no autonomous rescheduling, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
 - Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification` (2026-07-03); GitHub auto-merge gates on these. The T0 safe auto-merge allowlist includes `.agents/skills/**` (owner-approved, 2026-07-03).
-- The app remains one deployable Next.js app for current server logic; Supabase Edge Functions are default-no unless a specific scheduled or integration constraint justifies them.
+- Server logic remains one deployable Next.js app, and per ADR 0006 that app is the single authoritative domain/security layer for MULTIPLE clients: the web UI (primary) and the headless `@lifeos/cli` (agents/scripts/CI) consume shared, versioned `/api/v1` contracts with user-scoped bearer auth. Supabase Edge Functions are default-no unless a specific scheduled or integration constraint justifies them.
 - Persistence is intentionally mixed: authenticated Supabase paths are used where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
 - `design_handoff_lifeos/README.md` is preserved as a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
 - ADR 0005 governs staged evolution: stage labels order dependencies and risk, data-independent foundations may proceed when owner-ratified, and evidence-dependent behavior remains gated by relevant usage evidence.

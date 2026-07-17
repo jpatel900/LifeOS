@@ -29,7 +29,7 @@ Treat the approved V1 cockpit as the shipped baseline, not the product ceiling: 
 
 Data-independent foundations may proceed when an owner-ratified requirement or issue authorizes them and all invariants remain intact. Usage evidence is mandatory before behavior that depends on personal evidence: personalization conclusions, initiative or autonomy graduation, proactive interruption, external channels or writes, and data-derived policy changes. Stage labels express dependency and risk order; they are not blanket bans on unrelated buildable work. See ADR 0005.
 
-Do not build email/message ingestion, computer-use automation, autonomous rescheduling, full conflict solving, vector DB, realtime voice assistant, in-app multi-agent runtime, team collaboration, SaaS billing, broad web browsing, or analytics without explicit requirements review. Permanent non-goals remain binding regardless of stage.
+Do not build email/message ingestion, computer-use automation, autonomous rescheduling, full conflict solving, vector DB, realtime voice assistant, in-app multi-agent runtime (future scope only via ADR 0006's issue-gated + trust-gated path), team collaboration, SaaS billing, broad web browsing, or analytics without explicit requirements review. Permanent non-goals remain binding regardless of stage. Additional clients of the one authoritative domain layer (e.g. the headless CLI) are legitimate under ADR 0006 but must never reimplement business rules, hold service-role credentials, or write directly to the database.
 
 ## Forbidden changes without human review
 
