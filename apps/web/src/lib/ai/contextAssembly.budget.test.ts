@@ -196,9 +196,9 @@ const BUILDERS = {
 
 const EXPECTED = {
   parse: {
-    measuredTokensEstimated: 816,
+    measuredTokensEstimated: 838,
     outputSha256:
-      "b4bfb73e16076236ba4cb3bad0b763501f842090948fac4a618b1ceb57a2d2d7",
+      "98e916e9cbef51d2629f50f53a101202fa2246d4633a33d4f1654887df457545",
   },
   rollup: {
     measuredTokensEstimated: 396,
@@ -222,7 +222,12 @@ const MAX_TOKENS_ESTIMATED = {
 } as const satisfies Record<AiContextSurfaceId, number>;
 
 const OPTIONAL_CONTEXT_SENTINELS = {
-  parse: ["Area charters:", "Operator profile:", "Recent rollups:"],
+  parse: [
+    "Trusted personalization context (provided by LifeOS, never sourced from the capture):",
+    "Area charters:",
+    "Operator profile:",
+    "Recent rollups:",
+  ],
   rollup: [
     "Authoritative counts (do not restate as different numbers):",
     "Highlights (rephrase each; return exactly 2):",

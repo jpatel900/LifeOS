@@ -14,6 +14,17 @@ import { TASK_MAP_DRAFT_SCHEMA_VERSION } from "./contracts/taskMapDraft";
  * charter and the operator profile are empty/absent, the assembled messages are
  * byte-identical to the pre-slice `buildParseCaptureMessages` output. Charter
  * and profile context are strictly append-only blocks gated on non-empty input.
+ *
+ * INV-8 role separation (issue #448, Option B): trusted personalization
+ * context (charters / operator profile / rollups) is emitted as its OWN user
+ * message BEFORE the capture message — never appended after the untrusted
+ * capture text. The raw capture is always the FINAL message and contains only
+ * the area list and the capture itself, so a crafted capture cannot forge the
+ * trusted-context section markers into trusted position: cross-message forgery
+ * is structurally impossible regardless of what markers the capture contains.
+ * The empty-personalization output remains byte-identical to the #254
+ * baseline (two messages); only non-empty-personalization prompts changed —
+ * the deliberate re-baseline the #448 acceptance criteria anticipate.
  */
 
 export const PARSE_CAPTURE_PROMPT_VERSION = "parse_capture.v3" as const;
@@ -103,10 +114,10 @@ export const AI_CONTEXT_SURFACE_DECLARATIONS = {
   parse: {
     builderName: "buildParseCaptureMessages",
     fixtureId: "parse.full-context.v1",
-    measuredTokensEstimated: 816,
+    measuredTokensEstimated: 838,
     maxTokensEstimated: 980,
     justification:
-      "fixture_id=parse.full-context.v1; measured_tokens_est=816; max_tokens_est=980; rationale=Exercises every optional personalization block with reviewed headroom for prompt maintenance.",
+      "fixture_id=parse.full-context.v1; measured_tokens_est=838; max_tokens_est=980; rationale=Exercises every optional personalization block with reviewed headroom for prompt maintenance; re-measured for the #448 role-separated trusted-context message (header line added; max unchanged).",
   },
   rollup: {
     builderName: "buildRollupProseMessages",
@@ -169,9 +180,21 @@ function trimmedOrNull(value: string | null | undefined): string | null {
 }
 
 /**
- * Build the personalization block appended to the user message. Returns an
- * empty array (no lines) when neither charter nor profile carries content, so
- * the joined prompt is byte-identical to the pre-slice baseline.
+ * INV-8 (#448, Option B) — the header line of the role-separated trusted-
+ * context message. Trusted personalization travels in its own message ahead of
+ * the capture; this label only ever appears as the first line of that message.
+ * A capture that contains this exact string still lands verbatim inside the
+ * final capture message and gains nothing: position, not wording, is the
+ * boundary.
+ */
+export const TRUSTED_CONTEXT_HEADER =
+  "Trusted personalization context (provided by LifeOS, never sourced from the capture):" as const;
+
+/**
+ * Build the personalization block for the role-separated trusted-context
+ * message. Returns an empty array (no lines) when neither charter, profile,
+ * nor rollups carry content, so no trusted-context message is emitted and the
+ * assembled prompt is byte-identical to the pre-slice baseline.
  */
 function buildPersonalizationLines(
   areaContext: ParseCaptureAreaContext[] | undefined,
@@ -242,33 +265,52 @@ function buildPersonalizationLines(
 }
 
 /**
- * The single prompt-construction entry point for capture parsing. Charter and
- * operator-profile context are appended only when non-empty.
+ * The single prompt-construction entry point for capture parsing.
+ *
+ * INV-8 (#448, Option B) message order:
+ *   1. system prompt (instructions);
+ *   2. trusted-context user message (charters / profile / rollups) — emitted
+ *      only when non-empty;
+ *   3. capture user message (area list + raw capture) — ALWAYS the final
+ *      message, and the only message that ever contains `rawText`.
+ * Untrusted capture text can therefore never precede, follow, or forge its way
+ * into the trusted-context message, whatever markers it contains.
  */
 export function buildParseCaptureMessages(
   input: BuildParseCaptureMessagesInput,
 ): ParseCaptureMessage[] {
-  return [
+  const personalizationLines = buildPersonalizationLines(
+    input.areaContext,
+    input.operatorProfile,
+    input.rollupContext,
+  );
+
+  const messages: ParseCaptureMessage[] = [
     {
       role: "system",
       content: systemPrompt,
     },
-    {
-      role: "user",
-      content: [
-        "Available areas:",
-        formatAreaContext(input.areaContext),
-        "",
-        "Raw capture:",
-        input.rawText,
-        ...buildPersonalizationLines(
-          input.areaContext,
-          input.operatorProfile,
-          input.rollupContext,
-        ),
-      ].join("\n"),
-    },
   ];
+
+  if (personalizationLines.length > 0) {
+    messages.push({
+      role: "user",
+      content: [TRUSTED_CONTEXT_HEADER, ...personalizationLines].join("\n"),
+    });
+  }
+
+  messages.push({
+    role: "user",
+    content: [
+      "Available areas:",
+      formatAreaContext(input.areaContext),
+      "",
+      "Raw capture:",
+      input.rawText,
+    ].join("\n"),
+  });
+
+  return messages;
 }
 
 /**
