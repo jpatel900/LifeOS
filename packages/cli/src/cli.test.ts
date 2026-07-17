@@ -205,3 +205,65 @@ describe("auth commands", () => {
     expect(mocks.login).not.toHaveBeenCalled();
   });
 });
+
+describe("lifeos areas + today (#642)", () => {
+  it("areas list calls /api/v1/areas with the bearer token, active-only by default", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { ok: true, api_version: "1", data: { areas: [] } }),
+    );
+    const { io } = makeIo();
+
+    const outcome = await runCli(["areas", "list"], io, config);
+
+    expect(outcome.exitCode).toBe(0);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://localhost:3000/api/v1/areas");
+    expect(init.headers.authorization).toBe("Bearer user-token");
+  });
+
+  it("areas list --include-inactive widens the read", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { ok: true, data: { areas: [] } }),
+    );
+    const { io } = makeIo();
+
+    await runCli(["areas", "list", "--include-inactive"], io, config);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "http://localhost:3000/api/v1/areas?include_inactive=1",
+    );
+  });
+
+  it("today computes the LOCAL day window client-side and passes it as the required query", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { ok: true, data: { blocks: [], tasks: [] } }),
+    );
+    const { io } = makeIo();
+
+    const outcome = await runCli(["today", "--date", "2026-07-17"], io, config);
+
+    expect(outcome.exitCode).toBe(0);
+    const url = new URL(fetchMock.mock.calls[0][0]);
+    expect(url.pathname).toBe("/api/v1/blocks");
+    const start = url.searchParams.get("start");
+    const end = url.searchParams.get("end");
+    // Day authority is client-side: the window is the LOCAL 2026-07-17
+    // midnight-to-midnight converted to ISO instants, exactly 24h apart.
+    expect(start).toBe(new Date(2026, 6, 17).toISOString());
+    expect(end).toBe(new Date(2026, 6, 18).toISOString());
+    expect(Date.parse(end!) - Date.parse(start!)).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it("today rejects a malformed --date before any network or auth work", async () => {
+    const { lines, io } = makeIo();
+
+    for (const bad of ["2026-7-17", "17-07-2026", "2026-02-30", "tomorrow"]) {
+      const outcome = await runCli(["today", "--date", bad], io, config);
+      expect(outcome.exitCode).toBe(1);
+    }
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.getAccessToken).not.toHaveBeenCalled();
+    expect(JSON.parse(lines[0]).ok).toBe(false);
+  });
+});

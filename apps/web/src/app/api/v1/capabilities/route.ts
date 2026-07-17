@@ -12,6 +12,8 @@ const API_V1_CAPABILITIES = [
   "capabilities.read",
   "tasks.list",
   "captures.create",
+  "areas.list",
+  "blocks.list",
 ] as const;
 
 export async function GET() {

@@ -7,6 +7,8 @@ import { loadConfig, type CliConfig } from "./config";
  * Command surface (slice 1, issue #637):
  *   lifeos capabilities
  *   lifeos tasks list
+ *   lifeos areas list [--include-inactive]
+ *   lifeos today [--date YYYY-MM-DD]
  *   lifeos capture <text> [--return-hook <hook>] [--area-id <uuid>] [--client-capture-id <uuid>]
  *   lifeos login --email <email> [--password-env <VAR>]
  *   lifeos logout
@@ -74,8 +76,40 @@ function emitApiResult(io: CliIo, result: api.ApiResult): CliOutcome {
 const USAGE = {
   ok: false,
   error:
-    "Usage: lifeos <capabilities | tasks list | capture <text> | login --email <email> | logout | whoami>",
+    "Usage: lifeos <capabilities | tasks list | areas list | today | capture <text> | login --email <email> | logout | whoami>",
 };
+
+/**
+ * Day authority stays CLIENT-side (#642): the local day window is computed
+ * here from the machine's clock/timezone — the server never derives "today"
+ * itself. `--date YYYY-MM-DD` pins the day; otherwise the current local day.
+ */
+export function localDayWindow(
+  now: Date,
+  dateFlag?: string,
+): { start: string; end: string } | null {
+  let year: number;
+  let monthIndex: number;
+  let day: number;
+
+  if (dateFlag !== undefined) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateFlag);
+    if (!match) return null;
+    year = Number(match[1]);
+    monthIndex = Number(match[2]) - 1;
+    day = Number(match[3]);
+  } else {
+    year = now.getFullYear();
+    monthIndex = now.getMonth();
+    day = now.getDate();
+  }
+
+  const start = new Date(year, monthIndex, day, 0, 0, 0, 0);
+  const end = new Date(year, monthIndex, day + 1, 0, 0, 0, 0);
+  if (Number.isNaN(start.getTime()) || start.getDate() !== day) return null;
+
+  return { start: start.toISOString(), end: end.toISOString() };
+}
 
 export async function runCli(
   argv: string[],
@@ -104,6 +138,28 @@ export async function runCli(
         if (rest[0] !== "list") return emit(io, USAGE, 1);
         const token = await auth.getAccessToken(config);
         return emitApiResult(io, await api.listTasks(config, token));
+      }
+
+      case "areas": {
+        if (rest[0] !== "list") return emit(io, USAGE, 1);
+        const { flags } = parseFlags(rest.slice(1));
+        const token = await auth.getAccessToken(config);
+        return emitApiResult(
+          io,
+          await api.listAreas(config, token, {
+            includeInactive: flags["include-inactive"] === "true",
+          }),
+        );
+      }
+
+      case "today": {
+        const { flags } = parseFlags(rest);
+        const window = localDayWindow(new Date(), flags.date);
+        if (!window) {
+          return emitError(io, "today requires --date as YYYY-MM-DD.");
+        }
+        const token = await auth.getAccessToken(config);
+        return emitApiResult(io, await api.listBlocks(config, token, window));
       }
 
       case "capture": {
