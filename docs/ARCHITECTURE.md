@@ -21,16 +21,16 @@ V1 describes the shipped architecture baseline, not a freeze on data-independent
 
 ## 2. Recommended Stack
 
-| Layer                        | Choice                                                              | Reason                                                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Frontend                     | Next.js                                                             | Common, agent-friendly, deploys easily                                                                                        |
-| Hosting                      | Vercel Hobby initially                                              | Low fixed cost, simple deployment                                                                                             |
-| Database/Auth                | Supabase                                                            | Postgres + Auth + RLS + local DB dev via Supabase tooling                                                                     |
-| Server logic (baseline)      | Next.js Route Handlers + Server Actions                             | Single app server surface; secrets and integrations stay in `apps/web`                                                        |
-| Server logic (ADR exception) | Supabase Edge Functions                                             | Optional by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`) |
-| AI                           | OpenAI Responses API + Structured Outputs                           | Typed AI output and tool-ready interaction model                                                                              |
-| Calendar                     | Google Calendar API                                                 | Free/busy checks and approved event writes                                                                                    |
-| Background jobs              | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity                                                                                                   |
+| Layer                        | Choice                                                              | Reason                                                                                                                                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend                     | Next.js                                                             | Common, agent-friendly, deploys easily                                                                                                                                                                                                  |
+| Hosting                      | Vercel Hobby initially                                              | Low fixed cost, simple deployment                                                                                                                                                                                                       |
+| Database/Auth                | Supabase                                                            | Postgres + Auth + RLS + local DB dev via Supabase tooling                                                                                                                                                                               |
+| Server logic (baseline)      | Next.js Route Handlers + Server Actions                             | One authoritative domain/security layer in `apps/web`; secrets and integrations stay server-side. Multiple clients (web UI, headless CLI) consume it through shared, versioned contracts — see `docs/adr/0006-multi-client-doctrine.md` |
+| Server logic (ADR exception) | Supabase Edge Functions                                             | Optional by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`)                                                                                                           |
+| AI                           | OpenAI Responses API + Structured Outputs                           | Typed AI output and tool-ready interaction model                                                                                                                                                                                        |
+| Calendar                     | Google Calendar API                                                 | Free/busy checks and approved event writes                                                                                                                                                                                              |
+| Background jobs              | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity                                                                                                                                                                                                             |
 
 ## 3. Runtime Architecture
 
@@ -327,7 +327,8 @@ Additional invariants:
 | Use local proposals before calendar writes                                                                   | Accepted |
 | Keep external writes approval-gated                                                                          | Accepted |
 | Use strict schemas for AI output                                                                             | Accepted |
-| Avoid multi-agent runtime in app                                                                             | Accepted |
+| One authoritative domain/security layer; clients never bypass it (ADR 0006)                                  | Accepted |
+| No in-app multi-agent runtime today; future scope only via its own owner-ratified ADR + issue (ADR 0006)     | Accepted |
 | Keep realtime voice unapproved unless a reviewed requirement preserves privacy, cost, and consent boundaries | Accepted |
 | Avoid full calendar sync                                                                                     | Accepted |
 

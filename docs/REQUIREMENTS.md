@@ -1061,7 +1061,8 @@ Acceptance criteria:
 - Keep one repo.
 - Keep one schema source of truth.
 - Prefer boring CRUD plus typed **Next.js Route Handlers / Server Actions** (Supabase Edge Functions only when justified per `docs/adr/0001-v1-server-boundary.md`).
-- Avoid multi-agent orchestration inside app.
+- One authoritative domain/security layer; additional clients (headless CLI, agents, scripts) consume shared, versioned server contracts and never reimplement business rules or write directly to the database (`docs/adr/0006-multi-client-doctrine.md`).
+- No multi-agent orchestration inside the app today; it is issue-gated and trust-gated future scope requiring its own owner-ratified ADR (ADR 0006), not a permanent ban.
 - Use strict TypeScript types and shared schemas.
 
 Acceptance criteria:
@@ -1106,7 +1107,7 @@ The next approved planning focus after the current governance cleanup is the pro
 
 Use that focus to improve how accepted work is structured, related, reviewed, and surfaced inside the existing LifeOS workflow.
 
-Do not read that as approval for new ingestion channels, browser/computer-use automation, realtime voice, vector search, plugin marketplaces, multi-agent runtime, team collaboration, public SaaS billing, advanced analytics warehouses, self-healing automation, broad web browsing, or new vendors/integrations. The canonical "do not build" and change-control lists remain `AGENTS.md` section 4 and section 20.
+Do not read that as approval for new ingestion channels, browser/computer-use automation, realtime voice, vector search, plugin marketplaces, a multi-agent runtime (future scope strictly via ADR 0006's issue-gated path), team collaboration, public SaaS billing, advanced analytics warehouses, self-healing automation, broad web browsing, or new vendors/integrations. The canonical "do not build" and change-control lists remain `AGENTS.md` section 4 and section 20.
 
 Background-reference docs may inform planning, but they cannot expand implementation scope on their own.
 
@@ -1125,7 +1126,7 @@ The shipped baseline excludes the following. They remain unapproved until a revi
 - body-doubling sessions
 - full analytics warehouse
 - vector search
-- multi-agent runtime
+- multi-agent runtime (not built in this scope; reopenable only via ADR 0006's issue-gated path)
 - public SaaS billing
 
 ### Permanent non-goals (binding beyond V1 — the graveyard)
