@@ -18,7 +18,7 @@ Trust boundaries:
 Start with the smallest relevant context:
 
 1. Read `AGENTS.md`.
-2. Read `docs/agent/CONTEXT_INDEX.md`.
+2. Read `docs/SYSTEM_MAP.md` (orientation, where truth lives).
 3. Read `docs/PROJECT_STATE.md` only if needed for current status or implementation notes.
 4. If trusted issue context is available outside PR-authored text, compare the diff against the issue acceptance criteria, research/spec checkpoint, and forbidden changes. If that trusted checkpoint context is not available, say so plainly.
 

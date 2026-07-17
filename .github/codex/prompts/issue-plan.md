@@ -17,7 +17,7 @@ Trust boundaries:
 Start with the smallest relevant context:
 
 1. Read `AGENTS.md`.
-2. Read `docs/agent/CONTEXT_INDEX.md`.
+2. Read `docs/SYSTEM_MAP.md` (orientation, where truth lives; use `pnpm agent:context <area>` for on-demand area context).
 3. Read `.github/AGENT_AUTOMATION_POLICY.md`.
 4. Read `docs/agent/CODEX_PROMPT_TEMPLATE.md`.
 5. Read `docs/PROJECT_STATE.md` only if needed.
