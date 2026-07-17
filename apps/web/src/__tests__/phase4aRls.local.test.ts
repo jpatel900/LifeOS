@@ -2076,7 +2076,120 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
         .eq("id", userA.areaId);
     }
   });
+
+  // #292 Stage-2 entry gate instrumentation: brief_views. Append-only by
+  // design (no update/delete policy, see 20260718120000_add_brief_views.sql)
+  // so these tests use a unique per-run viewed_on date instead of the usual
+  // insert/cleanup-by-marker pattern — there is no delete policy to clean up
+  // with, and the (user_id, viewed_on) primary key means a fixed date would
+  // collide across repeated local runs.
+  it("lets user A read own brief_views but not user B's", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const viewedOn = randomFutureDateStamp();
+
+    const { error: insertAError } = await userAClient
+      .from("brief_views")
+      .insert({ user_id: userA.id, viewed_on: viewedOn });
+    expect(insertAError).toBeNull();
+
+    const { error: insertBError } = await userBClient
+      .from("brief_views")
+      .insert({ user_id: userB.id, viewed_on: viewedOn });
+    expect(insertBError).toBeNull();
+
+    const { data: visibleToA, error: selectAError } = await userAClient
+      .from("brief_views")
+      .select("user_id,viewed_on")
+      .eq("viewed_on", viewedOn);
+
+    expect(selectAError).toBeNull();
+    expect(visibleToA).toEqual([{ user_id: userA.id, viewed_on: viewedOn }]);
+  });
+
+  it("prevents user A from inserting brief_views for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const viewedOn = randomFutureDateStamp();
+
+    const { error } = await userAClient
+      .from("brief_views")
+      .insert({ user_id: userB.id, viewed_on: viewedOn });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("re-inserting the same (user, day) brief_view is a harmless conflict, not a leak", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const viewedOn = randomFutureDateStamp();
+
+    const { error: firstError } = await userAClient
+      .from("brief_views")
+      .insert({ user_id: userA.id, viewed_on: viewedOn });
+    expect(firstError).toBeNull();
+
+    const { error: secondError } = await userAClient
+      .from("brief_views")
+      .upsert(
+        { user_id: userA.id, viewed_on: viewedOn },
+        { onConflict: "user_id,viewed_on", ignoreDuplicates: true },
+      );
+    expect(secondError).toBeNull();
+
+    const { data, error: selectError } = await userAClient
+      .from("brief_views")
+      .select("user_id,viewed_on")
+      .eq("viewed_on", viewedOn);
+    expect(selectError).toBeNull();
+    expect(data).toEqual([{ user_id: userA.id, viewed_on: viewedOn }]);
+  });
+
+  it("denies update and delete on brief_views for both owner and cross-user", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const viewedOn = randomFutureDateStamp();
+
+    const { error: insertError } = await userAClient
+      .from("brief_views")
+      .insert({ user_id: userA.id, viewed_on: viewedOn });
+    expect(insertError).toBeNull();
+
+    // No update policy exists at all: PostgREST reports this as a schema
+    // cache / permission failure rather than an RLS row-filter (there is no
+    // updatable resource to filter), so this asserts denial broadly instead
+    // of the row-level-security message pattern used elsewhere in this file.
+    const { data: updateData, error: updateError } = await userAClient
+      .from("brief_views")
+      .update({ viewed_on: viewedOn })
+      .eq("viewed_on", viewedOn)
+      .select("viewed_on");
+    expect(updateData == null || updateData.length === 0).toBe(true);
+    if (updateError) {
+      expect(updateError.message).toMatch(
+        /permission denied|row-level security|violates row-level/i,
+      );
+    }
+
+    const { data: deleteData, error: deleteError } = await userAClient
+      .from("brief_views")
+      .delete()
+      .eq("viewed_on", viewedOn)
+      .select("viewed_on");
+    expect(deleteData == null || deleteData.length === 0).toBe(true);
+    if (deleteError) {
+      expect(deleteError.message).toMatch(
+        /permission denied|row-level security|violates row-level/i,
+      );
+    }
+  });
 });
+
+function randomFutureDateStamp(): string {
+  // Far enough in the future to never collide with real usage data, random
+  // enough per test run to never collide with a previous local RLS run.
+  const base = Date.UTC(2080, 0, 1);
+  const offsetDays = Math.floor(Math.random() * 3650);
+  const stamp = new Date(base + offsetDays * 24 * 60 * 60 * 1000);
+  return stamp.toISOString().slice(0, 10);
+}
 
 function expectDenied(data: unknown[] | null, error: { code?: string } | null) {
   if (error) {

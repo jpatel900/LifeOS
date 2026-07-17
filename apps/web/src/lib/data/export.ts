@@ -23,6 +23,7 @@ export const USER_DATA_EXPORT_TABLES = [
   "health_checks",
   "health_incidents",
   "ai_call_traces",
+  "brief_views",
 ] as const;
 
 export type UserDataExportTable = (typeof USER_DATA_EXPORT_TABLES)[number];
