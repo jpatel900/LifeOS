@@ -12,6 +12,7 @@ const migrationsDir = resolve(repoRoot, "supabase/migrations");
 const EXPECTED_CREATED_AT_TABLES = [
   "ai_call_traces",
   "areas",
+  "brief_views",
   "calendar_blocks",
   "capture_items",
   "execution_sessions",

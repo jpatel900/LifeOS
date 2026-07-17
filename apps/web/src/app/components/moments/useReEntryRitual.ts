@@ -17,6 +17,10 @@ import {
   type ReEntryDeferralOutcome,
   type ReEntryDeferralPlan,
 } from "@/lib/reEntry/defer";
+import {
+  createBriefViewRecorder,
+  type BriefViewRecorder,
+} from "@/lib/reEntry/briefView";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 /**
@@ -105,6 +109,10 @@ export function useReEntryRitual(
   const [latched, setLatched] = useState<LatchedRitual | null>(null);
 
   const executedRef = useRef(false);
+  const briefViewRecorderRef = useRef<BriefViewRecorder | null>(null);
+  if (briefViewRecorderRef.current === null) {
+    briefViewRecorderRef.current = createBriefViewRecorder();
+  }
 
   // Latch decision: computed from live state only while nothing has been
   // latched yet and no ritual has finished/started executing. Once latched,
@@ -152,6 +160,14 @@ export function useReEntryRitual(
     // ritual at "deferring" with the outcomes silently dropped.
     async function run() {
       const client = createSupabaseBrowserClient();
+
+      // #292 gate instrumentation: the ritual is about to own the screen
+      // (ritualActive in TodayMoments gates on status "deferring"/"ready",
+      // both set below) — record today's brief view now, once per local
+      // day. Fire-and-forget and failure-silent by construction; see
+      // lib/reEntry/briefView.ts. Demo mode (client === null) is skipped
+      // silently inside the recorder.
+      briefViewRecorderRef.current?.recordIfNeeded(client, now);
 
       if (!client) {
         setDemoMode(true);
