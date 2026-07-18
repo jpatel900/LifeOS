@@ -49,10 +49,16 @@ export function TodayView({
     <div className="grid gap-5">
       <Panel className="min-h-72 content-center">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="mono text-sm text-[var(--acc2)]">One move now</p>
-          <h1 className="mt-3 text-4xl font-extrabold leading-tight sm:text-6xl">
-            {next.title}
-          </h1>
+          {/* T2 (#660 surface audit): the ad-hoc mono eyebrow is now the
+              shared .moments-label grammar (sentence case in JSX, the CSS
+              class handles the uppercase/tracking treatment) instead of a
+              one-off accent-colored mono label. */}
+          <p className="moments-label">One move now</p>
+          {/* T1 (#660 surface audit): pinned off text-4xl/sm:text-6xl
+              font-extrabold (which both overshoots the fixed type scale and
+              exceeds the 700 weight cap) onto the shared h1 grammar
+              (2.25rem/700, .moments-greeting). */}
+          <h1 className="moments-greeting mt-3">{next.title}</h1>
           <button
             type="button"
             onClick={() => onNavigate(next.stage)}
@@ -70,33 +76,41 @@ export function TodayView({
             {vm.activeArea.name}
           </span>
         </div>
+        {/* T3 (#660 surface audit): the segments were solid state-surface
+            fills (--amb-sf/--grn-sf/--blu-sf) covering the full cell — calm
+            accent discipline elsewhere is border/tint, not fills (see
+            .moments-card--tint-watch, globals.css). Muted to a soft
+            color-mix tint over the base row surface, with the state color
+            carried by the count/label text and a bottom accent border
+            instead of a full-cell wash. */}
         <div className="flex h-16 overflow-hidden rounded-2xl border border-[var(--ln2)]">
-          {bands.map((band) => (
-            <button
-              key={band.label}
-              type="button"
-              onClick={() => onNavigate(band.stage)}
-              className="min-w-12 border-r border-[var(--bd)] px-3 text-left last:border-r-0"
-              style={{
-                flex: Math.max(1, band.count) + 0.6,
-                background:
-                  band.stage === "triage"
-                    ? "var(--amb-sf)"
-                    : band.stage === "review"
-                      ? "var(--grn-sf)"
-                      : "var(--blu-sf)",
-                color:
-                  band.stage === "triage"
-                    ? "var(--amb-fg)"
-                    : band.stage === "review"
-                      ? "var(--grn-fg)"
-                      : "var(--blu-fg)",
-              }}
-            >
-              <span className="mono block text-lg font-bold">{band.count}</span>
-              <span className="text-xs">{band.label}</span>
-            </button>
-          ))}
+          {bands.map((band) => {
+            const accent =
+              band.stage === "triage"
+                ? "var(--amb-fg)"
+                : band.stage === "review"
+                  ? "var(--grn-fg)"
+                  : "var(--blu-fg)";
+            return (
+              <button
+                key={band.label}
+                type="button"
+                onClick={() => onNavigate(band.stage)}
+                className="min-w-12 border-r border-[var(--bd)] px-3 text-left last:border-r-0"
+                style={{
+                  flex: Math.max(1, band.count) + 0.6,
+                  background: `color-mix(in oklch, ${accent} 12%, var(--sf2))`,
+                  borderBottom: `2px solid ${accent}`,
+                  color: accent,
+                }}
+              >
+                <span className="mono block text-lg font-bold">
+                  {band.count}
+                </span>
+                <span className="text-xs">{band.label}</span>
+              </button>
+            );
+          })}
         </div>
       </Panel>
     </div>

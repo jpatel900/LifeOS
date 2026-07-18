@@ -449,7 +449,14 @@ export function LifeOSCockpit({
         >
           Skip to stage content
         </a>
-        <header className="flex flex-wrap items-center gap-1 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2 sm:gap-2">
+        {/* C1 (#660 surface audit): was `flex-wrap` with the area-chip row
+            forced to `basis-full` below `sm` — the moments masthead grammar
+            is a single row (StartMoment.tsx). Recomposed to one row that
+            never wraps: the logo and "All areas" chip stay fixed width
+            (shrink-0), and the area-chip strip is the sole flexible,
+            horizontally-scrollable region, so overflow scrolls sideways
+            instead of dropping to a second row. */}
+        <header className="flex flex-nowrap items-center gap-1 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2 sm:gap-2">
           <button
             type="button"
             onClick={() => router.push("/")}
@@ -459,7 +466,7 @@ export function LifeOSCockpit({
             // (ux-audit-2026-07-13-codex.md); same for the header controls
             // below. touch-manipulation drops the 300ms double-tap delay on
             // coarse pointers (same pattern as components/moments/hitTarget).
-            className="flex min-h-11 touch-manipulation items-center gap-2 rounded-full px-2 text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+            className="flex min-h-11 shrink-0 touch-manipulation items-center gap-2 rounded-full px-2 text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
           >
             <span className="grid size-7 place-items-center rounded-full bg-[var(--acc)] text-[var(--on-acc)]">
               ◆
@@ -471,7 +478,7 @@ export function LifeOSCockpit({
             onClick={() => navigate("overview")}
             disabled={navLocked}
             className={cn(
-              "min-h-11 touch-manipulation rounded-full px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:px-3",
+              "min-h-11 shrink-0 touch-manipulation rounded-full px-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 sm:px-3",
               stage === "overview"
                 ? "bg-[var(--acc-sf)] text-[var(--ink)]"
                 : "text-[var(--mut)] hover:bg-[var(--sf3)]",
@@ -479,7 +486,7 @@ export function LifeOSCockpit({
           >
             All areas
           </button>
-          <div className="order-last flex min-w-0 basis-full flex-wrap gap-1 sm:order-none sm:basis-auto sm:flex-1">
+          <div className="flex min-w-0 flex-1 flex-nowrap gap-1 overflow-x-auto">
             {vm.areas.map((area) => (
               <button
                 key={area.id}
@@ -506,7 +513,7 @@ export function LifeOSCockpit({
           </div>
           {isAddingArea ? (
             <form
-              className="flex items-center gap-1"
+              className="flex shrink-0 items-center gap-1"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleAddArea();
@@ -527,13 +534,13 @@ export function LifeOSCockpit({
             <button
               type="button"
               onClick={() => setIsAddingArea(true)}
-              className="grid min-h-11 min-w-11 touch-manipulation place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)]"
+              className="grid min-h-11 min-w-11 shrink-0 touch-manipulation place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)]"
               aria-label="Add area"
             >
               <Plus size={18} />
             </button>
           )}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setIsPaletteOpen((value) => !value)}
@@ -560,7 +567,7 @@ export function LifeOSCockpit({
           <button
             type="button"
             onClick={() => setDark((value) => !value)}
-            className="grid min-h-11 min-w-11 touch-manipulation place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)]"
+            className="grid min-h-11 min-w-11 shrink-0 touch-manipulation place-items-center rounded-full text-[var(--mut)] hover:bg-[var(--sf3)] hover:text-[var(--ink)]"
             aria-label="Toggle theme"
           >
             {dark ? <Moon size={18} /> : <Sun size={18} />}
@@ -586,17 +593,22 @@ export function LifeOSCockpit({
           aria-label="Workflow stages"
         >
           <div className="absolute left-8 right-8 top-1/2 h-px bg-[var(--ln2)]" />
+          {/* C3 (#660 surface audit): the cell radius is now the token
+              scale's row step (--surface-radius-sm, 10px) instead of the
+              ad-hoc rounded-2xl, and the count chip drops the mono/
+              font-bold combo (an ad-hoc emphasis pairing not used
+              elsewhere) for a plain font-semibold digit. */}
           {PIPELINE_STAGES.map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => navigate(item)}
               disabled={navLocked}
-              className="relative z-10 flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl text-xs text-[var(--mut)] hover:bg-[var(--sf3)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="relative z-10 flex min-h-16 flex-col items-center justify-center gap-1 rounded-[var(--surface-radius-sm)] text-xs text-[var(--mut)] hover:bg-[var(--sf3)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span
                 className={cn(
-                  "grid size-8 place-items-center rounded-full border text-sm font-bold mono",
+                  "grid size-8 place-items-center rounded-full border text-sm font-semibold",
                   stage === item
                     ? "border-[var(--acc-rng)] bg-[var(--acc-sf)] text-[var(--ink)] shadow-[0_0_0_6px_var(--acc-sf)]"
                     : "border-[var(--ln2)] bg-[var(--sf2)]",

@@ -97,13 +97,17 @@ export function WipRefusalPanel({
   onDismiss: () => void;
 }) {
   return (
-    <div className="mb-5 rounded-[2rem] border border-[var(--amb)] bg-[var(--amb-sf)] p-5 text-[var(--amb-fg)] shadow-sm">
+    // C4 (#660 surface audit): rounded-[2rem] retokened to the moments
+    // --surface-radius (16px) family; the mono/uppercase/tracking-[0.18em]
+    // eyebrow below is now a plain sentence-case label; the heading drops
+    // extrabold for the 700-weight cap.
+    <div className="mb-5 rounded-[var(--surface-radius)] border border-[var(--amb)] bg-[var(--amb-sf)] p-5 text-[var(--amb-fg)] shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="mono text-xs font-bold uppercase tracking-[0.18em]">
+          <p className="text-xs font-semibold">
             WIP enforcement · {refusal.policy_id}
           </p>
-          <h2 className="mt-2 text-xl font-extrabold">
+          <h2 className="mt-2 text-xl font-bold">
             LifeOS refused a fourth active item.
           </h2>
           <p className="mt-2 text-sm font-semibold">
@@ -130,7 +134,7 @@ export function WipRefusalPanel({
             onClick={() => onSwap(holder.task_id)}
             className="rounded-2xl bg-[var(--sf1)] p-4 text-left text-[var(--ink)] shadow-sm"
           >
-            <span className="mono text-xs font-bold uppercase tracking-[0.14em] text-[var(--fnt)]">
+            <span className="text-xs font-semibold text-[var(--fnt)]">
               {holder.status}
             </span>
             <span className="mt-1 block font-extrabold">{holder.title}</span>

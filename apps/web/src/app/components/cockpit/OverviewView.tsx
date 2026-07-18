@@ -18,7 +18,10 @@ export function OverviewView({
     <div className="grid gap-5">
       <Panel>
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold">All areas overview</h1>
+          {/* O3 (#660 surface audit): pinned off text-2xl/font-extrabold
+              onto the fixed h1 grammar (2.25rem/700, .moments-greeting in
+              globals.css) shared by the other stage screens' hero titles. */}
+          <h1 className="moments-greeting">All areas overview</h1>
           <span className="text-sm text-[var(--mut)]">Global scope</span>
         </div>
         <div className="flex h-12 overflow-hidden rounded-full border border-[var(--ln2)]">
@@ -56,10 +59,30 @@ export function OverviewView({
       </Panel>
       <div className="grid gap-4 lg:grid-cols-4">
         {[
-          { title: "To triage", items: vm.global.inbox },
-          { title: "To plan", items: vm.global.today },
-          { title: "Scheduled", items: vm.global.planned },
-          { title: "Done", items: vm.global.done },
+          {
+            title: "To triage",
+            items: vm.global.inbox,
+            what: "Nothing is waiting for a decision.",
+            next: "Capture a thought to fill this column.",
+          },
+          {
+            title: "To plan",
+            items: vm.global.today,
+            what: "Nothing has been triaged into today yet.",
+            next: "Triage an item to move it here.",
+          },
+          {
+            title: "Scheduled",
+            items: vm.global.planned,
+            what: "Nothing is on the calendar yet.",
+            next: "Plan a triaged item to schedule it.",
+          },
+          {
+            title: "Done",
+            items: vm.global.done,
+            what: "Nothing has been finished yet.",
+            next: "Complete a scheduled block to see it here.",
+          },
         ].map((column) => (
           <Panel key={column.title}>
             <h2 className="font-bold">{column.title}</h2>
@@ -68,10 +91,16 @@ export function OverviewView({
                 column.items.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-[var(--ln)] p-3 text-sm"
+                    // O1 (#660 surface audit, the sole detector hit): the
+                    // side-tab borderLeft stripe is replaced with a
+                    // full-perimeter 1px tint on the existing border — the
+                    // same pattern moments-card--emphasis cards use
+                    // (StartMoment.tsx, FirstMoveCard.tsx) — plus the area
+                    // dot below, which already carries the same signal.
+                    className="rounded-2xl border p-3 text-sm"
                     style={{
                       background: item.cardColor,
-                      borderLeft: `3px solid ${item.area.color}`,
+                      borderColor: item.area.color,
                     }}
                   >
                     <span className="block font-semibold">{item.title}</span>
@@ -85,7 +114,13 @@ export function OverviewView({
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-[var(--mut)]">Empty</p>
+                // O2 (#660 surface audit): the empty state now says what
+                // this column is and one next step, instead of a bare
+                // "Empty" label with no orientation.
+                <div className="text-sm text-[var(--mut)]">
+                  <p>{column.what}</p>
+                  <p className="mt-1">{column.next}</p>
+                </div>
               )}
             </div>
           </Panel>
