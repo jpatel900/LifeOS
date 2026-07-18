@@ -903,10 +903,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  // FR-031 slice F3 (#664): the triage-accept "map it" offer needs the
+  // freshly-created task's id to call `requestTaskMapDraft` — the reducer
+  // mints it internally (`nextId("task")`), so it's surfaced back to the
+  // caller here rather than re-derived from a lagging `stateRef` read.
+  // Returns null when the accept was refused/no-opped (e.g. WIP refusal)
+  // so callers never offer a map for a task that was never created.
   function acceptTaskDraftWithPersistence(
     draftId: string,
     status: "active" | "backlog",
-  ) {
+  ): string | null {
     const previous = stateRef.current;
     const draft = previous.taskDrafts.find((item) => item.id === draftId);
     const next =
@@ -937,6 +943,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           markPersistedSaveFailure(error);
         });
     }
+
+    return localTask?.id ?? null;
   }
 
   function planTaskAtHourWithPersistence(taskId: string, hour: number) {
