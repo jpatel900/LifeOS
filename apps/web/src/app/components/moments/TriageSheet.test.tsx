@@ -315,6 +315,7 @@ describe("TriageSheet", () => {
 
       render(
         <WorkflowProvider>
+          <CaptureSeedBridge />
           <StateBridge />
           <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
         </WorkflowProvider>,
