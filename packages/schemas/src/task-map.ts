@@ -10,6 +10,20 @@ import { z } from "zod";
  * Any persistence path must run BOTH this schema and `validateGraph`.
  */
 
+// FR-031 slice F2 (#664): additive schema evolution, same pattern as
+// `META_LEARNING_EVENT_SCHEMA_VERSION`/`_V2` in `meta-learning.ts` — old
+// persisted maps keep their exact version literal and validate unchanged;
+// new drafts are generated (and re-approved regens are written) at the new
+// version. Never a breaking replace: "1.0" documents (no node durations)
+// must still parse and render.
+export const TASK_MAP_SCHEMA_VERSION_V1 = "1.0" as const;
+export const TASK_MAP_SCHEMA_VERSION_V1_1 = "1.1" as const;
+
+const TaskMapSchemaVersionSchema = z.enum([
+  TASK_MAP_SCHEMA_VERSION_V1,
+  TASK_MAP_SCHEMA_VERSION_V1_1,
+]);
+
 // Mirrors `TaskMapNode` in `apps/web/src/lib/taskmap/graph.ts`; packages cannot
 // import app code, so keep these field names assignment-compatible by design.
 export const TaskMapNodeSchema = z
@@ -26,6 +40,14 @@ export const TaskMapNodeSchema = z
     completed_at: z.string().datetime().nullable().optional(),
     red_reason: z.string().min(1).optional(),
     red_condition: z.string().min(1).optional(),
+    // FR-031 slice F2 (#664): additive, optional per-node duration estimate
+    // in minutes, introduced at schema_version 1.1. Absent on every "1.0"
+    // document and on any node the AI (or user) didn't estimate — absence
+    // is not an error, it just means the deterministic roll-up
+    // (`computeTaskMapTimeline` in `apps/web/src/lib/taskmap/timeline.ts`)
+    // has no data for that node and flags the total as partial. Never
+    // negative or zero: an unusable estimate is the same as no estimate.
+    estimated_minutes: z.number().positive().optional(),
   })
   .strict();
 
@@ -40,7 +62,7 @@ export const TaskMapEdgeSchema = z
 
 export const TaskMapGraphDraftSchema = z
   .object({
-    schema_version: z.literal("1.0"),
+    schema_version: TaskMapSchemaVersionSchema,
     nodes: z.array(TaskMapNodeSchema).min(1).max(13),
     edges: z.array(TaskMapEdgeSchema),
   })
