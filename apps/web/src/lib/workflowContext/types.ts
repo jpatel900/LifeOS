@@ -113,7 +113,11 @@ export interface WorkflowContextValue {
   // High-sensitivity and must not outlive the session on a shared device).
   clearOfflineCaptures: () => Promise<void>;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
-  acceptTaskDraft: (draftId: string) => void;
+  // FR-031 slice F3 (#664): returns the newly-created task's id (or null if
+  // the accept was refused/no-opped) so the triage-accept surface can offer
+  // an on-demand task-map draft for exactly the task that was just created —
+  // never a background call.
+  acceptTaskDraft: (draftId: string) => string | null;
   backlogTaskDraft: (draftId: string) => void;
   promoteBacklogTask: (taskId: string) => void;
   acceptProjectDraft: (draftId: string) => void;

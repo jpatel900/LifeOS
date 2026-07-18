@@ -2,7 +2,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
+import * as taskMapDraftClient from "@/lib/ai/taskMapDraftClient";
 import { TriageSheet } from "./TriageSheet";
+
+const validTaskMapDraft = {
+  schema_version: "1.0" as const,
+  nodes: [
+    { id: "n1", title: "Draft outline", role: "required" as const },
+    { id: "n2", title: "Send for review", role: "required" as const },
+  ],
+  edges: [{ from: "n1", to: "n2" }],
+};
 
 /**
  * Journey test through the real WorkflowProvider (not a hand-built VM):
@@ -263,6 +273,135 @@ describe("TriageSheet", () => {
     expect(screen.getByTestId("task-count")).toHaveTextContent("1");
 
     restoreFetch();
+  });
+
+  describe("FR-031 slice F3 — map-it offer at triage-accept (#664)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("does not offer a map, and never calls requestTaskMapDraft, before 'Do today' is tapped", async () => {
+      const requestSpy = vi.spyOn(taskMapDraftClient, "requestTaskMapDraft");
+      const restoreFetch = stubParseCaptureFetch();
+      renderSheet(true);
+
+      fireEvent.click(screen.getByTestId("seed-submit"));
+      await waitFor(() => {
+        expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId("triage-map-offer")).not.toBeInTheDocument();
+      expect(requestSpy).not.toHaveBeenCalled();
+
+      restoreFetch();
+    });
+
+    it("offers 'Map it' for exactly the task 'Do today' just created, and tapping it calls requestTaskMapDraft with that task", async () => {
+      const requestSpy = vi
+        .spyOn(taskMapDraftClient, "requestTaskMapDraft")
+        .mockResolvedValue({
+          ok: true,
+          draft: validTaskMapDraft,
+          suggestionRecordId: null,
+        });
+      const restoreFetch = stubParseCaptureFetch();
+
+      function StateBridge() {
+        const { state } = useWorkflow();
+        return (
+          <span data-testid="task-id">{state.tasks[0]?.id ?? "none"}</span>
+        );
+      }
+
+      render(
+        <WorkflowProvider>
+          <StateBridge />
+          <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
+        </WorkflowProvider>,
+      );
+
+      fireEvent.click(screen.getByTestId("seed-submit"));
+      await waitFor(() => {
+        expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getAllByTestId(/^triage-sheet-today-/)[0]);
+
+      const offer = await screen.findByTestId("triage-map-offer");
+      expect(offer).toHaveTextContent("Draft the proposal");
+      expect(offer).toHaveTextContent("Map it out?");
+
+      fireEvent.click(screen.getByTestId("triage-map-offer-accept"));
+
+      await waitFor(() => {
+        expect(requestSpy).toHaveBeenCalledTimes(1);
+      });
+      const taskId = screen.getByTestId("task-id").textContent;
+      expect(requestSpy.mock.calls[0][0]).toMatchObject({ taskId });
+
+      // Draft resolves to "ready" -> the one-pass approve review renders
+      // inline, reusing TaskMapDraftReview rather than a new surface.
+      await waitFor(() => {
+        expect(screen.getByTestId("taskmap-draft-review")).toBeInTheDocument();
+      });
+
+      restoreFetch();
+    });
+
+    it("'Not now' clears the offer without ever calling requestTaskMapDraft — declining costs nothing", async () => {
+      const requestSpy = vi.spyOn(taskMapDraftClient, "requestTaskMapDraft");
+      const restoreFetch = stubParseCaptureFetch();
+      renderSheet(true);
+
+      fireEvent.click(screen.getByTestId("seed-submit"));
+      await waitFor(() => {
+        expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getAllByTestId(/^triage-sheet-today-/)[0]);
+      await screen.findByTestId("triage-map-offer");
+
+      fireEvent.click(screen.getByTestId("triage-map-offer-dismiss"));
+
+      expect(screen.queryByTestId("triage-map-offer")).not.toBeInTheDocument();
+      expect(requestSpy).not.toHaveBeenCalled();
+
+      restoreFetch();
+    });
+
+    it("closing the sheet clears a not-yet-acted-on offer (no stale offer on reopen)", async () => {
+      const restoreFetch = stubParseCaptureFetch();
+      const { rerender } = render(
+        <WorkflowProvider>
+          <CaptureSeedBridge />
+          <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
+        </WorkflowProvider>,
+      );
+
+      fireEvent.click(screen.getByTestId("seed-submit"));
+      await waitFor(() => {
+        expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getAllByTestId(/^triage-sheet-today-/)[0]);
+      await screen.findByTestId("triage-map-offer");
+
+      rerender(
+        <WorkflowProvider>
+          <CaptureSeedBridge />
+          <TriageSheet open={false} selectedAreaId={null} onClose={vi.fn()} />
+        </WorkflowProvider>,
+      );
+      rerender(
+        <WorkflowProvider>
+          <CaptureSeedBridge />
+          <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
+        </WorkflowProvider>,
+      );
+
+      expect(screen.queryByTestId("triage-map-offer")).not.toBeInTheDocument();
+
+      restoreFetch();
+    });
   });
 
   it("links out to the full /triage view", () => {
