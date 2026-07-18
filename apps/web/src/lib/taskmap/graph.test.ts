@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeCriticalPath,
   cutScopeCandidates,
+  resolveFirstStepNode,
   type TaskMapGraph,
   validateGraph,
 } from "./graph";
@@ -289,5 +290,93 @@ describe("cutScopeCandidates", () => {
         edges: [],
       }).map((node) => node.id),
     ).toEqual(["first", "later"]);
+  });
+});
+
+describe("resolveFirstStepNode (FR-023)", () => {
+  const flagged = (id: string, title = id) => ({
+    ...required(id, title),
+    two_minute_move: true as const,
+  });
+
+  it("returns the flagged node when it is a structural entry node", () => {
+    const node = resolveFirstStepNode({
+      nodes: [flagged("a", "Open the doc"), required("b"), required("c")],
+      edges: [
+        { from: "a", to: "b" },
+        { from: "b", to: "c" },
+      ],
+    });
+    expect(node?.id).toBe("a");
+  });
+
+  it("prefers the flagged entry node even when it is not the critical-path head", () => {
+    // Two entry chains: a->b (len 2) and c->d->e (len 3). Critical head is
+    // "c", but the flag on the shorter chain's entry "a" wins.
+    const node = resolveFirstStepNode({
+      nodes: [
+        flagged("a"),
+        required("b"),
+        required("c"),
+        required("d"),
+        required("e"),
+      ],
+      edges: [
+        { from: "a", to: "b" },
+        { from: "c", to: "d" },
+        { from: "d", to: "e" },
+      ],
+    });
+    expect(
+      computeCriticalPath({
+        nodes: [
+          required("a"),
+          required("b"),
+          required("c"),
+          required("d"),
+          required("e"),
+        ],
+        edges: [
+          { from: "a", to: "b" },
+          { from: "c", to: "d" },
+          { from: "d", to: "e" },
+        ],
+      })[0],
+    ).toBe("c");
+    expect(node?.id).toBe("a");
+  });
+
+  it("falls back to the critical-path head when the flagged node is not an entry node", () => {
+    // "b" is flagged but has an incoming required edge — not trusted as the
+    // opening move; the critical-path head "a" wins.
+    const node = resolveFirstStepNode({
+      nodes: [
+        required("a"),
+        { ...required("b"), two_minute_move: true },
+        required("c"),
+      ],
+      edges: [
+        { from: "a", to: "b" },
+        { from: "b", to: "c" },
+      ],
+    });
+    expect(node?.id).toBe("a");
+  });
+
+  it("falls back to the critical-path head when no node is flagged", () => {
+    const node = resolveFirstStepNode({
+      nodes: [required("a"), required("b")],
+      edges: [{ from: "a", to: "b" }],
+    });
+    expect(node?.id).toBe("a");
+  });
+
+  it("returns null for a degenerate graph with no required nodes", () => {
+    expect(
+      resolveFirstStepNode({
+        nodes: [optional("opt-1"), red("red-1")],
+        edges: [],
+      }),
+    ).toBeNull();
   });
 });
