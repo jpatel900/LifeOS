@@ -47,6 +47,34 @@ describe("TaskMapDraftReview", () => {
     expect(red).toHaveAttribute("aria-disabled", "true");
   });
 
+  it("shows a start-here affordance only on the flagged two-minute-move node (FR-023)", () => {
+    const flaggedDraft: TaskMapGraph & { schema_version: "1.0" } = {
+      ...draft,
+      nodes: [
+        { ...draft.nodes[0], two_minute_move: true },
+        ...draft.nodes.slice(1),
+      ],
+    };
+    render(
+      <TaskMapDraftReview
+        draft={flaggedDraft}
+        onApprove={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("taskmap-draft-first-step-req-1"),
+    ).toHaveTextContent(/start here/i);
+    expect(
+      screen.queryByTestId("taskmap-draft-first-step-req-2"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-draft-edit-req-1")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("start here"),
+    );
+  });
+
   it("editable inputs take the full column width (no title clipping)", () => {
     render(
       <TaskMapDraftReview

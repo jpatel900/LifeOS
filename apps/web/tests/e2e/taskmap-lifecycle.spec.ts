@@ -22,7 +22,14 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const DRAFT_GRAPH = {
   schema_version: "1.0" as const,
   nodes: [
-    { id: "outline", title: "Draft outline", role: "required" as const },
+    {
+      id: "outline",
+      title: "Draft outline",
+      role: "required" as const,
+      // FR-023 slice F4 (#678): the flagged sub-60s opening move (an entry
+      // node), so the approve-time identity write sets first_tiny_step.
+      two_minute_move: true as const,
+    },
     {
       id: "draft-body",
       title: "Write draft body",
@@ -163,6 +170,18 @@ test.describe("task-map lifecycle (FR-031)", () => {
     await expect(page.getByTestId("taskmap-node-draft-body")).toBeVisible();
     await expect(page.getByTestId("taskmap-node-send-review")).toBeVisible();
     await expect(page.getByTestId("taskmap-node-diagrams")).toHaveCount(0);
+
+    // FR-023 slice F4 (#678): first node IS first_tiny_step. The flagged
+    // entry node "outline" carries the "start here" affordance in the
+    // collapsed map, AND its title is written to the task's first_tiny_step —
+    // the same string is surfaced by the FirstTinyStepCard. One fact, two
+    // places (FR-023 criterion 3).
+    await expect(
+      page.getByTestId("taskmap-first-step-badge-outline"),
+    ).toBeVisible();
+    await expect(page.getByTestId("first-tiny-step-value")).toHaveText(
+      "Draft outline",
+    );
 
     // Slice A (#664): the map is DRAWN — dependency edges render as SVG
     // connectors and the code-computed critical path is highlighted.

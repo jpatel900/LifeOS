@@ -234,8 +234,8 @@ function buildMockDraft(input: TaskMapDraftServiceInput): TaskMapGraphDraft {
       : {}),
     // FR-023 slice F4 (#678): the mock chain is linear, so node 1 is always
     // the structural entry node — mark it as the two-minute opening move so
-    // the identity write (`resolveFirstStepNode` -> `first_tiny_step`) has a
-    // flagged node in mock mode too.
+    // the approve-time first_tiny_step identity write has a flagged node in
+    // mock mode too.
     ...(index === 0 ? { two_minute_move: true } : {}),
   }));
 
