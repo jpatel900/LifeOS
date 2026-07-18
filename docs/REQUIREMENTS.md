@@ -1020,6 +1020,75 @@ Non-goals (binding):
 
 ---
 
+### FR-047 (reservation) — Mirror (dyad vital-signs surface)
+
+**Priority:** SHOULD
+
+**Stage:** Doctrine reservation now; Stage 2 card (build gated on #292 evidence). The four proxy gauges are data-independent once Stage 2 opens — they read data already recorded by shipped mechanisms. The purpose-gauge trend overlay additionally needs FR-033 samples to accrue before it is honest to render as a trend.
+
+Rationale: FR-033 already names the Mirror as its trend line's only consumer besides stage-gate reviews, and FR-034 already routes sanctuary exclusion and "absence is never evidence" through Mirror computations by name — but no FR yet says what the Mirror actually shows, or bounds it against coaching, streaks, and AI commentary creeping in later. This FR closes that gap: it gives the purpose gauge a truthful display surface and gives the system's own usage/calibration metrics (inflow, override-rate, re-entry latency, build:use ratio) a home that describes the system, never the person.
+
+Acceptance criteria:
+
+- Mirror renders the FR-033 purpose-gauge trend line placed _against_ a fixed set of four proxy gauges: capture inflow vs completion outflow (weekly), override-rate trend per policy class, re-entry latency, and build:use ratio (system-config activity vs task activity). No other gauge ships under this contract. <!-- source: docs/vision/vision-execution-companion.md item 7 "Mirror v1"; vision-fable-final-pass.md §2c -->
+- The Mirror and stage-gate reviews remain the only consumers of the purpose-gauge trend line named in FR-033; Mirror computations as a whole never enter AI prompt context. <!-- source: FR-033 acceptance criteria ("The only consumers are the Mirror... and stage-gate reviews. It never enters AI prompt context.") -->
+- A skipped or absent purpose-gauge check is never counted, shown, or treated as signal on the Mirror — no interpolation, and no carrying the last value forward as if current. <!-- source: FR-033 acceptance criteria ("a skipped or absent check is never counted, shown, or treated as signal") -->
+- Sanctuary-marked rows are excluded from every Mirror computation, including the person-side purpose-gauge overlay and all four proxy gauges, via the one shared exclusion predicate FR-034 already establishes; absence of data is never rendered as evidence of low activity or disengagement. <!-- source: FR-034 acceptance criteria ("exempt from every... person-side Mirror computation"; "Absence of data is never evidence. ... Mirror inflow gauges measure the system's health, never the person's.") -->
+- All four proxy gauges are framed as describing the SYSTEM's health and calibration, never the person's — no wording that rates, scores, or shames the operator. <!-- source: docs/vision/vision-execution-companion.md item 7 ("NEVER person-shaming framings — gauges describe the SYSTEM's health") -->
+- The override-rate-per-policy-class gauge and the re-entry-latency gauge are computed only from data already recorded by shipped mechanisms (suggestion/override records; the re-entry ritual, FR-028) — this FR authorizes no new data collection. <!-- source: vision-fable-final-pass.md §4 ("every proposal... routes through the same two primitives — suggestion/override records and map-views-at-altitude") -->
+- Mirror is a surface the operator navigates to; under the initiative gate it is evaluated as an "asked" opportunity and never rendered above I0 — it does not push, interject, or notify. <!-- source: apps/web/src/lib/initiative/initiativePolicy.ts evaluateI1InitiativeGate (opportunity "asked" → effectiveRung "I0"); FR-032 acceptance criteria -->
+- Before a purpose-gauge trend line has more than one sampled point, the Mirror renders an explicit not-enough-data state rather than a single point, an interpolated line, or a flat default. (Exact minimum sample count for a full trend render is an open question below.) <!-- source: FR-033 acceptance criteria sampling cadence ("at most ~4×/month") combined with the truthfulness rule above; smallest-honest-reading inference, not a direct quote -->
+
+Non-goals (binding):
+
+- No coaching, tips, or recommendations attached to any gauge — Mirror is observation-only. <!-- source: FR-033 non-goals ("Feeding the gauge into any automated proposal or recalibration"); task framing -->
+- No streaks, badges, or engagement mechanics on any Mirror gauge. <!-- source: FR-033 non-goals; FR-032 non-goals ("Engagement-driven interruption (variable-reward timing, streak pressure)") -->
+- No AI-generated commentary, narrative, or summary text over the gauges unless separately contracted by its own FR. <!-- source: task framing; consistent with FR-033's prompt-context exclusion -->
+- Auto-drafted demotion proposals for unused surfaces ("hide, not delete"), driven off Mirror data — reserved for a future FR once a trust-ledger primitive is ratified; this contract makes Mirror read-only/observational, not an actuator. <!-- source: vision-fable-final-pass.md §2c "teeth" paragraph; docs/vision/vision-execution-companion.md item 4 "Trust Kernel" (feature-demotion listed as a still-unbuilt ladder) -->
+- Expanding the proxy-gauge set beyond the four named above without an owner ADR. <!-- source: pattern established by FR-033 non-goals ("without an owner ADR") -->
+
+Open questions (owner):
+
+- Minimum sample count (or calendar window) before the purpose-gauge trend renders as a line rather than the not-enough-data state?
+- Should the four proxy gauges be individually hideable, or is the fixed four-gauge set itself the doctrine (no partial views)?
+
+---
+
+### FR-048 (reservation) — Triggers (context-conditioned prospective memory)
+
+**Priority:** SHOULD
+
+**Stage:** Doctrine reservation now; Stage 2 card (build gated on #292 evidence). Person-linked and area-event matching depend on People & Commitments (FR-017) and contextAssembly — both already shipped, so this FR is dependency-ready rather than data-accrual-gated. The schema, state machine, and date-window matching are data-independent and buildable as soon as Stage 2 opens.
+
+Rationale: "when X happens, do Y" is a context-conditioned intention, not a time-conditioned one — calendar rows already hold the latter, but context triggers ("next time I talk to Darpan, raise the account plan") have no home in the system today, and holding them is core chief-of-staff value: offloading an open loop is some of the deepest anxiety reduction the dyad can offer. This FR gives that noun a small, deterministic, I1-capped home.
+
+Acceptance criteria:
+
+- A trigger is a user-declared row: `condition_type` ∈ {person, area_event, date_window, manual_review}, a `condition_ref`, free-text `intention_text`, and `status` ∈ {armed, fired, done, expired, composted}. <!-- source: docs/vision/vision-execution-companion.md item 2 "Triggers" schema spec -->
+- Trigger declaration is entirely user-initiated; the system never proposes, drafts, or auto-creates a trigger from a capture, pattern, or AI inference. <!-- source: vision-execution-companion.md item 2 ("NEVER: AI-invented triggers in v1") -->
+- Matching is deterministic only: v1 supports a person-linked capture/commitment touching `condition_ref`, an area event (task completed / block scheduled in the linked area), and date-window entry — no AI matching of any kind. <!-- source: vision-execution-companion.md item 2 SPEC ("v1 matching is DETERMINISTIC ONLY... NO AI matching in v1") -->
+- Every evaluation of a trigger's condition or expiry takes the current time as an explicit caller-supplied parameter; the matching/expiry policy kernel holds no ambient clock internally — the same pattern already shipped in `compostPolicy.ts`'s `CompostPolicyOptions.now: Date` and `rupturePolicy.ts`'s caller-computed signals. <!-- source: apps/web/src/lib/compost/compostPolicy.ts (CompostPolicyOptions.now); apps/web/src/lib/rupture/rupturePolicy.ts (RuptureSignals, caller-supplied, no ambient clock) — established repo doctrine -->
+- A fired trigger surfaces at Initiative I1 only — in the brief and in person/area views — matching the "brief" opportunity in the shipped initiative gate (`evaluateI1InitiativeGate`), which resolves to `effectiveRung: "I1"`. It is never delivered as a mid-day interjection or an outside-app notification — both are `"mid_day"`/`"outside_app"` opportunities, which the shipped gate already blocks with `GRADUATION_REQUIRED`, and this FR claims no graduation. <!-- source: vision-execution-companion.md item 2 ("Surfacing: Initiative I1 ONLY... never a push, never mid-day"); apps/web/src/lib/initiative/initiativePolicy.ts evaluateI1InitiativeGate; FR-032 acceptance criteria -->
+- Lifecycle: armed → fired (one-tap done / re-arm / edit) → composted if unfired past `expires_at`. Composting is silent and rolls into the existing weekly compost count (FR-036); an expired trigger is never listed as a failure or treated as a missed commitment. <!-- source: vision-execution-companion.md item 2 SPEC + DONE-WHEN + NEVER; FR-036 acceptance criteria ("a one-line compost count for the period, never a list") -->
+- Sanctuary-marked people, areas, or captures are excluded from trigger matching through the same one shared exclusion predicate FR-034 already establishes for every other aggregation/context path. <!-- source: FR-034 acceptance criteria ("One shared exclusion predicate applied everywhere") -->
+- Trigger creation, firing, and resolution are born instrumented per NS-INV-3: a stable policy id (e.g. `trigger_surface.v1`) with a `suggestion_records`/`override_records` pairing, so the surface is measurable by the same instrumentation as every other proactive class and is a valid future Mirror override-rate input. <!-- source: vision-execution-companion.md item 2 DONE-WHEN ("suggestion/override records written with policy_id 'trigger_surface.v1'") -->
+
+Non-goals (binding):
+
+- AI-invented, AI-suggested, or AI-matched triggers in v1. <!-- source: vision-execution-companion.md item 2 NEVER -->
+- Any I2+ (mid-day interjection) or I3 (outside-app/notification) delivery of a trigger firing. Raising the rung for this class requires its own FR-032 graduation evidence, not an amendment to this FR. <!-- source: FR-032 acceptance criteria; vision-execution-companion.md item 2 NEVER ("notification delivery") -->
+- Treating an expired, unfired trigger as a missed commitment or task — it is a held thought, not action truth, and must carry no guilt-framed copy. <!-- source: vision-execution-companion.md item 2 NEVER ("treating an expired trigger as a missed commitment") -->
+- Time-conditioned reminders ("remind me at 3pm") — those are ordinary calendar/task rows already covered elsewhere; Triggers are context-conditioned only. <!-- source: vision-fable-final-pass.md §3a ("Time triggers are calendar rows; context triggers have no home in any commercial tool") -->
+- Any ambient-clock read inside the matching/expiry policy kernel itself. <!-- source: established repo doctrine — compostPolicy.ts / rupturePolicy.ts caller-supplied-time pattern -->
+
+Open questions (owner):
+
+- Is `expires_at` required at declaration, or does an undeclared expiry get a system default horizon (and if so, what default)?
+- Does `date_window` overlap with existing calendar/time-block rows, or is it strictly for windows that don't warrant a calendar entry (e.g., "sometime next month")?
+- `manual_review` is named in the schema but its firing cadence isn't specified in the vision artifact beyond "surface in brief" — fire on every brief render until resolved, or on some other cadence?
+
+---
+
 ### Constraint Layer — Explicitly Unapproved Capabilities
 
 The following feel productive to build but remain unapproved (owner-ratified 2026-07-05): people pages / CRM views, relationship radar, health-score dashboards beyond the existing dot rendering, template libraries, and Notion-parity database views. The predecessor system already provided these; they are capability, not constraint, and did not move the bottleneck. Building any of them requires an explicit requirements amendment; ADR 0005 does not silently authorize them.
