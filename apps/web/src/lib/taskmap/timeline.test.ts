@@ -8,11 +8,7 @@ import {
   resolveNodeDuration,
 } from "./timeline";
 
-const required = (
-  id: string,
-  estimated_minutes?: number,
-  done = false,
-) => ({
+const required = (id: string, estimated_minutes?: number, done = false) => ({
   id,
   title: id,
   role: "required" as const,
@@ -57,7 +53,11 @@ describe("resolveNodeDuration", () => {
 
   it("resolves the profile-adjusted minutes when a matching area profile exists", () => {
     const areaId = "33333333-3333-3333-3333-333333333333";
-    const result = resolveNodeDuration(required("a", 30), [profile(1.5)], areaId);
+    const result = resolveNodeDuration(
+      required("a", 30),
+      [profile(1.5)],
+      areaId,
+    );
     expect(result).toEqual({ minutes: 45, source: "learned_profile" });
   });
 

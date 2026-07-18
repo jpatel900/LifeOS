@@ -166,9 +166,9 @@ describe("TaskMapSection", () => {
       />,
     );
 
-    expect(
-      screen.getByTestId("taskmap-timeline-summary"),
-    ).toHaveTextContent("some steps unestimated");
+    expect(screen.getByTestId("taskmap-timeline-summary")).toHaveTextContent(
+      "some steps unestimated",
+    );
   });
 
   it("shows a quiet pending state while a draft is in flight", () => {

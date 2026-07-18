@@ -70,7 +70,9 @@ export interface FlowMomentProps {
   now: Date;
   onRequestTaskMapDraft(): void;
   onDismissTaskMapDraft(): void;
-  onApproveTaskMapDraft(graph: TaskMapGraph & { schema_version: "1.0" | "1.1" }): void;
+  onApproveTaskMapDraft(
+    graph: TaskMapGraph & { schema_version: "1.0" | "1.1" },
+  ): void;
   onToggleTaskMapNodeCompletion(nodeId: string): void;
   /** #572: the active task's committed opening move, or null when unset. */
   firstTinyStep: string | null;
