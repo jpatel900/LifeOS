@@ -392,7 +392,7 @@ describe("matchTriggers — hostile input (#636/#638 lineage)", () => {
     expect(result.skipped).toEqual([]);
   });
 
-  it("ignores an inherited (non-own) condition field", () => {
+  it("rejects a rule whose fields ride a non-plain prototype", () => {
     const rule = Object.assign(
       Object.create({ conditionRef: "person:darpan" }),
       {
@@ -409,10 +409,11 @@ describe("matchTriggers — hostile input (#636/#638 lineage)", () => {
       { ...emptyFacts(), personTouchRefs: ["person:darpan"] },
       { now: NOW },
     );
-    // conditionRef lives on the prototype -> not read -> malformed rule.
-    expect(result.skipped).toEqual([
-      { triggerId: "trg-proto", reason: "malformed_rule" },
-    ]);
+    // A non-plain prototype fails the container check before any field
+    // (including id) is trusted -> the rule is dropped with no firing and no
+    // fabricated skip record, matching the gate's non-record-container stance.
+    expect(result.firings).toEqual([]);
+    expect(result.skipped).toEqual([]);
   });
 });
 
