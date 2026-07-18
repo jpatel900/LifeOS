@@ -207,4 +207,90 @@ describe("TaskMapGraphDraftSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  // FR-023 slice F4 (#678): the two_minute_move marker.
+  it("accepts exactly one required node marked two_minute_move", () => {
+    expect(
+      TaskMapGraphDraftSchema.safeParse({
+        schema_version: "1.0",
+        nodes: [
+          {
+            id: "step-1",
+            title: "Open the doc",
+            role: "required",
+            two_minute_move: true,
+          },
+          { id: "step-2", title: "Do the work", role: "required" },
+        ],
+        edges: [{ from: "step-1", to: "step-2" }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("still accepts a document with the flag absent on every node", () => {
+    expect(TaskMapGraphDraftSchema.safeParse(minimalGraph).success).toBe(true);
+  });
+
+  it("rejects more than one node marked two_minute_move", () => {
+    expectRejectedWithMessage(
+      {
+        schema_version: "1.0",
+        nodes: [
+          {
+            id: "step-1",
+            title: "Open the doc",
+            role: "required",
+            two_minute_move: true,
+          },
+          {
+            id: "step-2",
+            title: "Do the work",
+            role: "required",
+            two_minute_move: true,
+          },
+        ],
+        edges: [{ from: "step-1", to: "step-2" }],
+      },
+      "At most one node may be marked as the two-minute move.",
+    );
+  });
+
+  it("rejects a two_minute_move marker on a non-required (optional) node", () => {
+    expectRejectedWithMessage(
+      {
+        schema_version: "1.0",
+        nodes: [
+          { id: "step-1", title: "Do the work", role: "required" },
+          {
+            id: "opt-1",
+            title: "Nice to have",
+            role: "optional",
+            two_minute_move: true,
+          },
+        ],
+        edges: [],
+      },
+      "The two-minute move must be a required node.",
+    );
+  });
+
+  it("rejects a two_minute_move marker on a red node", () => {
+    expectRejectedWithMessage(
+      {
+        schema_version: "1.0",
+        nodes: [
+          { id: "step-1", title: "Do the work", role: "required" },
+          {
+            id: "red-1",
+            title: "Do not ship early",
+            role: "red",
+            red_reason: "Needs sign-off first.",
+            two_minute_move: true,
+          },
+        ],
+        edges: [],
+      },
+      "The two-minute move must be a required node.",
+    );
+  });
 });

@@ -48,6 +48,17 @@ export const TaskMapNodeSchema = z
     // has no data for that node and flags the total as partial. Never
     // negative or zero: an unusable estimate is the same as no estimate.
     estimated_minutes: z.number().positive().optional(),
+    // FR-023 slice F4 (#678): additive, optional marker for the single
+    // sub-60-second physical opening move. When present and true, this node
+    // is the candidate "first tiny step" — the identity between the first
+    // node of a breakdown and `tasks.first_tiny_step` (FR-023 criterion 3).
+    // Additive at the SAME schema versions (no bump): every "1.0"/"1.1"
+    // document with the flag absent stays valid, absence just means "no
+    // AI-nominated opening move" and the resolver falls back to the
+    // code-computed critical-path head. The one-flag / required-role
+    // invariants are enforced graph-wide by the superRefine below, never
+    // per-node here.
+    two_minute_move: z.boolean().optional(),
   })
   .strict();
 
@@ -120,6 +131,32 @@ export const TaskMapGraphDraftSchema = z
         });
       }
       seenNodeIds.add(node.id);
+    });
+
+    // FR-023 slice F4 (#678): the `two_minute_move` marker names the ONE
+    // sub-60-second opening move. At most one node may carry it, and it must
+    // be a `required` node — the opening move can never be an optional
+    // (cut-scope) or red (do-not / conditional) step. Both are graph-wide
+    // invariants, enforced here so every persistence path (which runs this
+    // schema) rejects a malformed flag before write.
+    const flaggedNodes = graph.nodes.filter(
+      (node) => node.two_minute_move === true,
+    );
+    if (flaggedNodes.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At most one node may be marked as the two-minute move.",
+        path: ["nodes"],
+      });
+    }
+    graph.nodes.forEach((node, index) => {
+      if (node.two_minute_move === true && node.role !== "required") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "The two-minute move must be a required node.",
+          path: ["nodes", index, "two_minute_move"],
+        });
+      }
     });
   });
 
