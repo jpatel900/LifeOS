@@ -22,6 +22,11 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { GET, POST } from "./route";
 
+// HIGH-1 (#670): every provider-reaching POST now requires a valid bearer
+// token, so the "happy path" requests carry this header. The beforeEach mock
+// resolves it to a valid user; individual tests override for the reject cases.
+const authHeaders = { Authorization: "Bearer user-a-access-token" };
+
 describe("parse-capture route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -74,7 +79,7 @@ describe("parse-capture route", () => {
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ rawText: "Plan Monday work." }),
       }),
     );
@@ -82,16 +87,39 @@ describe("parse-capture route", () => {
 
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
-    expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
+    // HIGH-1 (#670): auth is now required even in mock/degraded mode, so the
+    // token is verified first and then forwarded to the trace context.
+    expect(mocks.createSupabaseServerClient).toHaveBeenCalledWith({
+      accessToken: "user-a-access-token",
+    });
     expect(mocks.parseCaptureWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({ rawText: "Plan Monday work." }),
       expect.objectContaining({
         forceMock: true,
-        // No Authorization header on this request, so tracing runs tokenless
-        // (issue #288). Parsing still works; the trace insert is skipped.
-        traceContext: { accessToken: null },
+        traceContext: { accessToken: "user-a-access-token" },
       }),
     );
+  });
+
+  it("rejects a request with no bearer token before parsing (denial-of-wallet guard)", async () => {
+    mocks.getParseCaptureStatus.mockReturnValue({
+      status: "ai_configured",
+      preferredParser: "ai",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/parse-capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawText: "Plan Monday work." }),
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ ok: false, errorCategory: "auth_rejected" });
+    expect(mocks.createSupabaseServerClient).not.toHaveBeenCalled();
+    expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
   });
 
   it("rejects a present but invalid bearer token before parsing", async () => {
@@ -194,7 +222,7 @@ describe("parse-capture route", () => {
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           rawText: "Send Sarah the deck.",
           areaContext: [
@@ -265,7 +293,7 @@ describe("parse-capture route", () => {
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ rawText: "Plan Monday work." }),
       }),
     );
@@ -300,7 +328,7 @@ describe("parse-capture route", () => {
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ rawText: "Plan Monday work." }),
       }),
     );
@@ -321,7 +349,7 @@ describe("parse-capture route", () => {
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ rawText: "Email Alex." }),
       }),
     );
@@ -355,7 +383,7 @@ describe("parse-capture route", () => {
     const response = await POST(
       new Request("http://localhost/api/parse-capture", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           rawText: "Need help",
           parserMode: "dangerous",

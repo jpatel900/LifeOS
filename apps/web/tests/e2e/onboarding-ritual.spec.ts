@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 
 /**
  * #581 (epic #555 item 7) — the three-step onboarding ritual.
@@ -37,6 +38,10 @@ const ZERO_WORKFLOW_STATE = {
 
 test.describe("onboarding ritual on a zero-state session (#581)", () => {
   test.beforeEach(async ({ page }) => {
+    // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and
+    // E2E has no Supabase env, so capture flows run against the deterministic
+    // mock-parser stub (task-map lifecycle precedent).
+    await stubParseCaptureRoute(page);
     await page.addInitScript(
       ([key, value]) => {
         if (!window.sessionStorage.getItem(key)) {
@@ -65,8 +70,8 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
     await expect(page.getByTestId("onboarding-calendar-link")).toBeVisible();
     await page.getByTestId("onboarding-day-continue").click();
 
-    // Step 3 — first capture through the shared CaptureCore, hitting the
-    // real /api/parse-capture route (mock parser without AI env).
+    // Step 3 — first capture through the shared CaptureCore, answered by the
+    // stubbed /api/parse-capture mock-parser payload (see stub above).
     await expect(page.getByTestId("onboarding-step-capture")).toBeVisible();
     const parseResponsePromise = page.waitForResponse(
       (response) =>

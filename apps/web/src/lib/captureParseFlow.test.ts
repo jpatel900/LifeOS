@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ParseCaptureResponseSchema } from "@lifeos/schemas";
-import { POST } from "@/app/api/parse-capture/route";
+import { postParseCaptureAuthenticated } from "@/__tests__/helpers/parseCaptureFetch";
 import { buildParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 import {
   acceptDraft,
@@ -30,16 +30,16 @@ describe("cockpit capture → parse → draft journey", () => {
     expect(capture.raw_text).toBe("Need to renew my passport before the trip");
     expect(state.taskDrafts).toHaveLength(0);
 
-    const httpResponse = await POST(
-      new Request("http://localhost/api/parse-capture", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rawText: capture.raw_text,
-          parserMode: "mock",
-        }),
+    // HIGH-1 (#670): the route requires a verified bearer token, so the
+    // journey runs as an authenticated caller (the only supported posture).
+    const httpResponse = await postParseCaptureAuthenticated({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rawText: capture.raw_text,
+        parserMode: "mock",
       }),
-    );
+    });
     expect(httpResponse.status).toBe(200);
     const body = await httpResponse.json();
     expect(body.ok).toBe(true);

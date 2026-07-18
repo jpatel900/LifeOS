@@ -1,13 +1,18 @@
 import { expect, test } from "@playwright/test";
+import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 
 /**
- * Browser proof that the cockpit capture surface exercises the real
- * /api/parse-capture route. Without AI env vars the server answers in mock
- * mode, the drafts land in triage, and the UI says the mock parser ran.
+ * Browser proof that the cockpit capture surface round-trips through
+ * /api/parse-capture, the drafts land in triage, and the UI says the mock
+ * parser ran. HIGH-1 (#670): the route now requires a verified bearer token
+ * and the E2E dev server has no Supabase env, so the route is stubbed with
+ * the deterministic mock-parser payload (task-map lifecycle precedent); the
+ * server-side contract is proven by the vitest route tests.
  */
 test("cockpit capture round-trips through /api/parse-capture in mock mode", async ({
   page,
 }) => {
+  await stubParseCaptureRoute(page);
   await page.goto("/capture");
 
   const parseResponsePromise = page.waitForResponse(
