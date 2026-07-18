@@ -455,8 +455,12 @@ export function GoogleCalendarConnectionPanel() {
 
   return (
     <Card className={panelClassName}>
+      {/* #660 audit line S7: `text-xl` (1.25rem) sat off both the h1 and
+          card-title tiers of the ratified scale — pinned to the fixed
+          card-title numbers (1.5rem/620, `.settings-card-title`; same
+          class S3's CreateAreaForm title uses). */}
       <CardHeader>
-        <CardTitle className="text-xl">Google Calendar</CardTitle>
+        <CardTitle className="settings-card-title">Google Calendar</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">

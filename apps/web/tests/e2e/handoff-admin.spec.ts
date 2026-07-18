@@ -28,7 +28,15 @@ test("settings areas remains admin outside the handoff cockpit", async ({
   ).toBeVisible();
   await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
   await expect(page.getByTestId("areas-create-card")).toBeVisible();
-  await expect(page.getByText("Ownership starts here")).toBeVisible();
+  // #660 audit line S3 dropped the "Ownership starts here" eyebrow kicker
+  // (no eyebrow-per-card grammar) — anchor on the card's own title and the
+  // guidance copy that replaced the kicker instead.
+  await expect(
+    page
+      .getByTestId("areas-create-card")
+      .getByRole("heading", { name: "Create area" }),
+  ).toBeVisible();
+  await expect(page.getByText("Opinionated default:")).toBeVisible();
   await expect(page.getByText("Registry details")).toBeVisible();
 });
 
