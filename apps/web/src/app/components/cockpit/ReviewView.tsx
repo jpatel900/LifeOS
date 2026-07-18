@@ -73,10 +73,7 @@ export function ReviewView({
           {/* R1 (#660 surface audit): pinned off text-4xl font-extrabold
               (overshoots the fixed type scale and the 700-weight cap) onto
               the shared h1 grammar (2.25rem/700, .moments-greeting). */}
-          <h1
-            className="moments-greeting mt-4"
-            data-testid="review-headline"
-          >
+          <h1 className="moments-greeting mt-4" data-testid="review-headline">
             {carry === 0 ? "Ready to close" : `${carry} carry over`}
           </h1>
         </div>

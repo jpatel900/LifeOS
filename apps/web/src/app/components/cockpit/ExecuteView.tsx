@@ -181,8 +181,8 @@ export function ExecuteView({
               is active. */}
           {!active ? (
             <p className="mx-auto mt-2 max-w-md text-sm text-[var(--mut)]">
-              This is your focus timer. Choose a planned block from the
-              queue to start a timed session.
+              This is your focus timer. Choose a planned block from the queue to
+              start a timed session.
             </p>
           ) : null}
           {active ? (
