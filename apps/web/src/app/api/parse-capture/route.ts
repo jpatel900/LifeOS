@@ -174,7 +174,19 @@ export async function POST(request: Request) {
   const status = getParseCaptureStatus();
   const accessToken = readBearerToken(request);
 
-  if (accessToken && !(await verifyBearerToken(accessToken))) {
+  // HIGH-1 (#670): require a valid authenticated user before any provider call.
+  // A missing token previously short-circuited this guard (accessToken == null)
+  // and reached the AI provider on the server key — an unauthenticated
+  // denial-of-wallet path. Mirror /api/task-map: missing token -> 401, invalid
+  // token -> 401, only then proceed.
+  if (!accessToken) {
+    return Response.json(
+      { ok: false, errorCategory: "auth_rejected" },
+      { status: 401 },
+    );
+  }
+
+  if (!(await verifyBearerToken(accessToken))) {
     return Response.json(
       { ok: false, errorCategory: "auth_rejected" },
       { status: 401 },
