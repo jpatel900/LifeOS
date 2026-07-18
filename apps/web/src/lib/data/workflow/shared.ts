@@ -64,6 +64,13 @@ export interface CaptureListResult {
   captures: CaptureItem[];
 }
 
+// FR-036 slice 2 (#659): result of applyCompostTransitions — the captures
+// whose status was actually written to "composted" by the guarded update.
+export interface CompostTransitionResult {
+  provider: DataProvider;
+  captures: CaptureItem[];
+}
+
 export interface TaskCreateResult {
   provider: DataProvider;
   task: Task;

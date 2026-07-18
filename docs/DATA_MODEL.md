@@ -118,7 +118,7 @@ Purpose: raw input before interpretation.
 | raw_audio_ref            | text nullable    | storage path if audio used                       |
 | capture_mode             | text             | text, audio, import                              |
 | inferred_area_confidence | numeric nullable | 0-1                                              |
-| status                   | text             | new, parsed, triage_required, resolved, archived |
+| status                   | text             | new, parsed, triage_required, resolved, archived, composted (FR-036) |
 | created_at               | timestamptz      | generated                                        |
 
 Indexes:

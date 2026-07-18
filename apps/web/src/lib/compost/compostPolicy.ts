@@ -1,7 +1,16 @@
 export const DEFAULT_COMPOST_THRESHOLD_DAYS = 14;
 
 const DAY_MS = 86_400_000;
-const ELIGIBLE_STATUSES = new Set(["new", "parsed", "triage_required"]);
+
+// FR-036 slice 2 (#659): the persistence layer (applyCompostTransitions)
+// reuses this exact list as its DB-level write guard so the eligible-status
+// definition has one source of truth instead of a duplicated literal list.
+export const COMPOST_ELIGIBLE_SOURCE_STATUSES = [
+  "new",
+  "parsed",
+  "triage_required",
+] as const;
+const ELIGIBLE_STATUSES = new Set<string>(COMPOST_ELIGIBLE_SOURCE_STATUSES);
 
 export interface CompostCandidate {
   readonly id: string;

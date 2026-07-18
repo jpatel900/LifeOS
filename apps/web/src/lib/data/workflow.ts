@@ -25,6 +25,7 @@ export type {
   AreaColorUpdateResult,
   CaptureCreateResult,
   CaptureListResult,
+  CompostTransitionResult,
   TaskCreateResult,
   ProjectCreateResult,
   PlanningItemsResult,
@@ -127,6 +128,7 @@ export {
   createCaptureItem,
   syncQueuedCapture,
   listCaptureItems,
+  applyCompostTransitions,
 } from "./workflow/capture";
 export type { SyncQueuedCaptureInput } from "./workflow/capture";
 

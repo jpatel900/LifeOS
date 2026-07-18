@@ -3,8 +3,13 @@ import {
   type CreateCaptureItemInput,
 } from "@lifeos/schemas";
 import {
+  COMPOST_ELIGIBLE_SOURCE_STATUSES,
+  type CompostTransitionIntent,
+} from "../../compost/compostPolicy";
+import {
   type CaptureCreateResult,
   type CaptureListResult,
+  type CompostTransitionResult,
   type MinimalSupabaseClient,
   captureColumns,
   getSupabaseMessage,
@@ -149,6 +154,75 @@ export async function listCaptureItems(
   const { data, error } = await query
     .select(captureColumns)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return {
+    provider: "supabase",
+    captures: parseCaptures(data),
+  };
+}
+
+/**
+ * FR-036 slice 2 (#659): apply `selectCompostTransitionIntents` output (the
+ * #616 deterministic eligibility core) as one atomic, guarded write. Only
+ * captures that are BOTH named in `intents` AND currently sitting in
+ * `COMPOST_ELIGIBLE_SOURCE_STATUSES` are moved to "composted" — the second
+ * `.in("status", ...)` below is a DB-level guard against a stale or
+ * malformed intent re-touching a row that already moved on (composted,
+ * resolved, archived, or anything else). Never deletes, never writes any
+ * column other than status, never trusts the intent's status literal into
+ * the query. RLS (`capture_items_update_own`) is the ownership boundary;
+ * this function does not add its own `.eq("user_id", ...)`, matching the
+ * existing convention in this file.
+ */
+export async function applyCompostTransitions(
+  client: MinimalSupabaseClient | null,
+  intents: readonly CompostTransitionIntent[],
+): Promise<CompostTransitionResult> {
+  const captureIds = Array.from(
+    new Set(
+      intents
+        .filter((intent) => intent.status === "composted")
+        .map((intent) => intent.captureId),
+    ),
+  );
+
+  if (!client) {
+    return { provider: "mock", captures: [] };
+  }
+
+  if (captureIds.length === 0) {
+    return { provider: "supabase", captures: [] };
+  }
+
+  await requireSupabaseUser(client, "Sign in before composting captures.");
+
+  const query = client.from("capture_items") as {
+    update: (row: Record<string, unknown>) => {
+      in: (
+        column: string,
+        values: string[],
+      ) => {
+        in: (
+          column: string,
+          values: readonly string[],
+        ) => {
+          select: (
+            columns: string,
+          ) => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({ status: "composted" })
+    .in("id", captureIds)
+    .in("status", COMPOST_ELIGIBLE_SOURCE_STATUSES)
+    .select(captureColumns);
 
   if (error) {
     throw new Error(getSupabaseMessage(error));

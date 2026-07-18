@@ -29,6 +29,10 @@ const JOURNEY_UNREACHED_STATUSES = {
     "parsed",
     // No transition-driven helper archives captures yet; keep visible until a real transition reaches it.
     "archived",
+    // FR-036 slice 2 (#659): applyCompostTransitions is a real-persistence-only
+    // write path with no mock-workflow journey helper; keep visible until a
+    // transition-driven journey reaches it.
+    "composted",
   ],
   tasks: [
     // V1 workflow creates accepted tasks directly, so no persisted task row legitimately reaches schema "draft".
