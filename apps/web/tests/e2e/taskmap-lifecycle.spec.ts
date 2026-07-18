@@ -164,8 +164,26 @@ test.describe("task-map lifecycle (FR-031)", () => {
     await expect(page.getByTestId("taskmap-node-send-review")).toBeVisible();
     await expect(page.getByTestId("taskmap-node-diagrams")).toHaveCount(0);
 
+    // Slice A (#664): the map is DRAWN — dependency edges render as SVG
+    // connectors and the code-computed critical path is highlighted.
+    const spineEdge1 = page.getByTestId("taskmap-edge-outline-draft-body");
+    const spineEdge2 = page.getByTestId("taskmap-edge-draft-body-send-review");
+    await expect(spineEdge1).toHaveAttribute("data-critical", "true");
+    await expect(spineEdge2).toHaveAttribute("data-critical", "true");
+
     const expandCta = page.getByTestId("taskmap-expand");
     await expect(expandCta).toHaveText("+1 more (optional / other paths)");
+
+    // Expanded: the FULL graph is drawn (red node kept in its DAG position)
+    // with the critical path still highlighted within it.
+    await expandCta.click();
+    await expect(page.getByTestId("taskmap-full-graph")).toBeVisible();
+    await expect(page.getByTestId("taskmap-node-skip-legal")).toBeVisible();
+    await expect(
+      page.getByTestId("taskmap-edge-outline-draft-body"),
+    ).toHaveAttribute("data-critical", "true");
+    await page.getByTestId("taskmap-collapse").click();
+    await expect(page.getByTestId("taskmap-node-skip-legal")).toHaveCount(0);
 
     // 3. Complete a critical node -> next-node emphasis advances; undo
     // restores it.
