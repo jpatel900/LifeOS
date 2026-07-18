@@ -14,8 +14,12 @@ export function Panel({
 }) {
   return (
     <div
+      // C2 (#660 surface audit): retokened off the one-off --cockpit-radius
+      // (22px) onto the moments --surface-radius family (16px) plus its
+      // shadow, matching the .moments-card grammar (globals.css) other
+      // routed surfaces already follow.
       className={cn(
-        "rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-5",
+        "rounded-[var(--surface-radius)] border border-[var(--ln)] bg-[var(--sf)] p-5 shadow-[var(--surface-shadow-sm)]",
         className,
       )}
     >
