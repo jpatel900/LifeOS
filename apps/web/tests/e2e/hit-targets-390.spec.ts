@@ -1,4 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+
+// HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
+// E2E dev server has no Supabase env, so every capture flow in this file runs
+// against the deterministic mock-parser stub (task-map lifecycle precedent).
+test.beforeEach(async ({ page }) => {
+  await stubParseCaptureRoute(page);
+});
 
 /**
  * #594 — audit-remediation follow-up to #604-#611: verifies the >=44x44 CSS
