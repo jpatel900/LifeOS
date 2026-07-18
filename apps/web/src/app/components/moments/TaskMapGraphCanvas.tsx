@@ -71,7 +71,7 @@ export function TaskMapGraphCanvas({
             .tm-edge {
               stroke-dasharray: var(--tm-len, 260);
               stroke-dashoffset: var(--tm-len, 260);
-              animation: tm-draw var(--motion-slow, 240ms) var(--motion-ease, ease) forwards;
+              animation: tm-draw var(--motion-slow) var(--motion-ease) forwards;
             }
           }
           @keyframes tm-draw { to { stroke-dashoffset: 0; } }
