@@ -814,6 +814,11 @@ summary {
   color: color-mix(in oklch, var(--primary) 48%, var(--muted-foreground));
 }
 
+/* #660 audit line S1: settings/areas/page.tsx no longer applies this
+   variant (moved to a plain single-row masthead + `.settings-page-title`,
+   above) — the gradient-hero grammar this class implements was the audit
+   finding. Left in place, not deleted: no other consumer references it
+   today, but this line's blast radius is settings/areas only. */
 .workflow-page-header--areas {
   border-color: color-mix(
     in oklch,
@@ -1121,7 +1126,14 @@ summary {
   box-shadow: inset 0 1px 0 0 color-mix(in oklch, white 4%, transparent);
 }
 
-.system-details-disclosure > summary {
+/* #660 audit line S8: the chevron/summary behavior below used to be scoped
+   under `.system-details-disclosure >` — moved to the `data-detail-level`
+   attribute selector (DiagnosticsDisclosure always sets it, on both the
+   `"card"` and `"flat"` variants) so a "flat" disclosure grouped inside one
+   shared moments-card-grammar container (see settings/areas/page.tsx) still
+   gets the same expand/collapse affordance without also getting its own
+   redundant nested card surface. */
+details[data-detail-level] > summary {
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1129,20 +1141,20 @@ summary {
   list-style: none;
 }
 
-.system-details-disclosure > summary::-webkit-details-marker {
+details[data-detail-level] > summary::-webkit-details-marker {
   display: none;
 }
 
-.system-details-disclosure > summary::after {
+details[data-detail-level] > summary::after {
   content: "›";
   font-size: 1rem;
   transform: rotate(90deg);
   transition: transform 180ms ease;
 }
 
-.system-details-disclosure > summary:hover,
-.system-details-disclosure > summary:focus-visible,
-.system-details-disclosure[open] {
+details[data-detail-level] > summary:hover,
+details[data-detail-level] > summary:focus-visible,
+details[data-detail-level][open] {
   color: var(--area-accent-foreground);
 }
 
@@ -1150,7 +1162,7 @@ summary {
   border-color: var(--area-accent-border);
 }
 
-.system-details-disclosure[open] > summary::after {
+details[data-detail-level][open] > summary::after {
   transform: rotate(270deg);
 }
 
@@ -1224,6 +1236,52 @@ summary {
   font-weight: 620;
   letter-spacing: -0.015em;
   line-height: 1.15;
+}
+
+/* #660 audit line S1: settings/areas' page h1, replacing `WorkflowPageHeader`
+   + `.workflow-page-title`'s fluid clamp (1.9-2.9rem) with the fixed h1 tier
+   the ratified moments grammar uses elsewhere (`.moments-greeting`/
+   `.login-title`, same 2.25rem/700 numbers). Its own class, not a reuse of
+   either of those, for the same reason `.login-title`/`.empty-state-title`
+   above each got their own: both existing classes are commented as scoped
+   to their own feature/page. `.workflow-page-header--areas` (below) is now
+   unreferenced by any component — left in place rather than deleted since
+   this line's blast radius is settings/areas only, and the class isn't
+   provably dead for every future consumer. */
+.settings-page-title {
+  margin: 0;
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+/* #660 audit lines S3/S7: card titles within settings/areas (CreateAreaForm,
+   GoogleCalendarConnectionPanel) — the fixed card-title tier (1.5rem/620,
+   same numbers `.moments-card-title`/`.login-title`/`.empty-state-title`
+   all use), its own class for the same scoping reason those three each got
+   their own instead of reusing one another's. */
+.settings-card-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
+/* #660 audit line S8: one shared moments-card-grammar container for the six
+   grouped `DiagnosticsDisclosure`s in settings/areas/page.tsx (each now
+   `variant="flat"`, so it carries no card surface of its own) — same
+   var(--surface-radius)/var(--surface-shadow-sm) numbers `.moments-card`
+   uses, kept as its own class rather than reusing that name (scoped to the
+   moments feature by its own comment). `divide-y divide-border` (applied in
+   JSX) draws the seam between items; this class supplies the outer surface. */
+.settings-disclosure-group {
+  border: 1px solid var(--border);
+  border-radius: var(--surface-radius);
+  background: var(--card);
+  box-shadow: var(--surface-shadow-sm);
+  overflow: clip;
 }
 
 .workflow-metric-grid {
@@ -1346,7 +1404,19 @@ summary {
   );
 }
 
+/* #660 audit line S6: this is now the ONLY class on the area registry card
+   (was stacked with `area-accent-card workflow-secondary-card
+   workflow-support-card`) — carries the moments-card-grammar surface itself
+   (var(--surface-radius)/var(--surface-shadow-sm), the same numbers
+   `.moments-card` uses) plus a full-perimeter accent border tint, replacing
+   `area-accent-card`'s `inset 3px 0 0 0` left-edge stripe (the side-tab
+   shape O1 removed elsewhere in this epic) rather than editing that shared
+   class, which moments/ScheduleBlock.tsx (outside this audit's scope) still
+   uses as-is. */
 .areas-record-card {
+  border-color: var(--area-accent-border);
+  border-radius: var(--surface-radius);
+  box-shadow: var(--surface-shadow-sm);
   background: linear-gradient(
     180deg,
     color-mix(in oklch, var(--area-accent-surface) 76%, var(--card)) 0%,

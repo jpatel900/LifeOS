@@ -11,6 +11,14 @@ interface DiagnosticsDisclosureProps extends Omit<
   title?: string;
   summaryClassName?: string;
   contentClassName?: string;
+  /** #660 audit line S8: `"card"` (default) is each disclosure standing
+   * alone with its own border/background/padding (`.system-details-
+   * disclosure`) — right for a single disclosure dropped into a page.
+   * `"flat"` drops that per-item card surface so a group of disclosures
+   * can share ONE outer moments-card-grammar container (see
+   * settings/areas/page.tsx's six-disclosure group) instead of stacking
+   * N bordered boxes back to back. */
+  variant?: "card" | "flat";
 }
 
 export function DiagnosticsDisclosure({
@@ -20,6 +28,7 @@ export function DiagnosticsDisclosure({
   title,
   summaryClassName,
   contentClassName,
+  variant = "card",
   ...props
 }: DiagnosticsDisclosureProps) {
   const resolvedTitle =
@@ -28,7 +37,10 @@ export function DiagnosticsDisclosure({
 
   return (
     <details
-      className={cn("system-details-disclosure", className)}
+      className={cn(
+        variant === "card" ? "system-details-disclosure" : "px-4 py-3",
+        className,
+      )}
       data-detail-level={detailLevel}
       {...props}
     >
