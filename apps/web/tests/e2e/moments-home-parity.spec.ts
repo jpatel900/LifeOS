@@ -1,4 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+
+// HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
+// E2E dev server has no Supabase env, so every capture flow in this file runs
+// against the deterministic mock-parser stub (task-map lifecycle precedent).
+test.beforeEach(async ({ page }) => {
+  await stubParseCaptureRoute(page);
+});
 
 /**
  * Moments pass P7 — parity proof (pre-flip).
@@ -19,8 +27,9 @@ import { expect, test } from "@playwright/test";
 
 test.describe("moments home parity (/)", () => {
   // Parity with capture-parse-mock.spec.ts: the moments capture surface
-  // exercises the real /api/parse-capture route, answering in mock mode
-  // without AI env.
+  // round-trips through /api/parse-capture in mock mode. HIGH-1 (#670): the
+  // route requires a verified bearer token and E2E has no Supabase env, so
+  // the route is stubbed with the deterministic mock-parser payload.
   test("capture round-trips through /api/parse-capture in mock mode", async ({
     page,
   }) => {
