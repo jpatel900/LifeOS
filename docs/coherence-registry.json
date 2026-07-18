@@ -466,6 +466,12 @@
       "id": "closure_ritual.v1",
       "fr": "FR-035",
       "note": "Deterministic closure-command policy core (issue #597 slice 1): complete/released terminal commands with the exact three-part summary; consumed by the later persistence/UI slices."
+    },
+    {
+      "id": "trigger_surface.v1",
+      "fr": "FR-048",
+      "reserved": true,
+      "note": "Reserved (issue #669 slice 1): Triggers deterministic matching kernel forward-hook constant only; suggestion/override instrumentation lands with the persistence/UI slice."
     }
   ]
 }
