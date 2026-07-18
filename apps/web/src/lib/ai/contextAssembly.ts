@@ -130,10 +130,10 @@ export const AI_CONTEXT_SURFACE_DECLARATIONS = {
   task_map_draft: {
     builderName: "buildTaskMapDraftMessages",
     fixtureId: "task-map.max-structural-shape.v1",
-    measuredTokensEstimated: 1020,
+    measuredTokensEstimated: 1119,
     maxTokensEstimated: 1225,
     justification:
-      "fixture_id=task-map.max-structural-shape.v1; measured_tokens_est=1020; max_tokens_est=1225; rationale=Exercises task fields, maximum graph shape, breakdown, and revision metadata with reviewed headroom for prompt maintenance.",
+      "fixture_id=task-map.max-structural-shape.v1; measured_tokens_est=1119; max_tokens_est=1225; rationale=Exercises task fields, maximum graph shape, breakdown, and revision metadata with reviewed headroom for prompt maintenance; re-measured for the #664 estimated_minutes prompt line (per-node duration guidance added; max unchanged).",
   },
 } as const satisfies Record<AiContextSurfaceId, AiContextSurfaceDeclaration>;
 

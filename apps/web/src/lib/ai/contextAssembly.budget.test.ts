@@ -206,9 +206,9 @@ const EXPECTED = {
       "81c4c6cc5f3037ac5a310b48ae1b53685b0ea80f43c903e83b6052f8e0634619",
   },
   task_map_draft: {
-    measuredTokensEstimated: 1020,
+    measuredTokensEstimated: 1119,
     outputSha256:
-      "68012a99f7858ccfec81bc4bbeb5bbf04474f6b06b03a703a28657d057cd6c4c",
+      "4384b6ec30528dd1ee687c70503d43960d9625d607380e3a3715596a4cb2c2da",
   },
 } as const satisfies Record<
   AiContextSurfaceId,
