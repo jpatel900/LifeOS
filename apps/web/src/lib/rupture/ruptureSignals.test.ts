@@ -255,18 +255,13 @@ describe("deriveDismissalSpike", () => {
           (1 - DEFAULT_DISMISSAL_SPIKE_MAX_MALFORMED_RATIO),
       ) + 1;
     const malformed = Array.from({ length: malformedNeeded }, () => "bad");
-    expect(
-      deriveDismissalSpike(REFERENCE, [...valid, ...malformed]),
-    ).toBe(false);
+    expect(deriveDismissalSpike(REFERENCE, [...valid, ...malformed])).toBe(
+      false,
+    );
   });
 
   it("never counts malformed entries toward the in-window valid count", () => {
-    const timestamps = [
-      "not-a-date",
-      "",
-      minusMs(1000),
-      minusMs(2000),
-    ];
+    const timestamps = ["not-a-date", "", minusMs(1000), minusMs(2000)];
     // only 2 valid entries — below default threshold (>=3) unless threshold is 2 or less
     const result = deriveDismissalSpike(REFERENCE, timestamps, {
       thresholdCount: 2,
@@ -355,8 +350,6 @@ describe("deriveDismissalSpike", () => {
   });
 
   it("treats a malformed referenceDate as no data (returns false, no throw)", () => {
-    expect(
-      deriveDismissalSpike("not-a-date", [minusMs(1000)]),
-    ).toBe(false);
+    expect(deriveDismissalSpike("not-a-date", [minusMs(1000)])).toBe(false);
   });
 });

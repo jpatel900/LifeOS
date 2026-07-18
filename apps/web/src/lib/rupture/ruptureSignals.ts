@@ -40,13 +40,18 @@ const INVALID_OPTION = Symbol("invalid-dismissal-spike-option");
  * `rupturePolicy.ts`'s `readOwnSignal` (#636/#638 precedent).
  */
 function readOwnOption(options: unknown, key: string): unknown {
-  if ((typeof options !== "object" && typeof options !== "function") || !options) {
+  if (
+    (typeof options !== "object" && typeof options !== "function") ||
+    !options
+  ) {
     return INVALID_OPTION;
   }
 
   try {
     const descriptor = Object.getOwnPropertyDescriptor(options, key);
-    return descriptor && "value" in descriptor ? descriptor.value : INVALID_OPTION;
+    return descriptor && "value" in descriptor
+      ? descriptor.value
+      : INVALID_OPTION;
   } catch {
     return INVALID_OPTION;
   }
@@ -102,9 +107,11 @@ function isValidRatio(value: unknown): value is number {
   );
 }
 
-function resolveDismissalSpikeConfig(
-  options: unknown,
-): { windowMs: number; thresholdCount: number; maxMalformedRatio: number } {
+function resolveDismissalSpikeConfig(options: unknown): {
+  windowMs: number;
+  thresholdCount: number;
+  maxMalformedRatio: number;
+} {
   const windowMsRaw = readOwnOption(options, "windowMs");
   const thresholdCountRaw = readOwnOption(options, "thresholdCount");
   const maxMalformedRatioRaw = readOwnOption(options, "maxMalformedRatio");
