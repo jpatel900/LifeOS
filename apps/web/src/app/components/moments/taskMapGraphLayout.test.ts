@@ -79,8 +79,8 @@ describe("computeGraphLayout", () => {
     const layout = computeGraphLayout(graph, criticalIds, criticalIds);
     // o1 is not visible, so the r1 -> o1 edge is dropped.
     expect(layout.edges).toHaveLength(2);
-    expect(
-      layout.edges.every((e) => e.from !== "o1" && e.to !== "o1"),
-    ).toBe(true);
+    expect(layout.edges.every((e) => e.from !== "o1" && e.to !== "o1")).toBe(
+      true,
+    );
   });
 });

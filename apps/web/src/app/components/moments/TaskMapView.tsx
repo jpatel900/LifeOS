@@ -110,10 +110,7 @@ export function TaskMapView({
         </div>
       ) : (
         <>
-          <div
-            className="overflow-x-auto"
-            data-testid="taskmap-critical-path"
-          >
+          <div className="overflow-x-auto" data-testid="taskmap-critical-path">
             <TaskMapGraphCanvas
               graph={graph}
               visibleIds={criticalIds}
