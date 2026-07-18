@@ -73,7 +73,10 @@ export function TriageView({
       <Panel className="grid min-h-[520px] place-items-center text-center">
         <div>
           <Check className="mx-auto mb-5 text-[var(--grn-fg)]" size={42} />
-          <h1 className="text-4xl font-extrabold">Inbox clear</h1>
+          {/* G1 (#660 surface audit): pinned off text-4xl font-extrabold
+              (overshoots the fixed type scale and the 700-weight cap) onto
+              the shared h1 grammar (2.25rem/700, .moments-greeting). */}
+          <h1 className="moments-greeting">Inbox clear</h1>
           <button
             type="button"
             onClick={onPlan}
@@ -89,9 +92,24 @@ export function TriageView({
   return (
     <Panel className="grid min-h-[560px] place-items-center">
       <div className="w-full max-w-xl">
-        <div className="rounded-[var(--cockpit-radius)] border border-[var(--acc-rng)] bg-[var(--acc-sf)] p-6">
-          <p className="mono text-sm text-[var(--acc2)]">Needs a decision</p>
-          <h1 className="mt-3 text-3xl font-extrabold">{current.title}</h1>
+        {/* G2 (#660 surface audit): the mono/accent-colored eyebrow is now
+            the shared .moments-label grammar (sentence case in JSX, the
+            class handles uppercase/tracking); the full accent-fill
+            (bg-[var(--acc-sf)]) card is now the moments-card--emphasis
+            pattern — quiet base surface plus a subtle accent ring, per
+            calm-accent discipline (globals.css, .moments-card--emphasis
+            doc comment) — rather than a full-card shout. The title
+            (formerly a second h1) is a card title, not the page's own h1,
+            so it moves to the .moments-card-title scale (1.5rem/620) like
+            the other single-item hero cards (FirstMoveCard, CurrentBlockHero). */}
+        <div
+          className="moments-card moments-card--emphasis border p-6"
+          style={{ borderColor: "var(--acc)" }}
+        >
+          <p className="moments-label">Needs a decision</p>
+          <h2 className="workflow-surface-title moments-card-title mt-3">
+            {current.title}
+          </h2>
           <p className="mt-3 text-[var(--mut)]">{current.first_tiny_step}</p>
         </div>
         {current.breakdown ? (
@@ -197,6 +215,11 @@ export function TriageView({
             />
           ))}
         </div>
+        {/* G3 (#660 surface audit): all three verdicts were full fills
+            (Drop was already quiet-border; Someday was a solid --blu-sf
+            slab) — calm-accent discipline keeps one filled primary
+            ("Do today") with the other two as quiet border/tint
+            secondaries. */}
         <div className="mt-7 grid grid-cols-3 gap-3">
           <button
             type="button"
@@ -208,7 +231,7 @@ export function TriageView({
           <button
             type="button"
             onClick={() => onBacklog(current.id)}
-            className="min-h-14 rounded-2xl bg-[var(--blu-sf)] font-semibold text-[var(--blu-fg)]"
+            className="min-h-14 rounded-2xl border border-[var(--blu-rng)] font-semibold text-[var(--blu-fg)]"
           >
             Someday
           </button>

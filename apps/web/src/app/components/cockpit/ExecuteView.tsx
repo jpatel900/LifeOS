@@ -88,7 +88,14 @@ export function ExecuteView({
   return (
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <Panel>
-        <h1 className="text-2xl font-extrabold">Focus queue</h1>
+        {/* E1 (#660 surface audit): text-2xl font-extrabold exceeded the
+            700-weight cap; pinned onto the card-title scale
+            (workflow-surface-title moments-card-title, 1.5rem/620 — same
+            call as PlanView's "Hour rail"), keeping the h1 tag (one h1 per
+            route, routeSmoke.test.tsx enforces level-1 count). */}
+        <h1 className="workflow-surface-title moments-card-title">
+          Focus queue
+        </h1>
         <div className="mt-4 grid gap-2">
           {vm.planned.length ? (
             vm.planned.map((item) => (
@@ -127,38 +134,57 @@ export function ExecuteView({
       </Panel>
       <Panel className="grid place-items-center text-center">
         <div>
-          <svg
-            width="260"
-            height="260"
-            viewBox="0 0 260 260"
-            className="mx-auto"
-          >
-            <circle
-              cx="130"
-              cy="130"
-              r="104"
-              fill="none"
-              stroke="var(--track)"
-              strokeWidth="16"
-            />
-            <circle
-              cx="130"
-              cy="130"
-              r="104"
-              fill="none"
-              stroke="var(--acc)"
-              strokeLinecap="round"
-              strokeWidth="16"
-              transform="rotate(-90 130 130)"
-              style={ringStyle(total - remaining, total, 104)}
-            />
-          </svg>
-          <p className="mono -mt-36 text-5xl font-bold">
-            {active ? `${minutes}:${seconds}` : "--:--"}
-          </p>
-          <h2 className="mt-28 text-2xl font-extrabold">
+          {/* E2 (#660 surface audit): the timer used to sit on fragile
+              -mt-36/mt-28 negative-margin magic numbers to land inside the
+              ring — recomposed as a relative wrapper with the readout
+              absolutely centered over the svg, so the overlay holds by
+              construction. The readout keeps its 3rem display size (the
+              one true display-scale number on this screen) and gains
+              tabular-nums so the digits don't shimmy as they tick. */}
+          <div className="relative mx-auto w-fit">
+            <svg width="260" height="260" viewBox="0 0 260 260">
+              <circle
+                cx="130"
+                cy="130"
+                r="104"
+                fill="none"
+                stroke="var(--track)"
+                strokeWidth="16"
+              />
+              <circle
+                cx="130"
+                cy="130"
+                r="104"
+                fill="none"
+                stroke="var(--acc)"
+                strokeLinecap="round"
+                strokeWidth="16"
+                transform="rotate(-90 130 130)"
+                style={ringStyle(total - remaining, total, 104)}
+              />
+            </svg>
+            <p className="mono absolute inset-0 flex items-center justify-center text-5xl font-bold tabular-nums">
+              {active ? `${minutes}:${seconds}` : "--:--"}
+            </p>
+          </div>
+          {/* E1: the active-task title is a card-scale heading, not a
+              second page h1 — pinned to the card-title grammar
+              (1.5rem/620), dropping font-extrabold (700-weight cap). */}
+          <h2 className="workflow-surface-title moments-card-title mt-4">
             {active?.task.title ?? "Pick a block"}
           </h2>
+          {/* E3 (#660 surface audit): the bare "Pick a block" fallback gave
+              no orientation — moments empty-state grammar wants what this
+              is plus one next step. The heading text stays literal ("Pick
+              a block" is asserted by executeFocusPolish.test.tsx and the
+              handoff e2e); the orientation line renders only when no block
+              is active. */}
+          {!active ? (
+            <p className="mx-auto mt-2 max-w-md text-sm text-[var(--mut)]">
+              This is your focus timer. Choose a planned block from the queue to
+              start a timed session.
+            </p>
+          ) : null}
           {active ? (
             <div className="mx-auto mt-3 max-w-md text-left">
               <FirstTinyStepCard

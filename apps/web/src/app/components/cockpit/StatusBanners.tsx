@@ -101,6 +101,11 @@ export function WipRefusalPanel({
     // --surface-radius (16px) family; the mono/uppercase/tracking-[0.18em]
     // eyebrow below is now a plain sentence-case label; the heading drops
     // extrabold for the 700-weight cap.
+    // C5 (#660 addendum): the slot-holder swap buttons below carried the
+    // same two residuals — rounded-2xl (off the 16/10px surface-radius
+    // scale) and font-extrabold (over the 700-weight cap) — retokened to
+    // --surface-radius-sm (10px, matches the nested-row grammar) and
+    // font-bold.
     <div className="mb-5 rounded-[var(--surface-radius)] border border-[var(--amb)] bg-[var(--amb-sf)] p-5 text-[var(--amb-fg)] shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
@@ -132,12 +137,12 @@ export function WipRefusalPanel({
             key={holder.task_id}
             type="button"
             onClick={() => onSwap(holder.task_id)}
-            className="rounded-2xl bg-[var(--sf1)] p-4 text-left text-[var(--ink)] shadow-sm"
+            className="rounded-[var(--surface-radius-sm)] bg-[var(--sf1)] p-4 text-left text-[var(--ink)] shadow-sm"
           >
             <span className="text-xs font-semibold text-[var(--fnt)]">
               {holder.status}
             </span>
-            <span className="mt-1 block font-extrabold">{holder.title}</span>
+            <span className="mt-1 block font-bold">{holder.title}</span>
             <span className="mt-3 block text-sm font-bold text-[var(--amb-fg)]">
               Swap this out
             </span>
