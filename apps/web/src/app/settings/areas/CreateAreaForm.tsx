@@ -128,8 +128,8 @@ export function CreateAreaForm({
               <strong className="font-semibold text-foreground">
                 Opinionated default:
               </strong>{" "}
-              keep names short and concrete. If you hesitate, it is probably
-              too broad.
+              keep names short and concrete. If you hesitate, it is probably too
+              broad.
             </p>
           </div>
           <div className="grid gap-2 sm:max-w-md">

@@ -34,16 +34,11 @@ function AdminShell({ children }: { children: ReactNode }) {
       <header className="border-b border-border bg-card/95 px-4 py-3">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-baseline gap-3">
-            <Link
-              href="/"
-              className="text-sm font-semibold tracking-tight"
-            >
+            <Link href="/" className="text-sm font-semibold tracking-tight">
               LifeOS · Settings
             </Link>
             {dateLabel ? (
-              <span className="text-sm text-muted-foreground">
-                {dateLabel}
-              </span>
+              <span className="text-sm text-muted-foreground">{dateLabel}</span>
             ) : null}
           </div>
           <nav className="flex flex-wrap items-center gap-1.5">
