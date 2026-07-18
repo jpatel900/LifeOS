@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPOST_ELIGIBLE_SOURCE_STATUSES,
   DEFAULT_COMPOST_THRESHOLD_DAYS,
   selectCompostTransitionIntents,
   type CompostCandidate,
@@ -23,6 +24,16 @@ function candidate(
     ...overrides,
   };
 }
+
+describe("COMPOST_ELIGIBLE_SOURCE_STATUSES", () => {
+  it("exposes the exact eligible-source-status literal list for downstream persistence guards (#659)", () => {
+    expect(COMPOST_ELIGIBLE_SOURCE_STATUSES).toEqual([
+      "new",
+      "parsed",
+      "triage_required",
+    ]);
+  });
+});
 
 describe("selectCompostTransitionIntents", () => {
   it("freezes the default threshold at 14 days and requires age to strictly exceed it", () => {

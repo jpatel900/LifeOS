@@ -49,6 +49,21 @@ describe("CaptureItemSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts the FR-036 composted status (#659)", () => {
+    const result = CaptureItemSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      raw_text: "Follow up with Alex",
+      raw_audio_ref: null,
+      capture_mode: "text",
+      inferred_area_confidence: 0.72,
+      status: "composted",
+      created_at: "2024-01-01T12:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects legacy status values not in DATA_MODEL.md", () => {
     const result = CaptureItemSchema.safeParse({
       id: uid,

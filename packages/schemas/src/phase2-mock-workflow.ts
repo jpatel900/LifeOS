@@ -17,7 +17,17 @@ export const Phase2CaptureItemSchema = z.object({
   client_capture_id: z.string().nullable().optional(),
   capture_mode: z.literal("text"),
   inferred_area_confidence: z.number().min(0).max(1).nullable(),
-  status: z.enum(["new", "parsed", "triage_required", "resolved", "archived"]),
+  // FR-036 slice 2 (#659): "composted" mirrors CAPTURE_ITEM_STATUSES so a
+  // persisted composted capture normalizes truthfully instead of being
+  // coerced to another status.
+  status: z.enum([
+    "new",
+    "parsed",
+    "triage_required",
+    "resolved",
+    "archived",
+    "composted",
+  ]),
   created_at: z.string().datetime(),
 });
 

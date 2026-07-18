@@ -15,6 +15,7 @@ import {
   listSuggestionRecords,
   createTimeBlockProposal,
   createProject,
+  applyCompostTransitions,
   createCaptureItem,
   syncQueuedCapture,
   createExecutionSession,
@@ -568,6 +569,76 @@ describe("workflow data provider", () => {
     expect(result.provider).toBe("mock");
     expect(result.capture.raw_text).toBe("Brain dump for later");
     expect(result.capture.status).toBe("new");
+  });
+
+  it("composts only intent-named captures through a DB-level eligible-source-status guard (#659)", async () => {
+    const select = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440020",
+          user_id: userId,
+          area_id: null,
+          raw_text: "Old brain dump",
+          raw_audio_ref: null,
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "composted",
+          created_at: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      error: null,
+    });
+    const inStatus = vi.fn().mockReturnValue({ select });
+    const inId = vi.fn().mockReturnValue({ in: inStatus });
+    const update = vi.fn().mockReturnValue({ in: inId });
+    const from = vi.fn().mockReturnValue({ update });
+
+    const result = await applyCompostTransitions(authenticatedClient(from), [
+      {
+        captureId: "550e8400-e29b-41d4-a716-446655440020",
+        status: "composted",
+      },
+      {
+        captureId: "550e8400-e29b-41d4-a716-446655440020",
+        status: "composted",
+      },
+    ]);
+
+    expect(from).toHaveBeenCalledWith("capture_items");
+    expect(update).toHaveBeenCalledWith({ status: "composted" });
+    expect(inId).toHaveBeenCalledWith("id", [
+      "550e8400-e29b-41d4-a716-446655440020",
+    ]);
+    expect(inStatus).toHaveBeenCalledWith("status", [
+      "new",
+      "parsed",
+      "triage_required",
+    ]);
+    expect(result.provider).toBe("supabase");
+    expect(result.captures).toHaveLength(1);
+    expect(result.captures[0]?.status).toBe("composted");
+  });
+
+  it("skips the query entirely when no intents are eligible (#659)", async () => {
+    const from = vi.fn();
+
+    const result = await applyCompostTransitions(authenticatedClient(from), []);
+
+    expect(from).not.toHaveBeenCalled();
+    expect(result.provider).toBe("supabase");
+    expect(result.captures).toEqual([]);
+  });
+
+  it("keeps composting a no-op in mock mode (#659)", async () => {
+    const result = await applyCompostTransitions(null, [
+      {
+        captureId: "550e8400-e29b-41d4-a716-446655440020",
+        status: "composted",
+      },
+    ]);
+
+    expect(result.provider).toBe("mock");
+    expect(result.captures).toEqual([]);
   });
 
   it("persists accepted task drafts through Supabase after validating input", async () => {

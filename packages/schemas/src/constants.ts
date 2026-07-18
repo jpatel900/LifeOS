@@ -8,6 +8,10 @@ export const CAPTURE_ITEM_STATUSES = [
   "triage_required",
   "resolved",
   "archived",
+  // FR-036 slice 2 (#659): additive guilt-free-aging archive status. Reached
+  // only through the reviewed applyCompostTransitions write path, never a
+  // direct client mutation.
+  "composted",
 ] as const;
 
 export const PROJECT_STATUSES = [
