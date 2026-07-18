@@ -7,6 +7,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import { cn } from "@/lib/utils";
+import { MirrorPanel } from "./MirrorPanel";
 import { Panel } from "./shared";
 
 // Health stage screen (extracted from LifeOSCockpit.tsx, issue #590 slice 2
@@ -162,6 +163,12 @@ export function HealthView({
           {message ? (
             <p className="text-sm text-[var(--mut)]">{message}</p>
           ) : null}
+          {/* FR-047 slice 1 (#668): Mirror on the vital-signs surface the
+              operator navigates to (I0/asked-only — no push, no notify).
+              No FR-033 sample store is shipped yet, so the honest sample
+              set is empty; the kernel fails closed to the calm
+              insufficient-data state until samples exist. */}
+          <MirrorPanel samples={[]} />
           {/* H3 (#660 surface audit): quiet disclosure treatment — the
               bare bordered details gets the nested-row surface
               (--sf2 + --surface-radius-sm), matching the sibling check
