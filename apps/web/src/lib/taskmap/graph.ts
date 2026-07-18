@@ -18,6 +18,13 @@ export type TaskMapNode = {
   // See `apps/web/src/lib/taskmap/timeline.ts` for the deterministic
   // duration-weighted roll-up that consumes this field.
   estimated_minutes?: number;
+  // FR-023 slice F4 (#678): additive marker for the single sub-60-second
+  // physical opening move. Mirrors `packages/schemas/src/task-map.ts`
+  // `TaskMapNodeSchema.two_minute_move`. At most one node carries it and it
+  // is always a `required` node (both enforced by the schema superRefine).
+  // The AI nominates it; `resolveFirstStepNode` decides the effective first
+  // step from it (with a critical-path-head fallback).
+  two_minute_move?: boolean;
 };
 
 /** True when a node has been marked done by either signal. Centralizes the
@@ -167,6 +174,60 @@ export function computeCriticalPath(graph: TaskMapGraph): string[] {
   return chooseBestPath(
     [...requiredIds].sort().map((nodeId) => bestFrom(nodeId)),
   );
+}
+
+/**
+ * FR-023 slice F4 (#678) — the effective first step of an approved map.
+ *
+ * The first node of a breakdown and `tasks.first_tiny_step` are ONE fact
+ * (FR-023 criterion 3). This resolver is that single derivation, shared by
+ * both the Supabase approve (`approveTaskMap`) and the local approve reducer
+ * (`approveTaskMapLocal`) so the two never disagree.
+ *
+ * Effective first node =
+ *   - the AI-nominated `two_minute_move` node IF it is a structural entry
+ *     node of the required subgraph (in-degree 0 among required->required
+ *     edges — the exact edge set `computeCriticalPath` walks, so the flag
+ *     branch and the fallback share coordinates), ELSE
+ *   - the head of the code-computed critical path.
+ *
+ * Returns null only for a degenerate graph with no critical path (e.g. no
+ * required nodes, or a structurally invalid graph); callers then leave
+ * `first_tiny_step` untouched rather than writing null.
+ */
+export function resolveFirstStepNode(graph: TaskMapGraph): TaskMapNode | null {
+  if (!validateGraph(graph).valid) {
+    return null;
+  }
+
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  const requiredIds = new Set(
+    graph.nodes
+      .filter((node) => node.role === "required")
+      .map((node) => node.id),
+  );
+
+  const requiredInDegree = new Map<string, number>(
+    [...requiredIds].map((nodeId) => [nodeId, 0]),
+  );
+  for (const edge of graph.edges) {
+    if (requiredIds.has(edge.from) && requiredIds.has(edge.to)) {
+      requiredInDegree.set(edge.to, (requiredInDegree.get(edge.to) ?? 0) + 1);
+    }
+  }
+
+  const flagged = graph.nodes.find((node) => node.two_minute_move === true);
+  if (
+    flagged &&
+    requiredIds.has(flagged.id) &&
+    (requiredInDegree.get(flagged.id) ?? 0) === 0
+  ) {
+    return flagged;
+  }
+
+  const criticalPath = computeCriticalPath(graph);
+  const headId = criticalPath[0];
+  return headId ? (nodesById.get(headId) ?? null) : null;
 }
 
 export function cutScopeCandidates(graph: TaskMapGraph): TaskMapNode[] {

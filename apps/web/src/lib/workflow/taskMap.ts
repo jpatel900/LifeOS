@@ -3,7 +3,7 @@ import {
   carryForwardNodeCompletion,
   toggleNodeCompletion,
 } from "../taskmap/collapse";
-import type { TaskMapGraph } from "../taskmap/graph";
+import { resolveFirstStepNode, type TaskMapGraph } from "../taskmap/graph";
 import { nowIso, type WorkflowState } from "./shared";
 
 // FR-031 slice 5: local-first fold-back for the approved task-map graph.
@@ -45,6 +45,13 @@ export function approveTaskMapLocal(
     }
   }
 
+  // FR-023 slice F4 (#678): first node == `first_tiny_step` (FR-023 criterion
+  // 3). The local optimistic patch applies the SAME `resolveFirstStepNode`
+  // derivation the Supabase approve (`approveTaskMap`) uses, so the two never
+  // disagree; the e2e drives this path (no Supabase). A degenerate graph
+  // (resolver returns null) leaves the existing `first_tiny_step` untouched.
+  const firstStepNode = resolveFirstStepNode(nextGraph as TaskMapGraph);
+
   return {
     ...state,
     tasks: state.tasks.map((item) =>
@@ -56,6 +63,7 @@ export function approveTaskMapLocal(
             map_schema_version: nextGraph.schema_version,
             map_approved_at: approvedAt,
             updated_at: approvedAt,
+            ...(firstStepNode ? { first_tiny_step: firstStepNode.title } : {}),
           }
         : item,
     ),

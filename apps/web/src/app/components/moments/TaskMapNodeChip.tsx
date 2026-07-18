@@ -40,13 +40,18 @@ export function TaskMapNodeChip({
   const isOptional = node.role === "optional";
   const isDone = isNodeComplete(node);
   const isInteractive = !isRed && Boolean(onToggleComplete);
+  // FR-023 slice F4 (#678): the single sub-60-second opening move. Only ever
+  // true on a required node (schema-enforced). The badge wording ("start
+  // here") is a placeholder pending an OWNER-GATE taste call vs "2-min".
+  const isFirstStep = node.two_minute_move === true && !isRed;
 
   const statusWords = isDone ? "done" : ROLE_LABEL[node.role];
+  const firstStepWords = isFirstStep ? " Start here — the first move." : "";
   const ariaLabel = isRed
     ? `${node.title}: do-not or conditional step. ${node.red_reason ?? ""}`.trim()
     : isInteractive
-      ? `${node.title}: ${statusWords}. Tap to mark ${isDone ? "not done" : "done"}.`
-      : `${node.title}: ${statusWords}`;
+      ? `${node.title}: ${statusWords}.${firstStepWords} Tap to mark ${isDone ? "not done" : "done"}.`
+      : `${node.title}: ${statusWords}.${firstStepWords}`.trimEnd();
 
   const sharedClassName = cn(
     "workflow-compact-item flex flex-col gap-1 rounded-lg border px-3 py-2 text-xs font-medium",
@@ -76,7 +81,21 @@ export function TaskMapNodeChip({
 
   const content = (
     <>
-      <span>{node.title}</span>
+      <span className="flex flex-wrap items-center gap-1.5">
+        {isFirstStep ? (
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            style={{
+              background: "color-mix(in oklch, var(--acc) 20%, transparent)",
+              color: "var(--acc)",
+            }}
+            data-testid={`taskmap-first-step-badge-${node.id}`}
+          >
+            Start here
+          </span>
+        ) : null}
+        <span>{node.title}</span>
+      </span>
       {isRed && node.red_reason ? (
         <span className="text-[11px] font-normal opacity-90">
           {node.red_reason}

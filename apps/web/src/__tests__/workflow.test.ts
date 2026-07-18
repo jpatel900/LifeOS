@@ -230,6 +230,58 @@ describe("local mock workflow", () => {
     expect(redAttempt).toBe(state);
   });
 
+  // FR-023 slice F4 (#678): approveTaskMapLocal writes the effective first
+  // node's title into `first_tiny_step` (identity, criterion 3). This is the
+  // path the e2e drives (no Supabase).
+  it("approveTaskMapLocal sets first_tiny_step to the flagged entry node's title", () => {
+    let state = createInitialWorkflowState();
+    state = submitCapture(state, {
+      rawText: "Ship the quarterly report.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    const taskId = state.tasks[0].id;
+
+    const graph = {
+      schema_version: "1.0" as const,
+      nodes: [
+        {
+          id: "step-1",
+          title: "Draft outline",
+          role: "required" as const,
+          two_minute_move: true as const,
+        },
+        { id: "step-2", title: "Send it", role: "required" as const },
+      ],
+      edges: [{ from: "step-1", to: "step-2" }],
+    };
+    state = approveTaskMapLocal(state, taskId, graph);
+
+    expect(state.tasks[0].first_tiny_step).toBe("Draft outline");
+  });
+
+  it("approveTaskMapLocal falls back to the critical-path head when no node is flagged", () => {
+    let state = createInitialWorkflowState();
+    state = submitCapture(state, {
+      rawText: "Ship the quarterly report.",
+      areaId: "area-main-job",
+    });
+    state = acceptDraft(state, state.taskDrafts[0].id);
+    const taskId = state.tasks[0].id;
+
+    const graph = {
+      schema_version: "1.0" as const,
+      nodes: [
+        { id: "step-1", title: "Draft outline", role: "required" as const },
+        { id: "step-2", title: "Send it", role: "required" as const },
+      ],
+      edges: [{ from: "step-1", to: "step-2" }],
+    };
+    state = approveTaskMapLocal(state, taskId, graph);
+
+    expect(state.tasks[0].first_tiny_step).toBe("Draft outline");
+  });
+
   // FR-031 slice 8 — approveTaskMapLocal carries completion forward on a
   // regen revision by reading the task's own prior progression_map from
   // state (mirroring the server-side approveTaskMap's `previous_graph`).

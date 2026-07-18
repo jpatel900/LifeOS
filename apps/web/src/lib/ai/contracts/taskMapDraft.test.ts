@@ -106,4 +106,41 @@ describe("validateTaskMapDraftResponse", () => {
       }),
     ).toThrow(/failed validation/);
   });
+
+  // FR-023 slice F4 (#678): the two_minute_move marker.
+  it("keeps a true two_minute_move flag and normalizes false/null to absent", () => {
+    const result = validateTaskMapDraftResponse({
+      schema_version: TASK_MAP_DRAFT_SCHEMA_VERSION,
+      nodes: [
+        { ...validPayload.nodes[0], two_minute_move: true },
+        { ...validPayload.nodes[1], two_minute_move: false },
+        { ...validPayload.nodes[2], two_minute_move: null },
+        validPayload.nodes[3],
+      ],
+      edges: validPayload.edges,
+    });
+
+    expect(
+      result.nodes.find((node) => node.id === "step-1")?.two_minute_move,
+    ).toBe(true);
+    expect(
+      result.nodes.find((node) => node.id === "step-2")?.two_minute_move,
+    ).toBeUndefined();
+    expect(
+      result.nodes.find((node) => node.id === "polish")?.two_minute_move,
+    ).toBeUndefined();
+  });
+
+  it("rejects a draft that flags two nodes as the two-minute move", () => {
+    expect(() =>
+      validateTaskMapDraftResponse({
+        schema_version: TASK_MAP_DRAFT_SCHEMA_VERSION,
+        nodes: [
+          { ...validPayload.nodes[0], two_minute_move: true },
+          { ...validPayload.nodes[1], two_minute_move: true },
+        ],
+        edges: validPayload.edges,
+      }),
+    ).toThrow(/failed validation/);
+  });
 });

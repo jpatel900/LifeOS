@@ -121,19 +121,41 @@ export function TaskMapDraftReview({
                   {node.role === "red" ? (
                     <TaskMapNodeChip node={node} />
                   ) : (
-                    <input
-                      type="text"
-                      value={node.title}
-                      onChange={(event) => editTitle(id, event.target.value)}
-                      className={cn(
-                        "workflow-compact-item w-full rounded-lg border px-3 py-2 text-xs font-medium",
-                        node.role === "optional" &&
-                          "border-dashed text-muted-foreground",
-                      )}
-                      aria-label={`Edit title for ${node.title} (${node.role} step)`}
-                      data-testid={`taskmap-draft-edit-${id}`}
-                      data-role={node.role}
-                    />
+                    <>
+                      {node.two_minute_move === true ? (
+                        // FR-023 slice F4 (#678): the flagged opening move.
+                        // Badge wording ("start here") is an OWNER-GATE taste
+                        // call pending, vs "2-min".
+                        <span
+                          className="self-start rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                          style={{
+                            background:
+                              "color-mix(in oklch, var(--acc) 20%, transparent)",
+                            color: "var(--acc)",
+                          }}
+                          data-testid={`taskmap-draft-first-step-${id}`}
+                        >
+                          Start here
+                        </span>
+                      ) : null}
+                      <input
+                        type="text"
+                        value={node.title}
+                        onChange={(event) => editTitle(id, event.target.value)}
+                        className={cn(
+                          "workflow-compact-item w-full rounded-lg border px-3 py-2 text-xs font-medium",
+                          node.role === "optional" &&
+                            "border-dashed text-muted-foreground",
+                        )}
+                        aria-label={`Edit title for ${node.title} (${node.role} step${
+                          node.two_minute_move === true
+                            ? ", start here — the first move"
+                            : ""
+                        })`}
+                        data-testid={`taskmap-draft-edit-${id}`}
+                        data-role={node.role}
+                      />
+                    </>
                   )}
                   <button
                     type="button"
