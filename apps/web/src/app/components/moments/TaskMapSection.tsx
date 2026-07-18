@@ -1,8 +1,13 @@
 "use client";
 
 import type { ReactElement } from "react";
+import type { DurationProfile } from "@lifeos/schemas";
 import { cn } from "@/lib/utils";
 import { validateTaskMapForPersistence } from "@/lib/taskmap/persistence";
+import {
+  computeTaskMapTimeline,
+  resolveNodeDuration,
+} from "@/lib/taskmap/timeline";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
 import { ProgressionRail } from "./ProgressionRail";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
@@ -38,7 +43,7 @@ import type { ProgressionNode } from "./progressionNodes";
 export type TaskMapDraftUiState =
   | { phase: "idle" }
   | { phase: "pending" }
-  | { phase: "ready"; draft: TaskMapGraph & { schema_version: "1.0" } }
+  | { phase: "ready"; draft: TaskMapGraph & { schema_version: "1.0" | "1.1" } }
   | { phase: "failed"; message: string };
 
 export interface TaskMapFocusedTask {
@@ -55,9 +60,79 @@ export interface TaskMapSectionProps {
   now: Date;
   onRequestDraft(): void;
   onDismissDraft(): void;
-  onApproveDraft(graph: TaskMapGraph & { schema_version: "1.0" }): void;
+  onApproveDraft(graph: TaskMapGraph & { schema_version: "1.0" | "1.1" }): void;
   /** FR-031 slice 6: omit to render the approved map read-only. */
   onToggleNodeCompletion?(nodeId: string): void;
+  /** FR-031 slice F2 (#664): learned duration_profiles for the timeline
+   * roll-up's precedence rule (learned profile > AI estimate > none). Omit
+   * (or pass []) to fall back to raw approved estimates. */
+  durationProfiles?: DurationProfile[];
+  /** FR-031 slice F2: the focused task's persisted area id, used only to
+   * match a duration profile. Omit/null when unknown — no profile applies. */
+  areaId?: string | null;
+}
+
+/** Compact "~2h 05m" formatting for the timeline summary line. */
+function formatMinutes(totalMinutes: number): string {
+  const minutes = Math.round(totalMinutes);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) {
+    return `${rest}m`;
+  }
+  return rest === 0
+    ? `${hours}h`
+    : `${hours}h ${String(rest).padStart(2, "0")}m`;
+}
+
+/**
+ * FR-031 slice F2 — one calm summary line under the approved map: remaining
+ * estimate + ETA, both computed deterministically in code
+ * (`computeTaskMapTimeline`) from approved per-node durations. Renders
+ * nothing when the map carries no duration data at all (old 1.0 maps), and
+ * marks the estimate "partial" when only some nodes are estimated. Never a
+ * countdown, never blocking — display only.
+ */
+function TaskMapTimelineSummary({
+  graph,
+  durationProfiles,
+  areaId,
+  now,
+}: {
+  graph: TaskMapGraph;
+  durationProfiles: DurationProfile[];
+  areaId: string | null;
+  now: Date;
+}) {
+  const timeline = computeTaskMapTimeline(
+    graph,
+    (node) => resolveNodeDuration(node, durationProfiles, areaId),
+    now,
+  );
+
+  // An entirely unestimated map (every node "none") has nothing honest to
+  // say — stay silent rather than showing "0m".
+  if (timeline.etaIso === null || timeline.totalMinutes === 0) {
+    return null;
+  }
+
+  const eta = new Date(timeline.etaIso);
+  const etaLabel = eta.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return (
+    <p
+      className="m-0 text-xs text-muted-foreground"
+      data-testid="taskmap-timeline-summary"
+    >
+      {timeline.remainingMinutes > 0
+        ? `~${formatMinutes(timeline.remainingMinutes)} left on the critical path · about ${etaLabel} if started now`
+        : "Critical path complete"}
+      {timeline.partial ? " · some steps unestimated" : ""}
+    </p>
+  );
 }
 
 export function TaskMapSection({
@@ -69,18 +144,28 @@ export function TaskMapSection({
   onDismissDraft,
   onApproveDraft,
   onToggleNodeCompletion,
+  durationProfiles = [],
+  areaId = null,
 }: TaskMapSectionProps) {
   let approvedMapView: ReactElement | null = null;
   if (task && task.map_status === "approved" && task.progression_map) {
     const validated = validateTaskMapForPersistence(task.progression_map);
     if (validated.ok) {
       approvedMapView = (
-        <TaskMapView
-          graph={validated.graph as TaskMapGraph}
-          mapApprovedAt={task.map_approved_at ?? null}
-          now={now}
-          onToggleNodeCompletion={onToggleNodeCompletion}
-        />
+        <div className="grid gap-1.5">
+          <TaskMapView
+            graph={validated.graph as TaskMapGraph}
+            mapApprovedAt={task.map_approved_at ?? null}
+            now={now}
+            onToggleNodeCompletion={onToggleNodeCompletion}
+          />
+          <TaskMapTimelineSummary
+            graph={validated.graph as TaskMapGraph}
+            durationProfiles={durationProfiles}
+            areaId={areaId}
+            now={now}
+          />
+        </div>
       );
     }
     // Defensive fallback: a persisted map that no longer validates never

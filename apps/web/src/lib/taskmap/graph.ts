@@ -12,6 +12,12 @@ export type TaskMapNode = {
   completed_at?: string | null;
   red_reason?: string;
   red_condition?: string;
+  // FR-031 slice F2 (#664): additive, optional per-node duration estimate in
+  // minutes (schema_version 1.1+). Mirrors
+  // `packages/schemas/src/task-map.ts` `TaskMapNodeSchema.estimated_minutes`.
+  // See `apps/web/src/lib/taskmap/timeline.ts` for the deterministic
+  // duration-weighted roll-up that consumes this field.
+  estimated_minutes?: number;
 };
 
 /** True when a node has been marked done by either signal. Centralizes the

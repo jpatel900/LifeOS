@@ -167,4 +167,44 @@ describe("TaskMapGraphDraftSchema", () => {
       TaskMapGraphDraftSchema.safeParse({ ...minimalGraph, nodes: [] }).success,
     ).toBe(false);
   });
+
+  // FR-031 slice F2 (#664): additive duration estimation.
+  it("accepts schema_version 1.1 with per-node estimated_minutes", () => {
+    const result = TaskMapGraphDraftSchema.safeParse({
+      schema_version: "1.1",
+      nodes: [
+        {
+          id: "required-1",
+          title: "Required 1",
+          role: "required",
+          estimated_minutes: 30,
+        },
+      ],
+      edges: [],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("still accepts a 1.0 document with no estimated_minutes on any node", () => {
+    expect(TaskMapGraphDraftSchema.safeParse(minimalGraph).success).toBe(true);
+  });
+
+  it("rejects a zero or negative estimated_minutes", () => {
+    expect(
+      TaskMapGraphDraftSchema.safeParse({
+        ...minimalGraph,
+        schema_version: "1.1",
+        nodes: [{ ...minimalGraph.nodes[0], estimated_minutes: 0 }],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      TaskMapGraphDraftSchema.safeParse({
+        ...minimalGraph,
+        schema_version: "1.1",
+        nodes: [{ ...minimalGraph.nodes[0], estimated_minutes: -5 }],
+      }).success,
+    ).toBe(false);
+  });
 });

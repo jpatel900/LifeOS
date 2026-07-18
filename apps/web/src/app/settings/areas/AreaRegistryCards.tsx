@@ -235,13 +235,28 @@ export function AreaRegistryCards({
                 data-testid="areas-area-card"
                 data-accent-strength={isSelected ? "subtle" : undefined}
                 style={buildAreaAccentStyle(area.color)}
-                className="area-accent-card workflow-secondary-card workflow-support-card areas-record-card"
+                // #660 audit line S6: was a four-class pileup
+                // (`area-accent-card workflow-secondary-card
+                // workflow-support-card areas-record-card`) — three of
+                // those are shared by moments/* surfaces outside this
+                // audit's scope (ScheduleBlock/CloseMoment/StartMoment),
+                // so rather than edit their definitions, `.areas-record-card`
+                // (already scoped to this file alone) now carries the full
+                // moments-card-grammar surface itself: var(--surface-radius)/
+                // var(--surface-shadow-sm), plus a full-perimeter accent tint
+                // instead of `area-accent-card`'s inset-left accent stripe
+                // (the same side-tab-shaped signal O1 replaced elsewhere in
+                // this epic).
+                className="areas-record-card"
               >
                 <CardHeader className="pb-2">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="space-y-1">
-                      <p className="workflow-section-kicker">Area</p>
-                      <CardTitle className="text-xl">{area.name}</CardTitle>
+                      {/* #660 audit line S5: dropped the "Area" eyebrow — the
+                          card already is the area; its name says so. */}
+                      <CardTitle className="settings-card-title">
+                        {area.name}
+                      </CardTitle>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {isSelected ? (
@@ -265,7 +280,7 @@ export function AreaRegistryCards({
                   </p>
 
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="area-accent-panel rounded-lg border p-3">
+                    <div className="area-accent-panel rounded-[var(--surface-radius-sm)] border p-3">
                       <p className="font-medium text-foreground">
                         {openTasks} open task{openTasks === 1 ? "" : "s"}
                       </p>
@@ -275,7 +290,7 @@ export function AreaRegistryCards({
                           : "Work is waiting for planning or execution."}
                       </p>
                     </div>
-                    <div className="area-accent-panel rounded-lg border p-3">
+                    <div className="area-accent-panel rounded-[var(--surface-radius-sm)] border p-3">
                       <p className="font-medium text-foreground">
                         {plannedBlocks} planned block
                         {plannedBlocks === 1 ? "" : "s"}
@@ -321,7 +336,7 @@ export function AreaRegistryCards({
 
                   <DiagnosticsDisclosure
                     title="Registry actions and settings"
-                    className="workflow-admin-card rounded-xl p-3 text-sm text-muted-foreground"
+                    className="workflow-admin-card rounded-[var(--surface-radius-sm)] p-3 text-sm text-muted-foreground"
                     contentClassName="mt-3 grid gap-3 text-sm text-muted-foreground"
                   >
                     {removeFeedback ? (
@@ -363,7 +378,7 @@ export function AreaRegistryCards({
 
                     <div
                       data-testid="areas-color-panel"
-                      className="workflow-admin-card rounded-xl p-3"
+                      className="workflow-admin-card rounded-[var(--surface-radius-sm)] p-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1">
@@ -477,7 +492,7 @@ export function AreaRegistryCards({
                       )}
                     </div>
 
-                    <div className="workflow-admin-card rounded-xl p-3 text-xs">
+                    <div className="workflow-admin-card rounded-[var(--surface-radius-sm)] p-3 text-xs">
                       <p className="font-medium text-foreground">Area record</p>
                       <div className="mt-2 space-y-1">
                         <p>

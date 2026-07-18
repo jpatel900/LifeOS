@@ -109,18 +109,26 @@ export function CreateAreaForm({
       data-testid="areas-create-card"
       className="workflow-primary-card workflow-flagship-card"
     >
+      {/* #660 audit lines S3/S4: dropped the "Ownership starts here" eyebrow
+          kicker (no eyebrow-per-card, same grammar L1/S5 apply) and pinned
+          the title off the fluid `.workflow-surface-title` clamp onto the
+          fixed card-title scale (1.5rem/620 — `.settings-card-title`,
+          reusing the same numbers `.moments-card-title`/`.login-title`/
+          `.empty-state-title` all use, as its own class per that precedent).
+          "Opinionated default" folded into the paragraph as a bold lead-in
+          instead of a separate uppercase `.workflow-section-kicker` — one
+          less all-caps label, same information. */}
       <CardHeader>
-        <p className="workflow-surface-kicker">Ownership starts here</p>
-        <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
-          Create area
-        </CardTitle>
+        <CardTitle className="settings-card-title">Create area</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <form onSubmit={handleCreateArea} className="space-y-4">
           <div className="workflow-action-tray">
-            <p className="workflow-section-kicker">Opinionated default</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Keep names short and concrete. If you hesitate, it is probably too
+            <p className="text-sm text-muted-foreground">
+              <strong className="font-semibold text-foreground">
+                Opinionated default:
+              </strong>{" "}
+              keep names short and concrete. If you hesitate, it is probably too
               broad.
             </p>
           </div>

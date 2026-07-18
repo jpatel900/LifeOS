@@ -224,6 +224,14 @@ function buildMockDraft(input: TaskMapDraftServiceInput): TaskMapGraphDraft {
     id: `step-${index + 1}`,
     title: step.title,
     role: "required" as const,
+    // FR-031 slice F2 (#664): carry the parse breakdown's per-step estimate
+    // into the mock draft so the deterministic timeline roll-up has data in
+    // mock mode too. Unusable estimates degrade to absent (no estimate).
+    ...(typeof step.estimatedMinutes === "number" &&
+    Number.isFinite(step.estimatedMinutes) &&
+    step.estimatedMinutes > 0
+      ? { estimated_minutes: step.estimatedMinutes }
+      : {}),
   }));
 
   const edges = nodes.slice(1).map((node, index) => ({

@@ -71,20 +71,33 @@ export function HealthView({
     <Panel className="min-h-[560px]">
       <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
         <div className="grid place-items-center text-center">
+          {/* H2 (#660 surface audit): the 224px (size-56) circle was a
+              solid bg-[var(--grn-sf)] fill — the loudest fill in the app.
+              Calm-accent discipline elsewhere is border/tint plus a quiet
+              ring (see .moments-card--emphasis, globals.css) rather than a
+              full-shape wash, so the fill drops to the quiet base surface
+              and the accent moves to the border plus a soft halo ring. */}
           <button
             type="button"
             onClick={() => {
               void runSystemCheck();
             }}
             aria-label={`Run health system check. ${headline}. Score ${score} out of 100.`}
+            style={{
+              boxShadow:
+                "0 0 0 6px color-mix(in oklch, var(--grn-fg) 14%, transparent)",
+            }}
             className={cn(
-              "grid size-56 place-items-center rounded-full border border-[var(--grn-rng)] bg-[var(--grn-sf)] text-[var(--grn-fg)]",
+              "grid size-56 place-items-center rounded-full border border-[var(--grn-rng)] bg-[var(--sf)] text-[var(--grn-fg)]",
               pulse && "animate-pulse",
             )}
           >
             <HeartPulse size={64} />
           </button>
-          <h1 className="mt-6 text-4xl font-extrabold">{headline}</h1>
+          {/* H1 (#660 surface audit): text-4xl font-extrabold was already
+              2.25rem numerically but exceeded the 700-weight cap; pinned
+              onto the shared h1 grammar (.moments-greeting). */}
+          <h1 className="moments-greeting mt-6">{headline}</h1>
           <p className="mono mt-2 text-[var(--grn-fg)]">
             {score}/100 · {healthy}/{checks.length}
           </p>
@@ -156,7 +169,12 @@ export function HealthView({
               set is empty; the kernel fails closed to the calm
               insufficient-data state until samples exist. */}
           <MirrorPanel samples={[]} />
-          <details className="rounded-2xl border border-[var(--ln)] p-4 text-[var(--mut)]">
+          {/* H3 (#660 surface audit): quiet disclosure treatment — the
+              bare bordered details gets the nested-row surface
+              (--sf2 + --surface-radius-sm), matching the sibling check
+              rows above so the disclosure reads as part of the same
+              family instead of an unstyled afterthought. */}
+          <details className="rounded-[var(--surface-radius-sm)] border border-[var(--ln)] bg-[var(--sf2)] p-4 text-[var(--mut)]">
             <summary className="cursor-pointer font-semibold text-[var(--ink)]">
               Full breakdown
             </summary>

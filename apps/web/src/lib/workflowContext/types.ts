@@ -60,7 +60,7 @@ export type TaskMapDraftState =
   | {
       phase: "ready";
       taskId: string;
-      draft: TaskMapGraph & { schema_version: "1.0" };
+      draft: TaskMapGraph & { schema_version: "1.0" | "1.1" };
       suggestionRecordId: string | null;
     }
   | { phase: "failed"; taskId: string; message: string };
@@ -97,7 +97,7 @@ export interface WorkflowContextValue {
   dismissTaskMapDraft: () => void;
   approveTaskMapDraft: (
     taskId: string,
-    graph: TaskMapGraph & { schema_version: "1.0" },
+    graph: TaskMapGraph & { schema_version: "1.0" | "1.1" },
   ) => Promise<void>;
   // FR-031 slice 6: user-action-only, reversible node-completion toggle on
   // an already-approved map. Never AI-invoked; not instrumented (a
@@ -113,7 +113,11 @@ export interface WorkflowContextValue {
   // High-sensitivity and must not outlive the session on a shared device).
   clearOfflineCaptures: () => Promise<void>;
   addParsedWorkflowResult: (parsed: ParsedWorkflowResult) => void;
-  acceptTaskDraft: (draftId: string) => void;
+  // FR-031 slice F3 (#664): returns the newly-created task's id (or null if
+  // the accept was refused/no-opped) so the triage-accept surface can offer
+  // an on-demand task-map draft for exactly the task that was just created —
+  // never a background call.
+  acceptTaskDraft: (draftId: string) => string | null;
   backlogTaskDraft: (draftId: string) => void;
   promoteBacklogTask: (taskId: string) => void;
   acceptProjectDraft: (draftId: string) => void;

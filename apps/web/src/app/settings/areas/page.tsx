@@ -3,7 +3,6 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
-import { WorkflowPageHeader } from "../../components/WorkflowPageHeader";
 import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
 import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
@@ -31,12 +30,26 @@ export default function AreasSettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <WorkflowPageHeader
-        className="workflow-page-header--areas"
-        eyebrow="Ownership boundaries"
-        title="Areas"
-        description="Use areas as clear ownership boundaries. Keep them specific enough to trust and quiet enough not to distract from daily work."
-      >
+      {/* #660 audit line S1: was `WorkflowPageHeader` — an uppercase eyebrow
+          ("Ownership boundaries"), a fluid-clamp `.workflow-page-title`
+          (1.9-2.9rem), and an animated gradient panel. That grammar is a
+          marketing-page pattern (matches the login/L2 and moments/#647
+          finding: product UI reads at a FIXED scale, not fluid). Recomposed
+          as a single-row masthead — title + description on the left, the
+          status badges in the same row on wider viewports — at the fixed
+          h1 tier (2.25rem/700, `.settings-page-title` below; same numbers
+          `.moments-greeting`/`.login-title` use, kept as its own class per
+          those classes' own "scoped to this feature" comments). No eyebrow:
+          the title already says what the page is (same reasoning as
+          L1/S3/S5 dropping their eyebrows-per-card). */}
+      <header className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-1.5">
+          <h1 className="settings-page-title">Areas</h1>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Use areas as clear ownership boundaries. Keep them specific enough
+            to trust and quiet enough not to distract from daily work.
+          </p>
+        </div>
         {state.status === "ready" ? (
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">
@@ -51,7 +64,7 @@ export default function AreasSettingsPage() {
             </Badge>
           </div>
         ) : null}
-      </WorkflowPageHeader>
+      </header>
 
       <CreateAreaForm
         currentAreas={state.status === "ready" ? state.areas : null}
@@ -103,32 +116,65 @@ export default function AreasSettingsPage() {
         />
       ) : null}
 
-      <DiagnosticsDisclosure title="Area charters" contentClassName="mt-4">
-        <AreaCharterPanel />
-      </DiagnosticsDisclosure>
+      {/* #660 audit line S8: was six standalone `DiagnosticsDisclosure`s,
+          each carrying its own `.system-details-disclosure` border/
+          background/padding — six bare boxes stacked with no shared rhythm.
+          Grouped into ONE moments-card-grammar container (`.settings-
+          disclosure-group`, fixed var(--surface-radius)/var(--surface-
+          shadow-sm) — the same numbers `.moments-card` uses, kept as its
+          own class per the login-title/empty-state-title precedent of not
+          reaching into a feature-scoped class name); each disclosure drops
+          to `variant="flat"` (no per-item card surface) and a hairline
+          divider marks the seam between items instead. */}
+      <div className="settings-disclosure-group divide-y divide-border">
+        <DiagnosticsDisclosure
+          title="Area charters"
+          variant="flat"
+          contentClassName="mt-4"
+        >
+          <AreaCharterPanel />
+        </DiagnosticsDisclosure>
 
-      <DiagnosticsDisclosure title="Operator profile" contentClassName="mt-4">
-        <OperatorProfilePanel />
-      </DiagnosticsDisclosure>
+        <DiagnosticsDisclosure
+          title="Operator profile"
+          variant="flat"
+          contentClassName="mt-4"
+        >
+          <OperatorProfilePanel />
+        </DiagnosticsDisclosure>
 
-      <DiagnosticsDisclosure
-        title="Google Calendar admin"
-        contentClassName="mt-4"
-      >
-        <GoogleCalendarConnectionPanel />
-      </DiagnosticsDisclosure>
+        <DiagnosticsDisclosure
+          title="Google Calendar admin"
+          variant="flat"
+          contentClassName="mt-4"
+        >
+          <GoogleCalendarConnectionPanel />
+        </DiagnosticsDisclosure>
 
-      <DiagnosticsDisclosure title="Data export" contentClassName="mt-4">
-        <DataExportPanel />
-      </DiagnosticsDisclosure>
+        <DiagnosticsDisclosure
+          title="Data export"
+          variant="flat"
+          contentClassName="mt-4"
+        >
+          <DataExportPanel />
+        </DiagnosticsDisclosure>
 
-      <DiagnosticsDisclosure title="Run setup again" contentClassName="mt-4">
-        <OnboardingRerunPanel />
-      </DiagnosticsDisclosure>
+        <DiagnosticsDisclosure
+          title="Run setup again"
+          variant="flat"
+          contentClassName="mt-4"
+        >
+          <OnboardingRerunPanel />
+        </DiagnosticsDisclosure>
 
-      <DiagnosticsDisclosure title="Local reset" contentClassName="mt-4">
-        <LocalResetPanel />
-      </DiagnosticsDisclosure>
+        <DiagnosticsDisclosure
+          title="Local reset"
+          variant="flat"
+          contentClassName="mt-4"
+        >
+          <LocalResetPanel />
+        </DiagnosticsDisclosure>
+      </div>
     </div>
   );
 }
