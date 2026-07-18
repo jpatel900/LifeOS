@@ -185,4 +185,38 @@ describe("TaskMapView", () => {
     expect(screen.getByTestId("taskmap-node-a")).toBeInTheDocument();
     expect(screen.getByTestId("taskmap-node-b")).toBeInTheDocument();
   });
+
+  // FR-023 slice F4 (#678): the approved view renders the chip through
+  // TaskMapGraphCanvas — lock the flagged node's "start here" badge in that
+  // exact composition (the e2e asserts visibility in a real browser; this
+  // pins the DOM locally).
+  it("renders the start-here badge on the flagged node in the drawn collapsed view, and only there", () => {
+    const flaggedGraph: TaskMapGraph = {
+      ...graph,
+      nodes: graph.nodes.map((node) =>
+        node.id === "req-1" ? { ...node, two_minute_move: true } : node,
+      ),
+    };
+
+    render(
+      <TaskMapView
+        graph={flaggedGraph}
+        mapApprovedAt={null}
+        now={new Date()}
+      />,
+    );
+
+    const badge = screen.getByTestId("taskmap-first-step-badge-req-1");
+    expect(badge).toHaveTextContent(/start here/i);
+    // Inside the drawn canvas, not the degrade fallback.
+    expect(screen.queryByTestId("taskmap-fallback")).not.toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-node-req-1").contains(badge)).toBe(true);
+    expect(
+      screen.queryByTestId("taskmap-first-step-badge-req-2"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-node-req-1")).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("Start here"),
+    );
+  });
 });

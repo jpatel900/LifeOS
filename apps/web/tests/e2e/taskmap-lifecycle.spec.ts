@@ -173,12 +173,21 @@ test.describe("task-map lifecycle (FR-031)", () => {
 
     // FR-023 slice F4 (#678): first node IS first_tiny_step. The flagged
     // entry node "outline" carries the "start here" affordance in the
-    // collapsed map, AND its title is written to the task's first_tiny_step —
-    // the same string is surfaced by the FirstTinyStepCard. One fact, two
-    // places (FR-023 criterion 3).
+    // collapsed map, AND its title is written to the task's first_tiny_step.
     await expect(
       page.getByTestId("taskmap-first-step-badge-outline"),
     ).toBeVisible();
+
+    // Same-string assertion (criterion 3): the FirstTinyStepCard renders only
+    // during an active focus session (FlowMoment gates it on
+    // `hasActiveSession`), so take the first move from Start — the natural
+    // FR-023 order: the approve above populated the field, so starting is
+    // un-gated, and the card must surface the SAME string as the map's first
+    // node. One fact, two places.
+    await page.keyboard.press("1");
+    await expect(page.getByTestId("start-moment")).toBeVisible();
+    await page.getByTestId("first-move-start").click();
+    await expect(page.getByTestId("flow-moment")).toBeVisible();
     await expect(page.getByTestId("first-tiny-step-value")).toHaveText(
       "Draft outline",
     );
