@@ -39,6 +39,13 @@ const taskMapNodeJsonSchema: JsonSchema = {
     // minutes, or null when the AI cannot estimate a step. Draft-only input
     // to the deterministic roll-up (timeline.ts) — never a timeline claim.
     estimated_minutes: { type: ["number", "null"] },
+    // FR-023 slice F4 (#678): true on the ONE node that is the sub-60-second
+    // physical opening move, false/null on every other node. Nullable for
+    // provider structured-output compatibility (strict mode requires every
+    // property); normalized back to absent unless strictly true before the
+    // zod parse. The one-flag / required-role invariants are the schema's
+    // job, not the AI's.
+    two_minute_move: { type: ["boolean", "null"] },
   },
   required: [
     "id",
@@ -47,6 +54,7 @@ const taskMapNodeJsonSchema: JsonSchema = {
     "red_reason",
     "red_condition",
     "estimated_minutes",
+    "two_minute_move",
   ],
 };
 
@@ -146,6 +154,15 @@ function normalizeNullableOptionalFields(payload: unknown): unknown {
             normalizedNode.estimated_minutes <= 0))
       ) {
         delete normalizedNode.estimated_minutes;
+      }
+      // FR-023 slice F4: the strict json_schema requires two_minute_move
+      // (nullable). Only a literal `true` is a meaningful flag — null and
+      // false both mean "not the opening move", so strip anything but true
+      // so the persisted document carries the marker on the one node only.
+      // The "at most one flag" rule is left to the schema superRefine, not
+      // deduped here.
+      if (normalizedNode.two_minute_move !== true) {
+        delete normalizedNode.two_minute_move;
       }
       return normalizedNode;
     }),
