@@ -23,7 +23,17 @@ function LaunchStepPrompt({
   const canSave = value.trim().length > 0;
 
   return (
-    <div className="rounded-2xl border border-[var(--amb-rng)] bg-[var(--amb-sf)] p-3">
+    // P2 (#660 surface audit): was a solid bg-[var(--amb-sf)] full-cell
+    // fill — calm-accent discipline elsewhere is a soft color-mix tint over
+    // the base row surface plus a border (see TodayView's T3 fix for the
+    // same pattern), not a full-panel wash.
+    <div
+      className="rounded-2xl border p-3"
+      style={{
+        borderColor: "var(--amb-rng)",
+        background: "color-mix(in oklch, var(--amb-fg) 12%, var(--sf2))",
+      }}
+    >
       <label
         htmlFor={inputId}
         className="grid gap-2 text-sm font-semibold text-[var(--amb-fg)]"
@@ -34,7 +44,7 @@ function LaunchStepPrompt({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Example: open the notes and write one bullet"
-          className="min-h-11 rounded-xl border border-[var(--amb-rng)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
+          className="min-h-11 rounded-[var(--surface-radius-sm)] border border-[var(--amb-rng)] bg-[var(--sf)] px-3 text-[var(--ink)] outline-none focus:border-[var(--acc)]"
         />
       </label>
       <button
@@ -155,7 +165,16 @@ export function PlanView({
     <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
       <Panel className="order-2 sm:order-1">
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold">Hour rail</h1>
+          {/* P1 (#660 surface audit): text-2xl font-extrabold exceeded the
+              700-weight cap; the size (1.5rem) already matched the
+              card-title scale, so this pins onto that scale's tokens
+              (workflow-surface-title moments-card-title) rather than the
+              larger 2.25rem greeting scale — h1 stays the tag (one h1 per
+              route, matching CaptureView's sr-only h1 and the
+              routeSmoke.test.tsx "level: 1" guard). */}
+          <h1 className="workflow-surface-title moments-card-title">
+            Hour rail
+          </h1>
           <span className="mono text-sm text-[var(--fnt)]">8a-6p</span>
         </div>
         <div className="grid gap-2">
@@ -176,7 +195,12 @@ export function PlanView({
                       : undefined
                 }
                 className={cn(
-                  "min-h-16 grid-cols-[58px_1fr] items-center rounded-2xl border p-3 text-left",
+                  // P3 (#660 surface audit): rounded-2xl here now matches
+                  // --surface-radius explicitly (token, not the bare
+                  // utility) so the two-step 16/10px scale is legible from
+                  // the class names alone, same as the rounded-xl ->
+                  // --surface-radius-sm normalization below.
+                  "min-h-16 grid-cols-[58px_1fr] items-center rounded-[var(--surface-radius)] border p-3 text-left",
                   collapsible ? "hidden sm:grid" : "grid",
                   placed
                     ? "border-[var(--acc-rng)] bg-[var(--acc-sf)]"
@@ -226,7 +250,10 @@ export function PlanView({
       </Panel>
       <div className="order-1 grid gap-5 sm:order-2">
         <Panel>
-          <h2 className="text-xl font-bold">To place</h2>
+          {/* P1 (#660 surface audit): section-header grammar — the same
+              .moments-label choice R2 made for ReviewView's Panel titles,
+              applied consistently across every stage view this PR touches. */}
+          <h2 className="moments-label">To place</h2>
           <div className="mt-4 grid gap-2">
             {missingLaunchStep ? (
               <LaunchStepPrompt
@@ -250,7 +277,7 @@ export function PlanView({
                     onSelectTask(selectedTaskId === task.id ? null : task.id)
                   }
                   className={cn(
-                    "rounded-2xl border p-4 text-left",
+                    "rounded-[var(--surface-radius)] border p-4 text-left",
                     selectedTaskId === task.id
                       ? "border-[var(--acc-rng)] bg-[var(--acc-sf)]"
                       : "border-[var(--ln)] bg-[var(--sf2)]",
@@ -268,13 +295,21 @@ export function PlanView({
           </div>
         </Panel>
         <Panel>
-          <h2 className="text-xl font-bold">Someday</h2>
+          <h2 className="moments-label">Someday</h2>
           <div className="mt-4 grid gap-2">
             {vm.backlog.length ? (
               vm.backlog.map((task) => (
+                // P2 (#660 surface audit): was a solid bg-[var(--blu-sf)]
+                // full-cell fill; same tint+border treatment as
+                // LaunchStepPrompt above.
                 <div
                   key={task.id}
-                  className="rounded-2xl bg-[var(--blu-sf)] p-4 text-[var(--blu-fg)]"
+                  className="rounded-[var(--surface-radius)] border p-4 text-[var(--blu-fg)]"
+                  style={{
+                    borderColor: "var(--blu-rng)",
+                    background:
+                      "color-mix(in oklch, var(--blu-fg) 12%, var(--sf2))",
+                  }}
                 >
                   <button
                     type="button"
@@ -318,7 +353,7 @@ export function PlanView({
         </Panel>
         <Panel>
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-bold">Proposals</h2>
+            <h2 className="moments-label">Proposals</h2>
             <button
               type="button"
               disabled={!taskIdToPlace || Boolean(missingLaunchStep)}
@@ -343,7 +378,7 @@ export function PlanView({
               vm.proposals.map(({ allDayContexts, proposal, task, hour }) => (
                 <div
                   key={proposal.id}
-                  className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
+                  className="rounded-[var(--surface-radius)] border border-[var(--ln)] bg-[var(--sf2)] p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -400,9 +435,14 @@ export function PlanView({
                       recalibration: recal,
                     };
                     return (
+                      // P3 (#660 surface audit): rounded-xl (12px, off both
+                      // scale steps) -> --surface-radius-sm (10px) — a
+                      // nested panel one level in from the rounded-2xl
+                      // proposal card above, matching moments-row's
+                      // nested-surface radius.
                       <div
                         data-testid="proposal-recalibration"
-                        className="mt-3 rounded-xl border border-[var(--ln)] bg-[var(--sf3)] px-3 py-2 text-sm"
+                        className="mt-3 rounded-[var(--surface-radius-sm)] border border-[var(--ln)] bg-[var(--sf3)] px-3 py-2 text-sm"
                       >
                         <p className="font-semibold">{recal.label}</p>
                         <p className="mono mt-1 text-[var(--fnt)]">
@@ -447,7 +487,7 @@ export function PlanView({
                     );
                   })()}
                   {task.first_tiny_step?.trim() ? (
-                    <p className="mt-3 rounded-xl bg-[var(--acc-sf)] px-3 py-2 text-sm font-semibold text-[var(--acc2)]">
+                    <p className="mt-3 rounded-[var(--surface-radius-sm)] bg-[var(--acc-sf)] px-3 py-2 text-sm font-semibold text-[var(--acc2)]">
                       First move: {task.first_tiny_step}
                     </p>
                   ) : (
@@ -507,7 +547,7 @@ export function PlanView({
           </div>
         </Panel>
         <Panel>
-          <h2 className="text-xl font-bold">Calendar approval</h2>
+          <h2 className="moments-label">Calendar approval</h2>
           <details className="mt-3 text-[var(--mut)]">
             <summary className="cursor-pointer font-semibold text-[var(--ink)]">
               Google writes are separate
