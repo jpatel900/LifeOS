@@ -207,8 +207,8 @@ export function resolveFirstStepNode(graph: TaskMapGraph): TaskMapNode | null {
       .map((node) => node.id),
   );
 
-  const requiredInDegree = new Map(
-    [...requiredIds].map((nodeId) => [nodeId, 0] as const),
+  const requiredInDegree = new Map<string, number>(
+    [...requiredIds].map((nodeId) => [nodeId, 0]),
   );
   for (const edge of graph.edges) {
     if (requiredIds.has(edge.from) && requiredIds.has(edge.to)) {
