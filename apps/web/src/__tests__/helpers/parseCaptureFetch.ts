@@ -18,7 +18,15 @@ const SUPABASE_TEST_URL = "http://supabase.test";
 const SUPABASE_TEST_ANON_KEY = "supabase-test-anon-key";
 
 function isSupabaseAuthUserUrl(url: string) {
-  return url.startsWith(SUPABASE_TEST_URL) && url.includes("/auth/v1/user");
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.origin === SUPABASE_TEST_URL &&
+      parsed.pathname.startsWith("/auth/v1/user")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function supabaseTestUserResponse() {
