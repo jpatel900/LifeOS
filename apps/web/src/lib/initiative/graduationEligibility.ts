@@ -11,7 +11,11 @@
 // No ambient clock: this kernel takes no time input and needs none — it
 // evaluates a caller-supplied evidence snapshot, not a rolling window.
 
-export type OpportunityOutcome = "accepted" | "welcomed" | "dismissed" | "ignored";
+export type OpportunityOutcome =
+  | "accepted"
+  | "welcomed"
+  | "dismissed"
+  | "ignored";
 
 export type GraduationEligibilityBlockReason =
   | "malformed_evidence"
@@ -119,7 +123,9 @@ function snapshotTopLevel(input: unknown): TopLevelSnapshot | undefined {
 }
 
 function isOpportunityOutcome(value: unknown): value is OpportunityOutcome {
-  return typeof value === "string" && OUTCOMES.includes(value as OpportunityOutcome);
+  return (
+    typeof value === "string" && OUTCOMES.includes(value as OpportunityOutcome)
+  );
 }
 
 /**
@@ -172,7 +178,8 @@ export function evaluateGraduationEligibility(
   let acceptedOrWelcomedCount = 0;
   let dismissedCount = 0;
   for (const outcome of outcomes) {
-    if (outcome === "accepted" || outcome === "welcomed") acceptedOrWelcomedCount += 1;
+    if (outcome === "accepted" || outcome === "welcomed")
+      acceptedOrWelcomedCount += 1;
     else if (outcome === "dismissed") dismissedCount += 1;
   }
 
@@ -185,7 +192,10 @@ export function evaluateGraduationEligibility(
   }
 
   // dismissedCount / total >= 1/5, evaluated as integers.
-  if (dismissedCount * MAX_DISMISSAL_DENOMINATOR >= total * MAX_DISMISSAL_NUMERATOR) {
+  if (
+    dismissedCount * MAX_DISMISSAL_DENOMINATOR >=
+    total * MAX_DISMISSAL_NUMERATOR
+  ) {
     return DISMISSAL_RATE_AT_OR_ABOVE_THRESHOLD;
   }
 

@@ -20,13 +20,22 @@ const successBranchCannotClaimGranted: Assert<
 > = true;
 
 function opportunities(
-  spec: Readonly<{ accepted?: number; welcomed?: number; ignored?: number; dismissed?: number }>,
+  spec: Readonly<{
+    accepted?: number;
+    welcomed?: number;
+    ignored?: number;
+    dismissed?: number;
+  }>,
 ): Array<{ outcome: string }> {
   const out: Array<{ outcome: string }> = [];
-  for (let i = 0; i < (spec.accepted ?? 0); i++) out.push({ outcome: "accepted" });
-  for (let i = 0; i < (spec.welcomed ?? 0); i++) out.push({ outcome: "welcomed" });
-  for (let i = 0; i < (spec.ignored ?? 0); i++) out.push({ outcome: "ignored" });
-  for (let i = 0; i < (spec.dismissed ?? 0); i++) out.push({ outcome: "dismissed" });
+  for (let i = 0; i < (spec.accepted ?? 0); i++)
+    out.push({ outcome: "accepted" });
+  for (let i = 0; i < (spec.welcomed ?? 0); i++)
+    out.push({ outcome: "welcomed" });
+  for (let i = 0; i < (spec.ignored ?? 0); i++)
+    out.push({ outcome: "ignored" });
+  for (let i = 0; i < (spec.dismissed ?? 0); i++)
+    out.push({ outcome: "dismissed" });
   return out;
 }
 
@@ -132,7 +141,10 @@ describe("evaluateGraduationEligibility", () => {
         initiativeClass: "brief",
         opportunities: opportunities({ accepted: 16, dismissed: 4 }),
       }),
-    ).toEqual({ eligible: false, reason: "dismissal_rate_at_or_above_threshold" });
+    ).toEqual({
+      eligible: false,
+      reason: "dismissal_rate_at_or_above_threshold",
+    });
   });
 
   it("is eligible just under the dismissal ceiling at 15%", () => {
@@ -285,7 +297,10 @@ describe("evaluateGraduationEligibility", () => {
 
   it("fails closed for revoked and throwing proxies", () => {
     const revoked = Proxy.revocable(
-      { initiativeClass: "brief", opportunities: opportunities({ accepted: 20 }) },
+      {
+        initiativeClass: "brief",
+        opportunities: opportunities({ accepted: 20 }),
+      },
       {},
     );
     revoked.revoke();
@@ -307,7 +322,11 @@ describe("evaluateGraduationEligibility", () => {
       },
     );
 
-    for (const input of [revoked.proxy, throwsOnPrototype, throwsOnDescriptor]) {
+    for (const input of [
+      revoked.proxy,
+      throwsOnPrototype,
+      throwsOnDescriptor,
+    ]) {
       expect(evaluateGraduationEligibility(input)).toEqual({
         eligible: false,
         reason: "malformed_evidence",
@@ -334,7 +353,10 @@ describe("evaluateGraduationEligibility", () => {
   it("freezes every block-reason decision", () => {
     const decisions = [
       evaluateGraduationEligibility(null),
-      evaluateGraduationEligibility({ initiativeClass: "brief", opportunities: [] }),
+      evaluateGraduationEligibility({
+        initiativeClass: "brief",
+        opportunities: [],
+      }),
       evaluateGraduationEligibility({
         initiativeClass: "brief",
         opportunities: opportunities({ accepted: 15, ignored: 5 }),
@@ -357,7 +379,10 @@ describe("evaluateGraduationEligibility", () => {
       rung: "I2",
     });
 
-    expect(decision).toEqual({ eligible: false, reason: "insufficient_opportunities" });
+    expect(decision).toEqual({
+      eligible: false,
+      reason: "insufficient_opportunities",
+    });
   });
 
   it("exposes an exhaustive decision type where success can only require ratification", () => {
