@@ -60,7 +60,7 @@ export type TaskMapDraftState =
   | {
       phase: "ready";
       taskId: string;
-      draft: TaskMapGraph & { schema_version: "1.0" };
+      draft: TaskMapGraph & { schema_version: "1.0" | "1.1" };
       suggestionRecordId: string | null;
     }
   | { phase: "failed"; taskId: string; message: string };
@@ -97,7 +97,7 @@ export interface WorkflowContextValue {
   dismissTaskMapDraft: () => void;
   approveTaskMapDraft: (
     taskId: string,
-    graph: TaskMapGraph & { schema_version: "1.0" },
+    graph: TaskMapGraph & { schema_version: "1.0" | "1.1" },
   ) => Promise<void>;
   // FR-031 slice 6: user-action-only, reversible node-completion toggle on
   // an already-approved map. Never AI-invoked; not instrumented (a

@@ -19,7 +19,10 @@ import {
  * approved graph; the AI never determines, edits, or re-scores it.
  */
 
-export const TASK_MAP_DRAFT_SCHEMA_VERSION = "1.0" as const;
+// FR-031 slice F2 (#664): freshly generated drafts are emitted at 1.1 (nodes
+// may carry an AI-proposed `estimated_minutes`, approved like any other draft
+// field). Persisted 1.0 maps stay valid — the zod gate accepts both versions.
+export const TASK_MAP_DRAFT_SCHEMA_VERSION = "1.1" as const;
 
 type JsonSchema = Record<string, unknown>;
 
@@ -32,8 +35,19 @@ const taskMapNodeJsonSchema: JsonSchema = {
     role: { type: "string", enum: ["required", "optional", "red"] },
     red_reason: { type: ["string", "null"] },
     red_condition: { type: ["string", "null"] },
+    // FR-031 slice F2 (#664): AI-proposed duration estimate in whole
+    // minutes, or null when the AI cannot estimate a step. Draft-only input
+    // to the deterministic roll-up (timeline.ts) — never a timeline claim.
+    estimated_minutes: { type: ["number", "null"] },
   },
-  required: ["id", "title", "role", "red_reason", "red_condition"],
+  required: [
+    "id",
+    "title",
+    "role",
+    "red_reason",
+    "red_condition",
+    "estimated_minutes",
+  ],
 };
 
 const taskMapEdgeJsonSchema: JsonSchema = {
@@ -120,6 +134,18 @@ function normalizeNullableOptionalFields(payload: unknown): unknown {
       }
       if (normalizedNode.red_condition === null) {
         delete normalizedNode.red_condition;
+      }
+      // FR-031 slice F2: null means "no estimate" (the strict json_schema
+      // requires the property); an unusable number (zero/negative/NaN)
+      // degrades to no estimate as well rather than failing the whole
+      // draft — the roll-up flags such nodes as partial instead.
+      if (
+        normalizedNode.estimated_minutes === null ||
+        (typeof normalizedNode.estimated_minutes === "number" &&
+          (!Number.isFinite(normalizedNode.estimated_minutes) ||
+            normalizedNode.estimated_minutes <= 0))
+      ) {
+        delete normalizedNode.estimated_minutes;
       }
       return normalizedNode;
     }),

@@ -38,7 +38,7 @@ import type { ProgressionNode } from "./progressionNodes";
 export type TaskMapDraftUiState =
   | { phase: "idle" }
   | { phase: "pending" }
-  | { phase: "ready"; draft: TaskMapGraph & { schema_version: "1.0" } }
+  | { phase: "ready"; draft: TaskMapGraph & { schema_version: "1.0" | "1.1" } }
   | { phase: "failed"; message: string };
 
 export interface TaskMapFocusedTask {
@@ -55,7 +55,7 @@ export interface TaskMapSectionProps {
   now: Date;
   onRequestDraft(): void;
   onDismissDraft(): void;
-  onApproveDraft(graph: TaskMapGraph & { schema_version: "1.0" }): void;
+  onApproveDraft(graph: TaskMapGraph & { schema_version: "1.0" | "1.1" }): void;
   /** FR-031 slice 6: omit to render the approved map read-only. */
   onToggleNodeCompletion?(nodeId: string): void;
 }
