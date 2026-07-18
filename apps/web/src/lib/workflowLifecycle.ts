@@ -63,6 +63,14 @@ export function captureLifecycleDisplay(
         variant: "secondary",
         detail: "This capture was archived from the active flow.",
       };
+    // FR-036 (#659): blame-free copy — a composted capture was a thought,
+    // not a commitment. Kept, findable, owes you nothing.
+    case "composted":
+      return {
+        label: "Composted",
+        variant: "secondary",
+        detail: "Kept and findable. It owes you nothing.",
+      };
   }
 }
 
