@@ -232,6 +232,11 @@ function buildMockDraft(input: TaskMapDraftServiceInput): TaskMapGraphDraft {
     step.estimatedMinutes > 0
       ? { estimated_minutes: step.estimatedMinutes }
       : {}),
+    // FR-023 slice F4 (#678): the mock chain is linear, so node 1 is always
+    // the structural entry node — mark it as the two-minute opening move so
+    // the identity write (`resolveFirstStepNode` -> `first_tiny_step`) has a
+    // flagged node in mock mode too.
+    ...(index === 0 ? { two_minute_move: true } : {}),
   }));
 
   const edges = nodes.slice(1).map((node, index) => ({

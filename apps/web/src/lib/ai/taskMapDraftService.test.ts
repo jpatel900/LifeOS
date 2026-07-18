@@ -63,6 +63,12 @@ describe("task map draft server service", () => {
       { from: "step-1", to: "step-2" },
       { from: "step-2", to: "step-3" },
     ]);
+    // FR-023 slice F4 (#678): the mock marks node 1 (the linear entry) as the
+    // two-minute opening move, and only node 1.
+    expect(result.draft.nodes[0]?.two_minute_move).toBe(true);
+    expect(
+      result.draft.nodes.slice(1).every((node) => !node.two_minute_move),
+    ).toBe(true);
   });
 
   it("falls back to a single generic node when no breakdown exists", async () => {

@@ -4,7 +4,7 @@ import {
   carryForwardNodeCompletion,
   toggleNodeCompletion,
 } from "../../taskmap/collapse";
-import type { TaskMapGraph } from "../../taskmap/graph";
+import { resolveFirstStepNode, type TaskMapGraph } from "../../taskmap/graph";
 import {
   type DataProvider,
   type MinimalSupabaseClient,
@@ -289,6 +289,16 @@ export async function approveTaskMap(
   await requireSupabaseUser(client, "Sign in before approving task maps.");
 
   const approvedAt = new Date().toISOString();
+
+  // FR-023 slice F4 (#678): the first node of the breakdown and
+  // `tasks.first_tiny_step` are ONE fact (FR-023 criterion 3). Resolve the
+  // effective first step from the SAME graph being written and set the field
+  // in the SAME update — map wins at approve time; the field wins everywhere
+  // else; no background sync. `resolveFirstStepNode` returns null only for a
+  // degenerate graph with no critical path, in which case the field is left
+  // untouched rather than nulled.
+  const firstStepNode = resolveFirstStepNode(graph as TaskMapGraph);
+
   const query = client.from("tasks") as {
     update: (row: Record<string, unknown>) => {
       eq: (
@@ -308,6 +318,7 @@ export async function approveTaskMap(
       map_status: "approved",
       map_schema_version: graph.schema_version,
       map_approved_at: approvedAt,
+      ...(firstStepNode ? { first_tiny_step: firstStepNode.title } : {}),
     })
     .eq("id", input.task_id)
     .select(taskColumns)

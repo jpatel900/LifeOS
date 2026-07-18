@@ -193,6 +193,73 @@ describe("approveTaskMap", () => {
     });
   });
 
+  // FR-023 slice F4 (#678): the approve write sets `first_tiny_step` to the
+  // effective first node's title in the SAME tasks.update (identity,
+  // criterion 3).
+  it("writes first_tiny_step from the flagged entry node in the same update", async () => {
+    const taskSingle = vi
+      .fn()
+      .mockResolvedValue({ data: taskRow, error: null });
+    const taskSelect = vi.fn().mockReturnValue({ single: taskSingle });
+    const taskEq = vi.fn().mockReturnValue({ select: taskSelect });
+    const taskUpdate = vi.fn().mockReturnValue({ eq: taskEq });
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { update: taskUpdate };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    const flaggedGraph = {
+      schema_version: "1.0",
+      nodes: [
+        {
+          id: "step-1",
+          title: "Open the doc",
+          role: "required",
+          two_minute_move: true,
+        },
+        { id: "step-2", title: "Do the work", role: "required" },
+      ],
+      edges: [{ from: "step-1", to: "step-2" }],
+    };
+
+    await approveTaskMap(authenticatedClient(from), {
+      task_id: taskId,
+      area_id: areaId,
+      graph: flaggedGraph,
+      ai_draft: null,
+    });
+
+    expect(taskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ first_tiny_step: "Open the doc" }),
+    );
+  });
+
+  it("writes first_tiny_step from the critical-path head when no node is flagged", async () => {
+    const taskSingle = vi
+      .fn()
+      .mockResolvedValue({ data: taskRow, error: null });
+    const taskSelect = vi.fn().mockReturnValue({ single: taskSingle });
+    const taskEq = vi.fn().mockReturnValue({ select: taskSelect });
+    const taskUpdate = vi.fn().mockReturnValue({ eq: taskEq });
+    const from = vi.fn((table: string) => {
+      if (table === "tasks") return { update: taskUpdate };
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await approveTaskMap(authenticatedClient(from), {
+      task_id: taskId,
+      area_id: areaId,
+      graph: validGraph,
+      ai_draft: null,
+    });
+
+    // validGraph is step-1 (Gather inputs) -> step-2; the critical-path head
+    // is step-1.
+    expect(taskUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ first_tiny_step: "Gather inputs" }),
+    );
+  });
+
   it("records one override_records row per changed node and none for unchanged nodes", async () => {
     const taskSingle = vi
       .fn()
