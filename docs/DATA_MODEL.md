@@ -109,17 +109,17 @@ Purpose: fallback policy values.
 
 Purpose: raw input before interpretation.
 
-| Column                   | Type             | Notes                                            |
-| ------------------------ | ---------------- | ------------------------------------------------ |
-| id                       | uuid pk          | generated                                        |
-| user_id                  | uuid             | owner                                            |
-| area_id                  | uuid nullable    | optional initial/inferred area                   |
-| raw_text                 | text             | captured text/transcript                         |
-| raw_audio_ref            | text nullable    | storage path if audio used                       |
-| capture_mode             | text             | text, audio, import                              |
-| inferred_area_confidence | numeric nullable | 0-1                                              |
+| Column                   | Type             | Notes                                                                |
+| ------------------------ | ---------------- | -------------------------------------------------------------------- |
+| id                       | uuid pk          | generated                                                            |
+| user_id                  | uuid             | owner                                                                |
+| area_id                  | uuid nullable    | optional initial/inferred area                                       |
+| raw_text                 | text             | captured text/transcript                                             |
+| raw_audio_ref            | text nullable    | storage path if audio used                                           |
+| capture_mode             | text             | text, audio, import                                                  |
+| inferred_area_confidence | numeric nullable | 0-1                                                                  |
 | status                   | text             | new, parsed, triage_required, resolved, archived, composted (FR-036) |
-| created_at               | timestamptz      | generated                                        |
+| created_at               | timestamptz      | generated                                                            |
 
 Indexes:
 

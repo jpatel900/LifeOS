@@ -594,8 +594,14 @@ describe("workflow data provider", () => {
     const from = vi.fn().mockReturnValue({ update });
 
     const result = await applyCompostTransitions(authenticatedClient(from), [
-      { captureId: "550e8400-e29b-41d4-a716-446655440020", status: "composted" },
-      { captureId: "550e8400-e29b-41d4-a716-446655440020", status: "composted" },
+      {
+        captureId: "550e8400-e29b-41d4-a716-446655440020",
+        status: "composted",
+      },
+      {
+        captureId: "550e8400-e29b-41d4-a716-446655440020",
+        status: "composted",
+      },
     ]);
 
     expect(from).toHaveBeenCalledWith("capture_items");
@@ -625,7 +631,10 @@ describe("workflow data provider", () => {
 
   it("keeps composting a no-op in mock mode (#659)", async () => {
     const result = await applyCompostTransitions(null, [
-      { captureId: "550e8400-e29b-41d4-a716-446655440020", status: "composted" },
+      {
+        captureId: "550e8400-e29b-41d4-a716-446655440020",
+        status: "composted",
+      },
     ]);
 
     expect(result.provider).toBe("mock");
