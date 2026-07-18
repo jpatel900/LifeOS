@@ -63,7 +63,9 @@ describe("matchTriggers — matching per condition type", () => {
     );
 
     expect(result.firings).toEqual([]);
-    expect(result.skipped).toEqual([{ triggerId: "trg-1", reason: "unmatched" }]);
+    expect(result.skipped).toEqual([
+      { triggerId: "trg-1", reason: "unmatched" },
+    ]);
   });
 
   it("fires an area_event rule on a qualifying area event", () => {
@@ -117,7 +119,9 @@ describe("matchTriggers — matching per condition type", () => {
     );
 
     expect(result.firings).toEqual([]);
-    expect(result.skipped).toEqual([{ triggerId: "trg-1", reason: "unmatched" }]);
+    expect(result.skipped).toEqual([
+      { triggerId: "trg-1", reason: "unmatched" },
+    ]);
   });
 });
 
@@ -244,7 +248,10 @@ describe("matchTriggers — sanctuary fails safe", () => {
   it.each([undefined, null, 1, "false", 0, {}])(
     "treats non-false sanctuary flag %p as malformed (never fires)",
     (sanctuaryExcluded) => {
-      const rule = { ...armedRule(), sanctuaryExcluded } as unknown as TriggerRule;
+      const rule = {
+        ...armedRule(),
+        sanctuaryExcluded,
+      } as unknown as TriggerRule;
       const result = matchTriggers(
         [rule],
         { ...emptyFacts(), personTouchRefs: ["person:darpan"] },
@@ -263,7 +270,10 @@ describe("matchTriggers — sanctuary fails safe", () => {
 describe("matchTriggers — fail closed on malformed data", () => {
   it("skips a malformed rule with a named reason, keeping other rules", () => {
     const good = armedRule({ id: "good" });
-    const bad = { ...armedRule({ id: "bad" }), conditionType: "telepathy" } as unknown as TriggerRule;
+    const bad = {
+      ...armedRule({ id: "bad" }),
+      conditionType: "telepathy",
+    } as unknown as TriggerRule;
     const result = matchTriggers(
       [bad, good],
       { ...emptyFacts(), personTouchRefs: ["person:darpan"] },
@@ -315,11 +325,9 @@ describe("matchTriggers — fail closed on malformed data", () => {
     null,
     "facts",
   ])("fails closed (malformed_facts) for malformed facts %p", (badFacts) => {
-    const facts = (
-      badFacts && typeof badFacts === "object"
-        ? { ...emptyFacts(), ...badFacts }
-        : badFacts
-    ) as unknown as TriggerFacts;
+    const facts = (badFacts && typeof badFacts === "object"
+      ? { ...emptyFacts(), ...badFacts }
+      : badFacts) as unknown as TriggerFacts;
     const result = matchTriggers([armedRule()], facts, { now: NOW });
     expect(result.firings).toEqual([]);
     expect(result.skipped).toEqual([
@@ -330,11 +338,9 @@ describe("matchTriggers — fail closed on malformed data", () => {
   it("does not consult facts for an already-skipped (expired) rule", () => {
     // Malformed facts must not upgrade an expired skip into malformed_facts.
     const rule = armedRule({ expiresAt: "2020-01-01T00:00:00Z" });
-    const result = matchTriggers(
-      [rule],
-      "garbage" as unknown as TriggerFacts,
-      { now: NOW },
-    );
+    const result = matchTriggers([rule], "garbage" as unknown as TriggerFacts, {
+      now: NOW,
+    });
     expect(result.skipped).toEqual([{ triggerId: "trg-1", reason: "expired" }]);
   });
 });
@@ -425,7 +431,9 @@ describe("matchTriggers — frozen rule cap", () => {
     );
     const result = matchTriggers(rules, emptyFacts(), { now: NOW });
 
-    const capped = result.skipped.filter((s) => s.reason === "rule_cap_exceeded");
+    const capped = result.skipped.filter(
+      (s) => s.reason === "rule_cap_exceeded",
+    );
     expect(capped).toHaveLength(3);
     expect(capped.map((s) => s.triggerId)).toEqual([
       `trg-${MAX_TRIGGER_RULES_PER_CALL}`,
@@ -492,7 +500,9 @@ describe("matchTriggers x evaluateI1InitiativeGate — propose/dispose integrati
     );
     expect(firings).toHaveLength(1);
 
-    const decision = evaluateI1InitiativeGate(gateInputFor(firings[0], "brief"));
+    const decision = evaluateI1InitiativeGate(
+      gateInputFor(firings[0], "brief"),
+    );
     expect(decision).toEqual({
       kind: "allow",
       initiativeClass: TRIGGER_SURFACE_POLICY_ID,

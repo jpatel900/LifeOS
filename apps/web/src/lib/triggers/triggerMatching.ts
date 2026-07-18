@@ -147,7 +147,10 @@ const STATUSES: ReadonlySet<TriggerStatus> = new Set([
 
 const INVALID = Symbol("invalid");
 
-function readOwnValue(source: unknown, key: PropertyKey): unknown | typeof INVALID {
+function readOwnValue(
+  source: unknown,
+  key: PropertyKey,
+): unknown | typeof INVALID {
   if ((typeof source !== "object" && typeof source !== "function") || !source) {
     return INVALID;
   }
@@ -212,7 +215,9 @@ function snapshotFacts(facts: unknown): FactSets | null {
   if (!isPlainRecord(facts)) return null;
   const person = snapshotRefSet(readOwnValue(facts, "personTouchRefs"));
   const area = snapshotRefSet(readOwnValue(facts, "areaEventRefs"));
-  const manualReview = snapshotRefSet(readOwnValue(facts, "manualReviewDueRefs"));
+  const manualReview = snapshotRefSet(
+    readOwnValue(facts, "manualReviewDueRefs"),
+  );
   if (!person || !area || !manualReview) return null;
   return { person, area, manualReview };
 }
@@ -384,6 +389,10 @@ export function matchTriggers(
 
     // Fail-safe direction: only an explicit `false` may fire (matches
     // compostPolicy `!== false` / rupturePolicy sanctuary handling).
+    // Mutation note: `!== false` vs `=== true` is an equivalent mutant here —
+    // snapshotRule already rejects non-boolean flags as malformed_rule, so the
+    // real fail-safe lives in that type guard; this direction is defense-in-depth
+    // kept for doctrine consistency with the sibling kernels.
     if (snapshot.sanctuaryExcluded !== false) {
       skipped.push({ triggerId: id, reason: "sanctuary_excluded" });
       continue;
