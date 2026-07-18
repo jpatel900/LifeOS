@@ -44,11 +44,9 @@ function TrendSparkline({ points }: { points: readonly number[] }) {
   const width = 240;
   const height = 56;
   const pad = 6;
-  const step =
-    points.length > 1 ? (width - pad * 2) / (points.length - 1) : 0;
+  const step = points.length > 1 ? (width - pad * 2) / (points.length - 1) : 0;
   // Ordinals are -1 (heavier) .. +1 (lighter); +1 plots highest.
-  const y = (ordinal: number) =>
-    pad + ((1 - ordinal) / 2) * (height - pad * 2);
+  const y = (ordinal: number) => pad + ((1 - ordinal) / 2) * (height - pad * 2);
   const path = points
     .map(
       (ordinal, index) =>
@@ -102,16 +100,14 @@ export function MirrorPanel({ samples }: { samples: unknown }) {
       </div>
 
       <div className="mt-3" data-testid="mirror-purpose-trend">
-        <p className="text-sm font-semibold text-[var(--ink)]">
-          Purpose gauge
-        </p>
+        <p className="text-sm font-semibold text-[var(--ink)]">Purpose gauge</p>
         {trend.status === "insufficient_data" ? (
           <p
             className="mt-1 text-sm text-[var(--mut)]"
             data-testid="mirror-insufficient-data"
           >
-            Not enough check-ins yet to show a trend. Nothing is owed here —
-            it fills in on its own whenever check-ins happen.
+            Not enough check-ins yet to show a trend. Nothing is owed here — it
+            fills in on its own whenever check-ins happen.
           </p>
         ) : (
           <div className="mt-1 text-[var(--ink)]">
