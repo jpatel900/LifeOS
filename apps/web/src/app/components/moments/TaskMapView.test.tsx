@@ -179,7 +179,7 @@ describe("TaskMapView", () => {
     );
 
     expect(screen.getByTestId("taskmap-fallback")).toBeInTheDocument();
-    expect(screen.queryByTestId("taskmap-edge-layer")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("taskmap-edges")).not.toBeInTheDocument();
     expect(screen.queryAllByTestId(/^taskmap-edge-/)).toHaveLength(0);
     // Nodes still render as chips so the surface is never a dead end.
     expect(screen.getByTestId("taskmap-node-a")).toBeInTheDocument();

@@ -63,7 +63,7 @@ export function TaskMapGraphCanvas({
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         fill="none"
         aria-hidden="true"
-        data-testid="taskmap-edge-layer"
+        data-testid="taskmap-edges"
       >
         <style>{`
           .tm-edge { stroke-dasharray: 1; stroke-dashoffset: 0; }
