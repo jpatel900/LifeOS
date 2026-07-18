@@ -64,6 +64,113 @@ describe("TaskMapSection", () => {
     expect(screen.queryByTestId("progression-rail")).not.toBeInTheDocument();
   });
 
+  // FR-031 slice F2 (#664): deterministic timeline summary.
+  it("shows no timeline summary for a 1.0 map with no durations", () => {
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: approvedGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "idle" }}
+        now={new Date()}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("taskmap-timeline-summary"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the remaining estimate and ETA for a 1.1 map with durations", () => {
+    const timedGraph = {
+      schema_version: "1.1" as const,
+      nodes: [
+        {
+          id: "req-1",
+          title: "Draft outline",
+          role: "required" as const,
+          done: true,
+          estimated_minutes: 30,
+        },
+        {
+          id: "req-2",
+          title: "Send it",
+          role: "required" as const,
+          done: false,
+          estimated_minutes: 45,
+        },
+      ],
+      edges: [{ from: "req-1", to: "req-2" }],
+    };
+
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: timedGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "idle" }}
+        now={new Date("2026-07-17T09:00:00.000Z")}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+      />,
+    );
+
+    const summary = screen.getByTestId("taskmap-timeline-summary");
+    // Done node (30m) excluded; remaining is req-2's 45m.
+    expect(summary).toHaveTextContent("~45m left on the critical path");
+    expect(summary).toHaveTextContent("about");
+    expect(summary).not.toHaveTextContent("unestimated");
+  });
+
+  it("marks the estimate partial when only some nodes carry durations", () => {
+    const partialGraph = {
+      schema_version: "1.1" as const,
+      nodes: [
+        {
+          id: "req-1",
+          title: "Draft outline",
+          role: "required" as const,
+          estimated_minutes: 30,
+        },
+        { id: "req-2", title: "Send it", role: "required" as const },
+      ],
+      edges: [{ from: "req-1", to: "req-2" }],
+    };
+
+    render(
+      <TaskMapSection
+        task={{
+          id: "task-1",
+          progression_map: partialGraph,
+          map_status: "approved",
+          map_approved_at: null,
+        }}
+        progressionNodes={NODES}
+        draftState={{ phase: "idle" }}
+        now={new Date("2026-07-17T09:00:00.000Z")}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("taskmap-timeline-summary")).toHaveTextContent(
+      "some steps unestimated",
+    );
+  });
+
   it("shows a quiet pending state while a draft is in flight", () => {
     render(
       <TaskMapSection

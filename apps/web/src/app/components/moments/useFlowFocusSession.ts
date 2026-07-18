@@ -115,7 +115,7 @@ export function useFlowFocusSession({
     void requestTaskMapDraft(railTaskId);
   }, [railTaskId, requestTaskMapDraft]);
   const handleApproveTaskMapDraft = useCallback(
-    (graph: TaskMapGraph & { schema_version: "1.0" }) => {
+    (graph: TaskMapGraph & { schema_version: "1.0" | "1.1" }) => {
       if (!railTaskId) return;
       void approveTaskMapDraft(railTaskId, graph);
     },

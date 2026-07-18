@@ -177,7 +177,10 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
   // is best-effort, mirroring `confirmWin`/`confirmRollup`'s markLocalOnly
   // fallback — a sync failure never loses the owner's approval decision.
   const approveTaskMapDraftAction = useCallback(
-    async (taskId: string, graph: TaskMapGraph & { schema_version: "1.0" }) => {
+    async (
+      taskId: string,
+      graph: TaskMapGraph & { schema_version: "1.0" | "1.1" },
+    ) => {
       const validated = validateTaskMapForPersistence(graph);
       if (!validated.ok) {
         markLocalOnly("Map couldn't be saved as edited; nothing changed.");

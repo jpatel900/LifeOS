@@ -23,8 +23,8 @@ import { HIT_TARGET_INVISIBLE, HIT_TARGET_ROW } from "./hitTarget";
  * nothing (NS-INV-4).
  */
 export interface TaskMapDraftReviewProps {
-  draft: TaskMapGraph & { schema_version: "1.0" };
-  onApprove(graph: TaskMapGraph & { schema_version: "1.0" }): void;
+  draft: TaskMapGraph & { schema_version: "1.0" | "1.1" };
+  onApprove(graph: TaskMapGraph & { schema_version: "1.0" | "1.1" }): void;
   onDismiss(): void;
   /** FR-031 slice 8 — true when this draft is a regeneration of an
    * already-approved map (reached via the "Revise map" affordance). Swaps
@@ -80,7 +80,9 @@ export function TaskMapDraftReview({
 
   const handleApprove = () => {
     if (!validation.valid) return;
-    onApprove({ schema_version: "1.0", nodes, edges });
+    // Preserve the draft's own schema version — a 1.1 draft (nodes may
+    // carry estimated_minutes) must not be down-versioned on approve.
+    onApprove({ schema_version: draft.schema_version, nodes, edges });
   };
 
   return (
