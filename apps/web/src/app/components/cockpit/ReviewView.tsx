@@ -70,8 +70,11 @@ export function ReviewView({
               saveReview() result comes back "persisted" (LifeOSCockpit).
               Readiness copy only — never claim the day is closed from this
               screen. */}
+          {/* R1 (#660 surface audit): pinned off text-4xl font-extrabold
+              (overshoots the fixed type scale and the 700-weight cap) onto
+              the shared h1 grammar (2.25rem/700, .moments-greeting). */}
           <h1
-            className="mt-4 text-4xl font-extrabold"
+            className="moments-greeting mt-4"
             data-testid="review-headline"
           >
             {carry === 0 ? "Ready to close" : `${carry} carry over`}
@@ -86,7 +89,13 @@ export function ReviewView({
         </button>
       </Panel>
       <Panel>
-        <h2 className="text-xl font-bold">Planned vs actual</h2>
+        {/* R2 (#660 surface audit): the six section h2s in this Panel drop
+            the ad-hoc text-xl font-bold treatment for the shared
+            .moments-label section-header grammar (sentence case in JSX,
+            the class handles uppercase/tracking) — the same choice T2 made
+            for eyebrows and SideRail/CloseMoment make for section headers
+            (globals.css, .moments-label doc comment). */}
+        <h2 className="moments-label">Planned vs actual</h2>
         <div className="mt-5 grid gap-3">
           {vm.sessions.length ? (
             vm.sessions.slice(0, 5).map((session) => (
@@ -129,7 +138,7 @@ export function ReviewView({
         </div>
         {vm.reviewQueue.length ? (
           <div className="mt-6 grid gap-3">
-            <h2 className="text-xl font-bold">Needs recovery</h2>
+            <h2 className="moments-label">Needs recovery</h2>
             {vm.reviewQueue.map((item) => (
               <div
                 key={`visible-${item.reason}-${item.task.id}`}
@@ -155,12 +164,18 @@ export function ReviewView({
                     >
                       Carry forward
                     </button>
+                    {/* R3 (#660 surface audit): Defer was a second filled
+                        pill sharing this card with the "Carry forward"
+                        primary — calm-accent discipline keeps one filled
+                        primary per card, so this becomes a quiet
+                        border/tint secondary (text keeps the --blu-fg
+                        identity, the fill is gone). */}
                     <button
                       type="button"
                       onClick={() => onDefer(item.task.id)}
                       className={cn(
                         HIT_TARGET_MIN,
-                        "rounded-full bg-[var(--blu-sf)] px-4 text-sm font-semibold text-[var(--blu-fg)]",
+                        "rounded-full border border-[var(--blu-rng)] px-4 text-sm font-semibold text-[var(--blu-fg)]",
                       )}
                     >
                       Defer
@@ -186,7 +201,7 @@ export function ReviewView({
             data-testid="review-aging-waiting-on"
             className="mt-6 grid gap-3"
           >
-            <h2 className="text-xl font-bold">Waiting on (aging)</h2>
+            <h2 className="moments-label">Waiting on (aging)</h2>
             {vm.agingWaitingOn.map((item) => (
               <div
                 key={`waiting-on-${item.task.id}`}
@@ -207,7 +222,7 @@ export function ReviewView({
             data-testid="review-open-commitments"
             className="mt-6 grid gap-3"
           >
-            <h2 className="text-xl font-bold">Open commitments</h2>
+            <h2 className="moments-label">Open commitments</h2>
             {vm.openCommitments.map((task) => (
               <div
                 key={`commitment-${task.id}`}
@@ -222,7 +237,7 @@ export function ReviewView({
             Approving records the decision; nothing changes automatically. */}
         {policyProposals.length ? (
           <div className="mt-6 grid gap-3" data-testid="policy-proposals">
-            <h2 className="text-xl font-bold">Policy proposals</h2>
+            <h2 className="moments-label">Policy proposals</h2>
             <p className="text-sm text-[var(--mut)]">
               Patterns from your recent decisions. Approving records your call —
               nothing changes automatically.
