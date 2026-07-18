@@ -59,6 +59,30 @@
   --accent-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
   --destructive: oklch(0.614 0.15 25.4); /* prototype light --st-red #cf5a54 */
   --destructive-foreground: oklch(0.98 0 0);
+  /* #660 audit line X1 (shared primitives): the only remaining raw Tailwind
+     palette color on a routed surface was DemoModeBanner's hardcoded
+     `bg-amber-400`/`border-black/30`/`text-black` (FR-029 loud
+     non-persistence notice). Tokenized here so the banner stays loud, with
+     the same bright amber and dark text as before (deliberately not
+     theme-muted; --warning below is Tailwind v4's own amber-400 oklch
+     value, not an approximation). --warning/--warning-foreground are
+     intentionally the same value in both :root and `.dark` (no override
+     below) for that reason.
+     --warning-border is the one value that must actually change per theme:
+     the original `border-black/30` read as a crisp dark edge in light mode
+     (kept pixel-identical here) but was invisible against the app's
+     near-black dark background, which is the dark-parity bug this line
+     exists to fix — `.dark` below gives it a light translucent value
+     instead so the edge stays visible there too. */
+  --warning: oklch(
+    82.8% 0.189 84.429
+  ); /* Tailwind v4's own --color-amber-400 value, verbatim (tailwindcss/theme.css) */
+  --warning-foreground: oklch(
+    0.145 0 0
+  ); /* near-black; AA on bright amber in both themes */
+  --warning-border: rgb(
+    0 0 0 / 0.3
+  ); /* light mode: identical to the old border-black/30 */
   --border: oklch(0.939 0.007 97.4); /* prototype light --line #ecebe6 */
   --input: oklch(0.939 0.007 97.4); /* prototype light --line #ecebe6 */
   --ring: oklch(0.72 0.11 270.2); /* accent-hued focus ring */
@@ -150,6 +174,10 @@
   --accent-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
   --destructive: oklch(0.673 0.153 25.3); /* prototype dark --st-red #e56b64 */
   --destructive-foreground: oklch(0.97 0.01 30);
+  /* #660 audit line X1: light translucent border so DemoModeBanner's edge
+     stays visible against the dark page background (see :root comment
+     above for the light-mode half of this fix). */
+  --warning-border: rgb(255 255 255 / 0.35);
   --border: oklch(0.295 0.018 276.3); /* prototype dark --line #2a2c36 */
   --input: oklch(0.295 0.018 276.3); /* prototype dark --line #2a2c36 */
   --ring: oklch(0.75 0.14 270.2); /* accent-hued focus ring */
@@ -201,6 +229,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-border: var(--warning-border);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -1158,6 +1189,41 @@ summary {
   max-width: 42rem;
   line-height: 1.6;
   text-wrap: pretty;
+}
+
+/* #660 audit line L2 (surface 10, Login): `.workflow-surface-title`'s fluid
+   clamp is a marketing-page pattern; the ratified moments grammar (#623/
+   #647, owner-ratified 2026-07-16, see `.moments-card-title` above) reads
+   product UI at a FIXED scale instead. Login's single card title sits at
+   the h1 tier (it is the only heading on the page, not a card nested inside
+   a larger surface), so it takes the fixed h1 values verbatim: 2.25rem/700,
+   the same numbers `.moments-greeting` uses, without reusing that class
+   name. `.moments-greeting` belongs to the moments feature (StartMoment.tsx
+   and friends), and login is not a moments surface. `.workflow-surface-title`
+   itself stays untouched (shared by other surfaces outside this audit
+   line's ownership). */
+.login-title {
+  margin: 0;
+  font-size: 2.25rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+/* #660 audit line X2 (shared primitives): EmptyState's title, upgraded from
+   a muted `text-base`/90%-opacity treatment to the moments empty-state
+   orientation grammar's card-title strength. A dedicated class rather than
+   reusing `.moments-card-title` above: that class is scoped to the moments
+   feature by its own comment ("WITHIN moments only"), and EmptyState is a
+   shared primitive used outside moments (settings/areas today). Same fixed
+   1.5rem/620 numbers, same reasoning `.login-title` above already applied
+   to avoid the equivalent coupling on a non-moments page title. */
+.empty-state-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 620;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
 }
 
 .workflow-metric-grid {

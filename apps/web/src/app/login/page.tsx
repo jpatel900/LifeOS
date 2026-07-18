@@ -73,10 +73,7 @@ export default function LoginPage() {
     <main className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-md items-center">
       <Card className="workflow-primary-card workflow-flagship-card w-full">
         <CardHeader className="space-y-3">
-          <p className="workflow-surface-kicker">Welcome</p>
-          <CardTitle className="workflow-surface-title text-3xl font-semibold leading-tight">
-            Sign in
-          </CardTitle>
+          <CardTitle className="login-title">Sign in</CardTitle>
           <CardDescription className="workflow-surface-body text-sm">
             Sign in to keep your areas and captures saved to your account and in
             sync wherever you use LifeOS.

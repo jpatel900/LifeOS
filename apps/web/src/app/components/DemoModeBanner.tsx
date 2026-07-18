@@ -18,6 +18,14 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
  * sync-degraded states on a configured deploy keep their existing designed
  * notices (SyncNotice). This banner fires only for the configuration-level
  * demo fallback, where nothing can ever persist.
+ *
+ * #660 audit line X1: colors are the `--warning`/`--warning-foreground`/
+ * `--warning-border` tokens (globals.css), not hardcoded Tailwind palette
+ * classes. `--warning`/`--warning-foreground` are the same in both themes
+ * (the banner stays exactly as loud as before); `--warning-border` is
+ * pixel-identical to the old `border-black/30` in light mode but switches
+ * to a light translucent value in dark mode, since the original hardcoded
+ * black border was invisible against the app's near-black dark background.
  */
 export function DemoModeBanner() {
   if (isSupabaseConfigured()) {
@@ -28,7 +36,7 @@ export function DemoModeBanner() {
     <div
       role="alert"
       data-testid="demo-mode-banner"
-      className="sticky top-0 z-50 border-b-4 border-black/30 bg-amber-400 px-4 py-2 text-center text-sm font-bold text-black"
+      className="sticky top-0 z-50 border-b-4 border-warning-border bg-warning px-4 py-2 text-center text-sm font-bold text-warning-foreground"
     >
       Demo mode — nothing here is saved. Captures, plans, and reviews live only
       in this tab and vanish on reload.
