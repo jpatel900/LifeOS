@@ -15,6 +15,8 @@ vi.mock("@/lib/ai/taskMapDraftService", () => ({
 
 vi.mock("@/lib/data/workflow", () => ({
   recordTaskMapDraftSuggestion: mocks.recordTaskMapDraftSuggestion,
+  TASK_MAP_DRAFT_POLICY_ID: "task_map.v1",
+  TASK_MAP_REVISION_POLICY_ID: "task_map_revision.v1",
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -248,11 +250,15 @@ describe("task-map route", () => {
       expect.objectContaining({
         currentMap: {
           ...currentMap,
-          // The route normalizes red fields to explicit nulls when absent.
+          // The route normalizes red fields to explicit nulls when absent,
+          // and (F5 #679) the estimate/opening-move carry-back fields to
+          // null/false when absent.
           nodes: currentMap.nodes.map((node) => ({
             ...node,
             red_reason: null,
             red_condition: null,
+            estimated_minutes: null,
+            two_minute_move: false,
           })),
         },
       }),
@@ -276,8 +282,92 @@ describe("task-map route", () => {
 
     expect(mocks.recordTaskMapDraftSuggestion).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ generated_from: "initial" }),
+      expect.objectContaining({
+        generated_from: "initial",
+        policy_identifier: "task_map.v1",
+      }),
     );
+  });
+
+  it("FR-031 slice F5 (#679): a revision request forwards evidence and records the task_map_revision.v1 policy", async () => {
+    mocks.generateTaskMapDraftWithFallback.mockResolvedValue({
+      ok: true,
+      parser: "ai",
+      draft: validDraft,
+    });
+    const currentMap = {
+      nodes: [
+        { id: "step-1", title: "Gather inputs", role: "required", done: true },
+      ],
+      edges: [],
+    };
+    const revision = {
+      signals: [
+        {
+          kind: "duration_drift",
+          detail: "A work session took 60 minutes instead of about 20.",
+        },
+      ],
+    };
+
+    const response = await POST(
+      postRequest(
+        {
+          taskId: "task-1",
+          areaId: "area-1",
+          title: "Ship the report",
+          currentMap,
+          revision,
+        },
+        authHeaders,
+      ),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(mocks.generateTaskMapDraftWithFallback).toHaveBeenCalledWith(
+      expect.objectContaining({ revisionEvidence: revision }),
+      expect.anything(),
+    );
+    expect(mocks.recordTaskMapDraftSuggestion).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        generated_from: "revision",
+        policy_identifier: "task_map_revision.v1",
+      }),
+    );
+  });
+
+  it("FR-031 slice F5 (#679): rejects a revision payload without currentMap or with an unknown signal kind", async () => {
+    const withoutCurrentMap = await POST(
+      postRequest(
+        {
+          taskId: "task-1",
+          title: "Ship the report",
+          revision: { signals: [{ kind: "duration_drift", detail: "x" }] },
+        },
+        authHeaders,
+      ),
+    );
+    expect(withoutCurrentMap.status).toBe(400);
+
+    const unknownKind = await POST(
+      postRequest(
+        {
+          taskId: "task-1",
+          title: "Ship the report",
+          currentMap: {
+            nodes: [{ id: "step-1", title: "Gather inputs", role: "required" }],
+            edges: [],
+          },
+          revision: { signals: [{ kind: "vibes", detail: "x" }] },
+        },
+        authHeaders,
+      ),
+    );
+    expect(unknownKind.status).toBe(400);
+    expect(mocks.generateTaskMapDraftWithFallback).not.toHaveBeenCalled();
   });
 
   it("FR-031 slice 8: still validates and degrades unchanged on a regen request", async () => {

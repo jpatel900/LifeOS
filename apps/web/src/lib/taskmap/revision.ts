@@ -128,7 +128,7 @@ export function revisionEligibility(
       signals.push({
         kind: "out_of_order_completion",
         nodeId: node.id,
-        detail: `"${node.title}" was finished ahead of an earlier planned step.`,
+        detail: `You finished "${node.title}" before an earlier step in the plan.`,
       });
     }
   }
@@ -148,7 +148,7 @@ export function revisionEligibility(
     ) {
       signals.push({
         kind: "duration_drift",
-        detail: `A session took ${Math.round(session.actualMinutes)}m against ~${Math.round(expected)}m expected.`,
+        detail: `A work session took ${Math.round(session.actualMinutes)} minutes instead of about ${Math.round(expected)}.`,
       });
     }
   }
@@ -156,14 +156,14 @@ export function revisionEligibility(
   if (evidence.sessions.some((session) => session.capOutcome === "cut_scope")) {
     signals.push({
       kind: "cut_scope",
-      detail: "Scope was cut during execution.",
+      detail: "You trimmed what this task needs to finish.",
     });
   }
 
   if (evidence.sessions.some((session) => session.outcome === "blocked")) {
     signals.push({
       kind: "blocker",
-      detail: "A session ended blocked.",
+      detail: "A work session ended stuck on something outside the plan.",
     });
   }
 
