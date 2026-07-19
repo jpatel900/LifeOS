@@ -69,6 +69,15 @@ export function useAreasLoadState() {
             blocks: executionResult.blocks,
             reviewEntries: executionResult.reviewEntries,
           });
+          // #691: push the fresh Supabase rows into WorkflowContext so this
+          // page and every other screen resolve areas from ONE list (the
+          // context loads its own list once at mount and can go stale — the
+          // "Current area: None selected while other screens act selected"
+          // divergence). Same supabase-only guard as the context's own
+          // mount load: mock rows must never enter the persisted-area map.
+          if (areasResult.provider === "supabase") {
+            syncPersistedAreas(areasResult.areas);
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -88,7 +97,9 @@ export function useAreasLoadState() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // syncPersistedAreas is WorkflowContext's stable `applyPersistedAreas`
+    // useCallback, so this still runs exactly once on mount.
+  }, [syncPersistedAreas]);
 
   return { state, setState, replaceReadyAreas };
 }

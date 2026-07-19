@@ -154,6 +154,12 @@ const persistedTask = {
 let restoreParseCaptureFetch: () => void;
 
 beforeEach(() => {
+  // #691: the provider now persists the area selection (and has always
+  // persisted the workflow state) to sessionStorage — each test must start
+  // from clean storage or one test's stored selection hydrates into the
+  // next (same pattern as cockpitPlanFlow.test.tsx).
+  window.sessionStorage.clear();
+  window.localStorage.clear();
   restoreParseCaptureFetch = stubParseCaptureFetch();
   mockListAreas.mockResolvedValue({
     provider: "supabase",
