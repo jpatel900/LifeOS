@@ -32,6 +32,12 @@ import {
   createBriefViewRecorder,
   type BriefViewRecorder,
 } from "@/lib/reEntry/briefView";
+import {
+  localDayStamp,
+  recordPurposeGaugeCheckinFireAndForget,
+  shouldOfferPurposeGaugeCheckin,
+} from "@/lib/purpose/purposeGaugeCheckin";
+import type { PurposeGaugeResponse } from "@/lib/purpose/purposeGaugePolicy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useOnboardingRitual } from "./useOnboardingRitual";
 import { OnboardingRitual } from "./OnboardingRitual";
@@ -65,6 +71,28 @@ import { useCloseMomentRollups } from "./useCloseMomentRollups";
 
 const PREFERENCES_KEY = "lifeos.moments.preferences";
 const CAPTURE_DRAFT_KEY = "lifeos.moments.captureDraft";
+// FR-047 slice 2 (#686): the local day (YYYY-MM-DD) a purpose-gauge check-in
+// was last taken, so the optional Close offer doesn't re-appear after it was
+// answered that day. A decline never writes this — it stays re-offerable,
+// which is fine for an asked-only surface (FR-033).
+const PURPOSE_GAUGE_KEY = "lifeos.moments.purposeGaugeLastChecked";
+
+function readPurposeGaugeLastChecked(): string | null {
+  try {
+    return window.localStorage.getItem(PURPOSE_GAUGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePurposeGaugeLastChecked(day: string): void {
+  try {
+    window.localStorage.setItem(PURPOSE_GAUGE_KEY, day);
+  } catch {
+    // Blocked storage (private mode, quota) — the offer may re-appear later
+    // the same day, harmless: a re-tap is a DB no-op (append-only PK).
+  }
+}
 const TOAST_DURATION_MS = 2500;
 // SP-6: undo over confirm. A toast carrying an Undo action stays up longer
 // (6s) than a plain acknowledgement (2.5s) — the extra time is the reading
@@ -300,6 +328,32 @@ export function TodayMoments({
       now,
     );
   }, [startMomentShowing, now]);
+
+  // FR-047 slice 2 / FR-033 (#686): the optional Close purpose-gauge check-in.
+  // Read the last-checked local day once (localStorage, mount-only) so an
+  // answered check-in stays hidden the rest of that day; gating itself lives
+  // in the shipped `shouldOfferPurposeGaugeCheckin` policy wrapper. Recording
+  // is fire-and-forget and skipped silently in demo mode.
+  const [purposeGaugeLastChecked, setPurposeGaugeLastChecked] = useState<
+    string | null
+  >(() => readPurposeGaugeLastChecked());
+  const purposeGaugeOffered = shouldOfferPurposeGaugeCheckin(
+    now,
+    purposeGaugeLastChecked,
+  );
+  const handlePurposeGaugeCheckIn = useCallback(
+    (response: PurposeGaugeResponse) => {
+      const checkedOn = localDayStamp(now);
+      recordPurposeGaugeCheckinFireAndForget(
+        createSupabaseBrowserClient(),
+        checkedOn,
+        response,
+      );
+      writePurposeGaugeLastChecked(checkedOn);
+      setPurposeGaugeLastChecked(checkedOn);
+    },
+    [now],
+  );
 
   // P6 deep-link shims: apply the incoming deepLink target exactly once. If
   // the re-entry ritual is active OR merely eligible-but-not-yet-latched
@@ -1004,6 +1058,8 @@ export function TodayMoments({
               onApproveMonthlyRollup={handleApproveMonthlyRollup}
               onDismissMonthlyRollup={handleDismissMonthlyRollup}
               onToggleMonthlyRollupProse={handleToggleMonthlyRollupProse}
+              purposeGaugeOffered={purposeGaugeOffered}
+              onPurposeGaugeCheckIn={handlePurposeGaugeCheckIn}
             />
           ) : null}
         </>

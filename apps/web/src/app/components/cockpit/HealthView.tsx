@@ -6,6 +6,8 @@ import {
 } from "@/lib/data/health";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
+import { readPurposeGaugeSamples } from "@/lib/data/purposeGaugeSamples";
+import type { MirrorPurposeSample } from "@/lib/mirror/mirrorTrendKernel";
 import { cn } from "@/lib/utils";
 import { MirrorPanel } from "./MirrorPanel";
 import { Panel } from "./shared";
@@ -22,6 +24,13 @@ export function HealthView({
     Array<(typeof vm.healthChecks)[number] | HealthDashboardCheck>
   >(vm.healthChecks);
   const [message, setMessage] = useState<string | null>(null);
+  // FR-047 slice 2 (#686): the Mirror trend reads real persisted FR-033
+  // check-ins instead of the empty-set placeholder slice 1 shipped. Read once
+  // on mount; demo/mock mode (no Supabase client) yields no samples, so the
+  // kernel honestly reports the calm insufficient-data state.
+  const [purposeSamples, setPurposeSamples] = useState<MirrorPurposeSample[]>(
+    [],
+  );
   async function runSystemCheck() {
     setPulse(true);
     setMessage(null);
@@ -53,6 +62,18 @@ export function HealthView({
   useEffect(() => {
     void runSystemCheck();
     // Run once when the health view mounts so persisted mode never shows mock-only copy as truth.
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void readPurposeGaugeSamples(createSupabaseBrowserClient()).then(
+      (samples) => {
+        if (!cancelled) setPurposeSamples(samples);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
   }, []);
   const critical = checks.filter((check) => check.status === "critical").length;
   const watch = checks.filter((check) => check.status === "watch").length;
@@ -165,10 +186,10 @@ export function HealthView({
           ) : null}
           {/* FR-047 slice 1 (#668): Mirror on the vital-signs surface the
               operator navigates to (I0/asked-only — no push, no notify).
-              No FR-033 sample store is shipped yet, so the honest sample
-              set is empty; the kernel fails closed to the calm
-              insufficient-data state until samples exist. */}
-          <MirrorPanel samples={[]} />
+              Slice 2 (#686) wires the persisted FR-033 check-ins in; until
+              enough samples exist the kernel still fails closed to the calm
+              insufficient-data state. */}
+          <MirrorPanel samples={purposeSamples} />
           {/* H3 (#660 surface audit): quiet disclosure treatment — the
               bare bordered details gets the nested-row surface
               (--sf2 + --surface-radius-sm), matching the sibling check
