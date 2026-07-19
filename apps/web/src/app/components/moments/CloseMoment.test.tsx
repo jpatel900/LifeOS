@@ -493,3 +493,96 @@ describe("CloseMoment — #486 monthly rollup readback", () => {
     ).toBeNull();
   });
 });
+
+// FR-031 slice F5 (#679) — the single Close map-revision surface.
+describe("CloseMoment — F5 map-revision offer", () => {
+  const offerVm = {
+    offer: {
+      taskTitle: "Ship the report",
+      signals: [
+        {
+          kind: "cut_scope" as const,
+          detail: "You trimmed what this task needs to finish.",
+        },
+      ],
+    },
+    draftState: { phase: "idle" as const },
+    currentGraph: null,
+    onPropose: vi.fn(),
+    onDismissOffer: vi.fn(),
+    onApprove: vi.fn(),
+    onDismissDraft: vi.fn(),
+  };
+
+  it("renders nothing without the optional taskMapRevision VM", () => {
+    renderClose();
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the named one-line offer and wires tap/dismiss", () => {
+    const onPropose = vi.fn();
+    const onDismissOffer = vi.fn();
+    renderClose({
+      taskMapRevision: { ...offerVm, onPropose, onDismissOffer },
+    });
+
+    expect(screen.getByTestId("taskmap-revision-offer")).toHaveTextContent(
+      "The map for “Ship the report” may be out of date.",
+    );
+    fireEvent.click(screen.getByTestId("taskmap-revision-offer-propose"));
+    expect(onPropose).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("taskmap-revision-offer-dismiss"));
+    expect(onDismissOffer).toHaveBeenCalledTimes(1);
+  });
+
+  it("swaps the offer for the pending line while a draft is in flight", () => {
+    renderClose({
+      taskMapRevision: {
+        ...offerVm,
+        draftState: { phase: "pending" as const },
+      },
+    });
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("taskmap-close-revision-pending"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the diff-mode review with Replace/Keep labels once ready", () => {
+    const draft = {
+      schema_version: "1.0" as const,
+      nodes: [{ id: "a", title: "First", role: "required" as const }],
+      edges: [],
+    };
+    renderClose({
+      taskMapRevision: {
+        ...offerVm,
+        draftState: { phase: "ready" as const, draft },
+        currentGraph: { nodes: draft.nodes, edges: [] },
+      },
+    });
+    expect(screen.getByTestId("taskmap-draft-review")).toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-draft-approve")).toHaveTextContent(
+      "Replace the map",
+    );
+  });
+
+  it("shows the failure note without ever claiming the map changed", () => {
+    renderClose({
+      taskMapRevision: {
+        ...offerVm,
+        draftState: {
+          phase: "failed" as const,
+          message: "Couldn't draft a map right now.",
+        },
+      },
+    });
+    expect(
+      screen.getByTestId("taskmap-close-revision-failed"),
+    ).toHaveTextContent("Your current map is unchanged.");
+  });
+});
