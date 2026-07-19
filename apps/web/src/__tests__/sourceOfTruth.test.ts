@@ -340,7 +340,7 @@ describe("source-of-truth boundaries", () => {
     expect(cockpit).toContain('data-testid="lifeos-cockpit"');
     expect(cockpit).toContain("CaptureView");
     expect(captureView).toContain("CaptureCore");
-    expect(captureCore).toContain("Save thought");
+    expect(captureCore).toContain("Save and sort");
     expect(planView).toContain("Google writes are separate");
     expect(overviewView).toContain("All areas overview");
     expect(globalsCss).toContain(".lifeos-cockpit");
