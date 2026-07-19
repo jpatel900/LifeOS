@@ -493,3 +493,60 @@ describe("CloseMoment — #486 monthly rollup readback", () => {
     ).toBeNull();
   });
 });
+
+// FR-047 slice 2 / FR-033 (#686): the optional Close purpose-gauge check-in.
+// Offer visibility is parent-gated (purposeGaugeOffered); a frictionless
+// decline is simply never tapping, which must record nothing.
+describe("CloseMoment — purpose-gauge check-in offer", () => {
+  it("shows the one-tap offer only when the parent gate says it is offered", () => {
+    renderClose({ purposeGaugeOffered: true, onPurposeGaugeCheckIn: vi.fn() });
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge-lighter"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge-even"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge-heavier"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the offer when the parent gate is closed (non-sample day / already answered)", () => {
+    renderClose({ purposeGaugeOffered: false, onPurposeGaugeCheckIn: vi.fn() });
+    expect(screen.queryByTestId("close-moment-purpose-gauge")).toBeNull();
+  });
+
+  it("hides the offer when no handler is wired even if flagged offered", () => {
+    renderClose({ purposeGaugeOffered: true });
+    expect(screen.queryByTestId("close-moment-purpose-gauge")).toBeNull();
+  });
+
+  it("records the tapped response exactly once and dismisses the offer in-view", () => {
+    const onPurposeGaugeCheckIn = vi.fn();
+    renderClose({ purposeGaugeOffered: true, onPurposeGaugeCheckIn });
+
+    fireEvent.click(screen.getByTestId("close-moment-purpose-gauge-heavier"));
+
+    expect(onPurposeGaugeCheckIn).toHaveBeenCalledTimes(1);
+    expect(onPurposeGaugeCheckIn).toHaveBeenCalledWith("heavier");
+    // Tapping dismisses the card for the rest of the view.
+    expect(screen.queryByTestId("close-moment-purpose-gauge")).toBeNull();
+  });
+
+  it("records nothing when the offer is shown but never tapped (frictionless decline)", () => {
+    const onPurposeGaugeCheckIn = vi.fn();
+    renderClose({ purposeGaugeOffered: true, onPurposeGaugeCheckIn });
+
+    // Close the day without ever touching the gauge.
+    fireEvent.click(screen.getByTestId("close-moment-close-day"));
+
+    expect(onPurposeGaugeCheckIn).not.toHaveBeenCalled();
+    // The offer is still present (untapped), proving no implicit recording.
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge"),
+    ).toBeInTheDocument();
+  });
+});
