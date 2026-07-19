@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { buildCockpitAccentStyle } from "@/lib/cockpit/accent";
+import { resolveSelectedArea } from "@/lib/areaAccent";
 import { momentKeyLabel } from "@/lib/keys/keymap";
 import { cn } from "@/lib/utils";
 import { useMomentKeyboard } from "./useMomentKeyboard";
@@ -182,6 +185,23 @@ export function TodayMoments({
     };
   }, [nowProp]);
   const now = nowProp ?? autoNow;
+
+  // #690 Part 2: the moments home is area-scoped (selectedAreaId drives every
+  // stage view model below). Mirror LifeOSCockpit's screen-accent wiring so
+  // the --acc token family (emphasis borders, progression rail, schedule and
+  // pipeline tints — all `var(--acc)` consumers) takes the active area's color
+  // at this scoped container instead of the fixed .lifeos-cockpit default.
+  // Same buildCockpitAccentStyle the stage routes use, so the home and the
+  // stage agree on the accent for a given area. Mounted guard mirrors
+  // MomentsThemeShell: default dark until next-themes resolves, so the SSR and
+  // first-client style strings match (no hydration mismatch). The base --acc
+  // is dark-independent; only the surface/ring derivations settle on mount.
+  const { resolvedTheme } = useTheme();
+  const [accentThemeMounted, setAccentThemeMounted] = useState(false);
+  useEffect(() => {
+    setAccentThemeMounted(true);
+  }, []);
+
   const {
     state,
     selectedAreaId,
@@ -228,6 +248,22 @@ export function TodayMoments({
     ritual.status === "deferring" || ritual.status === "ready";
 
   const [recoverySwapIndex, setRecoverySwapIndex] = useState(0);
+
+  // #690 Part 2: resolve the active area the same way the stage cockpit does
+  // (`activeArea ?? areas[0]`, via resolveSelectedArea) so an "All areas"
+  // selection lands on the same default accent as the stage routes.
+  const accentAreaColor = resolveSelectedArea(
+    state.areas,
+    selectedAreaId,
+  )?.color;
+  const accentStyle = useMemo(
+    () =>
+      buildCockpitAccentStyle(
+        accentAreaColor,
+        !accentThemeMounted || resolvedTheme !== "light",
+      ),
+    [accentAreaColor, accentThemeMounted, resolvedTheme],
+  );
 
   const startVM = useMemo(
     () => buildStartVM(state, { now, selectedAreaId }),
@@ -727,7 +763,7 @@ export function TodayMoments({
   );
 
   return (
-    <div className="grid gap-6" data-testid="today-moments">
+    <div className="grid gap-6" data-testid="today-moments" style={accentStyle}>
       {onboardingActive ? (
         // #581: the onboarding ritual stands in for the moments content the
         // same way the re-entry ritual does; completing (or skipping) it
