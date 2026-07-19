@@ -5,7 +5,22 @@ import type { WorkflowState } from "@/lib/workflow";
 import type { useWorkflow } from "@/lib/WorkflowContext";
 import { buildProgressionNodes } from "./progressionNodes";
 import type { TaskMapDraftUiState } from "./TaskMapSection";
-import type { TaskMapGraph } from "@/lib/taskmap/graph";
+import { isNodeComplete, type TaskMapGraph } from "@/lib/taskmap/graph";
+import { toggleNodeCompletion } from "@/lib/taskmap/collapse";
+import { validateTaskMapForPersistence } from "@/lib/taskmap/persistence";
+import {
+  buildRevisionEvidence,
+  evidenceFingerprint,
+  revisionEligibility,
+  shouldOfferRevision,
+  type RevisionSignal,
+} from "@/lib/taskmap/revision";
+import {
+  defaultRevisionOfferStorage,
+  readRevisionOfferRecord,
+  recordRevisionOfferDismissed,
+  recordRevisionOfferShown,
+} from "@/lib/taskmap/revisionOfferStore";
 import type { FirstMoveVM, StartVM } from "./momentsViewModel";
 import type { MomentValue } from "./MomentSwitcher";
 import type { EndSessionOutcome } from "./EndSessionSheet";
@@ -121,12 +136,111 @@ export function useFlowFocusSession({
     },
     [railTaskId, approveTaskMapDraft],
   );
+  // FR-031 slice F5 (#679) — the post-node-completion revision offer,
+  // latched here so it stays stable while rendered (a live derivation
+  // would suppress itself the moment the shown-today record is written).
+  // Everything below runs inside USER-ACTION handlers — no useEffect ever
+  // fires an offer, and no code path here calls the AI (the tap handler
+  // delegates to the same on-demand requestTaskMapDraft the manual button
+  // uses). The deterministic kernel + caps decide; localStorage remembers.
+  const [revisionOffer, setRevisionOffer] = useState<{
+    taskId: string;
+    signals: RevisionSignal[];
+    fingerprint: string;
+  } | null>(null);
+
   const handleToggleTaskMapNodeCompletion = useCallback(
     (nodeId: string) => {
       if (!railTaskId) return;
       void toggleTaskMapNodeCompletion(railTaskId, nodeId);
+
+      // Trigger point 1 of 2 (plan-contract §4.3a): after a COMPLETION
+      // write only — an undo tap is not completion evidence. The post-tap
+      // graph is recomputed with the same pure helper the reducer uses.
+      const task = state.tasks.find((item) => item.id === railTaskId);
+      if (!task || task.map_status !== "approved" || !task.progression_map) {
+        return;
+      }
+      const validated = validateTaskMapForPersistence(task.progression_map);
+      if (!validated.ok) {
+        return;
+      }
+      const graph = validated.graph as TaskMapGraph;
+      const node = graph.nodes.find((item) => item.id === nodeId);
+      if (!node || node.role === "red" || isNodeComplete(node)) {
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedGraph = toggleNodeCompletion(graph, nodeId, nowIso);
+      const evidence = buildRevisionEvidence(
+        state.executionSessions
+          .filter((session) => session.task_id === railTaskId)
+          .map((session) => ({
+            planned_minutes: session.planned_minutes,
+            actual_minutes: session.actual_minutes,
+            outcome: session.outcome,
+            cap_outcome: session.cap_outcome ?? null,
+          })),
+        // No duration profiles are plumbed into the moments shell today;
+        // the kernel falls back to planned-vs-actual drift.
+        [],
+        null,
+      );
+      const eligibility = revisionEligibility(updatedGraph, evidence);
+      if (!eligibility.eligible) {
+        return;
+      }
+
+      const storage = defaultRevisionOfferStorage();
+      const todayIsoDate = nowIso.slice(0, 10);
+      const decision = shouldOfferRevision({
+        eligibility,
+        todayIsoDate,
+        record: readRevisionOfferRecord(storage, railTaskId),
+      });
+      if (!decision) {
+        return;
+      }
+
+      recordRevisionOfferShown(storage, railTaskId, todayIsoDate);
+      setRevisionOffer({
+        taskId: railTaskId,
+        signals: eligibility.signals,
+        fingerprint: evidenceFingerprint(eligibility.signals),
+      });
     },
-    [railTaskId, toggleTaskMapNodeCompletion],
+    [railTaskId, toggleTaskMapNodeCompletion, state],
+  );
+
+  const handleProposeRevision = useCallback(() => {
+    if (!revisionOffer) return;
+    const offer = revisionOffer;
+    setRevisionOffer(null);
+    // The ONLY AI spend in the revision loop — an explicit tap, routed
+    // through the existing on-demand draft pipeline with evidence attached.
+    void requestTaskMapDraft(offer.taskId, {
+      revisionSignals: offer.signals,
+    });
+  }, [revisionOffer, requestTaskMapDraft]);
+
+  const handleDismissRevisionOffer = useCallback(() => {
+    if (!revisionOffer) return;
+    recordRevisionOfferDismissed(
+      defaultRevisionOfferStorage(),
+      revisionOffer.taskId,
+      revisionOffer.fingerprint,
+    );
+    setRevisionOffer(null);
+  }, [revisionOffer]);
+
+  // Never render an offer against a different focused task.
+  const revisionOfferForSection = useMemo(
+    () =>
+      revisionOffer && revisionOffer.taskId === railTaskId
+        ? { signals: revisionOffer.signals }
+        : null,
+    [revisionOffer, railTaskId],
   );
 
   useEffect(() => {
@@ -310,6 +424,9 @@ export function useFlowFocusSession({
     handleRequestTaskMapDraft,
     handleApproveTaskMapDraft,
     handleToggleTaskMapNodeCompletion,
+    revisionOfferForSection,
+    handleProposeRevision,
+    handleDismissRevisionOffer,
     startFocus,
     finishFocus,
     endSessionOpen,

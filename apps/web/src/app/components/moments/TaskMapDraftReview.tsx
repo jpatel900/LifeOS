@@ -8,6 +8,7 @@ import {
   type TaskMapGraph,
   type TaskMapNode,
 } from "@/lib/taskmap/graph";
+import { diffTaskMaps, type TaskMapDiff } from "@/lib/taskmap/revision";
 import { groupIntoColumns } from "@/lib/taskmap/layout";
 import { TaskMapNodeChip } from "./TaskMapNodeChip";
 import { HIT_TARGET_INVISIBLE, HIT_TARGET_ROW } from "./hitTarget";
@@ -31,6 +32,13 @@ export interface TaskMapDraftReviewProps {
    * the intro copy and the "Not now" label to make clear that approving
    * replaces the current map, and dismissing leaves it untouched. */
   isRevision?: boolean;
+  /** FR-031 slice F5 (#679) — the currently approved graph. When present,
+   * the review renders in DIFF MODE: the code-computed `diffTaskMaps`
+   * (never the AI) decides what changed — unchanged steps dim, new and
+   * changed steps carry a plain badge, and dropped steps are listed. The
+   * diff tracks the owner's live edits, so un-editing a change dims it
+   * again. */
+  currentGraph?: TaskMapGraph | null;
 }
 
 let nextCustomNodeSuffix = 0;
@@ -40,11 +48,24 @@ function newNodeId(): string {
   return `custom-${Date.now()}-${nextCustomNodeSuffix}`;
 }
 
+type NodeDiffStatus = "added" | "changed" | "unchanged";
+
+function nodeDiffStatus(diff: TaskMapDiff, nodeId: string): NodeDiffStatus {
+  if (diff.addedNodes.some((node) => node.id === nodeId)) {
+    return "added";
+  }
+  if (diff.changedNodes.some((change) => change.after.id === nodeId)) {
+    return "changed";
+  }
+  return "unchanged";
+}
+
 export function TaskMapDraftReview({
   draft,
   onApprove,
   onDismiss,
   isRevision = false,
+  currentGraph: approvedGraph = null,
 }: TaskMapDraftReviewProps) {
   const [nodes, setNodes] = useState<TaskMapNode[]>(draft.nodes);
   const [edges, setEdges] = useState(draft.edges);
@@ -54,6 +75,10 @@ export function TaskMapDraftReview({
   const validation = validateGraph(currentGraph);
   const columns = groupIntoColumns(currentGraph);
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
+
+  // FR-031 slice F5 (#679): diff mode — code-computed, live against the
+  // owner's edits. Null outside a revision-with-approved-map review.
+  const diff = approvedGraph ? diffTaskMaps(approvedGraph, currentGraph) : null;
 
   const removeNode = (id: string) => {
     setNodes((current) => current.filter((node) => node.id !== id));
@@ -95,7 +120,9 @@ export function TaskMapDraftReview({
       </p>
       <p className="text-sm text-muted-foreground">
         {isRevision
-          ? "Approving replaces the current map. Edit titles, drop a step, or add one — then approve the whole revision in one pass."
+          ? diff
+            ? "Approving replaces the current map. New and changed steps are marked; steps that stay the same are dimmed. Edit anything, then approve the whole revision in one pass."
+            : "Approving replaces the current map. Edit titles, drop a step, or add one — then approve the whole revision in one pass."
           : "Right enough to start? Edit titles, drop a step, or add one — then approve the whole map in one pass."}
       </p>
 
@@ -116,8 +143,31 @@ export function TaskMapDraftReview({
               // other node renders a single chip-styled editable input
               // carrying the role treatment directly (optional = dashed,
               // de-emphasized) — no duplicate chip above it.
+              const diffStatus = diff ? nodeDiffStatus(diff, id) : null;
               return (
-                <div key={id} className="flex w-full flex-col gap-1">
+                <div
+                  key={id}
+                  className={cn(
+                    "flex w-full flex-col gap-1",
+                    // Diff mode: steps that match the current map dim so
+                    // what's new/changed reads at a glance.
+                    diffStatus === "unchanged" && "opacity-60",
+                  )}
+                  {...(diffStatus ? { "data-diff": diffStatus } : {})}
+                >
+                  {diffStatus === "added" || diffStatus === "changed" ? (
+                    <span
+                      className="self-start rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                      style={{
+                        background:
+                          "color-mix(in oklch, var(--acc) 14%, transparent)",
+                        color: "var(--acc)",
+                      }}
+                      data-testid={`taskmap-diff-badge-${id}`}
+                    >
+                      {diffStatus === "added" ? "New step" : "Changed"}
+                    </span>
+                  ) : null}
                   {node.role === "red" ? (
                     <TaskMapNodeChip node={node} />
                   ) : (
@@ -174,6 +224,16 @@ export function TaskMapDraftReview({
           </div>
         ))}
       </div>
+
+      {diff && diff.removedNodes.length > 0 ? (
+        <p
+          className="m-0 text-xs text-muted-foreground"
+          data-testid="taskmap-diff-removed"
+        >
+          No longer in the plan:{" "}
+          {diff.removedNodes.map((node) => node.title).join(", ")}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <input
