@@ -20,6 +20,7 @@ import { AreaSelector } from "./AreaSelector";
 import { MastheadThemeToggle } from "./MastheadThemeToggle";
 import { formatMastheadDate } from "./formatMastheadDate";
 import { CaptureAffordance } from "./CaptureAffordance";
+import { AuthAffordance } from "./AuthAffordance";
 import { KeyboardLegend } from "./KeyboardLegend";
 import { CaptureOverlay } from "./CaptureOverlay";
 import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
@@ -912,6 +913,13 @@ export function TodayMoments({
               {/* Finding #3: topbar theme toggle, wired to the existing
                   next-themes setup — a real "D" kbd hint. */}
               <MastheadThemeToggle shortcutEnabled={topbarShortcutsEnabled} />
+              {/* #688: the auth door — a "Sign in" pill when signed out (or
+                  a quiet who + sign-out when signed in), in the same pill
+                  grammar as the cluster. Renders nothing when accounts aren't
+                  set up here, so it never dead-ends. Kept visible at every
+                  width (not `hidden sm:contents`) because being unable to find
+                  sign-in was the reported bug. */}
+              <AuthAffordance />
               {/* Finding #4: demoted from a bare text link to an
                   icon-weighted pill matching the rest of the cluster. */}
               <div
