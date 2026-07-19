@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Check, HeartPulse, RefreshCw, Users } from "lucide-react";
 import {
   getHealthDashboard,
@@ -10,6 +12,15 @@ import { cn } from "@/lib/utils";
 import { MirrorPanel } from "./MirrorPanel";
 import { Panel } from "./shared";
 
+// #688 (minimal additive): a live health check whose only finding is "nobody
+// is signed in" gets a door, not just a description. Mock checks in the
+// static view model carry no `details`, so this is false for them.
+function isSignedOutCheck(check: unknown): boolean {
+  if (!check || typeof check !== "object") return false;
+  const details = (check as HealthDashboardCheck).details;
+  return Boolean(details && details.mode === "signed_out");
+}
+
 // Health stage screen (extracted from LifeOSCockpit.tsx, issue #590 slice 2
 // — mechanical split, no behavior change).
 export function HealthView({
@@ -17,6 +28,7 @@ export function HealthView({
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
 }) {
+  const pathname = usePathname();
   const [pulse, setPulse] = useState(false);
   const [checks, setChecks] = useState<
     Array<(typeof vm.healthChecks)[number] | HealthDashboardCheck>
@@ -120,6 +132,16 @@ export function HealthView({
                 />
               </div>
               <p className="mt-1 text-sm text-[var(--mut)]">{check.summary}</p>
+              {/* #688 minimal additive: the sign-in door on signed-out rows. */}
+              {isSignedOutCheck(check) ? (
+                <Link
+                  href={`/login?next=${encodeURIComponent(pathname ?? "/health")}`}
+                  className="mt-2 inline-flex text-sm font-semibold text-[var(--ink)] underline underline-offset-2"
+                  data-testid={`health-signin-link-${check.id}`}
+                >
+                  Sign in
+                </Link>
+              ) : null}
             </div>
           ))}
           <div

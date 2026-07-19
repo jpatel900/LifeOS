@@ -96,9 +96,11 @@ import {
   NIL_UUID,
   persistedAreaIdForWorkflowId,
   persistedIdForLocalId,
+  isSignedOutError,
   persistedLoadFailureMessage,
   persistedSaveFailureMessage,
   persistedSyncFailureMessage,
+  signedOutLocalMessage,
   policyDecisionKey,
   workflowReducer,
   type PersistedWorkflowPayload,
@@ -186,6 +188,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       account:
         current.account === "sync-error" ? current.account : "local-only",
       message,
+      // #688: a plain local-only marker keeps an existing signed-out state
+      // (the reason hasn't changed); it never invents one.
+      signedOut: current.signedOut ?? false,
       pendingLocalChanges: true,
     }));
   }, []);
@@ -194,6 +199,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSyncStatus((current) => ({
       ...current,
       account: "synced",
+      signedOut: false,
       message: current.pendingLocalChanges
         ? "Some local changes still need account sync."
         : null,
@@ -205,17 +211,37 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       ...current,
       account: "sync-error",
       message,
+      signedOut: false,
+      pendingLocalChanges: true,
+    }));
+  }, []);
+
+  // #688: signed out is not a failure. When the only reason saved data
+  // didn't load is that nobody is signed in, report one calm local-only
+  // state (with `signedOut` set so banners can offer the sign-in door)
+  // instead of the failure-toned load-error message. True failures with a
+  // live session keep the failure language below.
+  const markSignedOutLocal = useCallback(() => {
+    setSyncStatus((current) => ({
+      ...current,
+      account: "local-only",
+      message: signedOutLocalMessage,
+      signedOut: true,
       pendingLocalChanges: true,
     }));
   }, []);
 
   const markPersistedLoadFailure = useCallback(
     (error: unknown) => {
+      if (isSignedOutError(error)) {
+        markSignedOutLocal();
+        return;
+      }
       markAccountSyncError(
         persistedSyncFailureMessage(error, persistedLoadFailureMessage),
       );
     },
-    [markAccountSyncError],
+    [markAccountSyncError, markSignedOutLocal],
   );
 
   const markPersistedSaveFailure = useCallback(

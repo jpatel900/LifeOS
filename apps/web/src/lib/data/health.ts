@@ -897,11 +897,13 @@ export async function getHealthDashboard(
         informationalCheck(
           "health-auth-session",
           "auth session",
-          "Supabase is configured, but no user session is active.",
+          // #688/#692: signed out is a calm state, said plainly — not
+          // failure language, no vendor vocabulary.
+          "You're not signed in. Work is saving on this device only.",
           {
             authenticated: false,
             mode: "signed_out",
-            repair_steps: ["Sign in on /login to check persisted-user rows."],
+            repair_steps: ["Sign in to sync work to your account."],
           },
         ),
       );
@@ -1029,21 +1031,22 @@ export async function getHealthDashboard(
       informationalCheck(
         "health-areas",
         "areas",
-        "Sign in before checking Supabase areas.",
+        // #688/#692: plain and calm — the signed-out condition, not an error.
+        "Sign in to check the areas saved to your account.",
         {
           source: "supabase",
           mode: "signed_out",
-          repair_steps: ["Sign in on /login to check persisted-user rows."],
+          repair_steps: ["Sign in to check saved account data."],
         },
       ),
       informationalCheck(
         "health-capture-persistence",
         "capture persistence",
-        "Sign in before checking capture_items persistence.",
+        "Sign in to check the captures saved to your account.",
         {
           source: "supabase",
           mode: "signed_out",
-          repair_steps: ["Sign in on /login to check persisted-user rows."],
+          repair_steps: ["Sign in to check saved account data."],
         },
       ),
     );

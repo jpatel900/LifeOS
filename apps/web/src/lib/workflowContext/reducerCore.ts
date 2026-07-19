@@ -248,6 +248,24 @@ export function hasServerCapabilityMissingSignal(error: unknown): boolean {
   );
 }
 
+// #688: the signed-out condition is not a failure — one calm plain-language
+// state (#692), pointed at by a sign-in door in the banners that render it.
+export const signedOutLocalMessage =
+  "You're not signed in, so new work is saving on this device only.";
+
+// #688: recognizes the errors our own data layer throws when the only
+// problem is that nobody is signed in (requireSupabaseUser's "Sign in
+// before …" messages, and supabase-js's own missing-session error). True
+// auth failures (bad JWT, expired token with a live session) do not match.
+export function isSignedOutError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.startsWith("sign in before") ||
+    message.includes("auth session missing")
+  );
+}
+
 export const persistedLoadFailureMessage =
   "Saved workspace data could not load; local workflow remains usable, but saved account data may be missing from view.";
 export const persistedSaveFailureMessage =
