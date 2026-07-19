@@ -131,8 +131,15 @@ export function CaptureCore({
   onResolved,
   onCancel,
   onLockChange,
-  saveLabel = "Save thought",
-  saveRawLabel = "Save raw",
+  // #689 scope add (owner): the old "Save raw" vs "Save thought" pair was a
+  // front-door fork nobody could tell apart. Both persist the identical capture item
+  // (stageAndPersistRawCapture); the ONLY difference is whether the AI
+  // sorts it into a task draft now or later at triage. The labels now say
+  // exactly that, in the same "sort" vocabulary the triage sheet uses.
+  // Collapsing to a single button is an OWNER-GATE on the PR (it would
+  // change ratified FR-026 containment behavior).
+  saveLabel = "Save and sort",
+  saveRawLabel = "Save as-is, sort later",
   hint,
   disabledReason,
   testIdPrefix = "capture",
@@ -346,13 +353,19 @@ export function CaptureCore({
       ) : null}
 
       {showReturnHook ? (
+        /* #689 scope add (owner): "Return hook" was jargon nobody could
+           explain after using it. Option (a) — self-explanatory in one plain
+           phrase where it stands: the label says what it does (the closing
+           "back to: <what you type>" line), the placeholder shows an
+           example. Same field, same behavior, same testid. */
         <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
-          Return hook
+          What were you doing? We&apos;ll point you back to it after you save.
+          (optional)
           <input
             value={returnHook}
             onChange={(event) => setReturnHook(event.target.value)}
             readOnly={locked}
-            placeholder="What should you go back to afterward?"
+            placeholder="e.g. writing the report"
             className={cn(
               HIT_TARGET_ROW,
               "rounded-md border border-input bg-background px-3 py-2 text-sm font-normal text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

@@ -35,6 +35,6 @@ describe("Today cockpit fallback (NEXT_PUBLIC_MOMENTS_HOME=false)", () => {
     expect(
       screen.getByRole("navigation", { name: "Workflow stages" }),
     ).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Save thought" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save and sort" })).toBeNull();
   });
 });
