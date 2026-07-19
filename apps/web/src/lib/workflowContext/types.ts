@@ -13,6 +13,7 @@ import type {
 } from "@lifeos/schemas";
 import type { WorkflowState } from "../workflow";
 import type { TaskMapGraph } from "../taskmap/graph";
+import type { RevisionSignal } from "../taskmap/revision";
 import type { ProposalRecalibrationVM } from "../learning/learningSurface";
 import type { PolicyChangeCandidate } from "../learning/overrideScan";
 import type { Phase2MockExecutionSession } from "../types";
@@ -56,12 +57,17 @@ export type CaptureParseState =
  */
 export type TaskMapDraftState =
   | { phase: "idle" }
-  | { phase: "pending"; taskId: string }
+  | { phase: "pending"; taskId: string; origin?: "revision" }
   | {
       phase: "ready";
       taskId: string;
       draft: TaskMapGraph & { schema_version: "1.0" | "1.1" };
       suggestionRecordId: string | null;
+      /** FR-031 slice F5 (#679): "revision" when this draft came from a
+       * tapped evidence-triggered offer. Dismissing such a draft rejects
+       * its suggestion row (the approved map bytes stay untouched);
+       * ordinary drafts/regens dismiss exactly as before. */
+      origin?: "revision";
     }
   | { phase: "failed"; taskId: string; message: string };
 
@@ -93,7 +99,13 @@ export interface WorkflowContextValue {
   retryCaptureParseWithMock: () => void;
   // FR-031 slice 5: on-demand task-map draft + one-pass approve.
   taskMapDraft: TaskMapDraftState;
-  requestTaskMapDraft: (taskId: string) => Promise<void>;
+  // FR-031 slice F5 (#679): options.revisionSignals turns the request into
+  // an evidence-triggered revision (policy task_map_revision.v1); still
+  // only ever called from an explicit user tap.
+  requestTaskMapDraft: (
+    taskId: string,
+    options?: { revisionSignals?: RevisionSignal[] },
+  ) => Promise<void>;
   dismissTaskMapDraft: () => void;
   approveTaskMapDraft: (
     taskId: string,

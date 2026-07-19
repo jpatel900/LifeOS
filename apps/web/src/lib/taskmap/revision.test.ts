@@ -197,13 +197,9 @@ describe("buildRevisionEvidence", () => {
     user_id: "user-1",
     area_id: "area-1",
     task_type: "__area__",
-    estimate_stats_json: {
-      multiplier: 2,
-      sample_count: 8,
-      last_updated: "2026-07-01T00:00:00.000Z",
-    },
-    created_at: "2026-07-01T00:00:00.000Z",
-    updated_at: "2026-07-01T00:00:00.000Z",
+    sample_count: 8,
+    estimate_stats_json: { multiplier: 2, sample_count: 8 },
+    last_updated_at: "2026-07-01T00:00:00.000Z",
   } as DurationProfile;
 
   it("adjusts expected minutes through a matching duration profile", () => {
