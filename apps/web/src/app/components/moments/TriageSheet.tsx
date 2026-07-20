@@ -51,6 +51,17 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * stays strictly on-demand, never background). The offer is local to this
  * sheet (cleared when it closes); the Flow moment's manual "Draft map"
  * button is untouched.
+ *
+ * #703 (owner-ratified 2026-07-19): this sheet gained the **Sort** action —
+ * the app's parse trigger, relocated here from the capture pop-up. Capture is
+ * now a pure raw save, so this is where a stored thought becomes a task
+ * draft. Sort calls the shared `sortCaptureIntoDrafts`, which drives the
+ * EXISTING `parseCaptureIntoDrafts` / `/api/parse-capture` path — reused, not
+ * reimplemented, so untrusted capture text keeps travelling through the same
+ * NS-INV-1 context-assembly authority path and INV-8 delimiting is inherited
+ * rather than re-established (proved by
+ * `lib/ai/triageSortContainment.test.tsx`). It runs only on a tap: never on
+ * open, never on a timer, never in the background (NFR-001/NFR-005).
  */
 
 export interface TriageSheetProps {
@@ -73,6 +84,9 @@ export function TriageSheet({
     requestTaskMapDraft,
     dismissTaskMapDraft,
     approveTaskMapDraft,
+    captureParse,
+    sortCaptureIntoDrafts,
+    retryCaptureParseWithMock,
   } = useWorkflow();
 
   // FR-031 slice F3 (#664): the one-tap "map it" offer for the task "Do
@@ -108,6 +122,42 @@ export function TriageSheet({
       draft.status === "pending" &&
       (resolvedAreaId ? draft.area_id === resolvedAreaId : true),
   );
+
+  // #703 (read path): raw captures were invisible here — the owner captured a
+  // thought, followed "Decide now" into this sheet, and met "Nothing waiting
+  // in triage". Every capture is persisted as a capture item first
+  // (stageAndPersistRawCapture) and only a sort turns it into a task draft,
+  // so an unsorted thought lives ONLY in `captureItems`. List them, plainly.
+  // A sorted capture keeps status "triage_required" while its draft sits in
+  // the pending list above — exclude any capture a draft already points at
+  // (task_drafts.capture_item_id), so a thought is never listed twice, and so
+  // a successful Sort visibly moves the row from this list up into that one.
+  const draftedCaptureIds = new Set(
+    state.taskDrafts
+      .map((draft) => draft.capture_item_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const unsortedCaptures = state.captureItems.filter(
+    (item) =>
+      (item.status === "new" || item.status === "triage_required") &&
+      !draftedCaptureIds.has(item.id) &&
+      (resolvedAreaId ? item.area_id === resolvedAreaId : true),
+  );
+
+  // #703: which capture (if any) this sheet is currently sorting, and which
+  // one failed. Read straight off the shared `captureParse` state the parse
+  // path already maintains — no second source of truth, and it is keyed by
+  // capture id so a failure can only ever be shown on the row it belongs to.
+  const sortingCaptureId =
+    captureParse.phase === "parsing" ? captureParse.captureId : null;
+  const failedSort =
+    captureParse.phase === "failed"
+      ? {
+          captureId: captureParse.captureId,
+          message: captureParse.message,
+          canRetryWithMock: captureParse.canRetryWithMock,
+        }
+      : null;
 
   const showMapOfferReady =
     mapOffer !== null &&
@@ -185,14 +235,14 @@ export function TriageSheet({
           )}
         </div>
       ) : null}
-      {pendingDrafts.length === 0 ? (
+      {pendingDrafts.length === 0 && unsortedCaptures.length === 0 ? (
         <p
           className="text-sm text-muted-foreground"
           data-testid="triage-sheet-empty"
         >
           Nothing waiting in triage — press C to capture the first thing.
         </p>
-      ) : (
+      ) : pendingDrafts.length === 0 ? null : (
         <ul className="grid gap-2" data-testid="triage-sheet-list">
           {pendingDrafts.map((draft) => {
             const area = state.areas.find((item) => item.id === draft.area_id);
@@ -285,6 +335,95 @@ export function TriageSheet({
           })}
         </ul>
       )}
+
+      {unsortedCaptures.length > 0 ? (
+        <div className="grid gap-2" data-testid="triage-sheet-captures">
+          {/* #703: glance level first (NFR-006) — what these are, that they
+              are safe, and what the one action does. The per-row text is the
+              detail layer; the failure explanation below is deeper still and
+              only appears when there is something to say. */}
+          <p className="text-xs font-semibold text-muted-foreground">
+            Captured, not sorted yet
+          </p>
+          <ul className="grid gap-2">
+            {unsortedCaptures.map((item) => {
+              const area = state.areas.find(
+                (candidate) => candidate.id === item.area_id,
+              );
+              const sorting = sortingCaptureId === item.id;
+              const failure =
+                failedSort?.captureId === item.id ? failedSort : null;
+
+              return (
+                <li
+                  key={item.id}
+                  className="workflow-compact-item grid gap-1.5 rounded-lg border border-border p-3"
+                  data-testid={`triage-sheet-capture-${item.id}`}
+                >
+                  <p className="text-sm font-medium">{item.raw_text}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {area ? `${area.name} · ` : ""}
+                    Saved as you wrote it — sorting it into a task is the next
+                    step here.
+                  </p>
+
+                  {failure ? (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="grid gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200"
+                      data-testid={`triage-sheet-sort-failed-${item.id}`}
+                    >
+                      {/* Plain language, and the reassurance first: nothing
+                          was lost. The underlying wording is the deep layer,
+                          folded away until asked for (NFR-006). */}
+                      <p className="font-semibold">
+                        Sorting isn&rsquo;t available right now. Your thought is
+                        safe here, exactly as you wrote it.
+                      </p>
+                      <details>
+                        <summary className="cursor-pointer font-semibold underline-offset-2 hover:underline">
+                          What happened?
+                        </summary>
+                        <p className="mt-1 font-normal">{failure.message}</p>
+                      </details>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => sortCaptureIntoDrafts(item.id)}
+                      disabled={sortingCaptureId !== null}
+                      className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+                      data-testid={`triage-sheet-sort-${item.id}`}
+                    >
+                      {sorting ? "Sorting…" : "Sort"}
+                    </Button>
+                    {failure?.canRetryWithMock ? (
+                      // The degraded choice moved here with the parse it
+                      // belongs to: a synchronous, in-band alternative the
+                      // person chooses, never a background retry (FR-026).
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => retryCaptureParseWithMock()}
+                        disabled={sortingCaptureId !== null}
+                        className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+                        data-testid={`triage-sheet-sort-basic-${item.id}`}
+                      >
+                        Sort it the simple way
+                      </Button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {/* #687: the old "Open full view →" link went to `/triage`, which now
           redirects straight back to this same sheet — a circular hop. This
