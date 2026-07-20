@@ -111,6 +111,28 @@ const REVISED_F5_GRAPH = {
 };
 
 const REVISION_OFFER_STORE_KEY = "lifeos.taskMapRevisionOffers.v1";
+const PURPOSE_GAUGE_KEY = "lifeos.moments.purposeGaugeLastChecked";
+
+/**
+ * ONE-OFFER-PER-CLOSE precedence (#692): on an FR-033 sample day (the 4th,
+ * 12th, 20th, 28th) the purpose-gauge check-in legitimately WINS the single
+ * Close offer slot and the map-revision offer is suppressed. That is correct
+ * product behavior — but it would make this spec pass 27 days a month and
+ * fail 4. Marking the check-in as already taken TODAY (the product's own
+ * per-day suppression, no test-only hook) makes the Close slot
+ * deterministically available on every calendar day. The precedence rule
+ * itself is covered by unit tests in CloseMoment.test.tsx.
+ */
+async function neutralizePurposeGaugeOffer(page: Page) {
+  await page.addInitScript((key) => {
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+      2,
+      "0",
+    )}-${String(now.getDate()).padStart(2, "0")}`;
+    window.localStorage.setItem(key, stamp);
+  }, PURPOSE_GAUGE_KEY);
+}
 
 /** Approves the stubbed draft as-is and completes "send-review" FIRST -
  * an out-of-critical-path-order completion, the deterministic kernel's
@@ -431,6 +453,8 @@ test.describe("task-map lifecycle (FR-031)", () => {
   }) => {
     let currentGraph: Record<string, unknown> = DRAFT_GRAPH;
     await stubDraftEndpoint(page, () => currentGraph);
+    // Must run before the first navigation (see the helper's doc comment).
+    await neutralizePurposeGaugeOffer(page);
     await captureAndEnterFlow(page, "Task map F5 close offer proof item");
     await approveMapAndCompleteOutOfOrder(page);
 
