@@ -129,7 +129,7 @@ export function TriageSheet({
     <MomentSheet open={open} title="Triage" onClose={onClose}>
       {mapOffer ? (
         <div
-          className="workflow-compact-item grid gap-2 rounded-lg border border-border p-3"
+          className="workflow-compact-item moments-row grid gap-2 p-3"
           data-testid="triage-map-offer"
         >
           {showMapOfferReady && taskMapDraft.phase === "ready" ? (
@@ -206,7 +206,7 @@ export function TriageSheet({
             return (
               <li
                 key={draft.id}
-                className="workflow-compact-item grid gap-2 rounded-lg border border-border p-3"
+                className="workflow-compact-item moments-row grid gap-2 p-3"
                 data-testid={`triage-sheet-item-${draft.id}`}
               >
                 <p className="text-sm font-medium">{draft.title}</p>
@@ -291,7 +291,10 @@ export function TriageSheet({
         href="/triage"
         className={cn(
           HIT_TARGET_INVISIBLE,
-          "text-sm font-semibold text-primary hover:underline",
+          // #690 Part 1: as a grid child the inline-flex link stretched to
+          // the full column and centered its label mid-panel; start-aligned
+          // like every other left-anchored affordance in the grammar.
+          "justify-self-start text-sm font-semibold text-primary hover:underline",
         )}
         data-testid="triage-sheet-open-full"
       >

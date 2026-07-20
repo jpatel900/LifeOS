@@ -85,21 +85,27 @@ export function MomentSheet({
         aria-label={title}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="workflow-primary-card relative z-10 grid h-full w-full max-w-sm gap-4 overflow-y-auto border-l border-border bg-card p-5 outline-none motion-reduce:transition-none motion-reduce:duration-0 sm:max-w-md"
+        className="workflow-primary-card relative z-10 grid h-full w-full max-w-sm content-start gap-5 overflow-y-auto border-l border-border bg-card p-6 outline-none motion-reduce:transition-none motion-reduce:duration-0 sm:max-w-md"
         style={{
           transitionDuration: "var(--motion-base)",
           transitionTimingFunction: "var(--motion-ease)",
         }}
         data-testid="moment-sheet-dialog"
       >
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        {/* #690 Part 1: panel header to the moments grammar — fixed
+            surface-title tier (`.moments-card-title`, the same 1.5rem/620 tier
+            every moments surface title uses) instead of the ad-hoc
+            `text-base`, and a hairline bottom divider that stages the header
+            (what this panel is) above its summary body — the same masthead
+            hairline the settings audit (#673 S1) established. */}
+        <div className="flex items-center justify-between gap-3 border-b border-border pb-4">
+          <h2 className="moments-card-title">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             className={cn(
               HIT_TARGET_INVISIBLE,
-              "text-xs font-semibold text-muted-foreground hover:text-foreground",
+              "text-sm font-semibold text-muted-foreground hover:text-foreground",
             )}
             data-testid="moment-sheet-close"
           >
