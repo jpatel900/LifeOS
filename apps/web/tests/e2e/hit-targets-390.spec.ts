@@ -215,7 +215,7 @@ async function captureTask(
 ) {
   await page.goto("/capture");
   await page.getByPlaceholder("Drop the thought here.").fill(title);
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
   await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
 }
 

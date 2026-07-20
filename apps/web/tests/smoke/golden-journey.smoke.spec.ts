@@ -85,7 +85,7 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
       response.request().method() === "POST",
   );
   await page.getByRole("textbox").first().fill(captureText);
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
 
   const parseResponse = await parseResponsePromise;
   expect(parseResponse.status(), "parse-capture route did not answer").toBe(

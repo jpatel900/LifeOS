@@ -18,7 +18,7 @@ async function goToStage(page: Page, stage: RegExp) {
 async function captureTask(page: Page, title: string) {
   await page.goto("/capture");
   await page.getByPlaceholder("Drop the thought here.").fill(title);
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
   // #556 FR-026: saving no longer navigates instantly — the capture stage
   // holds the user through the parse wait (raw text + hook visible, no
   // second submit possible) and only navigates to Triage once the parse
@@ -42,7 +42,7 @@ test("capture blocks empty saves", async ({ page }) => {
   await page.goto("/capture");
 
   await expect(
-    page.getByRole("button", { name: "Save thought" }),
+    page.getByRole("button", { name: "Save and sort" }),
   ).toBeDisabled();
 });
 
@@ -73,7 +73,7 @@ test("all areas pipeline board includes work from every area", async ({
   await page
     .getByPlaceholder("Drop the thought here.")
     .fill("Personal board repair item");
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
 
   await page.getByRole("button", { name: "All areas" }).click();
   // #555: in-app stage navigation is a real router.push now — settle on the

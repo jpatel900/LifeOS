@@ -92,7 +92,7 @@ async function captureAndEnterFlow(page: Page, title: string) {
       response.url().includes("/api/parse-capture") &&
       response.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
   await parseResponsePromise;
 
   await page.getByRole("button", { name: "Do today" }).click();
