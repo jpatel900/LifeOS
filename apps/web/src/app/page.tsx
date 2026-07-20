@@ -1,6 +1,10 @@
 import { CockpitRoute } from "./components/CockpitRoute";
 import { MomentsThemeShell } from "./components/moments/MomentsThemeShell";
 import { TodayMoments } from "./components/moments/TodayMoments";
+import {
+  deepLinkTargetFromParams,
+  type DeepLinkTarget,
+} from "./components/moments/deepLink";
 import { isMomentsHomeEnabled } from "@/lib/flags";
 
 // `/` renders the moments home only when the build-time
@@ -25,17 +29,25 @@ import { isMomentsHomeEnabled } from "@/lib/flags";
 //
 // #501: `data-theme` follows the app's next-themes theme (see
 // MomentsThemeShell) rather than staying permanently unset.
-function MomentsHomeShell() {
+function MomentsHomeShell({ deepLink }: { deepLink: DeepLinkTarget }) {
   return (
     <MomentsThemeShell>
-      <TodayMoments />
+      <TodayMoments deepLink={deepLink} />
     </MomentsThemeShell>
   );
 }
 
-export default function HomePage() {
+// #687: the demoted stage routes redirect here carrying the target as query
+// params (e.g. `/triage` -> `/?sheet=triage`), so `/` opens the matching
+// moment/sheet/overlay. searchParams is a promise in Next 15's App Router.
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (isMomentsHomeEnabled()) {
-    return <MomentsHomeShell />;
+    const params = searchParams ? await searchParams : undefined;
+    return <MomentsHomeShell deepLink={deepLinkTargetFromParams(params)} />;
   }
   return <CockpitRoute stage="today" />;
 }

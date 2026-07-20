@@ -1,4 +1,17 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+
+// #687: this suite drives the DEMOTED cockpit stage surfaces through routes
+// (/capture, /triage, /execute, /today) that are now flag-gated redirect
+// shims into the moments home under the shipping config. The cockpit flows it
+// covers remain live ONLY under the #590 rollback
+// (NEXT_PUBLIC_MOMENTS_HOME=false, set for BOTH the dev server and this
+// runner). AGENT-TODO(#687): migrate the still-relevant flow coverage to the
+// moments surfaces, then retire this suite with the legacy code.
+test.skip(
+  process.env.NEXT_PUBLIC_MOMENTS_HOME !== "false",
+  "#687: cockpit stage routes redirect to the moments home under the shipping config; run with NEXT_PUBLIC_MOMENTS_HOME=false to exercise the legacy cockpit flows",
+);
+
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the

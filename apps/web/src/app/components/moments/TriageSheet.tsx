@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { Button } from "@/components/ui/button";
 import { MomentSheet } from "./MomentSheet";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
-import { HIT_TARGET_INVISIBLE, HIT_TARGET_MIN } from "./hitTarget";
+import { HIT_TARGET_MIN } from "./hitTarget";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -287,16 +286,9 @@ export function TriageSheet({
         </ul>
       )}
 
-      <Link
-        href="/triage"
-        className={cn(
-          HIT_TARGET_INVISIBLE,
-          "text-sm font-semibold text-primary hover:underline",
-        )}
-        data-testid="triage-sheet-open-full"
-      >
-        Open full view →
-      </Link>
+      {/* #687: the old "Open full view →" link went to `/triage`, which now
+          redirects straight back to this same sheet — a circular hop. This
+          sheet is the triage surface; removed. */}
     </MomentSheet>
   );
 }
