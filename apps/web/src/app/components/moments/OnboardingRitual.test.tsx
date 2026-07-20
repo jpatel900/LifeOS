@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Area } from "@lifeos/schemas";
-import type { CaptureParseState } from "@/lib/WorkflowContext";
 import {
   DAY_SHAPE_PREFERENCES_KEY,
   readDayShapePreferences,
@@ -47,10 +46,7 @@ function renderRitual(
   overrides: Partial<Parameters<typeof OnboardingRitual>[0]> = {},
 ) {
   const props = {
-    captureParse: { phase: "idle" } as CaptureParseState,
-    onSubmitParse: vi.fn(),
-    onSubmitRaw: vi.fn(),
-    onRetryWithMock: vi.fn(),
+    onSubmit: vi.fn(),
     onAreasPersisted: vi.fn(),
     onComplete: vi.fn(),
     ...overrides,
@@ -253,8 +249,7 @@ describe("OnboardingRitual (#581)", () => {
     it("composes the shared CaptureCore and submits through the parse path", async () => {
       const { props } = renderRitual();
       await advanceToStep("capture");
-
-      // The FR-026 containment widget itself, not a reimplementation.
+      // The shared CaptureCore itself, not a reimplementation.
       expect(screen.getByTestId("onboarding-capture-core")).toBeInTheDocument();
 
       fireEvent.change(screen.getByTestId("onboarding-capture-textarea"), {
@@ -262,14 +257,14 @@ describe("OnboardingRitual (#581)", () => {
       });
       fireEvent.click(screen.getByTestId("onboarding-capture-save"));
 
-      expect(props.onSubmitParse).toHaveBeenCalledWith(
+      expect(props.onSubmit).toHaveBeenCalledWith(
         "Plan the kickoff agenda",
         null,
       );
     });
 
-    it("completes with 'captured' only after the containment sequence resolves", async () => {
-      const { props, view } = renderRitual();
+    it("completes with 'captured' only after the capture conclusion is dismissed", async () => {
+      const { props } = renderRitual();
       await advanceToStep("capture");
 
       fireEvent.change(screen.getByTestId("onboarding-capture-textarea"), {
@@ -278,19 +273,8 @@ describe("OnboardingRitual (#581)", () => {
       fireEvent.click(screen.getByTestId("onboarding-capture-save"));
       expect(props.onComplete).not.toHaveBeenCalled();
 
-      // The global parse resolves (WorkflowContext truth) — CaptureCore
-      // shows its conclusion, and dismissing it fires onResolved.
-      view.rerender(
-        <OnboardingRitual
-          {...props}
-          captureParse={{
-            phase: "parsed",
-            captureId: "capture-1",
-            parser: "mock",
-            status: "mock",
-          }}
-        />,
-      );
+      // #703: the save is synchronous — CaptureCore goes straight to its
+      // conclusion, and dismissing it fires onResolved.
       const conclusion = await screen.findByTestId(
         "onboarding-capture-conclusion",
       );

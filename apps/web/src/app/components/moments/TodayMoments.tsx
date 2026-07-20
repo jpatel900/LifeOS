@@ -240,9 +240,6 @@ export function TodayMoments({
     setSelectedAreaId,
     syncPersistedAreas,
     submitCaptureText,
-    submitCaptureRaw,
-    captureParse,
-    retryCaptureParseWithMock,
     startTaskSession,
     markSession,
     deferTask,
@@ -910,14 +907,9 @@ export function TodayMoments({
         // unmounts onto the Start moment, where the #551 state-truth
         // surfaces show whatever was just captured.
         <OnboardingRitual
-          captureParse={captureParse}
-          onSubmitParse={(text, hook) =>
+          onSubmit={(text, hook) =>
             submitCaptureText(text, selectedAreaId, hook)
           }
-          onSubmitRaw={(text, hook) =>
-            submitCaptureRaw(text, selectedAreaId, hook)
-          }
-          onRetryWithMock={retryCaptureParseWithMock}
           onAreasPersisted={syncPersistedAreas}
           onComplete={(outcome) => {
             onboarding.complete();
@@ -1193,8 +1185,10 @@ export function TodayMoments({
 
       <KeyboardLegend />
 
+      {/* #703: capture is never blocked. It used to be disabled while a
+          parse was in flight; parsing now happens in triage, and a sort
+          running there must never stop you writing down a new thought. */}
       <CaptureAffordance
-        disabled={captureParse.phase === "parsing"}
         onOpen={() => setCaptureOpen(true)}
         unsyncedCount={unsyncedCaptureCount}
       />
@@ -1212,14 +1206,11 @@ export function TodayMoments({
         value={moment}
         onChange={setMoment}
         onCapture={() => setCaptureOpen(true)}
-        captureDisabled={captureParse.phase === "parsing"}
         unsyncedCount={unsyncedCaptureCount}
       />
 
       <CaptureOverlay
         open={captureOpen}
-        captureParse={captureParse}
-        onRetryWithMock={retryCaptureParseWithMock}
         initialText={captureDraft}
         onDraftChange={(text) => {
           setCaptureDraft(text);
@@ -1228,14 +1219,12 @@ export function TodayMoments({
         onSave={(text, returnHook) =>
           submitCaptureText(text, selectedAreaId, returnHook)
         }
-        onSaveRaw={(text, returnHook) => {
-          submitCaptureRaw(text, selectedAreaId, returnHook);
-        }}
-        onResolved={(outcome) => {
+        onResolved={() => {
           // #556: the success toast only fires once the capture truly
-          // entered the pipeline (parsed, or a raw save the user actually
-          // resolved to) — never ahead of that truth.
-          showToast(outcome === "parsed" ? "Captured" : "Saved raw");
+          // entered the pipeline — never ahead of that truth. #703: one
+          // capture path, so one message, and it names where the thought
+          // went so the next step is obvious.
+          showToast("Captured — waiting in Triage");
           setCaptureOpen(false);
           // Clear the draft only after a successful save — Esc/close must
           // preserve it, so this write happens nowhere else.

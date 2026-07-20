@@ -2,36 +2,17 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CaptureOverlay } from "./CaptureOverlay";
-import type { CaptureParseState } from "@/lib/WorkflowContext";
-
-const IDLE: CaptureParseState = { phase: "idle" };
 
 describe("CaptureOverlay", () => {
   it("renders nothing when closed", () => {
     const { container } = render(
-      <CaptureOverlay
-        open={false}
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={vi.fn()}
-        onSaveRaw={vi.fn()}
-        onClose={vi.fn()}
-      />,
+      <CaptureOverlay open={false} onSave={vi.fn()} onClose={vi.fn()} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
 
   it("autofocuses the textarea when opened", async () => {
-    render(
-      <CaptureOverlay
-        open
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={vi.fn()}
-        onSaveRaw={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<CaptureOverlay open onSave={vi.fn()} onClose={vi.fn()} />);
     await waitFor(() => {
       expect(screen.getByTestId("capture-overlay-textarea")).toHaveFocus();
     });
@@ -39,16 +20,7 @@ describe("CaptureOverlay", () => {
 
   it("saves on Enter and clears the field", () => {
     const onSave = vi.fn();
-    render(
-      <CaptureOverlay
-        open
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={onSave}
-        onSaveRaw={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<CaptureOverlay open onSave={onSave} onClose={vi.fn()} />);
 
     const textarea = screen.getByTestId(
       "capture-overlay-textarea",
@@ -61,16 +33,7 @@ describe("CaptureOverlay", () => {
 
   it("saves the editable return hook with the capture", () => {
     const onSave = vi.fn();
-    render(
-      <CaptureOverlay
-        open
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={onSave}
-        onSaveRaw={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<CaptureOverlay open onSave={onSave} onClose={vi.fn()} />);
 
     fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
       target: { value: "Remember the renewal" },
@@ -90,16 +53,7 @@ describe("CaptureOverlay", () => {
 
   it("does not save on Shift+Enter", () => {
     const onSave = vi.fn();
-    render(
-      <CaptureOverlay
-        open
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={onSave}
-        onSaveRaw={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<CaptureOverlay open onSave={onSave} onClose={vi.fn()} />);
     const textarea = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -110,16 +64,7 @@ describe("CaptureOverlay", () => {
 
   it("closes on Escape while idle", () => {
     const onClose = vi.fn();
-    render(
-      <CaptureOverlay
-        open
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={vi.fn()}
-        onSaveRaw={vi.fn()}
-        onClose={onClose}
-      />,
-    );
+    render(<CaptureOverlay open onSave={vi.fn()} onClose={onClose} />);
     const textarea = screen.getByTestId("capture-overlay-textarea");
     fireEvent.keyDown(textarea, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -135,11 +80,8 @@ describe("CaptureOverlay", () => {
       render(
         <CaptureOverlay
           open
-          captureParse={IDLE}
-          onRetryWithMock={vi.fn()}
           initialText="half a thought"
           onSave={vi.fn()}
-          onSaveRaw={vi.fn()}
           onClose={vi.fn()}
         />,
       );
@@ -161,10 +103,7 @@ describe("CaptureOverlay", () => {
       render(
         <CaptureOverlay
           open
-          captureParse={IDLE}
-          onRetryWithMock={vi.fn()}
           onSave={vi.fn()}
-          onSaveRaw={vi.fn()}
           onClose={vi.fn()}
           onDraftChange={onDraftChange}
         />,
@@ -189,10 +128,7 @@ describe("CaptureOverlay", () => {
           </button>
           <CaptureOverlay
             open={open}
-            captureParse={IDLE}
-            onRetryWithMock={vi.fn()}
             onSave={vi.fn()}
-            onSaveRaw={vi.fn()}
             onClose={() => setOpen(false)}
           />
         </div>
@@ -217,16 +153,7 @@ describe("CaptureOverlay", () => {
     });
 
     it("traps Tab within the dialog", async () => {
-      render(
-        <CaptureOverlay
-          open
-          captureParse={IDLE}
-          onRetryWithMock={vi.fn()}
-          onSave={vi.fn()}
-          onSaveRaw={vi.fn()}
-          onClose={vi.fn()}
-        />,
-      );
+      render(<CaptureOverlay open onSave={vi.fn()} onClose={vi.fn()} />);
       await waitFor(() => {
         expect(screen.getByTestId("capture-overlay-textarea")).toHaveFocus();
       });
@@ -247,16 +174,7 @@ describe("CaptureOverlay", () => {
   // transitioned element must fall back to no motion for
   // prefers-reduced-motion users.
   it("scrim and dialog use motion tokens with reduced-motion fallbacks", () => {
-    render(
-      <CaptureOverlay
-        open
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={vi.fn()}
-        onSaveRaw={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<CaptureOverlay open onSave={vi.fn()} onClose={vi.fn()} />);
 
     const scrim = screen.getByTestId("capture-overlay-scrim");
     expect(scrim).toHaveClass("motion-reduce:transition-none");
@@ -273,197 +191,86 @@ describe("CaptureOverlay", () => {
   // SP-9: every tappable element reaches a >=44px effective hit area and
   // drops the 300ms double-tap delay on coarse pointers.
   it("the close button carries hit-area and touch-manipulation utilities", () => {
-    render(
-      <CaptureOverlay
-        open
-        captureParse={IDLE}
-        onRetryWithMock={vi.fn()}
-        onSave={vi.fn()}
-        onSaveRaw={vi.fn()}
-        onClose={vi.fn()}
-      />,
-    );
+    render(<CaptureOverlay open onSave={vi.fn()} onClose={vi.fn()} />);
 
     const closeButton = screen.getByTestId("capture-overlay-close");
     expect(closeButton).toHaveClass("min-h-[44px]");
     expect(closeButton).toHaveClass("touch-manipulation");
   });
 
-  // G1 floor follow-up: the "save raw" action, now always visible (not an
-  // optional prop) — #556 requires a visible parsed-save action to exist
-  // alongside it, not Enter-only.
-  describe("save raw", () => {
-    it("fires onSaveRaw with the trimmed text and hook, then clears", () => {
-      const onSave = vi.fn();
-      const onSaveRaw = vi.fn();
-      render(
-        <CaptureOverlay
-          open
-          captureParse={IDLE}
-          onRetryWithMock={vi.fn()}
-          onSave={onSave}
-          onSaveRaw={onSaveRaw}
-          onClose={vi.fn()}
-          onResolved={vi.fn()}
-        />,
-      );
+  // #703: one action. The overlay used to render a "save raw" button next
+  // to a parse-and-save button, and to own the whole FR-026 parse-wait
+  // containment sequence (raw text held through the wait, second submit
+  // blocked, degraded mock-retry offer). Capture no longer parses, so none
+  // of those states are reachable from here — the degraded/mock-retry path
+  // is proven at its new home in TriageSheet.test.tsx.
+  describe("#703 one capture action", () => {
+    it("renders a single save control and no save-raw alternative", () => {
+      render(<CaptureOverlay open onSave={vi.fn()} onClose={vi.fn()} />);
 
-      const textarea = screen.getByTestId(
-        "capture-overlay-textarea",
-      ) as HTMLTextAreaElement;
-      fireEvent.change(textarea, { target: { value: "  loose thought  " } });
+      expect(screen.getByTestId("capture-overlay-save")).toHaveTextContent(
+        "Capture",
+      );
+      expect(
+        screen.queryByTestId("capture-overlay-save-raw"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("clicking Capture saves the trimmed text and hook", () => {
+      const onSave = vi.fn();
+      render(<CaptureOverlay open onSave={onSave} onClose={vi.fn()} />);
+
+      fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
+        target: { value: "  loose thought  " },
+      });
       fireEvent.change(screen.getByTestId("capture-overlay-return-hook"), {
         target: { value: "back to planning" },
       });
-      fireEvent.click(screen.getByTestId("capture-overlay-save-raw"));
+      fireEvent.click(screen.getByTestId("capture-overlay-save"));
 
-      expect(onSaveRaw).toHaveBeenCalledWith(
-        "loose thought",
-        "back to planning",
-      );
-      // Save raw is the alternative to parse-and-save, not an addition to it.
-      expect(onSave).not.toHaveBeenCalled();
+      expect(onSave).toHaveBeenCalledWith("loose thought", "back to planning");
     });
 
-    it("does not fire onSaveRaw for empty or whitespace-only text", () => {
-      const onSaveRaw = vi.fn();
-      render(
-        <CaptureOverlay
-          open
-          captureParse={IDLE}
-          onRetryWithMock={vi.fn()}
-          onSave={vi.fn()}
-          onSaveRaw={onSaveRaw}
-          onClose={vi.fn()}
-        />,
-      );
+    it("does not save empty or whitespace-only text", () => {
+      const onSave = vi.fn();
+      render(<CaptureOverlay open onSave={onSave} onClose={vi.fn()} />);
+
       fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
         target: { value: "   " },
       });
-      fireEvent.click(screen.getByTestId("capture-overlay-save-raw"));
-      expect(onSaveRaw).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByTestId("capture-overlay-save"));
+
+      expect(onSave).not.toHaveBeenCalled();
     });
-  });
 
-  // #556 FR-026 containment — the sequence a parse-triggering save must
-  // follow: raw text + hook stay visible through the wait, no second
-  // submit is possible, a failed parse offers a synchronous choice (never
-  // fire-and-forget), and the flow ends with "back to: <hook>".
-  describe("#556 FR-026 containment", () => {
-    function ContainmentHarness({
-      onResolved = vi.fn(),
-    }: {
-      onResolved?: (outcome: string) => void;
-    }) {
-      const [captureParse, setCaptureParse] = useState<CaptureParseState>(IDLE);
-      const onRetryWithMock = vi.fn(() => {
-        setCaptureParse((current) =>
-          current.phase === "failed"
-            ? {
-                phase: "parsing",
-                captureId: current.captureId,
-                parserMode: "mock",
-              }
-            : current,
-        );
-      });
-      return (
-        <div>
-          <button
-            data-testid="resolve-parsed"
-            onClick={() =>
-              setCaptureParse((current) =>
-                current.phase === "parsing"
-                  ? {
-                      phase: "parsed",
-                      captureId: current.captureId,
-                      parser: "mock",
-                      status: "ai_unavailable",
-                    }
-                  : current,
-              )
-            }
-          >
-            resolve
-          </button>
-          <button
-            data-testid="fail-parse"
-            onClick={() =>
-              setCaptureParse((current) =>
-                current.phase === "parsing"
-                  ? {
-                      phase: "failed",
-                      captureId: current.captureId,
-                      status: "ai_unavailable",
-                      message: "Parsing failed safely.",
-                      canRetryWithMock: true,
-                    }
-                  : current,
-              )
-            }
-          >
-            fail
-          </button>
-          <CaptureOverlay
-            open
-            captureParse={captureParse}
-            onRetryWithMock={onRetryWithMock}
-            onSave={(text) => {
-              setCaptureParse({
-                phase: "parsing",
-                captureId: "cap-1",
-                parserMode: "auto",
-              });
-              return "cap-1";
-            }}
-            onSaveRaw={vi.fn()}
-            onClose={vi.fn()}
-            onResolved={(outcome) => onResolved(outcome)}
-          />
-        </div>
-      );
-    }
-
-    it("keeps the raw text and hook visible through the wait and blocks a second submit", async () => {
-      render(<ContainmentHarness />);
+    it("shows no parse wait and no degraded offer", () => {
+      render(<CaptureOverlay open onSave={vi.fn()} onClose={vi.fn()} />);
 
       fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
         target: { value: "Follow up with Alex" },
-      });
-      fireEvent.change(screen.getByTestId("capture-overlay-return-hook"), {
-        target: { value: "the weekly review" },
       });
       fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
         key: "Enter",
       });
 
-      // t=0..resolve: raw text and hook stay fully visible, not cleared.
       expect(
-        (screen.getByTestId("capture-overlay-textarea") as HTMLTextAreaElement)
-          .value,
-      ).toBe("Follow up with Alex");
+        screen.queryByTestId("capture-overlay-parsing"),
+      ).not.toBeInTheDocument();
       expect(
-        (screen.getByTestId("capture-overlay-return-hook") as HTMLInputElement)
-          .value,
-      ).toBe("the weekly review");
-      expect(screen.getByTestId("capture-overlay-parsing")).toBeVisible();
-
-      // No new capture can begin: both save actions and Close are disabled.
-      expect(screen.getByTestId("capture-overlay-save")).toBeDisabled();
-      expect(screen.getByTestId("capture-overlay-save-raw")).toBeDisabled();
-      expect(screen.getByTestId("capture-overlay-close")).toBeDisabled();
-
-      // Escape is swallowed while a parse is in flight — never abandons the
-      // return-hook context mid-wait.
-      fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
-        key: "Escape",
-      });
-      expect(screen.getByTestId("capture-overlay-textarea")).toBeVisible();
+        screen.queryByTestId("capture-overlay-degraded"),
+      ).not.toBeInTheDocument();
     });
 
-    it("shows the 'back to: <hook>' conclusion once the parse resolves", async () => {
+    it("still ends with the 'back to: <hook>' conclusion", async () => {
       const onResolved = vi.fn();
-      render(<ContainmentHarness onResolved={onResolved} />);
+      render(
+        <CaptureOverlay
+          open
+          onSave={vi.fn()}
+          onClose={vi.fn()}
+          onResolved={onResolved}
+        />,
+      );
 
       fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
         target: { value: "Follow up with Alex" },
@@ -474,82 +281,12 @@ describe("CaptureOverlay", () => {
       fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
         key: "Enter",
       });
-
-      fireEvent.click(screen.getByTestId("resolve-parsed"));
 
       await waitFor(() => {
         expect(
           screen.getByTestId("capture-overlay-conclusion"),
         ).toHaveTextContent("back to: the weekly review");
       });
-
-      // #591: auto-dismiss dwell is now a materially perceivable ~2.5s
-      // (CaptureCore's CONCLUSION_AUTO_DISMISS_MS) — give the real-timer
-      // waitFor headroom past RTL's 1000ms default.
-      await waitFor(
-        () => {
-          expect(onResolved).toHaveBeenCalledWith("parsed");
-        },
-        { timeout: 4000 },
-      );
-    });
-
-    it("the conclusion is human-perceptible: it survives the old 450ms mark and explicit dismissal (click) resolves it immediately (#591)", () => {
-      vi.useFakeTimers();
-      try {
-        const onResolved = vi.fn();
-        render(<ContainmentHarness onResolved={onResolved} />);
-
-        fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
-          target: { value: "Follow up with Alex" },
-        });
-        fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
-          key: "Enter",
-        });
-        fireEvent.click(screen.getByTestId("resolve-parsed"));
-
-        expect(
-          screen.getByTestId("capture-overlay-conclusion"),
-        ).toBeInTheDocument();
-
-        // Still visible well past the old 450ms auto-dismiss.
-        vi.advanceTimersByTime(450);
-        expect(
-          screen.getByTestId("capture-overlay-conclusion"),
-        ).toBeInTheDocument();
-        expect(onResolved).not.toHaveBeenCalled();
-
-        // Explicit dismissal resolves it immediately, without waiting out
-        // the rest of the dwell.
-        fireEvent.click(screen.getByTestId("capture-overlay-conclusion"));
-        expect(onResolved).toHaveBeenCalledWith("parsed");
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("offers a synchronous mock-retry or keep-as-raw choice when the parse fails, never fire-and-forget", async () => {
-      render(<ContainmentHarness />);
-
-      fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
-        target: { value: "Follow up with Alex" },
-      });
-      fireEvent.keyDown(screen.getByTestId("capture-overlay-textarea"), {
-        key: "Enter",
-      });
-
-      fireEvent.click(screen.getByTestId("fail-parse"));
-
-      const degraded = await screen.findByTestId("capture-overlay-degraded");
-      expect(degraded).toHaveTextContent("Parsing failed safely.");
-      expect(screen.getByTestId("capture-overlay-retry-mock")).toBeVisible();
-      expect(screen.getByTestId("capture-overlay-keep-raw")).toBeVisible();
-
-      // The raw text is still visible — nothing was lost while degraded.
-      expect(
-        (screen.getByTestId("capture-overlay-textarea") as HTMLTextAreaElement)
-          .value,
-      ).toBe("Follow up with Alex");
     });
   });
 });

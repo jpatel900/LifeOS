@@ -83,17 +83,21 @@ export interface WorkflowContextValue {
   refreshPersistedWorkflow: () => Promise<void>;
   addArea: (name: string, color: string) => void;
   updateAreaColor: (areaId: string, color: string) => void;
+  // #703: the one capture path. Persists the thought verbatim and never
+  // parses — sorting is the separate `sortCaptureIntoDrafts` step below.
+  // (Absorbed the former `submitCaptureRaw`, which did exactly this.)
   submitCaptureText: (
     rawText: string,
     areaId: string | null,
     returnHook?: string | null,
   ) => void;
-  // G1 floor follow-up: persist the thought verbatim, skipping the AI parse
-  // (parsed later at triage). Same offline behavior as submitCaptureText.
-  submitCaptureRaw: (
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
+  // #703: sort an already-captured item into task/project drafts, on demand
+  // from triage. Reuses the existing parse path end to end; reports progress
+  // and failure through `captureParse` below, exactly as the capture surface
+  // used to. Never called automatically.
+  sortCaptureIntoDrafts: (
+    captureId: string,
+    parserMode?: "auto" | "mock",
   ) => void;
   captureParse: CaptureParseState;
   retryCaptureParseWithMock: () => void;

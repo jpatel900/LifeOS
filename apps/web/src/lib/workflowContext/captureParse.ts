@@ -224,9 +224,11 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
       );
   }
 
-  // Stage + persist the raw capture item WITHOUT parsing it. Shared by the
-  // parse-and-save path (submitCaptureText) and the explicit save-raw path
-  // (submitCaptureRaw); the caller decides whether to parse the returned item.
+  // Stage + persist the raw capture item WITHOUT parsing it. Since #703 this
+  // is what capture *is* — the single `submitCaptureText` path calls it and
+  // nothing else parses at capture time. Parsing a stored capture is a
+  // separate, later, explicit step (`sortCaptureIntoDrafts`, driven from
+  // triage).
   function stageAndPersistRawCapture(
     rawText: string,
     areaId: string | null,
@@ -251,46 +253,58 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
     return localCapture;
   }
 
+  // #703 (owner-ratified 2026-07-19): the ONE capture path. Capture is now a
+  // pure raw save — it persists the thought verbatim and never starts a parse.
+  // Sorting a capture into drafts moved to an explicit triage action
+  // (`sortCaptureIntoDrafts` below), so the front door has no AI wait, no
+  // parse failure to handle, and no second button to choose between. This
+  // absorbed the former `submitCaptureRaw`: both buttons already called
+  // `stageAndPersistRawCapture` and produced the identical capture item, so
+  // collapsing them removes a fork, not a capability.
+  //
+  // Deliberately carries NO `captureParse.phase === "parsing"` guard: a sort
+  // running in triage must never block capturing a new thought — they are
+  // different surfaces now, and a capture that cannot be written is the one
+  // failure this app must never have (FR-027).
   function submitCaptureText(
     rawText: string,
     areaId: string | null,
     returnHook?: string | null,
   ) {
-    if (captureParse.phase === "parsing") {
-      stageAndPersistRawCapture(rawText, areaId, returnHook);
-      return;
-    }
-
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      enqueueOfflineCapture(rawText, areaId, returnHook);
-      return;
-    }
-
-    const localCapture = stageAndPersistRawCapture(rawText, areaId, returnHook);
-    if (localCapture) {
-      void parseCaptureIntoDrafts(localCapture, "auto");
-    }
-  }
-
-  // G1 floor follow-up: explicit "save raw" — persist the thought verbatim and
-  // SKIP the AI parse. The raw capture item lands in the spine and is parsed
-  // later at triage, exactly like the offline→reconnect path. Gives the operator
-  // control (and speed: no parse wait) when a thought should not be auto-drafted.
-  function submitCaptureRaw(
-    rawText: string,
-    areaId: string | null,
-    returnHook?: string | null,
-  ) {
-    if (captureParse.phase === "parsing") {
-      return;
-    }
-
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       enqueueOfflineCapture(rawText, areaId, returnHook);
       return;
     }
 
     stageAndPersistRawCapture(rawText, areaId, returnHook);
+  }
+
+  // #703: the relocated parse trigger. Drives the EXISTING
+  // `parseCaptureIntoDrafts` over an already-persisted capture item — the same
+  // function, the same `/api/parse-capture` route, the same NS-INV-1
+  // context-assembly authority path the capture surface used to reach. Nothing
+  // about how untrusted capture text is delimited changes by moving the
+  // trigger (INV-8): this function never assembles a prompt, it only names
+  // which stored capture to send.
+  //
+  // On-demand only — called from a user tap in triage, never on a timer, on
+  // mount, or from a sync. One sort at a time (FR-026: no parse queue).
+  function sortCaptureIntoDrafts(
+    captureId: string,
+    parserMode: ParseCaptureParserMode = "auto",
+  ) {
+    if (captureParse.phase === "parsing") {
+      return;
+    }
+
+    const capture = stateRef.current.captureItems.find(
+      (item) => item.id === captureId,
+    );
+    if (!capture) {
+      return;
+    }
+
+    void parseCaptureIntoDrafts(capture, parserMode);
   }
 
   function retryCaptureParseWithMock() {
@@ -312,7 +326,7 @@ export function createCaptureParseOps(deps: CaptureParseDeps) {
     parseCaptureIntoDrafts,
     stageAndPersistRawCapture,
     submitCaptureText,
-    submitCaptureRaw,
+    sortCaptureIntoDrafts,
     retryCaptureParseWithMock,
   };
 }
