@@ -87,19 +87,6 @@ export function requireSupabaseServiceRoleClient() {
   return client;
 }
 
-/**
- * LOW-1 (#670): thrown whenever the caller's bearer token is missing, invalid,
- * or expired. Distinguishing this by TYPE (not by pattern-matching the thrown
- * message) is what lets every route map auth failures to 401 without ever
- * inspecting — or echoing — the raw Supabase Auth error string.
- */
-export class SupabaseAuthRejectedError extends Error {
-  constructor(message = "Sign in before using this server action.") {
-    super(message);
-    this.name = "SupabaseAuthRejectedError";
-  }
-}
-
 export async function requireSupabaseServerUser(accessToken: string) {
   assertServerRuntime();
 
@@ -112,14 +99,11 @@ export async function requireSupabaseServerUser(accessToken: string) {
   const { data, error } = await client.auth.getUser();
 
   if (error) {
-    // The raw Supabase Auth error (e.g. "invalid claim: missing sub claim",
-    // "JWT expired") is logged by the caller, never returned to the client —
-    // see SupabaseAuthRejectedError's doc comment above.
-    throw new SupabaseAuthRejectedError(error.message);
+    throw new Error(error.message);
   }
 
   if (!data.user) {
-    throw new SupabaseAuthRejectedError();
+    throw new Error("Sign in before using this server action.");
   }
 
   return {

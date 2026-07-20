@@ -163,15 +163,6 @@ test.describe("44px hit-target inventory at 390px (#594) — onboarding", () => 
 });
 
 test.describe("44px hit-target inventory at 390px (#594) — /capture route", () => {
-  // #687: this legacy cockpit surface is only reachable under the #590
-  // rollback config (NEXT_PUBLIC_MOMENTS_HOME=false for server AND runner);
-  // the route redirects to the moments home otherwise. AGENT-TODO(#687):
-  // migrate to the moments surfaces, then retire with the legacy code.
-  test.skip(
-    process.env.NEXT_PUBLIC_MOMENTS_HOME !== "false",
-    "#687: legacy cockpit route redirects under the shipping config",
-  );
-
   // No zero-state seed here: the demo provider's default seeded areas keep
   // CaptureView's textarea enabled (disabledReason only fires with zero
   // areas — that path is exercised by the onboarding describe above, whose
@@ -229,15 +220,6 @@ async function captureTask(
 }
 
 test.describe("44px hit-target inventory at 390px (#615) — Plan stage", () => {
-  // #687: this legacy cockpit surface is only reachable under the #590
-  // rollback config (NEXT_PUBLIC_MOMENTS_HOME=false for server AND runner);
-  // the route redirects to the moments home otherwise. AGENT-TODO(#687):
-  // migrate to the moments surfaces, then retire with the legacy code.
-  test.skip(
-    process.env.NEXT_PUBLIC_MOMENTS_HOME !== "false",
-    "#687: legacy cockpit route redirects under the shipping config",
-  );
-
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
   });
@@ -265,15 +247,6 @@ test.describe("44px hit-target inventory at 390px (#615) — Plan stage", () => 
 });
 
 test.describe("44px hit-target inventory at 390px (#615) — Review stage", () => {
-  // #687: this legacy cockpit surface is only reachable under the #590
-  // rollback config (NEXT_PUBLIC_MOMENTS_HOME=false for server AND runner);
-  // the route redirects to the moments home otherwise. AGENT-TODO(#687):
-  // migrate to the moments surfaces, then retire with the legacy code.
-  test.skip(
-    process.env.NEXT_PUBLIC_MOMENTS_HOME !== "false",
-    "#687: legacy cockpit route redirects under the shipping config",
-  );
-
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
   });

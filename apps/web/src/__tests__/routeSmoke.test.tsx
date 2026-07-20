@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { isValidElement, type ReactElement, type ReactNode } from "react";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import HomePage from "../app/page";
 import CapturePage from "../app/capture/page";
 import CalendarPage from "../app/calendar/page";
@@ -34,21 +34,6 @@ function expectElement(value: unknown) {
 }
 
 describe("handoff cockpit route provider wiring", () => {
-  // #687: the demoted stage pages are redirect shims when the moments home is
-  // live; the cockpit renders they assert require the #590 rollback config.
-  // The `/` moments test below re-enables the flag inside its own body.
-  const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
-  beforeEach(() => {
-    process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
-  });
-  afterAll(() => {
-    if (ORIGINAL_MOMENTS_HOME === undefined) {
-      delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-    } else {
-      process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
-    }
-  });
-
   it("keeps the root html/body layout delegated to the client app shell", () => {
     const probe = <span data-testid="layout-probe" />;
     const root = expectElement(RootLayout({ children: probe }));
@@ -64,12 +49,7 @@ describe("handoff cockpit route provider wiring", () => {
   // Post go-live (P7d), `/` renders the moments home; the demoted stage routes
   // below still render the shared cockpit and stay wired through the provider.
   it("renders / through the moments home with one h1 and a first-focusable skip link", async () => {
-    // Moments home is the live `/`: lift the rollback pin for this test only.
-    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-    const { container } = renderThroughAppShell(
-      await HomePage({ searchParams: Promise.resolve({}) }),
-      "/",
-    );
+    const { container } = renderThroughAppShell(<HomePage />, "/");
 
     expect(await screen.findByTestId("today-moments")).toBeDefined();
     expect(screen.queryByTestId("lifeos-cockpit")).toBeNull();

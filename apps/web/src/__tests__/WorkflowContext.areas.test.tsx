@@ -1,35 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
-
-// #687: the demoted stage pages (/capture, /triage, /execute, ...) are
-// redirect shims into the moments home under the shipping config. This suite
-// exercises the cockpit surfaces themselves, which render only under the
-// #590 rollback (NEXT_PUBLIC_MOMENTS_HOME=false) — pin that config here.
-const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
-beforeEach(() => {
-  // beforeEach, not beforeAll: process.env is process-global and shared by
-  // every test file in a vitest worker, so re-pin before each test rather
-  // than once per file.
-  process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
-});
-afterAll(() => {
-  if (ORIGINAL_MOMENTS_HOME === undefined) {
-    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-  } else {
-    process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
-  }
-});
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/capture",
@@ -181,12 +154,6 @@ const persistedTask = {
 let restoreParseCaptureFetch: () => void;
 
 beforeEach(() => {
-  // #691: the provider now persists the area selection (and has always
-  // persisted the workflow state) to sessionStorage — each test must start
-  // from clean storage or one test's stored selection hydrates into the
-  // next (same pattern as cockpitPlanFlow.test.tsx).
-  window.sessionStorage.clear();
-  window.localStorage.clear();
   restoreParseCaptureFetch = stubParseCaptureFetch();
   mockListAreas.mockResolvedValue({
     provider: "supabase",

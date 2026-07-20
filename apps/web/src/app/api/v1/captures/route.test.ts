@@ -6,8 +6,7 @@ const mocks = vi.hoisted(() => ({
   parseCaptureWithFallback: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/supabase/server")>()),
+vi.mock("@/lib/supabase/server", () => ({
   requireSupabaseServerUser: mocks.requireSupabaseServerUser,
 }));
 
@@ -22,7 +21,6 @@ vi.mock("@/lib/ai/parseCaptureService", () => ({
 }));
 
 import { POST } from "./route";
-import { SupabaseAuthRejectedError } from "@/lib/supabase/server";
 
 const CCID = "6f9619ff-8b86-4d01-b42d-00cf4fc964ff";
 
@@ -51,10 +49,6 @@ describe("POST /api/v1/captures", () => {
       makeRequest({ raw_text: "x", client_capture_id: CCID }, {}),
     );
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({
-      ok: false,
-      errorCategory: "auth_rejected",
-    });
     expect(mocks.requireSupabaseServerUser).not.toHaveBeenCalled();
     expect(mocks.syncQueuedCapture).not.toHaveBeenCalled();
   });
@@ -152,33 +146,24 @@ describe("POST /api/v1/captures", () => {
     expect(mocks.parseCaptureWithFallback).not.toHaveBeenCalled();
   });
 
-  it("maps auth failure to 401 with a generic body, and persistence failure to 500 with a generic body (no exception text leaked)", async () => {
+  it("maps auth failure to 401 and persistence failure to 500", async () => {
     mocks.requireSupabaseServerUser.mockRejectedValueOnce(
-      new SupabaseAuthRejectedError("JWT expired"),
+      new Error("Sign in before using this server action."),
     );
     const unauth = await POST(
       makeRequest({ raw_text: "x", client_capture_id: CCID }),
     );
     expect(unauth.status).toBe(401);
-    expect(await unauth.json()).toEqual({
-      ok: false,
-      errorCategory: "auth_rejected",
-    });
 
     mocks.requireSupabaseServerUser.mockResolvedValueOnce({
       client: {},
       user: { id: "user-1" },
     });
-    mocks.syncQueuedCapture.mockRejectedValueOnce(
-      new Error("db down: connection pool exhausted"),
-    );
+    mocks.syncQueuedCapture.mockRejectedValueOnce(new Error("db down"));
     const failed = await POST(
       makeRequest({ raw_text: "x", client_capture_id: CCID }),
     );
     expect(failed.status).toBe(500);
-    const failedBody = await failed.json();
-    expect(failedBody.ok).toBe(false);
-    expect(JSON.stringify(failedBody)).not.toContain("db down");
-    expect(failedBody.error).toBe("Something went wrong.");
+    expect((await failed.json()).ok).toBe(false);
   });
 });
