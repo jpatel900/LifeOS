@@ -88,7 +88,9 @@ export type {
 // --- taskMap ---
 export {
   TASK_MAP_DRAFT_POLICY_ID,
+  TASK_MAP_REVISION_POLICY_ID,
   recordTaskMapDraftSuggestion,
+  rejectTaskMapSuggestionFireAndForget,
   approveTaskMap,
   setTaskMapNodeCompletion,
 } from "./workflow/taskMap";

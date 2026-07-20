@@ -53,6 +53,50 @@ function renderClose(
   return props;
 }
 
+/** Same defaults as `renderClose`, but exposes a typed `rerender` for the
+ * one-offer precedence test (which asserts across a prop change). */
+function renderCloseWithRerender(
+  overrides: Partial<React.ComponentProps<typeof CloseMoment>> = {},
+) {
+  const buildProps = (
+    next: Partial<React.ComponentProps<typeof CloseMoment>>,
+  ) =>
+    ({
+      vm: baseVm,
+      pendingWins: [] as CloseWinVM[],
+      confirmedWins: [] as { title: string; areaLabel: string }[],
+      pendingRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["pendingRollups"],
+      approvedRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["approvedRollups"],
+      onCloseDay: vi.fn(),
+      onCarryForward: vi.fn(),
+      onConfirmWin: vi.fn(),
+      onSkipWin: vi.fn(),
+      onApproveRollup: vi.fn(),
+      onDismissRollup: vi.fn(),
+      onToggleRollupProse: vi.fn(),
+      pendingMonthlyRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["pendingMonthlyRollups"],
+      approvedMonthlyRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["approvedMonthlyRollups"],
+      onApproveMonthlyRollup: vi.fn(),
+      onDismissMonthlyRollup: vi.fn(),
+      onToggleMonthlyRollupProse: vi.fn(),
+      ...next,
+    }) satisfies React.ComponentProps<typeof CloseMoment>;
+
+  const view = render(<CloseMoment {...buildProps(overrides)} />);
+  return {
+    rerender: (next: Partial<React.ComponentProps<typeof CloseMoment>>) =>
+      view.rerender(<CloseMoment {...buildProps(next)} />),
+  };
+}
+
 // R2-D (issue #483 round 2) then R3-B (round 3): the stats card used to be
 // a hard `grid grid-cols-2` full-bleed box holding exactly two numbers — a
 // full-bleed box whose content fills only ~56% of it reads as
@@ -491,6 +535,144 @@ describe("CloseMoment — #486 monthly rollup readback", () => {
     expect(
       screen.queryByTestId("close-moment-monthly-rollup-mom-area-1"),
     ).toBeNull();
+  });
+});
+
+// FR-031 slice F5 (#679) — the single Close map-revision surface.
+describe("CloseMoment — F5 map-revision offer", () => {
+  const offerVm = {
+    offer: {
+      taskTitle: "Ship the report",
+      signals: [
+        {
+          kind: "cut_scope" as const,
+          detail: "You trimmed what this task needs to finish.",
+        },
+      ],
+    },
+    draftState: { phase: "idle" as const },
+    currentGraph: null,
+    onPropose: vi.fn(),
+    onDismissOffer: vi.fn(),
+    onApprove: vi.fn(),
+    onDismissDraft: vi.fn(),
+  };
+
+  it("renders nothing without the optional taskMapRevision VM", () => {
+    renderClose();
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the named one-line offer and wires tap/dismiss", () => {
+    const onPropose = vi.fn();
+    const onDismissOffer = vi.fn();
+    renderClose({
+      taskMapRevision: { ...offerVm, onPropose, onDismissOffer },
+    });
+
+    expect(screen.getByTestId("taskmap-revision-offer")).toHaveTextContent(
+      "The map for “Ship the report” may be out of date.",
+    );
+    fireEvent.click(screen.getByTestId("taskmap-revision-offer-propose"));
+    expect(onPropose).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId("taskmap-revision-offer-dismiss"));
+    expect(onDismissOffer).toHaveBeenCalledTimes(1);
+  });
+
+  it("swaps the offer for the pending line while a draft is in flight", () => {
+    renderClose({
+      taskMapRevision: {
+        ...offerVm,
+        draftState: { phase: "pending" as const },
+      },
+    });
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId("taskmap-close-revision-pending"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the diff-mode review with Replace/Keep labels once ready", () => {
+    const draft = {
+      schema_version: "1.0" as const,
+      nodes: [{ id: "a", title: "First", role: "required" as const }],
+      edges: [],
+    };
+    renderClose({
+      taskMapRevision: {
+        ...offerVm,
+        draftState: { phase: "ready" as const, draft },
+        currentGraph: { nodes: draft.nodes, edges: [] },
+      },
+    });
+    expect(screen.getByTestId("taskmap-draft-review")).toBeInTheDocument();
+    expect(screen.getByTestId("taskmap-draft-approve")).toHaveTextContent(
+      "Replace the map",
+    );
+  });
+
+  it("shows the failure note without ever claiming the map changed", () => {
+    renderClose({
+      taskMapRevision: {
+        ...offerVm,
+        draftState: {
+          phase: "failed" as const,
+          message: "Couldn't draft a map right now.",
+        },
+      },
+    });
+    expect(
+      screen.getByTestId("taskmap-close-revision-failed"),
+    ).toHaveTextContent("Your current map is unchanged.");
+  });
+
+  // ONE-OFFER-PER-CLOSE precedence (#692 progressive disclosure): the
+  // purpose-gauge check-in and the map-revision offer must never stack.
+  // The check-in wins — it is time-boxed to rare FR-033 sample days, while
+  // a map revision keeps until acted on and is also offered in Flow.
+  it("hides the map-revision offer while the purpose-gauge check-in is showing", () => {
+    renderClose({
+      taskMapRevision: offerVm,
+      purposeGaugeOffered: true,
+      onPurposeGaugeCheckIn: vi.fn(),
+    });
+
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the map-revision offer once the check-in is answered or not offered", () => {
+    const { rerender } = renderCloseWithRerender({
+      taskMapRevision: offerVm,
+      purposeGaugeOffered: true,
+      onPurposeGaugeCheckIn: vi.fn(),
+    });
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+
+    // Answering the check-in frees the slot in-view.
+    fireEvent.click(screen.getByTestId("close-moment-purpose-gauge-even"));
+    expect(screen.getByTestId("taskmap-revision-offer")).toBeInTheDocument();
+
+    // And on a non-sample day the revision offer is the only ask.
+    rerender({
+      taskMapRevision: offerVm,
+      purposeGaugeOffered: false,
+      onPurposeGaugeCheckIn: vi.fn(),
+    });
+    expect(screen.getByTestId("taskmap-revision-offer")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("close-moment-purpose-gauge"),
+    ).not.toBeInTheDocument();
   });
 });
 

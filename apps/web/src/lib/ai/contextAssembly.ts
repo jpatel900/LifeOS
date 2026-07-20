@@ -129,11 +129,11 @@ export const AI_CONTEXT_SURFACE_DECLARATIONS = {
   },
   task_map_draft: {
     builderName: "buildTaskMapDraftMessages",
-    fixtureId: "task-map.max-structural-shape.v1",
-    measuredTokensEstimated: 1199,
-    maxTokensEstimated: 1225,
+    fixtureId: "task-map.max-structural-shape.v2",
+    measuredTokensEstimated: 1400,
+    maxTokensEstimated: 1425,
     justification:
-      "fixture_id=task-map.max-structural-shape.v1; measured_tokens_est=1199; max_tokens_est=1225; rationale=Exercises task fields, maximum graph shape, breakdown, and revision metadata with reviewed headroom for prompt maintenance; re-measured for the #678 two_minute_move prompt line (one opening-move guidance line added; max unchanged).",
+      "fixture_id=task-map.max-structural-shape.v2; measured_tokens_est=1400; max_tokens_est=1425; rationale=Exercises task fields, maximum graph shape, breakdown, and revision metadata with reviewed headroom for prompt maintenance; re-measured for the #679 evidence-triggered revision contract (evidence-handling system line, per-node estimate/opening-move annotations carried back, and a maximum four-signal evidence block added; max raised accordingly).",
   },
 } as const satisfies Record<AiContextSurfaceId, AiContextSurfaceDeclaration>;
 
@@ -435,6 +435,15 @@ export interface TaskMapDraftCurrentMapNodeContext {
    * blind. Data-only, like every other current-map field. */
   red_reason?: string | null;
   red_condition?: string | null;
+  /** FR-031 slice F5 (#679): the approved per-node estimate, carried back
+   * so an evidence-driven revision can re-estimate against what was
+   * approved rather than guessing blind. Data-only. */
+  estimated_minutes?: number | null;
+  /** FR-031 slice F5 (#679, closes the #685 AGENT-TODO): the currently
+   * approved opening-move flag, carried back so a revision keeps the
+   * committed first move unless the evidence says it is wrong — F4's regen
+   * re-nominated it from scratch. Data-only. */
+  two_minute_move?: boolean;
 }
 
 export interface TaskMapDraftCurrentMapEdgeContext {
@@ -447,6 +456,21 @@ export interface TaskMapDraftCurrentMapContext {
   edges: TaskMapDraftCurrentMapEdgeContext[];
 }
 
+/**
+ * FR-031 slice F5 (#679) — one reduced execution-evidence signal, computed
+ * by the deterministic kernel (`lib/taskmap/revision.ts`) BEFORE any AI
+ * call. Data-only prompt input: the AI is told what happened, never asked
+ * to detect it, and its output stays the same strict draft wire schema.
+ */
+export interface TaskMapDraftRevisionSignalContext {
+  kind: string;
+  detail: string;
+}
+
+export interface TaskMapDraftRevisionEvidenceContext {
+  signals: TaskMapDraftRevisionSignalContext[];
+}
+
 export interface TaskMapDraftPromptInput {
   title: string;
   description?: string | null;
@@ -457,6 +481,10 @@ export interface TaskMapDraftPromptInput {
   /** FR-031 slice 8 — present only for a regeneration request (an
    * already-approved map exists). Absent/null for a first-time draft. */
   currentMap?: TaskMapDraftCurrentMapContext | null;
+  /** FR-031 slice F5 (#679) — present only for an evidence-triggered
+   * revision request (offer tapped at node-completion or Close). Absent
+   * for first-time drafts and plain user-requested regens. */
+  revisionEvidence?: TaskMapDraftRevisionEvidenceContext | null;
 }
 
 const taskMapDraftSystemPrompt = [
@@ -474,6 +502,7 @@ const taskMapDraftSystemPrompt = [
   "Node ids must be short, unique, stable slugs (for example step-1, gather-inputs).",
   "Keep node titles concrete and non-shaming.",
   "When a current map is provided, this is a REVISION request, not a fresh decomposition: redraft the whole graph from scratch, but reuse a prior node's exact id and title for any step that still belongs, especially ones already marked done — do not needlessly rename or drop completed work. You never set or unset completion yourself; the current map's done state is context only.",
+  "When execution evidence is provided with a revision request, address it directly: reorder, split, merge, re-estimate, drop, or add steps so the map matches what actually happened. Keep the current map's two_minute_move node marked unless the evidence shows that opening move was wrong, and keep a node's approved estimated_minutes unless the evidence is about its duration.",
 ].join("\n");
 
 function formatCurrentMapNodes(
@@ -488,7 +517,17 @@ function formatCurrentMapNodes(
               : ""
           }]`
         : "";
-    return `- ${node.id} (${node.role}${node.done ? ", done" : ""}): ${node.title}${redNote}`;
+    // FR-031 slice F5 (#679): approved estimate + opening-move flag ride
+    // along so a revision starts from what was approved (#685 AGENT-TODO).
+    const minutes =
+      typeof node.estimated_minutes === "number" &&
+      Number.isFinite(node.estimated_minutes) &&
+      node.estimated_minutes > 0
+        ? `, ~${node.estimated_minutes}m`
+        : "";
+    const openingMove =
+      node.two_minute_move === true ? ", two_minute_move" : "";
+    return `- ${node.id} (${node.role}${node.done ? ", done" : ""}${minutes}${openingMove}): ${node.title}${redNote}`;
   });
 }
 
@@ -545,6 +584,15 @@ export function buildTaskMapDraftMessages(
               ...formatCurrentMapNodes(input.currentMap.nodes),
               "Current approved map — edges:",
               ...formatCurrentMapEdges(input.currentMap.edges),
+            ]
+          : []),
+        ...(input.currentMap && input.revisionEvidence?.signals.length
+          ? [
+              "",
+              "Execution evidence observed since approval (address it in the revision):",
+              ...input.revisionEvidence.signals.map(
+                (signal) => `- ${signal.kind}: ${signal.detail}`,
+              ),
             ]
           : []),
       ].join("\n"),

@@ -15,6 +15,29 @@ import type {
   RollupDraftVM,
 } from "./momentsViewModel";
 import { formatRollupCountsComparison } from "./momentsViewModel";
+import type { TaskMapGraph } from "@/lib/taskmap/graph";
+import type { RevisionSignal } from "@/lib/taskmap/revision";
+import { TaskMapDraftReview } from "./TaskMapDraftReview";
+import { TaskMapRevisionOfferCard } from "./TaskMapRevisionOfferCard";
+import type { TaskMapDraftUiState } from "./TaskMapSection";
+
+/**
+ * FR-031 slice F5 (#679) — everything the Close moment needs to surface
+ * the single evidence-triggered map-revision offer, bundled into ONE
+ * optional prop so the addition stays trivially additive. `offer` is the
+ * kernel-approved one-liner (at most one per Close — see
+ * `CLOSE_REVISION_OFFER_LIMIT`); `draftState`/`currentGraph` drive the
+ * diff-mode review once the offer is tapped.
+ */
+export interface CloseTaskMapRevisionVM {
+  offer: { taskTitle: string; signals: RevisionSignal[] } | null;
+  draftState: TaskMapDraftUiState;
+  currentGraph: TaskMapGraph | null;
+  onPropose(): void;
+  onDismissOffer(): void;
+  onApprove(graph: TaskMapGraph & { schema_version: "1.0" | "1.1" }): void;
+  onDismissDraft(): void;
+}
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -85,6 +108,19 @@ export interface CloseMomentProps {
   // signal). Optional so existing/mock call sites are unaffected.
   purposeGaugeOffered?: boolean;
   onPurposeGaugeCheckIn?: (response: PurposeGaugeResponse) => void;
+  // FR-031 slice F5 (#679): optional map-revision offer surface (at most
+  // one per Close). Omitted in mock/preview shells.
+  //
+  // ONE-OFFER PRECEDENCE (#692 progressive disclosure): the purpose-gauge
+  // check-in and the map-revision offer can both qualify on the same Close.
+  // Two asks stacked on one calm screen is exactly the overload the plain-
+  // visibility doctrine forbids, so at most ONE renders and the check-in
+  // WINS: it is time-boxed to FR-033 sample days (rare, and the day's data
+  // is lost if not taken), whereas a map revision stays eligible until the
+  // evidence is acted on and is also offered at node-completion in Flow.
+  // The suppressed revision offer is not consumed — it simply re-qualifies
+  // at the next Close (its own daily cap is only written when it renders).
+  taskMapRevision?: CloseTaskMapRevisionVM | null;
 }
 
 // FR-033's 3-point scale, plain and calm (owner plain-language doctrine):
@@ -116,6 +152,7 @@ export function CloseMoment({
   onToggleMonthlyRollupProse,
   purposeGaugeOffered,
   onPurposeGaugeCheckIn,
+  taskMapRevision = null,
 }: CloseMomentProps) {
   // Inline edits to a candidate's title before it is confirmed. Keyed by
   // taskId; absent means "use the candidate's original title".
@@ -132,6 +169,49 @@ export function CloseMoment({
 
   return (
     <div className="grid gap-6" data-testid="close-moment">
+      {/* FR-031 slice F5 (#679): the single Close map-revision surface —
+          the one-line offer, then (after a tap) the diff-mode review.
+          Fully additive: renders nothing unless the caller passed the
+          optional taskMapRevision VM and the kernel produced an offer.
+          Second gate on `showPurposeGauge` (see the one-offer precedence
+          note on `taskMapRevision` above): the parent already suppresses
+          the kernel on a check-in day, and this keeps the two asks from
+          ever stacking even if a caller wires them independently. */}
+      {taskMapRevision?.offer &&
+      taskMapRevision.draftState.phase === "idle" &&
+      !showPurposeGauge ? (
+        <TaskMapRevisionOfferCard
+          signals={taskMapRevision.offer.signals}
+          taskTitle={taskMapRevision.offer.taskTitle}
+          onPropose={taskMapRevision.onPropose}
+          onDismiss={taskMapRevision.onDismissOffer}
+        />
+      ) : null}
+      {taskMapRevision?.draftState.phase === "pending" ? (
+        <p
+          className="m-0 text-xs text-muted-foreground"
+          data-testid="taskmap-close-revision-pending"
+        >
+          Preparing an updated map to review…
+        </p>
+      ) : null}
+      {taskMapRevision?.draftState.phase === "failed" ? (
+        <p
+          className="m-0 text-xs text-muted-foreground"
+          data-testid="taskmap-close-revision-failed"
+        >
+          {taskMapRevision.draftState.message} Your current map is unchanged.
+        </p>
+      ) : null}
+      {taskMapRevision && taskMapRevision.draftState.phase === "ready" ? (
+        <TaskMapDraftReview
+          draft={taskMapRevision.draftState.draft}
+          onApprove={taskMapRevision.onApprove}
+          onDismiss={taskMapRevision.onDismissDraft}
+          isRevision
+          currentGraph={taskMapRevision.currentGraph}
+        />
+      ) : null}
       {/* R3-B (issue #483 round 3): R2-D correctly de-hollowed the stats
           card (952px full-bleed -> `w-fit` content-hugging) but that fix
           created a new regression — the stats card, the full-width Carry

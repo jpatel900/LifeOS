@@ -315,4 +315,84 @@ describe("buildTaskMapDraftMessages (FR-031 slice 8 regen input)", () => {
       "You never set or unset completion yourself",
     );
   });
+
+  // FR-031 slice F5 (#679) — evidence-triggered revision prompt input.
+  it("carries the approved estimate and opening-move flag back into the current-map lines (#685 AGENT-TODO)", () => {
+    const [, userMessage] = buildTaskMapDraftMessages({
+      ...baseInput,
+      currentMap: {
+        nodes: [
+          {
+            id: "step-1",
+            title: "Gather inputs",
+            role: "required",
+            done: true,
+            estimated_minutes: 25,
+            two_minute_move: true,
+          },
+          { id: "step-2", title: "Do the work", role: "required" },
+        ],
+        edges: [{ from: "step-1", to: "step-2" }],
+      },
+    });
+
+    expect(userMessage.content).toContain(
+      "- step-1 (required, done, ~25m, two_minute_move): Gather inputs",
+    );
+    expect(userMessage.content).toContain("- step-2 (required): Do the work");
+  });
+
+  it("appends the execution-evidence block only when a revision request carries signals", () => {
+    const currentMap = {
+      nodes: [
+        { id: "step-1", title: "Gather inputs", role: "required" as const },
+      ],
+      edges: [],
+    };
+    const evidenceLine =
+      "Execution evidence observed since approval (address it in the revision):";
+
+    const [, plainRegen] = buildTaskMapDraftMessages({
+      ...baseInput,
+      currentMap,
+    });
+    expect(plainRegen.content).not.toContain(evidenceLine);
+
+    const [, withEvidence] = buildTaskMapDraftMessages({
+      ...baseInput,
+      currentMap,
+      revisionEvidence: {
+        signals: [
+          {
+            kind: "duration_drift",
+            detail: "A work session took 60 minutes instead of about 20.",
+          },
+        ],
+      },
+    });
+    expect(withEvidence.content).toContain(evidenceLine);
+    expect(withEvidence.content).toContain(
+      "- duration_drift: A work session took 60 minutes instead of about 20.",
+    );
+  });
+
+  it("never emits the evidence block without a current map (evidence requires a revision)", () => {
+    const [, userMessage] = buildTaskMapDraftMessages({
+      ...baseInput,
+      revisionEvidence: {
+        signals: [{ kind: "blocker", detail: "x" }],
+      },
+    });
+    expect(userMessage.content).not.toContain("Execution evidence observed");
+  });
+
+  it("keeps the first-time draft output byte-identical when no evidence input is supplied", () => {
+    const before = buildTaskMapDraftMessages(baseInput);
+    const after = buildTaskMapDraftMessages({
+      ...baseInput,
+      currentMap: null,
+      revisionEvidence: null,
+    });
+    expect(after).toEqual(before);
+  });
 });

@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   approveTaskMap,
   recordTaskMapDraftSuggestion,
+  rejectTaskMapSuggestionFireAndForget,
   setTaskMapNodeCompletion,
   TASK_MAP_DRAFT_POLICY_ID,
+  TASK_MAP_REVISION_POLICY_ID,
   type MinimalSupabaseClient,
 } from "./workflow";
 
@@ -121,6 +123,82 @@ describe("recordTaskMapDraftSuggestion", () => {
     );
 
     expect(result).toEqual({ provider: "supabase", suggestionId: null });
+    warn.mockRestore();
+  });
+
+  // FR-031 slice F5 (#679): evidence-triggered revisions are measurable
+  // under their own policy id.
+  it("writes the task_map_revision.v1 policy id when the caller passes it", async () => {
+    const single = vi
+      .fn()
+      .mockResolvedValue({ data: { id: suggestionId }, error: null });
+    const select = vi.fn().mockReturnValue({ single });
+    const insert = vi.fn().mockReturnValue({ select });
+    const from = vi.fn().mockReturnValue({ insert });
+
+    await recordTaskMapDraftSuggestion(authenticatedClient(from), {
+      area_id: areaId,
+      task_id: taskId,
+      node_counts: { required: 2, optional: 0, red: 0 },
+      node_titles: ["Gather inputs", "Do the work"],
+      generated_from: "revision",
+      policy_identifier: TASK_MAP_REVISION_POLICY_ID,
+    });
+
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policy_identifier: TASK_MAP_REVISION_POLICY_ID,
+        suggestion_json: expect.objectContaining({
+          generated_from: "revision",
+        }),
+      }),
+    );
+  });
+});
+
+// FR-031 slice F5 (#679): rejecting a revision proposal flips ONLY the
+// suggestion row — no tasks-table write can even be attempted here.
+describe("rejectTaskMapSuggestionFireAndForget", () => {
+  it("updates the suggestion row to rejected and never touches tasks", async () => {
+    const eq = vi.fn().mockResolvedValue({ data: null, error: null });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+    const client = authenticatedClient(from);
+
+    rejectTaskMapSuggestionFireAndForget(
+      client,
+      suggestionId,
+      "2026-07-18T10:00:00.000Z",
+    );
+    // Fire-and-forget: give the detached promise a tick to run.
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 0));
+
+    expect(from).toHaveBeenCalledWith("suggestion_records");
+    expect(from).not.toHaveBeenCalledWith("tasks");
+    expect(update).toHaveBeenCalledWith({
+      status: "rejected",
+      decided_by: "user",
+      resolved_at: "2026-07-18T10:00:00.000Z",
+    });
+    expect(eq).toHaveBeenCalledWith("id", suggestionId);
+  });
+
+  it("contains a failed write without throwing (learning-write failure never breaks dismiss)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const eq = vi
+      .fn()
+      .mockResolvedValue({ data: null, error: { message: "update failed" } });
+    const update = vi.fn().mockReturnValue({ eq });
+    const from = vi.fn().mockReturnValue({ update });
+
+    expect(() =>
+      rejectTaskMapSuggestionFireAndForget(
+        authenticatedClient(from),
+        suggestionId,
+        "2026-07-18T10:00:00.000Z",
+      ),
+    ).not.toThrow();
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 0));
     warn.mockRestore();
   });
 });

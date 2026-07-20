@@ -13,6 +13,7 @@ import {
 import type { FlowVM } from "./momentsViewModel";
 import type { ProgressionNode } from "./progressionNodes";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
+import type { RevisionSignal } from "@/lib/taskmap/revision";
 import { momentKeyLabel } from "@/lib/keys/keymap";
 
 /**
@@ -74,6 +75,11 @@ export interface FlowMomentProps {
     graph: TaskMapGraph & { schema_version: "1.0" | "1.1" },
   ): void;
   onToggleTaskMapNodeCompletion(nodeId: string): void;
+  /** FR-031 slice F5 (#679): post-node-completion revision offer for the
+   * focused task, plus its tap/dismiss handlers. */
+  taskMapRevisionOffer?: { signals: RevisionSignal[] } | null;
+  onProposeTaskMapRevision?(): void;
+  onDismissTaskMapRevisionOffer?(): void;
   /** #572: the active task's committed opening move, or null when unset. */
   firstTinyStep: string | null;
   onUpdateFirstTinyStep(value: string): void;
@@ -97,6 +103,9 @@ export function FlowMoment({
   onDismissTaskMapDraft,
   onApproveTaskMapDraft,
   onToggleTaskMapNodeCompletion,
+  taskMapRevisionOffer = null,
+  onProposeTaskMapRevision,
+  onDismissTaskMapRevisionOffer,
   firstTinyStep,
   onUpdateFirstTinyStep,
 }: FlowMomentProps) {
@@ -172,6 +181,9 @@ export function FlowMoment({
         onDismissDraft={onDismissTaskMapDraft}
         onApproveDraft={onApproveTaskMapDraft}
         onToggleNodeCompletion={onToggleTaskMapNodeCompletion}
+        revisionOffer={taskMapRevisionOffer}
+        onProposeRevision={onProposeTaskMapRevision}
+        onDismissRevisionOffer={onDismissTaskMapRevisionOffer}
       />
     </div>
   );

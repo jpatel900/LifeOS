@@ -28,7 +28,11 @@ import { CaptureOverlay } from "./CaptureOverlay";
 import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
 import { StartMoment } from "./StartMoment";
 import { FlowMoment } from "./FlowMoment";
-import { CloseMoment } from "./CloseMoment";
+import { CloseMoment, type CloseTaskMapRevisionVM } from "./CloseMoment";
+import { useTaskMapCloseRevisionOffer } from "./useTaskMapCloseRevisionOffer";
+import type { TaskMapDraftUiState } from "./TaskMapSection";
+import type { TaskMapGraph } from "@/lib/taskmap/graph";
+import { validateTaskMapForPersistence } from "@/lib/taskmap/persistence";
 import { useReEntryRitual } from "./useReEntryRitual";
 import { ReEntryRitual, type RecoveryCandidate } from "./ReEntryRitual";
 import {
@@ -482,6 +486,9 @@ export function TodayMoments({
     handleRequestTaskMapDraft,
     handleApproveTaskMapDraft,
     handleToggleTaskMapNodeCompletion,
+    revisionOfferForSection,
+    handleProposeRevision,
+    handleDismissRevisionOffer,
     finishFocus,
     endSessionOpen,
     setEndSessionOpen,
@@ -537,6 +544,85 @@ export function TodayMoments({
     confirmRollup,
     listApprovedRollups,
   });
+
+  // FR-031 slice F5 (#679): the single Close map-revision offer — kernel
+  // decision latched per Close visit; tapping it is the only AI spend.
+  // ONE-OFFER-PER-CLOSE precedence (#692): the FR-033 purpose-gauge check-in
+  // wins when both qualify (it is time-boxed to rare sample days; a map
+  // revision keeps until acted on and is also offered in Flow). Suppression
+  // runs before the kernel, so the revision's daily cap is not spent unseen.
+  const {
+    offer: closeRevisionOffer,
+    clearOffer: clearCloseRevisionOffer,
+    dismissOffer: dismissCloseRevisionOffer,
+  } = useTaskMapCloseRevisionOffer({
+    state,
+    active: moment === "close",
+    suppressed: purposeGaugeOffered,
+  });
+
+  const closeTaskMapRevision = useMemo<CloseTaskMapRevisionVM | null>(() => {
+    if (moment !== "close" || !closeRevisionOffer) {
+      return null;
+    }
+    const task = state.tasks.find(
+      (item) => item.id === closeRevisionOffer.taskId,
+    );
+    if (!task) {
+      return null;
+    }
+
+    let currentGraph: TaskMapGraph | null = null;
+    if (task.map_status === "approved" && task.progression_map) {
+      const validated = validateTaskMapForPersistence(task.progression_map);
+      if (validated.ok) {
+        currentGraph = validated.graph as TaskMapGraph;
+      }
+    }
+
+    const draftState: TaskMapDraftUiState =
+      taskMapDraft.phase === "idle" ||
+      taskMapDraft.taskId !== closeRevisionOffer.taskId
+        ? { phase: "idle" }
+        : taskMapDraft.phase === "pending"
+          ? { phase: "pending" }
+          : taskMapDraft.phase === "ready"
+            ? { phase: "ready", draft: taskMapDraft.draft }
+            : { phase: "failed", message: taskMapDraft.message };
+
+    return {
+      offer: {
+        taskTitle: closeRevisionOffer.taskTitle,
+        signals: closeRevisionOffer.signals,
+      },
+      draftState,
+      currentGraph,
+      onPropose: () => {
+        void requestTaskMapDraft(closeRevisionOffer.taskId, {
+          revisionSignals: closeRevisionOffer.signals,
+        });
+      },
+      onDismissOffer: dismissCloseRevisionOffer,
+      onApprove: (graph) => {
+        clearCloseRevisionOffer();
+        void approveTaskMapDraft(closeRevisionOffer.taskId, graph);
+      },
+      onDismissDraft: () => {
+        clearCloseRevisionOffer();
+        dismissTaskMapDraft();
+      },
+    };
+  }, [
+    moment,
+    closeRevisionOffer,
+    state.tasks,
+    taskMapDraft,
+    requestTaskMapDraft,
+    approveTaskMapDraft,
+    dismissTaskMapDraft,
+    clearCloseRevisionOffer,
+    dismissCloseRevisionOffer,
+  ]);
 
   const handleDrillPipeline = useCallback(
     (stage: string) => {
@@ -1066,6 +1152,9 @@ export function TodayMoments({
               onDismissTaskMapDraft={dismissTaskMapDraft}
               onApproveTaskMapDraft={handleApproveTaskMapDraft}
               onToggleTaskMapNodeCompletion={handleToggleTaskMapNodeCompletion}
+              taskMapRevisionOffer={revisionOfferForSection}
+              onProposeTaskMapRevision={handleProposeRevision}
+              onDismissTaskMapRevisionOffer={handleDismissRevisionOffer}
               firstTinyStep={focusedTask?.first_tiny_step ?? null}
               onUpdateFirstTinyStep={(value) => {
                 if (!focusedTask) return;
@@ -1096,6 +1185,7 @@ export function TodayMoments({
               onToggleMonthlyRollupProse={handleToggleMonthlyRollupProse}
               purposeGaugeOffered={purposeGaugeOffered}
               onPurposeGaugeCheckIn={handlePurposeGaugeCheckIn}
+              taskMapRevision={closeTaskMapRevision}
             />
           ) : null}
         </>

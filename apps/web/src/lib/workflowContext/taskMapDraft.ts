@@ -15,7 +15,12 @@ import type { Area } from "@lifeos/schemas";
 import { requestTaskMapDraft as fetchTaskMapDraft } from "../ai/taskMapDraftClient";
 import { validateTaskMapForPersistence } from "../taskmap/persistence";
 import type { TaskMapGraph } from "../taskmap/graph";
-import { approveTaskMap, setTaskMapNodeCompletion } from "../data/workflow";
+import type { RevisionSignal } from "../taskmap/revision";
+import {
+  approveTaskMap,
+  rejectTaskMapSuggestionFireAndForget,
+  setTaskMapNodeCompletion,
+} from "../data/workflow";
 import { createSupabaseBrowserClient } from "../supabase/browser";
 import type { WorkflowState } from "../workflow";
 import {
@@ -66,106 +71,157 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
   // only ever called from an explicit user action, never a background
   // effect). Keyed to `taskId` so a stale draft from a previously focused
   // task never renders against the wrong task.
-  const requestTaskMapDraftAction = useCallback(async (taskId: string) => {
-    const task = stateRef.current.tasks.find((item) => item.id === taskId);
-    if (!task) return;
+  const requestTaskMapDraftAction = useCallback(
+    async (
+      taskId: string,
+      options?: { revisionSignals?: RevisionSignal[] },
+    ) => {
+      const task = stateRef.current.tasks.find((item) => item.id === taskId);
+      if (!task) return;
 
-    const setDraft = (next: TaskMapDraftState) => {
-      taskMapDraftRef.current = next;
-      setTaskMapDraft(next);
-    };
+      // FR-031 slice F5 (#679): a tapped evidence offer becomes a revision
+      // request — same on-demand pipeline, its own policy id server-side.
+      const origin =
+        options?.revisionSignals && options.revisionSignals.length > 0
+          ? ("revision" as const)
+          : undefined;
 
-    setDraft({ phase: "pending", taskId });
+      const setDraft = (next: TaskMapDraftState) => {
+        taskMapDraftRef.current = next;
+        setTaskMapDraft(next);
+      };
 
-    // Best-effort bearer token; the route requires one and 401s (as an
-    // ordinary ok:false) without it, so a missing/expired session degrades
-    // to the usual failed-draft notice rather than throwing.
-    let authorization: string | undefined;
-    try {
-      const authClient = createSupabaseBrowserClient();
-      if (authClient) {
-        const { data } = await authClient.auth.getSession();
-        const accessToken = data.session?.access_token?.trim();
-        if (accessToken) {
-          authorization = `Bearer ${accessToken}`;
+      setDraft({ phase: "pending", taskId, ...(origin ? { origin } : {}) });
+
+      // Best-effort bearer token; the route requires one and 401s (as an
+      // ordinary ok:false) without it, so a missing/expired session degrades
+      // to the usual failed-draft notice rather than throwing.
+      let authorization: string | undefined;
+      try {
+        const authClient = createSupabaseBrowserClient();
+        if (authClient) {
+          const { data } = await authClient.auth.getSession();
+          const accessToken = data.session?.access_token?.trim();
+          if (accessToken) {
+            authorization = `Bearer ${accessToken}`;
+          }
+        }
+      } catch {
+        // Tracing/auth is best-effort; fall through to an unauthenticated call.
+      }
+
+      const persistedAreaId = task.area_id
+        ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
+        : null;
+
+      // FR-031 slice 8: an already-approved map turns this generation call
+      // into a regeneration — send the current map (nodes/edges/completion)
+      // as data alongside the request so the prompt can offer it as context
+      // (contextAssembly.ts). The client already holds the approved graph
+      // locally; no extra read is needed.
+      let currentMap: NonNullable<
+        Parameters<typeof fetchTaskMapDraft>[0]["currentMap"]
+      > | null = null;
+      if (task.map_status === "approved" && task.progression_map) {
+        const validatedCurrent = validateTaskMapForPersistence(
+          task.progression_map,
+        );
+        if (validatedCurrent.ok) {
+          currentMap = {
+            nodes: validatedCurrent.graph.nodes.map((node) => ({
+              id: node.id,
+              title: node.title,
+              role: node.role,
+              done: node.done === true || Boolean(node.completed_at),
+              red_reason: node.red_reason ?? null,
+              red_condition: node.red_condition ?? null,
+              // FR-031 slice F5 (#679): carry the approved estimate and
+              // opening-move flag back to the prompt (#685 AGENT-TODO).
+              estimated_minutes: node.estimated_minutes ?? null,
+              two_minute_move: node.two_minute_move === true,
+            })),
+            edges: validatedCurrent.graph.edges.map((edge) => ({
+              from: edge.from,
+              to: edge.to,
+            })),
+          };
         }
       }
-    } catch {
-      // Tracing/auth is best-effort; fall through to an unauthenticated call.
-    }
 
-    const persistedAreaId = task.area_id
-      ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
-      : null;
+      const result = await fetchTaskMapDraft({
+        taskId,
+        areaId: persistedAreaId,
+        title: task.title,
+        description: task.description ?? null,
+        definitionOfDone: task.definition_of_done ?? null,
+        firstTinyStep: task.first_tiny_step ?? null,
+        authorization,
+        currentMap,
+        // A revision without a current approved map degrades to a plain
+        // draft request (the route rejects evidence without currentMap).
+        revision:
+          origin === "revision" && currentMap && options?.revisionSignals
+            ? {
+                signals: options.revisionSignals.map((signal) => ({
+                  kind: signal.kind,
+                  detail: signal.detail,
+                })),
+              }
+            : null,
+      });
 
-    // FR-031 slice 8: an already-approved map turns this generation call
-    // into a regeneration — send the current map (nodes/edges/completion)
-    // as data alongside the request so the prompt can offer it as context
-    // (contextAssembly.ts). The client already holds the approved graph
-    // locally; no extra read is needed.
-    let currentMap: NonNullable<
-      Parameters<typeof fetchTaskMapDraft>[0]["currentMap"]
-    > | null = null;
-    if (task.map_status === "approved" && task.progression_map) {
-      const validatedCurrent = validateTaskMapForPersistence(
-        task.progression_map,
-      );
-      if (validatedCurrent.ok) {
-        currentMap = {
-          nodes: validatedCurrent.graph.nodes.map((node) => ({
-            id: node.id,
-            title: node.title,
-            role: node.role,
-            done: node.done === true || Boolean(node.completed_at),
-            red_reason: node.red_reason ?? null,
-            red_condition: node.red_condition ?? null,
-          })),
-          edges: validatedCurrent.graph.edges.map((edge) => ({
-            from: edge.from,
-            to: edge.to,
-          })),
-        };
+      // Ignore a stale response if the focused task changed mid-flight.
+      if (
+        taskMapDraftRef.current.phase !== "pending" ||
+        taskMapDraftRef.current.taskId !== taskId
+      ) {
+        return;
+      }
+
+      if (!result.ok) {
+        setDraft({
+          phase: "failed",
+          taskId,
+          message: SAFE_TASK_MAP_FAILURE_MESSAGE,
+        });
+        return;
+      }
+
+      setDraft({
+        phase: "ready",
+        taskId,
+        draft: result.draft,
+        suggestionRecordId: result.suggestionRecordId,
+        ...(origin && currentMap ? { origin } : {}),
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure
+    [],
+  );
+
+  const dismissTaskMapDraftAction = useCallback(() => {
+    const current = taskMapDraftRef.current;
+
+    // FR-031 slice F5 (#679): rejecting an evidence-triggered revision
+    // proposal resolves its pending suggestion_records row to "rejected"
+    // (fire-and-forget, fully contained). Nothing else is written — the
+    // approved map bytes are untouched, and ordinary drafts/regens keep
+    // their slice-5 dismiss (no resolution write) unchanged.
+    if (
+      current.phase === "ready" &&
+      current.origin === "revision" &&
+      current.suggestionRecordId
+    ) {
+      const client = createSupabaseBrowserClient();
+      if (client) {
+        rejectTaskMapSuggestionFireAndForget(
+          client,
+          current.suggestionRecordId,
+          new Date().toISOString(),
+        );
       }
     }
 
-    const result = await fetchTaskMapDraft({
-      taskId,
-      areaId: persistedAreaId,
-      title: task.title,
-      description: task.description ?? null,
-      definitionOfDone: task.definition_of_done ?? null,
-      firstTinyStep: task.first_tiny_step ?? null,
-      authorization,
-      currentMap,
-    });
-
-    // Ignore a stale response if the focused task changed mid-flight.
-    if (
-      taskMapDraftRef.current.phase !== "pending" ||
-      taskMapDraftRef.current.taskId !== taskId
-    ) {
-      return;
-    }
-
-    if (!result.ok) {
-      setDraft({
-        phase: "failed",
-        taskId,
-        message: SAFE_TASK_MAP_FAILURE_MESSAGE,
-      });
-      return;
-    }
-
-    setDraft({
-      phase: "ready",
-      taskId,
-      draft: result.draft,
-      suggestionRecordId: result.suggestionRecordId,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure
-  }, []);
-
-  const dismissTaskMapDraftAction = useCallback(() => {
     taskMapDraftRef.current = { phase: "idle" };
     setTaskMapDraft({ phase: "idle" });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above

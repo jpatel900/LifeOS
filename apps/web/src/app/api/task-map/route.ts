@@ -4,6 +4,8 @@ import {
 } from "@/lib/ai/taskMapDraftService";
 import {
   recordTaskMapDraftSuggestion,
+  TASK_MAP_DRAFT_POLICY_ID,
+  TASK_MAP_REVISION_POLICY_ID,
   type MinimalSupabaseClient,
 } from "@/lib/data/workflow";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -52,6 +54,11 @@ interface CurrentMapNodeInput {
   done?: boolean;
   red_reason?: string | null;
   red_condition?: string | null;
+  /** FR-031 slice F5 (#679): approved estimate carried back as prompt data. */
+  estimated_minutes?: number | null;
+  /** FR-031 slice F5 (#679, closes the #685 AGENT-TODO): the approved
+   * opening-move flag carried back as prompt data. */
+  two_minute_move?: boolean;
 }
 
 interface CurrentMapEdgeInput {
@@ -62,6 +69,25 @@ interface CurrentMapEdgeInput {
 interface CurrentMapInput {
   nodes: CurrentMapNodeInput[];
   edges: CurrentMapEdgeInput[];
+}
+
+const REVISION_SIGNAL_KINDS = [
+  "out_of_order_completion",
+  "duration_drift",
+  "cut_scope",
+  "blocker",
+] as const;
+
+const MAX_REVISION_SIGNALS = 8;
+const MAX_REVISION_DETAIL_LENGTH = 200;
+
+interface RevisionSignalInput {
+  kind: (typeof REVISION_SIGNAL_KINDS)[number];
+  detail: string;
+}
+
+interface RevisionInput {
+  signals: RevisionSignalInput[];
 }
 
 interface TaskMapRequestBody {
@@ -77,6 +103,12 @@ interface TaskMapRequestBody {
    * regeneration of an already-approved map (explicit user action; this
    * route stays on-demand-only either way). */
   currentMap: CurrentMapInput | null;
+  /** FR-031 slice F5 (#679) — present only for an evidence-triggered
+   * revision request (offer tapped at node-completion or Close). Signals
+   * are computed client-side by the deterministic kernel and treated as
+   * bounded prompt DATA here; the route stays stateless and still returns
+   * the same wire schema. Requires `currentMap`. */
+  revision: RevisionInput | null;
 }
 
 function parseRequestBody(body: unknown): TaskMapRequestBody {
@@ -196,6 +228,13 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
           typeof nodeRecord.red_condition === "string"
             ? nodeRecord.red_condition
             : null,
+        estimated_minutes:
+          typeof nodeRecord.estimated_minutes === "number" &&
+          Number.isFinite(nodeRecord.estimated_minutes) &&
+          nodeRecord.estimated_minutes > 0
+            ? nodeRecord.estimated_minutes
+            : null,
+        two_minute_move: nodeRecord.two_minute_move === true,
       };
     });
 
@@ -218,6 +257,52 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     currentMap = { nodes, edges };
   }
 
+  let revision: RevisionInput | null = null;
+  if (record.revision !== undefined && record.revision !== null) {
+    if (typeof record.revision !== "object") {
+      throw new Error("revision must be an object when provided.");
+    }
+    if (!currentMap) {
+      throw new Error("revision requires currentMap.");
+    }
+    const revisionRecord = record.revision as Record<string, unknown>;
+    if (!Array.isArray(revisionRecord.signals)) {
+      throw new Error("revision.signals must be an array.");
+    }
+    if (
+      revisionRecord.signals.length === 0 ||
+      revisionRecord.signals.length > MAX_REVISION_SIGNALS
+    ) {
+      throw new Error(
+        `revision.signals must contain 1-${MAX_REVISION_SIGNALS} entries.`,
+      );
+    }
+    const signals = revisionRecord.signals.map((signal) => {
+      if (
+        !signal ||
+        typeof signal !== "object" ||
+        typeof (signal as Record<string, unknown>).detail !== "string" ||
+        !REVISION_SIGNAL_KINDS.includes(
+          (signal as Record<string, unknown>)
+            .kind as RevisionSignalInput["kind"],
+        )
+      ) {
+        throw new Error(
+          "revision.signals entries require a known kind and a detail string.",
+        );
+      }
+      const signalRecord = signal as Record<string, unknown>;
+      return {
+        kind: signalRecord.kind as RevisionSignalInput["kind"],
+        detail: (signalRecord.detail as string).slice(
+          0,
+          MAX_REVISION_DETAIL_LENGTH,
+        ),
+      };
+    });
+    revision = { signals };
+  }
+
   return {
     taskId: record.taskId.trim(),
     areaId: typeof record.areaId === "string" ? record.areaId : null,
@@ -233,6 +318,7 @@ function parseRequestBody(body: unknown): TaskMapRequestBody {
     breakdownSteps,
     parserMode,
     currentMap,
+    revision,
   };
 }
 
@@ -329,6 +415,7 @@ export async function POST(request: Request) {
         firstTinyStep: input.firstTinyStep,
         breakdownSteps: input.breakdownSteps,
         currentMap: input.currentMap,
+        revisionEvidence: input.revision,
       },
       {
         forceMock,
@@ -359,7 +446,17 @@ export async function POST(request: Request) {
       node_counts: countNodesByRole(result.draft.nodes),
       node_titles: result.draft.nodes.map((node) => node.title),
       confidence: null,
-      generated_from: input.currentMap ? "regen" : "initial",
+      // FR-031 slice F5 (#679): evidence-triggered revisions are measurable
+      // separately (their own policy id); manual regens and first drafts
+      // keep the slice-4/8 instrumentation unchanged.
+      generated_from: input.revision
+        ? "revision"
+        : input.currentMap
+          ? "regen"
+          : "initial",
+      policy_identifier: input.revision
+        ? TASK_MAP_REVISION_POLICY_ID
+        : TASK_MAP_DRAFT_POLICY_ID,
     });
 
     return Response.json({
