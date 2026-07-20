@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { buildCockpitAccentStyle } from "@/lib/cockpit/accent";
+import { resolveSelectedArea } from "@/lib/areaAccent";
 import { momentKeyLabel } from "@/lib/keys/keymap";
 import { cn } from "@/lib/utils";
 import { useMomentKeyboard } from "./useMomentKeyboard";
@@ -32,6 +35,12 @@ import {
   createBriefViewRecorder,
   type BriefViewRecorder,
 } from "@/lib/reEntry/briefView";
+import {
+  localDayStamp,
+  recordPurposeGaugeCheckinFireAndForget,
+  shouldOfferPurposeGaugeCheckin,
+} from "@/lib/purpose/purposeGaugeCheckin";
+import type { PurposeGaugeResponse } from "@/lib/purpose/purposeGaugePolicy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useOnboardingRitual } from "./useOnboardingRitual";
 import { OnboardingRitual } from "./OnboardingRitual";
@@ -65,6 +74,28 @@ import { useCloseMomentRollups } from "./useCloseMomentRollups";
 
 const PREFERENCES_KEY = "lifeos.moments.preferences";
 const CAPTURE_DRAFT_KEY = "lifeos.moments.captureDraft";
+// FR-047 slice 2 (#686): the local day (YYYY-MM-DD) a purpose-gauge check-in
+// was last taken, so the optional Close offer doesn't re-appear after it was
+// answered that day. A decline never writes this — it stays re-offerable,
+// which is fine for an asked-only surface (FR-033).
+const PURPOSE_GAUGE_KEY = "lifeos.moments.purposeGaugeLastChecked";
+
+function readPurposeGaugeLastChecked(): string | null {
+  try {
+    return window.localStorage.getItem(PURPOSE_GAUGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writePurposeGaugeLastChecked(day: string): void {
+  try {
+    window.localStorage.setItem(PURPOSE_GAUGE_KEY, day);
+  } catch {
+    // Blocked storage (private mode, quota) — the offer may re-appear later
+    // the same day, harmless: a re-tap is a DB no-op (append-only PK).
+  }
+}
 const TOAST_DURATION_MS = 2500;
 // SP-6: undo over confirm. A toast carrying an Undo action stays up longer
 // (6s) than a plain acknowledgement (2.5s) — the extra time is the reading
@@ -182,6 +213,23 @@ export function TodayMoments({
     };
   }, [nowProp]);
   const now = nowProp ?? autoNow;
+
+  // #690 Part 2: the moments home is area-scoped (selectedAreaId drives every
+  // stage view model below). Mirror LifeOSCockpit's screen-accent wiring so
+  // the --acc token family (emphasis borders, progression rail, schedule and
+  // pipeline tints — all `var(--acc)` consumers) takes the active area's color
+  // at this scoped container instead of the fixed .lifeos-cockpit default.
+  // Same buildCockpitAccentStyle the stage routes use, so the home and the
+  // stage agree on the accent for a given area. Mounted guard mirrors
+  // MomentsThemeShell: default dark until next-themes resolves, so the SSR and
+  // first-client style strings match (no hydration mismatch). The base --acc
+  // is dark-independent; only the surface/ring derivations settle on mount.
+  const { resolvedTheme } = useTheme();
+  const [accentThemeMounted, setAccentThemeMounted] = useState(false);
+  useEffect(() => {
+    setAccentThemeMounted(true);
+  }, []);
+
   const {
     state,
     selectedAreaId,
@@ -228,6 +276,22 @@ export function TodayMoments({
     ritual.status === "deferring" || ritual.status === "ready";
 
   const [recoverySwapIndex, setRecoverySwapIndex] = useState(0);
+
+  // #690 Part 2: resolve the active area the same way the stage cockpit does
+  // (`activeArea ?? areas[0]`, via resolveSelectedArea) so an "All areas"
+  // selection lands on the same default accent as the stage routes.
+  const accentAreaColor = resolveSelectedArea(
+    state.areas,
+    selectedAreaId,
+  )?.color;
+  const accentStyle = useMemo(
+    () =>
+      buildCockpitAccentStyle(
+        accentAreaColor,
+        !accentThemeMounted || resolvedTheme !== "light",
+      ),
+    [accentAreaColor, accentThemeMounted, resolvedTheme],
+  );
 
   const startVM = useMemo(
     () => buildStartVM(state, { now, selectedAreaId }),
@@ -300,6 +364,32 @@ export function TodayMoments({
       now,
     );
   }, [startMomentShowing, now]);
+
+  // FR-047 slice 2 / FR-033 (#686): the optional Close purpose-gauge check-in.
+  // Read the last-checked local day once (localStorage, mount-only) so an
+  // answered check-in stays hidden the rest of that day; gating itself lives
+  // in the shipped `shouldOfferPurposeGaugeCheckin` policy wrapper. Recording
+  // is fire-and-forget and skipped silently in demo mode.
+  const [purposeGaugeLastChecked, setPurposeGaugeLastChecked] = useState<
+    string | null
+  >(() => readPurposeGaugeLastChecked());
+  const purposeGaugeOffered = shouldOfferPurposeGaugeCheckin(
+    now,
+    purposeGaugeLastChecked,
+  );
+  const handlePurposeGaugeCheckIn = useCallback(
+    (response: PurposeGaugeResponse) => {
+      const checkedOn = localDayStamp(now);
+      recordPurposeGaugeCheckinFireAndForget(
+        createSupabaseBrowserClient(),
+        checkedOn,
+        response,
+      );
+      writePurposeGaugeLastChecked(checkedOn);
+      setPurposeGaugeLastChecked(checkedOn);
+    },
+    [now],
+  );
 
   // P6 deep-link shims: apply the incoming deepLink target exactly once. If
   // the re-entry ritual is active OR merely eligible-but-not-yet-latched
@@ -727,7 +817,7 @@ export function TodayMoments({
   );
 
   return (
-    <div className="grid gap-6" data-testid="today-moments">
+    <div className="grid gap-6" data-testid="today-moments" style={accentStyle}>
       {onboardingActive ? (
         // #581: the onboarding ritual stands in for the moments content the
         // same way the re-entry ritual does; completing (or skipping) it
@@ -1004,6 +1094,8 @@ export function TodayMoments({
               onApproveMonthlyRollup={handleApproveMonthlyRollup}
               onDismissMonthlyRollup={handleDismissMonthlyRollup}
               onToggleMonthlyRollupProse={handleToggleMonthlyRollupProse}
+              purposeGaugeOffered={purposeGaugeOffered}
+              onPurposeGaugeCheckIn={handlePurposeGaugeCheckIn}
             />
           ) : null}
         </>

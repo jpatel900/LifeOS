@@ -24,6 +24,7 @@ export const USER_DATA_EXPORT_TABLES = [
   "health_incidents",
   "ai_call_traces",
   "brief_views",
+  "purpose_gauge_checkins",
 ] as const;
 
 export type UserDataExportTable = (typeof USER_DATA_EXPORT_TABLES)[number];

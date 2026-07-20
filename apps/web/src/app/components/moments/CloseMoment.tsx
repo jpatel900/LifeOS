@@ -4,6 +4,10 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  PURPOSE_GAUGE_RESPONSES,
+  type PurposeGaugeResponse,
+} from "@/lib/purpose/purposeGaugePolicy";
 import type {
   CloseVM,
   MonthOverMonthReadbackVM,
@@ -73,7 +77,23 @@ export interface CloseMomentProps {
   onApproveMonthlyRollup(draft: MonthlyRollupDraftVM): void;
   onDismissMonthlyRollup(areaId: string): void;
   onToggleMonthlyRollupProse?(areaId: string): void;
+  // FR-047 slice 2 / FR-033 (#686): the optional one-tap purpose-gauge
+  // check-in. Present ONLY on FR-033 sample days when no check-in was taken
+  // yet today — the parent gates it via `shouldOfferPurposeGaugeCheckin`. A
+  // frictionless decline is simply never tapping: that records nothing
+  // (FR-033: a skipped or absent check is never counted, shown, or treated as
+  // signal). Optional so existing/mock call sites are unaffected.
+  purposeGaugeOffered?: boolean;
+  onPurposeGaugeCheckIn?: (response: PurposeGaugeResponse) => void;
 }
+
+// FR-033's 3-point scale, plain and calm (owner plain-language doctrine):
+// no scores, no streak, no implementation vocabulary.
+const PURPOSE_GAUGE_LABELS: Record<PurposeGaugeResponse, string> = {
+  lighter: "Lighter",
+  even: "About the same",
+  heavier: "Heavier",
+};
 
 export function CloseMoment({
   vm,
@@ -94,11 +114,21 @@ export function CloseMoment({
   onApproveMonthlyRollup,
   onDismissMonthlyRollup,
   onToggleMonthlyRollupProse,
+  purposeGaugeOffered,
+  onPurposeGaugeCheckIn,
 }: CloseMomentProps) {
   // Inline edits to a candidate's title before it is confirmed. Keyed by
   // taskId; absent means "use the candidate's original title".
   const [editedTitles, setEditedTitles] = useState<Record<string, string>>({});
   const titleFor = (win: CloseWinVM) => editedTitles[win.taskId] ?? win.title;
+  // Hide the offer the instant a response is tapped, so it doesn't linger for
+  // the rest of the view. The parent's persisted per-day suppression keeps it
+  // gone on later same-day Close visits; this is just the in-view dismissal.
+  const [purposeGaugeAnswered, setPurposeGaugeAnswered] = useState(false);
+  const showPurposeGauge =
+    Boolean(purposeGaugeOffered) &&
+    Boolean(onPurposeGaugeCheckIn) &&
+    !purposeGaugeAnswered;
 
   return (
     <div className="grid gap-6" data-testid="close-moment">
@@ -466,6 +496,44 @@ export function CloseMoment({
                 ))}
               </ul>
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {showPurposeGauge ? (
+        <Card
+          className="workflow-support-card moments-card"
+          data-testid="close-moment-purpose-gauge"
+        >
+          <CardContent className="grid gap-3 p-5 sm:p-6">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">How did today sit with you?</p>
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="close-moment-purpose-gauge-note"
+              >
+                One optional tap. Nothing is saved unless you pick one, and you
+                can always skip.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {PURPOSE_GAUGE_RESPONSES.map((response) => (
+                <Button
+                  key={response}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onPurposeGaugeCheckIn?.(response);
+                    setPurposeGaugeAnswered(true);
+                  }}
+                  className="min-h-[44px] touch-manipulation"
+                  data-testid={`close-moment-purpose-gauge-${response}`}
+                >
+                  {PURPOSE_GAUGE_LABELS[response]}
+                </Button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ) : null}

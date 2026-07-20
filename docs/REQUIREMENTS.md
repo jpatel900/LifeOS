@@ -1170,6 +1170,26 @@ Acceptance criteria:
 - No autonomous external actions.
 - No generalized plugin system.
 
+---
+
+### NFR-006 — Plain Visibility (friction to the AI, clarity to the person)
+
+- Friction and overhead go to the AI; visibility into what the system is doing stays with the person. Hiding state from the operator is as much a doctrine violation as exposing it in jargon. <!-- source: issue #692, owner doctrine 2026-07-18 ("reduce the decision friction... that is where we are bringing in the AI to help. But that doesn't mean we are not giving the person visibility") -->
+- Every user-facing string (maps, statuses, health surfaces, error copy) must clear a plain-language bar: understandable in one read by a non-technical person, with no term they would need to look up. <!-- source: issue #692 ("crystal clear and easy to understand... don't want the user to waste precious cognitive capacity") -->
+- Plain language alone is not enough — avoid information overload even when every word is simple. Visibility is progressively disclosed, never dumped in one block. <!-- source: issue #692 owner refinement 2026-07-18 ("plain language alone is not enough; avoid information overload even in simple words") -->
+- Every visibility surface defines its own layers — glance, detail, and deep/developer — and unfolds them on demand (tap/expand), layer by layer, never all at once. <!-- source: issue #692 owner refinement 2026-07-18 ("Visibility is PROGRESSIVELY DISCLOSED... detail unfolds on demand... layer by layer, never all at once") -->
+- The glance layer is the first read of any surface and must fit one calm read: current state, and what (if anything) needs the person. Full detail remains reachable underneath — layered, never truncated or hidden. <!-- source: issue #692 owner refinement 2026-07-18 ("the first read of any surface is the calm minimum... Full visibility remains available — it is layered, not truncated") -->
+- System, vendor, and implementation vocabulary never appears on a user-facing surface — no vendor names (e.g. Supabase, Sentry, PostHog, Langfuse), no internal subsystem, table, or column names, no persistence/infra terms. <!-- source: issue #692 known counter-examples ("Supabase authentication failed while checking this subsystem", "capture_items persistence", vendor rows presented to the end user) -->
+- Developer diagnostics, if reachable by the user at all, live only behind an explicit developer-disclosure affordance and are visually marked as diagnostic, never blended into ordinary user copy — this is the deep/developer layer of the glance → detail → deep model. <!-- source: issue #692 axiom draft point 3; issue #692 owner refinement 2026-07-18 ("deep/developer" layer) -->
+- Every UI-slice acceptance criterion includes a copy review against this axiom before the slice ships. <!-- source: issue #692 axiom draft point 4 -->
+
+Acceptance criteria:
+
+- No PR introducing or editing a user-facing string may ship vendor names, subsystem/table/column names, or other implementation vocabulary on a user-reachable surface.
+- Every visibility surface (maps, statuses, health, brief) names its glance / detail / deep layers, and the glance layer is reviewed for a single calm read — current state plus what (if anything) needs the person — before the slice ships.
+- Any developer-only diagnostic text is gated behind an explicit developer-disclosure control, labeled as such, and treated as the deep/developer layer, not the default view.
+- The health screen (owner-observed ground zero for this doctrine) is the first target of the follow-up copy-sweep slice tracked in issue #692.
+
 ### Operating-Layer Guardrails
 
 The next approved planning focus after the current governance cleanup is the project/task/stakeholder/dependency/context operating layer.
