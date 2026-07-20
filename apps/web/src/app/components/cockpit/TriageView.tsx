@@ -4,6 +4,7 @@ import type { Phase2TaskDraft } from "@lifeos/schemas";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import { cn } from "@/lib/utils";
 import { HIT_TARGET_MIN } from "../moments/hitTarget";
+import { UnsortedCaptures } from "../moments/UnsortedCaptures";
 import { Panel } from "./shared";
 
 // Triage stage screen (extracted from LifeOSCockpit.tsx, issue #590 slice 2
@@ -71,7 +72,11 @@ export function TriageView({
   if (!current) {
     return (
       <Panel className="grid min-h-[520px] place-items-center text-center">
-        <div>
+        <div className="w-full max-w-xl">
+          {/* #703: captures that have not been sorted yet are not "clear" —
+              sorting them is the work this screen is for, so they show above
+              the clear state rather than being invisible behind it. */}
+          <UnsortedCaptures areaId={vm.activeArea.id} className="mb-7" />
           <Check className="mx-auto mb-5 text-[var(--grn-fg)]" size={42} />
           {/* G1 (#660 surface audit): pinned off text-4xl font-extrabold
               (overshoots the fixed type scale and the 700-weight cap) onto
@@ -92,6 +97,8 @@ export function TriageView({
   return (
     <Panel className="grid min-h-[560px] place-items-center">
       <div className="w-full max-w-xl">
+        {/* #703: the Sort action for anything captured but not yet sorted. */}
+        <UnsortedCaptures areaId={vm.activeArea.id} className="mb-7" />
         {/* G2 (#660 surface audit): the mono/accent-colored eyebrow is now
             the shared .moments-label grammar (sentence case in JSX, the
             class handles uppercase/tracking); the full accent-fill

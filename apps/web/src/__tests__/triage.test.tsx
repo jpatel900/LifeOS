@@ -57,6 +57,30 @@ describe("Triage cockpit", () => {
     restoreFetch();
   });
 
+  /**
+   * #703: capture and sorting are separate steps now. Capture saves the thought
+   * verbatim and stays put; the person then goes to Triage and taps Sort, which
+   * is what turns it into a draft. This drives that real two-step journey.
+   */
+  async function captureThenSortIntoTriage(text: string) {
+    fireEvent.change(
+      await screen.findByPlaceholderText("Drop the thought here."),
+      { target: { value: text } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+
+    // Dismiss the "back to: <hook>" conclusion rather than waiting out its
+    // ~2.5s dwell — it locks stage nav while shown.
+    fireEvent.click(await screen.findByTestId("capture-page-conclusion"));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Triage/ }));
+    fireEvent.click(
+      await screen.findByTestId(/^triage-sheet-sort-/, undefined, {
+        timeout: 5000,
+      }),
+    );
+  }
+
   it("shows the empty verdict-first triage state", async () => {
     render(
       <AppShell>
@@ -76,17 +100,8 @@ describe("Triage cockpit", () => {
       </AppShell>,
     );
 
-    fireEvent.change(
-      await screen.findByPlaceholderText("Drop the thought here."),
-      {
-        target: { value: "Review old someday notes" },
-      },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
-    // #556: navigation to Triage now only happens once the parse actually
-    // resolves (raw text + hook held in context through the wait, then the
-    // "back to: <hook>" conclusion) — under full-suite load that round trip
-    // can exceed RTL's 1000ms findBy default, so this waits longer.
+    await captureThenSortIntoTriage("Review old someday notes");
+
     fireEvent.click(
       await screen.findByRole("button", { name: "Someday" }, { timeout: 5000 }),
     );
@@ -102,18 +117,8 @@ describe("Triage cockpit", () => {
       </AppShell>,
     );
 
-    fireEvent.change(
-      await screen.findByPlaceholderText("Drop the thought here."),
-      {
-        target: { value: "Prepare the sponsor update deck" },
-      },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+    await captureThenSortIntoTriage("Prepare the sponsor update deck");
 
-    // #591: the "back to: <hook>" conclusion's auto-dismiss dwell is now a
-    // materially perceivable ~2.5s (CaptureCore's CONCLUSION_AUTO_DISMISS_MS,
-    // was 450ms) before it navigates on to Triage — give this findBy
-    // headroom past RTL's 1000ms default.
     expect(
       await screen.findByText("Start here (same first move)", undefined, {
         timeout: 4000,
@@ -145,15 +150,9 @@ describe("Triage cockpit", () => {
       </AppShell>,
     );
 
-    fireEvent.change(
-      await screen.findByPlaceholderText("Drop the thought here."),
-      {
-        target: { value: "Tidy the garage shelves" },
-      },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+    await captureThenSortIntoTriage("Tidy the garage shelves");
 
-    // Generous timeouts: this journey chains two async state flushes (parse
+    // Generous timeouts: this journey chains two async state flushes (sort
     // response, then split). Under CI worker contention the default 1s findBy
     // window flaked twice on 2026-07-05 (CI run 28738354680 + a Codex sandbox)
     // while always passing warm — the wait is load-bound, not behavioral.

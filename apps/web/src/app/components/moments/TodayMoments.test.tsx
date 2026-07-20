@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 
@@ -42,8 +43,31 @@ const FIXED_NOW = new Date("2026-07-05T15:00:00.000Z");
  * so journeys that need a first move must create one through real context
  * actions rather than mocking WorkflowContext internals.
  */
+/**
+ * #703: capture no longer parses — a seeded capture only becomes a pending
+ * draft once something taps Sort. This stands in for that tap, driving the
+ * same `sortCaptureIntoDrafts` the Sort button calls, so these journeys still
+ * exercise the real capture -> sort -> draft path. One sort runs at a time
+ * (FR-026: no parse queue), so it re-checks whenever `captureParse` settles.
+ */
+function useAutoSortSeededCaptures() {
+  const { state, captureParse, sortCaptureIntoDrafts } = useWorkflow();
+  const attempted = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (captureParse.phase === "parsing") return;
+    const next = state.captureItems.find(
+      (item) => !attempted.current.has(item.id),
+    );
+    if (!next) return;
+    attempted.current.add(next.id);
+    sortCaptureIntoDrafts(next.id);
+  }, [state.captureItems, captureParse, sortCaptureIntoDrafts]);
+}
+
 function TaskSeedBridge() {
   const { state, submitCaptureText, acceptTaskDraft } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
 
   return (
@@ -357,10 +381,12 @@ describe("TodayMoments", () => {
       key: "Enter",
     });
 
-    // Held in context through the wait, not released the instant Enter is
-    // pressed.
+    // #703: no parse wait at capture any more — the save is synchronous and
+    // the overlay goes straight to its "back to: <hook>" conclusion. It is
+    // still not released the instant Enter is pressed.
     expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
-    expect(screen.getByTestId("capture-overlay-parsing")).toBeVisible();
+    expect(screen.queryByTestId("capture-overlay-parsing")).toBeNull();
+    expect(screen.getByTestId("capture-overlay-conclusion")).toBeVisible();
 
     await waitFor(
       () => {
@@ -470,6 +496,7 @@ function ReEntrySeedBridge({
   onState: (lastActivityAt: string | null) => void;
 }) {
   const { state, submitCaptureText, acceptTaskDraft } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
 
   onState(latestActivityTimestamp(state));
@@ -787,6 +814,7 @@ function DriftSeedBridge() {
     startTaskSession,
     markSession,
   } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
   const task = state.tasks[0];
 
@@ -1237,7 +1265,7 @@ describe("TodayMoments — P6 deep-link shims", () => {
       () => {
         const toastAfter = screen.getByTestId("today-moments-toast");
         expect(toastAfter).toHaveClass("fixed");
-        expect(within(toastAfter).getByText("Captured")).toBeInTheDocument();
+        expect(within(toastAfter).getByText(/Captured/)).toBeInTheDocument();
       },
       { timeout: 5000 },
     );
@@ -1261,7 +1289,7 @@ describe("TodayMoments — P6 deep-link shims", () => {
 
     const toastMessage = await waitFor(
       () =>
-        within(screen.getByTestId("today-moments-toast")).getByText("Captured"),
+        within(screen.getByTestId("today-moments-toast")).getByText(/Captured/),
       { timeout: 5000 },
     );
     expect(toastMessage).toHaveClass("motion-reduce:transition-none");
@@ -1673,6 +1701,7 @@ function BacklogRecoverySeedBridge({
   }) => void;
 }) {
   const { state, submitCaptureText, backlogTaskDraft } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
   const task = state.tasks[0];
 

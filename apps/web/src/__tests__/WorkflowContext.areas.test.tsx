@@ -115,9 +115,17 @@ function SyncStatusProbe() {
 }
 
 function TriageActionProbe() {
-  const { state, selectedAreaId, submitCaptureText, backlogTaskDraft } =
-    useWorkflow();
+  const {
+    state,
+    selectedAreaId,
+    submitCaptureText,
+    sortCaptureIntoDrafts,
+    backlogTaskDraft,
+  } = useWorkflow();
   const draft = state.taskDrafts[0];
+  // #703: capture saves raw; sorting it into a draft is a separate triage
+  // action. This probe drives both steps, same as the real journey.
+  const unsortedCapture = state.captureItems[0];
 
   return (
     <div>
@@ -130,6 +138,15 @@ function TriageActionProbe() {
         }
       >
         Capture
+      </button>
+      <button
+        type="button"
+        disabled={!unsortedCapture}
+        onClick={() =>
+          unsortedCapture && sortCaptureIntoDrafts(unsortedCapture.id)
+        }
+      >
+        Sort
       </button>
       <button
         type="button"
@@ -303,7 +320,7 @@ describe("WorkflowProvider persisted area sync", () => {
       target: { value: "Capture should wait for a real area" },
     });
 
-    expect(screen.getByRole("button", { name: "Save thought" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Capture" })).toBeDisabled();
     expect(mockCreateCaptureItem).not.toHaveBeenCalled();
   });
 
@@ -374,6 +391,25 @@ describe("WorkflowProvider persisted area sync", () => {
   });
 
   it("persists Someday triage decisions as backlog tasks when signed in", async () => {
+    // The capture already exists on the account — this test is about what
+    // triage does with it, not about capturing it.
+    mockListCaptureItems.mockResolvedValue({
+      provider: "supabase",
+      captures: [
+        {
+          id: "44444444-4444-4444-8444-444444444444",
+          user_id: persistedArea.user_id,
+          area_id: persistedArea.id,
+          raw_text: "Review the future idea",
+          raw_audio_ref: null,
+          capture_mode: "text",
+          inferred_area_confidence: null,
+          status: "new",
+          created_at: "2026-05-27T00:00:00.000Z",
+        },
+      ],
+    });
+
     render(
       <WorkflowProvider>
         <TriageActionProbe />
@@ -386,7 +422,13 @@ describe("WorkflowProvider persisted area sync", () => {
       );
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+    // #703: capture saves raw and sorting is a separate triage action, so
+    // this journey starts from an already-saved (server-side) capture and
+    // exercises the Sort step that turns it into a draft.
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Sort" })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("draft-count")).toHaveTextContent("1");

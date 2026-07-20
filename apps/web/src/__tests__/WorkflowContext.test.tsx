@@ -324,7 +324,7 @@ describe("WorkflowProvider storage fallback", () => {
     } as Response;
 
     function ParseProbe() {
-      const { state, submitCaptureText } = useWorkflow();
+      const { state, submitCaptureText, sortCaptureIntoDrafts } = useWorkflow();
       return (
         <div>
           <span data-testid="capture-count">{state.captureItems.length}</span>
@@ -343,6 +343,15 @@ describe("WorkflowProvider storage fallback", () => {
           >
             Add capture
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              const capture = state.captureItems[0];
+              if (capture) sortCaptureIntoDrafts(capture.id);
+            }}
+          >
+            Sort
+          </button>
         </div>
       );
     }
@@ -355,10 +364,15 @@ describe("WorkflowProvider storage fallback", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add capture" }));
 
+    // #703: capture alone never parses — the route is only called once the
+    // person sorts the stored capture in triage.
     await waitFor(() => {
       expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
       expect(screen.getByTestId("draft-count")).toHaveTextContent("0");
     });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
 
     await act(async () => {
       resolveParse(successfulResponse);
@@ -392,7 +406,8 @@ describe("WorkflowProvider storage fallback", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     function ConcurrentCaptureProbe() {
-      const { captureParse, state, submitCaptureText } = useWorkflow();
+      const { captureParse, state, submitCaptureText, sortCaptureIntoDrafts } =
+        useWorkflow();
       return (
         <div>
           <span data-testid="capture-count">{state.captureItems.length}</span>
@@ -412,6 +427,15 @@ describe("WorkflowProvider storage fallback", () => {
           >
             Add second capture
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              const capture = state.captureItems[0];
+              if (capture) sortCaptureIntoDrafts(capture.id);
+            }}
+          >
+            Sort
+          </button>
         </div>
       );
     }
@@ -424,9 +448,15 @@ describe("WorkflowProvider storage fallback", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add first capture" }));
     await waitFor(() => {
+      expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
+    await waitFor(() => {
       expect(screen.getByTestId("parse-phase")).toHaveTextContent("parsing");
     });
 
+    // #703: a sort in flight must NEVER block writing down a new thought —
+    // capture and sorting are different surfaces now.
     fireEvent.click(screen.getByRole("button", { name: "Add second capture" }));
 
     expect(screen.getByTestId("capture-count")).toHaveTextContent("2");
@@ -519,8 +549,13 @@ describe("WorkflowProvider storage fallback", () => {
     );
 
     function FailureProbe() {
-      const { state, submitCaptureText, syncStatus, captureParse } =
-        useWorkflow();
+      const {
+        state,
+        submitCaptureText,
+        sortCaptureIntoDrafts,
+        syncStatus,
+        captureParse,
+      } = useWorkflow();
       return (
         <div>
           <span data-testid="capture-count">{state.captureItems.length}</span>
@@ -541,6 +576,15 @@ describe("WorkflowProvider storage fallback", () => {
           >
             Add capture
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              const capture = state.captureItems[0];
+              if (capture) sortCaptureIntoDrafts(capture.id);
+            }}
+          >
+            Sort
+          </button>
         </div>
       );
     }
@@ -557,6 +601,8 @@ describe("WorkflowProvider storage fallback", () => {
       expect(screen.getByTestId("capture-count")).toHaveTextContent("1");
       expect(screen.getByTestId("draft-count")).toHaveTextContent("0");
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
 
     await waitFor(() => {
       expect(screen.getByTestId("account-status")).toHaveTextContent(
