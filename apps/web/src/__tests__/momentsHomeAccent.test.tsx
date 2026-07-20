@@ -5,6 +5,9 @@ import { TodayMoments } from "../app/components/moments/TodayMoments";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
+  // #688: AuthAffordance (masthead sign-in door) reads the current path for
+  // its ?next= return target.
+  usePathname: () => "/",
 }));
 
 vi.mock("@/lib/reEntry/briefView", () => ({
