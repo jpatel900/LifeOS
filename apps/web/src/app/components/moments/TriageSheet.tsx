@@ -120,9 +120,18 @@ export function TriageSheet({
   // scoping as the pipeline "Capture" badge (`buildPipelineCounts`'s
   // actionableCapture filter plus `triage_required`, the parse-later
   // status). Presentation-only: no new write path, rows are read-only.
+  // A parsed capture keeps status "triage_required" while its draft sits in
+  // the pending list above — exclude any capture a draft already points at
+  // (task_drafts.capture_item_id), so a thought is never listed twice.
+  const draftedCaptureIds = new Set(
+    state.taskDrafts
+      .map((draft) => draft.capture_item_id)
+      .filter((id): id is string => Boolean(id)),
+  );
   const unsortedCaptures = state.captureItems.filter(
     (item) =>
       (item.status === "new" || item.status === "triage_required") &&
+      !draftedCaptureIds.has(item.id) &&
       (resolvedAreaId ? item.area_id === resolvedAreaId : true),
   );
 

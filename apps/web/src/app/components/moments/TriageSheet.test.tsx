@@ -34,6 +34,32 @@ function CaptureSeedBridge() {
 }
 
 /**
+ * #689: seeds a raw capture (no parse — the exact local-mode path where the
+ * owner's thought used to vanish from every triage surface).
+ */
+function RawCaptureSeedBridge() {
+  const { state, submitCaptureRaw } = useWorkflow();
+  return (
+    <button
+      type="button"
+      data-testid="seed-submit-raw"
+      // Seeded into the first area explicitly: the sheet resolves an "All
+      // areas" selection to `areas[0]` (same fallback as
+      // buildPipelineCounts), while a null areaId here would let
+      // `inferAreaId` route the text to some other area.
+      onClick={() =>
+        submitCaptureRaw(
+          "Buy milk and call the dentist",
+          state.areas[0]?.id ?? null,
+        )
+      }
+    >
+      Seed raw capture
+    </button>
+  );
+}
+
+/**
  * Seeds a capture in each of two distinct (already-seeded demo) areas, so
  * the "All areas" fallback-to-first-area behavior (shared with
  * buildPipelineCounts / buildCockpitViewModel's `activeArea ?? areas[0]`)
@@ -94,6 +120,29 @@ describe("TriageSheet", () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     window.sessionStorage.clear();
+  });
+
+  // #689 (read path): a raw capture persists only as a capture item — no
+  // task draft — and used to be invisible here while the Start moment said
+  // "1 thought waiting for a decision". It must show as an unsorted row.
+  it("shows a raw (unparsed) capture as a 'Captured, not sorted yet' row", async () => {
+    render(
+      <WorkflowProvider>
+        <RawCaptureSeedBridge />
+        <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
+      </WorkflowProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId("seed-submit-raw"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-captures")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText("Buy milk and call the dentist"),
+    ).toBeInTheDocument();
+    // The sheet must not simultaneously claim to be empty.
+    expect(screen.queryByTestId("triage-sheet-empty")).not.toBeInTheDocument();
   });
 
   it("renders nothing when closed", () => {

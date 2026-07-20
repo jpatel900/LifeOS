@@ -1,7 +1,19 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { CaptureParseNotice, WipRefusalPanel } from "./StatusBanners";
-import type { CaptureParseState } from "@/lib/workflowContext/types";
+import {
+  CaptureParseNotice,
+  SyncNotice,
+  WipRefusalPanel,
+} from "./StatusBanners";
+import type {
+  CaptureParseState,
+  WorkflowSyncStatus,
+} from "@/lib/workflowContext/types";
+
+// #688: SyncNotice reads the current path for its sign-in link's ?next=.
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/health",
+}));
 import type { WipRefusal } from "@/lib/workflow/shared";
 import { WIP_ENFORCEMENT_POLICY_ID } from "@/lib/workflow/shared";
 
@@ -58,5 +70,51 @@ describe("StatusBanners 44px hit targets (#615)", () => {
     expect(
       screen.getByRole("button", { name: "Keep refused" }).className,
     ).toContain("min-h-[44px]");
+  });
+});
+
+// #688: the signed-out condition is one calm state with a door — not the
+// amber failure banner — and true failures keep the failure treatment.
+describe("SyncNotice signed-out state (#688)", () => {
+  const signedOutStatus: WorkflowSyncStatus = {
+    storage: "available",
+    account: "local-only",
+    message: "You're not signed in, so new work is saving on this device only.",
+    pendingLocalChanges: true,
+    signedOut: true,
+  };
+
+  it("renders the calm signed-out banner with a sign-in link back to the current page", () => {
+    render(<SyncNotice status={signedOutStatus} />);
+
+    const banner = screen.getByTestId("sync-notice-signed-out");
+    expect(banner).toHaveTextContent("You're not signed in");
+    // Calm surface tones, not the amber failure treatment.
+    expect(banner.className).not.toContain("amb");
+
+    const link = screen.getByTestId("sync-notice-signin-link");
+    expect(link).toHaveAttribute("href", "/login?next=%2Fhealth");
+    expect(link).toHaveTextContent("Sign in");
+  });
+
+  it("keeps failure language and treatment for a real sync error with a live session", () => {
+    render(
+      <SyncNotice
+        status={{
+          storage: "available",
+          account: "sync-error",
+          message: "Account sync failed; changes stay local.",
+          pendingLocalChanges: true,
+          signedOut: false,
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("sync-notice-signed-out"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Account sync failed; changes stay local.",
+    );
   });
 });
