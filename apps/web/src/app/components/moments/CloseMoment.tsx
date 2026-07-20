@@ -4,6 +4,10 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  PURPOSE_GAUGE_RESPONSES,
+  type PurposeGaugeResponse,
+} from "@/lib/purpose/purposeGaugePolicy";
 import type {
   CloseVM,
   MonthOverMonthReadbackVM,
@@ -96,10 +100,36 @@ export interface CloseMomentProps {
   onApproveMonthlyRollup(draft: MonthlyRollupDraftVM): void;
   onDismissMonthlyRollup(areaId: string): void;
   onToggleMonthlyRollupProse?(areaId: string): void;
+  // FR-047 slice 2 / FR-033 (#686): the optional one-tap purpose-gauge
+  // check-in. Present ONLY on FR-033 sample days when no check-in was taken
+  // yet today — the parent gates it via `shouldOfferPurposeGaugeCheckin`. A
+  // frictionless decline is simply never tapping: that records nothing
+  // (FR-033: a skipped or absent check is never counted, shown, or treated as
+  // signal). Optional so existing/mock call sites are unaffected.
+  purposeGaugeOffered?: boolean;
+  onPurposeGaugeCheckIn?: (response: PurposeGaugeResponse) => void;
   // FR-031 slice F5 (#679): optional map-revision offer surface (at most
   // one per Close). Omitted in mock/preview shells.
+  //
+  // ONE-OFFER PRECEDENCE (#692 progressive disclosure): the purpose-gauge
+  // check-in and the map-revision offer can both qualify on the same Close.
+  // Two asks stacked on one calm screen is exactly the overload the plain-
+  // visibility doctrine forbids, so at most ONE renders and the check-in
+  // WINS: it is time-boxed to FR-033 sample days (rare, and the day's data
+  // is lost if not taken), whereas a map revision stays eligible until the
+  // evidence is acted on and is also offered at node-completion in Flow.
+  // The suppressed revision offer is not consumed — it simply re-qualifies
+  // at the next Close (its own daily cap is only written when it renders).
   taskMapRevision?: CloseTaskMapRevisionVM | null;
 }
+
+// FR-033's 3-point scale, plain and calm (owner plain-language doctrine):
+// no scores, no streak, no implementation vocabulary.
+const PURPOSE_GAUGE_LABELS: Record<PurposeGaugeResponse, string> = {
+  lighter: "Lighter",
+  even: "About the same",
+  heavier: "Heavier",
+};
 
 export function CloseMoment({
   vm,
@@ -120,20 +150,36 @@ export function CloseMoment({
   onApproveMonthlyRollup,
   onDismissMonthlyRollup,
   onToggleMonthlyRollupProse,
+  purposeGaugeOffered,
+  onPurposeGaugeCheckIn,
   taskMapRevision = null,
 }: CloseMomentProps) {
   // Inline edits to a candidate's title before it is confirmed. Keyed by
   // taskId; absent means "use the candidate's original title".
   const [editedTitles, setEditedTitles] = useState<Record<string, string>>({});
   const titleFor = (win: CloseWinVM) => editedTitles[win.taskId] ?? win.title;
+  // Hide the offer the instant a response is tapped, so it doesn't linger for
+  // the rest of the view. The parent's persisted per-day suppression keeps it
+  // gone on later same-day Close visits; this is just the in-view dismissal.
+  const [purposeGaugeAnswered, setPurposeGaugeAnswered] = useState(false);
+  const showPurposeGauge =
+    Boolean(purposeGaugeOffered) &&
+    Boolean(onPurposeGaugeCheckIn) &&
+    !purposeGaugeAnswered;
 
   return (
     <div className="grid gap-6" data-testid="close-moment">
       {/* FR-031 slice F5 (#679): the single Close map-revision surface —
           the one-line offer, then (after a tap) the diff-mode review.
           Fully additive: renders nothing unless the caller passed the
-          optional taskMapRevision VM and the kernel produced an offer. */}
-      {taskMapRevision?.offer && taskMapRevision.draftState.phase === "idle" ? (
+          optional taskMapRevision VM and the kernel produced an offer.
+          Second gate on `showPurposeGauge` (see the one-offer precedence
+          note on `taskMapRevision` above): the parent already suppresses
+          the kernel on a check-in day, and this keeps the two asks from
+          ever stacking even if a caller wires them independently. */}
+      {taskMapRevision?.offer &&
+      taskMapRevision.draftState.phase === "idle" &&
+      !showPurposeGauge ? (
         <TaskMapRevisionOfferCard
           signals={taskMapRevision.offer.signals}
           taskTitle={taskMapRevision.offer.taskTitle}
@@ -530,6 +576,44 @@ export function CloseMoment({
                 ))}
               </ul>
             ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {showPurposeGauge ? (
+        <Card
+          className="workflow-support-card moments-card"
+          data-testid="close-moment-purpose-gauge"
+        >
+          <CardContent className="grid gap-3 p-5 sm:p-6">
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">How did today sit with you?</p>
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="close-moment-purpose-gauge-note"
+              >
+                One optional tap. Nothing is saved unless you pick one, and you
+                can always skip.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {PURPOSE_GAUGE_RESPONSES.map((response) => (
+                <Button
+                  key={response}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onPurposeGaugeCheckIn?.(response);
+                    setPurposeGaugeAnswered(true);
+                  }}
+                  className="min-h-[44px] touch-manipulation"
+                  data-testid={`close-moment-purpose-gauge-${response}`}
+                >
+                  {PURPOSE_GAUGE_LABELS[response]}
+                </Button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       ) : null}

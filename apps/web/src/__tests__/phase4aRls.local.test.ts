@@ -2180,6 +2180,164 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       );
     }
   });
+
+  // FR-047 slice 2 / FR-033 (#686): purpose_gauge_checkins. Same append-only
+  // own-row shape as brief_views (no update/delete policy), with a `response`
+  // payload, so these use a unique per-run checked_on and additionally prove
+  // the payload can't be revised by a re-tap and created_at can't be forged.
+  it("lets user A read own purpose_gauge_checkins but not user B's", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const checkedOn = randomFutureDateStamp();
+
+    const { error: insertAError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .insert({
+        user_id: userA.id,
+        checked_on: checkedOn,
+        response: "lighter",
+      });
+    expect(insertAError).toBeNull();
+
+    const { error: insertBError } = await userBClient
+      .from("purpose_gauge_checkins")
+      .insert({
+        user_id: userB.id,
+        checked_on: checkedOn,
+        response: "heavier",
+      });
+    expect(insertBError).toBeNull();
+
+    const { data: visibleToA, error: selectAError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .select("user_id,checked_on,response")
+      .eq("checked_on", checkedOn);
+
+    expect(selectAError).toBeNull();
+    expect(visibleToA).toEqual([
+      { user_id: userA.id, checked_on: checkedOn, response: "lighter" },
+    ]);
+  });
+
+  it("prevents user A from inserting purpose_gauge_checkins for user B", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const checkedOn = randomFutureDateStamp();
+
+    const { error } = await userAClient
+      .from("purpose_gauge_checkins")
+      .insert({ user_id: userB.id, checked_on: checkedOn, response: "even" });
+
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("rejects a response outside the three FR-033 values", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const checkedOn = randomFutureDateStamp();
+
+    const { error } = await userAClient
+      .from("purpose_gauge_checkins")
+      .insert({ user_id: userA.id, checked_on: checkedOn, response: "great" });
+
+    expect(error?.message).toMatch(/check constraint|violates check/i);
+  });
+
+  it("re-tapping the same day is a no-op that never revises the first response", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const checkedOn = randomFutureDateStamp();
+
+    const { error: firstError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .insert({
+        user_id: userA.id,
+        checked_on: checkedOn,
+        response: "lighter",
+      });
+    expect(firstError).toBeNull();
+
+    // A second tap with a DIFFERENT response upserts with ignoreDuplicates:
+    // the (user_id, checked_on) PK collision means the row is left untouched.
+    const { error: secondError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .upsert(
+        { user_id: userA.id, checked_on: checkedOn, response: "heavier" },
+        { onConflict: "user_id,checked_on", ignoreDuplicates: true },
+      );
+    expect(secondError).toBeNull();
+
+    const { data, error: selectError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .select("response")
+      .eq("checked_on", checkedOn);
+    expect(selectError).toBeNull();
+    expect(data).toEqual([{ response: "lighter" }]);
+  });
+
+  it("overwrites a client-forged created_at with the server clock", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const checkedOn = randomFutureDateStamp();
+
+    const { error: insertError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .insert({
+        user_id: userA.id,
+        checked_on: checkedOn,
+        response: "even",
+        created_at: "2000-01-01T00:00:00.000Z",
+      });
+    expect(insertError).toBeNull();
+
+    const { data, error: selectError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .select("created_at")
+      .eq("checked_on", checkedOn)
+      .single();
+    expect(selectError).toBeNull();
+    // The BEFORE INSERT trigger forced created_at = now(), so the forged
+    // year-2000 value never landed.
+    expect(new Date(data!.created_at).getUTCFullYear()).toBeGreaterThanOrEqual(
+      2026,
+    );
+  });
+
+  it("denies update and delete on purpose_gauge_checkins for the owner", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const checkedOn = randomFutureDateStamp();
+
+    const { error: insertError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .insert({
+        user_id: userA.id,
+        checked_on: checkedOn,
+        response: "lighter",
+      });
+    expect(insertError).toBeNull();
+
+    // No update policy exists at all, so PostgREST reports a permission /
+    // schema failure or an empty affected set — assert denial broadly.
+    const { data: updateData, error: updateError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .update({ response: "heavier" })
+      .eq("checked_on", checkedOn)
+      .select("response");
+    expect(updateData == null || updateData.length === 0).toBe(true);
+    if (updateError) {
+      expect(updateError.message).toMatch(
+        /permission denied|row-level security|violates row-level/i,
+      );
+    }
+
+    const { data: deleteData, error: deleteError } = await userAClient
+      .from("purpose_gauge_checkins")
+      .delete()
+      .eq("checked_on", checkedOn)
+      .select("checked_on");
+    expect(deleteData == null || deleteData.length === 0).toBe(true);
+    if (deleteError) {
+      expect(deleteError.message).toMatch(
+        /permission denied|row-level security|violates row-level/i,
+      );
+    }
+  });
 });
 
 function randomFutureDateStamp(): string {

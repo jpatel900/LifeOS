@@ -48,10 +48,23 @@ export interface CloseRevisionOffer {
 export function useTaskMapCloseRevisionOffer({
   state,
   active,
+  suppressed = false,
 }: {
   state: WorkflowState;
   /** True while the Close moment is on screen. */
   active: boolean;
+  /**
+   * ONE-OFFER-PER-CLOSE precedence (#692 plain-visibility / progressive
+   * disclosure): true when another Close ask already owns the screen — today
+   * that is the FR-033 purpose-gauge check-in, which WINS because it is
+   * time-boxed to rare sample days while a map revision stays eligible and
+   * is also offered at node-completion in Flow.
+   *
+   * Suppression happens BEFORE the kernel runs, so the one-offer-per-day cap
+   * is never spent on an offer the owner did not see: the revision simply
+   * re-qualifies at the next Close.
+   */
+  suppressed?: boolean;
 }) {
   const [offer, setOffer] = useState<CloseRevisionOffer | null>(null);
   const computedForVisitRef = useRef(false);
@@ -59,7 +72,7 @@ export function useTaskMapCloseRevisionOffer({
   stateRef.current = state;
 
   useEffect(() => {
-    if (!active) {
+    if (!active || suppressed) {
       computedForVisitRef.current = false;
       setOffer(null);
       return;
@@ -151,7 +164,7 @@ export function useTaskMapCloseRevisionOffer({
       signals: picked.signals,
       fingerprint: evidenceFingerprint(picked.signals),
     });
-  }, [active]);
+  }, [active, suppressed]);
 
   /** Clears without suppression — used when the offer is tapped (the tap
    * consumes it; the daily cap already prevents a same-day re-offer). */

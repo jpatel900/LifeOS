@@ -53,6 +53,50 @@ function renderClose(
   return props;
 }
 
+/** Same defaults as `renderClose`, but exposes a typed `rerender` for the
+ * one-offer precedence test (which asserts across a prop change). */
+function renderCloseWithRerender(
+  overrides: Partial<React.ComponentProps<typeof CloseMoment>> = {},
+) {
+  const buildProps = (
+    next: Partial<React.ComponentProps<typeof CloseMoment>>,
+  ) =>
+    ({
+      vm: baseVm,
+      pendingWins: [] as CloseWinVM[],
+      confirmedWins: [] as { title: string; areaLabel: string }[],
+      pendingRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["pendingRollups"],
+      approvedRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["approvedRollups"],
+      onCloseDay: vi.fn(),
+      onCarryForward: vi.fn(),
+      onConfirmWin: vi.fn(),
+      onSkipWin: vi.fn(),
+      onApproveRollup: vi.fn(),
+      onDismissRollup: vi.fn(),
+      onToggleRollupProse: vi.fn(),
+      pendingMonthlyRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["pendingMonthlyRollups"],
+      approvedMonthlyRollups: [] as React.ComponentProps<
+        typeof CloseMoment
+      >["approvedMonthlyRollups"],
+      onApproveMonthlyRollup: vi.fn(),
+      onDismissMonthlyRollup: vi.fn(),
+      onToggleMonthlyRollupProse: vi.fn(),
+      ...next,
+    }) satisfies React.ComponentProps<typeof CloseMoment>;
+
+  const view = render(<CloseMoment {...buildProps(overrides)} />);
+  return {
+    rerender: (next: Partial<React.ComponentProps<typeof CloseMoment>>) =>
+      view.rerender(<CloseMoment {...buildProps(next)} />),
+  };
+}
+
 // R2-D (issue #483 round 2) then R3-B (round 3): the stats card used to be
 // a hard `grid grid-cols-2` full-bleed box holding exactly two numbers — a
 // full-bleed box whose content fills only ~56% of it reads as
@@ -584,5 +628,107 @@ describe("CloseMoment — F5 map-revision offer", () => {
     expect(
       screen.getByTestId("taskmap-close-revision-failed"),
     ).toHaveTextContent("Your current map is unchanged.");
+  });
+
+  // ONE-OFFER-PER-CLOSE precedence (#692 progressive disclosure): the
+  // purpose-gauge check-in and the map-revision offer must never stack.
+  // The check-in wins — it is time-boxed to rare FR-033 sample days, while
+  // a map revision keeps until acted on and is also offered in Flow.
+  it("hides the map-revision offer while the purpose-gauge check-in is showing", () => {
+    renderClose({
+      taskMapRevision: offerVm,
+      purposeGaugeOffered: true,
+      onPurposeGaugeCheckIn: vi.fn(),
+    });
+
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the map-revision offer once the check-in is answered or not offered", () => {
+    const { rerender } = renderCloseWithRerender({
+      taskMapRevision: offerVm,
+      purposeGaugeOffered: true,
+      onPurposeGaugeCheckIn: vi.fn(),
+    });
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+
+    // Answering the check-in frees the slot in-view.
+    fireEvent.click(screen.getByTestId("close-moment-purpose-gauge-even"));
+    expect(screen.getByTestId("taskmap-revision-offer")).toBeInTheDocument();
+
+    // And on a non-sample day the revision offer is the only ask.
+    rerender({
+      taskMapRevision: offerVm,
+      purposeGaugeOffered: false,
+      onPurposeGaugeCheckIn: vi.fn(),
+    });
+    expect(screen.getByTestId("taskmap-revision-offer")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("close-moment-purpose-gauge"),
+    ).not.toBeInTheDocument();
+  });
+});
+
+// FR-047 slice 2 / FR-033 (#686): the optional Close purpose-gauge check-in.
+// Offer visibility is parent-gated (purposeGaugeOffered); a frictionless
+// decline is simply never tapping, which must record nothing.
+describe("CloseMoment — purpose-gauge check-in offer", () => {
+  it("shows the one-tap offer only when the parent gate says it is offered", () => {
+    renderClose({ purposeGaugeOffered: true, onPurposeGaugeCheckIn: vi.fn() });
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge-lighter"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge-even"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge-heavier"),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the offer when the parent gate is closed (non-sample day / already answered)", () => {
+    renderClose({ purposeGaugeOffered: false, onPurposeGaugeCheckIn: vi.fn() });
+    expect(screen.queryByTestId("close-moment-purpose-gauge")).toBeNull();
+  });
+
+  it("hides the offer when no handler is wired even if flagged offered", () => {
+    renderClose({ purposeGaugeOffered: true });
+    expect(screen.queryByTestId("close-moment-purpose-gauge")).toBeNull();
+  });
+
+  it("records the tapped response exactly once and dismisses the offer in-view", () => {
+    const onPurposeGaugeCheckIn = vi.fn();
+    renderClose({ purposeGaugeOffered: true, onPurposeGaugeCheckIn });
+
+    fireEvent.click(screen.getByTestId("close-moment-purpose-gauge-heavier"));
+
+    expect(onPurposeGaugeCheckIn).toHaveBeenCalledTimes(1);
+    expect(onPurposeGaugeCheckIn).toHaveBeenCalledWith("heavier");
+    // Tapping dismisses the card for the rest of the view.
+    expect(screen.queryByTestId("close-moment-purpose-gauge")).toBeNull();
+  });
+
+  it("records nothing when the offer is shown but never tapped (frictionless decline)", () => {
+    const onPurposeGaugeCheckIn = vi.fn();
+    renderClose({ purposeGaugeOffered: true, onPurposeGaugeCheckIn });
+
+    // Close the day without ever touching the gauge.
+    fireEvent.click(screen.getByTestId("close-moment-close-day"));
+
+    expect(onPurposeGaugeCheckIn).not.toHaveBeenCalled();
+    // The offer is still present (untapped), proving no implicit recording.
+    expect(
+      screen.getByTestId("close-moment-purpose-gauge"),
+    ).toBeInTheDocument();
   });
 });
