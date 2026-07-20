@@ -19,6 +19,10 @@ export interface TaskMapDraftRequestCurrentMapNode {
   done?: boolean;
   red_reason?: string | null;
   red_condition?: string | null;
+  /** FR-031 slice F5 (#679): approved estimate carried back as prompt data. */
+  estimated_minutes?: number | null;
+  /** FR-031 slice F5 (#679): approved opening-move flag carried back. */
+  two_minute_move?: boolean;
 }
 
 export interface TaskMapDraftRequestCurrentMapEdge {
@@ -45,6 +49,19 @@ export interface TaskMapDraftRequestInput {
   fetchImpl?: typeof fetch;
   /** Present only for a regeneration request. */
   currentMap?: TaskMapDraftRequestCurrentMap | null;
+  /** FR-031 slice F5 (#679) — present only for an evidence-triggered
+   * revision request. Kernel-computed signals sent as bounded prompt data;
+   * requires `currentMap`. */
+  revision?: TaskMapDraftRequestRevision | null;
+}
+
+export interface TaskMapDraftRequestRevisionSignal {
+  kind: "out_of_order_completion" | "duration_drift" | "cut_scope" | "blocker";
+  detail: string;
+}
+
+export interface TaskMapDraftRequestRevision {
+  signals: TaskMapDraftRequestRevisionSignal[];
 }
 
 export type TaskMapDraftRequestResult =
@@ -86,6 +103,7 @@ export async function requestTaskMapDraft(
         breakdownSteps: null,
         parserMode: "auto",
         currentMap: input.currentMap ?? null,
+        revision: input.revision ?? null,
       }),
     });
     httpOk = httpResponse.ok;

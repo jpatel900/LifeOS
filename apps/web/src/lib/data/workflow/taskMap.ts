@@ -23,6 +23,12 @@ import {
 // FR-031 slice 4: task-map v1 AI graph draft, born instrumented per NS-INV-3.
 export const TASK_MAP_DRAFT_POLICY_ID = "task_map.v1" as const;
 
+// FR-031 slice F5 (#679): evidence-triggered map revisions carry their own
+// policy id so their acceptance/rejection is measurable separately from
+// first drafts and manual regens in `suggestion_records`. Same pipeline,
+// same wire schema — only the instrumentation label differs.
+export const TASK_MAP_REVISION_POLICY_ID = "task_map_revision.v1" as const;
+
 export interface TaskMapDraftSuggestionNodeCounts {
   required: number;
   optional: number;
@@ -37,8 +43,16 @@ export interface TaskMapDraftSuggestionInput {
   confidence?: number | null;
   /** FR-031 slice 8 — "initial" for the first draft on a task, "regen" for
    * an explicit user-requested revision of an already-approved map.
+   * FR-031 slice F5 (#679) adds "revision" for an evidence-triggered
+   * revision proposal (offer tapped at node-completion or Close).
    * Defaults to "initial" for callers that predate slice 8. */
-  generated_from?: "initial" | "regen";
+  generated_from?: "initial" | "regen" | "revision";
+  /** FR-031 slice F5 (#679) — instrumentation policy id for this
+   * generation. Defaults to `TASK_MAP_DRAFT_POLICY_ID`; evidence-triggered
+   * revisions pass `TASK_MAP_REVISION_POLICY_ID`. */
+  policy_identifier?:
+    | typeof TASK_MAP_DRAFT_POLICY_ID
+    | typeof TASK_MAP_REVISION_POLICY_ID;
 }
 
 export interface TaskMapDraftSuggestionResult {
@@ -59,10 +73,11 @@ export async function recordTaskMapDraftSuggestion(
   client: MinimalSupabaseClient | null,
   input: TaskMapDraftSuggestionInput,
 ): Promise<TaskMapDraftSuggestionResult> {
+  const policyId = input.policy_identifier ?? TASK_MAP_DRAFT_POLICY_ID;
   try {
     const result = await createSuggestionRecord(client, {
       area_id: input.area_id,
-      policy_identifier: TASK_MAP_DRAFT_POLICY_ID,
+      policy_identifier: policyId,
       suggestion_type: "task_map_draft",
       subject_type: "task",
       subject_id: uuidPattern.test(input.task_id) ? input.task_id : null,
@@ -80,7 +95,7 @@ export async function recordTaskMapDraftSuggestion(
   } catch (error) {
     logLearningWriteFailure(error, {
       table: "suggestion_records",
-      policy_identifier: TASK_MAP_DRAFT_POLICY_ID,
+      policy_identifier: policyId,
       suggestion_type: "task_map_draft",
     });
     return { provider: client ? "supabase" : "mock", suggestionId: null };
@@ -130,6 +145,27 @@ function recordSuggestionResolutionFireAndForget(
       policy_identifier: TASK_MAP_DRAFT_POLICY_ID,
       action: "resolve",
     });
+  });
+}
+
+/**
+ * FR-031 slice F5 (#679) — reject an evidence-triggered revision proposal.
+ * The ONLY write a rejection performs is flipping the pending
+ * `suggestion_records` row to "rejected": `tasks.progression_map` is never
+ * touched (the guard tests assert byte-identical approved-map content).
+ * Fire-and-forget with full containment, mirroring the accept-side
+ * resolution write — a learning-write failure never breaks the dismiss.
+ */
+export function rejectTaskMapSuggestionFireAndForget(
+  client: MinimalSupabaseClient,
+  suggestionRecordId: string,
+  resolvedAt: string,
+): void {
+  recordSuggestionResolutionFireAndForget(client, {
+    id: suggestionRecordId,
+    status: "rejected",
+    decided_by: "user",
+    resolved_at: resolvedAt,
   });
 }
 

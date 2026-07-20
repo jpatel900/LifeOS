@@ -172,20 +172,17 @@ export function LifeOSCockpit({
       if (!stored) return;
       const parsed = JSON.parse(stored) as {
         dark?: boolean;
-        areaId?: string | null;
       };
       if (typeof parsed.dark === "boolean") setDark(parsed.dark);
-      if (
-        parsed.areaId &&
-        state.areas.some((area) => area.id === parsed.areaId)
-      ) {
-        setSelectedAreaId(parsed.areaId);
-      }
+      // #691: `areaId` is no longer restored (or written) here — the cockpit
+      // used to keep its own localStorage copy of the area selection and
+      // silently override the shared WorkflowContext value on mount, which
+      // made screens disagree. WorkflowContext now persists the selection
+      // itself; a stale `areaId` field in old stored prefs is simply ignored.
     } catch {
       // Preferences are optional; blocked localStorage should not block work.
     }
     // Run only once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -194,14 +191,13 @@ export function LifeOSCockpit({
         "lifeos.cockpit.preferences",
         JSON.stringify({
           dark,
-          areaId: selectedAreaId,
           stage,
         }),
       );
     } catch {
       // Workflow remains usable when localStorage is blocked.
     }
-  }, [dark, selectedAreaId, stage]);
+  }, [dark, stage]);
 
   function navigate(nextStage: CockpitStage) {
     const path = STAGE_PATHS[nextStage];
@@ -498,7 +494,10 @@ export function LifeOSCockpit({
                 disabled={navLocked}
                 className={cn(
                   "flex min-h-11 max-w-full shrink-0 touch-manipulation items-center gap-2 rounded-full px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50",
-                  activeArea.id === area.id
+                  // #691: highlight from the real shared selection, not the
+                  // view model's first-area fallback — with nothing selected
+                  // (All areas) no chip may claim to be current.
+                  selectedAreaId === area.id
                     ? "bg-[var(--acc-sf)] text-[var(--ink)]"
                     : "text-[var(--mut)] hover:bg-[var(--sf3)]",
                 )}

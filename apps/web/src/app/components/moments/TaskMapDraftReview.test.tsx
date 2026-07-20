@@ -225,3 +225,91 @@ describe("TaskMapDraftReview", () => {
     expect(onApprove).not.toHaveBeenCalled();
   });
 });
+
+// FR-031 slice F5 (#679) — code-computed diff mode.
+describe("TaskMapDraftReview diff mode", () => {
+  const currentGraph: TaskMapGraph = {
+    nodes: [
+      { id: "req-1", title: "Draft outline", role: "required", done: true },
+      { id: "dropped", title: "Old busywork step", role: "required" },
+      { id: "opt-1", title: "Polish formatting", role: "optional" },
+    ],
+    edges: [
+      { from: "req-1", to: "dropped" },
+      { from: "dropped", to: "opt-1" },
+    ],
+  };
+
+  it("dims unchanged steps, badges new/changed ones, and lists dropped steps", () => {
+    render(
+      <TaskMapDraftReview
+        draft={draft}
+        onApprove={vi.fn()}
+        onDismiss={vi.fn()}
+        isRevision
+        currentGraph={currentGraph}
+      />,
+    );
+
+    // Unchanged (same id/title/role as the approved map): dimmed.
+    const unchangedRow = screen
+      .getByTestId("taskmap-draft-edit-req-1")
+      .closest("[data-diff]");
+    expect(unchangedRow).toHaveAttribute("data-diff", "unchanged");
+    expect(unchangedRow?.className).toMatch(/opacity-60/);
+    expect(
+      screen.queryByTestId("taskmap-diff-badge-req-1"),
+    ).not.toBeInTheDocument();
+
+    // New in the candidate: badged, not dimmed.
+    expect(screen.getByTestId("taskmap-diff-badge-req-2")).toHaveTextContent(
+      "New step",
+    );
+    const addedRow = screen
+      .getByTestId("taskmap-draft-edit-req-2")
+      .closest("[data-diff]");
+    expect(addedRow).toHaveAttribute("data-diff", "added");
+    expect(addedRow?.className).not.toMatch(/opacity-60/);
+
+    // Dropped from the approved map: listed plainly.
+    expect(screen.getByTestId("taskmap-diff-removed")).toHaveTextContent(
+      "No longer in the plan: Old busywork step",
+    );
+  });
+
+  it("tracks the owner's live edits — retitling an unchanged step flips it to changed", () => {
+    render(
+      <TaskMapDraftReview
+        draft={draft}
+        onApprove={vi.fn()}
+        onDismiss={vi.fn()}
+        isRevision
+        currentGraph={currentGraph}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("taskmap-draft-edit-req-1"), {
+      target: { value: "Draft the full outline" },
+    });
+    expect(screen.getByTestId("taskmap-diff-badge-req-1")).toHaveTextContent(
+      "Changed",
+    );
+    expect(
+      screen.getByTestId("taskmap-draft-edit-req-1").closest("[data-diff]"),
+    ).toHaveAttribute("data-diff", "changed");
+  });
+
+  it("renders no diff affordances at all without a currentGraph (plain draft review)", () => {
+    render(
+      <TaskMapDraftReview
+        draft={draft}
+        onApprove={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+    expect(document.querySelector("[data-diff]")).toBeNull();
+    expect(
+      screen.queryByTestId("taskmap-diff-removed"),
+    ).not.toBeInTheDocument();
+  });
+});

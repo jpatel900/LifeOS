@@ -463,6 +463,11 @@
       "note": "Task-map v1 draft prompt contract version used by the AI context assembly path (slice 4)."
     },
     {
+      "id": "task_map_revision.v1",
+      "fr": "FR-031",
+      "note": "Evidence-triggered map-revision proposal policy id (slice F5, issue #679): suggestion rows for revisions offered at node-completion or Close, kept separate from task_map.v1 so revision acceptance/rejection is measurable on its own."
+    },
+    {
       "id": "closure_ritual.v1",
       "fr": "FR-035",
       "note": "Deterministic closure-command policy core (issue #597 slice 1): complete/released terminal commands with the exact three-part summary; consumed by the later persistence/UI slices."

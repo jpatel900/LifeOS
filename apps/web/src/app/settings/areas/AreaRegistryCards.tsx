@@ -324,8 +324,11 @@ export function AreaRegistryCards({
                         {isSelected ? "Using this area" : "Use this area"}
                       </Button>
                       <Button asChild variant="outline">
+                        {/* #687: retargeted from the legacy `/capture` cockpit
+                            stage to the moments home with the capture overlay
+                            open. */}
                         <Link
-                          href="/capture"
+                          href="/?capture=1"
                           onClick={() => setSelectedAreaId(workflowAreaId)}
                         >
                           Capture here
@@ -358,6 +361,11 @@ export function AreaRegistryCards({
                       </Alert>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
+                      {/* #687 OWNER-GATE: /calendar and /review are NOT
+                          redirected (plan placement/proposals and review
+                          diagnostics exist only there), so these links keep
+                          their targets until the owner decides
+                          port/keep/drop. */}
                       <Button asChild variant="outline" size="sm">
                         <Link
                           href="/calendar"

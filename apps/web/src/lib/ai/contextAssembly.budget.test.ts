@@ -15,7 +15,7 @@ import {
 const FIXTURE_IDS = {
   parse: "parse.full-context.v1",
   rollup: "rollup.full-draft.v1",
-  task_map_draft: "task-map.max-structural-shape.v1",
+  task_map_draft: "task-map.max-structural-shape.v2",
 } as const satisfies Record<AiContextSurfaceId, string>;
 
 const BUILDERS = {
@@ -111,11 +111,14 @@ const BUILDERS = {
             title: "Collect current findings",
             role: "required",
             done: true,
+            estimated_minutes: 25,
+            two_minute_move: true,
           },
           {
             id: "confirm-owners",
             title: "Confirm owners for blocking risks",
             role: "required",
+            estimated_minutes: 20,
           },
           {
             id: "reconcile-evidence",
@@ -191,6 +194,29 @@ const BUILDERS = {
           { from: "publish-brief", to: "stakeholder-faq" },
         ],
       },
+      // FR-031 slice F5 (#679): the representative fixture exercises the
+      // maximum evidence block — all four kernel signal kinds at once.
+      revisionEvidence: {
+        signals: [
+          {
+            kind: "out_of_order_completion",
+            detail:
+              'You finished "Review the recommendation with the migration lead" before an earlier step in the plan.',
+          },
+          {
+            kind: "duration_drift",
+            detail: "A work session took 95 minutes instead of about 35.",
+          },
+          {
+            kind: "cut_scope",
+            detail: "You trimmed what this task needs to finish.",
+          },
+          {
+            kind: "blocker",
+            detail: "A work session ended stuck on something outside the plan.",
+          },
+        ],
+      },
     }),
 } as const satisfies Record<AiContextSurfaceId, () => ParseCaptureMessage[]>;
 
@@ -206,9 +232,9 @@ const EXPECTED = {
       "81c4c6cc5f3037ac5a310b48ae1b53685b0ea80f43c903e83b6052f8e0634619",
   },
   task_map_draft: {
-    measuredTokensEstimated: 1199,
+    measuredTokensEstimated: 1400,
     outputSha256:
-      "0f022e96ba6cead49e9a0eabf56e0cabd9c61b85b023dfee1b2edfa53364ebff",
+      "3171628ff38d173ed7fc153bf098f4dc22d4641df0322caaa448e02e75e99433",
   },
 } as const satisfies Record<
   AiContextSurfaceId,
@@ -218,7 +244,7 @@ const EXPECTED = {
 const MAX_TOKENS_ESTIMATED = {
   parse: 980,
   rollup: 475,
-  task_map_draft: 1225,
+  task_map_draft: 1425,
 } as const satisfies Record<AiContextSurfaceId, number>;
 
 const OPTIONAL_CONTEXT_SENTINELS = {
@@ -239,6 +265,8 @@ const OPTIONAL_CONTEXT_SENTINELS = {
     "This is a REVISION request.",
     "red_reason:",
     "red_condition:",
+    "Execution evidence observed since approval (address it in the revision):",
+    "two_minute_move",
   ],
 } as const satisfies Record<AiContextSurfaceId, readonly string[]>;
 
@@ -302,11 +330,17 @@ describe("INV-9 per-surface AI context fixture budgets", () => {
         expect(renderedContent).toContain(sentinel);
       }
       if (surface === "task_map_draft") {
+        // Role annotations may carry ", done", ", ~Nm", and/or
+        // ", two_minute_move" (FR-031 slice F5) after the role.
         expect(
-          renderedContent.match(/^- .+ \(required(?:, done)?\):/gm),
+          renderedContent.match(/^- .+ \(required(?:,[^)]*)?\):/gm),
         ).toHaveLength(7);
-        expect(renderedContent.match(/^- .+ \(optional\):/gm)).toHaveLength(4);
-        expect(renderedContent.match(/^- .+ \(red\):/gm)).toHaveLength(2);
+        expect(
+          renderedContent.match(/^- .+ \(optional(?:,[^)]*)?\):/gm),
+        ).toHaveLength(4);
+        expect(
+          renderedContent.match(/^- .+ \(red(?:,[^)]*)?\):/gm),
+        ).toHaveLength(2);
         expect(renderedContent.match(/^\d+\. /gm)).toHaveLength(7);
       }
       expect(measured).toBe(expected.measuredTokensEstimated);

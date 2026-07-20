@@ -24,9 +24,11 @@ describe("Today cockpit fallback (NEXT_PUBLIC_MOMENTS_HOME=false)", () => {
 
   it("renders one dominant next action and the glance bar", async () => {
     process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
+    // #687: HomePage is an async server component now (it reads searchParams
+    // for the redirect-shim deep links) — resolve it before rendering.
     render(
       <AppShell>
-        <HomePage />
+        {await HomePage({ searchParams: Promise.resolve({}) })}
       </AppShell>,
     );
 

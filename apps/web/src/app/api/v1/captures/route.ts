@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { CreateCaptureItemInputSchema } from "@lifeos/schemas";
 import { syncQueuedCapture } from "@/lib/data/workflow";
-import { requireSupabaseServerUser } from "@/lib/supabase/server";
+import {
+  requireSupabaseServerUser,
+  SupabaseAuthRejectedError,
+} from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +53,11 @@ const CreateCaptureRequestSchema = CreateCaptureItemInputSchema.extend({
 export async function POST(request: Request) {
   const accessToken = readBearerToken(request);
 
+  // LOW-1 (#670): missing/invalid/expired token all map to the same generic
+  // 401 body — never the raw Supabase Auth error string.
   if (!accessToken) {
     return NextResponse.json(
-      { ok: false, error: "Sign in before saving captures." },
+      { ok: false, errorCategory: "auth_rejected" },
       { status: 401 },
     );
   }
@@ -104,10 +109,20 @@ export async function POST(request: Request) {
       { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Capture save failed.";
-    const status = /sign in/i.test(message) ? 401 : 500;
+    if (error instanceof SupabaseAuthRejectedError) {
+      return NextResponse.json(
+        { ok: false, errorCategory: "auth_rejected" },
+        { status: 401 },
+      );
+    }
 
-    return NextResponse.json({ ok: false, error: message }, { status });
+    // LOW-1 (#670): log the detail server-side only; the caller gets a
+    // generic message, never the raw data-layer/provider error string.
+    console.error("v1/captures POST failed:", error);
+
+    return NextResponse.json(
+      { ok: false, error: "Something went wrong." },
+      { status: 500 },
+    );
   }
 }

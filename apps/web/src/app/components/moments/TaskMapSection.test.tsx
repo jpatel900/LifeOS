@@ -378,6 +378,71 @@ describe("TaskMapSection", () => {
     );
   });
 
+  // FR-031 slice F5 (#679) — post-node-completion revision offer.
+  it("renders the revision offer card under the approved map only while the draft state is idle", () => {
+    const onPropose = vi.fn();
+    const offerProps = {
+      task: {
+        id: "task-1",
+        progression_map: approvedGraph,
+        map_status: "approved" as const,
+        map_approved_at: null,
+      },
+      progressionNodes: NODES,
+      now: new Date(),
+      onRequestDraft: vi.fn(),
+      onDismissDraft: vi.fn(),
+      onApproveDraft: vi.fn(),
+      revisionOffer: {
+        signals: [
+          {
+            kind: "cut_scope" as const,
+            detail: "You trimmed what this task needs to finish.",
+          },
+        ],
+      },
+      onProposeRevision: onPropose,
+      onDismissRevisionOffer: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <TaskMapSection {...offerProps} draftState={{ phase: "idle" }} />,
+    );
+    expect(screen.getByTestId("taskmap-revision-offer")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("taskmap-revision-offer-propose"));
+    expect(onPropose).toHaveBeenCalledTimes(1);
+
+    // A pending round-trip hides the card (no double surface).
+    rerender(
+      <TaskMapSection {...offerProps} draftState={{ phase: "pending" }} />,
+    );
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("never renders the revision offer without an approved map", () => {
+    render(
+      <TaskMapSection
+        task={{ id: "task-1", progression_map: null, map_status: null }}
+        progressionNodes={NODES}
+        draftState={{ phase: "idle" }}
+        now={new Date()}
+        onRequestDraft={vi.fn()}
+        onDismissDraft={vi.fn()}
+        onApproveDraft={vi.fn()}
+        revisionOffer={{
+          signals: [{ kind: "blocker", detail: "A session ended stuck." }],
+        }}
+        onProposeRevision={vi.fn()}
+        onDismissRevisionOffer={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByTestId("taskmap-revision-offer"),
+    ).not.toBeInTheDocument();
+  });
+
   it("no task (nothing focused) renders the rail without a Draft map affordance", () => {
     render(
       <TaskMapSection

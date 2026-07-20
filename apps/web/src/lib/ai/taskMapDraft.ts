@@ -8,6 +8,7 @@ import {
   type TaskMapDraftBreakdownStepContext,
   type TaskMapDraftCurrentMapContext,
   type TaskMapDraftPromptInput,
+  type TaskMapDraftRevisionEvidenceContext,
 } from "./contextAssembly";
 import {
   resolveStructuredOutputProvider,
@@ -18,6 +19,7 @@ export type {
   TaskMapDraftBreakdownStepContext,
   TaskMapDraftCurrentMapContext,
   TaskMapDraftPromptInput,
+  TaskMapDraftRevisionEvidenceContext,
 };
 
 export interface TaskMapDraftInput {
@@ -28,6 +30,9 @@ export interface TaskMapDraftInput {
   breakdownSteps?: TaskMapDraftBreakdownStepContext[] | null;
   /** FR-031 slice 8 — present only for a regeneration request. */
   currentMap?: TaskMapDraftCurrentMapContext | null;
+  /** FR-031 slice F5 (#679) — present only for an evidence-triggered
+   * revision request. Prompt data only; same output wire schema. */
+  revisionEvidence?: TaskMapDraftRevisionEvidenceContext | null;
 }
 
 export interface TaskMapDraftOptions {
@@ -96,6 +101,7 @@ export async function taskMapDraftDetailed(
       firstTinyStep: input.firstTinyStep,
       breakdownSteps: input.breakdownSteps,
       currentMap: input.currentMap,
+      revisionEvidence: input.revisionEvidence,
     }),
     responseFormat: taskMapDraftResponseFormat,
   });

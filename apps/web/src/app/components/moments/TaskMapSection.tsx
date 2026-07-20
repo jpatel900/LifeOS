@@ -9,8 +9,10 @@ import {
   resolveNodeDuration,
 } from "@/lib/taskmap/timeline";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
+import type { RevisionSignal } from "@/lib/taskmap/revision";
 import { ProgressionRail } from "./ProgressionRail";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
+import { TaskMapRevisionOfferCard } from "./TaskMapRevisionOfferCard";
 import { TaskMapView } from "./TaskMapView";
 import { HIT_TARGET_INVISIBLE } from "./hitTarget";
 import type { ProgressionNode } from "./progressionNodes";
@@ -70,6 +72,12 @@ export interface TaskMapSectionProps {
   /** FR-031 slice F2: the focused task's persisted area id, used only to
    * match a duration profile. Omit/null when unknown — no profile applies. */
   areaId?: string | null;
+  /** FR-031 slice F5 (#679): a kernel-approved revision offer for THIS
+   * task, latched by the caller after a node-completion write. Renders as
+   * a one-line card under the approved map; render-only until tapped. */
+  revisionOffer?: { signals: RevisionSignal[] } | null;
+  onProposeRevision?(): void;
+  onDismissRevisionOffer?(): void;
 }
 
 /** Compact "~2h 05m" formatting for the timeline summary line. */
@@ -146,11 +154,16 @@ export function TaskMapSection({
   onToggleNodeCompletion,
   durationProfiles = [],
   areaId = null,
+  revisionOffer = null,
+  onProposeRevision,
+  onDismissRevisionOffer,
 }: TaskMapSectionProps) {
   let approvedMapView: ReactElement | null = null;
+  let approvedGraph: TaskMapGraph | null = null;
   if (task && task.map_status === "approved" && task.progression_map) {
     const validated = validateTaskMapForPersistence(task.progression_map);
     if (validated.ok) {
+      approvedGraph = validated.graph as TaskMapGraph;
       approvedMapView = (
         <div className="grid gap-1.5">
           <TaskMapView
@@ -183,6 +196,10 @@ export function TaskMapSection({
         onApprove={onApproveDraft}
         onDismiss={onDismissDraft}
         isRevision={approvedMapView !== null}
+        // FR-031 slice F5 (#679): with an approved map on file, the review
+        // renders in diff mode — the code-computed diff marks new/changed
+        // steps and dims unchanged ones.
+        currentGraph={approvedGraph}
       />
     );
   }
@@ -191,6 +208,19 @@ export function TaskMapSection({
     return (
       <div className="grid gap-2">
         {approvedMapView}
+        {/* FR-031 slice F5 (#679): the evidence-triggered offer — only when
+            no draft round-trip is in flight, so the card never competes
+            with a pending/failed notice. Render-only until tapped. */}
+        {revisionOffer &&
+        draftState.phase === "idle" &&
+        onProposeRevision &&
+        onDismissRevisionOffer ? (
+          <TaskMapRevisionOfferCard
+            signals={revisionOffer.signals}
+            onPropose={onProposeRevision}
+            onDismiss={onDismissRevisionOffer}
+          />
+        ) : null}
         <div className="grid gap-1.5 justify-items-start">
           <button
             type="button"

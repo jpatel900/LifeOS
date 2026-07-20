@@ -9,6 +9,7 @@ import {
   type TaskMapDraftBreakdownStepContext,
   type TaskMapDraftCurrentMapContext,
   type TaskMapDraftOptions,
+  type TaskMapDraftRevisionEvidenceContext,
   type TaskMapDraftTelemetry,
 } from "./taskMapDraft";
 import { TASK_MAP_DRAFT_SCHEMA_VERSION } from "./contracts/taskMapDraft";
@@ -37,6 +38,10 @@ export interface TaskMapDraftServiceInput {
    * this (its degrade/validate behavior is unchanged either way); only the
    * AI prompt (via `contextAssembly.ts`) reads it. */
   currentMap?: TaskMapDraftCurrentMapContext | null;
+  /** FR-031 slice F5 (#679) — kernel-computed evidence signals for an
+   * evidence-triggered revision. Prompt data only; the mock parser and
+   * every degrade/validation path are unchanged either way. */
+  revisionEvidence?: TaskMapDraftRevisionEvidenceContext | null;
 }
 
 export interface TaskMapDraftServiceOptions {
@@ -372,6 +377,7 @@ export async function generateTaskMapDraftWithFallback(
         firstTinyStep: input.firstTinyStep,
         breakdownSteps: input.breakdownSteps,
         currentMap: input.currentMap,
+        revisionEvidence: input.revisionEvidence,
       },
       {
         apiKey,
