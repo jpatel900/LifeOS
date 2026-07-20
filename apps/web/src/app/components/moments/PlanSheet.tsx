@@ -14,9 +14,9 @@ import { HIT_TARGET_INVISIBLE } from "./hitTarget";
  * primitive (already used by StartMoment) to show today's blocks — no new
  * derivation, `blocks`/`now`/`timeDisplay` are passed straight through from
  * the caller's existing StartVM/now/timeDisplay. Anything beyond today's
- * schedule (the hour-rail placement UI, proposals, unplan) stays in the
- * full Plan stage shell until P7; the "Open full view" link goes to the
- * existing `/calendar` route (no new route added).
+ * schedule (the hour-rail placement UI, proposals, unplan) still lives only
+ * in the full Plan stage shell at `/calendar` (#687 OWNER-GATE — not
+ * redirected), which the "Open full view" link reaches.
  */
 
 export interface PlanSheetProps {
@@ -38,6 +38,10 @@ export function PlanSheet({
     <MomentSheet open={open} title="Plan" onClose={onClose}>
       <div className="grid gap-4" data-testid="plan-sheet">
         <ScheduleList blocks={blocks} timeDisplay={timeDisplay} now={now} />
+        {/* #687 OWNER-GATE: `/calendar` is intentionally NOT redirected — the
+            hour-rail placement UI, proposals, and Google approval exist only
+            there — so this link stays until the owner decides
+            port/keep/drop. */}
         <Link
           href="/calendar"
           className={cn(

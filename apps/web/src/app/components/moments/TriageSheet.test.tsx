@@ -405,19 +405,19 @@ describe("TriageSheet", () => {
     });
   });
 
-  it("links out to the full /triage view", () => {
+  // #687: the "Open full view →" link to /triage was removed — that route now
+  // redirects back to this sheet, so the link had become a circular hop.
+  it("no longer links out to the legacy /triage route", () => {
     renderSheet(true);
-    expect(screen.getByTestId("triage-sheet-open-full")).toHaveAttribute(
-      "href",
-      "/triage",
-    );
+    expect(
+      screen.queryByTestId("triage-sheet-open-full"),
+    ).not.toBeInTheDocument();
   });
 
-  // SP-9: the accept/reject actions and the "open full view" link reach a
-  // >=44px effective hit area and drop the 300ms double-tap delay on
-  // coarse pointers. (sessionStorage isolation is handled at the describe
-  // level — see beforeEach/afterEach.)
-  it("accept/reject buttons and the open-full link carry hit-area and touch-manipulation utilities", async () => {
+  // SP-9: the accept/reject actions reach a >=44px effective hit area and
+  // drop the 300ms double-tap delay on coarse pointers. (sessionStorage
+  // isolation is handled at the describe level — see beforeEach/afterEach.)
+  it("accept/reject buttons carry hit-area and touch-manipulation utilities", async () => {
     const restoreFetch = stubParseCaptureFetch();
     renderSheet(true);
 
@@ -434,10 +434,6 @@ describe("TriageSheet", () => {
     const rejectButtons = screen.getAllByTestId(/^triage-sheet-reject-/);
     expect(rejectButtons[0]).toHaveClass("min-h-[44px]");
     expect(rejectButtons[0]).toHaveClass("touch-manipulation");
-
-    const openFull = screen.getByTestId("triage-sheet-open-full");
-    expect(openFull).toHaveClass("min-h-[44px]");
-    expect(openFull).toHaveClass("touch-manipulation");
 
     restoreFetch();
   });
