@@ -128,7 +128,7 @@ export function TriageSheet({
     <MomentSheet open={open} title="Triage" onClose={onClose}>
       {mapOffer ? (
         <div
-          className="workflow-compact-item grid gap-2 rounded-lg border border-border p-3"
+          className="workflow-compact-item moments-row grid gap-2 p-3"
           data-testid="triage-map-offer"
         >
           {showMapOfferReady && taskMapDraft.phase === "ready" ? (
@@ -205,7 +205,7 @@ export function TriageSheet({
             return (
               <li
                 key={draft.id}
-                className="workflow-compact-item grid gap-2 rounded-lg border border-border p-3"
+                className="workflow-compact-item moments-row grid gap-2 p-3"
                 data-testid={`triage-sheet-item-${draft.id}`}
               >
                 <p className="text-sm font-medium">{draft.title}</p>

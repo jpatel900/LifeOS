@@ -46,7 +46,8 @@ export function PlanSheet({
           href="/calendar"
           className={cn(
             HIT_TARGET_INVISIBLE,
-            "text-sm font-semibold text-primary hover:underline",
+            // #690 Part 1: start-aligned (see TriageSheet's open-full link).
+            "justify-self-start text-sm font-semibold text-primary hover:underline",
           )}
           data-testid="plan-sheet-open-full"
         >

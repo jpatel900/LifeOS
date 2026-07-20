@@ -21,6 +21,7 @@ const EXPECTED_CREATED_AT_TABLES = [
   "operator_profiles",
   "override_records",
   "people",
+  "purpose_gauge_checkins",
   "projects",
   "review_entries",
   "rollup_summaries",
