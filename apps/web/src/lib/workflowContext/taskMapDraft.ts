@@ -194,8 +194,8 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         suggestionRecordId: result.suggestionRecordId,
         ...(origin && currentMap ? { origin } : {}),
       });
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure
     [],
   );
 

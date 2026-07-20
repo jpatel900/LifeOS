@@ -83,6 +83,49 @@ const REVISED_GRAPH = {
   ],
 };
 
+// FR-031 slice F5 (#679): revision candidate served after an offer tap.
+// "outline" is byte-identical (incl. the two_minute_move flag) so the diff
+// dims it; "polish" is new; "send-review" keeps its id but is retitled
+// (changed + completion carry-forward); "draft-body"/"diagrams"/"skip-legal"
+// are dropped.
+const REVISED_F5_GRAPH = {
+  schema_version: "1.0" as const,
+  nodes: [
+    {
+      id: "outline",
+      title: "Draft outline",
+      role: "required" as const,
+      two_minute_move: true as const,
+    },
+    { id: "polish", title: "Polish the draft", role: "required" as const },
+    {
+      id: "send-review",
+      title: "Send for final review",
+      role: "required" as const,
+    },
+  ],
+  edges: [
+    { from: "outline", to: "polish" },
+    { from: "polish", to: "send-review" },
+  ],
+};
+
+const REVISION_OFFER_STORE_KEY = "lifeos.taskMapRevisionOffers.v1";
+
+/** Approves the stubbed draft as-is and completes "send-review" FIRST -
+ * an out-of-critical-path-order completion, the deterministic kernel's
+ * strongest evidence signal - which surfaces the revision offer card. */
+async function approveMapAndCompleteOutOfOrder(page: Page) {
+  await page.getByTestId("taskmap-draft-cta").click();
+  await expect(page.getByTestId("taskmap-draft-review")).toBeVisible();
+  await page.getByTestId("taskmap-draft-approve").click();
+  await expect(page.getByTestId("taskmap-view")).toBeVisible();
+
+  const lastChip = page.getByTestId("taskmap-node-send-review");
+  await lastChip.click();
+  await expect(lastChip).toHaveAttribute("data-done", "true");
+}
+
 async function captureAndEnterFlow(page: Page, title: string) {
   await page.goto("/capture");
   await page.getByPlaceholder("Drop the thought here.").fill(title);
@@ -302,5 +345,131 @@ test.describe("task-map lifecycle (FR-031)", () => {
     // The v0 rail stays intact — no dead end (NFR-004).
     await expect(rail).toBeVisible();
     await expect(page.getByTestId("taskmap-view")).toHaveCount(0);
+  });
+  test("F5: an out-of-order completion offers a revision; reject leaves the approved map untouched; the tapped offer opens a code-computed diff and approve carries completion forward", async ({
+    page,
+  }) => {
+    let currentGraph: Record<string, unknown> = DRAFT_GRAPH;
+    await stubDraftEndpoint(page, () => currentGraph);
+    await captureAndEnterFlow(page, "Task map F5 revision proof item");
+    await approveMapAndCompleteOutOfOrder(page);
+
+    // The one-line offer card appears AFTER the completion write - and only
+    // then; it is render-only (no AI call was made: the stub would have
+    // flipped the review open, and it did not).
+    const offer = page.getByTestId("taskmap-revision-offer");
+    await expect(offer).toBeVisible();
+    await expect(
+      page.getByTestId("taskmap-revision-offer-reason"),
+    ).toContainText("before an earlier step in the plan");
+    await expect(page.getByTestId("taskmap-draft-review")).toHaveCount(0);
+
+    // "Not now" dismisses: the offer disappears and the approved map is
+    // byte-untouched (same nodes, same completion state).
+    await page.getByTestId("taskmap-revision-offer-dismiss").click();
+    await expect(offer).toHaveCount(0);
+    await expect(page.getByTestId("taskmap-node-send-review")).toHaveAttribute(
+      "data-done",
+      "true",
+    );
+    await expect(page.getByTestId("taskmap-node-draft-body")).toBeVisible();
+
+    // Dismissal suppresses re-offers for this evidence, and one offer per
+    // task per day is the cap - reset the device-local offer record (test
+    // shortcut standing in for "a new day / new evidence") to exercise the
+    // tap path on the same task.
+    await page.evaluate(
+      (key) => localStorage.removeItem(key),
+      REVISION_OFFER_STORE_KEY,
+    );
+    const lastChip = page.getByTestId("taskmap-node-send-review");
+    await lastChip.click(); // undo - never a trigger
+    await expect(lastChip).toHaveAttribute("data-done", "false");
+    await expect(offer).toHaveCount(0);
+    await lastChip.click(); // re-complete - the trigger
+    await expect(offer).toBeVisible();
+
+    // Tap the offer: the stub serves the revision candidate and the review
+    // opens in DIFF MODE - unchanged dimmed, new/changed badged, dropped
+    // steps listed. The diff is computed in code from the two graphs.
+    currentGraph = REVISED_F5_GRAPH;
+    await page.getByTestId("taskmap-revision-offer-propose").click();
+    await expect(page.getByTestId("taskmap-draft-review")).toBeVisible();
+
+    const unchangedRow = page
+      .getByTestId("taskmap-draft-edit-outline")
+      .locator("xpath=ancestor::*[@data-diff]");
+    await expect(unchangedRow).toHaveAttribute("data-diff", "unchanged");
+    await expect(page.getByTestId("taskmap-diff-badge-polish")).toHaveText(
+      "New step",
+    );
+    await expect(page.getByTestId("taskmap-diff-badge-send-review")).toHaveText(
+      "Changed",
+    );
+    await expect(page.getByTestId("taskmap-diff-removed")).toContainText(
+      "Add diagrams",
+    );
+
+    // Approve = the existing one-pass approve path: surviving completed id
+    // ("send-review") keeps its done state, the dropped node is gone, and
+    // the FR-023 first-step identity stays synced to the flagged node.
+    await page.getByTestId("taskmap-draft-approve").click();
+    await expect(page.getByTestId("taskmap-view")).toBeVisible();
+    await expect(page.getByTestId("taskmap-node-send-review")).toHaveAttribute(
+      "data-done",
+      "true",
+    );
+    await expect(page.getByTestId("taskmap-node-polish")).toBeVisible();
+    await expect(page.getByTestId("taskmap-node-draft-body")).toHaveCount(0);
+    await expect(
+      page.getByTestId("taskmap-first-step-badge-outline"),
+    ).toBeVisible();
+  });
+
+  test("F5: Close surfaces at most one named offer for the most-active map; Keep current map rejects without touching it", async ({
+    page,
+  }) => {
+    let currentGraph: Record<string, unknown> = DRAFT_GRAPH;
+    await stubDraftEndpoint(page, () => currentGraph);
+    await captureAndEnterFlow(page, "Task map F5 close offer proof item");
+    await approveMapAndCompleteOutOfOrder(page);
+
+    // Ignore the Flow offer; Close computes its own single offer. Reset the
+    // shown-today record (the daily cap would otherwise absorb the Flow
+    // offer) so the Close trigger is exercised in isolation.
+    await page.getByTestId("taskmap-revision-offer-dismiss").click();
+    await page.evaluate(
+      (key) => localStorage.removeItem(key),
+      REVISION_OFFER_STORE_KEY,
+    );
+
+    await page.keyboard.press("3");
+    await expect(page.getByTestId("close-moment")).toBeVisible();
+
+    // Exactly one offer, naming the most-active map's task.
+    const closeOffer = page.getByTestId("taskmap-revision-offer");
+    await expect(closeOffer).toHaveCount(1);
+    await expect(closeOffer).toContainText(
+      "Task map F5 close offer proof item",
+    );
+
+    // Tap -> diff review at Close; "Keep current map" rejects.
+    currentGraph = REVISED_F5_GRAPH;
+    await page.getByTestId("taskmap-revision-offer-propose").click();
+    await expect(page.getByTestId("taskmap-draft-review")).toBeVisible();
+    await page.getByTestId("taskmap-draft-dismiss").click();
+    await expect(page.getByTestId("taskmap-draft-review")).toHaveCount(0);
+
+    // Back in Flow the approved map is exactly as it was: the dropped
+    // candidate never applied, completion state intact (NS-INV-4 - a
+    // rejected proposal changes nothing).
+    await page.keyboard.press("2");
+    await expect(page.getByTestId("taskmap-view")).toBeVisible();
+    await expect(page.getByTestId("taskmap-node-send-review")).toHaveAttribute(
+      "data-done",
+      "true",
+    );
+    await expect(page.getByTestId("taskmap-node-draft-body")).toBeVisible();
+    await expect(page.getByTestId("taskmap-node-polish")).toHaveCount(0);
   });
 });
