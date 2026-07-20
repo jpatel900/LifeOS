@@ -47,8 +47,12 @@ test("a raw capture names its destination and is visible in triage", async ({
 
   // (2) One tap lands on the thought itself — not on an empty sheet.
   await openTriage.click();
-  await expect(page.getByTestId("triage-sheet-captures")).toBeVisible();
-  await expect(page.getByText(thought)).toBeVisible();
+  const captures = page.getByTestId("triage-sheet-captures");
+  await expect(captures).toBeVisible();
+  // Scoped to the sheet: the thought also appears in the Start moment's
+  // "waiting for a decision" card behind it, so an unscoped text lookup is
+  // ambiguous. The claim under test is that it is visible HERE.
+  await expect(captures.getByText(thought)).toBeVisible();
   // The regression this spec exists to catch: the sheet must not simultaneously
   // claim there is nothing waiting.
   await expect(page.getByTestId("triage-sheet-empty")).toHaveCount(0);
