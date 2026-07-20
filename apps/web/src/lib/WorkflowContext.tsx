@@ -91,6 +91,7 @@ import {
   createSyncedInitialState,
   decidedPolicyKeysFromSuggestionRecords,
   isUuid,
+  loadStoredSelectedAreaId,
   loadStoredStateFromSession,
   mergePersistedCalendarBlocks,
   NIL_UUID,
@@ -100,6 +101,7 @@ import {
   persistedSaveFailureMessage,
   persistedSyncFailureMessage,
   policyDecisionKey,
+  storeSelectedAreaId,
   workflowReducer,
   type PersistedWorkflowPayload,
 } from "./workflowContext/reducerCore";
@@ -243,7 +245,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     dispatch({ type: "syncAreas", areas: syncedAreas });
     setSelectedAreaId((current) => {
-      if (current && syncedAreas.some((area) => area.id === current)) {
+      // #691: `null` is the user's explicit All-areas choice, not a missing
+      // value — an area sync must never stomp it back to the first area.
+      if (current === null) {
+        return null;
+      }
+      if (syncedAreas.some((area) => area.id === current)) {
         return current;
       }
       return syncedAreas[0]?.id ?? null;
@@ -714,14 +721,29 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     if (restoredState) {
       dispatch({ type: "hydrate", state: restoredState });
       setSelectedAreaId((current) => {
+        // #691: `null` = explicit All-areas choice; keep it (see
+        // applyPersistedAreas).
         if (
-          current &&
+          current === null ||
           restoredState.areas.some((area) => area.id === current)
         ) {
           return current;
         }
         return restoredState.areas[0]?.id ?? null;
       });
+    }
+    // #691: restore the persisted area selection (single persistence point —
+    // LifeOSCockpit's own localStorage copy is retired). Runs after the
+    // state reconcile above so the stored selection wins; an id no longer in
+    // the area list is ignored (the default/reconciled value stands).
+    const storedSelection = loadStoredSelectedAreaId();
+    if (storedSelection === null) {
+      setSelectedAreaId(null);
+    } else if (typeof storedSelection === "string") {
+      const areas = restoredState?.areas ?? stateRef.current.areas;
+      if (areas.some((area) => area.id === storedSelection)) {
+        setSelectedAreaId(storedSelection);
+      }
     }
     setHasHydratedFromStorage(true);
   }, []);
@@ -781,6 +803,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }));
     }
   }, [hasHydratedFromStorage, state]);
+
+  // #691: persist the area selection whenever it changes, gated on hydration
+  // (like the state save above) so the pre-restore default never overwrites
+  // the stored choice.
+  useEffect(() => {
+    if (!hasHydratedFromStorage) {
+      return;
+    }
+    storeSelectedAreaId(selectedAreaId);
+  }, [hasHydratedFromStorage, selectedAreaId]);
 
   // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.
   const refreshUnsyncedCount = useCallback(async () => {
