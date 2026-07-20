@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,7 +38,7 @@ function safeNextPath(raw: string | null): string {
   return raw;
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = safeNextPath(searchParams?.get("next") ?? null);
@@ -135,5 +135,27 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+// #688: `useSearchParams` (the ?next= return target) opts this route out of
+// static prerendering unless it sits under a Suspense boundary — without one
+// `next build` fails on /login outright. The fallback mirrors the card's
+// frame so the shell doesn't jump when the form swaps in.
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto flex min-h-[calc(100vh-10rem)] w-full max-w-md items-center">
+          <Card className="workflow-primary-card workflow-flagship-card w-full">
+            <CardHeader className="space-y-3">
+              <CardTitle className="login-title">Sign in</CardTitle>
+            </CardHeader>
+          </Card>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
