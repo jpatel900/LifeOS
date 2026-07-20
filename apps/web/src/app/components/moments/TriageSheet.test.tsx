@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
@@ -15,13 +16,39 @@ const validTaskMapDraft = {
 };
 
 /**
+ * #703: capture no longer parses, so a seeded capture only becomes a pending
+ * draft once something taps Sort. This stands in for that tap — it sorts each
+ * newly captured item exactly once, driving the same `sortCaptureIntoDrafts`
+ * the Sort button calls, so the journey tests below still exercise the real
+ * capture -> sort -> draft path end to end.
+ *
+ * One sort runs at a time (FR-026: no parse queue), so this re-checks whenever
+ * `captureParse` settles and picks up the next unsorted capture then.
+ */
+function useAutoSortSeededCaptures() {
+  const { state, captureParse, sortCaptureIntoDrafts } = useWorkflow();
+  const attempted = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (captureParse.phase === "parsing") return;
+    const next = state.captureItems.find(
+      (item) => !attempted.current.has(item.id),
+    );
+    if (!next) return;
+    attempted.current.add(next.id);
+    sortCaptureIntoDrafts(next.id);
+  }, [state.captureItems, captureParse, sortCaptureIntoDrafts]);
+}
+
+/**
  * Journey test through the real WorkflowProvider (not a hand-built VM):
- * capture -> mock parse -> pending draft shows in the sheet -> accept to
- * backlog moves it out. Mirrors the capture->parse bridge pattern used in
+ * capture -> Sort -> mock parse -> pending draft shows in the sheet -> accept
+ * to backlog moves it out. Mirrors the capture->parse bridge pattern used in
  * TodayMoments.test.tsx.
  */
 function CaptureSeedBridge() {
   const { submitCaptureText } = useWorkflow();
+  useAutoSortSeededCaptures();
   return (
     <button
       type="button"
@@ -42,6 +69,7 @@ function CaptureSeedBridge() {
  */
 function TwoAreaCaptureSeedBridge() {
   const { state, submitCaptureText } = useWorkflow();
+  useAutoSortSeededCaptures();
   return (
     <div>
       <span data-testid="seed-draft-count">{state.taskDrafts.length}</span>
@@ -176,6 +204,7 @@ describe("TriageSheet", () => {
 
     function EditBridge() {
       const { state, submitCaptureText, editTaskDraft } = useWorkflow();
+      useAutoSortSeededCaptures();
       const draft = state.taskDrafts[0];
       return (
         <div>
@@ -232,6 +261,7 @@ describe("TriageSheet", () => {
 
     function StateBridge() {
       const { state, submitCaptureText } = useWorkflow();
+      useAutoSortSeededCaptures();
       const draft = state.taskDrafts[0];
       return (
         <div>
@@ -464,5 +494,132 @@ describe("TriageSheet", () => {
     expect(screen.getAllByTestId(/^triage-sheet-item-/)).toHaveLength(1);
 
     restoreFetch();
+  });
+
+  // #703 — the Sort action: the app's parse trigger, relocated to this sheet.
+  describe("#703 Sort action", () => {
+    /** Captures without sorting, so the row sits in the unsorted list. */
+    function RawCaptureBridge() {
+      const { state, submitCaptureText } = useWorkflow();
+      return (
+        <div>
+          <span data-testid="raw-draft-count">{state.taskDrafts.length}</span>
+          <button
+            type="button"
+            data-testid="raw-capture"
+            onClick={() => submitCaptureText("Draft the proposal", null)}
+          >
+            Capture
+          </button>
+        </div>
+      );
+    }
+
+    function renderRawSheet() {
+      return render(
+        <WorkflowProvider>
+          <RawCaptureBridge />
+          <TriageSheet open selectedAreaId={null} onClose={vi.fn()} />
+        </WorkflowProvider>,
+      );
+    }
+
+    it("lists a capture that has not been sorted yet, with a Sort action", async () => {
+      renderRawSheet();
+      fireEvent.click(screen.getByTestId("raw-capture"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("triage-sheet-captures")).toBeInTheDocument();
+      });
+      // The thought is shown as written, and it is not a draft yet.
+      expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
+        "Draft the proposal",
+      );
+      expect(screen.getByTestId("raw-draft-count")).toHaveTextContent("0");
+      expect(screen.getAllByTestId(/^triage-sheet-sort-/)).toHaveLength(1);
+    });
+
+    it("does not sort on its own — nothing parses until the action is tapped", async () => {
+      const fetchSpy = vi.fn(
+        async () => ({ ok: true, json: async () => ({}) }) as Response,
+      );
+      vi.stubGlobal("fetch", fetchSpy);
+
+      renderRawSheet();
+      fireEvent.click(screen.getByTestId("raw-capture"));
+      await waitFor(() => {
+        expect(screen.getByTestId("triage-sheet-captures")).toBeInTheDocument();
+      });
+
+      expect(fetchSpy).not.toHaveBeenCalledWith(
+        "/api/parse-capture",
+        expect.anything(),
+      );
+      expect(screen.getByTestId("raw-draft-count")).toHaveTextContent("0");
+      vi.unstubAllGlobals();
+    });
+
+    it("Sort turns the capture into a pending draft and moves it out of the unsorted list", async () => {
+      const restoreFetch = stubParseCaptureFetch();
+      renderRawSheet();
+      fireEvent.click(screen.getByTestId("raw-capture"));
+
+      const sortButton = await screen.findByTestId(/^triage-sheet-sort-/);
+      fireEvent.click(sortButton);
+
+      // A draft appears for review...
+      await waitFor(() => {
+        expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+      });
+      expect(screen.getAllByTestId(/^triage-sheet-item-/)).toHaveLength(1);
+
+      // ...and the same thought is no longer listed as unsorted, so it is
+      // never shown twice.
+      expect(
+        screen.queryByTestId("triage-sheet-captures"),
+      ).not.toBeInTheDocument();
+
+      restoreFetch();
+    });
+
+    it("when sorting is unavailable it says so plainly and the capture stays listed and safe", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            ({
+              ok: false,
+              json: async () => ({
+                ok: false,
+                error: "Parsing is unavailable right now.",
+                can_retry_with_mock: true,
+                status: "ai_unavailable",
+              }),
+            }) as Response,
+        ),
+      );
+
+      renderRawSheet();
+      fireEvent.click(screen.getByTestId("raw-capture"));
+      const sortButton = await screen.findByTestId(/^triage-sheet-sort-/);
+      fireEvent.click(sortButton);
+
+      const failure = await screen.findByTestId(/^triage-sheet-sort-failed-/);
+      expect(failure).toHaveTextContent(
+        "Sorting isn’t available right now. Your thought is safe here, exactly as you wrote it.",
+      );
+
+      // Nothing was lost: the capture is still listed, still verbatim, and
+      // the in-band alternative is offered rather than a background retry.
+      expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
+        "Draft the proposal",
+      );
+      expect(screen.getByTestId("raw-draft-count")).toHaveTextContent("0");
+      expect(screen.getAllByTestId(/^triage-sheet-sort-basic-/)).toHaveLength(
+        1,
+      );
+
+      vi.unstubAllGlobals();
+    });
   });
 });
