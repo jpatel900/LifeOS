@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
-import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { AreaCharterPanel } from "./AreaCharterPanel";
 import { DataExportPanel } from "./DataExportPanel";
@@ -18,15 +17,18 @@ import { LocalResetPanel } from "./LocalResetPanel";
 import { useAreasLoadState } from "./useAreasLoadState";
 
 export default function AreasSettingsPage() {
-  const { selectedAreaId } = useWorkflow();
+  const { selectedAreaId, state: workflowState } = useWorkflow();
   const { state, replaceReadyAreas } = useAreasLoadState();
 
-  const currentArea =
-    state.status === "ready"
-      ? (state.areas.find(
-          (area) => workflowAreaIdForPersistedArea(area) === selectedAreaId,
-        ) ?? null)
-      : null;
+  // #691: resolve the badge from the SAME context area list every other
+  // screen reads (not this page's separately-loaded rows), and give null the
+  // same meaning the pickers give it: All areas. "None selected" remains
+  // only as the honest fallback for an id the shared list cannot resolve.
+  const currentAreaLabel =
+    selectedAreaId === null
+      ? "All areas"
+      : (workflowState.areas.find((area) => area.id === selectedAreaId)?.name ??
+        "None selected");
 
   return (
     <div className="flex flex-col gap-6">
@@ -60,7 +62,7 @@ export default function AreasSettingsPage() {
               variant="secondary"
               className="area-accent-chip rounded-full"
             >
-              Current area: {currentArea?.name ?? "None selected"}
+              Current area: {currentAreaLabel}
             </Badge>
           </div>
         ) : null}

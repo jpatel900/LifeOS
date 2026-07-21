@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   listExecutionReviewItems: vi.fn(),
 }));
 
-vi.mock("@/lib/supabase/server", () => ({
+vi.mock("@/lib/supabase/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/supabase/server")>()),
   requireSupabaseServerUser: mocks.requireSupabaseServerUser,
 }));
 
@@ -14,6 +15,7 @@ vi.mock("@/lib/data/workflow", () => ({
 }));
 
 import { GET } from "./route";
+import { SupabaseAuthRejectedError } from "@/lib/supabase/server";
 
 const WINDOW = "?start=2026-07-17T00:00:00.000Z&end=2026-07-18T00:00:00.000Z";
 
@@ -41,6 +43,10 @@ describe("GET /api/v1/blocks", () => {
   it("rejects a missing bearer token with 401 and never touches the data layer", async () => {
     const response = await GET(makeRequest());
     expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+    });
     expect(mocks.requireSupabaseServerUser).not.toHaveBeenCalled();
     expect(mocks.listExecutionReviewItems).not.toHaveBeenCalled();
   });
@@ -62,15 +68,19 @@ describe("GET /api/v1/blocks", () => {
     expect(mocks.listExecutionReviewItems).not.toHaveBeenCalled();
   });
 
-  it("verifies the token BEFORE any data work and maps auth failure to 401", async () => {
+  it("verifies the token BEFORE any data work and maps auth failure to 401 with a generic body (no raw provider error leaked)", async () => {
     mocks.requireSupabaseServerUser.mockRejectedValue(
-      new Error("Sign in before using this server action."),
+      new SupabaseAuthRejectedError("JWT expired"),
     );
 
     const response = await GET(
       makeRequest({ authorization: "Bearer invalid" }),
     );
     expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      ok: false,
+      errorCategory: "auth_rejected",
+    });
     expect(mocks.listExecutionReviewItems).not.toHaveBeenCalled();
   });
 
@@ -137,15 +147,20 @@ describe("GET /api/v1/blocks", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("maps data-layer failures to 500 without leaking internals", async () => {
+  it("maps data-layer failures to 500 with a generic body (no exception text leaked)", async () => {
     mocks.requireSupabaseServerUser.mockResolvedValue({
       client: {},
       user: { id: "user-1" },
     });
-    mocks.listExecutionReviewItems.mockRejectedValue(new Error("boom"));
+    mocks.listExecutionReviewItems.mockRejectedValue(
+      new Error("boom: pg connection reset"),
+    );
 
     const response = await GET(makeRequest({ authorization: "Bearer good" }));
     expect(response.status).toBe(500);
-    expect((await response.json()).ok).toBe(false);
+    const body = await response.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("boom");
+    expect(body.error).toBe("Something went wrong.");
   });
 });
