@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listExecutionReviewItems } from "@/lib/data/workflow";
-import {
-  requireSupabaseServerUser,
-  SupabaseAuthRejectedError,
-} from "@/lib/supabase/server";
+import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -47,11 +44,9 @@ const WindowSchema = z
 export async function GET(request: Request) {
   const accessToken = readBearerToken(request);
 
-  // LOW-1 (#670): missing/invalid/expired token all map to the same generic
-  // 401 body — never the raw Supabase Auth error string.
   if (!accessToken) {
     return NextResponse.json(
-      { ok: false, errorCategory: "auth_rejected" },
+      { ok: false, error: "Sign in before listing blocks." },
       { status: 401 },
     );
   }
@@ -109,20 +104,10 @@ export async function GET(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    if (error instanceof SupabaseAuthRejectedError) {
-      return NextResponse.json(
-        { ok: false, errorCategory: "auth_rejected" },
-        { status: 401 },
-      );
-    }
+    const message =
+      error instanceof Error ? error.message : "Block list failed.";
+    const status = /sign in/i.test(message) ? 401 : 500;
 
-    // LOW-1 (#670): log the detail server-side only; the caller gets a
-    // generic message, never the raw data-layer/provider error string.
-    console.error("v1/blocks GET failed:", error);
-
-    return NextResponse.json(
-      { ok: false, error: "Something went wrong." },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, error: message }, { status });
   }
 }

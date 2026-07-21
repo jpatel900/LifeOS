@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildUserDataExport } from "@/lib/data/export";
-import {
-  requireSupabaseServerUser,
-  SupabaseAuthRejectedError,
-} from "@/lib/supabase/server";
+import { requireSupabaseServerUser } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +22,9 @@ function readBearerToken(request: Request) {
 export async function GET(request: Request) {
   const accessToken = readBearerToken(request);
 
-  // LOW-1 (#670): missing/invalid/expired token all map to the same generic
-  // 401 body — never the raw Supabase Auth error string.
   if (!accessToken) {
     return NextResponse.json(
-      { ok: false, errorCategory: "auth_rejected" },
+      { ok: false, error: "Sign in before exporting your data." },
       { status: 401 },
     );
   }
@@ -50,23 +45,12 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    if (error instanceof SupabaseAuthRejectedError) {
-      return NextResponse.json(
-        { ok: false, errorCategory: "auth_rejected" },
-        { status: 401 },
-      );
-    }
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Data export failed. Nothing was exported; try again.";
+    const status = /sign in/i.test(message) ? 401 : 500;
 
-    // LOW-1 (#670): log the detail server-side only; the caller gets a
-    // generic message, never the raw data-layer/provider error string.
-    console.error("export GET failed:", error);
-
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Data export failed. Nothing was exported; try again.",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, error: message }, { status });
   }
 }

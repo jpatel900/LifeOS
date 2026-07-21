@@ -57,13 +57,7 @@ function AdminShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
-      {/* #687: the header already centers its own row at `max-w-6xl`, but the
-          page content was rendered bare — so `/settings/areas` stretched
-          edge-to-edge (title flush to the viewport's left edge), reading as
-          an older, inconsistent shell. Wrap children in the same centered,
-          padded container so settings sits at the same measure as the rest
-          of the app. */}
-      <div className="mx-auto max-w-6xl px-4 py-6">{children}</div>
+      {children}
     </div>
   );
 }

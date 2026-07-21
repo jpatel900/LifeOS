@@ -15,7 +15,6 @@ import {
   type AgingWaitingOnItem,
 } from "@/lib/agingRules";
 import { cardBg } from "./accent";
-import { resolveSelectedArea } from "@/lib/areaAccent";
 
 export type CockpitStage =
   | "today"
@@ -176,20 +175,14 @@ export function buildCockpitViewModel(
   dark: boolean,
   agingOptions: AgingRulesOptions = {},
 ): CockpitViewModel {
-  // #691: ONE active-area resolver shared with the moments home's accent
-  // derivation (#701) — this used to be an inline second copy of the same
-  // `find ?? areas[0]` rule, which is exactly how two screens drift apart.
-  // Note this is the *data/accent* fallback: with nothing selected ("All
-  // areas") it still lands on the first area, while the pickers and badges
-  // read `selectedAreaId` directly so none of them claims an area is
-  // current. A true all-areas cockpit data view is the open AGENT-TODO.
-  const activeArea = resolveSelectedArea(state.areas, selectedAreaId) ?? {
-    id: "area-default",
-    user_id: "local",
-    name: "LifeOS",
-    color: "#6b78e8",
-    created_at: new Date(0).toISOString(),
-  };
+  const activeArea = state.areas.find((area) => area.id === selectedAreaId) ??
+    state.areas[0] ?? {
+      id: "area-default",
+      user_id: "local",
+      name: "LifeOS",
+      color: "#6b78e8",
+      created_at: new Date(0).toISOString(),
+    };
   const areaId = activeArea.id;
   const inbox = state.taskDrafts.filter(
     (draft) => draft.status === "pending" && draft.area_id === areaId,

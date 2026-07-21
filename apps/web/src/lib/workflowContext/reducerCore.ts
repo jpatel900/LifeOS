@@ -776,46 +776,6 @@ export function loadStoredStateFromSession(): {
   }
 }
 
-// #691: the persisted current-area selection, stored beside the workflow
-// state under its own key. Selection is app-wide UI state (WorkflowContext's
-// `selectedAreaId`), so it persists at the same layer with the same lifetime
-// as the state whose areas it references. Three-valued read:
-// `undefined` = nothing stored (caller keeps its default), `null` = the user
-// explicitly chose All areas, string = an area id (caller validates it
-// against the live area list before applying).
-export const SELECTED_AREA_STORAGE_KEY = "lifeos.phase2.selectedArea";
-
-export function loadStoredSelectedAreaId(): string | null | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-  try {
-    const stored = window.sessionStorage.getItem(SELECTED_AREA_STORAGE_KEY);
-    if (stored === null) {
-      return undefined;
-    }
-    const parsed: unknown = JSON.parse(stored);
-    if (parsed === null) {
-      return null;
-    }
-    return typeof parsed === "string" ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export function storeSelectedAreaId(areaId: string | null) {
-  try {
-    window.sessionStorage.setItem(
-      SELECTED_AREA_STORAGE_KEY,
-      JSON.stringify(areaId),
-    );
-  } catch {
-    // Storage blocked — the selection just won't survive a reload. The
-    // workflow-state save effect already surfaces the blocked-storage banner.
-  }
-}
-
 // E2 (#261 follow-up): the stable (policy, area) key for a policy-change
 // proposal. Module-level so the persisted-decision seeding (in the load effect)
 // and the in-render policyProposalKey share ONE format — they must match or a
