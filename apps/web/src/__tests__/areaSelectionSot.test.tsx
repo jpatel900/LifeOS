@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import AreasSettingsPage from "../app/settings/areas/page";
 import TodayPage from "../app/today/page";
 import { AreaSelector } from "../app/components/moments/AreaSelector";
@@ -49,9 +49,27 @@ function ContextAreaPicker() {
   );
 }
 
+// #687: `/today` is a redirect shim into the moments home under the shipping
+// config, so `TodayPage` renders the cockpit only under the #590 rollback
+// (NEXT_PUBLIC_MOMENTS_HOME=false). The localStorage-override test below
+// needs the cockpit to actually mount, so pin the rollback config here —
+// stubbing `redirect` instead would let the assertion pass without the
+// surface under test ever rendering. beforeEach, not beforeAll: process.env
+// is process-global and shared by every test file in a vitest worker.
+const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
+
 beforeEach(() => {
+  process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
   window.sessionStorage.clear();
   window.localStorage.clear();
+});
+
+afterAll(() => {
+  if (ORIGINAL_MOMENTS_HOME === undefined) {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+  } else {
+    process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
+  }
 });
 
 describe("area selection single source of truth (#691)", () => {
