@@ -306,6 +306,13 @@ export function isSignedOutAuthError(error: unknown): boolean {
   );
 }
 
+/**
+ * #692 / NFR-006: every branch here is read by the person, so it says what
+ * happened and what to do in plain words. The vendor name, the transport
+ * detail, and the raw provider message stay out of the returned string; the
+ * developer layer of the health screen renders `subsystem` and `details`
+ * instead. Classification is unchanged — only the wording is.
+ */
 function normalizeSupabaseFailureSummary(
   message: string,
   fallback: string,
@@ -317,15 +324,15 @@ function normalizeSupabaseFailureSummary(
     normalized.includes("token") ||
     normalized.includes("auth")
   ) {
-    return "Supabase authentication failed while checking this subsystem.";
+    return "Your sign-in could not be confirmed. Sign in again to continue.";
   }
 
   if (normalized.includes("permission") || normalized.includes("rls")) {
-    return "Supabase denied access for this user/session.";
+    return "This account is not allowed to see that. Sign in again, or use the account this work belongs to.";
   }
 
   if (normalized.includes("network") || normalized.includes("fetch")) {
-    return "Supabase request failed before a response was returned.";
+    return "Your account could not be reached. Check your internet connection and try again.";
   }
 
   return fallback;
@@ -338,13 +345,13 @@ function configuredCheck(supabaseConfigured: boolean) {
         "supabase config",
         "healthy",
         100,
-        "Supabase public URL and anon key are present.",
+        "This device knows where your account lives, so signing in will work.",
         { repair_steps: [] },
       )
     : informationalCheck(
         "health-supabase-config",
         "supabase config",
-        "Supabase config is missing; local mock mode is active by design.",
+        "No account is connected here. Everything you do stays on this device.",
         {
           configured: false,
           mode: "mock_only",
@@ -374,7 +381,7 @@ function googleCalendarCheck(options: HealthDashboardOptions) {
     return informationalCheck(
       "health-google-calendar",
       "Google Calendar",
-      "Google Calendar is not configured; planning remains local-only.",
+      "Google Calendar is not set up. Your plans stay inside LifeOS.",
       {
         configured: false,
         connection_present: false,
@@ -387,7 +394,7 @@ function googleCalendarCheck(options: HealthDashboardOptions) {
     return informationalCheck(
       "health-google-calendar",
       "Google Calendar",
-      "Google Calendar is configured, but no active connection metadata is present.",
+      "Google Calendar is set up but not connected yet. Connect it to plan into your calendar.",
       {
         configured: true,
         connection_present: false,
@@ -401,7 +408,7 @@ function googleCalendarCheck(options: HealthDashboardOptions) {
     "Google Calendar",
     "healthy",
     100,
-    "Google Calendar connection metadata is active.",
+    "Google Calendar is connected.",
     {
       configured: true,
       connection_present: true,
@@ -423,26 +430,34 @@ function getObservabilityCheckStatus(provider: ObservabilityProviderStatus) {
   }
 }
 
+/**
+ * #692 / NFR-006: these rows used to name the vendor and its wiring on the
+ * user surface ("Sentry DSN is absent", "PostHog public config", "langfuse is
+ * disabled"). The person only needs to know what, if anything, leaves the app
+ * — so the copy answers that. The vendor identity is still fully visible in
+ * `subsystem` and `details.provider`, which the health screen renders in its
+ * developer layer. Nothing about what is measured changed.
+ */
 function getObservabilityProviderSummary(
   provider: ObservabilityProviderStatus,
 ) {
   switch (provider.state) {
     case "disabled":
       return provider.provider === "sentry"
-        ? "Sentry DSN is absent; sanitized error export is disabled."
+        ? "Crash reports are turned off. Nothing is sent when something goes wrong."
         : provider.provider === "posthog"
-          ? "PostHog public config is absent; manual product analytics is disabled."
-          : `${provider.provider} is disabled; vendor telemetry stays off by default.`;
+          ? "Usage counting is turned off. Nothing about how you use LifeOS is sent."
+          : "AI activity logging is turned off. Nothing about your AI requests is sent.";
     case "configured":
       return provider.provider === "sentry"
-        ? "Sentry DSN is present; sanitized error capture is enabled with replay, tracing, and default PII off."
+        ? "Crash reports are on. Only the technical error is sent — never your screen, your typing, or your personal details."
         : provider.provider === "posthog"
-          ? "PostHog public config is present; manual analytics is enabled with autocapture, replay, heatmaps, dead clicks, and console logs off."
-          : "Langfuse server config is present; metadata-only parse_capture tracing is enabled without prompt, completion, or raw-capture export.";
+          ? "Usage counting is on. Only a few chosen actions are counted — never your screen, your typing, or your clicks."
+          : "AI activity logging is on. Only timings and outcomes are sent — never what you wrote or what the AI wrote back.";
     case "missing_config":
-      return `${provider.provider} has partial configuration. Complete the config before any future enablement.`;
+      return "This reporting tool is only half set up, so it stays off. Someone technical needs to finish it.";
     case "invalid_config":
-      return `${provider.provider} config is invalid. Fix the config before enablement.`;
+      return "This reporting tool's setup is not valid, so it stays off. Someone technical needs to fix it.";
   }
 }
 
@@ -457,8 +472,8 @@ function observabilityChecks(snapshot: ObservabilityHealthSnapshot) {
       "healthy",
       100,
       snapshot.guardrails.networkTelemetryEnabled
-        ? "Selective sanitized telemetry may be enabled, but replay, autocapture, tracing, and AI content export remain off."
-        : "Replay, autocapture, AI content tracing, and vendor telemetry remain disabled.",
+        ? "Some technical reports may leave this app, but your screen is never recorded, your clicks are never captured, and nothing you write to the AI is ever sent."
+        : "Nothing leaves this app. Your screen is not recorded, your clicks are not captured, and nothing you write to the AI is sent anywhere.",
       {
         ai_content_tracing_enabled: snapshot.guardrails.aiContentTracingEnabled,
         active_provider_count: activeProviders.length,
@@ -574,7 +589,7 @@ function providerIncidentCheck(incidents: ProviderIncident[]) {
       "AI provider incidents",
       "healthy",
       100,
-      "No repeated AI-provider failures were found in recent trace data.",
+      "The AI helper has been working normally over the last day.",
       {
         incident_count: 0,
         window_minutes: 30,
@@ -589,7 +604,7 @@ function providerIncidentCheck(incidents: ProviderIncident[]) {
     "AI provider incidents",
     "watch",
     55,
-    `${incidents.length} AI provider incident${incidents.length === 1 ? "" : "s"} found from repeated recent failures. Capture stays safe; check the affected AI path before relying on it.`,
+    `The AI helper failed several times in a row on ${incidents.length} thing${incidents.length === 1 ? "" : "s"} it was asked to do. Nothing you captured was lost — double-check anything the AI filled in.`,
     {
       incident_count: incidents.length,
       affected_features: incidents.map((incident) => incident.feature),
@@ -672,7 +687,7 @@ async function probeTransitionRpcs(client: MinimalHealthSupabaseClient) {
       "transition RPCs",
       "critical",
       0,
-      "Supabase RPC support is unavailable in the current client.",
+      "LifeOS cannot move work between steps right now. Reload the page, then run the check again.",
       { repair_steps: ["Recreate the Supabase browser client."] },
     );
   }
@@ -701,7 +716,10 @@ async function probeTransitionRpcs(client: MinimalHealthSupabaseClient) {
       "transition RPCs",
       "critical",
       0,
-      `Missing transition RPC${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}. Apply the pending Supabase migrations, then rerun the system check.`,
+      // #692: the RPC names stay in `details.missing` (the developer layer
+      // renders them); the sentence the person reads says what is broken and
+      // who can fix it. Classification and score are unchanged.
+      `${missing.length} action${missing.length === 1 ? "" : "s"} for moving work between steps ${missing.length === 1 ? "is" : "are"} missing, so those steps will fail. Someone technical needs to finish setting this up.`,
       {
         callable,
         missing,
@@ -717,7 +735,7 @@ async function probeTransitionRpcs(client: MinimalHealthSupabaseClient) {
       "transition RPCs",
       "watch",
       60,
-      `Transition RPCs exist, but ${invocationErrors.length} probe${invocationErrors.length === 1 ? "" : "s"} returned an unexpected invocation error.`,
+      `Moving work between steps mostly works, but ${invocationErrors.length} action${invocationErrors.length === 1 ? "" : "s"} answered unexpectedly. Try again; if it keeps happening, someone technical should look.`,
       {
         callable,
         missing,
@@ -734,7 +752,7 @@ async function probeTransitionRpcs(client: MinimalHealthSupabaseClient) {
     "transition RPCs",
     "healthy",
     100,
-    "Required transition RPCs are callable without mutating workflow data.",
+    "Moving work between steps is working.",
     {
       callable,
       missing,
@@ -763,7 +781,10 @@ async function probeCoreReads(client: MinimalHealthSupabaseClient) {
       "core table reads",
       "critical",
       0,
-      `Unable to read core user table${failed.length === 1 ? "" : "s"}: ${failed.join(", ")}. Check migrations, grants, RLS, and the active session.`,
+      // #692: the table names stay in `details.failed` for the developer
+      // layer. The person is told which of their things could not be loaded
+      // in the words they use for them.
+      `${failed.length} part${failed.length === 1 ? "" : "s"} of your saved work could not be loaded. Sign in again and retry; if it keeps happening, someone technical should look.`,
       {
         readable,
         failed,
@@ -779,7 +800,7 @@ async function probeCoreReads(client: MinimalHealthSupabaseClient) {
     "core table reads",
     "healthy",
     100,
-    "Core user-owned workflow tables are readable for the active session.",
+    "All of your saved work is loading correctly.",
     { readable, failed, repair_steps: [] },
   );
 }
@@ -809,7 +830,7 @@ async function persistHealthChecks(
   if (error) {
     return normalizeSupabaseFailureSummary(
       getErrorMessage(error),
-      "Unable to persist health snapshot.",
+      "This check ran, but a record of it could not be saved to your account.",
     );
   }
 
@@ -831,7 +852,7 @@ export async function getHealthDashboard(
       "mock mode",
       "healthy",
       100,
-      "Mock mode is available as the deterministic fallback path.",
+      "This device can keep your work on its own, so nothing is lost if your account cannot be reached.",
       { available: true, repair_steps: [] },
     ),
     configuredCheck(supabaseConfigured),
@@ -842,7 +863,7 @@ export async function getHealthDashboard(
       informationalCheck(
         "health-auth-session",
         "auth session",
-        "No Supabase session is active because Supabase config is missing.",
+        "There is no account to sign in to here, so everything stays on this device.",
         {
           authenticated: false,
           mode: "mock_only",
@@ -853,7 +874,7 @@ export async function getHealthDashboard(
         "areas",
         "healthy",
         100,
-        "Default mock areas are readable.",
+        "The starter areas are ready to use.",
         { source: "mock", repair_steps: [] },
       ),
       makeCheck(
@@ -861,14 +882,14 @@ export async function getHealthDashboard(
         "capture persistence",
         "healthy",
         90,
-        "Capture persistence is available through browser mock workflow state.",
+        "Anything you capture is being kept on this device.",
         { source: "mock", repair_steps: [] },
       ),
       integrationCheck(
         "health-ai-parser",
         "AI parser",
         options.aiParserConfigured ?? false,
-        "AI parser is not configured in Phase 4E; parsing remains deterministic mock logic.",
+        "The AI helper is turned off. Anything you capture is sorted with built-in rules instead.",
       ),
       googleCalendarCheck(options),
       ...observabilityChecks(observability),
@@ -892,7 +913,7 @@ export async function getHealthDashboard(
         "auth session",
         "critical",
         0,
-        "Supabase auth is unavailable in the current client.",
+        "Signing in is not working right now. Reload the page, then run the check again.",
         { repair_steps: ["Recreate the Supabase browser client."] },
       ),
     );
@@ -922,7 +943,7 @@ export async function getHealthDashboard(
           0,
           normalizeSupabaseFailureSummary(
             getErrorMessage(error),
-            "Unable to verify Supabase auth session.",
+            "Your sign-in could not be checked. Sign in again to continue.",
           ),
           { authenticated: false, repair_steps: ["Sign in again."] },
         ),
@@ -950,7 +971,7 @@ export async function getHealthDashboard(
           "auth session",
           "healthy",
           100,
-          "Authenticated Supabase session is active.",
+          "You're signed in. Your work is saving to your account.",
           { authenticated: true, repair_steps: [] },
         ),
       );
@@ -967,7 +988,7 @@ export async function getHealthDashboard(
               "areas",
               "healthy",
               100,
-              `${areas.length} active area${areas.length === 1 ? "" : "s"} readable from Supabase.`,
+              `Your ${areas.length} area${areas.length === 1 ? "" : "s"} loaded correctly.`,
               {
                 source: "supabase",
                 active_area_count: areas.length,
@@ -979,7 +1000,7 @@ export async function getHealthDashboard(
               "areas",
               "healthy",
               100,
-              "Supabase areas are readable, but no active areas exist.",
+              "Your areas load correctly. You haven't set any up yet.",
               {
                 source: "supabase",
                 active_area_count: 0,
@@ -997,7 +1018,7 @@ export async function getHealthDashboard(
           0,
           normalizeSupabaseFailureSummary(
             error instanceof Error ? error.message : "",
-            "Unable to read Supabase areas.",
+            "Your areas could not be loaded. Sign in again and retry.",
           ),
           {
             source: "supabase",
@@ -1015,7 +1036,7 @@ export async function getHealthDashboard(
           "capture persistence",
           "healthy",
           100,
-          "capture_items is readable for the active user.",
+          "The thoughts you've captured are loading correctly.",
           { source: "supabase", repair_steps: [] },
         ),
       );
@@ -1028,7 +1049,7 @@ export async function getHealthDashboard(
           0,
           normalizeSupabaseFailureSummary(
             error instanceof Error ? error.message : "",
-            "Unable to check capture_items access.",
+            "The thoughts you've captured could not be loaded. Sign in again and retry.",
           ),
           {
             source: "supabase",
@@ -1053,7 +1074,7 @@ export async function getHealthDashboard(
           60,
           normalizeSupabaseFailureSummary(
             error instanceof Error ? error.message : "",
-            "Unable to read recent AI provider trace data.",
+            "The AI helper's recent activity could not be checked. Sign in again and retry.",
           ),
           {
             repair_steps: ["Check ai_call_traces grants, RLS, and auth state."],
@@ -1092,7 +1113,7 @@ export async function getHealthDashboard(
       "health-ai-parser",
       "AI parser",
       options.aiParserConfigured ?? false,
-      "AI parser is not configured in Phase 4E; parsing remains deterministic mock logic.",
+      "The AI helper is turned off. Anything you capture is sorted with built-in rules instead.",
     ),
     googleCalendarCheck(options),
     ...observabilityChecks(observability),
@@ -1104,7 +1125,7 @@ export async function getHealthDashboard(
       checkedAt,
       checks,
       persistence: "skipped",
-      persistenceMessage: "Sign in before persisting health checks.",
+      persistenceMessage: "Sign in to keep a record of these checks.",
     };
   }
 
