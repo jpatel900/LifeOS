@@ -1564,8 +1564,7 @@ h4 {
    Ports docs/vision/prototypes/prototype-2-today-home.html's visual
    language (layered surfaces, card treatment, background depth, type
    hierarchy) onto the live moments home. New rules only — the shared
-   workflow-*/
-health-*/review-* classes above stay untouched so the
+   workflow-, health-, and review-prefixed classes above stay untouched so the
    demoted cockpit routes, /login, and /settings/areas render exactly as
    before. Applied as ADDITIONAL classes (never a replacement) on
    existing elements in app/components/moments/** and the

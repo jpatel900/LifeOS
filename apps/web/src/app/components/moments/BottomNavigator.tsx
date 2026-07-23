@@ -44,7 +44,7 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  *     control's 44px floor) — measured live at 46px (44 + this pill's own
  *     2px border, border-box).
  *   + pb 0.5rem (8px, before the safe-area-inset-bottom term composed into
- *     the same `pb-[calc(env(...)+0.5rem)]` declaration)
+ *     the same bottom-padding declaration)
  *   = 8 + 46 + 8 = 62px, measured live (getBoundingClientRect) at 63px.
  *   Was ~73.2px/74 before D-10 R2's height-lock fix — MomentsThemeShell's
  *   reserved end-of-scroll clearance (`pb-7rem` = 112px, sized against the
