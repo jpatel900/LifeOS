@@ -6,7 +6,7 @@ settings:
 
 overrides:
   postcss: ^8.5.15
-  protobufjs: ^8.6.0
+  protobufjs: ^8.6.6
   vite: ^7.3.5
 
 importers:
@@ -3197,8 +3197,8 @@ packages:
   prop-types@15.8.1:
     resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}
 
-  protobufjs@8.6.5:
-    resolution: {integrity: sha512-zeE5LPpencAGXvsxyOYmEgJhxzHY8IsmPAFzstZVhDSVT8QH03q6gMZwZRaQGApevZbAL6u28ugs4CC+YKB2jQ==}
+  protobufjs@8.7.1:
+    resolution: {integrity: sha512-agdGHrXNTv0IrYscJPDou/PlEJk1c/hBZ9o/B5NH2i/nSPtPqacNxzgwf1CebXxFMjMrZH5sqv9uQuw96aGt/A==}
     engines: {node: '>=12.0.0'}
 
   proxy-from-env@1.1.0:
@@ -4150,7 +4150,7 @@ snapshots:
     dependencies:
       lodash.camelcase: 4.3.0
       long: 5.3.2
-      protobufjs: 8.6.5
+      protobufjs: 8.7.1
       yargs: 17.7.3
 
   '@humanfs/core@0.19.2':
@@ -6900,7 +6900,7 @@ snapshots:
       object-assign: 4.1.1
       react-is: 16.13.1
 
-  protobufjs@8.6.5:
+  protobufjs@8.7.1:
     dependencies:
       long: 5.3.2
 

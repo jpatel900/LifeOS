@@ -98,27 +98,12 @@ function TaskSeedBridge() {
 }
 
 /**
- * Presses the `c` capture shortcut and waits for the overlay.
- *
- * The shortcut is gated by TodayMoments' `topbarShortcutsEnabled`, which is
- * false while the onboarding and re-entry ritual gates are still settling —
- * both derive from state the provider hydrates AFTER first render, and
- * `useMomentKeyboard` attaches no listener at all while `enabled` is false.
- * A synchronous key press right after `render()` can therefore land in that
- * window and be swallowed silently, which is how the SP-5 draft-preservation
- * test failed twice in ~15 full-suite runs on 2026-07-22/23 (under parallel
- * workspace load; never in isolation).
- *
- * Re-pressing until the overlay opens keeps the exact claim under test —
- * pressing `c` opens capture — and only tolerates a mount that has not
- * settled yet. Nothing is relaxed: if the shortcut genuinely stops working,
- * this still fails, just at the waitFor timeout instead of instantly.
+ * Presses the `c` capture shortcut exactly once. The mount contract is that
+ * the page must be ready to receive a user keypress once it is interactive;
+ * retrying here would hide a dropped shortcut during cold mount.
  */
-async function pressCaptureShortcut(): Promise<void> {
-  await waitFor(() => {
-    fireEvent.keyDown(window, { key: "c" });
-    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
-  });
+function pressCaptureShortcut(): void {
+  fireEvent.keyDown(window, { key: "c" });
 }
 
 function renderToday(props: Partial<TodayMomentsProps> = {}) {

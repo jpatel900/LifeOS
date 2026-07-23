@@ -1,4 +1,5 @@
 import { render } from "@testing-library/react";
+import { useLayoutEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   useMomentKeyboard,
@@ -8,6 +9,14 @@ import {
 function Harness(props: MomentKeyboardHandlers) {
   useMomentKeyboard(props);
   return null;
+}
+
+function ColdMountHarness(props: MomentKeyboardHandlers) {
+  useLayoutEffect(() => {
+    fireKey({ key: "c" });
+  }, []);
+
+  return <Harness {...props} />;
 }
 
 function fireKey(init: KeyboardEventInit, target: EventTarget = window) {
@@ -52,6 +61,13 @@ describe("useMomentKeyboard", () => {
     fireKey({ key: "C" });
 
     expect(handlers.onCapture).toHaveBeenCalledTimes(2);
+  });
+
+  it("receives capture during cold mount before passive effects run", () => {
+    const handlers = makeHandlers();
+    render(<ColdMountHarness {...handlers} />);
+
+    expect(handlers.onCapture).toHaveBeenCalledTimes(1);
   });
 
   it("maps Cmd/Ctrl+K to onPalette and prevents default", () => {
