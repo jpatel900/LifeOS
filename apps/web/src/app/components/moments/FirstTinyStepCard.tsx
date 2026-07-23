@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 /**
  * #572 (execute/review contract completion, epic #555 item 5): the focus
@@ -19,6 +19,7 @@ export interface FirstTinyStepCardProps {
 }
 
 export function FirstTinyStepCard({ value, onSave }: FirstTinyStepCardProps) {
+  const inputId = useId();
   const trimmed = value?.trim() ?? "";
   const [editing, setEditing] = useState(!trimmed);
   const [draft, setDraft] = useState(trimmed);
@@ -52,11 +53,15 @@ export function FirstTinyStepCard({ value, onSave }: FirstTinyStepCardProps) {
         className="workflow-surface-card rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4"
         data-testid="first-tiny-step-card"
       >
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <label
+          htmlFor={inputId}
+          className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+        >
           First move
-        </p>
+        </label>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
+            id={inputId}
             type="text"
             autoFocus
             value={draft}
