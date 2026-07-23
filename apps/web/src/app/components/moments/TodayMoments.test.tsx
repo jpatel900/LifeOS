@@ -97,6 +97,30 @@ function TaskSeedBridge() {
   );
 }
 
+/**
+ * Presses the `c` capture shortcut and waits for the overlay.
+ *
+ * The shortcut is gated by TodayMoments' `topbarShortcutsEnabled`, which is
+ * false while the onboarding and re-entry ritual gates are still settling —
+ * both derive from state the provider hydrates AFTER first render, and
+ * `useMomentKeyboard` attaches no listener at all while `enabled` is false.
+ * A synchronous key press right after `render()` can therefore land in that
+ * window and be swallowed silently, which is how the SP-5 draft-preservation
+ * test failed twice in ~15 full-suite runs on 2026-07-22/23 (under parallel
+ * workspace load; never in isolation).
+ *
+ * Re-pressing until the overlay opens keeps the exact claim under test —
+ * pressing `c` opens capture — and only tolerates a mount that has not
+ * settled yet. Nothing is relaxed: if the shortcut genuinely stops working,
+ * this still fails, just at the waitFor timeout instead of instantly.
+ */
+async function pressCaptureShortcut(): Promise<void> {
+  await waitFor(() => {
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+  });
+}
+
 function renderToday(props: Partial<TodayMomentsProps> = {}) {
   return render(
     <WorkflowProvider>
@@ -374,7 +398,7 @@ describe("TodayMoments", () => {
     expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
     expect(screen.getByTestId("flow-moment-empty")).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
@@ -791,7 +815,7 @@ describe("TodayMoments — FR-028 re-entry return ritual", () => {
       "half-typed thought before the ritual",
     );
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
 
     expect(screen.getByTestId("capture-overlay-textarea")).toHaveValue(
       "half-typed thought before the ritual",
@@ -1256,7 +1280,7 @@ describe("TodayMoments — P6 deep-link shims", () => {
     expect(toast).toHaveClass("fixed");
     expect(toast.textContent).toBe("");
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
       target: { value: "Follow up with Alex about the contract" },
     });
@@ -1284,7 +1308,7 @@ describe("TodayMoments — P6 deep-link shims", () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
       target: { value: "Follow up with Alex about the contract" },
     });
@@ -1336,7 +1360,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
   it("preserves typed text through Esc/close and reopen, with the cursor at the end and a restored hint", async () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const textarea = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -1356,7 +1380,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
       window.localStorage.getItem("lifeos.moments.captureDraft"),
     ).toBeNull();
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const reopened = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -1375,7 +1399,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const textarea = screen.getByTestId("capture-overlay-textarea");
     fireEvent.change(textarea, {
       target: { value: "Follow up with Alex about the contract" },
@@ -1400,7 +1424,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
       window.sessionStorage.getItem("lifeos.moments.captureDraft"),
     ).toBeNull();
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const reopened = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -1412,10 +1436,10 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
     restoreFetch();
   });
 
-  it("fresh mount with empty sessionStorage shows an empty box and no false restored hint", () => {
+  it("fresh mount with empty sessionStorage shows an empty box and no false restored hint", async () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const textarea = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
