@@ -210,12 +210,10 @@ test("execute, review, health, and all areas keep the handoff hierarchy", async 
   await page.goto("/health");
   await expect(
     page.getByRole("heading", {
-      name: /All systems healthy|checks need attention/,
+      name: /Everything is working|\d+ things? needs? a look/,
     }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Run system check" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Check again" })).toBeVisible();
 
   await page.getByRole("button", { name: "All areas" }).click();
   // #555: in-app stage navigation is a real router.push now — settle on the

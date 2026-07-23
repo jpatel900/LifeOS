@@ -49,7 +49,7 @@ const STAGES: StageCase[] = [
     assertLandmark: async (page) => {
       await expect(
         page.getByRole("heading", {
-          name: /All systems healthy|checks need attention/,
+          name: /Everything is working|\d+ things? needs? a look/,
         }),
       ).toBeVisible();
     },
@@ -227,7 +227,7 @@ test("moments home: View area health reaches /health in one interaction", async 
   await expect(page.getByTestId("lifeos-cockpit")).toBeVisible();
   await expect(
     page.getByRole("heading", {
-      name: /All systems healthy|checks need attention/,
+      name: /Everything is working|\d+ things? needs? a look/,
     }),
   ).toBeVisible();
 });
