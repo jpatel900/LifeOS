@@ -37,6 +37,13 @@ describe("Today cockpit fallback (NEXT_PUBLIC_MOMENTS_HOME=false)", () => {
     expect(
       screen.getByRole("navigation", { name: "Workflow stages" }),
     ).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Save and sort" })).toBeNull();
+    // #703: anchored on the capture surface's save control by testid, not by
+    // a button label. A label lookup here is no longer a real claim — the
+    // one capture action is now named "Capture", which is also the name of a
+    // stage-nav button on this very screen, so a name-based negative would be
+    // either trivially true (an old label nothing renders any more) or
+    // trivially false (matching the nav). The testid only exists on the
+    // capture stage, which this Today fallback is not.
+    expect(screen.queryByTestId("capture-page-save")).toBeNull();
   });
 });

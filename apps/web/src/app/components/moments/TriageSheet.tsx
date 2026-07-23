@@ -7,6 +7,7 @@ import { useWorkflow } from "@/lib/WorkflowContext";
 import { Button } from "@/components/ui/button";
 import { MomentSheet } from "./MomentSheet";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
+import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
 
 /**
@@ -52,6 +53,17 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * stays strictly on-demand, never background). The offer is local to this
  * sheet (cleared when it closes); the Flow moment's manual "Draft map"
  * button is untouched.
+ *
+ * #703 (owner-ratified 2026-07-19): this sheet gained the **Sort** action —
+ * the app's parse trigger, relocated here from the capture pop-up. Capture is
+ * now a pure raw save, so this is where a stored thought becomes a task
+ * draft. Sort calls the shared `sortCaptureIntoDrafts`, which drives the
+ * EXISTING `parseCaptureIntoDrafts` / `/api/parse-capture` path — reused, not
+ * reimplemented, so untrusted capture text keeps travelling through the same
+ * NS-INV-1 context-assembly authority path and INV-8 delimiting is inherited
+ * rather than re-established (proved by
+ * `lib/ai/triageSortContainment.test.tsx`). It runs only on a tap: never on
+ * open, never on a timer, never in the background (NFR-001/NFR-005).
  */
 
 export interface TriageSheetProps {
@@ -114,26 +126,28 @@ export function TriageSheet({
   // #689 (read path): raw captures used to be invisible here — the owner
   // captured a thought, followed "Decide now" into this sheet, and met
   // "Nothing waiting in triage". Every capture is persisted as a capture
-  // item first (stageAndPersistRawCapture), and only an AI/mock parse turns
-  // it into a task draft — so in local mode (parse skipped or declined) the
-  // thought lives ONLY in `captureItems`. List them, plainly, same area
-  // scoping as the pipeline "Capture" badge (`buildPipelineCounts`'s
-  // actionableCapture filter plus `triage_required`, the parse-later
-  // status). Presentation-only: no new write path, rows are read-only.
-  // A parsed capture keeps status "triage_required" while its draft sits in
+  // item first (stageAndPersistRawCapture), and only a parse turns it into a
+  // task draft — so until it is sorted the thought lives ONLY in
+  // `captureItems`. Same area scoping as the pipeline "Capture" badge
+  // (`buildPipelineCounts`'s actionableCapture filter plus
+  // `triage_required`, the parse-later status).
+  // A sorted capture keeps status "triage_required" while its draft sits in
   // the pending list above — exclude any capture a draft already points at
   // (task_drafts.capture_item_id), so a thought is never listed twice.
+  // #703: the sheet still needs the *count* so the empty state stays honest;
+  // the rows themselves (and the Sort action) live in the shared
+  // UnsortedCaptures component below, which applies this identical filter.
   const draftedCaptureIds = new Set(
     state.taskDrafts
       .map((draft) => draft.capture_item_id)
       .filter((id): id is string => Boolean(id)),
   );
-  const unsortedCaptures = state.captureItems.filter(
+  const unsortedCaptureCount = state.captureItems.filter(
     (item) =>
       (item.status === "new" || item.status === "triage_required") &&
       !draftedCaptureIds.has(item.id) &&
       (resolvedAreaId ? item.area_id === resolvedAreaId : true),
-  );
+  ).length;
 
   const showMapOfferReady =
     mapOffer !== null &&
@@ -211,7 +225,7 @@ export function TriageSheet({
           )}
         </div>
       ) : null}
-      {pendingDrafts.length === 0 && unsortedCaptures.length === 0 ? (
+      {pendingDrafts.length === 0 && unsortedCaptureCount === 0 ? (
         <p
           className="text-sm text-muted-foreground"
           data-testid="triage-sheet-empty"
@@ -312,36 +326,12 @@ export function TriageSheet({
         </ul>
       )}
 
-      {unsortedCaptures.length > 0 ? (
-        <div className="grid gap-2" data-testid="triage-sheet-captures">
-          {/* #689: glance level first (#692) — what these are and that they
-              are safe; the per-row text is the detail. */}
-          <p className="text-xs font-semibold text-muted-foreground">
-            Captured, not sorted yet
-          </p>
-          <ul className="grid gap-2">
-            {unsortedCaptures.map((item) => {
-              const area = state.areas.find(
-                (candidate) => candidate.id === item.area_id,
-              );
-              return (
-                <li
-                  key={item.id}
-                  className="workflow-compact-item grid gap-1.5 rounded-lg border border-border p-3"
-                  data-testid={`triage-sheet-capture-${item.id}`}
-                >
-                  <p className="text-sm font-medium">{item.raw_text}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {area ? `${area.name} · ` : ""}
-                    Saved as you wrote it — sorting it into a task is the next
-                    step here.
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
+      {/* #703: the unsorted-capture rows and the Sort action that drives
+          the parse live in one shared component, used by BOTH triage
+          surfaces (this sheet and the cockpit TriageView) so they show the
+          same rows, the same copy (#689), and the same degraded behavior.
+          It renders nothing when there is nothing unsorted. */}
+      <UnsortedCaptures areaId={resolvedAreaId} />
 
       {/* #689 item 3: when signed out, say where these live, plainly, with
           the door right here. */}

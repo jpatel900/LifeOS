@@ -15,38 +15,58 @@ test.skip(
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 
 /**
- * Browser proof that the cockpit capture surface round-trips through
- * /api/parse-capture, the drafts land in triage, and the UI says the mock
- * parser ran. HIGH-1 (#670): the route now requires a verified bearer token
- * and the E2E dev server has no Supabase env, so the route is stubbed with
- * the deterministic mock-parser payload (task-map lifecycle precedent); the
- * server-side contract is proven by the vitest route tests.
+ * Browser proof of the #703 journey on the legacy cockpit surfaces: capture
+ * saves raw and never parses, and the Sort action on the cockpit's own triage
+ * stage is what round-trips through /api/parse-capture and produces drafts.
+ *
+ * HIGH-1 (#670): the route requires a verified bearer token and the E2E dev
+ * server has no Supabase env, so the route is stubbed with the deterministic
+ * mock-parser payload (task-map lifecycle precedent); the server-side
+ * contract is proven by the vitest route tests.
  */
-test("cockpit capture round-trips through /api/parse-capture in mock mode", async ({
+test("cockpit capture saves raw, then triage Sort round-trips through /api/parse-capture in mock mode", async ({
   page,
 }) => {
   await stubParseCaptureRoute(page);
   await page.goto("/capture");
 
+  const textarea = page.getByPlaceholder("Drop the thought here.");
+  await textarea.fill("Mock mode parse proof capture");
+
+  // #703: one action, and no second save button beside it.
+  await expect(page.getByTestId("capture-page-save")).toHaveText("Capture");
+  await expect(page.getByTestId("capture-page-save-raw")).toHaveCount(0);
+  await page.getByTestId("capture-page-save").click();
+
+  // Saving is synchronous and nothing parsed: the closing "back to: <hook>"
+  // conclusion renders with no wait before it (no hook was entered, so it
+  // falls back to the default label), and the surface does NOT navigate away
+  // — there is no draft in triage yet to navigate to.
+  await expect(page.getByTestId("capture-page-parsing")).toHaveCount(0);
+  await expect(page.getByTestId("capture-page-conclusion")).toContainText(
+    "back to: what you were doing",
+  );
+  await expect(page).toHaveURL(/\/capture$/);
+
+  // #703: sorting is the separate, explicit step, taken on the triage stage.
   const parseResponsePromise = page.waitForResponse(
     (response) =>
       response.url().includes("/api/parse-capture") &&
       response.request().method() === "POST",
   );
 
-  const textarea = page.getByPlaceholder("Drop the thought here.");
-  await textarea.fill("Mock mode parse proof capture");
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  // The first client-side navigation in a dev run can spend several seconds
+  // compiling, so give the stage switch a wide window.
+  await page.getByRole("button", { name: /Triage/ }).click();
+  await expect(page.getByTestId("triage-sheet-captures")).toContainText(
+    "Mock mode parse proof capture",
+    { timeout: 30_000 },
+  );
 
-  // #556 FR-026 containment: the capture stage holds the user through the
-  // wait instead of navigating instantly — raw text stays fully visible,
-  // the surface is locked against a second submit, and the "Saved; waiting
-  // in Triage" toast has not fired yet. The mock parser resolves fast, so
-  // this assertion races the response; it still catches a regression back
-  // to instant navigation because the URL check below requires the wait to
-  // have actually happened (the textarea would already be gone otherwise).
-  await expect(textarea).toHaveValue("Mock mode parse proof capture");
-  await expect(page.getByText("Saved; waiting in Triage")).toHaveCount(0);
+  await page
+    .getByTestId(/^triage-sheet-sort-/)
+    .first()
+    .click();
 
   const parseResponse = await parseResponsePromise;
   expect(parseResponse.status()).toBe(200);
@@ -54,21 +74,9 @@ test("cockpit capture round-trips through /api/parse-capture in mock mode", asyn
   expect(body.ok).toBe(true);
   expect(body.parser).toBe("mock");
 
-  // Containment's closing beat: the "back to: <hook>" conclusion renders on
-  // the capture stage itself before the toast/navigation fire (no hook was
-  // entered, so it falls back to the default label).
-  await expect(page.getByTestId("capture-page-conclusion")).toContainText(
-    "back to: what you were doing",
-  );
-
-  // #555: capture -> triage is a real router.push now; the first client-side
-  // navigation to /triage in a dev run can spend several seconds compiling
-  // (a cold /_error compile alone has been observed north of 20s when this
-  // spec leads a multi-file run), so give the URL commit a wide window.
-  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
   await expect(
     page.getByRole("heading", { name: "Mock mode parse proof capture" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("button", { name: "Do today" })).toBeVisible();
 
   // The UI states plainly that the mock parser produced these drafts.

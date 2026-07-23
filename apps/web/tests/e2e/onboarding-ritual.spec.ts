@@ -39,8 +39,11 @@ const ZERO_WORKFLOW_STATE = {
 test.describe("onboarding ritual on a zero-state session (#581)", () => {
   test.beforeEach(async ({ page }) => {
     // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and
-    // E2E has no Supabase env, so capture flows run against the deterministic
-    // mock-parser stub (task-map lifecycle precedent).
+    // E2E has no Supabase env, so any parse this suite touches must run
+    // against the deterministic mock-parser stub (task-map lifecycle
+    // precedent). Since #703 the ritual's capture step never parses — the
+    // stub stays as the guard that makes that observable: if a parse ever
+    // reappears here it answers deterministically instead of 401-ing.
     await stubParseCaptureRoute(page);
     await page.addInitScript(
       ([key, value]) => {
@@ -70,26 +73,32 @@ test.describe("onboarding ritual on a zero-state session (#581)", () => {
     await expect(page.getByTestId("onboarding-calendar-link")).toBeVisible();
     await page.getByTestId("onboarding-day-continue").click();
 
-    // Step 3 — first capture through the shared CaptureCore, answered by the
-    // stubbed /api/parse-capture mock-parser payload (see stub above).
+    // Step 3 — first capture through the shared CaptureCore. #703: capture
+    // is a pure raw save now — nothing is parsed here, so this step has ONE
+    // action and never waits on /api/parse-capture. (The capture -> parse ->
+    // draft round-trip moved to the triage Sort action with the parse
+    // itself, and is proven by capture-sort-triage.spec.ts and
+    // moments-home-parity.spec.ts on this same moments home.)
     await expect(page.getByTestId("onboarding-step-capture")).toBeVisible();
-    const parseResponsePromise = page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/parse-capture") &&
-        response.request().method() === "POST",
+    await expect(page.getByTestId("onboarding-capture-save-raw")).toHaveCount(
+      0,
     );
     const textarea = page.getByTestId("onboarding-capture-textarea");
     await textarea.fill("Plan the kickoff agenda for Monday");
     await textarea.press("Enter");
 
-    // FR-026 containment: the raw text stays visible through the wait.
+    // FR-026 containment: the raw text stays visible through the closing
+    // beat rather than vanishing the instant Enter is pressed.
     await expect(textarea).toHaveValue("Plan the kickoff agenda for Monday");
-    const parseResponse = await parseResponsePromise;
-    expect(parseResponse.status()).toBe(200);
+    await expect(
+      page.getByTestId("onboarding-capture-conclusion"),
+    ).toContainText("back to: what you were doing");
 
     // The ritual closes onto the Start moment, where the #551 state-truth
-    // surfaces are the payoff: hero visible, pending-triage badge showing
-    // the captured thought.
+    // surfaces are the payoff: hero visible, and a pending-triage surface
+    // showing the captured thought waiting for a decision — which is also
+    // the proof the capture stayed RAW: a parsed capture would have left the
+    // pending-triage count and become a draft instead.
     await expect(page.getByTestId("onboarding-ritual")).toBeHidden();
     await expect(page.getByTestId("start-moment")).toBeVisible();
     await expect(page.getByTestId("start-hero")).toBeVisible();

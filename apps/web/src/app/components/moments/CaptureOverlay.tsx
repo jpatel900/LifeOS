@@ -4,9 +4,8 @@ import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
-import { CaptureCore, type CaptureCoreOutcome } from "./CaptureCore";
+import { CaptureCore } from "./CaptureCore";
 import { HIT_TARGET_INVISIBLE } from "./hitTarget";
-import type { CaptureParseState } from "@/lib/WorkflowContext";
 
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
@@ -26,14 +25,14 @@ import type { CaptureParseState } from "@/lib/WorkflowContext";
 
 export interface CaptureOverlayProps {
   open: boolean;
+  // #703: one action. The overlay used to take onSave (parse now) and
+  // onSaveRaw (parse later); both persisted the identical capture item, so
+  // they collapsed into this single save.
   onSave(text: string, returnHook: string | null): void;
   onClose(): void;
   initialText?: string;
   onDraftChange?(text: string): void;
-  onSaveRaw(text: string, returnHook: string | null): void;
-  captureParse: CaptureParseState;
-  onRetryWithMock(): void;
-  onResolved?(outcome: CaptureCoreOutcome): void;
+  onResolved?(): void;
 }
 
 export function CaptureOverlay({
@@ -42,9 +41,6 @@ export function CaptureOverlay({
   onClose,
   initialText,
   onDraftChange,
-  onSaveRaw,
-  captureParse,
-  onRetryWithMock,
   onResolved,
 }: CaptureOverlayProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -93,14 +89,11 @@ export function CaptureOverlay({
         }}
       >
         <CaptureCore
-          mode="parse"
+          mode="full"
           testIdPrefix="capture-overlay"
           initialText={initialText}
           onDraftChange={onDraftChange}
-          onSubmitParse={onSave}
-          onSubmitRaw={onSaveRaw}
-          captureParse={captureParse}
-          onRetryWithMock={onRetryWithMock}
+          onSubmit={onSave}
           onResolved={onResolved}
           onCancel={onClose}
           onLockChange={setLocked}

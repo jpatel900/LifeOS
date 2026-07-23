@@ -78,14 +78,38 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
       postData: JSON.stringify({ ...body, parserMode: "mock" }),
     });
   });
+  // #703: capture is a pure raw save with ONE action ("Capture") and no
+  // parse at the front door — the surface stays put instead of navigating.
+  // The parse round-trip this leg asserts is now driven by the Sort action on
+  // the triage stage, so the journey crosses there explicitly.
   await page.goto("/capture");
+  await page.getByRole("textbox").first().fill(captureText);
+  await page.getByTestId("capture-page-save").click();
+  await expect(page.getByTestId("capture-page-conclusion")).toBeVisible();
+  await expect(page.getByTestId("capture-page-conclusion")).toHaveCount(0, {
+    timeout: 30_000,
+  });
+  console.log("[smoke] PASS capture: raw capture saved without a parse.");
+
+  // ---- Journey: triage Sort -> parse --------------------------------------
+  await goToStage(page, /Triage/);
+  await page.waitForURL(/\/triage$/, { timeout: 30_000 });
+  // Marker-scoped, same safety posture as the draft selection below: a
+  // populated prod account may hold other unsorted captures, and the smoke
+  // never acts on a row it cannot identify as its own.
+  const journeyCaptureRow = page
+    .getByTestId(/^triage-sheet-capture-/)
+    .filter({ hasText: marker(runId) });
+  await expect(
+    journeyCaptureRow,
+    "journey capture not found in triage by marker",
+  ).toBeVisible({ timeout: 30_000 });
   const parseResponsePromise = page.waitForResponse(
     (response) =>
       response.url().includes("/api/parse-capture") &&
       response.request().method() === "POST",
   );
-  await page.getByRole("textbox").first().fill(captureText);
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  await journeyCaptureRow.getByTestId(/^triage-sheet-sort-/).click();
 
   const parseResponse = await parseResponsePromise;
   expect(parseResponse.status(), "parse-capture route did not answer").toBe(
@@ -93,10 +117,9 @@ test("golden journey: capture -> triage -> plan -> gate -> execute -> review -> 
   );
   const parseBody = (await parseResponse.json()) as { ok?: boolean };
   expect(parseBody.ok, "parse-capture degraded to an error").toBe(true);
-  console.log("[smoke] PASS capture -> parse: raw capture round-tripped.");
+  console.log("[smoke] PASS triage Sort -> parse: capture round-tripped.");
 
   // ---- Journey: triage (select the journey's own draft by marker) ---------
-  await page.waitForURL(/\/triage$/, { timeout: 30_000 });
   // Match by the run MARKER, not the full text: the mock parser (pinned
   // above) preserves the title verbatim, so the marker is guaranteed present.
   // If the marker is absent we FAIL LOUDLY rather than accept an

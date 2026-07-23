@@ -170,7 +170,24 @@ async function captureAndEnterFlow(page: Page, title: string) {
       response.url().includes("/api/parse-capture") &&
       response.request().method() === "POST",
   );
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  // #703: the capture stage saves raw and never parses; the Sort action on
+  // the triage stage is what round-trips through /api/parse-capture.
+  await page.getByTestId("capture-page-save").click();
+  await expect(page.getByTestId("capture-page-conclusion")).toBeVisible();
+  await expect(page.getByTestId("capture-page-conclusion")).toHaveCount(0, {
+    timeout: 30_000,
+  });
+  await page
+    .getByRole("navigation", { name: "Workflow stages" })
+    .getByRole("button", { name: /Triage/ })
+    .click();
+  await expect(page.getByTestId("triage-sheet-captures")).toContainText(title, {
+    timeout: 30_000,
+  });
+  await page
+    .getByTestId(/^triage-sheet-sort-/)
+    .first()
+    .click();
   await parseResponsePromise;
 
   await page.getByRole("button", { name: "Do today" }).click();

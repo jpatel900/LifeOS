@@ -37,7 +37,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
   useRouter: () => ({
     // Keep the mocked pathname in sync with in-app navigation so the
-    // pathname-derived stage actually transitions (Save and sort -> triage).
+    // pathname-derived stage actually transitions between cockpit stages.
     push: (path: string) => mockPathname.mockReturnValue(path),
   }),
 }));
@@ -54,13 +54,12 @@ describe("Capture cockpit", () => {
     restoreFetch();
   });
 
-  // #556 FR-026: saving no longer navigates instantly — the capture stage
-  // holds the user through the parse wait (raw text stays visible, no
-  // second submit possible) and only navigates/toasts once the parse
-  // actually resolves ("back to: <hook>" conclusion), never ahead of that
-  // truth. This test now drives that full wait instead of asserting the old
-  // instant-navigate behavior.
-  it("saves a thought through the single primary action and routes it to triage", async () => {
+  // #703: capture has ONE action and never parses. Saving is synchronous —
+  // the thought is persisted verbatim and the surface says where it went. It
+  // deliberately does NOT navigate to triage any more: no draft exists yet
+  // (sorting is a separate action there), and staying put means the next
+  // thought can go straight in.
+  it("saves a thought through the single primary action and says where it went", async () => {
     render(
       <AppShell>
         <CapturePage />
@@ -73,24 +72,17 @@ describe("Capture cockpit", () => {
         target: { value: "Draft agenda for the planning meeting" },
       },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
-
-    // Held in context through the wait: raw text stays visible, save
-    // controls lock, no premature toast/navigation yet.
-    expect(screen.getByPlaceholderText("Drop the thought here.")).toHaveValue(
-      "Draft agenda for the planning meeting",
-    );
-    expect(screen.queryByText("Saved; waiting in Triage")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
 
     expect(
-      await screen.findByText("Saved; waiting in Triage", undefined, {
+      await screen.findByText("Saved — it's waiting in Triage", undefined, {
         timeout: 5000,
       }),
     ).toBeDefined();
-    expect(
-      await screen.findByText("Draft agenda for the planning meeting"),
-    ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Do today" })).toBeDefined();
+
+    // No parse ran at the front door: no wait, no failure state.
+    expect(screen.queryByTestId("capture-page-parsing")).toBeNull();
+    expect(screen.queryByTestId("capture-page-degraded")).toBeNull();
   });
 
   it("blocks empty saves and keeps one primary capture action", async () => {
@@ -100,15 +92,14 @@ describe("Capture cockpit", () => {
       </AppShell>,
     );
 
-    expect(await screen.findByText("Saves raw text first")).toBeDefined();
     expect(
-      screen.queryByRole("button", { name: "Organize after save" }),
-    ).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Save and sort" }),
-    ).toBeDisabled();
-    expect(
-      screen.getAllByRole("button", { name: "Save and sort" }),
-    ).toHaveLength(1);
+      await screen.findByText(
+        "Saved exactly as you write it. Sort it into a task later, in Triage.",
+      ),
+    ).toBeDefined();
+    // The second save button is gone, not renamed.
+    expect(screen.queryByTestId("capture-page-save-raw")).toBeNull();
+    expect(screen.getByRole("button", { name: "Capture" })).toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Capture" })).toHaveLength(1);
   });
 });

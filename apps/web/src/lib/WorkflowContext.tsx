@@ -1134,7 +1134,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     updateAreaColor: (areaId, color) =>
       dispatch({ type: "updateAreaColor", areaId, color }),
     submitCaptureText: captureParseOps.submitCaptureText,
-    submitCaptureRaw: captureParseOps.submitCaptureRaw,
+    sortCaptureIntoDrafts: captureParseOps.sortCaptureIntoDrafts,
     captureParse,
     retryCaptureParseWithMock: captureParseOps.retryCaptureParseWithMock,
     taskMapDraft,

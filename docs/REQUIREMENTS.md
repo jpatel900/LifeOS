@@ -536,12 +536,15 @@ Non-goals:
 
 Rationale: the standard async pattern (submit → spinner → notify-when-done → user wanders off) is a context-switch cascade generator for this operator. This requirement is deliberately counter to the default pattern any implementer would reach for. Do not normalize it back to the standard pattern.
 
+**Parse timing (amended 2026-07-19).** Capture no longer parses. The capture surface has ONE action, "Capture": it saves the thought verbatim and ends, with no AI wait and no parse failure to handle at the front door. Parsing is now an explicit "Sort" action in triage, over an already-saved capture. This does not relax the containment rule — it moves the surface the rule binds. The criteria below therefore apply wherever a parse wait actually occurs, which is now the triage Sort action; the return-hook criteria stay with capture, where the interruption they protect against happens. <!-- source: issue #703 (owner ratified 2026-07-19, chat: "one Capture button AND a Sort action in triage" — sorting moves rather than disappears; corrected-contract comment on #703 records that the earlier "sorting happens at triage" premise was false on origin/main) -->
+
 Acceptance criteria:
 
-- During a parse wait, the capture UI holds the user in context: the raw captured text remains fully visible, and a "return hook" field (one line: what you were doing before this thought interrupted, i.e. what you return to) is visible and editable while waiting.
-- A new capture cannot begin until the current one resolves (parse returns and the draft is dispatched, or the capture is saved raw). No capture queue.
-- No fire-and-forget: notify-me-later parsing is prohibited for capture. If parse exceeds its latency budget, the surface degrades synchronously (offer mock parse / save raw now) rather than going async.
-- On resolve, the return hook is displayed as the final element of the capture interaction ("back to: <hook>").
+- The capture surface offers exactly one save action. It resolves synchronously as saved — no spinner, no parse wait, no failure state at capture time. <!-- source: issue #703 (owner ratified 2026-07-19; supersedes the two-action parse-now/save-raw fork, whose two buttons already persisted the identical capture item) -->
+- During a parse wait, the surface that started it holds the user in context: the text being sorted remains fully visible, and the person is never sent elsewhere to wait. Since #703 this binds the triage Sort action. <!-- source: issue #703 (parse relocated from capture to triage; the hold-in-context rule follows the parse) -->
+- A capture carries a "return hook" field (one line: what you were doing before this thought interrupted, i.e. what you return to), visible and editable while composing, and on save the return hook is displayed as the final element of the capture interaction ("back to: <hook>"). This is a context-restoration guarantee and is independent of whether an AI runs. <!-- source: issue #703 (retained verbatim in behavior when the parse wait left the capture surface) -->
+- Only one sort runs at a time. No parse queue. A sort in flight must NOT block starting a new capture — capture is always available. <!-- source: issue #703 (capture and parse are now separate surfaces, so the old single-in-flight lock no longer gates the front door) -->
+- No fire-and-forget: notify-me-later parsing is prohibited. If a parse exceeds its latency budget or is unavailable, the surface degrades synchronously (offer the built-in fallback parser, or leave the capture as it is) rather than going async. The capture is never lost and stays listed.
 
 Non-goals:
 
@@ -562,11 +565,11 @@ Rationale: capture today is a desktop web tab; thoughts arrive on the phone and 
 Acceptance criteria:
 
 - The web app is installable as a PWA (web app manifest + service worker) so capture opens from a phone home-screen icon in one tap, and registers as a share target so text shared from another phone app lands directly in a raw capture.
-- Offline raw capture is save-first with no parse wait. When offline (or when the user chooses "save raw"), the capture is written to a device-local queue immediately and the interaction ends — there is NO spinner, NO parse wait, NO "notify me later" (consistent with FR-026's prohibition of fire-and-forget async: the offline path resolves synchronously as saved-raw, it does not go pending-async).
+- Offline raw capture is save-first with no parse wait. When offline, the capture is written to a device-local queue immediately and the interaction ends — there is NO spinner, NO parse wait, NO "notify me later" (consistent with FR-026's prohibition of fire-and-forget async: the offline path resolves synchronously as saved-raw, it does not go pending-async). Since #703 the online path behaves the same way; the former "save raw" choice is gone because it is no longer a choice. <!-- source: issue #703 (owner ratified 2026-07-19: one Capture action) -->
 - Queued raw captures sync to the spine (`capture_items`) automatically when connectivity returns; parse happens at triage, not at sync time. Sync is idempotent (a client-generated `client_capture_id` dedupes replays).
 - A queued-but-unsynced capture is never silently lost and its unsynced state is visible (count/badge); loss of the device before sync is the only unrecoverable case and the queue is durable across app restarts until synced.
 - The PWA is a capture + read reach extension only. It introduces no new write path to the spine beyond the existing authenticated `capture_items` insert; it holds no OAuth tokens and no service keys (NS-INV-9 perimeter containment holds even though the PWA is first-party).
-- When the user is in the capture surface awaiting a parse (online, chose to parse now), FR-026 containment applies unchanged (return hook visible, no second capture, synchronous degrade). FR-027 governs only the raw-save / offline / share-target entry paths where there is no parse wait at all.
+- Since #703 there is no "parse now" choice at capture and therefore no in-capture parse wait on ANY path: every capture — online, offline, or share-target — is a raw save that resolves immediately. What FR-027 already required of the offline path is now simply how capture works everywhere, and this requirement's existing "parse happens at triage, not at sync time" line became literally true rather than aspirational. FR-026's hold-in-context and synchronous-degrade rules now bind the triage Sort action instead. <!-- source: issue #703 (owner ratified 2026-07-19; the pre-#703 text described a parse-now capture path that no longer exists) -->
 
 Non-goals:
 

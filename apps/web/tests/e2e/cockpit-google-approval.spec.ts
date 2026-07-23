@@ -13,6 +13,7 @@ test.skip(
 );
 
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { cockpitCaptureAndSort } from "./helpers/cockpitCaptureSort";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
 // E2E dev server has no Supabase env, so every capture flow in this file runs
@@ -28,14 +29,10 @@ async function goToStage(page: Page, stage: RegExp) {
     .click();
 }
 
+// #703: capture saves raw and the parse moved to the triage Sort action, so
+// getting a draft is now the capture -> triage -> Sort journey.
 async function captureTask(page: Page, title: string) {
-  await page.goto("/capture");
-  await page.getByPlaceholder("Drop the thought here.").fill(title);
-  await page.getByRole("button", { name: "Save and sort" }).click();
-  // #556 FR-026: saving no longer navigates instantly — wait for the parse
-  // wait to resolve and land on Triage before the caller proceeds. 30s: the
-  // first capture-submit of a dev run can hit multi-second cold compiles.
-  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
+  await cockpitCaptureAndSort(page, title);
 }
 
 test("google approval bridge is visible but safely disabled in mock mode while local approve works", async ({

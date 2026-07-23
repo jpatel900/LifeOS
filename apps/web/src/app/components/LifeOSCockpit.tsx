@@ -91,7 +91,6 @@ export function LifeOSCockpit({
     syncStatus,
     syncPersistedAreas,
     submitCaptureText,
-    submitCaptureRaw,
     captureParse,
     retryCaptureParseWithMock,
     acceptTaskDraft,
@@ -373,11 +372,11 @@ export function LifeOSCockpit({
     toggle();
   }
 
-  // #556: Execute side-capture is raw-save-only, never a background parse —
-  // FR-026 forbids a fire-and-forget async wait, and the issue explicitly
-  // allows this surface to satisfy containment trivially by never waiting on
-  // one (preserves focus on the running session). Parsed later at triage,
-  // same as the explicit "Save raw" action elsewhere.
+  // #556/#703: Execute side-capture never waits on a parse — FR-026 forbids
+  // a fire-and-forget async wait, and this surface satisfies containment
+  // trivially by never waiting on one (preserves focus on the running
+  // session). Since #703 that is true of every capture surface: all of them
+  // save raw, and sorting happens on demand in triage.
   function saveSideCapture(text: string) {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -385,7 +384,7 @@ export function LifeOSCockpit({
       showToast("Create an area before capture");
       return;
     }
-    submitCaptureRaw(trimmed, activeArea.id);
+    submitCaptureText(trimmed, activeArea.id);
     showToast("Side thought saved");
   }
 
@@ -575,17 +574,14 @@ export function LifeOSCockpit({
 
         <SyncNotice status={syncStatus} />
 
-        {/* #556: the capture stage shows its own containment sequence
-            (raw text + parsing/degraded/conclusion) inline via CaptureCore —
-            this global banner would just duplicate it, so it's suppressed
-            there and still covers every other stage (e.g. a retry from
-            triage). */}
-        {stage !== "capture" ? (
-          <CaptureParseNotice
-            state={captureParse}
-            onRetryWithMock={retryCaptureParseWithMock}
-          />
-        ) : null}
+        {/* #703: the capture stage no longer parses, so it no longer has an
+            inline parse sequence for this banner to duplicate — it now shows
+            on every stage, including capture. In practice it reports the
+            triage Sort action, the only thing that parses now. */}
+        <CaptureParseNotice
+          state={captureParse}
+          onRetryWithMock={retryCaptureParseWithMock}
+        />
 
         <nav
           className="relative grid grid-cols-6 gap-2 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] p-2"
@@ -634,30 +630,18 @@ export function LifeOSCockpit({
           {stage === "capture" ? (
             <CaptureView
               hasArea={hasRealActiveArea}
-              captureParse={captureParse}
               onLockChange={setCaptureStageLocked}
-              onRetryWithMock={retryCaptureParseWithMock}
-              onSubmitParse={(text, returnHook) =>
+              onSubmit={(text, returnHook) =>
                 submitCaptureText(text, activeArea.id, returnHook)
               }
-              onSubmitRaw={(text, returnHook) =>
-                submitCaptureRaw(text, activeArea.id, returnHook)
-              }
-              onResolved={(outcome) => {
-                // #556: truth-based nav/toast — only fires once the capture
-                // actually resolved, never ahead of that (the old code
-                // navigated and toasted "waiting in Triage" the instant
-                // Save was clicked, before anything existed there). Only a
-                // parsed capture puts a draft in the Triage inbox, so only
-                // that outcome navigates there; a raw save is parsed later
-                // at triage and would land on "Inbox clear" today, so it
-                // stays here, ready for the next thought.
-                if (outcome === "parsed") {
-                  showToast("Saved; waiting in Triage");
-                  navigate("triage");
-                } else {
-                  showToast("Saved raw");
-                }
+              onResolved={() => {
+                // #556: truth-based toast — only fires once the capture
+                // actually resolved, never ahead of that. #703: every
+                // capture now lands the same way (saved as written, waiting
+                // in Triage to be sorted), so there is one outcome and one
+                // message. We stay on the capture surface rather than
+                // navigating, so the next thought can go straight in.
+                showToast("Saved — it's waiting in Triage");
               }}
             />
           ) : null}

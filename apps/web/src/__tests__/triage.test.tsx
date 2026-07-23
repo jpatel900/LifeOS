@@ -57,6 +57,42 @@ describe("Triage cockpit", () => {
     restoreFetch();
   });
 
+  /**
+   * #703: capture and sorting are separate steps now. Capture saves the thought
+   * verbatim and stays put; the person then goes to Triage and taps Sort, which
+   * is what turns it into a draft. This drives that real two-step journey.
+   */
+  async function captureThenSortIntoTriage(text: string) {
+    fireEvent.change(
+      await screen.findByPlaceholderText("Drop the thought here."),
+      { target: { value: text } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Capture" }));
+
+    // Dismiss the "back to: <hook>" conclusion rather than waiting out its
+    // ~2.5s dwell — it locks stage nav while shown.
+    fireEvent.click(await screen.findByTestId("capture-page-conclusion"));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Triage/ }));
+    fireEvent.click(
+      await screen.findByTestId(/^triage-sheet-sort-/, undefined, {
+        timeout: 5000,
+      }),
+    );
+  }
+
+  // #703: these three drive the real two-step journey (capture -> Sort ->
+  // parse -> draft), so they chain more async flushes inside one test than
+  // the one-click capture they replaced. Each already declared its own
+  // generous findBy windows (4s-10s) for the load-bound waits, but vitest's
+  // DEFAULT 5s TEST timeout capped them: the test died before its own stated
+  // wait budget could be reached, which is exactly how "renders split drafts"
+  // timed out under parallel-workspace contention on 2026-07-22. The explicit
+  // per-test timeout below makes the already-documented budget reachable. No
+  // assertion is relaxed or removed — only the ceiling that made them
+  // unreachable.
+  const JOURNEY_TEST_TIMEOUT_MS = 30_000;
+
   it("shows the empty verdict-first triage state", async () => {
     render(
       <AppShell>
@@ -68,114 +104,107 @@ describe("Triage cockpit", () => {
     expect(screen.getByRole("button", { name: "Plan the day" })).toBeDefined();
   });
 
-  it("lets a captured item move to Someday", async () => {
-    mockPathname.mockReturnValue("/capture");
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+  it(
+    "lets a captured item move to Someday",
+    async () => {
+      mockPathname.mockReturnValue("/capture");
+      render(
+        <AppShell>
+          <CapturePage />
+        </AppShell>,
+      );
 
-    fireEvent.change(
-      await screen.findByPlaceholderText("Drop the thought here."),
-      {
-        target: { value: "Review old someday notes" },
-      },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
-    // #556: navigation to Triage now only happens once the parse actually
-    // resolves (raw text + hook held in context through the wait, then the
-    // "back to: <hook>" conclusion) — under full-suite load that round trip
-    // can exceed RTL's 1000ms findBy default, so this waits longer.
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Someday" }, { timeout: 5000 }),
-    );
+      await captureThenSortIntoTriage("Review old someday notes");
 
-    expect(await screen.findByText("Inbox clear")).toBeDefined();
-  });
+      fireEvent.click(
+        await screen.findByRole(
+          "button",
+          { name: "Someday" },
+          { timeout: 5000 },
+        ),
+      );
 
-  it("shows the anti-procrastination breakdown on a parsed task draft", async () => {
-    mockPathname.mockReturnValue("/capture");
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+      expect(await screen.findByText("Inbox clear")).toBeDefined();
+    },
+    JOURNEY_TEST_TIMEOUT_MS,
+  );
 
-    fireEvent.change(
-      await screen.findByPlaceholderText("Drop the thought here."),
-      {
-        target: { value: "Prepare the sponsor update deck" },
-      },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
+  it(
+    "shows the anti-procrastination breakdown on a parsed task draft",
+    async () => {
+      mockPathname.mockReturnValue("/capture");
+      render(
+        <AppShell>
+          <CapturePage />
+        </AppShell>,
+      );
 
-    // #591: the "back to: <hook>" conclusion's auto-dismiss dwell is now a
-    // materially perceivable ~2.5s (CaptureCore's CONCLUSION_AUTO_DISMISS_MS,
-    // was 450ms) before it navigates on to Triage — give this findBy
-    // headroom past RTL's 1000ms default.
-    expect(
-      await screen.findByText("Start here (same first move)", undefined, {
-        timeout: 4000,
-      }),
-    ).toBeDefined();
-    expect(
-      screen.getAllByText(
-        "Clarify the next concrete step for: Prepare the sponsor update deck",
-      ),
-    ).toHaveLength(3);
-    expect(
-      screen.getByText("Do the core work for: Prepare the sponsor update deck"),
-    ).toBeDefined();
-    expect(screen.getAllByText("critical path")).toHaveLength(3);
-    expect(screen.getByText("~30m")).toBeDefined();
-    expect(screen.getAllByText("~10m")).toHaveLength(2);
-    expect(
-      screen.getByText(
-        "Clarify the step, do the core work, then confirm the outcome.",
-      ),
-    ).toBeDefined();
-  });
+      await captureThenSortIntoTriage("Prepare the sponsor update deck");
 
-  it("renders split drafts without a breakdown section", async () => {
-    mockPathname.mockReturnValue("/capture");
-    render(
-      <AppShell>
-        <CapturePage />
-      </AppShell>,
-    );
+      expect(
+        await screen.findByText("Start here (same first move)", undefined, {
+          timeout: 4000,
+        }),
+      ).toBeDefined();
+      expect(
+        screen.getAllByText(
+          "Clarify the next concrete step for: Prepare the sponsor update deck",
+        ),
+      ).toHaveLength(3);
+      expect(
+        screen.getByText(
+          "Do the core work for: Prepare the sponsor update deck",
+        ),
+      ).toBeDefined();
+      expect(screen.getAllByText("critical path")).toHaveLength(3);
+      expect(screen.getByText("~30m")).toBeDefined();
+      expect(screen.getAllByText("~10m")).toHaveLength(2);
+      expect(
+        screen.getByText(
+          "Clarify the step, do the core work, then confirm the outcome.",
+        ),
+      ).toBeDefined();
+    },
+    JOURNEY_TEST_TIMEOUT_MS,
+  );
 
-    fireEvent.change(
-      await screen.findByPlaceholderText("Drop the thought here."),
-      {
-        target: { value: "Tidy the garage shelves" },
-      },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
+  it(
+    "renders split drafts without a breakdown section",
+    async () => {
+      mockPathname.mockReturnValue("/capture");
+      render(
+        <AppShell>
+          <CapturePage />
+        </AppShell>,
+      );
 
-    // Generous timeouts: this journey chains two async state flushes (parse
-    // response, then split). Under CI worker contention the default 1s findBy
-    // window flaked twice on 2026-07-05 (CI run 28738354680 + a Codex sandbox)
-    // while always passing warm — the wait is load-bound, not behavioral.
-    expect(
-      await screen.findByText("Start here (same first move)", undefined, {
-        timeout: 10_000,
-      }),
-    ).toBeDefined();
+      await captureThenSortIntoTriage("Tidy the garage shelves");
 
-    fireEvent.change(screen.getByPlaceholderText("First split task"), {
-      target: { value: "Sort tools into bins" },
-    });
-    fireEvent.change(screen.getByPlaceholderText("Second split task"), {
-      target: { value: "Donate the spare shelf" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Split draft" }));
+      // Generous timeouts: this journey chains two async state flushes (sort
+      // response, then split). Under CI worker contention the default 1s findBy
+      // window flaked twice on 2026-07-05 (CI run 28738354680 + a Codex sandbox)
+      // while always passing warm — the wait is load-bound, not behavioral.
+      expect(
+        await screen.findByText("Start here (same first move)", undefined, {
+          timeout: 10_000,
+        }),
+      ).toBeDefined();
 
-    expect(
-      await screen.findByText("Sort tools into bins", undefined, {
-        timeout: 10_000,
-      }),
-    ).toBeDefined();
-    expect(screen.queryByText("Start here (same first move)")).toBeNull();
-  });
+      fireEvent.change(screen.getByPlaceholderText("First split task"), {
+        target: { value: "Sort tools into bins" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("Second split task"), {
+        target: { value: "Donate the spare shelf" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Split draft" }));
+
+      expect(
+        await screen.findByText("Sort tools into bins", undefined, {
+          timeout: 10_000,
+        }),
+      ).toBeDefined();
+      expect(screen.queryByText("Start here (same first move)")).toBeNull();
+    },
+    JOURNEY_TEST_TIMEOUT_MS,
+  );
 });

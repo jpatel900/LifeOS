@@ -3,59 +3,47 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
-import type { CaptureParseState } from "@/lib/WorkflowContext";
-import {
-  HIT_TARGET_INVISIBLE,
-  HIT_TARGET_MIN,
-  HIT_TARGET_ROW,
-} from "./hitTarget";
+import { HIT_TARGET_INVISIBLE, HIT_TARGET_ROW } from "./hitTarget";
 
 /**
  * #556 (FR-026 capture containment) — the ONE capture widget shared by all
  * three capture surfaces: the moments-home overlay (CaptureOverlay.tsx wraps
  * this in dialog chrome), the /capture route (CaptureView in
  * LifeOSCockpit.tsx wraps this in page chrome), and the Execute side-capture
- * rail (wraps this with `mode="raw-only"` compact — see the #556 report for
- * why side-capture is allowed to skip the parse-wait entirely).
+ * rail (wraps this with `mode="quick"` compact).
  *
- * Owns: the raw text + return-hook fields, the raw-first save action, the
- * parse-wait containment sequence (raw text + hook stay visible through the
- * wait; no second submit is possible; a failed parse offers a synchronous
- * mock-retry or "keep as raw" choice — never fire-and-forget), and the
- * closing "back to: <hook>" conclusion. Kind chips (Task/Note/Idea) are
- * removed here, not reimplemented: the schema has no field they ever fed
- * (CaptureItemSchema carries no "kind"/task-type-hint column, and
- * requestParseCapture has no parameter for one), so they were cosmetic from
- * day one. Threading a real hint through the parse contract is a schema +
- * prompt change out of scope for a containment fix; removing them is the
- * smallest safe change (see #556 report).
+ * #703 (owner-ratified 2026-07-19) — ONE action, "Capture". This component
+ * no longer parses anything. It used to own a second save button and the
+ * whole parse-wait containment sequence (spinner, degraded banner, mock
+ * retry); both save buttons already persisted the identical capture item and
+ * the only difference was whether the AI parse ran immediately. That parse
+ * now runs on demand from triage instead (`sortCaptureIntoDrafts`), so the
+ * wait and its failure states have no trigger left here and are gone. The
+ * parse machinery itself is untouched and fully alive — it moved, it was not
+ * deleted.
  *
- * Deliberately does NOT key off a per-capture id: it tracks the single
- * global `captureParse` phase from WorkflowContext instead. This keeps it
- * correct against both `submitCaptureText`'s current `void`-returning
- * signature and #565's coming `string | null`-returning one (Codex-owned,
- * WorkflowContext.tsx is out of scope here) — this component never reads
- * that return value. It only ever watches its own submit through to
- * resolution while `locked`, and containment guarantees only one
- * parse-mode capture is ever in flight at a time (a second submit, and a
- * close/unmount, are both blocked while waiting), so there is nothing to
- * disambiguate by id.
+ * Still owns: the raw text + return-hook fields and the closing
+ * "back to: <hook>" conclusion. Those are context-restoration elements, not
+ * parse-wait elements — FR-026's point is that an interrupting thought
+ * shouldn't cost you your place, which is true whether or not an AI runs.
+ * Kind chips (Task/Note/Idea) are removed here, not reimplemented: the
+ * schema has no field they ever fed, so they were cosmetic from day one
+ * (see #556 report).
+ *
+ * Saving is now synchronous end to end: the capture is staged and persisted
+ * with no round-trip to await, so there is no in-flight state to
+ * disambiguate and no way for a second capture to collide with a first.
  */
 
-export type CaptureCoreMode = "parse" | "raw-only";
-export type CaptureCoreOutcome = "parsed" | "raw" | "failed-raw";
+export type CaptureCoreMode = "full" | "quick";
 
-type CorePhase =
-  | { kind: "idle" }
-  | { kind: "waiting" }
-  | {
-      kind: "degraded";
-      message: string;
-      canRetryWithMock: boolean;
-    }
-  | { kind: "conclusion"; hookLabel: string; outcome: CaptureCoreOutcome };
+type CorePhase = { kind: "idle" } | { kind: "conclusion"; hookLabel: string };
 
 export interface CaptureCoreProps {
+  // "full": the dedicated capture surfaces (overlay, /capture route,
+  // onboarding) — shows the return hook and the closing "back to:" line.
+  // "quick": the Execute side-capture rail — saves and gets straight out of
+  // the way so a focus session is never interrupted by its own capture box.
   mode: CaptureCoreMode;
   compact?: boolean;
   initialText?: string;
@@ -63,27 +51,19 @@ export interface CaptureCoreProps {
   autoFocus?: boolean;
   showReturnHook?: boolean;
   onDraftChange?(text: string): void;
-  // Starts (or offline-queues) the parse. Any return value is ignored — see
-  // the module comment above for why. Required when mode="parse".
-  onSubmitParse?(text: string, returnHook: string | null): void;
-  onSubmitRaw(text: string, returnHook: string | null): void;
-  // Global parse status from WorkflowContext. Required when mode="parse".
-  captureParse?: CaptureParseState;
-  onRetryWithMock?(): void;
-  // Fires once the containment sequence concludes (parsed, raw, or a
-  // degraded parse accepted as raw) — the caller closes/navigates here, not
-  // before, so a success signal is never shown ahead of truth.
-  onResolved?(outcome: CaptureCoreOutcome): void;
-  // Escape/close while idle only — swallowed while a parse is in flight so
-  // the user can't abandon the return-hook context mid-wait.
+  // Persists the capture (or queues it offline). Synchronous from this
+  // component's point of view — there is nothing to await.
+  onSubmit(text: string, returnHook: string | null): void;
+  // Fires once the capture is saved and the conclusion (if any) is done —
+  // the caller closes/navigates/toasts here, never before.
+  onResolved?(): void;
+  // Escape/close while idle; also dismisses the conclusion.
   onCancel?(): void;
-  // Reports whether a new capture may begin right now — false for the
-  // entire waiting/degraded/conclusion sequence. Lets chrome around this
-  // core (e.g. CaptureOverlay's Close button) disable itself in step,
-  // without duplicating the phase state machine.
+  // Reports whether a new capture may begin right now — false only while
+  // the brief conclusion is on screen. Lets chrome around this core (e.g.
+  // CaptureOverlay's Close button) disable itself in step.
   onLockChange?(locked: boolean): void;
   saveLabel?: string;
-  saveRawLabel?: string;
   hint?: string;
   disabledReason?: string | null;
   testIdPrefix?: string;
@@ -94,15 +74,13 @@ export interface CaptureCoreProps {
   // /capture route's full multi-line composer).
   submitShortcut?: "enter" | "mod-enter";
   // Lets a surface with its own hero-textarea styling (the /capture page's
-  // large borderless composer) override the default ui/textarea chrome
-  // without forking the containment logic that owns it.
+  // large borderless composer) override the default ui/textarea chrome.
   textareaClassName?: string;
   // LifeOSCockpit uses its own `--btn`/`--acc` cockpit theme tokens (scoped
   // under `.lifeos-cockpit[data-theme]`), separate from the shadcn
   // `--primary`/`--muted` tokens this component defaults to — override so
-  // the buttons follow whichever surface's theme they're embedded in.
+  // the button follows whichever surface's theme it's embedded in.
   saveButtonClassName?: string;
-  saveRawButtonClassName?: string;
 }
 
 const DEFAULT_HOOK_LABEL = "what you were doing";
@@ -122,24 +100,22 @@ export function CaptureCore({
   initialText,
   placeholder = "What's on your mind?",
   autoFocus = true,
-  showReturnHook = mode === "parse" && !compact,
+  showReturnHook = mode === "full" && !compact,
   onDraftChange,
-  onSubmitParse,
-  onSubmitRaw,
-  captureParse,
-  onRetryWithMock,
+  onSubmit,
   onResolved,
   onCancel,
   onLockChange,
   // #689 scope add (owner): the old "Save raw" vs "Save thought" pair was a
-  // front-door fork nobody could tell apart. Both persist the identical capture item
-  // (stageAndPersistRawCapture); the ONLY difference is whether the AI
-  // sorts it into a task draft now or later at triage. The labels now say
-  // exactly that, in the same "sort" vocabulary the triage sheet uses.
-  // Collapsing to a single button is an OWNER-GATE on the PR (it would
-  // change ratified FR-026 containment behavior).
-  saveLabel = "Save and sort",
-  saveRawLabel = "Save as-is, sort later",
+  // front-door fork nobody could tell apart — both persisted the identical
+  // capture item (stageAndPersistRawCapture); the ONLY difference was
+  // whether the AI sorted it into a task draft now or later at triage.
+  // #689 renamed them to say that ("Save and sort" / "Save as-is, sort
+  // later"); #703 (owner-ratified) went the rest of the way and removed the
+  // fork entirely. One action, and its label says exactly what happens — the
+  // thought is saved, as written, right now. No promise about sorting: that
+  // is a separate step the user takes in triage when they choose to.
+  saveLabel = "Capture",
   hint,
   disabledReason,
   testIdPrefix = "capture",
@@ -147,7 +123,6 @@ export function CaptureCore({
   submitShortcut = "enter",
   textareaClassName,
   saveButtonClassName,
-  saveRawButtonClassName,
 }: CaptureCoreProps) {
   const [text, setText] = useState(initialText ?? "");
   const [returnHook, setReturnHook] = useState("");
@@ -186,37 +161,15 @@ export function CaptureCore({
     };
   }, []);
 
-  // Track the in-flight parse this instance started and react to its
-  // WorkflowContext-reported phase. Never a second poll/fetch of our own —
-  // captureParse is the single source of truth already owned by the caller.
-  // Only ever watched while `waiting` (set by handleSaveParse right after
-  // the submit call), so a stale captureParse phase left over from a prior
-  // session elsewhere is never misread as this instance's own.
-  useEffect(() => {
-    if (phase.kind !== "waiting") return;
-    if (!captureParse) return;
-
-    if (captureParse.phase === "parsed") {
-      concludeWith("parsed");
-    } else if (captureParse.phase === "failed") {
-      setPhase({
-        kind: "degraded",
-        message: captureParse.message,
-        canRetryWithMock: captureParse.canRetryWithMock,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [captureParse, phase]);
-
-  function concludeWith(outcome: CaptureCoreOutcome) {
+  function concludeWith() {
     const hookLabel = returnHook.trim() || DEFAULT_HOOK_LABEL;
-    setPhase({ kind: "conclusion", hookLabel, outcome });
+    setPhase({ kind: "conclusion", hookLabel });
     conclusionTimeoutRef.current = setTimeout(() => {
-      finishResolved(outcome);
+      finishResolved();
     }, CONCLUSION_AUTO_DISMISS_MS);
   }
 
-  function finishResolved(outcome: CaptureCoreOutcome) {
+  function finishResolved() {
     if (conclusionTimeoutRef.current) {
       clearTimeout(conclusionTimeoutRef.current);
       conclusionTimeoutRef.current = null;
@@ -224,7 +177,7 @@ export function CaptureCore({
     setText("");
     setReturnHook("");
     setPhase({ kind: "idle" });
-    onResolved?.(outcome);
+    onResolved?.();
   }
 
   function handleChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -242,9 +195,8 @@ export function CaptureCore({
   }, [locked]);
 
   // If this instance unmounts while locked (its surface was torn down
-  // mid-wait, e.g. the route changed), release the caller's lock — chrome
-  // that disabled itself in step with us (nav buttons, Close) must never
-  // stay stuck disabled after we're gone.
+  // mid-conclusion, e.g. the route changed), release the caller's lock —
+  // chrome that disabled itself in step with us must never stay stuck.
   useEffect(() => {
     return () => {
       onLockChange?.(false);
@@ -252,36 +204,19 @@ export function CaptureCore({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleSaveParse() {
-    if (!canSubmit || locked || !onSubmitParse) return;
-    const trimmed = text.trim();
-    const hook = returnHook.trim() || null;
-    onSubmitParse(trimmed, hook);
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      // Offline: WorkflowContext queues the raw capture and never starts a
-      // parse (no captureParse transition to wait on) — the raw save is
-      // already durable, so this resolves immediately, synchronously, as
-      // FR-027 requires (no spinner for a parse that will never run).
-      concludeWith("raw");
-      return;
-    }
-    setPhase({ kind: "waiting" });
-  }
-
-  function handleSaveRaw() {
+  function handleSave() {
     if (!canSubmit || locked) return;
     const trimmed = text.trim();
     const hook = returnHook.trim() || null;
-    onSubmitRaw(trimmed, hook);
-    if (mode === "raw-only" || compact) {
-      // Focus-preserving path (Execute side-capture): raw save is
-      // synchronous and there is nothing to wait on, so resolve immediately
+    onSubmit(trimmed, hook);
+    if (mode === "quick" || compact) {
+      // Focus-preserving path (Execute side-capture): resolve immediately
       // with no conclusion takeover — the caller's own chrome (toast) says
       // it was saved.
-      finishResolved("raw");
+      finishResolved();
       return;
     }
-    concludeWith("raw");
+    concludeWith();
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -293,37 +228,20 @@ export function CaptureCore({
     if (isSubmitCombo) {
       event.preventDefault();
       if (phase.kind === "conclusion") {
-        finishResolved(phase.outcome);
+        finishResolved();
         return;
       }
-      if (mode === "parse") {
-        handleSaveParse();
-      } else {
-        handleSaveRaw();
-      }
+      handleSave();
       return;
     }
     if (event.key === "Escape") {
       event.preventDefault();
       if (phase.kind === "idle") {
         onCancel?.();
-      } else if (phase.kind === "conclusion") {
-        finishResolved(phase.outcome);
+      } else {
+        finishResolved();
       }
-      // Waiting/degraded: swallow — holds the user in context, no early
-      // abandon while a parse is in flight (FR-026).
     }
-  }
-
-  function handleRetryWithMock() {
-    if (phase.kind !== "degraded") return;
-    onRetryWithMock?.();
-    setPhase({ kind: "waiting" });
-  }
-
-  function handleKeepAsRaw() {
-    if (phase.kind !== "degraded") return;
-    concludeWith("failed-raw");
   }
 
   const id = testIdPrefix;
@@ -354,8 +272,8 @@ export function CaptureCore({
 
       {showReturnHook ? (
         /* #689 scope add (owner): "Return hook" was jargon nobody could
-           explain after using it. Option (a) — self-explanatory in one plain
-           phrase where it stands: the label says what it does (the closing
+           explain after using it. Self-explanatory in one plain phrase
+           where it stands: the label says what it does (the closing
            "back to: <what you type>" line), the placeholder shows an
            example. Same field, same behavior, same testid. */
         <label className="grid gap-1 text-xs font-semibold text-muted-foreground">
@@ -375,60 +293,12 @@ export function CaptureCore({
         </label>
       ) : null}
 
-      {phase.kind === "waiting" ? (
-        <p
-          role="status"
-          aria-live="polite"
-          className="text-xs font-semibold text-muted-foreground"
-          data-testid={`${id}-parsing`}
-        >
-          Parsing capture into drafts…
-        </p>
-      ) : null}
-
-      {phase.kind === "degraded" ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="grid gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs font-semibold text-amber-900 dark:text-amber-200"
-          data-testid={`${id}-degraded`}
-        >
-          <p>{phase.message}</p>
-          <div className="flex flex-wrap gap-2">
-            {phase.canRetryWithMock ? (
-              <button
-                type="button"
-                onClick={handleRetryWithMock}
-                className={cn(
-                  HIT_TARGET_MIN,
-                  "rounded-full bg-primary px-4 text-primary-foreground",
-                )}
-                data-testid={`${id}-retry-mock`}
-              >
-                Parse with mock parser
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleKeepAsRaw}
-              className={cn(
-                HIT_TARGET_MIN,
-                "rounded-full border border-input px-4",
-              )}
-              data-testid={`${id}-keep-raw`}
-            >
-              Keep as raw
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {phase.kind === "conclusion" ? (
         <button
           type="button"
           role="status"
           aria-live="polite"
-          onClick={() => finishResolved(phase.outcome)}
+          onClick={() => finishResolved()}
           className={cn(
             HIT_TARGET_INVISIBLE,
             "justify-self-start text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline",
@@ -444,27 +314,9 @@ export function CaptureCore({
       ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-3">
-        {mode === "parse" ? (
-          <button
-            type="button"
-            onClick={handleSaveRaw}
-            disabled={!canSubmit || locked}
-            className={cn(
-              HIT_TARGET_INVISIBLE,
-              "rounded-full px-4 text-xs font-semibold",
-              canSubmit && !locked
-                ? "text-muted-foreground hover:text-foreground"
-                : "cursor-not-allowed text-muted-foreground/50",
-              saveRawButtonClassName,
-            )}
-            data-testid={`${id}-save-raw`}
-          >
-            {saveRawLabel}
-          </button>
-        ) : null}
         <button
           type="button"
-          onClick={mode === "parse" ? handleSaveParse : handleSaveRaw}
+          onClick={handleSave}
           disabled={!canSubmit || locked}
           className={cn(
             "min-h-11 rounded-full px-5 font-bold",
@@ -475,7 +327,7 @@ export function CaptureCore({
           )}
           data-testid={`${id}-save`}
         >
-          {locked && phase.kind === "waiting" ? "Saving…" : saveLabel}
+          {saveLabel}
         </button>
       </div>
     </div>

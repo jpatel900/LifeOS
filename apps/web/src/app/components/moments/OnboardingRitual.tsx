@@ -125,10 +125,9 @@ function formatHour(hour: number): string {
 }
 
 export interface OnboardingRitualProps {
-  captureParse: CaptureParseState;
-  onSubmitParse(text: string, returnHook: string | null): void;
-  onSubmitRaw(text: string, returnHook: string | null): void;
-  onRetryWithMock(): void;
+  // #703: one capture action — the onboarding capture saves the thought and
+  // completes; sorting it into a task is a later, explicit triage step.
+  onSubmit(text: string, returnHook: string | null): void;
   /** Host wires this to WorkflowContext's syncPersistedAreas. */
   onAreasPersisted(areas: Area[]): void;
   onComplete(outcome: OnboardingOutcome): void;
@@ -142,10 +141,7 @@ type PersistState =
   | { status: "error"; message: string };
 
 export function OnboardingRitual({
-  captureParse,
-  onSubmitParse,
-  onSubmitRaw,
-  onRetryWithMock,
+  onSubmit,
   onAreasPersisted,
   onComplete,
 }: OnboardingRitualProps) {
@@ -593,13 +589,10 @@ export function OnboardingRitual({
           </p>
 
           <CaptureCore
-            mode="parse"
+            mode="full"
             placeholder="What's on your mind right now?"
             showReturnHook={false}
-            captureParse={captureParse}
-            onSubmitParse={onSubmitParse}
-            onSubmitRaw={onSubmitRaw}
-            onRetryWithMock={onRetryWithMock}
+            onSubmit={onSubmit}
             onResolved={() => onComplete("captured")}
             saveLabel="Capture it"
             testIdPrefix="onboarding-capture"

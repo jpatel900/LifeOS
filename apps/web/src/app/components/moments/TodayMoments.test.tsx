@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 
@@ -45,8 +46,31 @@ const FIXED_NOW = new Date("2026-07-05T15:00:00.000Z");
  * so journeys that need a first move must create one through real context
  * actions rather than mocking WorkflowContext internals.
  */
+/**
+ * #703: capture no longer parses — a seeded capture only becomes a pending
+ * draft once something taps Sort. This stands in for that tap, driving the
+ * same `sortCaptureIntoDrafts` the Sort button calls, so these journeys still
+ * exercise the real capture -> sort -> draft path. One sort runs at a time
+ * (FR-026: no parse queue), so it re-checks whenever `captureParse` settles.
+ */
+function useAutoSortSeededCaptures() {
+  const { state, captureParse, sortCaptureIntoDrafts } = useWorkflow();
+  const attempted = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (captureParse.phase === "parsing") return;
+    const next = state.captureItems.find(
+      (item) => !attempted.current.has(item.id),
+    );
+    if (!next) return;
+    attempted.current.add(next.id);
+    sortCaptureIntoDrafts(next.id);
+  }, [state.captureItems, captureParse, sortCaptureIntoDrafts]);
+}
+
 function TaskSeedBridge() {
   const { state, submitCaptureText, acceptTaskDraft } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
 
   return (
@@ -71,6 +95,30 @@ function TaskSeedBridge() {
       </button>
     </div>
   );
+}
+
+/**
+ * Presses the `c` capture shortcut and waits for the overlay.
+ *
+ * The shortcut is gated by TodayMoments' `topbarShortcutsEnabled`, which is
+ * false while the onboarding and re-entry ritual gates are still settling —
+ * both derive from state the provider hydrates AFTER first render, and
+ * `useMomentKeyboard` attaches no listener at all while `enabled` is false.
+ * A synchronous key press right after `render()` can therefore land in that
+ * window and be swallowed silently, which is how the SP-5 draft-preservation
+ * test failed twice in ~15 full-suite runs on 2026-07-22/23 (under parallel
+ * workspace load; never in isolation).
+ *
+ * Re-pressing until the overlay opens keeps the exact claim under test —
+ * pressing `c` opens capture — and only tolerates a mount that has not
+ * settled yet. Nothing is relaxed: if the shortcut genuinely stops working,
+ * this still fails, just at the waitFor timeout instead of instantly.
+ */
+async function pressCaptureShortcut(): Promise<void> {
+  await waitFor(() => {
+    fireEvent.keyDown(window, { key: "c" });
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+  });
 }
 
 function renderToday(props: Partial<TodayMomentsProps> = {}) {
@@ -350,7 +398,7 @@ describe("TodayMoments", () => {
     expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
     expect(screen.getByTestId("flow-moment-empty")).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
@@ -360,10 +408,12 @@ describe("TodayMoments", () => {
       key: "Enter",
     });
 
-    // Held in context through the wait, not released the instant Enter is
-    // pressed.
+    // #703: no parse wait at capture any more — the save is synchronous and
+    // the overlay goes straight to its "back to: <hook>" conclusion. It is
+    // still not released the instant Enter is pressed.
     expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
-    expect(screen.getByTestId("capture-overlay-parsing")).toBeVisible();
+    expect(screen.queryByTestId("capture-overlay-parsing")).toBeNull();
+    expect(screen.getByTestId("capture-overlay-conclusion")).toBeVisible();
 
     await waitFor(
       () => {
@@ -473,6 +523,7 @@ function ReEntrySeedBridge({
   onState: (lastActivityAt: string | null) => void;
 }) {
   const { state, submitCaptureText, acceptTaskDraft } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
 
   onState(latestActivityTimestamp(state));
@@ -764,7 +815,7 @@ describe("TodayMoments — FR-028 re-entry return ritual", () => {
       "half-typed thought before the ritual",
     );
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
 
     expect(screen.getByTestId("capture-overlay-textarea")).toHaveValue(
       "half-typed thought before the ritual",
@@ -790,6 +841,7 @@ function DriftSeedBridge() {
     startTaskSession,
     markSession,
   } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
   const task = state.tasks[0];
 
@@ -1228,7 +1280,7 @@ describe("TodayMoments — P6 deep-link shims", () => {
     expect(toast).toHaveClass("fixed");
     expect(toast.textContent).toBe("");
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
       target: { value: "Follow up with Alex about the contract" },
     });
@@ -1256,7 +1308,7 @@ describe("TodayMoments — P6 deep-link shims", () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     fireEvent.change(screen.getByTestId("capture-overlay-textarea"), {
       target: { value: "Follow up with Alex about the contract" },
     });
@@ -1308,7 +1360,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
   it("preserves typed text through Esc/close and reopen, with the cursor at the end and a restored hint", async () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const textarea = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -1328,7 +1380,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
       window.localStorage.getItem("lifeos.moments.captureDraft"),
     ).toBeNull();
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const reopened = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -1347,7 +1399,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
     const restoreFetch = stubParseCaptureFetch();
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const textarea = screen.getByTestId("capture-overlay-textarea");
     fireEvent.change(textarea, {
       target: { value: "Follow up with Alex about the contract" },
@@ -1372,7 +1424,7 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
       window.sessionStorage.getItem("lifeos.moments.captureDraft"),
     ).toBeNull();
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const reopened = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -1384,10 +1436,10 @@ describe("TodayMoments — SP-5 capture draft preservation", () => {
     restoreFetch();
   });
 
-  it("fresh mount with empty sessionStorage shows an empty box and no false restored hint", () => {
+  it("fresh mount with empty sessionStorage shows an empty box and no false restored hint", async () => {
     renderToday({ initialMoment: "start" });
 
-    fireEvent.keyDown(window, { key: "c" });
+    await pressCaptureShortcut();
     const textarea = screen.getByTestId(
       "capture-overlay-textarea",
     ) as HTMLTextAreaElement;
@@ -1680,6 +1732,7 @@ function BacklogRecoverySeedBridge({
   }) => void;
 }) {
   const { state, submitCaptureText, backlogTaskDraft } = useWorkflow();
+  useAutoSortSeededCaptures();
   const draft = state.taskDrafts[0];
   const task = state.tasks[0];
 

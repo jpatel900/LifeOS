@@ -247,14 +247,14 @@ export function ExecuteView({
             />
           ) : null}
           {active ? (
-            // #556: raw-save-only (mode="raw-only") — Execute side-capture
-            // never waits on a parse (issue #556 explicitly allows this;
-            // see the CaptureView comment above and the #556 report). Same
-            // shared CaptureCore as the other two surfaces, just without the
-            // parse-wait it would otherwise contain.
+            // #556/#703: mode="quick" — the Execute side-capture saves and
+            // gets straight out of the way, with no return-hook field and no
+            // conclusion takeover, so a focus session is never interrupted by
+            // its own capture box. Same shared CaptureCore as the other
+            // surfaces; since #703 none of them wait on a parse.
             <div className="mx-auto mt-7 max-w-md text-left">
               <CaptureCore
-                mode="raw-only"
+                mode="quick"
                 compact
                 autoFocus={false}
                 testIdPrefix="capture-side"
@@ -262,7 +262,7 @@ export function ExecuteView({
                 saveLabel="Save side thought"
                 textareaClassName="min-h-12 rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] px-4 text-[var(--ink)] outline-none placeholder:text-[var(--fnt)]"
                 saveButtonClassName="min-h-11 rounded-full px-4 text-sm font-bold bg-[var(--btn)] text-[var(--btn-fg)] disabled:cursor-not-allowed disabled:bg-[var(--sf3)] disabled:text-[var(--fnt)]"
-                onSubmitRaw={(text) => onSideCapture(text)}
+                onSubmit={(text) => onSideCapture(text)}
               />
             </div>
           ) : null}

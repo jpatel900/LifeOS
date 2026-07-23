@@ -17,20 +17,24 @@ test.beforeEach(async ({ page }) => {
  * regress the live stage specs. Each test names the stage spec it
  * establishes parity with.
  *
- * Parity boundary (documented, not a failure): the moments home hosts capture
- * and the Start -> Flow -> Close focus journey inline. Triage/Plan are reached
- * via summary sheets that link out to the demoted stage routes (P5 fallback),
- * and marking a session stuck/missed still lives in the stage review surface —
- * so those journeys stay proven by the existing stage specs until a later
- * packet brings them inline. This suite covers what the moments home owns.
+ * Parity boundary (documented, not a failure): the moments home hosts capture,
+ * the Start -> Flow -> Close focus journey, and — since #703 — the triage
+ * sheet's Sort action inline. Plan is still reached via a summary sheet that
+ * links out to the demoted stage routes (P5 fallback), and marking a session
+ * stuck/missed still lives in the stage review surface — so those journeys
+ * stay proven by the existing stage specs until a later packet brings them
+ * inline. This suite covers what the moments home owns.
  */
 
 test.describe("moments home parity (/)", () => {
-  // Parity with capture-parse-mock.spec.ts: the moments capture surface
-  // round-trips through /api/parse-capture in mock mode. HIGH-1 (#670): the
-  // route requires a verified bearer token and E2E has no Supabase env, so
-  // the route is stubbed with the deterministic mock-parser payload.
-  test("capture round-trips through /api/parse-capture in mock mode", async ({
+  // Parity with capture-parse-mock.spec.ts, re-anchored for #703: capture is
+  // a pure raw save, and the moments home's own triage sheet is what
+  // round-trips through /api/parse-capture in mock mode via its Sort action.
+  // The round-trip assertion MOVED here from the capture step with the parse
+  // itself — it did not go away. HIGH-1 (#670): the route requires a verified
+  // bearer token and E2E has no Supabase env, so the route is stubbed with
+  // the deterministic mock-parser payload.
+  test("capture saves raw, then triage Sort round-trips through /api/parse-capture in mock mode", async ({
     page,
   }) => {
     await page.goto("/");
@@ -40,38 +44,34 @@ test.describe("moments home parity (/)", () => {
     await page.keyboard.press("1");
     await expect(page.getByTestId("start-moment")).toBeVisible();
 
-    const parseResponsePromise = page.waitForResponse(
-      (response) =>
-        response.url().includes("/api/parse-capture") &&
-        response.request().method() === "POST",
-    );
-
     await page.getByTestId("capture-affordance").click();
     const dialog = page.getByRole("dialog", { name: "Capture a thought" });
     await expect(dialog).toBeVisible();
     const textarea = page.getByTestId("capture-overlay-textarea");
     await textarea.fill("Mock mode parse proof capture");
     await page.getByTestId("capture-overlay-return-hook").fill("the inbox");
+
+    // #703: one action. The second save button is gone from this surface.
+    await expect(page.getByTestId("capture-overlay-save")).toHaveText(
+      "Capture",
+    );
+    await expect(page.getByTestId("capture-overlay-save-raw")).toHaveCount(0);
     await textarea.press("Enter");
 
-    // #556 FR-026 containment: held in context through the wait — the raw
-    // text and return hook stay fully visible, the dialog does not close the
-    // instant Enter is pressed, and no capture can begin again while this
-    // one is in flight (Close is disabled).
+    // #556 FR-026 containment, re-anchored: there is no parse wait to sit
+    // through any more, but the dialog still holds the person in context
+    // through the closing beat — the raw text and return hook stay fully
+    // visible, the dialog does not vanish the instant Enter is pressed, and
+    // no new capture can begin while the conclusion is on screen (Close is
+    // disabled). The parse-wait spinner has no trigger here and must not
+    // appear at all.
     await expect(dialog).toBeVisible();
+    await expect(page.getByTestId("capture-overlay-parsing")).toHaveCount(0);
     await expect(textarea).toHaveValue("Mock mode parse proof capture");
     await expect(page.getByTestId("capture-overlay-return-hook")).toHaveValue(
       "the inbox",
     );
     await expect(page.getByTestId("capture-overlay-close")).toBeDisabled();
-
-    // The real parity claim (mirrors capture-parse-mock.spec.ts): the moments
-    // capture surface round-trips through /api/parse-capture in mock mode.
-    const parseResponse = await parseResponsePromise;
-    expect(parseResponse.status()).toBe(200);
-    const body = await parseResponse.json();
-    expect(body.ok).toBe(true);
-    expect(body.parser).toBe("mock");
 
     // Containment's closing beat, still inside the dialog before it closes:
     // the "back to: <hook>" conclusion.
@@ -83,8 +83,8 @@ test.describe("moments home parity (/)", () => {
     // asserted here.
     await expect(dialog).toBeHidden();
 
-    // #551 state truth: the capture just landed in triage as a pending
-    // draft, so the Start column must show that visibly rather than still
+    // #551 state truth: the capture just landed in triage awaiting a
+    // decision, so the Start column must show that visibly rather than still
     // reading "Nothing queued". With no first move queued (empty demo
     // state), the pending item is PROMOTED into the flagship card
     // (start-pending-triage-card); with a first move present it renders as
@@ -95,6 +95,38 @@ test.describe("moments home parity (/)", () => {
       .or(page.getByTestId("start-pending-triage"));
     await expect(pendingTriageSurface).toBeVisible();
     await expect(pendingTriageSurface).toContainText(/waiting for a decision/);
+
+    // --- Triage: the thought is listed, unsorted, and nothing parsed yet ---
+    await page.getByTestId("pipeline-overview-stage-triage").click();
+    const capturesList = page.getByTestId("triage-sheet-captures");
+    await expect(capturesList).toBeVisible({ timeout: 15_000 });
+    await expect(capturesList).toContainText("Mock mode parse proof capture");
+    await expect(capturesList).toContainText("Saved as you wrote it");
+    await expect(page.getByTestId("triage-sheet-list")).toHaveCount(0);
+
+    // --- Sort: the parity claim, on the action that now owns the parse ----
+    const parseResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/parse-capture") &&
+        response.request().method() === "POST",
+    );
+
+    await page
+      .getByTestId(/^triage-sheet-sort-/)
+      .first()
+      .click();
+
+    const parseResponse = await parseResponsePromise;
+    expect(parseResponse.status()).toBe(200);
+    const body = await parseResponse.json();
+    expect(body.ok).toBe(true);
+    expect(body.parser).toBe("mock");
+
+    // ...and the round-trip produced a reviewable draft on this surface.
+    const draftList = page.getByTestId("triage-sheet-list");
+    await expect(draftList).toBeVisible({ timeout: 15_000 });
+    await expect(draftList).toContainText("Mock mode parse proof capture");
+    await expect(page.getByRole("button", { name: "Do today" })).toBeVisible();
   });
 
   // Parity with the golden-journey / cockpit-flow-repair "start -> execute ->

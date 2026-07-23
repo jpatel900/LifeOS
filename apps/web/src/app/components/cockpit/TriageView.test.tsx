@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { WorkflowProvider } from "@/lib/WorkflowContext";
 import { TriageView } from "./TriageView";
 import {
   buildWorkflowCockpitViewModel,
@@ -33,18 +34,22 @@ describe("TriageView 44px hit targets (#615)", () => {
       ),
     };
 
+    // #703: TriageView now embeds the shared UnsortedCaptures Sort action,
+    // which reads WorkflowContext, so this unit render needs the provider.
     render(
-      <TriageView
-        vm={buildWorkflowCockpitViewModel(state)}
-        onDrop={noop}
-        onBacklog={noop}
-        onToday={noop}
-        onEdit={noop}
-        onSplit={noop}
-        onMerge={noop}
-        onRejectPersonLink={noop}
-        onPlan={noop}
-      />,
+      <WorkflowProvider>
+        <TriageView
+          vm={buildWorkflowCockpitViewModel(state)}
+          onDrop={noop}
+          onBacklog={noop}
+          onToday={noop}
+          onEdit={noop}
+          onSplit={noop}
+          onMerge={noop}
+          onRejectPersonLink={noop}
+          onPlan={noop}
+        />
+      </WorkflowProvider>,
     );
 
     expect(
