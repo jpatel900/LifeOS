@@ -150,12 +150,19 @@ test.describe("44px hit-target inventory at 390px (#594) — onboarding", () => 
     await page.getByTestId("onboarding-day-skip").click();
     await expect(page.getByTestId("onboarding-step-capture")).toBeVisible();
 
-    // Type text so the save controls are enabled (save/save-raw are
-    // disabled, not hidden, while empty — bounding boxes are unaffected).
+    // Type text so the save control is enabled (it is disabled, not hidden,
+    // while empty — the bounding box is unaffected either way).
     await page.getByTestId("onboarding-capture-textarea").fill("Draft note");
 
+    // #703: this step now offers ONE save control ("Capture"); the second
+    // save button ("save later") is gone, and the parse it used to trigger
+    // moved to the triage Sort action. The 44px floor is asserted on every
+    // control the step still has, and the removed one is pinned at zero so
+    // the one-button contract cannot silently regress.
+    await expect(page.getByTestId("onboarding-capture-save-raw")).toHaveCount(
+      0,
+    );
     await assertAtLeast44(page, "onboarding-capture-save");
-    await assertAtLeast44(page, "onboarding-capture-save-raw");
     await assertAtLeast44(page, "onboarding-capture-skip");
 
     await assertNoHorizontalOverflow(page);
@@ -189,9 +196,10 @@ test.describe("44px hit-target inventory at 390px (#594) — /capture route", ()
     await page.getByTestId("capture-page-textarea").fill("Draft note");
     await page.getByTestId("capture-page-return-hook").fill("the standup");
 
+    // #703: one save control here too (see the onboarding step above).
+    await expect(page.getByTestId("capture-page-save-raw")).toHaveCount(0);
     await assertAtLeast44(page, "capture-page-return-hook");
     await assertAtLeast44(page, "capture-page-save");
-    await assertAtLeast44(page, "capture-page-save-raw");
 
     await assertNoHorizontalOverflow(page);
   });
