@@ -37,7 +37,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
   useRouter: () => ({
     // Keep the mocked pathname in sync with in-app navigation so the
-    // pathname-derived stage actually transitions (Save thought -> triage).
+    // pathname-derived stage actually transitions between cockpit stages.
     push: (path: string) => mockPathname.mockReturnValue(path),
   }),
 }));

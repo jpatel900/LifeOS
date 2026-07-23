@@ -106,9 +106,15 @@ export function CaptureCore({
   onResolved,
   onCancel,
   onLockChange,
-  // #703: one action, and its label says exactly what happens — the thought
-  // is saved, as written, right now. No promise about sorting: that is a
-  // separate step the user takes in triage when they choose to.
+  // #689 scope add (owner): the old "Save raw" vs "Save thought" pair was a
+  // front-door fork nobody could tell apart — both persisted the identical
+  // capture item (stageAndPersistRawCapture); the ONLY difference was
+  // whether the AI sorted it into a task draft now or later at triage.
+  // #689 renamed them to say that ("Save and sort" / "Save as-is, sort
+  // later"); #703 (owner-ratified) went the rest of the way and removed the
+  // fork entirely. One action, and its label says exactly what happens — the
+  // thought is saved, as written, right now. No promise about sorting: that
+  // is a separate step the user takes in triage when they choose to.
   saveLabel = "Capture",
   hint,
   disabledReason,

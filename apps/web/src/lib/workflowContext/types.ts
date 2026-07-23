@@ -309,6 +309,11 @@ export interface WorkflowSyncStatus {
   account: "checking" | "synced" | "local-only" | "sync-error";
   message: string | null;
   pendingLocalChanges: boolean;
+  // #688: true when the ONLY reason account sync is off is that nobody is
+  // signed in. Lets banners present one calm signed-out state with a
+  // sign-in door instead of failure language. A true auth *failure* with a
+  // live session never sets this.
+  signedOut?: boolean;
 }
 
 export const initialSyncStatus: WorkflowSyncStatus = {

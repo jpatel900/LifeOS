@@ -286,6 +286,26 @@ function informationalCheck(
   });
 }
 
+/**
+ * #688: supabase-js reports "nobody is signed in" as an ERROR from
+ * `auth.getUser()` (AuthSessionMissingError, "Auth session missing!"), not as
+ * a null user. That error message contains "auth", so it used to fall through
+ * `normalizeSupabaseFailureSummary` into "Supabase authentication failed while
+ * checking this subsystem" at CRITICAL — the exact scary line the owner
+ * reported on a merely signed-out session. Signed-out is a calm state, so it
+ * is classified before any failure wording is chosen. A real auth failure with
+ * a live session (expired/invalid JWT, bad token) does NOT match.
+ */
+export function isSignedOutAuthError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("auth session missing") ||
+    message.includes("session missing") ||
+    message.includes("session_not_found") ||
+    message.includes("no session")
+  );
+}
+
 function normalizeSupabaseFailureSummary(
   message: string,
   fallback: string,
@@ -878,7 +898,22 @@ export async function getHealthDashboard(
     );
   } else {
     const { data, error } = await client.auth.getUser();
-    if (error) {
+    if (error && isSignedOutAuthError(error)) {
+      // #688: signed out — the calm state, not a failure. Same shape as the
+      // no-user branch below so both routes present identically.
+      checks.push(
+        informationalCheck(
+          "health-auth-session",
+          "auth session",
+          "You're not signed in. Work is saving on this device only.",
+          {
+            authenticated: false,
+            mode: "signed_out",
+            repair_steps: ["Sign in to sync work to your account."],
+          },
+        ),
+      );
+    } else if (error) {
       checks.push(
         makeCheck(
           "health-auth-session",
@@ -897,11 +932,13 @@ export async function getHealthDashboard(
         informationalCheck(
           "health-auth-session",
           "auth session",
-          "Supabase is configured, but no user session is active.",
+          // #688/#692: signed out is a calm state, said plainly — not
+          // failure language, no vendor vocabulary.
+          "You're not signed in. Work is saving on this device only.",
           {
             authenticated: false,
             mode: "signed_out",
-            repair_steps: ["Sign in on /login to check persisted-user rows."],
+            repair_steps: ["Sign in to sync work to your account."],
           },
         ),
       );
@@ -1029,21 +1066,22 @@ export async function getHealthDashboard(
       informationalCheck(
         "health-areas",
         "areas",
-        "Sign in before checking Supabase areas.",
+        // #688/#692: plain and calm — the signed-out condition, not an error.
+        "Sign in to check the areas saved to your account.",
         {
           source: "supabase",
           mode: "signed_out",
-          repair_steps: ["Sign in on /login to check persisted-user rows."],
+          repair_steps: ["Sign in to check saved account data."],
         },
       ),
       informationalCheck(
         "health-capture-persistence",
         "capture persistence",
-        "Sign in before checking capture_items persistence.",
+        "Sign in to check the captures saved to your account.",
         {
           source: "supabase",
           mode: "signed_out",
-          repair_steps: ["Sign in on /login to check persisted-user rows."],
+          repair_steps: ["Sign in to check saved account data."],
         },
       ),
     );

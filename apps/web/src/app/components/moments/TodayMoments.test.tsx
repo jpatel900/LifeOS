@@ -12,6 +12,9 @@ import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
+  // #688: AuthAffordance (masthead sign-in door) reads the current path for
+  // its ?next= return target.
+  usePathname: () => "/",
 }));
 
 // #292 brief view instrumentation: hoisted so both vi.mock's factory (which
@@ -1265,7 +1268,9 @@ describe("TodayMoments — P6 deep-link shims", () => {
       () => {
         const toastAfter = screen.getByTestId("today-moments-toast");
         expect(toastAfter).toHaveClass("fixed");
-        expect(within(toastAfter).getByText(/Captured/)).toBeInTheDocument();
+        expect(
+          within(toastAfter).getByText(/Captured — it's in your triage pile/),
+        ).toBeInTheDocument();
       },
       { timeout: 5000 },
     );
@@ -1289,7 +1294,9 @@ describe("TodayMoments — P6 deep-link shims", () => {
 
     const toastMessage = await waitFor(
       () =>
-        within(screen.getByTestId("today-moments-toast")).getByText(/Captured/),
+        within(screen.getByTestId("today-moments-toast")).getByText(
+          /Captured — it's in your triage pile/,
+        ),
       { timeout: 5000 },
     );
     expect(toastMessage).toHaveClass("motion-reduce:transition-none");

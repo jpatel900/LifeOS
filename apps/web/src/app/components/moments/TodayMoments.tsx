@@ -23,6 +23,7 @@ import { AreaSelector } from "./AreaSelector";
 import { MastheadThemeToggle } from "./MastheadThemeToggle";
 import { formatMastheadDate } from "./formatMastheadDate";
 import { CaptureAffordance } from "./CaptureAffordance";
+import { AuthAffordance } from "./AuthAffordance";
 import { KeyboardLegend } from "./KeyboardLegend";
 import { CaptureOverlay } from "./CaptureOverlay";
 import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
@@ -238,6 +239,7 @@ export function TodayMoments({
     state,
     selectedAreaId,
     setSelectedAreaId,
+    syncStatus,
     syncPersistedAreas,
     submitCaptureText,
     startTaskSession,
@@ -1080,6 +1082,13 @@ export function TodayMoments({
               {/* Finding #3: topbar theme toggle, wired to the existing
                   next-themes setup — a real "D" kbd hint. */}
               <MastheadThemeToggle shortcutEnabled={topbarShortcutsEnabled} />
+              {/* #688: the auth door — a "Sign in" pill when signed out (or
+                  a quiet who + sign-out when signed in), in the same pill
+                  grammar as the cluster. Renders nothing when accounts aren't
+                  set up here, so it never dead-ends. Kept visible at every
+                  width (not `hidden sm:contents`) because being unable to find
+                  sign-in was the reported bug. */}
+              <AuthAffordance />
               {/* Finding #4: demoted from a bare text link to an
                   icon-weighted pill matching the rest of the cluster. */}
               <div
@@ -1221,10 +1230,31 @@ export function TodayMoments({
         }
         onResolved={() => {
           // #556: the success toast only fires once the capture truly
-          // entered the pipeline — never ahead of that truth. #703: one
-          // capture path, so one message, and it names where the thought
-          // went so the next step is obvious.
-          showToast("Captured — waiting in Triage");
+          // entered the pipeline — never ahead of that truth.
+          // #689: the toast names WHERE the thought went and offers the
+          // one-tap path there. Every capture is visible in the triage
+          // sheet as an unsorted-capture row, except the offline queue: a
+          // capture saved while offline stays on the device until reconnect
+          // (FR-027), so the message says that instead of promising a
+          // triage row that isn't there yet.
+          // #703: capture is now a single raw-save path (the parse moved to
+          // triage's Sort action), so there is no longer a "parsed" outcome
+          // to branch on here — the offline case is simply "offline".
+          const offline =
+            typeof navigator !== "undefined" && navigator.onLine === false;
+          const signedOutNote = syncStatus.signedOut
+            ? " Saved on this device — sign in to keep it everywhere."
+            : "";
+          if (offline) {
+            showToast(
+              "Captured — saved on this device. It joins your triage pile when you're back online.",
+            );
+          } else {
+            showToast(`Captured — it's in your triage pile.${signedOutNote}`, {
+              label: "Open triage",
+              run: () => setActiveSheet("triage"),
+            });
+          }
           setCaptureOpen(false);
           // Clear the draft only after a successful save — Esc/close must
           // preserve it, so this write happens nowhere else.

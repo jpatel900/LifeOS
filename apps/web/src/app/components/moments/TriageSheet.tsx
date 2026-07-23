@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ export function TriageSheet({
 }: TriageSheetProps) {
   const {
     state,
+    syncStatus,
     acceptTaskDraft,
     backlogTaskDraft,
     rejectTaskDraft,
@@ -121,9 +123,20 @@ export function TriageSheet({
       (resolvedAreaId ? draft.area_id === resolvedAreaId : true),
   );
 
-  // #703: the sheet still needs to know whether anything unsorted exists so
-  // the empty state stays honest — the rows and the Sort action itself live
-  // in the shared UnsortedCaptures component below.
+  // #689 (read path): raw captures used to be invisible here — the owner
+  // captured a thought, followed "Decide now" into this sheet, and met
+  // "Nothing waiting in triage". Every capture is persisted as a capture
+  // item first (stageAndPersistRawCapture), and only a parse turns it into a
+  // task draft — so until it is sorted the thought lives ONLY in
+  // `captureItems`. Same area scoping as the pipeline "Capture" badge
+  // (`buildPipelineCounts`'s actionableCapture filter plus
+  // `triage_required`, the parse-later status).
+  // A sorted capture keeps status "triage_required" while its draft sits in
+  // the pending list above — exclude any capture a draft already points at
+  // (task_drafts.capture_item_id), so a thought is never listed twice.
+  // #703: the sheet still needs the *count* so the empty state stays honest;
+  // the rows themselves (and the Sort action) live in the shared
+  // UnsortedCaptures component below, which applies this identical filter.
   const draftedCaptureIds = new Set(
     state.taskDrafts
       .map((draft) => draft.capture_item_id)
@@ -313,7 +326,31 @@ export function TriageSheet({
         </ul>
       )}
 
+      {/* #703: the unsorted-capture rows and the Sort action that drives
+          the parse live in one shared component, used by BOTH triage
+          surfaces (this sheet and the cockpit TriageView) so they show the
+          same rows, the same copy (#689), and the same degraded behavior.
+          It renders nothing when there is nothing unsorted. */}
       <UnsortedCaptures areaId={resolvedAreaId} />
+
+      {/* #689 item 3: when signed out, say where these live, plainly, with
+          the door right here. */}
+      {syncStatus.signedOut ? (
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="triage-sheet-signedout-note"
+        >
+          Saved on this device.{" "}
+          <Link
+            href="/login?next=/"
+            className="font-semibold text-foreground underline underline-offset-2"
+            data-testid="triage-sheet-signin-link"
+          >
+            Sign in
+          </Link>{" "}
+          to keep captures on all your devices.
+        </p>
+      ) : null}
 
       {/* #687: the old "Open full view →" link went to `/triage`, which now
           redirects straight back to this same sheet — a circular hop. This

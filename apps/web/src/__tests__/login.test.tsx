@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => {
     push,
     signInWithPassword,
     createSupabaseBrowserClient: vi.fn(),
+    // #688: query string the login page sees; tests override it to exercise
+    // the ?next= return path.
+    search: "",
   };
 });
 
@@ -17,6 +20,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mocks.push,
   }),
+  // #688: the login form reads ?next= to return the person to the page they
+  // came from. Default here is "no next param" -> routes to Today.
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 
 vi.mock("@/lib/supabase/browser", () => ({
@@ -26,6 +32,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 describe("LoginPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.search = "";
     mocks.createSupabaseBrowserClient.mockReturnValue({
       auth: {
         signInWithPassword: mocks.signInWithPassword,
@@ -56,6 +63,8 @@ describe("LoginPage", () => {
     expect(screen.getByLabelText("Password")).toHaveValue("password123");
   });
 
+  // #692 plain language: the no-accounts case is stated in the person's
+  // terms, with no vendor/config vocabulary.
   it("shows the config error when the browser client is unavailable", async () => {
     mocks.createSupabaseBrowserClient.mockReturnValue(null);
 
@@ -63,7 +72,7 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Supabase is not configured. Add local Supabase env vars to use login, or continue in local-only mode.",
+      "Accounts aren't set up here yet, so there's nothing to sign in to. Your notes are still saved on this device.",
     );
     expect(mocks.signInWithPassword).not.toHaveBeenCalled();
   });
@@ -85,6 +94,34 @@ describe("LoginPage", () => {
     await waitFor(() => {
       expect(mocks.push).toHaveBeenCalledWith("/");
     });
+  });
+
+  // #688: the sign-in door returns you to the page you came from.
+  it("returns to the originating page when ?next= is a same-app path", async () => {
+    mocks.search = "next=%2Fhealth";
+    render(<LoginPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => {
+      expect(mocks.push).toHaveBeenCalledWith("/health");
+    });
+  });
+
+  // Open-redirect guard: a crafted ?next= must never bounce a freshly
+  // signed-in session off-site.
+  it.each([
+    ["//evil.example.com", "protocol-relative URL"],
+    ["https://evil.example.com", "absolute URL"],
+    ["javascript:alert(1)", "script URL"],
+  ])("ignores an off-site ?next= (%s)", async (next) => {
+    mocks.search = `next=${encodeURIComponent(next)}`;
+    render(<LoginPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => {
+      expect(mocks.push).toHaveBeenCalledWith("/");
+    });
+    expect(mocks.push).not.toHaveBeenCalledWith(next);
   });
 
   it("shows the provider error when sign-in fails", async () => {
