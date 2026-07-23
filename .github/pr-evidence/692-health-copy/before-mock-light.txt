@@ -1,0 +1,69 @@
+Skip to stage content
+◆
+LifeOS
+All areas
+Main Job
+Personal
+Volunteer Work
+Side Project
+Account sync is unavailable; work is staying local.
+0
+Today
+0
+Capture
+0
+Triage
+0
+Plan
+0
+Execute
+0
+Review
+3 checks need attention
+
+71/100 · 1/4
+
+auth
+
+Authentication is configured (mock only, no real auth yet).
+
+database
+
+Local mock data only; Supabase not wired yet.
+
+ai_parsing
+
+Parsing is mocked; real AI integration will come later.
+
+People & commitments
+
+No aging waiting-ons or stale commitments.
+
+Run system check
+
+Mock-only health check completed.
+
+Mirror
+Observation only — these gauges describe the system, not you.
+
+Purpose gauge
+
+Not enough check-ins yet to show a trend. Nothing is owed here — it fills in on its own whenever check-ins happen.
+
+Capture inflow vs completion outflow
+
+No reading yet.
+
+Override rate per policy class
+
+No reading yet.
+
+Re-entry latency
+
+No reading yet.
+
+Build:use ratio
+
+No reading yet.
+
+Full breakdown
