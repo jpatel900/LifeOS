@@ -148,7 +148,7 @@ const BASELINE: readonly BaselineEntry[] = [
       "Supabase is not configured. Google Calendar stays unavailable in local-only mode.",
       "Supabase auth helpers are unavailable. Sign in again before connecting Google Calendar.",
       "LifeOS cleared the local Google Calendar connection and encrypted token material. Google-side revocation still lives in your Google account if you want to remove consent there too.",
-      "Missing server config is non-fatal. Mock/local mode still works\n                without Google env vars.",
+      "Missing server config is non-fatal. Mock/local mode still works without Google env vars.",
       "Granted OAuth scopes:",
     ],
   },
@@ -319,7 +319,7 @@ const BASELINE: readonly BaselineEntry[] = [
     file: "apps/web/src/app/settings/areas/DataExportPanel.tsx",
     strings: [
       "Data export needs a signed-in account. Local-only data stays on this device and is not included.",
-      "Download a JSON copy of your account data: areas, captures, tasks,\n          projects, planning proposals, calendar blocks, execution sessions,\n          reviews, health history, and the external-write audit log. Google\n          connection tokens are never included.",
+      "Download a JSON copy of your account data: areas, captures, tasks, projects, planning proposals, calendar blocks, execution sessions, reviews, health history, and the external-write audit log. Google connection tokens are never included.",
     ],
   },
   // ===== SLICE D (15 strings) =====
@@ -511,14 +511,14 @@ const BASELINE: readonly BaselineEntry[] = [
     slice: "F",
     file: "apps/web/src/app/settings/areas/AreaRegistryCards.tsx",
     strings: [
-      "Preview updates immediately on this card. Reset uses the\n                        default accent token.",
+      "Preview updates immediately on this card. Reset uses the default accent token.",
     ],
   },
   {
     slice: "F",
     file: "apps/web/src/app/settings/areas/page.tsx",
     strings: [
-      "If Supabase is configured, sign in and make sure the local stack\n              is running. Without Supabase env vars, this page uses local-only\n              areas.",
+      "If Supabase is configured, sign in and make sure the local stack is running. Without Supabase env vars, this page uses local-only areas.",
     ],
   },
   {

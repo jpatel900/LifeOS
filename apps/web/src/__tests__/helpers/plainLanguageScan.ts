@@ -148,17 +148,23 @@ function walkFiles(relativePath: string): string[] {
 
   // Sorted so the scan order — and therefore the reported violation order —
   // is identical on every machine and in CI.
-  return readdirSync(currentPath, { withFileTypes: true })
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .flatMap((entry) => {
-      const next = `${relativePath}/${entry.name}`.replace(/\\/g, "/");
+  return (
+    readdirSync(currentPath, { withFileTypes: true })
+      // Codepoint order, not `localeCompare` — locale collation can differ
+      // between a developer machine and CI.
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      .flatMap((entry) => {
+        const next = `${relativePath}/${entry.name}`.replace(/\\/g, "/");
 
-      if (entry.isDirectory()) {
-        return IGNORED_SCAN_DIRECTORIES.has(entry.name) ? [] : walkFiles(next);
-      }
+        if (entry.isDirectory()) {
+          return IGNORED_SCAN_DIRECTORIES.has(entry.name)
+            ? []
+            : walkFiles(next);
+        }
 
-      return entry.isFile() ? [next] : [];
-    });
+        return entry.isFile() ? [next] : [];
+      })
+  );
 }
 
 function isScannedFile(path: string) {
@@ -168,9 +174,17 @@ function isScannedFile(path: string) {
   return true;
 }
 
-/** Line endings normalized so a baseline entry matches on Windows and Linux. */
+/**
+ * Reduce a literal to the text a person would actually read.
+ *
+ * Runs of whitespace collapse to one space, which does two things: it matches
+ * how the browser renders wrapped JSX text, and it keeps a baseline entry
+ * stable when a component is only re-indented. It also erases the CRLF/LF
+ * difference between a Windows checkout and Linux CI, which the ratchet below
+ * depends on.
+ */
 function normalize(text: string) {
-  return text.replace(/\r\n/g, "\n").trim();
+  return text.replace(/\s+/g, " ").trim();
 }
 
 function hasDeveloperLayerMarker(node: ts.Node, sourceText: string) {
