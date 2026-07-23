@@ -15,6 +15,7 @@ test.skip(
 );
 
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { cockpitCaptureAndSort } from "./helpers/cockpitCaptureSort";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
 // E2E dev server has no Supabase env, so every capture flow in this file runs
@@ -127,22 +128,15 @@ test("theme toggle uses data-theme light on the cockpit root", async ({
   await captureEvidence(page, "desktop-capture-light.png");
 });
 
-test("capture saves raw thought and routes the item to triage", async ({
+// #703: capture saves the thought raw and stays put — it no longer parses or
+// navigates. Sorting it into a draft is the explicit Sort action on the
+// triage stage, so this proof now walks that whole journey.
+test("capture saves raw thought and the triage Sort action turns it into a draft", async ({
   page,
 }) => {
-  await page.goto("/capture");
-
-  await page
-    .getByPlaceholder("Drop the thought here.")
-    .fill("Browser handoff proof capture item");
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  await cockpitCaptureAndSort(page, "Browser handoff proof capture item");
 
   await expect(page).toHaveURL(/\/triage$/);
-  await expect(
-    page.getByRole("heading", {
-      name: "Browser handoff proof capture item",
-    }),
-  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Drop" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Someday" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Do today" })).toBeVisible();
@@ -151,11 +145,7 @@ test("capture saves raw thought and routes the item to triage", async ({
 test("triage someday and do-today choices feed the plan screen", async ({
   page,
 }) => {
-  await page.goto("/capture");
-  await page
-    .getByPlaceholder("Drop the thought here.")
-    .fill("Someday proof item");
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  await cockpitCaptureAndSort(page, "Someday proof item");
   await page.getByRole("button", { name: "Someday" }).click();
 
   await expect(
@@ -167,11 +157,7 @@ test("triage someday and do-today choices feed the plan screen", async ({
     page.getByText("Move to today: Someday proof item"),
   ).toBeVisible();
 
-  await page.goto("/capture");
-  await page
-    .getByPlaceholder("Drop the thought here.")
-    .fill("Do today proof item");
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  await cockpitCaptureAndSort(page, "Do today proof item");
   await page.getByRole("button", { name: "Do today" }).click();
 
   await expect(
@@ -188,11 +174,7 @@ test("triage someday and do-today choices feed the plan screen", async ({
 test("plan hour rail creates local blocks and keeps Google writes secondary", async ({
   page,
 }) => {
-  await page.goto("/capture");
-  await page
-    .getByPlaceholder("Drop the thought here.")
-    .fill("Plan rail proof item");
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  await cockpitCaptureAndSort(page, "Plan rail proof item");
   await page.getByRole("button", { name: "Do today" }).click();
 
   await expect(

@@ -36,8 +36,11 @@ test("a raw capture names its destination and is visible in triage", async ({
   const thought = "Buy milk and call the dentist";
   await page.getByTestId("capture-overlay-textarea").fill(thought);
 
-  // "Save as-is, sort later" — the explicit raw path, no parse in flight.
-  await page.getByTestId("capture-overlay-save-raw").click();
+  // #703: one "Capture" action, and it is the raw path — no parse in flight,
+  // sorting happens later on the triage surface. (This spec was written
+  // against the two-button pair; it is the same raw journey either way.)
+  await expect(page.getByTestId("capture-overlay-save-raw")).toHaveCount(0);
+  await page.getByTestId("capture-overlay-save").click();
 
   // (1) The confirmation names WHERE the thought went, and offers the path.
   const toast = page.getByTestId("today-moments-toast");

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { cockpitCaptureAndSort } from "./helpers/cockpitCaptureSort";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
 // E2E dev server has no Supabase env, so every capture flow in this file runs
@@ -226,14 +227,13 @@ async function goToStage(page: import("@playwright/test").Page, stage: RegExp) {
     .click();
 }
 
+// #703: one Capture button, no parse at the front door — the draft these
+// #615 describes need comes from the triage Sort action instead.
 async function captureTask(
   page: import("@playwright/test").Page,
   title: string,
 ) {
-  await page.goto("/capture");
-  await page.getByPlaceholder("Drop the thought here.").fill(title);
-  await page.getByRole("button", { name: "Save and sort" }).click();
-  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
+  await cockpitCaptureAndSort(page, title);
 }
 
 test.describe("44px hit-target inventory at 390px (#615) — Plan stage", () => {

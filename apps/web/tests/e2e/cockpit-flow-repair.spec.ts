@@ -13,6 +13,7 @@ test.skip(
 );
 
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { cockpitCaptureAndSort } from "./helpers/cockpitCaptureSort";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
 // E2E dev server has no Supabase env, so every capture flow in this file runs
@@ -28,18 +29,11 @@ async function goToStage(page: Page, stage: RegExp) {
     .click();
 }
 
+// #703: capture is a raw save and no longer produces a draft on its own —
+// every caller here wants a draft on the triage stage, which now takes the
+// capture -> cross to triage -> Sort journey (shared helper).
 async function captureTask(page: Page, title: string) {
-  await page.goto("/capture");
-  await page.getByPlaceholder("Drop the thought here.").fill(title);
-  await page.getByRole("button", { name: "Save and sort" }).click();
-  // #556 FR-026: saving no longer navigates instantly — the capture stage
-  // holds the user through the parse wait (raw text + hook visible, no
-  // second submit possible) and only navigates to Triage once the parse
-  // truly resolves ("back to: <hook>" conclusion). Every caller of this
-  // helper immediately assumes it landed on /triage, so wait for that here.
-  // 30s: the first capture-submit of a dev run can hit multi-second cold
-  // compiles (/_error, /triage) that starve a 15s window under load.
-  await expect(page).toHaveURL(/\/triage$/, { timeout: 30_000 });
+  await cockpitCaptureAndSort(page, title);
 }
 
 async function planTaskAtEight(page: Page, title: string) {
@@ -54,9 +48,10 @@ async function planTaskAtEight(page: Page, title: string) {
 test("capture blocks empty saves", async ({ page }) => {
   await page.goto("/capture");
 
-  await expect(
-    page.getByRole("button", { name: "Save and sort" }),
-  ).toBeDisabled();
+  // #703: one save control, and its label is "Capture". Looked up by testid
+  // because the stage nav also has a "Capture" button.
+  await expect(page.getByTestId("capture-page-save")).toBeDisabled();
+  await expect(page.getByTestId("capture-page-save-raw")).toHaveCount(0);
 });
 
 test("empty plan routes to capture instead of execute", async ({ page }) => {
@@ -74,19 +69,16 @@ test("all areas pipeline board includes work from every area", async ({
   page,
 }) => {
   await captureTask(page, "Main area board repair item");
-  // #555: saving navigates to /triage for real now, and a second capture
-  // submitted while the first parse is still in flight is dropped by the
-  // capture guard (WorkflowContext submitCaptureText) — settle the first
-  // parse (draft visible in triage) before starting the second capture.
+  // #703: the helper already settled the sort (draft heading visible on the
+  // triage stage). Only one sort runs at a time, so settling the first one
+  // before starting the second capture is still the contract — it is just
+  // enforced inside the helper now rather than here.
   await expect(page).toHaveURL(/\/triage$/, { timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Do today" })).toBeVisible();
 
   await page.getByRole("button", { name: "Personal" }).click();
   await goToStage(page, /Capture/);
-  await page
-    .getByPlaceholder("Drop the thought here.")
-    .fill("Personal board repair item");
-  await page.getByRole("button", { name: "Save and sort" }).click();
+  await captureTask(page, "Personal board repair item");
 
   await page.getByRole("button", { name: "All areas" }).click();
   // #555: in-app stage navigation is a real router.push now — settle on the

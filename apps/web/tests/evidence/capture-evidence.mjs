@@ -58,7 +58,8 @@ await page
 await page.waitForTimeout(400);
 await shot("03-capture-overlay");
 
-await page.getByTestId("capture-overlay-save-raw").click();
+// #703: one capture action ("Capture") — the two-button pair is gone.
+await page.getByTestId("capture-overlay-save").click();
 await page.getByTestId("today-moments-toast").waitFor({ state: "visible" });
 await page.waitForTimeout(600);
 await shot("04-capture-confirmation");

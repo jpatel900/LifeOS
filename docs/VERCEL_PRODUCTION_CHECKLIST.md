@@ -128,9 +128,10 @@ Expected:
 ### Stage 2: capture and triage
 
 1. Open `/capture`.
-2. Save one short thought with `Save thought`.
-3. Use `Save and organize`.
-4. Open `/triage`.
+2. Save one short thought with the single `Capture` action. It saves the
+   thought exactly as written — no parse runs here. <!-- source: issue #703 -->
+3. Open `/triage`.
+4. Press `Sort` on the captured thought — this is the app's parse trigger.
 5. Confirm drafts are reviewable and can be accepted.
 
 Expected:
