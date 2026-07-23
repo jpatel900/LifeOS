@@ -34,10 +34,12 @@ import {
  *      its entry must be deleted in the same PR. This is what forces the list
  *      DOWN; nothing else does.
  *   3. `the baseline never grows` — the total is pinned to
- *      `BASELINE_MAX_STRINGS`. Honest limit: that constant lives in this file,
- *      so a determined author can raise it. The guard makes growth a visible
+ *      `BASELINE_PINNED_STRINGS` by strict equality, so a slice that removes
+ *      strings MUST lower the constant and nothing can quietly grow back into
+ *      the space it freed. Honest limit: that constant lives in this file, so
+ *      a determined author can raise it. The guard makes growth a visible
  *      one-line diff on a numbered constant instead of a silent extra array
- *      element. Lower it freely; raising it needs review.
+ *      element.
  *
  * TWO MECHANISMS, DELIBERATELY SEPARATE — DO NOT MIX THEM
  * ------------------------------------------------------
@@ -532,10 +534,14 @@ const BASELINE: readonly BaselineEntry[] = [
 
 /**
  * Pinned total of baselined strings. MAY ONLY EVER BE LOWERED.
- * Each #692 slice that lands should bring this down by the number of strings
- * it deleted from `BASELINE`.
+ *
+ * Asserted with strict equality, not `<=`. A high-water mark would let the
+ * baseline grow back into the space a finished slice freed up: shrink to 114
+ * and a `<=151` pin silently permits 37 new violations. Equality means every
+ * slice must lower this constant by exactly what it deleted, and any growth
+ * has to raise a numbered constant in the diff where a reviewer sees it.
  */
-const BASELINE_MAX_STRINGS = 151;
+const BASELINE_PINNED_STRINGS = 151;
 
 const repoRoot = resolve(__dirname, "../../../..");
 
@@ -588,7 +594,7 @@ describe("repo-wide plain-language guard (#692 / NFR-006)", () => {
   });
 
   it("never grows the baseline", () => {
-    expect(baselineStringCount).toBeLessThanOrEqual(BASELINE_MAX_STRINGS);
+    expect(baselineStringCount).toBe(BASELINE_PINNED_STRINGS);
   });
 
   it("keeps the baseline unambiguous and slice-annotated", () => {
