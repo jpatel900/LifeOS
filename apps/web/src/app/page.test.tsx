@@ -11,7 +11,12 @@ vi.mock("./components/CockpitRoute", () => ({
   ),
 }));
 vi.mock("./components/moments/TodayMoments", () => ({
-  TodayMoments: () => <div data-testid="today-moments-home" />,
+  TodayMoments: ({ deepLink }: { deepLink?: unknown }) => (
+    <div
+      data-testid="today-moments-home"
+      data-deeplink={JSON.stringify(deepLink ?? null)}
+    />
+  ),
 }));
 
 // #501: MomentsThemeShell reads next-themes' useTheme() to mirror
@@ -37,18 +42,57 @@ describe("HomePage route gate (P7a — NEXT_PUBLIC_MOMENTS_HOME)", () => {
     }
   });
 
-  it("renders the moments home by default (P7d go-live — flag unset)", () => {
+  it("renders the moments home by default (P7d go-live — flag unset)", async () => {
     delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-    render(<HomePage />);
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("today-moments-home")).toBeTruthy();
     expect(screen.queryByTestId("cockpit-route")).toBeNull();
   });
 
-  it('renders the stage cockpit today grid only when explicitly disabled ("false")', () => {
+  it('renders the stage cockpit today grid only when explicitly disabled ("false")', async () => {
     process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
-    render(<HomePage />);
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("cockpit-route").textContent).toBe("today");
     expect(screen.queryByTestId("today-moments-home")).toBeNull();
+  });
+
+  // #687: the demoted stage routes redirect here carrying their target as
+  // query params; the moments home must translate them into a deepLink so the
+  // matching sheet/moment/overlay opens on arrival.
+  it("passes the triage sheet deep-link from ?sheet=triage", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    render(
+      await HomePage({ searchParams: Promise.resolve({ sheet: "triage" }) }),
+    );
+    expect(
+      screen.getByTestId("today-moments-home").getAttribute("data-deeplink"),
+    ).toBe(JSON.stringify({ sheet: "triage" }));
+  });
+
+  it("passes the flow moment deep-link from ?moment=flow", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    render(
+      await HomePage({ searchParams: Promise.resolve({ moment: "flow" }) }),
+    );
+    expect(
+      screen.getByTestId("today-moments-home").getAttribute("data-deeplink"),
+    ).toBe(JSON.stringify({ moment: "flow" }));
+  });
+
+  it("passes the capture overlay deep-link from ?capture=1", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    render(await HomePage({ searchParams: Promise.resolve({ capture: "1" }) }));
+    expect(
+      screen.getByTestId("today-moments-home").getAttribute("data-deeplink"),
+    ).toBe(JSON.stringify({ overlay: "capture" }));
+  });
+
+  it("passes a null deep-link for a plain home visit (no params)", async () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
+    expect(
+      screen.getByTestId("today-moments-home").getAttribute("data-deeplink"),
+    ).toBe("null");
   });
 });
 
@@ -67,26 +111,26 @@ describe("MomentsHomeShell data-theme (#501 — follows next-themes, not cockpit
     }
   });
 
-  it('sets data-theme="light" when the app theme resolves to light', () => {
+  it('sets data-theme="light" when the app theme resolves to light', async () => {
     useThemeMock.mockReturnValue({ resolvedTheme: "light" });
-    render(<HomePage />);
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("moments-home-shell")).toHaveAttribute(
       "data-theme",
       "light",
     );
   });
 
-  it("leaves data-theme unset when the app theme resolves to dark", () => {
+  it("leaves data-theme unset when the app theme resolves to dark", async () => {
     useThemeMock.mockReturnValue({ resolvedTheme: "dark" });
-    render(<HomePage />);
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("moments-home-shell")).not.toHaveAttribute(
       "data-theme",
     );
   });
 
-  it("stays unset (dark) before next-themes has mounted/resolved a theme", () => {
+  it("stays unset (dark) before next-themes has mounted/resolved a theme", async () => {
     useThemeMock.mockReturnValue({ resolvedTheme: undefined });
-    render(<HomePage />);
+    render(await HomePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("moments-home-shell")).not.toHaveAttribute(
       "data-theme",
     );

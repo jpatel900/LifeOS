@@ -14,6 +14,12 @@ test.beforeEach(async ({ page }) => {
  * is the only source of navigation truth: Back/Forward, refresh, and direct
  * URL entry must always render the same screen, and Health + Settings must
  * be reachable in at most two interactions from `/`.
+ *
+ * #687 update: /today, /capture, /triage, and /execute are now flag-gated
+ * redirect shims into the moments home (the demoted cockpit surfaces there
+ * were old versions of live moments surfaces). Their URL truth is asserted
+ * as redirects below. /calendar, /review, /health, and /areas keep the
+ * cockpit renderer (OWNER-GATE: capabilities exist only there).
  */
 
 interface StageCase {
@@ -23,26 +29,10 @@ interface StageCase {
 
 const STAGES: StageCase[] = [
   {
-    path: "/capture",
-    assertLandmark: async (page) => {
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Capture" }),
-      ).toBeVisible();
-    },
-  },
-  {
     path: "/calendar",
     assertLandmark: async (page) => {
       await expect(
         page.getByRole("heading", { name: "Hour rail" }),
-      ).toBeVisible();
-    },
-  },
-  {
-    path: "/execute",
-    assertLandmark: async (page) => {
-      await expect(
-        page.getByRole("heading", { name: "Focus queue" }),
       ).toBeVisible();
     },
   },
@@ -72,13 +62,58 @@ const STAGES: StageCase[] = [
       ).toBeVisible();
     },
   },
+];
+
+// #687: each redirected legacy route must land on `/` with the matching
+// moments surface open — no cockpit shell anywhere on the path.
+const REDIRECTED: Array<{
+  path: string;
+  landedUrl: RegExp;
+  assertSurface(page: Page): Promise<void>;
+}> = [
   {
     path: "/today",
-    assertLandmark: async (page) => {
-      await expect(page.getByText("At a glance")).toBeVisible();
+    landedUrl: /\/$/,
+    assertSurface: async (page) => {
+      await expect(page.getByTestId("today-moments")).toBeVisible();
+    },
+  },
+  {
+    path: "/capture",
+    landedUrl: /\/\?capture=1$/,
+    assertSurface: async (page) => {
+      await expect(
+        page.getByRole("dialog", { name: "Capture a thought" }),
+      ).toBeVisible();
+    },
+  },
+  {
+    path: "/triage",
+    landedUrl: /\/\?sheet=triage$/,
+    assertSurface: async (page) => {
+      await expect(page.getByTestId("triage-sheet-empty")).toBeVisible();
+    },
+  },
+  {
+    path: "/execute",
+    landedUrl: /\/\?moment=flow$/,
+    assertSurface: async (page) => {
+      await expect(page.getByTestId("flow-moment")).toBeVisible();
     },
   },
 ];
+
+for (const target of REDIRECTED) {
+  test(`direct entry to ${target.path} redirects to the moments home surface`, async ({
+    page,
+  }) => {
+    await page.goto(target.path);
+    await expect(page).toHaveURL(target.landedUrl, { timeout: 30_000 });
+    await expect(page.getByTestId("today-moments")).toBeVisible();
+    await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
+    await target.assertSurface(page);
+  });
+}
 
 for (const stage of STAGES) {
   test(`direct entry to ${stage.path} renders its screen`, async ({ page }) => {
@@ -102,21 +137,23 @@ for (const stage of STAGES) {
 test("in-app navigate then Back renders the previous screen's URL and landmark", async ({
   page,
 }) => {
-  await page.goto("/capture");
-  await STAGES.find((s) => s.path === "/capture")!.assertLandmark(page);
+  // #687: /capture and /execute are redirect shims now; the cockpit-internal
+  // round-trip runs between the two cockpit surfaces that stay live.
+  await page.goto("/calendar");
+  await STAGES.find((s) => s.path === "/calendar")!.assertLandmark(page);
 
   await page
     .getByRole("navigation", { name: "Workflow stages" })
-    .getByRole("button", { name: "Execute" })
+    .getByRole("button", { name: "Review" })
     .click();
 
-  await expect(page).toHaveURL(/\/execute$/);
-  await STAGES.find((s) => s.path === "/execute")!.assertLandmark(page);
+  await expect(page).toHaveURL(/\/review$/);
+  await STAGES.find((s) => s.path === "/review")!.assertLandmark(page);
 
   await page.goBack();
 
-  await expect(page).toHaveURL(/\/capture$/);
-  await STAGES.find((s) => s.path === "/capture")!.assertLandmark(page);
+  await expect(page).toHaveURL(/\/calendar$/);
+  await STAGES.find((s) => s.path === "/calendar")!.assertLandmark(page);
 });
 
 test("/ renders the moments home, including after a cockpit round-trip", async ({
@@ -125,14 +162,8 @@ test("/ renders the moments home, including after a cockpit round-trip", async (
   await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
 
-  await page.goto("/capture");
+  await page.goto("/calendar");
   await expect(page.getByTestId("lifeos-cockpit")).toBeVisible();
-
-  await page
-    .getByRole("navigation", { name: "Workflow stages" })
-    .getByRole("button", { name: "Execute" })
-    .click();
-  await expect(page).toHaveURL(/\/execute$/);
 
   // The cockpit's brand affordance is a real navigation to `/`, not a stage
   // transition — clicking it must land back on the moments home, not on the
@@ -141,6 +172,43 @@ test("/ renders the moments home, including after a cockpit round-trip", async (
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByTestId("today-moments")).toBeVisible();
+});
+
+test("cockpit stage rail's Capture node lands on the moments home, not a legacy shell (#687)", async ({
+  page,
+}) => {
+  await page.goto("/calendar");
+  await expect(page.getByTestId("lifeos-cockpit")).toBeVisible();
+
+  await page
+    .getByRole("navigation", { name: "Workflow stages" })
+    .getByRole("button", { name: "Capture" })
+    .click();
+
+  // The push goes to /capture, whose page redirects into the moments home
+  // with the capture overlay open — the legacy capture shell never renders.
+  await expect(page).toHaveURL(/\/\?capture=1$/, { timeout: 30_000 });
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toBeVisible();
+});
+
+test("/settings/areas content is centered, not stretched edge-to-edge (#687)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/settings/areas");
+
+  const heading = page.getByRole("heading", { level: 1, name: "Areas" });
+  await expect(heading).toBeVisible();
+
+  // AdminShell now wraps content in the same centered max-w-6xl container as
+  // its header; at 1280px the content column must start well inside the
+  // viewport instead of flush against its left edge.
+  const box = await heading.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThan(40);
 });
 
 test("moments home: View area health reaches /health in one interaction", async ({
