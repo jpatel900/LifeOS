@@ -37,7 +37,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
   useRouter: () => ({
     // Keep the mocked pathname in sync with in-app navigation so the
-    // pathname-derived stage actually transitions (Save thought -> triage).
+    // pathname-derived stage actually transitions (Save and sort -> triage).
     push: (path: string) => mockPathname.mockReturnValue(path),
   }),
 }));
@@ -73,7 +73,7 @@ describe("Capture cockpit", () => {
         target: { value: "Draft agenda for the planning meeting" },
       },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
 
     // Held in context through the wait: raw text stays visible, save
     // controls lock, no premature toast/navigation yet.
@@ -104,9 +104,11 @@ describe("Capture cockpit", () => {
     expect(
       screen.queryByRole("button", { name: "Organize after save" }),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: "Save thought" })).toBeDisabled();
     expect(
-      screen.getAllByRole("button", { name: "Save thought" }),
+      screen.getByRole("button", { name: "Save and sort" }),
+    ).toBeDisabled();
+    expect(
+      screen.getAllByRole("button", { name: "Save and sort" }),
     ).toHaveLength(1);
   });
 });

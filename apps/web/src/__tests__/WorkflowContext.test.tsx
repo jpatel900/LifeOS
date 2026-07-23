@@ -573,3 +573,26 @@ describe("WorkflowProvider storage fallback", () => {
     );
   });
 });
+
+// #688: signed-out is recognized as a calm state, never conflated with a
+// real load failure.
+describe("isSignedOutError (#688)", () => {
+  it("matches the data layer's signed-out errors and supabase's missing-session error", async () => {
+    const { isSignedOutError } =
+      await import("@/lib/workflowContext/reducerCore");
+    expect(
+      isSignedOutError(
+        new Error("Sign in before loading areas from Supabase."),
+      ),
+    ).toBe(true);
+    expect(isSignedOutError(new Error("Auth session missing!"))).toBe(true);
+  });
+
+  it("does not match real failures with a live session", async () => {
+    const { isSignedOutError } =
+      await import("@/lib/workflowContext/reducerCore");
+    expect(isSignedOutError(new Error("JWT expired"))).toBe(false);
+    expect(isSignedOutError(new Error("network error"))).toBe(false);
+    expect(isSignedOutError("Sign in before loading")).toBe(false);
+  });
+});

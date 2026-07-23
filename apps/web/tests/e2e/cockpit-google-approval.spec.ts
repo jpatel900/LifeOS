@@ -31,7 +31,7 @@ async function goToStage(page: Page, stage: RegExp) {
 async function captureTask(page: Page, title: string) {
   await page.goto("/capture");
   await page.getByPlaceholder("Drop the thought here.").fill(title);
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
   // #556 FR-026: saving no longer navigates instantly — wait for the parse
   // wait to resolve and land on Triage before the caller proceeds. 30s: the
   // first capture-submit of a dev run can hit multi-second cold compiles.

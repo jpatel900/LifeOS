@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type {
   CaptureParseState,
@@ -11,6 +13,38 @@ import { HIT_TARGET_MIN } from "../moments/hitTarget";
 // switch regardless of which stage view is active.
 
 export function SyncNotice({ status }: { status: WorkflowSyncStatus }) {
+  const pathname = usePathname();
+
+  // #688: when the ONLY reason sync is off is that nobody is signed in, this
+  // is one calm state with a door — quiet surface tones, not the amber
+  // failure treatment below, and a link back to this same page after
+  // sign-in. True failures (sync-error, blocked storage) keep the amber.
+  if (status.signedOut && status.storage !== "blocked") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        data-testid="sync-notice-signed-out"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] px-4 py-3 text-sm text-[var(--mut)]"
+      >
+        <span>
+          {status.message ??
+            "You're not signed in, so new work is saving on this device only."}
+        </span>
+        <Link
+          href={`/login?next=${encodeURIComponent(pathname ?? "/")}`}
+          className={cn(
+            HIT_TARGET_MIN,
+            "rounded-full border border-[var(--ln)] px-4 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--sf2)]",
+          )}
+          data-testid="sync-notice-signin-link"
+        >
+          Sign in
+        </Link>
+      </div>
+    );
+  }
+
   const messages = [
     status.storage === "blocked"
       ? "Browser storage is blocked; this session may not restore after reload."

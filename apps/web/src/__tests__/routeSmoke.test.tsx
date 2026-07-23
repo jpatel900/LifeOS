@@ -82,7 +82,7 @@ describe("handoff cockpit route provider wiring", () => {
   });
 
   it.each([
-    ["/capture", () => <CapturePage />, "Save thought"],
+    ["/capture", () => <CapturePage />, "Save and sort"],
     ["/triage", () => <TriagePage />, "Inbox clear"],
     ["/calendar", () => <CalendarPage />, "Hour rail"],
     ["/execute", () => <ExecutePage />, "Focus queue"],

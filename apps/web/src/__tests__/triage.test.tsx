@@ -82,7 +82,7 @@ describe("Triage cockpit", () => {
         target: { value: "Review old someday notes" },
       },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
     // #556: navigation to Triage now only happens once the parse actually
     // resolves (raw text + hook held in context through the wait, then the
     // "back to: <hook>" conclusion) — under full-suite load that round trip
@@ -108,7 +108,7 @@ describe("Triage cockpit", () => {
         target: { value: "Prepare the sponsor update deck" },
       },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
 
     // #591: the "back to: <hook>" conclusion's auto-dismiss dwell is now a
     // materially perceivable ~2.5s (CaptureCore's CONCLUSION_AUTO_DISMISS_MS,
@@ -151,7 +151,7 @@ describe("Triage cockpit", () => {
         target: { value: "Tidy the garage shelves" },
       },
     );
-    fireEvent.click(screen.getByRole("button", { name: "Save thought" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save and sort" }));
 
     // Generous timeouts: this journey chains two async state flushes (parse
     // response, then split). Under CI worker contention the default 1s findBy

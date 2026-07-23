@@ -135,7 +135,7 @@ test("capture saves raw thought and routes the item to triage", async ({
   await page
     .getByPlaceholder("Drop the thought here.")
     .fill("Browser handoff proof capture item");
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
 
   await expect(page).toHaveURL(/\/triage$/);
   await expect(
@@ -155,7 +155,7 @@ test("triage someday and do-today choices feed the plan screen", async ({
   await page
     .getByPlaceholder("Drop the thought here.")
     .fill("Someday proof item");
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
   await page.getByRole("button", { name: "Someday" }).click();
 
   await expect(
@@ -171,7 +171,7 @@ test("triage someday and do-today choices feed the plan screen", async ({
   await page
     .getByPlaceholder("Drop the thought here.")
     .fill("Do today proof item");
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
   await page.getByRole("button", { name: "Do today" }).click();
 
   await expect(
@@ -192,7 +192,7 @@ test("plan hour rail creates local blocks and keeps Google writes secondary", as
   await page
     .getByPlaceholder("Drop the thought here.")
     .fill("Plan rail proof item");
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
   await page.getByRole("button", { name: "Do today" }).click();
 
   await expect(

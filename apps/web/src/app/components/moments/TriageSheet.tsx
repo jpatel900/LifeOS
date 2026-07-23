@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ export function TriageSheet({
 }: TriageSheetProps) {
   const {
     state,
+    syncStatus,
     acceptTaskDraft,
     backlogTaskDraft,
     rejectTaskDraft,
@@ -107,6 +109,30 @@ export function TriageSheet({
     (draft) =>
       draft.status === "pending" &&
       (resolvedAreaId ? draft.area_id === resolvedAreaId : true),
+  );
+
+  // #689 (read path): raw captures used to be invisible here — the owner
+  // captured a thought, followed "Decide now" into this sheet, and met
+  // "Nothing waiting in triage". Every capture is persisted as a capture
+  // item first (stageAndPersistRawCapture), and only an AI/mock parse turns
+  // it into a task draft — so in local mode (parse skipped or declined) the
+  // thought lives ONLY in `captureItems`. List them, plainly, same area
+  // scoping as the pipeline "Capture" badge (`buildPipelineCounts`'s
+  // actionableCapture filter plus `triage_required`, the parse-later
+  // status). Presentation-only: no new write path, rows are read-only.
+  // A parsed capture keeps status "triage_required" while its draft sits in
+  // the pending list above — exclude any capture a draft already points at
+  // (task_drafts.capture_item_id), so a thought is never listed twice.
+  const draftedCaptureIds = new Set(
+    state.taskDrafts
+      .map((draft) => draft.capture_item_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const unsortedCaptures = state.captureItems.filter(
+    (item) =>
+      (item.status === "new" || item.status === "triage_required") &&
+      !draftedCaptureIds.has(item.id) &&
+      (resolvedAreaId ? item.area_id === resolvedAreaId : true),
   );
 
   const showMapOfferReady =
@@ -185,14 +211,14 @@ export function TriageSheet({
           )}
         </div>
       ) : null}
-      {pendingDrafts.length === 0 ? (
+      {pendingDrafts.length === 0 && unsortedCaptures.length === 0 ? (
         <p
           className="text-sm text-muted-foreground"
           data-testid="triage-sheet-empty"
         >
           Nothing waiting in triage — press C to capture the first thing.
         </p>
-      ) : (
+      ) : pendingDrafts.length === 0 ? null : (
         <ul className="grid gap-2" data-testid="triage-sheet-list">
           {pendingDrafts.map((draft) => {
             const area = state.areas.find((item) => item.id === draft.area_id);
@@ -285,6 +311,56 @@ export function TriageSheet({
           })}
         </ul>
       )}
+
+      {unsortedCaptures.length > 0 ? (
+        <div className="grid gap-2" data-testid="triage-sheet-captures">
+          {/* #689: glance level first (#692) — what these are and that they
+              are safe; the per-row text is the detail. */}
+          <p className="text-xs font-semibold text-muted-foreground">
+            Captured, not sorted yet
+          </p>
+          <ul className="grid gap-2">
+            {unsortedCaptures.map((item) => {
+              const area = state.areas.find(
+                (candidate) => candidate.id === item.area_id,
+              );
+              return (
+                <li
+                  key={item.id}
+                  className="workflow-compact-item grid gap-1.5 rounded-lg border border-border p-3"
+                  data-testid={`triage-sheet-capture-${item.id}`}
+                >
+                  <p className="text-sm font-medium">{item.raw_text}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {area ? `${area.name} · ` : ""}
+                    Saved as you wrote it — sorting it into a task is the next
+                    step here.
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* #689 item 3: when signed out, say where these live, plainly, with
+          the door right here. */}
+      {syncStatus.signedOut ? (
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="triage-sheet-signedout-note"
+        >
+          Saved on this device.{" "}
+          <Link
+            href="/login?next=/"
+            className="font-semibold text-foreground underline underline-offset-2"
+            data-testid="triage-sheet-signin-link"
+          >
+            Sign in
+          </Link>{" "}
+          to keep captures on all your devices.
+        </p>
+      ) : null}
 
       {/* #687: the old "Open full view →" link went to `/triage`, which now
           redirects straight back to this same sheet — a circular hop. This

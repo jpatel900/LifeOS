@@ -303,7 +303,9 @@ describe("WorkflowProvider persisted area sync", () => {
       target: { value: "Capture should wait for a real area" },
     });
 
-    expect(screen.getByRole("button", { name: "Save thought" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Save and sort" }),
+    ).toBeDisabled();
     expect(mockCreateCaptureItem).not.toHaveBeenCalled();
   });
 

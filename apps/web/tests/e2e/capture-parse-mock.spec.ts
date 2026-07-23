@@ -36,7 +36,7 @@ test("cockpit capture round-trips through /api/parse-capture in mock mode", asyn
 
   const textarea = page.getByPlaceholder("Drop the thought here.");
   await textarea.fill("Mock mode parse proof capture");
-  await page.getByRole("button", { name: "Save thought" }).click();
+  await page.getByRole("button", { name: "Save and sort" }).click();
 
   // #556 FR-026 containment: the capture stage holds the user through the
   // wait instead of navigating instantly — raw text stays fully visible,

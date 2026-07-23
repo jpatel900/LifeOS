@@ -695,3 +695,65 @@ describe("health dashboard data provider", () => {
     },
   );
 });
+
+// #688: the owner's reported symptom — "auth session: Supabase authentication
+// failed while checking this subsystem" on a merely signed-out session.
+// supabase-js reports no-session as an ERROR from getUser(), and that message
+// contains "auth", so it used to normalize into critical failure language.
+describe("signed-out auth session is calm, not a failure (#688)", () => {
+  it("classifies supabase's missing-session error as informational signed-out", async () => {
+    const getUser = vi.fn().mockResolvedValue({
+      data: { user: null },
+      error: new Error("Auth session missing!"),
+    });
+
+    const result = await getHealthDashboard(
+      { from: vi.fn(), auth: { getUser } } as MinimalHealthSupabaseClient,
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    const check = checkBySubsystem(result.checks, "auth session");
+    expect(check.status).toBe("healthy");
+    expect(check.details.mode).toBe("signed_out");
+    expect(check.summary).toBe(
+      "You're not signed in. Work is saving on this device only.",
+    );
+    // The exact failure wording the owner saw must be gone.
+    expect(check.summary).not.toMatch(/authentication failed/i);
+  });
+
+  it("keeps failure language for a real auth failure with a live session", async () => {
+    const getUser = vi.fn().mockResolvedValue({
+      data: { user: null },
+      error: new Error("JWT expired: token is no longer valid"),
+    });
+
+    const result = await getHealthDashboard(
+      { from: vi.fn(), auth: { getUser } } as MinimalHealthSupabaseClient,
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    const check = checkBySubsystem(result.checks, "auth session");
+    expect(check.status).toBe("critical");
+    expect(check.summary).toMatch(/authentication failed/i);
+  });
+
+  it("signed-out areas and capture checks stay informational with a sign-in step", async () => {
+    const getUser = vi.fn().mockResolvedValue({
+      data: { user: null },
+      error: new Error("Auth session missing!"),
+    });
+
+    const result = await getHealthDashboard(
+      { from: vi.fn(), auth: { getUser } } as MinimalHealthSupabaseClient,
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    for (const subsystem of ["areas", "capture persistence"]) {
+      const check = checkBySubsystem(result.checks, subsystem);
+      expect(check.status).toBe("healthy");
+      expect(check.details.mode).toBe("signed_out");
+      expect(check.summary).toMatch(/^Sign in to check/);
+    }
+  });
+});
