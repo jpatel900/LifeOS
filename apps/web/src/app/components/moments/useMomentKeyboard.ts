@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import {
   matchesMomentKeyBinding,
   momentKeyBindingById,
@@ -54,7 +54,7 @@ export function useMomentKeyboard(handlers: MomentKeyboardHandlers): void {
     enabled = true,
   } = handlers;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) return;
 
     function handleKeyDown(event: KeyboardEvent): void {
