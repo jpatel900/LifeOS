@@ -1,0 +1,275 @@
+Skip to stage content
+◆
+LifeOS
+All areas
+Main Job
+Personal
+Volunteer Work
+Side Project
+You're not signed in, so new work is saving on this device only.
+Sign in
+0
+Today
+0
+Capture
+0
+Triage
+0
+Plan
+0
+Execute
+0
+Review
+Everything is working
+
+Nothing needs you right now.
+
+Your work and account
+All good.
+
+Saving on this device
+
+This device can keep your work on its own, so nothing is lost if your account cannot be reached.
+
+Your account
+
+This device knows where your account lives, so signing in will work.
+
+Signed in
+
+You're not signed in. Work is saving on this device only.
+
+Sign in
+
+Your areas
+
+Sign in to check the areas saved to your account.
+
+Sign in
+
+Thoughts you capture
+
+Sign in to check the captures saved to your account.
+
+Sign in
+Connected apps
+All good.
+
+AI helper
+
+The AI helper is turned off. Anything you capture is sorted with built-in rules instead.
+
+Google Calendar
+
+Google Calendar is not set up. Your plans stay inside LifeOS.
+
+What leaves this app
+All good.
+
+What is shared
+
+Nothing leaves this app. Your screen is not recorded, your clicks are not captured, and nothing you write to the AI is sent anywhere.
+
+Crash reports
+
+Crash reports are turned off. Nothing is sent when something goes wrong.
+
+Usage counting
+
+Usage counting is turned off. Nothing about how you use LifeOS is sent.
+
+AI activity logging
+
+AI activity logging is turned off. Nothing about your AI requests is sent.
+
+People & commitments
+
+Nothing has been waiting on someone else for too long.
+
+Check again
+
+Sign in to keep a record of these checks.
+
+Mirror
+Observation only — these gauges describe the system, not you.
+
+Purpose gauge
+
+Not enough check-ins yet to show a trend. Nothing is owed here — it fills in on its own whenever check-ins happen.
+
+Capture inflow vs completion outflow
+
+No reading yet.
+
+Override rate per policy class
+
+No reading yet.
+
+Re-entry latency
+
+No reading yet.
+
+Build:use ratio
+
+No reading yet.
+
+Developer details
+
+Technical names and raw values, for someone debugging LifeOS. You do not need any of this for normal use.
+
+overall score 100/100 · 11 healthy · 0 watch · 0 critical
+
+mock mode · healthy · 100
+
+This device can keep your work on its own, so nothing is lost if your account cannot be reached.
+
+available
+true
+repair_steps
+(none)
+
+supabase config · healthy · 100
+
+This device knows where your account lives, so signing in will work.
+
+repair_steps
+(none)
+
+auth session · healthy · 100
+
+You're not signed in. Work is saving on this device only.
+
+informational
+true
+repair_steps
+Sign in to sync work to your account.
+authenticated
+false
+mode
+signed_out
+
+areas · healthy · 100
+
+Sign in to check the areas saved to your account.
+
+informational
+true
+repair_steps
+Sign in to check saved account data.
+source
+supabase
+mode
+signed_out
+
+capture persistence · healthy · 100
+
+Sign in to check the captures saved to your account.
+
+informational
+true
+repair_steps
+Sign in to check saved account data.
+source
+supabase
+mode
+signed_out
+
+AI parser · healthy · 100
+
+The AI helper is turned off. Anything you capture is sorted with built-in rules instead.
+
+informational
+true
+repair_steps
+(none)
+configured
+false
+mode
+optional_disabled
+
+Google Calendar · healthy · 100
+
+Google Calendar is not set up. Your plans stay inside LifeOS.
+
+informational
+true
+repair_steps
+(none)
+configured
+false
+connection_present
+false
+mode
+optional_disabled
+
+Observability privacy · healthy · 100
+
+Nothing leaves this app. Your screen is not recorded, your clicks are not captured, and nothing you write to the AI is sent anywhere.
+
+ai_content_tracing_enabled
+false
+active_provider_count
+0
+active_providers
+(none)
+active_transport_modes
+(none)
+autocapture_enabled
+false
+environment
+development
+network_telemetry_enabled
+false
+session_replay_enabled
+false
+
+Sentry · healthy · 100
+
+Crash reports are turned off. Nothing is sent when something goes wrong.
+
+environment
+development
+invalid_key_count
+0
+missing_key_count
+1
+provider
+sentry
+provider_state
+disabled
+transport_mode
+noop
+
+PostHog · healthy · 100
+
+Usage counting is turned off. Nothing about how you use LifeOS is sent.
+
+environment
+development
+invalid_key_count
+0
+missing_key_count
+2
+provider
+posthog
+provider_state
+disabled
+transport_mode
+noop
+
+Langfuse · healthy · 100
+
+AI activity logging is turned off. Nothing about your AI requests is sent.
+
+environment
+development
+invalid_key_count
+0
+missing_key_count
+3
+provider
+langfuse
+provider_state
+disabled
+transport_mode
+noop
