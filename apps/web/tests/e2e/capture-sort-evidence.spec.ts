@@ -28,6 +28,14 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/");
     await page.getByTestId("today-moments").waitFor();
 
+    // The home's opening moment is wall-clock derived (heuristicMoment in
+    // TodayMoments.tsx: >=17:00 local opens on Close), and the Pipeline rail
+    // this spec drills through lives on Start only. Pin the moment with the
+    // 1/2/3 switch so the run is deterministic at any hour — the same pin
+    // every other moments spec uses.
+    await page.keyboard.press("1");
+    await page.getByTestId("start-moment").waitFor();
+
     // --- Capture pop-up: ONE action ---------------------------------------
     await page.getByTestId("capture-affordance").click();
     await page.getByTestId("capture-overlay-textarea").fill(CAPTURE_TEXT);

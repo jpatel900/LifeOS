@@ -28,6 +28,14 @@ test("capture stays raw, then the triage Sort action turns it into a draft", asy
   await page.goto("/");
   await expect(page.getByTestId("today-moments")).toBeVisible();
 
+  // The home's opening moment is wall-clock derived (heuristicMoment in
+  // TodayMoments.tsx: >=17:00 local opens on Close), and the Pipeline rail
+  // this spec drills through to reach triage lives on Start only. Pin the
+  // moment with the 1/2/3 switch so the run is deterministic at any hour —
+  // the same pin every other moments spec uses.
+  await page.keyboard.press("1");
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+
   // --- Capture: one action, no parse, no wait -------------------------------
   await page.getByTestId("capture-affordance").click();
   const textarea = page.getByTestId("capture-overlay-textarea");
