@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HealthPage from "../app/health/page";
 import { AppShell } from "../app/components/AppShell";
+import { HEALTH_CHECK_PRESENTATION } from "../app/components/cockpit/HealthView";
+import { healthChecks as demoHealthChecks } from "../lib/mockData";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/health",
@@ -27,23 +29,125 @@ beforeEach(() => {
   mocks.createSupabaseBrowserClient.mockReturnValue(null);
 });
 
+/**
+ * NFR-006 half 1 — implementation vocabulary that must never reach a
+ * user-facing layer of this screen. It is still allowed (and expected) inside
+ * the developer disclosure, which this helper strips out before asserting.
+ */
+const BANNED_ON_USER_SURFACE = [
+  /supabase/i,
+  /sentry/i,
+  /posthog/i,
+  /langfuse/i,
+  /observability/i,
+  /telemetry/i,
+  /autocapture/i,
+  /\bRLS\b/,
+  /\bDSN\b/,
+  /anon key/i,
+  /capture_items/i,
+  /subsystem/i,
+  /persistence/i,
+  /mock mode/i,
+  /\bRPCs?\b/,
+  /deterministic/i,
+];
+
+function userFacingText() {
+  const cockpit = screen
+    .getByTestId("lifeos-cockpit")
+    .cloneNode(true) as HTMLElement;
+  cockpit
+    .querySelectorAll('[data-testid="health-developer-details"]')
+    .forEach((node) => node.remove());
+  return cockpit.textContent ?? "";
+}
+
+function renderHealth() {
+  return render(
+    <AppShell>
+      <HealthPage />
+    </AppShell>,
+  );
+}
+
 describe("Health cockpit", () => {
-  it("leads with the grouped health answer and hides full detail behind disclosure", async () => {
-    render(
-      <AppShell>
-        <HealthPage />
-      </AppShell>,
+  it("leads with the plain glance answer and layers the rest (#692)", async () => {
+    renderHealth();
+
+    // GLANCE — the headline answers "is everything working" and the line
+    // under it answers "does anything need me", both in plain words.
+    expect(await screen.findByText("3 things need a look")).toBeDefined();
+    expect(screen.getByTestId("health-glance-needs-you").textContent).toContain(
+      "Needs a look:",
     );
 
-    expect(await screen.findByText("3 checks need attention")).toBeDefined();
-    expect(screen.getByText("auth")).toBeDefined();
-    expect(screen.getByText("database")).toBeDefined();
-    expect(screen.getByText("ai_parsing")).toBeDefined();
-    expect(screen.getByText("Full breakdown")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Run system check" }));
-    expect(
-      screen.getByRole("button", { name: "Run system check" }),
-    ).toBeDefined();
+    // DETAIL — grouped, not an arbitrary top-3 slice, and not truncated.
+    expect(screen.getByTestId("health-group-work")).toBeDefined();
+    expect(screen.getByTestId("health-group-connections")).toBeDefined();
+    expect(screen.getByText("Your work and account")).toBeDefined();
+    expect(screen.getByText("Connected apps")).toBeDefined();
+
+    // DEVELOPER — present, explicitly labeled, and holding the technical names.
+    const developer = screen.getByTestId("health-developer-details");
+    expect(screen.getByText("Developer details")).toBeDefined();
+    expect(developer.textContent).toContain("ai_parsing");
+    expect(developer.textContent).toContain("calendar_connector");
+
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    expect(screen.getByRole("button", { name: "Check again" })).toBeDefined();
+  });
+
+  it("every check the app can produce has a plain name and a group (#692)", async () => {
+    const { getHealthDashboard } =
+      await vi.importActual<typeof import("@/lib/data/health")>(
+        "@/lib/data/health",
+      );
+    const live = await getHealthDashboard(null);
+
+    const ids = new Set<string>([
+      ...live.checks.map((check) => check.id),
+      ...demoHealthChecks.map((check) => check.id),
+      // Signed-in-only checks, which the mock path above never reaches.
+      "health-transition-rpcs",
+      "health-core-reads",
+      "health-ai-provider-incidents",
+    ]);
+
+    const unmapped = [...ids].filter((id) => !HEALTH_CHECK_PRESENTATION[id]);
+    expect(unmapped).toEqual([]);
+  });
+
+  it("keeps implementation vocabulary out of every user-facing layer (#692 / NFR-006)", async () => {
+    // Drive the screen with the real check set, vendor rows included, so the
+    // guard sees exactly what the owner saw on his own screen.
+    const { getHealthDashboard } =
+      await vi.importActual<typeof import("@/lib/data/health")>(
+        "@/lib/data/health",
+      );
+    mocks.createSupabaseBrowserClient.mockReturnValue({});
+    mocks.getHealthDashboard.mockResolvedValue(await getHealthDashboard(null));
+
+    renderHealth();
+    await screen.findByTestId("health-developer-details");
+
+    const visible = userFacingText();
+    for (const banned of BANNED_ON_USER_SURFACE) {
+      expect(
+        banned.test(visible),
+        `user-facing copy must not match ${banned}`,
+      ).toBe(false);
+    }
+
+    // ...and the same words ARE still reachable, one explicit disclosure down.
+    // Visibility is layered, never truncated (NFR-006).
+    const developer = screen.getByTestId(
+      "health-developer-details",
+    ).textContent;
+    expect(developer).toContain("supabase config");
+    expect(developer).toContain("Sentry");
+    expect(developer).toContain("PostHog");
+    expect(developer).toContain("Langfuse");
   });
 
   it("renders persisted-mode probe results instead of demo copy", async () => {
@@ -60,39 +164,42 @@ describe("Health cockpit", () => {
           status: "critical",
           score: 0,
           summary:
-            "Missing transition RPC: accept_time_block_proposal. Apply the pending Supabase migrations, then rerun the system check.",
-          details: {},
+            "1 action for moving work between steps is missing, so those steps will fail. Someone technical needs to finish setting this up.",
+          details: { missing: ["accept_time_block_proposal"] },
         },
         {
           id: "health-core-reads",
           subsystem: "core table reads",
           status: "healthy",
           score: 100,
-          summary:
-            "Core user-owned workflow tables are readable for the active session.",
+          summary: "All of your saved work is loading correctly.",
           details: {},
         },
       ],
     });
 
-    render(
-      <AppShell>
-        <HealthPage />
-      </AppShell>,
-    );
+    renderHealth();
 
     expect(
-      (await screen.findAllByText("transition RPCs")).length,
+      (await screen.findAllByText("Moving work between steps")).length,
     ).toBeGreaterThan(0);
     expect(
-      screen.getAllByText(/Missing transition RPC/).length,
+      screen.getAllByText(/1 action for moving work between steps is missing/)
+        .length,
     ).toBeGreaterThan(0);
     expect(
-      screen.getByText("Persisted health snapshot for this session."),
+      screen.getByText(
+        "Checked. A record of this check was saved to your account.",
+      ),
     ).toBeDefined();
-    expect(screen.queryByText("auth")).toBeNull();
-    expect(screen.queryByText("database")).toBeNull();
-    expect(screen.queryByText("ai_parsing")).toBeNull();
+    // The demo checks are gone once real results arrive.
+    expect(screen.queryByText("Where your work is kept")).toBeNull();
+    expect(screen.queryByText("AI helper")).toBeNull();
+    // The technical name is still reachable in the developer layer only.
+    expect(
+      screen.getByTestId("health-developer-details").textContent,
+    ).toContain("transition RPCs");
+    expect(userFacingText()).not.toContain("transition RPCs");
   });
 
   it("re-running the system check refreshes the persisted display", async () => {
@@ -109,7 +216,7 @@ describe("Health cockpit", () => {
           status: "critical",
           score: 0,
           summary:
-            "Missing transition RPC: accept_time_block_proposal. Apply the pending Supabase migrations, then rerun the system check.",
+            "1 action for moving work between steps is missing, so those steps will fail. Someone technical needs to finish setting this up.",
           details: {},
         },
       ],
@@ -125,31 +232,31 @@ describe("Health cockpit", () => {
           subsystem: "transition RPCs",
           status: "healthy",
           score: 100,
-          summary:
-            "Required transition RPCs are callable without mutating workflow data.",
+          summary: "Moving work between steps is working.",
           details: {},
         },
       ],
     });
 
-    render(
-      <AppShell>
-        <HealthPage />
-      </AppShell>,
-    );
+    renderHealth();
 
-    expect(
-      (await screen.findAllByText(/Missing transition RPC/)).length,
-    ).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "Run system check" }));
     expect(
       (
         await screen.findAllByText(
-          "Required transition RPCs are callable without mutating workflow data.",
+          /1 action for moving work between steps is missing/,
         )
       ).length,
     ).toBeGreaterThan(0);
-    expect(screen.queryAllByText(/Missing transition RPC/)).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    expect(
+      (await screen.findAllByText("Moving work between steps is working."))
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryAllByText(
+        /1 action for moving work between steps is missing/,
+      ),
+    ).toHaveLength(0);
     expect(mocks.getHealthDashboard).toHaveBeenCalledTimes(2);
   });
 });

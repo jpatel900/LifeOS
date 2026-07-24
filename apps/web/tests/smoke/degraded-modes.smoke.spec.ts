@@ -24,13 +24,15 @@ test.describe("degraded-mode: designed states, not crashes", () => {
     // signed-out/mock-only surface — never a crashed page.
     await page.goto("/health");
     await expect(
-      page.getByRole("button", { name: "Run system check" }),
+      page.getByRole("button", { name: "Check again" }),
     ).toBeVisible();
 
     // The health headline is one of the two designed states.
-    const healthy = page.getByRole("heading", { name: "All systems healthy" });
+    const healthy = page.getByRole("heading", {
+      name: "Everything is working",
+    });
     const attention = page.getByRole("heading", {
-      name: /checks need attention/,
+      name: /\d+ things? needs? a look/,
     });
     await expect(healthy.or(attention).first()).toBeVisible();
   });

@@ -236,28 +236,33 @@ export const healthChecks: Phase2MockHealthCheck[] = [
     subsystem: "auth",
     status: "healthy",
     score: 100,
-    summary: "Authentication is configured (mock only, no real auth yet).",
+    // #692 / NFR-006: demo copy is user-facing copy. Same statuses and
+    // scores as before; only the wording changed.
+    summary: "Signing in works. This demo isn't linked to a real account yet.",
   },
   {
     id: "health-database",
     subsystem: "database",
     status: "watch",
     score: 75,
-    summary: "Local mock data only; Supabase not wired yet.",
+    summary:
+      "Your work is kept on this device only. It isn't saved to an account yet.",
   },
   {
     id: "health-ai",
     subsystem: "ai_parsing",
     status: "watch",
     score: 60,
-    summary: "Parsing is mocked; real AI integration will come later.",
+    summary:
+      "The AI helper isn't turned on yet. Anything you capture is sorted with built-in rules.",
   },
   {
     id: "health-calendar",
     subsystem: "calendar_connector",
     status: "watch",
     score: 50,
-    summary: "Calendar connector is not configured; all blocks are local.",
+    summary:
+      "No calendar is connected yet, so everything you plan stays inside LifeOS.",
   },
 ];
 

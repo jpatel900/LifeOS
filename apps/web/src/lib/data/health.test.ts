@@ -175,15 +175,17 @@ describe("health dashboard data provider", () => {
     expect(checkBySubsystem(result.checks, "supabase config").status).toBe(
       "healthy",
     );
+    // #692: the same three facts, now asserted through the plain-language
+    // wording the person actually reads.
     expect(checkBySubsystem(result.checks, "areas").summary).toContain(
-      "mock areas",
+      "starter areas",
     );
     expect(checkBySubsystem(result.checks, "AI parser").summary).toContain(
-      "not configured",
+      "turned off",
     );
     expect(
       checkBySubsystem(result.checks, "Google Calendar").summary,
-    ).toContain("not configured");
+    ).toContain("not set up");
     expect(
       checkBySubsystem(result.checks, "Google Calendar").details,
     ).toMatchObject({
@@ -375,7 +377,7 @@ describe("health dashboard data provider", () => {
     );
     expect(from).toHaveBeenCalledWith("ai_call_traces");
     expect(incidentCheck.status).toBe("watch");
-    expect(incidentCheck.summary).toContain("AI provider incident");
+    expect(incidentCheck.summary).toContain("AI helper failed several times");
     expect(incidentCheck.details).toMatchObject({
       incident_count: 1,
       affected_features: ["parse"],
@@ -474,7 +476,7 @@ describe("health dashboard data provider", () => {
 
     expect(result.persistence).toBe("unavailable");
     expect(result.persistenceMessage).toBe(
-      "Supabase denied access for this user/session.",
+      "This account is not allowed to see that. Sign in again, or use the account this work belongs to.",
     );
     expect(checkBySubsystem(result.checks, "areas").status).toBe("healthy");
   });
@@ -519,7 +521,14 @@ describe("health dashboard data provider", () => {
 
     const transitionRpcs = checkBySubsystem(result.checks, "transition RPCs");
     expect(transitionRpcs.status).toBe("critical");
-    expect(transitionRpcs.summary).toContain("accept_time_block_proposal");
+    // #692: the RPC name is a developer identifier, so it now lives only in
+    // `details.missing` (the health screen's developer layer renders it) and
+    // no longer in the sentence the person reads. The naming guarantee is
+    // asserted on `details`, which is the stronger surface.
+    expect(transitionRpcs.summary).not.toContain("accept_time_block_proposal");
+    expect(transitionRpcs.summary).toContain(
+      "1 action for moving work between steps is missing",
+    );
     expect(transitionRpcs.details).toMatchObject({
       missing: ["accept_time_block_proposal"],
     });
@@ -537,7 +546,7 @@ describe("health dashboard data provider", () => {
     const calendar = checkBySubsystem(result.checks, "Google Calendar");
     expect(calendar.status).toBe("healthy");
     expect(calendar.score).toBe(100);
-    expect(calendar.summary).toContain("no active connection metadata");
+    expect(calendar.summary).toContain("set up but not connected yet");
     expect(calendar.details).toMatchObject({
       configured: true,
       connection_present: false,
@@ -556,8 +565,14 @@ describe("health dashboard data provider", () => {
       }),
     });
 
+    // #692: the row still says the capture is on and still promises the
+    // privacy guardrails — in words a non-technical reader can act on. The
+    // vendor identity stays in `subsystem` / `details`, i.e. the developer layer.
     expect(checkBySubsystem(result.checks, "Sentry").summary).toContain(
-      "sanitized error capture is enabled",
+      "Crash reports are on",
+    );
+    expect(checkBySubsystem(result.checks, "Sentry").summary).toContain(
+      "never your screen, your typing, or your personal details",
     );
     expect(checkBySubsystem(result.checks, "Sentry").details).toMatchObject({
       transport_mode: "sentry_sdk",
@@ -592,8 +607,13 @@ describe("health dashboard data provider", () => {
 
     const auth = checkBySubsystem(result.checks, "auth session");
     expect(auth.status).toBe("critical");
-    expect(auth.summary).toContain("authentication failed");
+    // #692: still a failure, still critical, still tells the person what to
+    // do — without the vendor name or the word "authentication".
+    expect(auth.summary).toBe(
+      "Your sign-in could not be confirmed. Sign in again to continue.",
+    );
     expect(auth.summary).not.toContain("sk-secret-123");
+    expect(auth.summary).not.toMatch(/supabase/i);
     expect(JSON.stringify(result)).not.toContain(secretLikeMessage);
   });
 
@@ -720,6 +740,7 @@ describe("signed-out auth session is calm, not a failure (#688)", () => {
     );
     // The exact failure wording the owner saw must be gone.
     expect(check.summary).not.toMatch(/authentication failed/i);
+    expect(check.summary).not.toMatch(/supabase|subsystem/i);
   });
 
   it("keeps failure language for a real auth failure with a live session", async () => {
@@ -734,8 +755,14 @@ describe("signed-out auth session is calm, not a failure (#688)", () => {
     );
 
     const check = checkBySubsystem(result.checks, "auth session");
+    // #692: the classification is untouched — a live-session auth failure is
+    // still critical and still tells the person to sign in again. Only the
+    // wording changed (no vendor name, no "authentication failed").
     expect(check.status).toBe("critical");
-    expect(check.summary).toMatch(/authentication failed/i);
+    expect(check.details.mode).not.toBe("signed_out");
+    expect(check.summary).toBe(
+      "Your sign-in could not be confirmed. Sign in again to continue.",
+    );
   });
 
   it("signed-out areas and capture checks stay informational with a sign-in step", async () => {

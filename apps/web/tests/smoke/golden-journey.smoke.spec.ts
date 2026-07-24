@@ -232,12 +232,10 @@ test("golden journey: capture -> triage -> (authenticated: plan -> gate -> execu
   // "no draft exists" constraint does not reach it — prod's truthfulness here
   // is worth asserting whether or not credentials were available.
   await page.goto("/health");
-  await expect(
-    page.getByRole("button", { name: "Run system check" }),
-  ).toBeVisible();
-  const healthy = page.getByRole("heading", { name: "All systems healthy" });
+  await expect(page.getByRole("button", { name: "Check again" })).toBeVisible();
+  const healthy = page.getByRole("heading", { name: "Everything is working" });
   const attention = page.getByRole("heading", {
-    name: /checks need attention/,
+    name: /\d+ things? needs? a look/,
   });
   await expect(
     healthy.or(attention).first(),

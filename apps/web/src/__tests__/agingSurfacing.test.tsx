@@ -160,8 +160,9 @@ describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {
     await waitFor(() => expect(mockListAreas).toHaveBeenCalled());
 
     const panel = await screen.findByTestId("health-aging-signals");
+    // #692: same signal, plain wording.
     expect(panel.textContent).toContain(
-      "No aging waiting-ons or stale commitments.",
+      "Nothing has been waiting on someone else for too long.",
     );
   });
 
@@ -189,7 +190,7 @@ describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {
 
     const panel = await screen.findByTestId("health-aging-signals");
     await waitFor(() =>
-      expect(panel.textContent).toContain("1 aging waiting-on"),
+      expect(panel.textContent).toContain("1 waiting on someone else"),
     );
   });
 

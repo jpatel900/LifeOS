@@ -1,0 +1,77 @@
+Skip to stage content
+◆LifeOSAll areas
+Main JobPersonalVolunteer WorkSide Project
+0Today0Capture0Triage0Plan0Execute0Review
+3 things need a look
+
+Needs a look: Where your work is kept, AI helper, Google Calendar.
+
+Your work and account1 thing needs a look.
+
+Signed in
+
+Signing in works. This demo isn't linked to a real account yet.
+
+Where your work is kept
+
+Your work is kept on this device only. It isn't saved to an account yet.
+
+Connected apps2 things need a look.
+
+AI helper
+
+The AI helper isn't turned on yet. Anything you capture is sorted with built-in rules.
+
+Google Calendar
+
+No calendar is connected yet, so everything you plan stays inside LifeOS.
+
+People & commitments
+
+Nothing has been waiting on someone else for too long.
+
+Check again
+Mirror
+Observation only — these gauges describe the system, not you.
+
+Purpose gauge
+
+Not enough check-ins yet to show a trend. Nothing is owed here — it fills in on its own whenever check-ins happen.
+
+Capture inflow vs completion outflow
+
+No reading yet.
+
+Override rate per policy class
+
+No reading yet.
+
+Re-entry latency
+
+No reading yet.
+
+Build:use ratio
+
+No reading yet.
+
+Developer details
+
+Technical names and raw values, for someone debugging LifeOS. You do not need any of this for normal use.
+
+overall score 71/100 · 1 healthy · 3 watch · 0 critical
+
+auth · healthy · 100
+
+Signing in works. This demo isn't linked to a real account yet.
+
+database · watch · 75
+
+Your work is kept on this device only. It isn't saved to an account yet.
+
+ai_parsing · watch · 60
+
+The AI helper isn't turned on yet. Anything you capture is sorted with built-in rules.
+
+calendar_connector · watch · 50
+
+No calendar is connected yet, so everything you plan stays inside LifeOS.

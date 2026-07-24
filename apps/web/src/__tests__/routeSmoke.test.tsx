@@ -94,7 +94,9 @@ describe("handoff cockpit route provider wiring", () => {
     [
       "/health",
       () => <HealthPage />,
-      /All systems healthy|checks need attention/,
+      // #692: anchored so it matches the glance headline only, not the
+      // "Needs a look: ..." line beneath it.
+      /^(Everything is working|\d+ things? needs? a look)$/,
     ],
     ["/areas", () => <AreasOverviewPage />, "All areas overview"],
   ])(
@@ -129,7 +131,8 @@ describe("handoff cockpit route provider wiring", () => {
     renderThroughAppShell(<HealthPage />, "/health");
 
     expect(
-      await screen.findByRole("button", { name: /Run health system check/i }),
+      // #692: the ring's accessible name is now the plain glance sentence.
+      await screen.findByRole("button", { name: /Check the system again/i }),
     ).toBeDefined();
   });
 
