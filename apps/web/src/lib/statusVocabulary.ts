@@ -32,6 +32,17 @@ export function saveModeLabel(provider: DataProvider) {
  */
 export const DEVICE_ONLY_SHORT_LABEL = "Device only";
 
+/**
+ * The glance label for the two states where something is actually wrong
+ * (#734): a save that was attempted and failed, and a browser that refuses to
+ * hold work on this device at all.
+ *
+ * It is a SEPARATE label, not a variant of `DEVICE_ONLY_SHORT_LABEL`, because
+ * "Device only" would be a lie in the second case — there, the work is not
+ * safely on the device either. Two states, two labels.
+ */
+export const SAVE_PROBLEM_SHORT_LABEL = "Problem saving";
+
 export function saveModeShortLabel(provider: DataProvider) {
   return provider === "supabase" ? "Saved to account" : DEVICE_ONLY_SHORT_LABEL;
 }

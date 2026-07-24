@@ -25,6 +25,7 @@ import { MastheadThemeToggle } from "./MastheadThemeToggle";
 import { formatMastheadDate } from "./formatMastheadDate";
 import { CaptureAffordance } from "./CaptureAffordance";
 import { AuthAffordance } from "./AuthAffordance";
+import { DeviceSaveIndicator } from "./DeviceSaveIndicator";
 import { KeyboardLegend } from "./KeyboardLegend";
 import { CaptureOverlay } from "./CaptureOverlay";
 import { CommandPalette, type CommandPaletteAction } from "./CommandPalette";
@@ -1049,6 +1050,14 @@ export function TodayMoments({
               >
                 {formatMastheadDate(now)}
               </span>
+              {/* #734: where your work is right now, next to what day it is —
+                  and only when there is something to say. It sits in the
+                  brand/date group rather than the control cluster on the
+                  right because it is state, not a preference, and because
+                  that cluster's width budget is measured to the pixel (see
+                  R3-C above); this group already wraps and has the slack.
+                  Renders nothing once everything has reached the account. */}
+              <DeviceSaveIndicator status={syncStatus} />
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
