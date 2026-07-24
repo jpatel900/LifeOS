@@ -16,6 +16,9 @@ vi.mock("next/navigation", () => ({
 }));
 import {
   ACCOUNT_SAVE_FAILED,
+  ACCOUNT_UNREACHABLE_NOW,
+  DEVICE_STORAGE_BLOCKED,
+  SOME_WORK_ON_THIS_DEVICE,
   SORT_ON_THIS_DEVICE_ACTION,
 } from "@/lib/statusVocabulary";
 import type { WipRefusal } from "@/lib/workflow/shared";
@@ -119,5 +122,96 @@ describe("SyncNotice signed-out state (#688)", () => {
       screen.queryByTestId("sync-notice-signed-out"),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(ACCOUNT_SAVE_FAILED);
+  });
+});
+
+// #734: the ordinary device-only states fire on every offline save. They must
+// not wear the amber failure treatment; amber belongs to real failures only.
+describe("SyncNotice tone (#734)", () => {
+  function base(
+    overrides: Partial<WorkflowSyncStatus> = {},
+  ): WorkflowSyncStatus {
+    return {
+      storage: "available",
+      account: "synced",
+      message: null,
+      pendingLocalChanges: false,
+      ...overrides,
+    };
+  }
+
+  it("gives an unreachable account the calm treatment, not amber", () => {
+    render(
+      <SyncNotice
+        status={base({
+          account: "local-only",
+          message: ACCOUNT_UNREACHABLE_NOW,
+          pendingLocalChanges: true,
+        })}
+      />,
+    );
+
+    const banner = screen.getByTestId("sync-notice");
+    expect(banner).toHaveTextContent(ACCOUNT_UNREACHABLE_NOW);
+    expect(banner).toHaveAttribute("data-tone", "calm");
+    expect(banner.className).not.toContain("amb");
+    expect(banner.className).not.toContain("font-semibold");
+  });
+
+  it("gives work left on this device the calm treatment, not amber", () => {
+    render(
+      <SyncNotice
+        status={base({
+          message: SOME_WORK_ON_THIS_DEVICE,
+          pendingLocalChanges: true,
+        })}
+      />,
+    );
+
+    const banner = screen.getByTestId("sync-notice");
+    expect(banner).toHaveTextContent(SOME_WORK_ON_THIS_DEVICE);
+    expect(banner).toHaveAttribute("data-tone", "calm");
+    expect(banner.className).not.toContain("amb");
+  });
+
+  it("keeps amber for a failed save", () => {
+    render(
+      <SyncNotice
+        status={base({
+          account: "sync-error",
+          message: ACCOUNT_SAVE_FAILED,
+          pendingLocalChanges: true,
+        })}
+      />,
+    );
+
+    const banner = screen.getByTestId("sync-notice");
+    expect(banner).toHaveAttribute("data-tone", "alarm");
+    expect(banner.className).toContain("amb");
+  });
+
+  it("keeps amber when the browser blocks storage, even while signed out", () => {
+    render(
+      <SyncNotice
+        status={base({
+          storage: "blocked",
+          account: "local-only",
+          signedOut: true,
+        })}
+      />,
+    );
+
+    const banner = screen.getByTestId("sync-notice");
+    expect(banner).toHaveTextContent(DEVICE_STORAGE_BLOCKED);
+    expect(banner).toHaveAttribute("data-tone", "alarm");
+    expect(banner.className).toContain("amb");
+    expect(
+      screen.queryByTestId("sync-notice-signin-link"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders nothing once everything has reached the account", () => {
+    const { container } = render(<SyncNotice status={base()} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });
