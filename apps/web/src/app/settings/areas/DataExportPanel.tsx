@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "../../../lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 
 type ExportState =
@@ -24,7 +25,7 @@ export function DataExportPanel() {
       const client = createSupabaseBrowserClient();
       if (!client) {
         throw new Error(
-          "Data export needs a signed-in account. Local-only data stays on this device and is not included.",
+          `Please sign in to download your data. Anything ${SAVED_ON_THIS_DEVICE_SHORT} isn't included.`,
         );
       }
 
@@ -80,10 +81,10 @@ export function DataExportPanel() {
     <Card data-testid="data-export-card" className="workflow-admin-card">
       <CardContent className="space-y-3 pt-6 text-sm text-muted-foreground">
         <p>
-          Download a JSON copy of your account data: areas, captures, tasks,
-          projects, planning proposals, calendar blocks, execution sessions,
-          reviews, health history, and the external-write audit log. Google
-          connection tokens are never included.
+          Download everything in your account as one file: your areas, captures,
+          tasks, projects, plans, calendar blocks, focus sessions, reviews,
+          health history, and a record of every change LifeOS made to your
+          calendar. Your Google sign-in is never part of it.
         </p>
         {exportState.status === "done" ? (
           <Alert variant="success" role="status" aria-live="polite">

@@ -146,7 +146,7 @@ test("settings export reports local or unauthenticated export limits plainly", a
   await expect(page.getByText("Export did not finish.")).toBeVisible();
   await expect(
     page.getByText(
-      /Data export needs a signed-in account|Sign in before exporting your data/i,
+      /Please sign in to download your data|Sign in before exporting your data/i,
     ),
   ).toBeVisible();
 });

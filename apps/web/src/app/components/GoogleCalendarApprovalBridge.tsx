@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import type { Phase2TimeBlockProposal } from "@lifeos/schemas";
 import { isLifeOsOwnedGoogleEventIdShape } from "@/lib/cockpit/googleCalendarBridge";
+import {
+  GOOGLE_CALENDAR_NOT_SET_UP,
+  GOOGLE_CALENDAR_UNAVAILABLE_HERE,
+} from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import type { Phase2MockCalendarBlock, Phase2MockTask } from "@/lib/types";
 import { useWorkflow } from "@/lib/WorkflowContext";
@@ -65,8 +69,7 @@ export function GoogleCalendarApprovalBridge({
       ) {
         conclude({
           status: "blocked",
-          reason:
-            "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
+          reason: GOOGLE_CALENDAR_UNAVAILABLE_HERE,
         });
         return;
       }
@@ -95,9 +98,7 @@ export function GoogleCalendarApprovalBridge({
         if (!response.ok || !payload?.ok) {
           conclude({
             status: "blocked",
-            reason:
-              payload?.error ??
-              "Google Calendar is not configured on this server. Local planning keeps working.",
+            reason: payload?.error ?? GOOGLE_CALENDAR_NOT_SET_UP,
           });
           return;
         }
@@ -105,8 +106,7 @@ export function GoogleCalendarApprovalBridge({
         if (payload.configured === false) {
           conclude({
             status: "blocked",
-            reason:
-              "Google Calendar is not configured on this server. Local planning keeps working.",
+            reason: GOOGLE_CALENDAR_NOT_SET_UP,
           });
           return;
         }

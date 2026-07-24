@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ReviewPage from "../app/review/page";
 import { TodayMoments } from "../app/components/moments/TodayMoments";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 
 /**
  * #588 — report day closure only after persistence resolves.
@@ -123,7 +124,7 @@ describe("#588 cockpit review shell: verdict gated on the resolved save", () => 
 
     await waitFor(() => {
       expect(screen.getByTestId("cockpit-toast")).toHaveTextContent(
-        "Review saved locally — account sync pending",
+        `Review ${SAVED_ON_THIS_DEVICE_SHORT}`,
       );
     });
     expect(navigationMock.push).toHaveBeenCalledWith("/today");
@@ -200,7 +201,7 @@ describe("#588 moments close shell: verdict gated on the resolved save", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
-        "Day closed locally — account sync pending",
+        `Day closed — ${SAVED_ON_THIS_DEVICE_SHORT}`,
       );
     });
   });

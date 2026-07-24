@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Moon, Plus, Sun } from "lucide-react";
 import { createArea, listAreas, updateAreaColor } from "@/lib/data/workflow";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import {
   persistedAreaIdForWorkflowAreaId,
@@ -726,7 +727,7 @@ export function LifeOSCockpit({
                     return;
                   }
                   if (result === "local-only") {
-                    showToast("Review saved locally — account sync pending");
+                    showToast(`Review ${SAVED_ON_THIS_DEVICE_SHORT}`);
                     navigate("today");
                     return;
                   }

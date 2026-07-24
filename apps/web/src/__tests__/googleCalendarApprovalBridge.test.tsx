@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarPage from "../app/calendar/page";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
+import {
+  GOOGLE_CALENDAR_NOT_SET_UP,
+  GOOGLE_CALENDAR_UNAVAILABLE_HERE,
+} from "@/lib/statusVocabulary";
 import { applyGoogleCalendarWriteResult } from "@/lib/workflow";
 import {
   acceptLatestDraft,
@@ -157,14 +161,10 @@ describe("Google Calendar approval bridge", () => {
     await waitFor(() => {
       expect(approveButton).toBeDisabled();
     });
-    expect(
-      screen.getByText(
-        "Google Calendar is not configured on this server. Local planning keeps working.",
-      ),
-    ).toBeDefined();
+    expect(screen.getByText(GOOGLE_CALENDAR_NOT_SET_UP)).toBeDefined();
   });
 
-  it("keeps the bridge disabled in local-only mode without a Supabase client", async () => {
+  it("keeps the bridge disabled when LifeOS has no account connection", async () => {
     mocks.createSupabaseBrowserClient.mockReturnValue(null);
     stubFetch({});
 
@@ -176,11 +176,7 @@ describe("Google Calendar approval bridge", () => {
     await waitFor(() => {
       expect(approveButton).toBeDisabled();
     });
-    expect(
-      screen.getByText(
-        "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
-      ),
-    ).toBeDefined();
+    expect(screen.getByText(GOOGLE_CALENDAR_UNAVAILABLE_HERE)).toBeDefined();
   });
 
   it("creates the Google event from an explicit approval and surfaces the cancel control", async () => {

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { GOOGLE_CALENDAR_UNAVAILABLE_HERE } from "../../src/lib/statusVocabulary";
 
 // #687: this suite drives the DEMOTED cockpit stage surfaces through routes
 // (/capture, /triage, /execute, /today) that are now flag-gated redirect
@@ -52,11 +53,7 @@ test("google approval bridge is visible but safely disabled in mock mode while l
   });
   await expect(approveButton).toBeVisible();
   await expect(approveButton).toBeDisabled();
-  await expect(
-    page.getByText(
-      "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByText(GOOGLE_CALENDAR_UNAVAILABLE_HERE)).toBeVisible();
 
   // The local mock workflow keeps working end to end: the proposal can be
   // accepted locally, producing a scheduled block without any Google write.

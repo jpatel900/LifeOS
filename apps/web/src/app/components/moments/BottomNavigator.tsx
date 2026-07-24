@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Settings } from "lucide-react";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { cn } from "@/lib/utils";
 import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
 import { HIT_TARGET_MIN } from "./hitTarget";
@@ -113,7 +114,7 @@ export function BottomNavigator({
             <span aria-hidden="true">{unsyncedCount}</span>
             <span className="sr-only">
               {unsyncedCount} {unsyncedCount === 1 ? "capture" : "captures"}{" "}
-              waiting to sync
+              {SAVED_ON_THIS_DEVICE_SHORT}
             </span>
           </span>
         ) : null}

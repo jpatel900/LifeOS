@@ -20,7 +20,7 @@ import {
  *
  * IT LANDS AS A RATCHET, NOT A CLEAN BILL OF HEALTH
  * -------------------------------------------------
- * Five areas of the app still carry jargon, inventoried on #692. Turning the
+ * Several areas of the app still carry jargon, inventoried on #692. Turning the
  * guard on today would fail on all of them, so the violations that exist right
  * now are enumerated in `BASELINE` below, each annotated with the #692 slice
  * that will delete it. The list is the technical-debt registry, visible in the
@@ -220,43 +220,13 @@ const BASELINE: readonly BaselineEntry[] = [
       "Completion saved locally; account sync is pending.",
     ],
   },
-  // ===== SLICE C (8 strings) =====
-  {
-    slice: "C",
-    file: "apps/web/src/app/components/GoogleCalendarApprovalBridge.tsx",
-    strings: [
-      "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
-      "Google Calendar is not configured on this server. Local planning keeps working.",
-    ],
-  },
-  {
-    slice: "C",
-    file: "apps/web/src/app/components/LifeOSCockpit.tsx",
-    strings: ["Review saved locally — account sync pending"],
-  },
-  {
-    slice: "C",
-    file: "apps/web/src/app/components/moments/BottomNavigator.tsx",
-    strings: ["waiting to sync"],
-  },
-  {
-    slice: "C",
-    file: "apps/web/src/app/components/moments/CaptureAffordance.tsx",
-    strings: ["waiting to sync"],
-  },
-  {
-    slice: "C",
-    file: "apps/web/src/app/components/moments/TodayMoments.tsx",
-    strings: ["Day closed locally — account sync pending"],
-  },
-  {
-    slice: "C",
-    file: "apps/web/src/app/settings/areas/DataExportPanel.tsx",
-    strings: [
-      "Data export needs a signed-in account. Local-only data stays on this device and is not included.",
-      "Download a JSON copy of your account data: areas, captures, tasks, projects, planning proposals, calendar blocks, execution sessions, reviews, health history, and the external-write audit log. Google connection tokens are never included.",
-    ],
-  },
+  // ===== SLICE C — DONE, 8 strings removed =====
+  // Toasts and inline notices were de-jargoned in #692 Slice C. Five of those
+  // eight strings were three different phrasings of one fact ("it is on this
+  // device, not in your account yet"); they now all render
+  // `SAVED_ON_THIS_DEVICE_SHORT` from `lib/statusVocabulary.ts`. Slice B is
+  // the same fact again on the banner surfaces — reuse that constant there
+  // rather than writing a fourth phrasing.
   // ===== SLICE D (15 strings) =====
   {
     slice: "D",
@@ -469,12 +439,13 @@ const BASELINE: readonly BaselineEntry[] = [
  * Pinned total of baselined strings. MAY ONLY EVER BE LOWERED.
  *
  * Asserted with strict equality, not `<=`. A high-water mark would let the
- * baseline grow back into the space a finished slice freed up: shrink to 114
- * and a `<=151` pin silently permits 37 new violations. Equality means every
+ * baseline grow back into the space a finished slice freed up: once Slice B
+ * shrinks this to 77, a `<=114` pin would silently permit 37 new violations
+ * in the space it just freed. Equality means every
  * slice must lower this constant by exactly what it deleted, and any growth
  * has to raise a numbered constant in the diff where a reviewer sees it.
  */
-const BASELINE_PINNED_STRINGS = 122;
+const BASELINE_PINNED_STRINGS = 114;
 
 const repoRoot = resolve(__dirname, "../../../..");
 
