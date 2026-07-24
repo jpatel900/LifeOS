@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error:
-          "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key before checking conflicts.",
+          "Google Calendar isn't set up on LifeOS yet, so conflicts can't be checked right now.",
       },
       { status: 503 },
     );
