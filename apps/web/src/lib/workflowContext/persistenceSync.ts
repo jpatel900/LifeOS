@@ -35,6 +35,7 @@ import {
   type ReviewTaskTargetStatus,
 } from "../data/workflow";
 import { normalizePersonName } from "../data/personLinks";
+import { savedOnThisDeviceBanner } from "../statusVocabulary";
 import { createSupabaseBrowserClient } from "../supabase/browser";
 import type {
   Phase2MockCalendarBlock,
@@ -86,7 +87,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       : null;
 
     if (!client || (localCapture.area_id && !persistedAreaId)) {
-      markLocalOnly("Capture saved locally; account sync is not available.");
+      markLocalOnly(savedOnThisDeviceBanner("Your capture"));
       return;
     }
 
@@ -119,7 +120,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedAreaId) {
-      markLocalOnly("Triage decision saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your triage decision"));
       return;
     }
 
@@ -249,7 +250,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedTaskId) {
-      markLocalOnly("Plan saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your plan"));
       return;
     }
 
@@ -297,7 +298,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedTaskId) {
-      markLocalOnly("Proposal created locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your new proposal"));
       return;
     }
 
@@ -329,7 +330,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedProposalId) {
-      markLocalOnly("Proposal edit saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your proposal edit"));
       return;
     }
 
@@ -351,7 +352,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedProposalId) {
-      markLocalOnly("Proposal rejected locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your rejected proposal"));
       return;
     }
 
@@ -370,7 +371,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client) {
-      markLocalOnly("Proposal accepted locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your accepted proposal"));
       return;
     }
 
@@ -381,7 +382,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       );
 
       if (!persistedTaskId) {
-        markLocalOnly("Proposal accepted locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your accepted proposal"));
         return;
       }
 
@@ -437,7 +438,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedBlockId) {
-      markLocalOnly("Unplanned locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your plan change"));
       return;
     }
 
@@ -456,7 +457,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedTaskId) {
-      markLocalOnly("Recovery choice saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your recovery choice"));
       return;
     }
 
@@ -477,7 +478,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       : null;
 
     if (!client || (selectedAreaId && !persistedAreaId)) {
-      markLocalOnly("Review saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your review"));
       return "local-only";
     }
 
@@ -532,9 +533,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       : null;
 
     if (!client || !persistedTaskId) {
-      markLocalOnly(
-        "Execution session saved locally; account sync is pending.",
-      );
+      markLocalOnly(savedOnThisDeviceBanner("Your focus session"));
       return;
     }
 
@@ -574,7 +573,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedSessionId) {
-      markLocalOnly("Session outcome saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
       return;
     }
 
@@ -655,7 +654,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     );
 
     if (!client || !persistedSessionId || !persistedTaskId) {
-      markLocalOnly("Deferral saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your deferral"));
       return "local-only";
     }
 

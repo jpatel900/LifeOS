@@ -12,6 +12,11 @@ import {
   type WorkflowState,
 } from "../workflow";
 import { createSupabaseBrowserClient } from "../supabase/browser";
+import {
+  BLOCK_NOT_IN_ACCOUNT_FOR_GOOGLE,
+  GOOGLE_CALENDAR_UNAVAILABLE_HERE,
+  PROPOSAL_NOT_IN_ACCOUNT_FOR_GOOGLE,
+} from "../statusVocabulary";
 import { isLifeOsOwnedGoogleEventIdShape } from "../cockpit/googleCalendarBridge";
 import type { MinimalSupabaseClient } from "../data/workflow";
 import { persistedIdForLocalId } from "./reducerCore";
@@ -57,8 +62,7 @@ export function createCalendarApproval(deps: CalendarApprovalDeps) {
         ok: false,
         result: {
           outcome: "unavailable",
-          message:
-            "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
+          message: GOOGLE_CALENDAR_UNAVAILABLE_HERE,
         },
       };
     }
@@ -142,8 +146,7 @@ export function createCalendarApproval(deps: CalendarApprovalDeps) {
     if (!persistedProposalId) {
       return {
         outcome: "unavailable",
-        message:
-          "This proposal has not synced to your account yet, so it cannot be written to Google. Try again after sync.",
+        message: PROPOSAL_NOT_IN_ACCOUNT_FOR_GOOGLE,
       };
     }
 
@@ -242,8 +245,7 @@ export function createCalendarApproval(deps: CalendarApprovalDeps) {
     if (!persistedBlockId) {
       return {
         outcome: "unavailable",
-        message:
-          "This block has not synced to your account yet, so its Google event cannot be cancelled from here.",
+        message: BLOCK_NOT_IN_ACCOUNT_FOR_GOOGLE,
       };
     }
 

@@ -22,6 +22,7 @@ import {
   setTaskMapNodeCompletion,
 } from "../data/workflow";
 import { createSupabaseBrowserClient } from "../supabase/browser";
+import { savedOnThisDeviceBanner } from "../statusVocabulary";
 import type { WorkflowState } from "../workflow";
 import {
   persistedAreaIdForWorkflowId,
@@ -267,7 +268,7 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
       );
 
       if (!client || !persistedTaskId) {
-        markLocalOnly("Map approved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your approved map"));
         return;
       }
 
@@ -304,7 +305,7 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         });
         await syncPersistedWorkflowRows(client);
       } catch {
-        markLocalOnly("Map approved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your approved map"));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure
@@ -335,7 +336,7 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
       );
 
       if (!client || !persistedTaskId) {
-        markLocalOnly("Completion saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your map progress"));
         return;
       }
 
@@ -353,7 +354,7 @@ export function useTaskMapDraftActions(deps: TaskMapDraftActionsDeps) {
         });
         await syncPersistedWorkflowRows(client);
       } catch {
-        markLocalOnly("Completion saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your map progress"));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see note above the `deps` destructure

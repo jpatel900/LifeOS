@@ -146,80 +146,18 @@ const BASELINE: readonly BaselineEntry[] = [
       "Keep local planning in this view or configure Google Calendar server env vars.",
     ],
   },
-  // ===== SLICE B (37 strings) =====
-  {
-    slice: "B",
-    file: "apps/web/src/app/components/cockpit/StatusBanners.tsx",
-    strings: [
-      "Browser storage is blocked; this session may not restore after reload.",
-      "Account sync is unavailable; changes stay local.",
-      "Account sync failed; changes stay local.",
-      "Some local changes still need account sync.",
-      "AI parser is unavailable right now, so the built-in mock parser drafted this capture.",
-      "AI parsing is turned off, so the built-in mock parser drafted this capture.",
-      "Parse with mock parser",
-    ],
-  },
-  {
-    slice: "B",
-    file: "apps/web/src/lib/WorkflowContext.tsx",
-    strings: [
-      "Some local changes still need account sync.",
-      "Account sync is unavailable; work is staying local.",
-      "Win saved locally; account sync is pending.",
-      "Rollup saved locally; account sync is pending.",
-      "Browser storage is blocked; this session will not reliably restore after reload.",
-      "Dropped draft locally; account sync is pending.",
-      "Draft edit saved locally; account sync is pending.",
-      "Draft split saved locally; account sync is pending.",
-      "Draft merge saved locally; account sync is pending.",
-      "First move saved locally; account sync is pending.",
-      "WIP swap saved locally; account sync is pending.",
-    ],
-  },
-  {
-    slice: "B",
-    file: "apps/web/src/lib/workflowContext/calendarApproval.ts",
-    strings: [
-      "Google Calendar is unavailable in local-only mode. Local planning keeps working.",
-      "This proposal has not synced to your account yet, so it cannot be written to Google. Try again after sync.",
-    ],
-  },
-  {
-    slice: "B",
-    file: "apps/web/src/lib/workflowContext/persistenceSync.ts",
-    strings: [
-      "Capture saved locally; account sync is not available.",
-      "Triage decision saved locally; account sync is pending.",
-      "Plan saved locally; account sync is pending.",
-      "Proposal created locally; account sync is pending.",
-      "Proposal edit saved locally; account sync is pending.",
-      "Proposal rejected locally; account sync is pending.",
-      "Proposal accepted locally; account sync is pending.",
-      "Unplanned locally; account sync is pending.",
-      "Recovery choice saved locally; account sync is pending.",
-      "Review saved locally; account sync is pending.",
-      "Execution session saved locally; account sync is pending.",
-      "Session outcome saved locally; account sync is pending.",
-      "Deferral saved locally; account sync is pending.",
-    ],
-  },
-  {
-    slice: "B",
-    file: "apps/web/src/lib/workflowContext/reducerCore.ts",
-    strings: [
-      "Change saved locally, but account sync failed; it will stay local until sync recovers.",
-      "Account sync needs a server update; the app and database look out of step. Check Health for the next step.",
-    ],
-  },
-  {
-    slice: "B",
-    file: "apps/web/src/lib/workflowContext/taskMapDraft.ts",
-    strings: [
-      "Map approved locally; account sync is pending.",
-      "Completion saved locally; account sync is pending.",
-    ],
-  },
+  // ===== SLICE B — DONE, 37 strings removed =====
+  // The sync and storage banners were de-jargoned in #692 Slice B. This was
+  // the largest slice and the highest-frequency copy in the app: these fire on
+  // ordinary saving, not on rare errors, so the normal state now reads as
+  // normal. 24 of the 37 were the same fact Slice C had already named — the
+  // work is on this device, it is not in the account — spelled 20 different
+  // ways; they all call `savedOnThisDeviceBanner(subject)` from
+  // `lib/statusVocabulary.ts` now, and the remaining 13 are named constants in
+  // that same file. `calendarApproval.ts` imports Slice A's already-shipped
+  // GOOGLE_CALENDAR_UNAVAILABLE_HERE rather than keep its own copy of it.
+  // Slices D and E say the same things again in `lib/ai/*` and
+  // `lib/data/workflow/*` — import from statusVocabulary, do not re-phrase.
   // ===== SLICE C — DONE, 8 strings removed =====
   // Toasts and inline notices were de-jargoned in #692 Slice C. Five of those
   // eight strings were three different phrasings of one fact ("it is on this
@@ -439,13 +377,13 @@ const BASELINE: readonly BaselineEntry[] = [
  * Pinned total of baselined strings. MAY ONLY EVER BE LOWERED.
  *
  * Asserted with strict equality, not `<=`. A high-water mark would let the
- * baseline grow back into the space a finished slice freed up: once Slice B
- * shrinks this to 77, a `<=114` pin would silently permit 37 new violations
- * in the space it just freed. Equality means every
- * slice must lower this constant by exactly what it deleted, and any growth
- * has to raise a numbered constant in the diff where a reviewer sees it.
+ * baseline grow back into the space a finished slice freed up: Slice B just
+ * shrank this from 114 to 77, and a `<=114` pin would silently permit 37 new
+ * violations in the space it freed. Equality means every slice must lower this
+ * constant by exactly what it deleted, and any growth has to raise a numbered
+ * constant in the diff where a reviewer sees it.
  */
-const BASELINE_PINNED_STRINGS = 114;
+const BASELINE_PINNED_STRINGS = 77;
 
 const repoRoot = resolve(__dirname, "../../../..");
 

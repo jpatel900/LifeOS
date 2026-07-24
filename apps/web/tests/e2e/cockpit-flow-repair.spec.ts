@@ -13,6 +13,7 @@ test.skip(
 );
 
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { savedOnThisDeviceBanner } from "../../src/lib/statusVocabulary";
 import { cockpitCaptureAndSort } from "./helpers/cockpitCaptureSort";
 
 // HIGH-1 (#670): /api/parse-capture requires a verified bearer token and the
@@ -214,7 +215,9 @@ test("triage supports local edit and reassignment", async ({ page }) => {
   await adjustPanel.getByLabel("Area").selectOption({ label: "Personal" });
   await page.getByRole("button", { name: "Save edits" }).click();
 
-  await expect(page.getByText("Draft edit saved locally")).toBeVisible();
+  await expect(
+    page.getByText(savedOnThisDeviceBanner("Your draft edit")),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Personal" }).click();
   await goToStage(page, /Triage/);
 
@@ -234,7 +237,9 @@ test("triage supports local split and merge", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "First split item" }),
   ).toBeVisible();
-  await expect(page.getByText("Draft split saved locally")).toBeVisible();
+  await expect(
+    page.getByText(savedOnThisDeviceBanner("Your draft split")),
+  ).toBeVisible();
 
   await page.getByRole("button", { name: /Merge next:/ }).click();
 
@@ -298,7 +303,9 @@ test("plan exposes local proposal edit, reject, and accept controls", async ({
   await expect(page.getByText("edited")).toBeVisible();
 
   await page.getByRole("button", { name: "Reject" }).first().click();
-  await expect(page.getByText("Proposal rejected locally")).toBeVisible();
+  await expect(
+    page.getByText(savedOnThisDeviceBanner("Your rejected proposal")),
+  ).toBeVisible();
 
   await page
     .getByRole("button", { name: "Proposal parity repair item" })

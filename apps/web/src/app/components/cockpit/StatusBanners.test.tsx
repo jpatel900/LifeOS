@@ -14,13 +14,17 @@ import type {
 vi.mock("next/navigation", () => ({
   usePathname: () => "/health",
 }));
+import {
+  ACCOUNT_SAVE_FAILED,
+  SORT_ON_THIS_DEVICE_ACTION,
+} from "@/lib/statusVocabulary";
 import type { WipRefusal } from "@/lib/workflow/shared";
 import { WIP_ENFORCEMENT_POLICY_ID } from "@/lib/workflow/shared";
 
 // #615: every actionable control here reaches the shared >=44px hit-target
 // floor via hitTarget.ts (HIT_TARGET_MIN) — never a raw min-h-10 (40px).
 // Neither state is reachable through the demo-mode e2e oracle: the mock
-// parser never fails a parse (no "Parse with mock parser" retry surfaces),
+// parser never fails a parse (no on-device sort retry surfaces),
 // and no single e2e run stacks the 3 active/scheduled tasks the WIP
 // enforcement policy needs before a 4th refusal. jsdom does not compute
 // layout, so this is a className-level guard.
@@ -38,7 +42,8 @@ describe("StatusBanners 44px hit targets (#615)", () => {
     render(<CaptureParseNotice state={state} onRetryWithMock={() => {}} />);
 
     expect(
-      screen.getByRole("button", { name: "Parse with mock parser" }).className,
+      screen.getByRole("button", { name: SORT_ON_THIS_DEVICE_ACTION })
+        .className,
     ).toContain("min-h-[44px]");
   });
 
@@ -103,7 +108,7 @@ describe("SyncNotice signed-out state (#688)", () => {
         status={{
           storage: "available",
           account: "sync-error",
-          message: "Account sync failed; changes stay local.",
+          message: ACCOUNT_SAVE_FAILED,
           pendingLocalChanges: true,
           signedOut: false,
         }}
@@ -113,8 +118,6 @@ describe("SyncNotice signed-out state (#688)", () => {
     expect(
       screen.queryByTestId("sync-notice-signed-out"),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Account sync failed; changes stay local.",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent(ACCOUNT_SAVE_FAILED);
   });
 });
