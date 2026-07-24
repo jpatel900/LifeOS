@@ -39,7 +39,7 @@ describe("Google Calendar settings panel", () => {
           connection: null,
           status: "disconnected",
           message:
-            "Google Calendar is ready to connect, but no active connection metadata exists yet.",
+            "Google Calendar isn't connected yet. Connect it whenever you're ready.",
         }),
         {
           status: 200,
@@ -60,7 +60,7 @@ describe("Google Calendar settings panel", () => {
     ).toBeDisabled();
   });
 
-  it("shows a non-crashing mock-safe message when Google config is absent", async () => {
+  it("shows a plain, non-crashing message when Google config is absent", async () => {
     mocks.getSession.mockResolvedValue({
       data: {
         session: {
@@ -82,7 +82,7 @@ describe("Google Calendar settings panel", () => {
           connection: null,
           status: "disconnected",
           message:
-            "Google Calendar is not configured on this server. Mock/local mode remains available.",
+            "Google Calendar isn't set up on LifeOS yet. Local planning still works without it, and you can connect Google later once it's set up.",
         }),
         {
           status: 200,
@@ -94,11 +94,7 @@ describe("Google Calendar settings panel", () => {
     render(<GoogleCalendarConnectionPanel />);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(
-          /mock.local mode remains available|mock.local mode remains intact/i,
-        ),
-      ).toBeDefined();
+      expect(screen.getByText(/isn't set up on LifeOS yet/i)).toBeDefined();
     });
     expect(
       screen.getByRole("button", { name: "Connect Google Calendar" }),
@@ -119,9 +115,7 @@ describe("Google Calendar settings panel", () => {
     render(<GoogleCalendarConnectionPanel />);
 
     expect(
-      await screen.findByText(
-        /Sign in before connecting Google Calendar|OAuth actions require an authenticated Supabase session/i,
-      ),
+      await screen.findByText(/sign in to LifeOS to connect Google Calendar/i),
     ).toBeDefined();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -197,7 +191,9 @@ describe("Google Calendar settings panel", () => {
     expect(await screen.findByText("Connected")).toBeDefined();
     expect(screen.getByText("Advanced details")).toBeDefined();
     expect(
-      screen.getByText(/Granted OAuth scopes: https:\/\/www\.googleapis\.com/i),
+      screen.getByText(
+        /Access you granted to Google: https:\/\/www\.googleapis\.com/i,
+      ),
     ).toBeDefined();
   });
 });

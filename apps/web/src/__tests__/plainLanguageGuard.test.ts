@@ -82,78 +82,11 @@ type BaselineEntry = {
  * `AreaRegistryCards.tsx`) are rendered copy a person can read.
  */
 const BASELINE: readonly BaselineEntry[] = [
-  // ===== SLICE A (50 strings) =====
-  {
-    slice: "A",
-    file: "apps/web/src/app/api/google-calendar/cancel-event/route.ts",
-    strings: [
-      "Google Calendar is not configured on this server. Add server-only Google OAuth env vars and token encryption key before cancelling events.",
-      "Reconnect Google Calendar before cancelling events. No refresh token is stored.",
-    ],
-  },
-  {
-    slice: "A",
-    file: "apps/web/src/app/api/google-calendar/connect/route.ts",
-    strings: [
-      "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key before connecting.",
-    ],
-  },
-  {
-    slice: "A",
-    file: "apps/web/src/app/api/google-calendar/connection/route.ts",
-    strings: [
-      "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key when you want real Google integration. Mock/local mode remains available.",
-      "Google Calendar is connected with encrypted server-only token storage. Free/busy checks and event creation run only from explicit user actions.",
-      "The last Google Calendar OAuth callback failed safely. Reconnect to try again.",
-      "Google Calendar is ready to connect, but no active encrypted token connection exists yet.",
-    ],
-  },
-  {
-    slice: "A",
-    file: "apps/web/src/app/api/google-calendar/create-event/route.ts",
-    strings: [
-      "Google Calendar is not configured on this server. Add server-only Google OAuth env vars and token encryption key before creating events.",
-      "Reconnect Google Calendar before creating events. No refresh token is stored.",
-    ],
-  },
-  {
-    slice: "A",
-    file: "apps/web/src/app/api/google-calendar/disconnect/route.ts",
-    strings: [
-      "LifeOS cleared local Google Calendar token material and connection metadata. Google-side revoke still lives in your Google account if you want to remove consent there too.",
-    ],
-  },
-  {
-    slice: "A",
-    file: "apps/web/src/app/api/google-calendar/freebusy/route.ts",
-    strings: [
-      "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key before checking conflicts.",
-    ],
-  },
-  {
-    slice: "A",
-    file: "apps/web/src/app/settings/areas/GoogleCalendarConnectionPanel.tsx",
-    strings: [
-      "Google Calendar OAuth completed. Tokens are stored encrypted on the server only. Event creation still requires explicit approval from an existing local proposal.",
-      "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key before connecting.",
-      "Google Calendar OAuth callback was rejected because the request state was invalid or expired.",
-      "Google Calendar OAuth callback requires an authenticated Supabase session. Sign in and try again.",
-      "Google Calendar access was not granted. No connection metadata was activated.",
-      "Google Calendar OAuth callback failed safely. No calendar writes were attempted.",
-      "Google Calendar did not return a usable refresh token, so LifeOS refused to activate the connection. Reconnect and re-consent before continuing.",
-      "Google Calendar is not configured on this server. Local planning still works without Google integration.",
-      "Sign in before connecting Google Calendar. OAuth actions require an authenticated Supabase session.",
-      "Google Calendar OAuth could not start. No connection changes were applied.",
-      "Supabase is not configured in this environment, so Google Calendar stays unavailable and mock/local mode remains intact.",
-      "Supabase auth helpers are unavailable in this browser session. Sign in again before connecting Google Calendar.",
-      "Sign in before connecting Google Calendar. No OAuth flow can start without an authenticated Supabase session.",
-      "Supabase is not configured. Google Calendar stays unavailable in local-only mode.",
-      "Supabase auth helpers are unavailable. Sign in again before connecting Google Calendar.",
-      "LifeOS cleared the local Google Calendar connection and encrypted token material. Google-side revocation still lives in your Google account if you want to remove consent there too.",
-      "Missing server config is non-fatal. Mock/local mode still works without Google env vars.",
-      "Granted OAuth scopes:",
-    ],
-  },
+  // ===== SLICE A (21 strings) =====
+  // Panel + all six google-calendar API routes were de-jargoned in #692 Slice A
+  // (PR: plain language on the calendar settings screen). What remains here is
+  // server-internal: helpers that throw "must stay server-only" guards and the
+  // planning presentation strings — a later slice owns those.
   {
     slice: "A",
     file: "apps/web/src/lib/googleCalendar/config.ts",
@@ -541,7 +474,7 @@ const BASELINE: readonly BaselineEntry[] = [
  * slice must lower this constant by exactly what it deleted, and any growth
  * has to raise a numbered constant in the diff where a reviewer sees it.
  */
-const BASELINE_PINNED_STRINGS = 151;
+const BASELINE_PINNED_STRINGS = 122;
 
 const repoRoot = resolve(__dirname, "../../../..");
 
