@@ -99,7 +99,7 @@ export function DeviceSaveIndicator({ status }: DeviceSaveIndicatorProps) {
 
   return (
     <div
-      className="relative self-center"
+      className="relative self-start"
       ref={containerRef}
       onKeyDown={handleKeyDown}
       onBlur={(event) => {

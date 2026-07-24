@@ -1037,26 +1037,35 @@ export function TodayMoments({
                  demotion — it's still the only accent-filled control and
                  remains by far the widest. */}
           <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-baseline gap-3">
-              <span className="text-sm font-semibold tracking-tight">
-                LifeOS · Today
-              </span>
-              {/* Finding #2: the masthead had no date. Derived from the
-                  real `now` this component already threads through every
-                  other time-aware surface — never a fixed/fake string. */}
-              <span
-                className="text-sm text-muted-foreground"
-                data-testid="today-moments-date"
-              >
-                {formatMastheadDate(now)}
-              </span>
-              {/* #734: where your work is right now, next to what day it is —
-                  and only when there is something to say. It sits in the
-                  brand/date group rather than the control cluster on the
-                  right because it is state, not a preference, and because
-                  that cluster's width budget is measured to the pixel (see
-                  R3-C above); this group already wraps and has the slack.
-                  Renders nothing once everything has reached the account. */}
+            {/* #734: the identity column — who and when on the first line,
+                where your work is on a second line under it, appearing only
+                when there is something to say.
+
+                It is a column, not one more item in the brand/date row,
+                because that row's width is already spoken for. Measured
+                in-browser at a 1280px viewport: the header's container is
+                952px and its two groups already occupy 885px of it. The
+                indicator renders 134px wide, so placing it in the row
+                overflowed by ~79px and reopened exactly the ragged wrap
+                R3-C above had closed. Stacking costs nothing horizontally,
+                and costs no height at all in the ordinary case — the
+                indicator renders nothing once every write has reached the
+                account. */}
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <span className="text-sm font-semibold tracking-tight">
+                  LifeOS · Today
+                </span>
+                {/* Finding #2: the masthead had no date. Derived from the
+                    real `now` this component already threads through every
+                    other time-aware surface — never a fixed/fake string. */}
+                <span
+                  className="text-sm text-muted-foreground"
+                  data-testid="today-moments-date"
+                >
+                  {formatMastheadDate(now)}
+                </span>
+              </div>
               <DeviceSaveIndicator status={syncStatus} />
             </div>
 
