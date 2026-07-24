@@ -34,7 +34,7 @@ export async function GET(request: Request) {
       connection: null,
       status: "disconnected",
       message:
-        "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key when you want real Google integration. Mock/local mode remains available.",
+        "Google Calendar isn't set up on LifeOS yet. Local planning still works without it, and you can connect Google later once it's set up.",
     });
   }
 
@@ -67,10 +67,10 @@ export async function GET(request: Request) {
             : "disconnected",
       message:
         connection?.status === "connected"
-          ? "Google Calendar is connected with encrypted server-only token storage. Free/busy checks and event creation run only from explicit user actions."
+          ? "Google Calendar is connected. LifeOS only checks your availability or adds events when you explicitly ask — never on its own."
           : connection?.status === "error"
-            ? "The last Google Calendar OAuth callback failed safely. Reconnect to try again."
-            : "Google Calendar is ready to connect, but no active encrypted token connection exists yet.",
+            ? "The last attempt to connect Google Calendar failed safely. Please connect again to retry."
+            : "Google Calendar isn't connected yet. Connect it whenever you're ready.",
     });
   } catch (error) {
     const message = safeErrorMessage(error);

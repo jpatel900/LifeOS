@@ -67,7 +67,7 @@ function getFlashMessage() {
     return {
       severity: "success" as const,
       message:
-        "Google Calendar OAuth completed. Tokens are stored encrypted on the server only. Event creation still requires explicit approval from an existing local proposal.",
+        "Google Calendar is connected. LifeOS never adds anything to your calendar on its own — every event still needs your approval first.",
     };
   }
 
@@ -75,7 +75,7 @@ function getFlashMessage() {
     return {
       severity: "error" as const,
       message:
-        "Google Calendar is not configured on this server. Add the server-only Google OAuth env vars and token encryption key before connecting.",
+        "Google Calendar isn't set up on LifeOS yet, so you can't connect it right now. Local planning still works.",
     };
   }
 
@@ -83,7 +83,7 @@ function getFlashMessage() {
     return {
       severity: "error" as const,
       message:
-        "Google Calendar OAuth callback was rejected because the request state was invalid or expired.",
+        "Connecting Google Calendar didn't finish in time, so LifeOS stopped for safety. Please try connecting again.",
     };
   }
 
@@ -91,7 +91,7 @@ function getFlashMessage() {
     return {
       severity: "error" as const,
       message:
-        "Google Calendar OAuth callback requires an authenticated Supabase session. Sign in and try again.",
+        "Please sign in to LifeOS first, then try connecting Google Calendar again.",
     };
   }
 
@@ -99,7 +99,7 @@ function getFlashMessage() {
     return {
       severity: "warning" as const,
       message:
-        "Google Calendar access was not granted. No connection metadata was activated.",
+        "You didn't grant Google Calendar access, so nothing was connected.",
     };
   }
 
@@ -107,7 +107,7 @@ function getFlashMessage() {
     return {
       severity: "error" as const,
       message:
-        "Google Calendar OAuth callback failed safely. No calendar writes were attempted.",
+        "Connecting Google Calendar failed safely. Nothing was added to or changed in your calendar.",
     };
   }
 
@@ -115,7 +115,7 @@ function getFlashMessage() {
     return {
       severity: "error" as const,
       message:
-        "Google Calendar did not return a usable refresh token, so LifeOS refused to activate the connection. Reconnect and re-consent before continuing.",
+        "Google didn't give LifeOS lasting permission, so the connection wasn't turned on. Please connect again and allow access when Google asks.",
     };
   }
 
@@ -162,7 +162,7 @@ function normalizePanelFailure(rawMessage: string) {
     return {
       severity: "warning" as const,
       message:
-        "Google Calendar is not configured on this server. Local planning still works without Google integration.",
+        "Google Calendar isn't set up on LifeOS yet. Local planning still works without it.",
     };
   }
 
@@ -173,8 +173,7 @@ function normalizePanelFailure(rawMessage: string) {
   ) {
     return {
       severity: "warning" as const,
-      message:
-        "Sign in before connecting Google Calendar. OAuth actions require an authenticated Supabase session.",
+      message: "Please sign in to LifeOS before connecting Google Calendar.",
     };
   }
 
@@ -182,7 +181,7 @@ function normalizePanelFailure(rawMessage: string) {
     return {
       severity: "error" as const,
       message:
-        "Google Calendar OAuth could not start. No connection changes were applied.",
+        "LifeOS couldn't start connecting Google Calendar. Nothing was changed.",
     };
   }
 
@@ -229,7 +228,7 @@ export function GoogleCalendarConnectionPanel() {
             connected: false,
             connection: null,
             message:
-              "Supabase is not configured in this environment, so Google Calendar stays unavailable and mock/local mode remains intact.",
+              "LifeOS isn't fully set up here, so Google Calendar isn't available. Local planning still works.",
             severity: "warning",
           });
         }
@@ -244,7 +243,7 @@ export function GoogleCalendarConnectionPanel() {
             connected: false,
             connection: null,
             message:
-              "Supabase auth helpers are unavailable in this browser session. Sign in again before connecting Google Calendar.",
+              "LifeOS can't check your sign-in right now. Please sign in again before connecting Google Calendar.",
             severity: "warning",
           });
         }
@@ -260,8 +259,7 @@ export function GoogleCalendarConnectionPanel() {
             configured: true,
             connected: false,
             connection: null,
-            message:
-              "Sign in before connecting Google Calendar. No OAuth flow can start without an authenticated Supabase session.",
+            message: "Please sign in to LifeOS to connect Google Calendar.",
             severity: "warning",
           });
         }
@@ -337,13 +335,13 @@ export function GoogleCalendarConnectionPanel() {
 
     if (!client) {
       throw new Error(
-        "Supabase is not configured. Google Calendar stays unavailable in local-only mode.",
+        "Google Calendar is not configured for LifeOS here, so it stays unavailable.",
       );
     }
 
     if (!client.auth || typeof client.auth.getSession !== "function") {
       throw new Error(
-        "Supabase auth helpers are unavailable. Sign in again before connecting Google Calendar.",
+        "LifeOS can't check your sign-in. Sign in before connecting Google Calendar again.",
       );
     }
 
@@ -424,7 +422,7 @@ export function GoogleCalendarConnectionPanel() {
         connected: false,
         connection: null,
         message:
-          "LifeOS cleared the local Google Calendar connection and encrypted token material. Google-side revocation still lives in your Google account if you want to remove consent there too.",
+          "LifeOS disconnected Google Calendar and deleted its saved access on our side. Your permission still lives in your Google account — remove it there too if you want to fully revoke access.",
         severity: "info",
       });
       setActionState({ status: "idle" });
@@ -540,8 +538,8 @@ export function GoogleCalendarConnectionPanel() {
 
             {!panelState.configured ? (
               <p className="mb-0 mt-3 text-sm text-muted-foreground">
-                Missing server config is non-fatal. Mock/local mode still works
-                without Google env vars.
+                Google Calendar isn't set up here, and that's okay — local
+                planning keeps working without it.
               </p>
             ) : null}
 
@@ -552,7 +550,7 @@ export function GoogleCalendarConnectionPanel() {
                 summaryClassName="text-sm font-medium text-foreground"
               >
                 <p>
-                  Granted OAuth scopes:{" "}
+                  Access you granted to Google:{" "}
                   {panelState.connection.granted_scopes_json.join(", ")}
                 </p>
               </DiagnosticsDisclosure>

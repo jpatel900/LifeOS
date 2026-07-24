@@ -89,7 +89,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error:
-          "Google Calendar is not configured on this server. Add server-only Google OAuth env vars and token encryption key before cancelling events.",
+          "Google Calendar isn't set up on LifeOS yet, so events can't be cancelled right now.",
       },
       { status: 503 },
     );
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           error:
-            "Reconnect Google Calendar before cancelling events. No refresh token is stored.",
+            "Reconnect Google Calendar before cancelling events. Its saved access is no longer available.",
         },
         { status: 409 },
       );

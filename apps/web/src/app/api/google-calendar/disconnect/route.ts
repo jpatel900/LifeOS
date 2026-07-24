@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       connection: updatedConnection,
       status: "disconnected",
       message:
-        "LifeOS cleared local Google Calendar token material and connection metadata. Google-side revoke still lives in your Google account if you want to remove consent there too.",
+        "LifeOS disconnected Google Calendar and deleted its saved access on our side. Your permission still lives in your Google account — remove it there too if you want to fully revoke access.",
     });
   } catch (error) {
     return NextResponse.json(
