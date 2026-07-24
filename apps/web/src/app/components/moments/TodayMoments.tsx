@@ -9,6 +9,7 @@ import { useWorkflow } from "@/lib/WorkflowContext";
 import { buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
 import { momentKeyLabel } from "@/lib/keys/keymap";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { cn } from "@/lib/utils";
 import { useMomentKeyboard } from "./useMomentKeyboard";
 import { HIT_TARGET_MIN } from "./hitTarget";
@@ -649,7 +650,7 @@ export function TodayMoments({
         return;
       }
       if (result === "local-only") {
-        showToast("Day closed locally — account sync pending");
+        showToast(`Day closed — ${SAVED_ON_THIS_DEVICE_SHORT}`);
         return;
       }
       showToast("Couldn't close the day — review not saved yet");

@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -426,7 +427,7 @@ describe("TodayMoments", () => {
     // local-only and the toast states that truth (not a bare "Day closed").
     await waitFor(() => {
       expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
-        "Day closed locally — account sync pending",
+        `Day closed — ${SAVED_ON_THIS_DEVICE_SHORT}`,
       );
     });
   });
@@ -1778,7 +1779,7 @@ describe("TodayMoments — SP-6 undo over confirm", () => {
     // (local-only in mock mode) — flush the microtask queue first.
     await act(async () => {});
     expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
-      "Day closed locally — account sync pending",
+      `Day closed — ${SAVED_ON_THIS_DEVICE_SHORT}`,
     );
     expect(
       screen.queryByTestId("today-moments-toast-undo"),

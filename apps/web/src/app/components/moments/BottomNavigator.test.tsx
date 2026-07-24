@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { BottomNavigator } from "./BottomNavigator";
 
 describe("BottomNavigator", () => {
@@ -121,7 +122,7 @@ describe("BottomNavigator", () => {
       );
       const badge = screen.getByTestId("bottom-navigator-capture-badge");
       expect(badge).toHaveTextContent("2");
-      expect(badge).toHaveTextContent("captures waiting to sync");
+      expect(badge).toHaveTextContent(`captures ${SAVED_ON_THIS_DEVICE_SHORT}`);
     });
   });
 });

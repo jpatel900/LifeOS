@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { CaptureAffordance } from "./CaptureAffordance";
 
 describe("CaptureAffordance", () => {
@@ -43,7 +44,7 @@ describe("CaptureAffordance", () => {
   });
 
   // G1 floor follow-up: the offline-queue badge.
-  it("shows no queue badge when nothing is waiting to sync", () => {
+  it("shows no queue badge when nothing is waiting for the account", () => {
     const { unmount } = render(<CaptureAffordance onOpen={vi.fn()} />);
     expect(screen.queryByTestId("capture-queue-badge")).toBeNull();
     unmount();
@@ -57,7 +58,7 @@ describe("CaptureAffordance", () => {
     const badge = screen.getByTestId("capture-queue-badge");
 
     expect(badge).toHaveTextContent("3");
-    expect(badge).toHaveTextContent("3 captures waiting to sync");
+    expect(badge).toHaveTextContent(`3 captures ${SAVED_ON_THIS_DEVICE_SHORT}`);
     // stable-width digits so the count does not jitter as it changes
     expect(badge).toHaveClass("tabular-nums");
   });
@@ -65,7 +66,7 @@ describe("CaptureAffordance", () => {
   it("uses the singular noun for a single pending capture", () => {
     render(<CaptureAffordance onOpen={vi.fn()} unsyncedCount={1} />);
     expect(screen.getByTestId("capture-queue-badge")).toHaveTextContent(
-      "1 capture waiting to sync",
+      `1 capture ${SAVED_ON_THIS_DEVICE_SHORT}`,
     );
   });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { momentKeyLabel } from "@/lib/keys/keymap";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { cn } from "@/lib/utils";
 import { HIT_TARGET_ROW } from "./hitTarget";
 
@@ -11,9 +12,11 @@ import { HIT_TARGET_ROW } from "./hitTarget";
  * useMomentKeyboard's "c"/"C" mapping (UX-INV-2 single-key capture).
  *
  * G1 floor follow-up: when `unsyncedCount > 0`, a queue badge surfaces how many
- * offline-captured thoughts are still waiting to sync (the count exposed by
- * WorkflowContext after #443's offline queue). Color is never the only signal —
- * an sr-only phrase carries the same status without it.
+ * offline-captured thoughts are on this device but not in the account yet (the
+ * count exposed by WorkflowContext after #443's offline queue). Color is never
+ * the only signal — an sr-only phrase carries the same status without it. That
+ * phrase is `SAVED_ON_THIS_DEVICE_SHORT` (#692 Slice C): every surface reporting
+ * this state uses the same words, so do not re-phrase it here.
  *
  * D-6 (#483): the full prototype microcopy ("Something on your mind? Capture
  * it — don't hold it.") only shows at `sm` and up, where the pill has room to
@@ -116,7 +119,7 @@ export function CaptureAffordance({
           <span aria-hidden="true">{unsyncedCount}</span>
           <span className="sr-only">
             {unsyncedCount} {unsyncedCount === 1 ? "capture" : "captures"}{" "}
-            waiting to sync
+            {SAVED_ON_THIS_DEVICE_SHORT}
           </span>
         </span>
       ) : null}
