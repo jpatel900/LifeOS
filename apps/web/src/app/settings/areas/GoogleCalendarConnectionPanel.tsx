@@ -538,8 +538,9 @@ export function GoogleCalendarConnectionPanel() {
 
             {!panelState.configured ? (
               <p className="mb-0 mt-3 text-sm text-muted-foreground">
-                Google Calendar isn't set up here, and that's okay — local
-                planning keeps working without it.
+                {
+                  "Google Calendar isn't set up here, and that's okay — local planning keeps working without it."
+                }
               </p>
             ) : null}
 
