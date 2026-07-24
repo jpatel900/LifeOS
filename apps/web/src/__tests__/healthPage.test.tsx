@@ -4,6 +4,7 @@ import HealthPage from "../app/health/page";
 import { AppShell } from "../app/components/AppShell";
 import { HEALTH_CHECK_PRESENTATION } from "../app/components/cockpit/HealthView";
 import { healthChecks as demoHealthChecks } from "../lib/mockData";
+import { BANNED_ON_USER_SURFACE } from "./helpers/plainLanguageVocabulary";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/health",
@@ -33,26 +34,11 @@ beforeEach(() => {
  * NFR-006 half 1 — implementation vocabulary that must never reach a
  * user-facing layer of this screen. It is still allowed (and expected) inside
  * the developer disclosure, which this helper strips out before asserting.
+ *
+ * The list itself now lives in `./helpers/plainLanguageVocabulary`, shared
+ * with the repo-wide guard in `plainLanguageGuard.test.ts`, so this
+ * screen-scoped DOM assertion can never drift behind the repo-wide scan.
  */
-const BANNED_ON_USER_SURFACE = [
-  /supabase/i,
-  /sentry/i,
-  /posthog/i,
-  /langfuse/i,
-  /observability/i,
-  /telemetry/i,
-  /autocapture/i,
-  /\bRLS\b/,
-  /\bDSN\b/,
-  /anon key/i,
-  /capture_items/i,
-  /subsystem/i,
-  /persistence/i,
-  /mock mode/i,
-  /\bRPCs?\b/,
-  /deterministic/i,
-];
-
 function userFacingText() {
   const cockpit = screen
     .getByTestId("lifeos-cockpit")

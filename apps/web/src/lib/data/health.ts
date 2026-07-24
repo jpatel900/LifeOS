@@ -249,6 +249,10 @@ function getErrorMessage(error: unknown) {
     return error.message;
   }
 
+  /* plain-language-guard: developer-layer — internal default only. Every
+     caller routes this through `normalizeSupabaseFailureSummary` before it
+     can reach a screen, so no person ever reads this sentence (#692
+     inventory, "Not a violation"). */
   return "Supabase request failed.";
 }
 
