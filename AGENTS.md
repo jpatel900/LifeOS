@@ -61,6 +61,7 @@ Use the smallest trusted skill set. Repo-local `.agents/skills` are preferred; `
 | Work surface                                        | Load first                                                                               |
 | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | Skill/plugin selection or governance                | `skill-router`, then the most specific skill below                                       |
+| Authoring or receiving any lane contract            | `lifeos-lane-contract`                                                                   |
 | AI parser, prompts, structured outputs, model tiers | `lifeos-schema-ai`                                                                       |
 | Calendar, free/busy, OAuth, external writes         | `lifeos-calendar-external-writes`                                                        |
 | Supabase, migrations, RLS, grants, persistence      | `lifeos-supabase-rls`                                                                    |
