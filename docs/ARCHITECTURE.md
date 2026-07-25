@@ -21,16 +21,16 @@ V1 describes the shipped architecture baseline, not a freeze on data-independent
 
 ## 2. Recommended Stack
 
-| Layer                        | Choice                                                              | Reason                                                                                                                                                                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend                     | Next.js                                                             | Common, agent-friendly, deploys easily                                                                                                                                                                                                  |
-| Hosting                      | Vercel Hobby initially                                              | Low fixed cost, simple deployment                                                                                                                                                                                                       |
-| Database/Auth                | Supabase                                                            | Postgres + Auth + RLS + local DB dev via Supabase tooling                                                                                                                                                                               |
-| Server logic (baseline)      | Next.js Route Handlers + Server Actions                             | One authoritative domain/security layer in `apps/web`; secrets and integrations stay server-side. Multiple clients (web UI, headless CLI) consume it through shared, versioned contracts — see `docs/adr/0006-multi-client-doctrine.md` |
-| Server logic (ADR exception) | Supabase Edge Functions                                             | Optional by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`)                                                                                                           |
-| AI                           | OpenAI Responses API + Structured Outputs                           | Typed AI output and tool-ready interaction model                                                                                                                                                                                        |
-| Calendar                     | Google Calendar API                                                 | Free/busy checks and approved event writes                                                                                                                                                                                              |
-| Background jobs              | None by default; Supabase Cron + Edge Functions only when justified | Avoid background complexity                                                                                                                                                                                                             |
+| Layer                        | Choice                                                                                        | Reason                                                                                                                                                                                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend                     | Next.js                                                                                       | Common, agent-friendly, deploys easily                                                                                                                                                                                                  |
+| Hosting                      | Vercel Hobby initially                                                                        | Low fixed cost, simple deployment                                                                                                                                                                                                       |
+| Database/Auth                | Supabase                                                                                      | Postgres + Auth + RLS + local DB dev via Supabase tooling                                                                                                                                                                               |
+| Server logic (baseline)      | Next.js Route Handlers (ADR 0001 also permits Server Actions; none are in the codebase today) | One authoritative domain/security layer in `apps/web`; secrets and integrations stay server-side. Multiple clients (web UI, headless CLI) consume it through shared, versioned contracts — see `docs/adr/0006-multi-client-doctrine.md` |
+| Server logic (ADR exception) | Supabase Edge Functions                                                                       | Optional by default; use for cron or integrations that cannot live safely in Next (see `docs/adr/0001-v1-server-boundary.md`)                                                                                                           |
+| AI                           | OpenAI Responses API + Structured Outputs                                                     | Typed AI output and tool-ready interaction model                                                                                                                                                                                        |
+| Calendar                     | Google Calendar API                                                                           | Free/busy checks and approved event writes                                                                                                                                                                                              |
+| Background jobs              | None by default; Supabase Cron + Edge Functions only when justified                           | Avoid background complexity                                                                                                                                                                                                             |
 
 ## 3. Runtime Architecture
 
@@ -41,7 +41,7 @@ Supabase Auth
   ↓
 Supabase Postgres with RLS
   ↓
-Next.js server (Route Handlers + Server Actions)
+Next.js server (Route Handlers)
   ├─ parse_capture
   ├─ triage_apply
   ├─ propose_blocks
@@ -58,7 +58,7 @@ Optional, not the default path: **Supabase Edge Functions** for scheduled jobs o
 
 ## 4. Why No Separate Backend by Default
 
-Do not add a separate Node/Express/Nest backend without a superseding reviewed ADR. Application logic lives in **Next.js** (Route Handlers and Server Actions). **Supabase** provides the database, auth, RLS, and migrations; it is not a second application server for core CRUD and AI flows.
+Do not add a separate Node/Express/Nest backend without a superseding reviewed ADR. Application logic lives in **Next.js** — today entirely in **Route Handlers**; ADR 0001 also permits Server Actions, but the codebase contains none. **Supabase** provides the database, auth, RLS, and migrations; it is not a second application server for core CRUD and AI flows.
 
 Supabase still provides:
 
@@ -296,7 +296,7 @@ Prefer **Supabase Cron** invoking **Edge Functions** for recurring jobs when tho
 
 Minimum logging:
 
-- Next.js Route Handler / Server Action invocation success/failure (and Edge Function invocations if used)
+- Next.js Route Handler invocation success/failure (and Edge Function invocations if used; Server Actions, should any ever be added under ADR 0001, log the same way)
 - AI validation failures
 - calendar write attempts
 - calendar write failures
