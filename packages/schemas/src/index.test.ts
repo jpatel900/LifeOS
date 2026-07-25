@@ -709,6 +709,35 @@ describe("GoogleCalendarConnectionSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  // #743 P0 incident: PostgREST serializes `timestamptz` columns with a
+  // numeric offset ("+00:00"), not a "Z" suffix. This is the verbatim
+  // production row (tokens redacted) that 503'd every connection-status read
+  // and killed the OAuth callback before the token exchange ever ran, because
+  // `z.string().datetime()` only accepts "Z". Keep this fixture verbatim.
+  it("validates a real PostgREST row with offset-format timestamps (#743 P0)", () => {
+    const result = GoogleCalendarConnectionSchema.safeParse({
+      id: "c6b5d8ac-630b-41c9-ac30-5448887513d7",
+      status: "error",
+      user_id: "bf369e8a-8b2b-4d73-b611-8f62999d510f",
+      provider: "google_calendar",
+      created_at: "2026-05-28T18:09:22.314246+00:00",
+      updated_at: "2026-07-25T22:08:43.942452+00:00",
+      calendar_id: "primary",
+      connected_at: null,
+      disconnected_at: "2026-07-25T22:08:43.897+00:00",
+      last_error_json: {
+        at: "2026-07-25T22:08:43.897Z",
+        code: "callback_failed",
+        description: null,
+        http_status: null,
+      },
+      granted_scopes_json: [],
+      first_write_warning_acknowledged_at: null,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("rejects unsupported calendar providers", () => {
     const result = GoogleCalendarConnectionSchema.safeParse({
       id: uid,

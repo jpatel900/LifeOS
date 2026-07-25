@@ -264,6 +264,35 @@ describe("Google Calendar free/busy helper", () => {
     );
   });
 
+  // #743 P0: a non-provider crash during refresh used to persist
+  // `description: null` here too. It must now carry the crash's message.
+  it("captures a non-provider refresh crash's message instead of description: null (#743 P0)", async () => {
+    mocks.decryptGoogleCalendarToken.mockReturnValue("google-refresh-token");
+    mocks.refreshGoogleCalendarAccessToken.mockRejectedValue(
+      new Error("network socket hang up"),
+    );
+
+    await expect(
+      resolveGoogleCalendarAccessToken({
+        connection,
+        supabaseAccessToken: "supabase-access-token",
+      }),
+    ).rejects.toThrow("network socket hang up");
+
+    expect(
+      mocks.upsertGoogleCalendarConnectionForAccessToken,
+    ).toHaveBeenCalledWith(
+      "supabase-access-token",
+      expect.objectContaining({
+        last_error_json: expect.objectContaining({
+          code: "refresh_failed",
+          description: "network socket hang up",
+        }),
+        status: "connected",
+      }),
+    );
+  });
+
   it("reports a conflict when the free/busy response contains busy windows", async () => {
     mocks.decryptGoogleCalendarToken.mockReturnValue("google-access-token");
     vi.mocked(fetch).mockResolvedValue(

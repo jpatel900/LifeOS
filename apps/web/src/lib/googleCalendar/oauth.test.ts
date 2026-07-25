@@ -5,6 +5,7 @@ import {
   exchangeGoogleCalendarCode,
   GoogleOAuthProviderError,
   isGoogleCalendarOAuthStateValid,
+  isGoogleOAuthProviderError,
   readGoogleCalendarOAuthStateCookie,
   refreshGoogleCalendarAccessToken,
   sealGoogleCalendarOAuthStateCookie,
@@ -171,6 +172,55 @@ describe("Google Calendar OAuth helpers", () => {
         httpStatus: 400,
         phase: "refresh",
       });
+    });
+  });
+
+  // #743 P0 follow-up: `isGoogleOAuthProviderError` replaces `instanceof`
+  // checks at the call sites (callback route, freebusy refresh) because
+  // `instanceof` can silently fail across a bundle/chunk split.
+  describe("isGoogleOAuthProviderError (#743 P0)", () => {
+    it("recognizes a real GoogleOAuthProviderError instance", () => {
+      const error = new GoogleOAuthProviderError({
+        phase: "exchange",
+        code: "invalid_grant",
+        description: null,
+        httpStatus: 400,
+      });
+
+      expect(isGoogleOAuthProviderError(error)).toBe(true);
+    });
+
+    it("recognizes a duck-typed error carrying the same name and shape, simulating a cross-bundle class identity split", () => {
+      class DuplicateGoogleOAuthProviderError extends Error {
+        code = "invalid_grant";
+        description: string | null = null;
+        httpStatus = 400;
+        phase = "exchange" as const;
+        constructor() {
+          super("Google Calendar connection step did not complete.");
+          this.name = "GoogleOAuthProviderError";
+        }
+      }
+      const crossBundleError = new DuplicateGoogleOAuthProviderError();
+
+      // The whole point: this would NOT be `instanceof GoogleOAuthProviderError`
+      // (different class from a different module instance), but it still
+      // carries the marker name and shape, so the guard must still say yes.
+      expect(crossBundleError instanceof GoogleOAuthProviderError).toBe(false);
+      expect(isGoogleOAuthProviderError(crossBundleError)).toBe(true);
+    });
+
+    it("rejects ordinary errors, including ones with an unrelated custom name", () => {
+      expect(isGoogleOAuthProviderError(new Error("plain failure"))).toBe(
+        false,
+      );
+
+      const namedError = new Error("schema validation failed");
+      namedError.name = "ZodError";
+      expect(isGoogleOAuthProviderError(namedError)).toBe(false);
+
+      expect(isGoogleOAuthProviderError("not an error")).toBe(false);
+      expect(isGoogleOAuthProviderError(null)).toBe(false);
     });
   });
 });

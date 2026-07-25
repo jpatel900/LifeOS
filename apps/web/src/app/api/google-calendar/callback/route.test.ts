@@ -331,5 +331,54 @@ describe("google-calendar callback route", () => {
       expect(serializedLog).not.toContain("super-secret-auth-code");
       expect(serializedLog).not.toContain("client-secret");
     });
+
+    // #743 P0: this is the exact incident shape -- a non-provider crash (here,
+    // standing in for the ZodError that fired on every real production row)
+    // used to persist and log `description: null`, making the diagnostics
+    // feature blind to its own failure. It must now carry the crash's message.
+    it("captures a non-provider crash's message instead of persisting and logging description: null", async () => {
+      mocks.getGoogleCalendarStoredConnectionForAccessToken.mockRejectedValue(
+        new Error(
+          "invalid_string: disconnected_at, created_at, updated_at failed datetime validation",
+        ),
+      );
+
+      const response = await GET(
+        new Request(
+          "http://localhost/api/google-calendar/callback?state=expected-state&code=auth-code-value",
+          { headers: { Cookie: "lifeos_google_calendar_oauth=sealed-cookie" } },
+        ),
+      );
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toContain(
+        "googleCalendarError=callback_failed",
+      );
+      expect(
+        mocks.upsertGoogleCalendarConnectionForAccessToken,
+      ).toHaveBeenCalledWith(
+        "supabase-access-token",
+        expect.objectContaining({
+          last_error_json: expect.objectContaining({
+            code: "callback_failed",
+            description: expect.stringContaining("datetime validation"),
+          }),
+          status: "error",
+        }),
+      );
+
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      const [, logged] = consoleErrorSpy.mock.calls[0] as [string, unknown];
+      const serializedLog = JSON.stringify(logged);
+      expect(serializedLog).toContain("datetime validation");
+      expect(serializedLog).not.toBe(
+        JSON.stringify({
+          code: "callback_failed",
+          description: null,
+          httpStatus: null,
+          userId: "550e8400-e29b-41d4-a716-446655440001",
+        }),
+      );
+    });
   });
 });
