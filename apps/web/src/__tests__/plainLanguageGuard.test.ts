@@ -241,8 +241,13 @@ const BASELINE: readonly BaselineEntry[] = [
   //     PostgrestError can trigger; three exported functions with no production
   //     caller at all; one mock `constraints[]` entry no component renders.
   //
-  // THE NINE "Sign in before …" STRINGS ARE DEAD FOR A NON-OBVIOUS REASON, and
-  // reading the source alone gets it wrong. They are `requireSupabaseUser`'s
+  // FIVE OF THESE ARE DEAD FOR A NON-OBVIOUS REASON, and reading the source
+  // alone gets it wrong: `areas.ts`'s four "Sign in before …" strings and
+  // `capture.ts`'s "Sign in before loading captures from Supabase.". (The
+  // other "Sign in before …" strings in this slice are dead or caught for
+  // ordinary reasons — `supabase/server.ts`'s is routed by error TYPE, and
+  // `planning.ts`/`capture.ts`'s save-path ones are replaced by
+  // `markPersistedSaveFailure`.) These five are `requireSupabaseUser`'s
   // `unauthenticatedMessage`, reached only when `auth.getUser()` resolves
   // `{ user: null, error: null }`. The real @supabase/ssr client never does —
   // a signed-out session rejects one branch earlier with AuthSessionMissingError
