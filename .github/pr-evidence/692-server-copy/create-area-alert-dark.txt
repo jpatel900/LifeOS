@@ -1,0 +1,4 @@
+Area could not be created
+Auth session missing!
+
+Fix the problem, then try creating the area again.

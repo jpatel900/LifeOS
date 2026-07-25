@@ -257,9 +257,7 @@ describe("workflow data provider", () => {
         from,
         auth: { getUser },
       } as unknown as MinimalSupabaseClient),
-    ).rejects.toThrow(
-      "Sign in before loading the areas saved in your account.",
-    );
+    ).rejects.toThrow("Sign in before loading areas from Supabase.");
     expect(from).not.toHaveBeenCalled();
   });
 

@@ -1,0 +1,5 @@
+Areas could not load
+
+Auth session missing!
+
+If Supabase is configured, sign in and make sure the local stack is running. Without Supabase env vars, this page uses local-only areas.
