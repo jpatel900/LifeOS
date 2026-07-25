@@ -155,6 +155,18 @@ export function savedOnThisDeviceBanner(subject: string) {
  */
 export const ACCOUNT_UNREACHABLE_NOW = `LifeOS can't reach your account right now, so your work is ${SAVED_ON_THIS_DEVICE_SHORT}.`;
 
+/**
+ * Nobody is signed in — the most ordinary way to be device-only (#688).
+ *
+ * Moved here verbatim from `workflowContext/reducerCore.ts` by #734. It was
+ * the only whole-account state sentence still living outside this file, and
+ * `cockpit/StatusBanners.tsx` had already grown a second hand-typed copy of
+ * it as a fallback — the exact drift this module exists to prevent. Both
+ * sites read it from here now.
+ */
+export const SIGNED_OUT_SAVING_ON_THIS_DEVICE =
+  "You're not signed in, so new work is saving on this device only.";
+
 export const SOME_WORK_ON_THIS_DEVICE =
   savedOnThisDeviceBanner("Some of your work");
 
