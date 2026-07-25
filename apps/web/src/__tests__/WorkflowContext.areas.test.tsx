@@ -10,6 +10,10 @@ import {
 } from "vitest";
 import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
+import {
+  ACCOUNT_NEEDS_APP_UPDATE,
+  ACCOUNT_SAVE_FAILED,
+} from "@/lib/statusVocabulary";
 import { stubParseCaptureFetch } from "./helpers/parseCaptureFetch";
 
 // #687: the demoted stage pages (/capture, /triage, /execute, ...) are
@@ -494,10 +498,7 @@ describe("WorkflowProvider persisted area sync", () => {
         "sync-error",
       );
       expect(screen.getByTestId("sync-message")).toHaveTextContent(
-        "Change saved locally, but account sync failed",
-      );
-      expect(screen.getByTestId("sync-message")).toHaveTextContent(
-        "stay local until sync recovers",
+        ACCOUNT_SAVE_FAILED,
       );
     });
   });
@@ -528,10 +529,7 @@ describe("WorkflowProvider persisted area sync", () => {
         "sync-error",
       );
       expect(screen.getByTestId("sync-message")).toHaveTextContent(
-        "app and database look out of step",
-      );
-      expect(screen.getByTestId("sync-message")).toHaveTextContent(
-        "Check Health",
+        ACCOUNT_NEEDS_APP_UPDATE,
       );
     });
   });

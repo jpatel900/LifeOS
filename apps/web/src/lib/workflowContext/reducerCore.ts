@@ -19,6 +19,10 @@ import {
   type SuggestionRecord,
 } from "@lifeos/schemas";
 import {
+  ACCOUNT_NEEDS_APP_UPDATE,
+  ACCOUNT_SAVE_FAILED,
+} from "../statusVocabulary";
+import {
   acceptDraft,
   acceptProjectDraft,
   appendParsedWorkflowResult,
@@ -268,10 +272,8 @@ export function isSignedOutError(error: unknown): boolean {
 
 export const persistedLoadFailureMessage =
   "Saved workspace data could not load; local workflow remains usable, but saved account data may be missing from view.";
-export const persistedSaveFailureMessage =
-  "Change saved locally, but account sync failed; it will stay local until sync recovers.";
-export const serverCapabilityMissingMessage =
-  "Account sync needs a server update; the app and database look out of step. Check Health for the next step.";
+export const persistedSaveFailureMessage = ACCOUNT_SAVE_FAILED;
+export const serverCapabilityMissingMessage = ACCOUNT_NEEDS_APP_UPDATE;
 
 export function persistedSyncFailureMessage(
   error: unknown,

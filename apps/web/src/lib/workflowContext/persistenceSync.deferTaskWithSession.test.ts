@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createPersistenceSync } from "./persistenceSync";
 import type { Phase2MockExecutionSession } from "../types";
+import { savedOnThisDeviceBanner } from "../statusVocabulary";
 
 // #613: unit coverage for the atomic cap-DEFER persistence seam
 // (persistDeferredTaskWithSession) in isolation from the full React
@@ -105,7 +106,7 @@ describe("persistDeferredTaskWithSession (#613 atomic cap-DEFER seam)", () => {
     expect(result).toBe("local-only");
     expect(deferExecutionSessionWithTaskMock).not.toHaveBeenCalled();
     expect(markLocalOnly).toHaveBeenCalledWith(
-      "Deferral saved locally; account sync is pending.",
+      savedOnThisDeviceBanner("Your deferral"),
     );
   });
 

@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import {
+  ACCOUNT_SAVE_FAILED,
+  ACCOUNT_UNREACHABLE_NOW,
+  AI_SORTING_OFF_SORTED_HERE,
+  AI_SORTING_UNAVAILABLE_SORTED_HERE,
+  DEVICE_STORAGE_BLOCKED,
+  SOME_WORK_ON_THIS_DEVICE,
+  SORT_ON_THIS_DEVICE_ACTION,
+} from "@/lib/statusVocabulary";
 import type {
   CaptureParseState,
   useWorkflow,
@@ -46,17 +55,15 @@ export function SyncNotice({ status }: { status: WorkflowSyncStatus }) {
   }
 
   const messages = [
-    status.storage === "blocked"
-      ? "Browser storage is blocked; this session may not restore after reload."
-      : null,
+    status.storage === "blocked" ? DEVICE_STORAGE_BLOCKED : null,
     status.account === "local-only"
-      ? (status.message ?? "Account sync is unavailable; changes stay local.")
+      ? (status.message ?? ACCOUNT_UNREACHABLE_NOW)
       : null,
     status.account === "sync-error"
-      ? (status.message ?? "Account sync failed; changes stay local.")
+      ? (status.message ?? ACCOUNT_SAVE_FAILED)
       : null,
     status.account === "synced" && status.pendingLocalChanges
-      ? (status.message ?? "Some local changes still need account sync.")
+      ? (status.message ?? SOME_WORK_ON_THIS_DEVICE)
       : null,
   ].filter(Boolean);
 
@@ -88,8 +95,8 @@ export function CaptureParseNotice({
       ? "Parsing capture into drafts…"
       : state.phase === "parsed"
         ? state.status === "ai_unavailable"
-          ? "AI parser is unavailable right now, so the built-in mock parser drafted this capture."
-          : "AI parsing is turned off, so the built-in mock parser drafted this capture."
+          ? AI_SORTING_UNAVAILABLE_SORTED_HERE
+          : AI_SORTING_OFF_SORTED_HERE
         : state.message;
 
   return (
@@ -114,7 +121,7 @@ export function CaptureParseNotice({
             "rounded-full bg-[var(--btn)] px-4 font-bold text-[var(--btn-fg)]",
           )}
         >
-          Parse with mock parser
+          {SORT_ON_THIS_DEVICE_ACTION}
         </button>
       ) : null}
     </div>

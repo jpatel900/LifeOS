@@ -39,6 +39,12 @@ import {
   type WorkflowState,
 } from "./workflow";
 import {
+  ACCOUNT_UNREACHABLE_NOW,
+  DEVICE_STORAGE_BLOCKED,
+  SOME_WORK_ON_THIS_DEVICE,
+  savedOnThisDeviceBanner,
+} from "./statusVocabulary";
+import {
   createRollupSummary,
   createWinRecord,
   listAreas,
@@ -202,9 +208,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       ...current,
       account: "synced",
       signedOut: false,
-      message: current.pendingLocalChanges
-        ? "Some local changes still need account sync."
-        : null,
+      message: current.pendingLocalChanges ? SOME_WORK_ON_THIS_DEVICE : null,
     }));
   }, []);
 
@@ -300,7 +304,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       areas = persistedAreasRef.current,
     ) => {
       if (!client) {
-        markLocalOnly("Account sync is unavailable; work is staying local.");
+        markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
         return;
       }
       if (!areas.length) {
@@ -319,7 +323,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         planningResult.provider !== "supabase" ||
         executionResult.provider !== "supabase"
       ) {
-        markLocalOnly("Account sync is unavailable; work is staying local.");
+        markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
         return;
       }
 
@@ -437,7 +441,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         : null;
 
       if (!persistedTaskId || !persistedAreaId) {
-        markLocalOnly("Win saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your win"));
         return;
       }
 
@@ -451,7 +455,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           occurred_at: today,
         });
       } catch {
-        markLocalOnly("Win saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your win"));
       }
     },
     [markLocalOnly],
@@ -499,7 +503,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         persistedAreasRef.current,
       );
       if (!persistedAreaId) {
-        markLocalOnly("Rollup saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your rollup"));
         return;
       }
 
@@ -512,7 +516,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           summary: input.summary,
         });
       } catch {
-        markLocalOnly("Rollup saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your rollup"));
       }
     },
     [markLocalOnly],
@@ -739,8 +743,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       setSyncStatus((current) => ({
         ...current,
         storage: "blocked",
-        message:
-          "Browser storage is blocked; this session will not reliably restore after reload.",
+        message: DEVICE_STORAGE_BLOCKED,
         pendingLocalChanges: true,
       }));
     }
@@ -780,14 +783,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     async function syncPersistedAreas() {
       const client = createSupabaseBrowserClient();
       if (!client) {
-        markLocalOnly("Account sync is unavailable; work is staying local.");
+        markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
         return;
       }
 
       try {
         const result = await listAreas(client);
         if (cancelled || result.provider !== "supabase") {
-          markLocalOnly("Account sync is unavailable; work is staying local.");
+          markLocalOnly(ACCOUNT_UNREACHABLE_NOW);
           return;
         }
         applyPersistedAreas(result.areas);
@@ -823,8 +826,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       setSyncStatus((current) => ({
         ...current,
         storage: "blocked",
-        message:
-          "Browser storage is blocked; this session will not reliably restore after reload.",
+        message: DEVICE_STORAGE_BLOCKED,
         pendingLocalChanges: true,
       }));
     }
@@ -1171,7 +1173,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         (item) => item.id === draftId,
       );
       dispatch({ type: "rejectDraft", draftId });
-      markLocalOnly("Dropped draft locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your dropped draft"));
 
       if (draft) {
         recordRejectedTaskDraft(createSupabaseBrowserClient(), {
@@ -1189,7 +1191,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "rejectProjectDraft", draftId }),
     editTaskDraft: (draftId, changes) => {
       dispatch({ type: "editDraft", draftId, changes });
-      markLocalOnly("Draft edit saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your draft edit"));
     },
     rejectPersonLink: (draftId, mentionIndex) => {
       const draft = stateRef.current.taskDrafts.find(
@@ -1217,11 +1219,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     },
     splitTaskDraft: (draftId, titles) => {
       dispatch({ type: "splitDraft", draftId, titles });
-      markLocalOnly("Draft split saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your draft split"));
     },
     mergeTaskDrafts: (primaryDraftId, secondaryDraftId) => {
       dispatch({ type: "mergeDrafts", primaryDraftId, secondaryDraftId });
-      markLocalOnly("Draft merge saved locally; account sync is pending.");
+      markLocalOnly(savedOnThisDeviceBanner("Your draft merge"));
     },
     acceptLocalProposal: (proposalId) => {
       const previous = stateRef.current;
@@ -1314,7 +1316,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        markLocalOnly("First move saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your first move"));
       }
     },
     unplanTask: (blockId) => {
@@ -1416,7 +1418,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           released_task_id: slotTaskId,
           activation_path: refusal.activation_path,
         });
-        markLocalOnly("WIP swap saved locally; account sync is pending.");
+        markLocalOnly(savedOnThisDeviceBanner("Your swap"));
       }
     },
     resetWorkflow: () => dispatch({ type: "reset" }),
