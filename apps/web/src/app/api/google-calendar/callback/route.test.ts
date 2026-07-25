@@ -22,12 +22,14 @@ vi.mock("@/lib/googleCalendar/oauth", async () => {
     typeof import("@/lib/googleCalendar/oauth")
   >("@/lib/googleCalendar/oauth");
 
+  // Spread `actual` first so real, unmocked exports (GoogleOAuthProviderError,
+  // truncateGoogleOAuthErrorText, the *_MAX_LENGTH constants, etc.) stay
+  // available to route.ts -- only the specific functions below are faked.
   return {
+    ...actual,
     exchangeGoogleCalendarCode: mocks.exchangeGoogleCalendarCode,
     getGoogleCalendarOAuthStateCookieOptions:
       mocks.getGoogleCalendarOAuthStateCookieOptions,
-    GOOGLE_CALENDAR_OAUTH_STATE_COOKIE: "lifeos_google_calendar_oauth",
-    GoogleOAuthProviderError: actual.GoogleOAuthProviderError,
     isGoogleCalendarOAuthStateValid: mocks.isGoogleCalendarOAuthStateValid,
     readGoogleCalendarOAuthStateCookie:
       mocks.readGoogleCalendarOAuthStateCookie,

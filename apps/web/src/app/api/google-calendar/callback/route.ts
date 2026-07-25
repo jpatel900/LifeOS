@@ -120,9 +120,8 @@ export async function GET(request: Request) {
     }
 
     if (providerError) {
-      const providerErrorDescription = url.searchParams.get(
-        "error_description",
-      );
+      const providerErrorDescription =
+        url.searchParams.get("error_description");
       await markConnectionError(statePayload.accessToken, user.id, [], {
         code: truncateGoogleOAuthErrorText(
           providerError,
