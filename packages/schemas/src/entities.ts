@@ -303,6 +303,17 @@ export const HealthCheckSchema = z.object({
 
 export type HealthCheck = z.infer<typeof HealthCheckSchema>;
 
+// #743 P0: PostgREST serializes `timestamptz` columns with a numeric offset
+// ("+00:00"), not a "Z" suffix. Plain `z.string().datetime()` only accepts
+// "Z", so every real row read through this schema 503'd in production (the
+// OAuth callback died on this same read before the token exchange ever ran).
+// `{ offset: true }` accepts both "Z" and numeric-offset suffixes, so a value
+// written locally with `Date.prototype.toISOString()` (always "Z") and a
+// value read back from PostgREST (offset) both parse. See
+// `server.test.ts`'s "(#743 P0)" test for the verbatim production row this
+// must accept.
+const offsetDatetime = () => z.string().datetime({ offset: true });
+
 // Sanitized-only: this must never carry tokens, client secrets, or the OAuth
 // authorization code. `code`/`description` are Google's own error identifier
 // and human-readable text (e.g. "invalid_grant"); see oauth.ts's
@@ -311,7 +322,7 @@ export const GoogleCalendarConnectionErrorSchema = z.object({
   code: z.string().min(1),
   description: z.string().nullable(),
   http_status: z.number().int().nullable(),
-  at: z.string().datetime(),
+  at: offsetDatetime(),
 });
 
 export type GoogleCalendarConnectionError = z.infer<
@@ -325,14 +336,14 @@ export const GoogleCalendarConnectionSchema = z.object({
   calendar_id: z.string().min(1),
   granted_scopes_json: JsonValueSchema,
   status: z.enum(GOOGLE_CALENDAR_CONNECTION_STATUSES),
-  first_write_warning_acknowledged_at: z.string().datetime().nullable(),
-  connected_at: z.string().datetime().nullable(),
-  disconnected_at: z.string().datetime().nullable(),
+  first_write_warning_acknowledged_at: offsetDatetime().nullable(),
+  connected_at: offsetDatetime().nullable(),
+  disconnected_at: offsetDatetime().nullable(),
   // Optional/nullable: rows created before this column existed, and every
   // fixture that predates it, stay valid without a migration of their own.
   last_error_json: GoogleCalendarConnectionErrorSchema.nullable().optional(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: offsetDatetime(),
+  updated_at: offsetDatetime(),
 });
 
 export type GoogleCalendarConnection = z.infer<

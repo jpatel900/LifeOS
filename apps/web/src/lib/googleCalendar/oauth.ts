@@ -82,6 +82,27 @@ export class GoogleOAuthProviderError extends Error {
   }
 }
 
+/**
+ * #743 P0 follow-up: prefer this over `error instanceof GoogleOAuthProviderError`.
+ * `instanceof` compares against the exact class identity from THIS module
+ * instance, which can silently fail across a bundle/chunk split (Next.js can
+ * emit more than one copy of a shared module across route bundles) -- the
+ * error would still carry the right shape, but the check would say no and
+ * fall through to a generic, undiagnosed error path. This checks the
+ * `name` marker set in the constructor plus the expected fields instead of
+ * relying on class identity.
+ */
+export function isGoogleOAuthProviderError(
+  error: unknown,
+): error is GoogleOAuthProviderError {
+  return (
+    error instanceof Error &&
+    error.name === "GoogleOAuthProviderError" &&
+    typeof (error as GoogleOAuthProviderError).code === "string" &&
+    typeof (error as GoogleOAuthProviderError).httpStatus === "number"
+  );
+}
+
 function assertServerRuntime() {
   const isTestRuntime =
     process.env.VITEST === "true" || process.env.NODE_ENV === "test";

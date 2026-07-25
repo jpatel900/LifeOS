@@ -4,8 +4,10 @@ import {
   encryptGoogleCalendarToken,
 } from "./tokens";
 import {
-  GoogleOAuthProviderError,
+  GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH,
+  isGoogleOAuthProviderError,
   refreshGoogleCalendarAccessToken,
+  truncateGoogleOAuthErrorText,
 } from "./oauth";
 import {
   type GoogleCalendarStoredConnection,
@@ -72,14 +74,26 @@ async function persistGoogleCalendarRefreshFailure(
   connection: GoogleCalendarStoredConnection,
   error: unknown,
 ) {
-  const details =
-    error instanceof GoogleOAuthProviderError
-      ? {
-          code: error.code,
-          description: error.description,
-          http_status: error.httpStatus,
-        }
-      : { code: "refresh_failed", description: null, http_status: null };
+  // #743 P0: same bundling-safety and "description: null" gap as the
+  // callback route -- see the comment there. `isGoogleOAuthProviderError`
+  // checks a `name` marker rather than `instanceof` class identity.
+  const details = isGoogleOAuthProviderError(error)
+    ? {
+        code: error.code,
+        description: error.description,
+        http_status: error.httpStatus,
+      }
+    : {
+        code: "refresh_failed",
+        description:
+          error instanceof Error
+            ? truncateGoogleOAuthErrorText(
+                error.message,
+                GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH,
+              )
+            : null,
+        http_status: null,
+      };
 
   try {
     await upsertGoogleCalendarConnectionForAccessToken(supabaseAccessToken, {
