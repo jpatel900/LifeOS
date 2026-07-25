@@ -26,13 +26,15 @@
  *
  * ## Why one generic journal rather than a copy of the capture queue per entity
  *
- * The inventory found 8+ distinct write shapes with no device-durable home
- * (wins, rollups, first-tiny-step edits, draft edit/split/merge/reject,
- * project-draft decisions, WIP swaps, task-map approvals, and every op above
- * whenever the account is unreachable). Copying `offlineQueue.ts` per entity
- * would mean 8 near-identical IndexedDB modules and 8 replay paths to keep in
- * step. One store with a typed `entity` discriminator and a handler-map
- * dispatcher carries all of them with a single durability contract.
+ * The inventory found 7 distinct write shapes with no device-durable home at
+ * all (wins, rollups, task-map drafts, first-tiny-step edits, draft
+ * edit/split/merge/reject, project-draft decisions, WIP swaps) — 12 once you
+ * count the ops that additionally become device-only whenever the account is
+ * unreachable (plans, reviews, proposal decisions, task transitions,
+ * execution-session outcomes). Copying `offlineQueue.ts` per entity would mean
+ * 7 near-identical IndexedDB modules and 7 replay paths to keep in step. One
+ * store with a typed `entity` discriminator and a handler-map dispatcher
+ * carries all of them with a single durability contract.
  *
  * ## Conventions (mirrored from `lib/capture/offlineQueue.ts`)
  *
