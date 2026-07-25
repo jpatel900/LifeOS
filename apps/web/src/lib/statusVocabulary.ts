@@ -247,10 +247,14 @@ export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
  * The two constants below are the only Slice D strings a person can actually
  * read. `/api/parse-capture` and `parseCaptureClient.ts` each used to carry
  * their own sentence about "the mock parser"; both now read from here, and
- * both render in two places with opposite amounts of surrounding help:
+ * both render in two places:
  *
- *  - `moments/UnsortedCaptures.tsx` folds the sentence into a "What happened?"
- *    disclosure, under its own reassurance line. Detail layer.
+ *  - `moments/UnsortedCaptures.tsx` renders the matching constant as the
+ *    glance-level line (`failure.status === "ai_unavailable"` picks
+ *    UNAVAILABLE, everything else picks FAILED — #740, previously a single
+ *    hardcoded sentence shown for both states, contradicting whichever one
+ *    wasn't true) and again, verbatim from the server, inside its "What
+ *    happened?" disclosure.
  *  - `cockpit/StatusBanners.tsx` (`CaptureParseNotice`) renders it BARE, as the
  *    only sentence in the banner, with no reassurance around it.
  *
@@ -272,9 +276,15 @@ export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
  *
  * KNOWN LIMIT, recorded rather than papered over: FAILED still covers both "the
  * AI could not be reached" and "the AI answered with something LifeOS could not
- * use". Those are different causes with the same remedy, and separating them in
- * copy would mean adding a branch to `safeParserFailureMessage` — a behavior
- * change this slice deliberately does not make. Tracked on #692.
+ * use" — this is a limit of the ROUTE's classification (`safeParserFailureMessage`
+ * in `api/parse-capture/route.ts`), not of any renderer. #740 made every
+ * renderer honest about the classification the route already computes
+ * (UNAVAILABLE vs FAILED, read off `status`); it did not and could not touch
+ * this limit, because splitting "unreachable" from "unusable answer" WITHIN
+ * the FAILED bucket needs a new route-level distinction, which is a behavior
+ * change no copy-only slice may make. Those two causes share one remedy, and
+ * separating them in copy would mean adding that branch — this slice
+ * deliberately does not. Tracked on #692.
  */
 const THOUGHT_STILL_SAVED_SORT_HERE =
   "Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.";
