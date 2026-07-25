@@ -81,31 +81,111 @@ describe("enqueuePendingWrite / listPendingWrites", () => {
     expect(await pendingWriteCount()).toBe(2);
   });
 
-  it("returns writes in created_at order regardless of insertion order", async () => {
+  // Re-anchored (was "returns writes in created_at order"). Insertion order is
+  // now the guarantee and it deliberately OVERRIDES created_at: a clock that
+  // jumps backwards (NTP correction, DST, a device with a bad clock) must not
+  // be able to reorder replay and break dependent writes.
+  it("returns writes in insertion order even when created_at disagrees", async () => {
     // Pin the clock, but fake ONLY `Date`: `fake-indexeddb` dispatches its
     // request/transaction events through the real timer queue, so a full
     // `vi.useFakeTimers()` freezes every IndexedDB call in this file.
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(new Date("2026-03-02T10:00:00.000Z"));
-      const later = await enqueuePendingWrite({
+      const insertedFirst = await enqueuePendingWrite({
         entity: "review",
-        payload: { line: "second" },
+        payload: { line: "written first, but stamped later" },
       });
       vi.setSystemTime(new Date("2026-03-01T10:00:00.000Z"));
-      const earlier = await enqueuePendingWrite({
+      const insertedSecond = await enqueuePendingWrite({
         entity: "review",
-        payload: { line: "first" },
+        payload: { line: "written second, but stamped earlier" },
       });
 
       const pending = await listPendingWrites();
       expect(pending.map((write) => write.client_write_id)).toEqual([
-        earlier.client_write_id,
-        later.client_write_id,
+        insertedFirst.client_write_id,
+        insertedSecond.client_write_id,
       ]);
+      // The timestamps really do disagree with the order — otherwise this
+      // test would pass for the wrong reason.
+      expect(pending[0]!.created_at > pending[1]!.created_at).toBe(true);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("orders by insertion even when the ids sort against it and the clock cannot separate them (FIFO regression guard)", async () => {
+    // The regression this pins down: ordering must come from the storage
+    // mechanism, never from the id and never from the timestamp.
+    //
+    // Fixed ids so lexicographic id order is the REVERSE of insertion order,
+    // AND a frozen clock so both records carry an identical `created_at`.
+    // Both halves are load-bearing. Without the frozen clock this test passes
+    // against the very implementation it is meant to catch: each enqueue takes
+    // more than a millisecond, so `created_at` differs and a timestamp sort
+    // accidentally lands on the right answer. Freezing the clock removes that
+    // accident and leaves the id as the only tie-break — which is exactly the
+    // random ordering CI caught.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-05-04T12:00:00.000Z"));
+
+      const firstId = "zzzzzzzz-zzzz-4zzz-zzzz-zzzzzzzzzzzz";
+      const secondId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+
+      await enqueuePendingWrite({
+        entity: "draft_edit",
+        payload: { step: 1 },
+        clientWriteId: firstId,
+      });
+      await enqueuePendingWrite({
+        entity: "draft_edit",
+        payload: { step: 2 },
+        clientWriteId: secondId,
+      });
+
+      const pending = await listPendingWrites();
+      // The timestamps really are identical, so nothing but `seq` can order
+      // these — otherwise this test would pass for the wrong reason.
+      expect(pending[0]!.created_at).toBe(pending[1]!.created_at);
+      expect(pending.map((write) => write.client_write_id)).toEqual([
+        firstId,
+        secondId,
+      ]);
+
+      const replayed: number[] = [];
+      await replayPendingWrites({
+        draft_edit: async (write) => {
+          replayed.push(write.payload.step as number);
+        },
+      });
+      expect(replayed).toEqual([1, 2]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("assigns a strictly increasing seq and keeps it when a write is re-enqueued", async () => {
+    const first = await enqueuePendingWrite({ entity: "win", payload: {} });
+    const second = await enqueuePendingWrite({ entity: "rollup", payload: {} });
+    expect(second.seq).toBeGreaterThan(first.seq);
+
+    // A retry under the same client id must update in place, not jump the
+    // queue: the record keeps its original seq, so FIFO order is preserved.
+    const retried = await enqueuePendingWrite({
+      entity: "win",
+      payload: { retried: true },
+      clientWriteId: first.client_write_id,
+    });
+    expect(retried.seq).toBe(first.seq);
+
+    const pending = await listPendingWrites();
+    expect(pending.map((write) => write.client_write_id)).toEqual([
+      first.client_write_id,
+      second.client_write_id,
+    ]);
+    expect(pending[0]!.payload).toEqual({ retried: true });
   });
 
   it("filters by entity when one is given", async () => {
@@ -166,7 +246,7 @@ describe("markPendingWriteSynced / clearPendingWrites", () => {
 });
 
 describe("replayPendingWrites", () => {
-  it("dispatches each write to its entity handler in created_at order and clears the synced ones", async () => {
+  it("dispatches each write to its entity handler in insertion order and clears the synced ones", async () => {
     const seen: string[] = [];
     const first = await enqueuePendingWrite({
       entity: "win",

@@ -20,9 +20,10 @@
  *
  * This journal is the missing device-durable tier: the same durability the
  * raw-capture queue already gives captures, generalised to every other user
- * write. One database, one store, keyed by `client_write_id` — which is also
- * the idempotency key a later slice will send to the server so a replayed
- * write never double-creates a row.
+ * write. One database, one store, carrying a unique `client_write_id` per
+ * record — the idempotency key a later slice will send to the server so a
+ * replayed write never double-creates a row. (Ordering is a separate concern;
+ * see the FIFO section below for why that id is an index, not the key.)
  *
  * ## Why one generic journal rather than a copy of the capture queue per entity
  *
@@ -35,6 +36,26 @@
  * 7 near-identical IndexedDB modules and 7 replay paths to keep in step. One
  * store with a typed `entity` discriminator and a handler-map dispatcher
  * carries all of them with a single durability contract.
+ *
+ * ## Ordering is FIFO, and the storage mechanism guarantees it
+ *
+ * Replay MUST be strictly first-in-first-out: journalled writes can depend on
+ * each other (edit a draft, then accept it), and replaying them out of order
+ * corrupts the result. Two weaker schemes were tried and rejected:
+ *
+ * - **Keying the store by `client_write_id`.** `getAll()` returns primary-key
+ *   order, and those ids are random UUIDs, so replay order was UUID-
+ *   lexicographic — i.e. random. CI caught this as a flaky test; it was a real
+ *   ordering bug, not a flaky assertion.
+ * - **Sorting by `created_at`.** ISO timestamps have millisecond resolution,
+ *   so two writes in the same tick tie, and any tie-break by random id is
+ *   random again.
+ *
+ * So the store is keyed by an **auto-increment `seq`**, with
+ * `client_write_id` as a **unique index**. `getAll()` is therefore already in
+ * insertion order and needs no sort. Re-enqueueing an existing
+ * `client_write_id` reuses its stored `seq`, so an idempotent retry updates
+ * the record in place without jumping the queue.
  *
  * ## Conventions (mirrored from `lib/capture/offlineQueue.ts`)
  *
@@ -54,8 +75,14 @@
  */
 
 const DB_NAME = "lifeos-pending-writes";
-const DB_VERSION = 1;
+/**
+ * v2 replaced a v1 store keyed by `client_write_id` (see the FIFO note above).
+ * v1 was never wired into any UI, so no user data can exist in it and the
+ * upgrade recreates the store outright rather than migrating rows.
+ */
+const DB_VERSION = 2;
 const STORE_NAME = "pending";
+const CLIENT_WRITE_ID_INDEX = "by_client_write_id";
 
 /**
  * The write shapes the inventory found with no device-durable home. Listing
@@ -79,7 +106,17 @@ export type PendingWritePayload = Record<string, unknown>;
 export interface PendingWrite<
   TPayload extends PendingWritePayload = PendingWritePayload,
 > {
-  /** Primary key, and the idempotency key a later slice sends to the server. */
+  /**
+   * Auto-increment primary key and the ONLY ordering authority. Assigned by
+   * IndexedDB at first enqueue; a re-enqueue under the same
+   * `client_write_id` keeps its original `seq`, so a retry never jumps the
+   * queue. Never set this by hand.
+   */
+  seq: number;
+  /**
+   * Unique index, and the idempotency key a later slice sends to the server.
+   * Deliberately NOT the primary key — see the FIFO note in the file header.
+   */
   client_write_id: string;
   entity: PendingWriteEntity;
   payload: TPayload;
@@ -113,9 +150,16 @@ function openDatabase(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "client_write_id" });
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME);
       }
+      const store = db.createObjectStore(STORE_NAME, {
+        keyPath: "seq",
+        autoIncrement: true,
+      });
+      store.createIndex(CLIENT_WRITE_ID_INDEX, "client_write_id", {
+        unique: true,
+      });
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -166,8 +210,9 @@ export async function enqueuePendingWrite<
     );
   }
 
-  const write: PendingWrite<TPayload> = {
-    client_write_id: input.clientWriteId ?? generateClientWriteId(),
+  const clientWriteId = input.clientWriteId ?? generateClientWriteId();
+  const fields = {
+    client_write_id: clientWriteId,
     entity: input.entity,
     payload: input.payload,
     created_at: new Date().toISOString(),
@@ -176,18 +221,44 @@ export async function enqueuePendingWrite<
   const db = await openDatabase();
   try {
     const transaction = db.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).put(write);
+    const store = transaction.objectStore(STORE_NAME);
+
+    // Look up any existing record for this client id INSIDE the same
+    // transaction. Awaiting a promise settled from an IndexedDB success
+    // callback resumes on a microtask, which runs before the transaction can
+    // auto-commit, so the read and the write stay atomic.
+    const existing = await requestToPromise(
+      store.index(CLIENT_WRITE_ID_INDEX).get(clientWriteId) as IDBRequest<
+        PendingWrite<TPayload> | undefined
+      >,
+    );
+
+    // A retry of the same logical write keeps its original queue position:
+    // reuse the stored `seq` rather than appending a fresh one, so replay
+    // order still reflects when the user first made the change.
+    const seq = existing
+      ? existing.seq
+      : ((await requestToPromise(store.add(fields))) as number);
+
+    if (existing) {
+      store.put({ ...fields, seq });
+    }
+
     await transactionDone(transaction);
+    return { ...fields, seq };
   } finally {
     db.close();
   }
-
-  return write;
 }
 
 /**
- * All journalled writes in `created_at` order (ties broken by id so the order
- * is stable), optionally narrowed to one entity.
+ * All journalled writes in strict insertion (FIFO) order, optionally narrowed
+ * to one entity.
+ *
+ * `getAll()` returns records in primary-key order, and the primary key is the
+ * auto-increment `seq`, so this order IS the order the writes were made. No
+ * post-sort: `created_at` has millisecond resolution and cannot separate two
+ * writes made in the same tick.
  */
 export async function listPendingWrites(
   entity?: PendingWriteEntity,
@@ -205,13 +276,9 @@ export async function listPendingWrites(
     );
     await transactionDone(transaction);
 
-    return writes
-      .filter((write) => entity === undefined || write.entity === entity)
-      .sort(
-        (a, b) =>
-          a.created_at.localeCompare(b.created_at) ||
-          a.client_write_id.localeCompare(b.client_write_id),
-      );
+    return writes.filter(
+      (write) => entity === undefined || write.entity === entity,
+    );
   } finally {
     db.close();
   }
@@ -228,7 +295,16 @@ export async function markPendingWriteSynced(
   const db = await openDatabase();
   try {
     const transaction = db.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).delete(clientWriteId);
+    const store = transaction.objectStore(STORE_NAME);
+    // `client_write_id` is an index now, not the primary key, so resolve it to
+    // the `seq` key before deleting. An unknown id resolves to undefined and
+    // the delete is skipped (documented no-op).
+    const seq = await requestToPromise(
+      store.index(CLIENT_WRITE_ID_INDEX).getKey(clientWriteId),
+    );
+    if (seq !== undefined) {
+      store.delete(seq);
+    }
     await transactionDone(transaction);
   } finally {
     db.close();
