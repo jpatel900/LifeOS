@@ -119,10 +119,13 @@ const BASELINE: readonly BaselineEntry[] = [
     file: "apps/web/src/lib/googleCalendar/oauth.ts",
     strings: [
       "Google Calendar OAuth helpers must stay server-only.",
-      "Google token exchange failed.",
+      // #743: the two bare `!response.ok` throws that used to say "...
+      // failed." were replaced with GoogleOAuthProviderError, which carries
+      // Google's real code/description instead of discarding them. Its own
+      // message ("Google Calendar connection step did not complete.")
+      // contains no banned term, so it needs no baseline entry.
       "Google token exchange returned an invalid payload.",
       "Google Calendar refresh token is required.",
-      "Google access token refresh failed.",
       "Google access token refresh returned an invalid payload.",
     ],
   },
@@ -457,8 +460,12 @@ const BASELINE: readonly BaselineEntry[] = [
  * Slice D took it 77 -> 74: three rendered strings, not the fifteen its
  * inventory listed. See the Slice D block in `BASELINE` for the twelve that
  * stayed and the per-string reason each one is not copy.
+ *
+ * #743 took it 74 -> 72: replacing the two bare `!response.ok` throws in
+ * `oauth.ts` with `GoogleOAuthProviderError` (whose own message carries no
+ * banned term) removed both baselined strings without adding a replacement.
  */
-const BASELINE_PINNED_STRINGS = 74;
+const BASELINE_PINNED_STRINGS = 72;
 
 const repoRoot = resolve(__dirname, "../../../..");
 

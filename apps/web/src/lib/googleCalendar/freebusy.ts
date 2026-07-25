@@ -3,7 +3,10 @@ import {
   decryptGoogleCalendarToken,
   encryptGoogleCalendarToken,
 } from "./tokens";
-import { refreshGoogleCalendarAccessToken } from "./oauth";
+import {
+  GoogleOAuthProviderError,
+  refreshGoogleCalendarAccessToken,
+} from "./oauth";
 import {
   type GoogleCalendarStoredConnection,
   upsertGoogleCalendarConnectionForAccessToken,
@@ -58,6 +61,44 @@ function isAccessTokenExpired(tokenExpiresAt: string | null) {
   return expiresAt <= Date.now() + ACCESS_TOKEN_REFRESH_BUFFER_MS;
 }
 
+// #743: a failed refresh used to just propagate a bare "failed" error with
+// nothing persisted, so a broken connection (e.g. the owner revoked LifeOS's
+// access in their Google account) left no trace anywhere the owner could
+// see. This records Google's own reason -- never the refresh token itself --
+// without changing the connection's status; the original error still
+// propagates unchanged to the caller either way.
+async function persistGoogleCalendarRefreshFailure(
+  supabaseAccessToken: string,
+  connection: GoogleCalendarStoredConnection,
+  error: unknown,
+) {
+  const details =
+    error instanceof GoogleOAuthProviderError
+      ? {
+          code: error.code,
+          description: error.description,
+          http_status: error.httpStatus,
+        }
+      : { code: "refresh_failed", description: null, http_status: null };
+
+  try {
+    await upsertGoogleCalendarConnectionForAccessToken(supabaseAccessToken, {
+      calendar_id: connection.calendar_id,
+      connected_at: connection.connected_at,
+      disconnected_at: connection.disconnected_at,
+      granted_scopes_json: Array.isArray(connection.granted_scopes_json)
+        ? connection.granted_scopes_json
+        : [],
+      last_error_json: { ...details, at: new Date().toISOString() },
+      status: connection.status,
+      user_id: connection.user_id,
+    });
+  } catch {
+    // Best effort: surfacing the original refresh error to the caller
+    // matters more than persisting the diagnostic write succeeding.
+  }
+}
+
 export async function resolveGoogleCalendarAccessToken(params: {
   connection: GoogleCalendarStoredConnection;
   supabaseAccessToken: string;
@@ -78,7 +119,19 @@ export async function resolveGoogleCalendarAccessToken(params: {
   const refreshToken = decryptGoogleCalendarToken(
     connection.encrypted_refresh_token,
   );
-  const refreshed = await refreshGoogleCalendarAccessToken({ refreshToken });
+
+  let refreshed;
+  try {
+    refreshed = await refreshGoogleCalendarAccessToken({ refreshToken });
+  } catch (error) {
+    await persistGoogleCalendarRefreshFailure(
+      supabaseAccessToken,
+      connection,
+      error,
+    );
+    throw error;
+  }
+
   const encryptedAccessToken = encryptGoogleCalendarToken(
     refreshed.accessToken,
   );
@@ -97,6 +150,7 @@ export async function resolveGoogleCalendarAccessToken(params: {
       (Array.isArray(connection.granted_scopes_json)
         ? connection.granted_scopes_json
         : []),
+    last_error_json: null,
     status: "connected",
     token_expires_at: buildGoogleAccessTokenExpiresAt(refreshed.expiresIn),
     token_type: refreshed.tokenType,

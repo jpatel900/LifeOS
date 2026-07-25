@@ -1,6 +1,8 @@
 import {
+  GoogleCalendarConnectionErrorSchema,
   GoogleCalendarConnectionSchema,
   type GoogleCalendarConnection,
+  type GoogleCalendarConnectionError,
 } from "@lifeos/schemas";
 import {
   createSupabaseServerClient,
@@ -9,7 +11,7 @@ import {
 } from "@/lib/supabase/server";
 
 const googleCalendarConnectionColumns =
-  "id,user_id,provider,calendar_id,granted_scopes_json,status,first_write_warning_acknowledged_at,connected_at,disconnected_at,created_at,updated_at";
+  "id,user_id,provider,calendar_id,granted_scopes_json,status,first_write_warning_acknowledged_at,connected_at,disconnected_at,last_error_json,created_at,updated_at";
 const googleCalendarStoredConnectionColumns = `${googleCalendarConnectionColumns},encrypted_access_token,encrypted_refresh_token,token_expires_at,token_type`;
 
 type GoogleCalendarConnectionRow = {
@@ -20,6 +22,9 @@ type GoogleCalendarConnectionRow = {
   encrypted_refresh_token?: string | null;
   first_write_warning_acknowledged_at?: string | null;
   granted_scopes_json: string[];
+  // Sanitized diagnostics only (#743) -- see GoogleCalendarConnectionErrorSchema.
+  // Omit the key to leave the stored value untouched; pass `null` to clear it.
+  last_error_json?: GoogleCalendarConnectionError | null;
   status: "connected" | "disconnected" | "error" | "metadata_only";
   token_expires_at?: string | null;
   token_type?: string | null;
@@ -33,8 +38,31 @@ export interface GoogleCalendarStoredConnection extends GoogleCalendarConnection
   token_type: string | null;
 }
 
+// #743: a malformed last_error_json must never take down the whole
+// connection-status read (it's a diagnostics-only field, not core connection
+// state) -- so an unparseable value is dropped to `null` here rather than
+// failing the entire row's validation.
+function sanitizeLastErrorJson(row: unknown): unknown {
+  if (
+    !row ||
+    typeof row !== "object" ||
+    !("last_error_json" in row) ||
+    (row as Record<string, unknown>).last_error_json === null ||
+    (row as Record<string, unknown>).last_error_json === undefined
+  ) {
+    return row;
+  }
+
+  const record = row as Record<string, unknown>;
+  const check = GoogleCalendarConnectionErrorSchema.safeParse(
+    record.last_error_json,
+  );
+
+  return check.success ? row : { ...record, last_error_json: null };
+}
+
 function parseGoogleCalendarConnection(row: unknown) {
-  return GoogleCalendarConnectionSchema.parse(row);
+  return GoogleCalendarConnectionSchema.parse(sanitizeLastErrorJson(row));
 }
 
 function assertRecord(value: unknown): Record<string, unknown> {
@@ -230,6 +258,10 @@ export async function upsertGoogleCalendarConnectionForAccessToken(
   if ("first_write_warning_acknowledged_at" in row) {
     values.first_write_warning_acknowledged_at =
       row.first_write_warning_acknowledged_at ?? null;
+  }
+
+  if ("last_error_json" in row) {
+    values.last_error_json = row.last_error_json ?? null;
   }
 
   const { data, error } = await query

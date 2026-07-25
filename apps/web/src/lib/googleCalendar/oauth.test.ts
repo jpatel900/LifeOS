@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildGoogleCalendarAuthorizeUrl,
   createGoogleCalendarOAuthState,
+  exchangeGoogleCalendarCode,
+  GoogleOAuthProviderError,
   isGoogleCalendarOAuthStateValid,
   readGoogleCalendarOAuthStateCookie,
+  refreshGoogleCalendarAccessToken,
   sealGoogleCalendarOAuthStateCookie,
 } from "./oauth";
 
@@ -66,5 +69,108 @@ describe("Google Calendar OAuth helpers", () => {
     const payload = readGoogleCalendarOAuthStateCookie(cookieValue);
 
     expect(isGoogleCalendarOAuthStateValid(payload, "state-value")).toBe(false);
+  });
+
+  describe("provider error capture (#743)", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("captures Google's code/description/status instead of discarding them on exchange failure", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              error: "invalid_grant",
+              error_description: "Malformed auth code.",
+            }),
+            { status: 400 },
+          ),
+        ),
+      );
+
+      await expect(
+        exchangeGoogleCalendarCode({ code: "auth-code-value" }),
+      ).rejects.toMatchObject({
+        name: "GoogleOAuthProviderError",
+        code: "invalid_grant",
+        description: "Malformed auth code.",
+        httpStatus: 400,
+        phase: "exchange",
+      });
+    });
+
+    it("falls back to unknown_error when Google's exchange failure body has no error field", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(new Response("not json", { status: 500 })),
+      );
+
+      await expect(
+        exchangeGoogleCalendarCode({ code: "auth-code-value" }),
+      ).rejects.toMatchObject({
+        code: "unknown_error",
+        description: null,
+        httpStatus: 500,
+      });
+    });
+
+    it("never leaks the client secret or authorization code into the thrown error", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              error: "invalid_client",
+              error_description: "Unauthorized client.",
+            }),
+            { status: 401 },
+          ),
+        ),
+      );
+
+      let caught: unknown;
+      try {
+        await exchangeGoogleCalendarCode({ code: "super-secret-auth-code" });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(GoogleOAuthProviderError);
+      const serialized = JSON.stringify(
+        caught,
+        Object.getOwnPropertyNames(caught),
+      );
+      expect(serialized).not.toContain("super-secret-auth-code");
+      expect(serialized).not.toContain("client-secret");
+    });
+
+    it("captures Google's code/description/status instead of discarding them on refresh failure", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              error: "invalid_grant",
+              error_description: "Token has been expired or revoked.",
+            }),
+            { status: 400 },
+          ),
+        ),
+      );
+
+      await expect(
+        refreshGoogleCalendarAccessToken({
+          refreshToken: "refresh-token-value",
+        }),
+      ).rejects.toMatchObject({
+        name: "GoogleOAuthProviderError",
+        code: "invalid_grant",
+        description: "Token has been expired or revoked.",
+        httpStatus: 400,
+        phase: "refresh",
+      });
+    });
   });
 });

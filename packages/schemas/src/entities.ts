@@ -303,6 +303,21 @@ export const HealthCheckSchema = z.object({
 
 export type HealthCheck = z.infer<typeof HealthCheckSchema>;
 
+// Sanitized-only: this must never carry tokens, client secrets, or the OAuth
+// authorization code. `code`/`description` are Google's own error identifier
+// and human-readable text (e.g. "invalid_grant"); see oauth.ts's
+// GoogleOAuthProviderError for what populates it.
+export const GoogleCalendarConnectionErrorSchema = z.object({
+  code: z.string().min(1),
+  description: z.string().nullable(),
+  http_status: z.number().int().nullable(),
+  at: z.string().datetime(),
+});
+
+export type GoogleCalendarConnectionError = z.infer<
+  typeof GoogleCalendarConnectionErrorSchema
+>;
+
 export const GoogleCalendarConnectionSchema = z.object({
   id: z.string().uuid(),
   user_id: z.string().uuid(),
@@ -313,6 +328,9 @@ export const GoogleCalendarConnectionSchema = z.object({
   first_write_warning_acknowledged_at: z.string().datetime().nullable(),
   connected_at: z.string().datetime().nullable(),
   disconnected_at: z.string().datetime().nullable(),
+  // Optional/nullable: rows created before this column existed, and every
+  // fixture that predates it, stay valid without a migration of their own.
+  last_error_json: GoogleCalendarConnectionErrorSchema.nullable().optional(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
 });

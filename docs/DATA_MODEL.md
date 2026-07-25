@@ -765,8 +765,15 @@ phases.
 | disconnected_at                     | timestamptz nullable |
 | token_expires_at                    | timestamptz nullable |
 | token_type                          | text nullable        |
+| last_error_json                     | jsonb nullable       |
 | created_at                          | timestamptz          |
 | updated_at                          | timestamptz          |
+
+`last_error_json` (#743): sanitized reason the last connect/refresh attempt
+failed -- `{code, description, http_status, at}`, where `code`/`description`
+are Google's own OAuth error identifier and text. Never holds tokens, the
+client secret, or the authorization code. Written by the callback route and
+by the access-token-refresh helper; cleared on a successful connect/refresh.
 
 Statuses:
 

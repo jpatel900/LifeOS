@@ -96,6 +96,84 @@ describe("google-calendar connection route", () => {
     expect(body.error).not.toContain("stack trace");
   });
 
+  it("surfaces the stored, sanitized error reason in plain language (#743)", async () => {
+    mocks.getGoogleCalendarConnectionForAccessToken.mockResolvedValue({
+      connection: {
+        ...connection,
+        status: "error",
+        last_error_json: {
+          code: "invalid_grant",
+          description: "Malformed auth code.",
+          http_status: 400,
+          at: "2026-07-25T00:00:00.000Z",
+        },
+      },
+    });
+
+    const response = await GET(request("supabase-access-token"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.status).toBe("error");
+    expect(body.message).toBe(
+      "The sign-in code expired or was already used. Try connecting again.",
+    );
+    expect(body.reason).toEqual({
+      code: "invalid_grant",
+      description: "Malformed auth code.",
+      glance:
+        "The sign-in code expired or was already used. Try connecting again.",
+    });
+  });
+
+  it("surfaces a stored reason even while status is still connected (#743)", async () => {
+    // A refresh attempt can fail and get recorded without flipping the
+    // connection's status (see resolveGoogleCalendarAccessToken in
+    // freebusy.ts) -- the reason must still reach the owner, not only when
+    // status has been flipped to "error" by a full callback failure.
+    mocks.getGoogleCalendarConnectionForAccessToken.mockResolvedValue({
+      connection: {
+        ...connection,
+        status: "connected",
+        last_error_json: {
+          code: "invalid_grant",
+          description: "Token has been expired or revoked.",
+          http_status: 400,
+          at: "2026-07-25T00:00:00.000Z",
+        },
+      },
+    });
+
+    const response = await GET(request("supabase-access-token"));
+    const body = await response.json();
+
+    expect(body.status).toBe("connected");
+    expect(body.message).toBe(
+      "Google Calendar is connected. LifeOS only checks your availability or adds events when you explicitly ask — never on its own.",
+    );
+    expect(body.reason).toEqual({
+      code: "invalid_grant",
+      description: "Token has been expired or revoked.",
+      glance:
+        "The sign-in code expired or was already used. Try connecting again.",
+    });
+  });
+
+  it("falls back to the generic error message when no reason was ever stored", async () => {
+    mocks.getGoogleCalendarConnectionForAccessToken.mockResolvedValue({
+      connection: { ...connection, status: "error", last_error_json: null },
+    });
+
+    const response = await GET(request("supabase-access-token"));
+    const body = await response.json();
+
+    expect(body.status).toBe("error");
+    expect(body.reason).toBeNull();
+    expect(body.message).toBe(
+      "The last attempt to connect Google Calendar failed safely. Please connect again to retry.",
+    );
+  });
+
   it("returns a safe failure message when connection lookup fails unexpectedly", async () => {
     mocks.getGoogleCalendarConnectionForAccessToken.mockRejectedValue(
       new Error("database timeout while loading connection"),

@@ -12,6 +12,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 import {
+  getGoogleCalendarConnectionForAccessToken,
   getGoogleCalendarStoredConnectionForAccessToken,
   upsertGoogleCalendarConnectionForAccessToken,
 } from "./server";
@@ -29,6 +30,7 @@ const storedConnection = {
   first_write_warning_acknowledged_at: null,
   connected_at: "2026-05-09T00:00:00.000Z",
   disconnected_at: null,
+  last_error_json: null,
   token_expires_at: "2026-05-09T01:00:00.000Z",
   token_type: "Bearer",
   created_at: "2026-05-09T00:00:00.000Z",
@@ -83,5 +85,87 @@ describe("Google Calendar server persistence helpers", () => {
     ).rejects.toThrow(/user mismatch/i);
 
     expect(mocks.requireSupabaseServiceRoleClient).not.toHaveBeenCalled();
+  });
+
+  it("writes last_error_json only when the caller supplies the key (#743)", async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: storedConnection,
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ single });
+    const upsert = vi.fn().mockReturnValue({ select });
+    const serviceClient = { from: vi.fn().mockReturnValue({ upsert }) };
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue(serviceClient);
+
+    await upsertGoogleCalendarConnectionForAccessToken(
+      "supabase-access-token",
+      {
+        calendar_id: "primary",
+        connected_at: null,
+        disconnected_at: "2026-07-25T00:00:00.000Z",
+        granted_scopes_json: [],
+        last_error_json: {
+          code: "invalid_grant",
+          description: "Malformed auth code.",
+          http_status: 400,
+          at: "2026-07-25T00:00:00.000Z",
+        },
+        status: "error",
+        user_id: user.id,
+      },
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        last_error_json: {
+          code: "invalid_grant",
+          description: "Malformed auth code.",
+          http_status: 400,
+          at: "2026-07-25T00:00:00.000Z",
+        },
+      }),
+      { onConflict: "user_id" },
+    );
+
+    upsert.mockClear();
+
+    await upsertGoogleCalendarConnectionForAccessToken(
+      "supabase-access-token",
+      {
+        calendar_id: "primary",
+        connected_at: "2026-07-25T00:00:00.000Z",
+        disconnected_at: null,
+        granted_scopes_json: [],
+        status: "connected",
+        user_id: user.id,
+      },
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ last_error_json: expect.anything() }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("drops a malformed last_error_json instead of failing the whole row (#743)", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        ...storedConnection,
+        // Missing the required `code` field -- simulates corrupted or
+        // hand-edited diagnostics data reaching the read path.
+        last_error_json: { description: "no code here", at: "bad" },
+      },
+      error: null,
+    });
+    const select = vi.fn().mockReturnValue({ maybeSingle });
+    const client = { from: vi.fn().mockReturnValue({ select }) };
+    mocks.requireSupabaseServerUser.mockResolvedValue({ client, user });
+
+    const result = await getGoogleCalendarConnectionForAccessToken(
+      "supabase-access-token",
+    );
+
+    expect(result.connection?.last_error_json ?? null).toBeNull();
+    expect(result.connection?.status).toBe("connected");
   });
 });

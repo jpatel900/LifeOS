@@ -726,6 +726,73 @@ describe("GoogleCalendarConnectionSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  // #743: sanitized OAuth failure reason, so the owner sees WHY a connect or
+  // refresh attempt failed instead of a generic message.
+  it("validates a connection row carrying a sanitized last_error_json reason", () => {
+    const result = GoogleCalendarConnectionSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      provider: "google_calendar",
+      calendar_id: "primary",
+      granted_scopes_json: [],
+      status: "error",
+      first_write_warning_acknowledged_at: null,
+      connected_at: null,
+      disconnected_at: "2024-01-01T12:00:00.000Z",
+      last_error_json: {
+        code: "invalid_grant",
+        description: "Malformed auth code.",
+        http_status: 400,
+        at: "2024-01-01T12:00:00.000Z",
+      },
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts connection rows that predate the last_error_json column", () => {
+    const result = GoogleCalendarConnectionSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      provider: "google_calendar",
+      calendar_id: "primary",
+      granted_scopes_json: [],
+      status: "connected",
+      first_write_warning_acknowledged_at: null,
+      connected_at: "2024-01-01T12:00:00.000Z",
+      disconnected_at: null,
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a last_error_json payload that is missing Google's error code", () => {
+    const result = GoogleCalendarConnectionSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      provider: "google_calendar",
+      calendar_id: "primary",
+      granted_scopes_json: [],
+      status: "error",
+      first_write_warning_acknowledged_at: null,
+      connected_at: null,
+      disconnected_at: "2024-01-01T12:00:00.000Z",
+      last_error_json: {
+        description: "Malformed auth code.",
+        http_status: 400,
+        at: "2024-01-01T12:00:00.000Z",
+      },
+      created_at: "2024-01-01T12:00:00.000Z",
+      updated_at: "2024-01-01T12:00:00.000Z",
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("ExternalWriteEventSchema", () => {
