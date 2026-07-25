@@ -264,7 +264,7 @@ describe("no IndexedDB (SSR / unsupported browser)", () => {
 
   function withoutIndexedDb<T>(run: () => Promise<T>): Promise<T> {
     const original = globalWithIdb.indexedDB;
-    // @ts-expect-error deliberately removing the global for this assertion
+    // Deliberately removing the global to exercise the SSR / unsupported path.
     delete globalWithIdb.indexedDB;
     return run().finally(() => {
       globalWithIdb.indexedDB = original;
