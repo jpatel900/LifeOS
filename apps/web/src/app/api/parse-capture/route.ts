@@ -4,6 +4,10 @@ import {
   type ParseCaptureRuntimeStatus,
 } from "@/lib/ai/parseCaptureService";
 import { captureError } from "@/lib/observability";
+import {
+  AI_SORTING_FAILED_NOT_SORTED,
+  AI_SORTING_UNAVAILABLE_NOT_SORTED,
+} from "@/lib/statusVocabulary";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function readBearerToken(request: Request) {
@@ -133,12 +137,16 @@ function parseOperatorProfile(value: unknown) {
   return { profileText, compensationRules };
 }
 
+// #692 Slice D: the words are in `lib/statusVocabulary.ts`, not here. This
+// message is rendered verbatim by `CaptureParseNotice` with nothing around it,
+// so the constants carry their own "your thought is still saved" guarantee —
+// see the note above them. Which status maps to which sentence is unchanged.
 function safeParserFailureMessage(status: ParseCaptureRuntimeStatus) {
   if (status === "ai_unavailable") {
-    return "AI parser is unavailable right now. You can retry with the mock parser.";
+    return AI_SORTING_UNAVAILABLE_NOT_SORTED;
   }
 
-  return "Parsing failed safely. You can retry with the mock parser.";
+  return AI_SORTING_FAILED_NOT_SORTED;
 }
 
 async function logSafeParseFailure(error: unknown) {

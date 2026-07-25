@@ -2,6 +2,7 @@ import {
   ParseCaptureResponseSchema,
   type ParseCaptureResponse,
 } from "@lifeos/schemas";
+import { AI_SORTING_FAILED_NOT_SORTED } from "../statusVocabulary";
 import type { ParseCaptureRuntimeStatus } from "./parseCaptureService";
 
 /**
@@ -45,8 +46,17 @@ export type ParseCaptureRequestResult =
       canRetryWithMock: boolean;
     };
 
-const SAFE_FAILURE_MESSAGE =
-  "Parsing is unavailable right now. Your capture is saved; you can retry with the mock parser.";
+/**
+ * #692 Slice D. Every path that reaches this constant is the same state the
+ * route calls a failed sort: LifeOS could not be reached, or answered with
+ * something this client could not use. AI sorting being switched off entirely
+ * is a different state and is the route's to report, so this file has one
+ * sentence rather than a second copy of the pair.
+ *
+ * The old wording promised "Your capture is saved" — that guarantee is now the
+ * second half of the shared constant, so it still reaches the reader.
+ */
+const SAFE_FAILURE_MESSAGE = AI_SORTING_FAILED_NOT_SORTED;
 
 function toClientStatus(value: unknown): ParseCaptureClientStatus {
   return value === "mock" ||

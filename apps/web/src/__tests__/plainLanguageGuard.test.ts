@@ -41,6 +41,15 @@ import {
  *      one-line diff on a numbered constant instead of a silent extra array
  *      element.
  *
+ * A SLICE MAY LEGITIMATELY MOVE THIS BY LESS THAN ITS INVENTORY SAYS
+ * -----------------------------------------------------------------
+ * Slice D was inventoried as 15 strings and lowered the pin by 3, because
+ * tracing each string to its renderer showed twelve of them are never rendered
+ * to anyone. The number that matters is strings a person can read, not strings
+ * the scanner can see. When a slice comes in under its inventory the baseline
+ * comment must say which strings stayed and why — see the Slice D block — so
+ * the gap is a recorded finding rather than an abandoned slice.
+ *
  * TWO MECHANISMS, DELIBERATELY SEPARATE — DO NOT MIX THEM
  * ------------------------------------------------------
  * - PERMANENT exemptions (the developer-disclosure layer #724 built, where
@@ -165,15 +174,52 @@ const BASELINE: readonly BaselineEntry[] = [
   // `SAVED_ON_THIS_DEVICE_SHORT` from `lib/statusVocabulary.ts`. Slice B is
   // the same fact again on the banner surfaces — reuse that constant there
   // rather than writing a fourth phrasing.
-  // ===== SLICE D (15 strings) =====
+  // ===== SLICE D — 3 strings removed, 12 REMAIN ON PURPOSE =====
+  // Slice D was inventoried as "AI failure copy, 15 strings". Tracing each one
+  // to its renderer before rewriting showed only THREE of the fifteen can be
+  // read by a person. They were the two `safeParserFailureMessage` branches in
+  // `api/parse-capture/route.ts` and `SAFE_FAILURE_MESSAGE` in
+  // `lib/ai/parseCaptureClient.ts`; all three land in `captureParse.message`,
+  // which renders in `moments/UnsortedCaptures.tsx` (inside the "What
+  // happened?" disclosure) and in `cockpit/StatusBanners.tsx`
+  // (`CaptureParseNotice`, where it is the only sentence in the banner). Those
+  // three now read `AI_SORTING_UNAVAILABLE_NOT_SORTED` /
+  // `AI_SORTING_FAILED_NOT_SORTED` from `lib/statusVocabulary.ts`.
+  //
+  // The other twelve stay baselined, and the reason is per-string, not
+  // laziness. NONE of them reaches a renderer:
+  //
+  //  - The five `... must run on the server.` throws are developer guardrails
+  //    for a bundling mistake, and two of them are asserted verbatim by
+  //    `sourceOfTruth.test.ts` ("marks parser modules with explicit server
+  //    runtime guards"). All five are also matched by the
+  //    `/must run on the server/i` branch of `categorizeParseCaptureError` /
+  //    `categorizeTaskMapDraftError`, so rewording them silently reclassifies
+  //    the error. Same for the two `failed schema validation:` template heads
+  //    and the `/failed schema validation/i` branch.
+  //  - Both `parserMode must be auto or mock when provided.` throws are
+  //    swallowed: parse-capture catches and replaces them with
+  //    `safeParserFailureMessage`, and task-map echoes the text but
+  //    `workflowContext/taskMapDraft.ts` discards it.
+  //  - `AI provider is temporarily unavailable.` and `AI task-map draft
+  //    response failed schema validation.` are `safeDegradeMessage` output. It
+  //    travels in the route's `errors` array, which `taskMapDraftClient.ts`
+  //    never reads — it reads `body.error`. Even that is discarded:
+  //    `workflowContext/taskMapDraft.ts` substitutes
+  //    `SAFE_TASK_MAP_FAILURE_MESSAGE`.
+  //  - `Mock parser output requires user review before persistence.` is a
+  //    `triage_reasons` entry. `triageReasons` has no renderer anywhere in
+  //    `apps/` or `packages/`, and the mock response sets its own
+  //    `review_trigger`, so it never even reaches that fallback.
+  //
+  // Rewriting any of those twelve buys a reader nothing and costs either a
+  // source-of-truth guard or an error classification. Two of them are worth a
+  // FIX rather than a rewrite — the discarded task-map messages are a UI
+  // defect, not a copy defect. Both are follow-ups on #692, not this slice.
   {
     slice: "D",
     file: "apps/web/src/app/api/parse-capture/route.ts",
-    strings: [
-      "parserMode must be auto or mock when provided.",
-      "AI parser is unavailable right now. You can retry with the mock parser.",
-      "Parsing failed safely. You can retry with the mock parser.",
-    ],
+    strings: ["parserMode must be auto or mock when provided."],
   },
   {
     slice: "D",
@@ -186,13 +232,6 @@ const BASELINE: readonly BaselineEntry[] = [
     strings: [
       "parseCapture must run on the server.",
       "AI capture parsing response failed schema validation:",
-    ],
-  },
-  {
-    slice: "D",
-    file: "apps/web/src/lib/ai/parseCaptureClient.ts",
-    strings: [
-      "Parsing is unavailable right now. Your capture is saved; you can retry with the mock parser.",
     ],
   },
   {
@@ -377,13 +416,17 @@ const BASELINE: readonly BaselineEntry[] = [
  * Pinned total of baselined strings. MAY ONLY EVER BE LOWERED.
  *
  * Asserted with strict equality, not `<=`. A high-water mark would let the
- * baseline grow back into the space a finished slice freed up: Slice B just
- * shrank this from 114 to 77, and a `<=114` pin would silently permit 37 new
+ * baseline grow back into the space a finished slice freed up: Slice B shrank
+ * this from 114 to 77, and a `<=114` pin would silently permit 37 new
  * violations in the space it freed. Equality means every slice must lower this
  * constant by exactly what it deleted, and any growth has to raise a numbered
  * constant in the diff where a reviewer sees it.
+ *
+ * Slice D took it 77 -> 74: three rendered strings, not the fifteen its
+ * inventory listed. See the Slice D block in `BASELINE` for the twelve that
+ * stayed and the per-string reason each one is not copy.
  */
-const BASELINE_PINNED_STRINGS = 77;
+const BASELINE_PINNED_STRINGS = 74;
 
 const repoRoot = resolve(__dirname, "../../../..");
 
