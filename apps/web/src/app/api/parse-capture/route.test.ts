@@ -358,7 +358,8 @@ describe("parse-capture route", () => {
     expect(response.status).toBe(502);
     expect(body).toEqual({
       ok: false,
-      error: "Parsing failed safely. You can retry with the mock parser.",
+      error:
+        "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.",
       can_retry_with_mock: true,
       status: "ai_configured",
     });
@@ -394,7 +395,7 @@ describe("parse-capture route", () => {
 
     expect(response.status).toBe(502);
     expect(body.error).toBe(
-      "Parsing failed safely. You can retry with the mock parser.",
+      "LifeOS couldn't sort this one just now. Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.",
     );
     expect(body.can_retry_with_mock).toBe(true);
     expect(body.status).toBe("ai_configured");

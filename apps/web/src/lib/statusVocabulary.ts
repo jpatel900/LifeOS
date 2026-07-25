@@ -205,6 +205,48 @@ export const AI_SORTING_OFF_SORTED_HERE =
 
 export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
 
+/**
+ * WHEN A SORT DOES NOT PRODUCE DRAFTS (#692 Slice D).
+ *
+ * The two constants below are the only Slice D strings a person can actually
+ * read. `/api/parse-capture` and `parseCaptureClient.ts` each used to carry
+ * their own sentence about "the mock parser"; both now read from here, and
+ * both render in two places with opposite amounts of surrounding help:
+ *
+ *  - `moments/UnsortedCaptures.tsx` folds the sentence into a "What happened?"
+ *    disclosure, under its own reassurance line. Detail layer.
+ *  - `cockpit/StatusBanners.tsx` (`CaptureParseNotice`) renders it BARE, as the
+ *    only sentence in the banner, with no reassurance around it.
+ *
+ * The bare case is why each sentence carries its own "your thought is still
+ * saved" guarantee instead of leaning on a wrapper. That guarantee is not
+ * decoration: raw captures surviving AI failure is a binding invariant
+ * (AGENTS.md), and since #703 a sort only ever runs on a capture that is
+ * already stored, so the sentence is literally true on both paths.
+ *
+ * WHY TWO AND NOT ONE. They are different states with different odds:
+ * UNAVAILABLE means AI sorting is not on the table at all right now, so trying
+ * again changes nothing. FAILED means AI sorting is set up and this attempt did
+ * not work, so trying again might. Collapsing them would tell a person to retry
+ * something that cannot succeed.
+ *
+ * WHY NOT THREE. `AI_SORTING_UNAVAILABLE_SORTED_HERE` above is NOT a substitute
+ * for either: it reports a sort that SUCCEEDED on this device, and these two
+ * report no drafts at all. Reusing it would claim work that did not happen.
+ *
+ * KNOWN LIMIT, recorded rather than papered over: FAILED still covers both "the
+ * AI could not be reached" and "the AI answered with something LifeOS could not
+ * use". Those are different causes with the same remedy, and separating them in
+ * copy would mean adding a branch to `safeParserFailureMessage` — a behavior
+ * change this slice deliberately does not make. Tracked on #692.
+ */
+const THOUGHT_STILL_SAVED_SORT_HERE =
+  "Your thought is still saved, exactly as you wrote it. You can sort it on this device instead.";
+
+export const AI_SORTING_UNAVAILABLE_NOT_SORTED = `AI sorting is unavailable right now, so this one hasn't been sorted. ${THOUGHT_STILL_SAVED_SORT_HERE}`;
+
+export const AI_SORTING_FAILED_NOT_SORTED = `LifeOS couldn't sort this one just now. ${THOUGHT_STILL_SAVED_SORT_HERE}`;
+
 export function aiSortingAvailabilityLabel(status: AiSortingAvailability) {
   switch (status) {
     case "ai_configured":
