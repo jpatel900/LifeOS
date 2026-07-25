@@ -225,21 +225,41 @@ const BASELINE: readonly BaselineEntry[] = [
       "AI task-map draft response failed schema validation.",
     ],
   },
-  // ===== SLICE E (36 strings) =====
+  // ===== SLICE E — 4 of 36 removed; the other 32 are NOT copy debt =====
+  // Slice E traced every one of its 36 strings to its terminus before writing
+  // any copy (the trace table is on #692). The premise did not survive: only
+  // FOUR reach a person. `apps/web/src/lib/data/workflow/areas.ts`'s four
+  // "Sign in before …" messages render VERBATIM in destructive Alerts on
+  // `/settings/areas` (`useAreasLoadState.ts` -> `page.tsx`, `CreateAreaForm
+  // .tsx`, and `AreaRegistryCards.tsx` twice), which `middleware.ts` leaves
+  // unprotected on purpose. Those four are rewritten and gone from this list.
+  //
+  // The 32 below are baselined but are NOT pending copy work, and a later
+  // slice should not spend effort "finishing" them:
+  //  - 7 are CAUGHT — the text is discarded and replaced before display, by
+  //    `markPersistedSaveFailure` / `markPersistedLoadFailure`
+  //    (`WorkflowContext.tsx`) or by the generic
+  //    `{ ok: false, error: "Something went wrong." }` body that every Route
+  //    Handler has returned since #670.
+  //  - 1 is CLASSIFIER-LOAD-BEARING — `listCaptureItems`' message is matched
+  //    by `isSignedOutError`'s "sign in before" prefix test.
+  //  - 24 are DEAD — unreachable `if (!client)` guards whose every caller
+  //    already returns early on a null client, `assertServerRuntime` throws
+  //    in modules no client bundle imports, `getSupabaseMessage` defaults
+  //    that no real `PostgrestError` can trigger, three exported functions
+  //    with no production caller at all, and one mock `constraints[]` entry
+  //    that no component renders.
+  //
+  // Because the ratchet cannot express that difference today, the number 32
+  // overstates the remaining debt. See the PR for a proposed `terminus` field
+  // on `BaselineEntry` that would record it without changing any assertion.
+  // The `DEVELOPER_LAYER_MARKER` escape hatch is NOT the answer here and was
+  // deliberately not used: it is permanent and these are not developer-layer
+  // copy, they are unreachable strings.
   {
     slice: "E",
     file: "apps/web/src/lib/data/export.ts",
     strings: ["User data export must run on the server."],
-  },
-  {
-    slice: "E",
-    file: "apps/web/src/lib/data/workflow/areas.ts",
-    strings: [
-      "Sign in before loading areas from Supabase.",
-      "Sign in before creating areas in Supabase.",
-      "Sign in before removing areas from Supabase.",
-      "Sign in before updating area colors in Supabase.",
-    ],
   },
   {
     slice: "E",
@@ -382,8 +402,13 @@ const BASELINE: readonly BaselineEntry[] = [
  * violations in the space it freed. Equality means every slice must lower this
  * constant by exactly what it deleted, and any growth has to raise a numbered
  * constant in the diff where a reviewer sees it.
+ *
+ * IT IS NOT A DEBT COUNT ANY MORE. Slice E traced its 36 entries and found 32
+ * of them unreadable by any person (see the Slice E block above). The ratchet
+ * has no way to express that, so it keeps counting them. Read this number as
+ * "strings the scanner still finds", not "strings still to write".
  */
-const BASELINE_PINNED_STRINGS = 77;
+const BASELINE_PINNED_STRINGS = 73;
 
 const repoRoot = resolve(__dirname, "../../../..");
 

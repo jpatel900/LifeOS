@@ -24,6 +24,37 @@ import {
   uniqueAreaSlug,
 } from "./shared";
 
+/**
+ * THE FOUR MESSAGES IN THIS FILE ARE READ BY A PERSON (#692 Slice E)
+ * =================================================================
+ * Slice E traced all 36 of its baselined strings to their terminus. 32 are
+ * caught and replaced before display (`markPersistedSaveFailure` /
+ * `markPersistedLoadFailure` in `WorkflowContext.tsx`, or the generic
+ * `{ ok: false, error: "Something went wrong." }` body every Route Handler
+ * returns since #670) or are unreachable. These four are the exception: the
+ * `/settings/areas` screen renders `error.message` VERBATIM in a destructive
+ * Alert from three separate catch sites —
+ *   - `settings/areas/useAreasLoadState.ts` -> `settings/areas/page.tsx`
+ *   - `settings/areas/CreateAreaForm.tsx`
+ *   - `settings/areas/AreaRegistryCards.tsx` (accent + remove)
+ * — and `middleware.ts` deliberately does no route protection, so a
+ * signed-out visitor with an account configured reaches that screen and
+ * reads whatever these say.
+ *
+ * "SIGN IN BEFORE" IS A LOAD-BEARING PREFIX. DO NOT REWORD IT.
+ * `workflowContext/reducerCore.ts`'s `isSignedOutError` classifies these by
+ * `message.toLowerCase().startsWith("sign in before")`. That test is what
+ * routes a signed-out session to the calm `signedOutLocalMessage` banner
+ * instead of the failure-toned `persistedLoadFailureMessage`. Change the
+ * first three words and the banner silently switches to failure language
+ * while every test still passes. The tail after the prefix is free — that
+ * is the half #692 rewrote.
+ *
+ * The tails say "your account" because that is already the shipped noun for
+ * this thing everywhere else (`saveModeLabel` -> "Saved to account",
+ * `SAVED_ON_THIS_DEVICE_SHORT` -> "…not in your account yet"). Do not invent
+ * a second name for it here.
+ */
 export async function listAreas(
   client: MinimalSupabaseClient | null,
   options: { includeInactive?: boolean } = {},
@@ -39,7 +70,7 @@ export async function listAreas(
 
   await requireSupabaseUser(
     client,
-    "Sign in before loading areas from Supabase.",
+    "Sign in before loading the areas saved in your account.",
   );
 
   let data: unknown;
@@ -122,7 +153,7 @@ export async function createArea(
 
   const user = await requireSupabaseUser(
     client,
-    "Sign in before creating areas in Supabase.",
+    "Sign in before saving a new area to your account.",
   );
 
   const listQuery = client.from("areas") as {
@@ -210,7 +241,7 @@ export async function softDeleteArea(
 
   await requireSupabaseUser(
     client,
-    "Sign in before removing areas from Supabase.",
+    "Sign in before removing an area from your account.",
   );
 
   const query = client.from("areas") as {
@@ -275,7 +306,7 @@ export async function updateAreaColor(
 
   await requireSupabaseUser(
     client,
-    "Sign in before updating area colors in Supabase.",
+    "Sign in before saving an area's accent to your account.",
   );
 
   const query = client.from("areas") as {

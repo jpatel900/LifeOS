@@ -627,9 +627,30 @@ describe("isSignedOutError (#688)", () => {
   it("matches the data layer's signed-out errors and supabase's missing-session error", async () => {
     const { isSignedOutError } =
       await import("@/lib/workflowContext/reducerCore");
+    // #692 Slice E rewrote the TAIL of every "Sign in before …" message in
+    // `lib/data/workflow/areas.ts` and deliberately froze the PREFIX, because
+    // this classifier keys on it. These are the shipped strings verbatim: if a
+    // later edit reworders one of them, this assertion fails instead of the
+    // banner silently switching from the calm signed-out state to failure
+    // language.
     expect(
       isSignedOutError(
-        new Error("Sign in before loading areas from Supabase."),
+        new Error("Sign in before loading the areas saved in your account."),
+      ),
+    ).toBe(true);
+    expect(
+      isSignedOutError(
+        new Error("Sign in before saving a new area to your account."),
+      ),
+    ).toBe(true);
+    expect(
+      isSignedOutError(
+        new Error("Sign in before removing an area from your account."),
+      ),
+    ).toBe(true);
+    expect(
+      isSignedOutError(
+        new Error("Sign in before saving an area's accent to your account."),
       ),
     ).toBe(true);
     expect(isSignedOutError(new Error("Auth session missing!"))).toBe(true);
