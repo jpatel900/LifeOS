@@ -252,11 +252,6 @@ export function hasServerCapabilityMissingSignal(error: unknown): boolean {
   );
 }
 
-// #688: the signed-out condition is not a failure — one calm plain-language
-// state (#692), pointed at by a sign-in door in the banners that render it.
-export const signedOutLocalMessage =
-  "You're not signed in, so new work is saving on this device only.";
-
 // #688: recognizes the errors our own data layer throws when the only
 // problem is that nobody is signed in (requireSupabaseUser's "Sign in
 // before …" messages, and supabase-js's own missing-session error). True

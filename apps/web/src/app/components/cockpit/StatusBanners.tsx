@@ -1,13 +1,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
 import {
-  ACCOUNT_SAVE_FAILED,
-  ACCOUNT_UNREACHABLE_NOW,
   AI_SORTING_OFF_SORTED_HERE,
   AI_SORTING_UNAVAILABLE_SORTED_HERE,
-  DEVICE_STORAGE_BLOCKED,
-  SOME_WORK_ON_THIS_DEVICE,
   SORT_ON_THIS_DEVICE_ACTION,
 } from "@/lib/statusVocabulary";
 import type {
@@ -21,25 +18,45 @@ import { HIT_TARGET_MIN } from "../moments/hitTarget";
 // slice 2 — mechanical split, no behavior change). Rendered above the stage
 // switch regardless of which stage view is active.
 
+/**
+ * #734: the tone split is the point of this banner now.
+ *
+ * #688 gave the signed-out state a calm treatment because a signed-out
+ * session is not a failure. Everything else still landed in amber, including
+ * the two states that fire on ordinary use: an account LifeOS can't reach
+ * right now, and work that stayed on this device after the account came back.
+ * Those are the highest-frequency states in the app — a person working
+ * offline for ten minutes was reading a failure banner the whole time.
+ *
+ * `resolveDeviceSaveNotice` decides which is which (same conditions, same
+ * priority as before). Amber is now reserved for a save that was attempted
+ * and failed, and for a browser that refuses to hold work on this device at
+ * all — the one state where a reload really does lose something.
+ */
 export function SyncNotice({ status }: { status: WorkflowSyncStatus }) {
   const pathname = usePathname();
+  const notice = resolveDeviceSaveNotice(status);
 
-  // #688: when the ONLY reason sync is off is that nobody is signed in, this
-  // is one calm state with a door — quiet surface tones, not the amber
-  // failure treatment below, and a link back to this same page after
-  // sign-in. True failures (sync-error, blocked storage) keep the amber.
-  if (status.signedOut && status.storage !== "blocked") {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        data-testid="sync-notice-signed-out"
-        className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--cockpit-radius)] border border-[var(--ln)] bg-[var(--sf)] px-4 py-3 text-sm text-[var(--mut)]"
-      >
-        <span>
-          {status.message ??
-            "You're not signed in, so new work is saving on this device only."}
-        </span>
+  if (!notice) return null;
+
+  const alarm = notice.tone === "alarm";
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid={notice.signedOut ? "sync-notice-signed-out" : "sync-notice"}
+      data-tone={notice.tone}
+      className={cn(
+        "flex flex-wrap items-center justify-between gap-3 rounded-[var(--cockpit-radius)] border px-4 py-3 text-sm",
+        alarm
+          ? "border-[var(--amb-rng)] bg-[var(--amb-sf)] font-semibold text-[var(--amb-fg)]"
+          : "border-[var(--ln)] bg-[var(--sf)] text-[var(--mut)]",
+      )}
+    >
+      <span>{notice.message}</span>
+      {/* #688: the door back in, on the one state that has one. */}
+      {notice.signedOut ? (
         <Link
           href={`/login?next=${encodeURIComponent(pathname ?? "/")}`}
           className={cn(
@@ -50,32 +67,7 @@ export function SyncNotice({ status }: { status: WorkflowSyncStatus }) {
         >
           Sign in
         </Link>
-      </div>
-    );
-  }
-
-  const messages = [
-    status.storage === "blocked" ? DEVICE_STORAGE_BLOCKED : null,
-    status.account === "local-only"
-      ? (status.message ?? ACCOUNT_UNREACHABLE_NOW)
-      : null,
-    status.account === "sync-error"
-      ? (status.message ?? ACCOUNT_SAVE_FAILED)
-      : null,
-    status.account === "synced" && status.pendingLocalChanges
-      ? (status.message ?? SOME_WORK_ON_THIS_DEVICE)
-      : null,
-  ].filter(Boolean);
-
-  if (!messages.length) return null;
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="rounded-[var(--cockpit-radius)] border border-[var(--amb-rng)] bg-[var(--amb-sf)] px-4 py-3 text-sm font-semibold text-[var(--amb-fg)]"
-    >
-      {messages[0]}
+      ) : null}
     </div>
   );
 }

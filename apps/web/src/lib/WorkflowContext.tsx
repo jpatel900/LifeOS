@@ -41,6 +41,7 @@ import {
 import {
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
+  SIGNED_OUT_SAVING_ON_THIS_DEVICE,
   SOME_WORK_ON_THIS_DEVICE,
   savedOnThisDeviceBanner,
 } from "./statusVocabulary";
@@ -107,7 +108,6 @@ import {
   persistedLoadFailureMessage,
   persistedSaveFailureMessage,
   persistedSyncFailureMessage,
-  signedOutLocalMessage,
   policyDecisionKey,
   storeSelectedAreaId,
   workflowReducer,
@@ -231,7 +231,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     setSyncStatus((current) => ({
       ...current,
       account: "local-only",
-      message: signedOutLocalMessage,
+      message: SIGNED_OUT_SAVING_ON_THIS_DEVICE,
       signedOut: true,
       pendingLocalChanges: true,
     }));
