@@ -73,7 +73,7 @@ permissions:
 
 jobs:
   smoke:
-    name: Production smoke
+    name: Production smoke (green by design — read the run summary for the real result)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -254,6 +254,40 @@ jobs:
           else
             echo "outcome=failure" >> "$GITHUB_OUTPUT"
           fi
+
+      # The smoke step above deliberately swallows a non-zero exit so the
+      # reconcile step can still open/close the tracking issue. That makes a
+      # GREEN JOB PROVE NOTHING -- the job is green whether prod passed,
+      # failed, or was skipped. That design is intentional and unchanged here;
+      # this step just stops it from being invisible, by writing the real
+      # outcome where a human looking at the run will see it.
+      #
+      # `if: always()` on purpose: if the smoke step never ran (an earlier step
+      # died), outcome is the empty string and the summary must say so rather
+      # than print a blank line. Read-only -- echoes to $GITHUB_STEP_SUMMARY
+      # and nothing else, so it cannot change whether the job passes.
+      - name: Report the real smoke outcome in the run summary
+        if: always()
+        env:
+          SMOKE_OUTCOME: ${{ steps.smoke.outputs.outcome }}
+        run: |
+          outcome="${SMOKE_OUTCOME:-not-reached}"
+          {
+            echo "## SMOKE RESULT: $(echo "$outcome" | tr '[:lower:]' '[:upper:]')"
+            echo ""
+            echo "This job is **green by design** — the smoke step swallows failure so the"
+            echo "issue-reconcile step can always run. A green check on this workflow does"
+            echo "NOT mean production is healthy. The truth is the line above, and the"
+            echo "\`prod-smoke\` labelled tracking issue."
+            echo ""
+            case "$outcome" in
+              success)     echo "Production smoke passed. Any open \`prod-smoke\` issue was closed with a recovery note." ;;
+              failure)     echo "Production smoke FAILED. A \`prod-smoke\` issue was opened or commented on, and the Playwright report is attached to this run as \`prod-smoke-report\`." ;;
+              skipped)     echo "Smoke did not run: the \`SMOKE_BASE_URL\` secret is unset. Nothing about production was checked." ;;
+              not-reached) echo "The smoke step never ran — an earlier step in this job failed. Nothing about production was checked." ;;
+              *)           echo "Unrecognised outcome value \`$outcome\`. Treat this run as proving nothing." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Playwright report on failure
         if: steps.smoke.outputs.outcome == 'failure'
