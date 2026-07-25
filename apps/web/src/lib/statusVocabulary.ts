@@ -247,10 +247,14 @@ export const SORT_ON_THIS_DEVICE_ACTION = "Sort on this device";
  * The two constants below are the only Slice D strings a person can actually
  * read. `/api/parse-capture` and `parseCaptureClient.ts` each used to carry
  * their own sentence about "the mock parser"; both now read from here, and
- * both render in two places with opposite amounts of surrounding help:
+ * both render in two places:
  *
- *  - `moments/UnsortedCaptures.tsx` folds the sentence into a "What happened?"
- *    disclosure, under its own reassurance line. Detail layer.
+ *  - `moments/UnsortedCaptures.tsx` renders the matching constant as the
+ *    glance-level line (`failure.status === "ai_unavailable"` picks
+ *    UNAVAILABLE, everything else picks FAILED — #740, previously a single
+ *    hardcoded sentence shown for both states, contradicting whichever one
+ *    wasn't true) and again, verbatim from the server, inside its "What
+ *    happened?" disclosure.
  *  - `cockpit/StatusBanners.tsx` (`CaptureParseNotice`) renders it BARE, as the
  *    only sentence in the banner, with no reassurance around it.
  *
