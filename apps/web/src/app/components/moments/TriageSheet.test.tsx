@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
 import * as taskMapDraftClient from "@/lib/ai/taskMapDraftClient";
+import {
+  AI_SORTING_FAILED_NOT_SORTED,
+  AI_SORTING_UNAVAILABLE_NOT_SORTED,
+} from "@/lib/statusVocabulary";
 import { TriageSheet } from "./TriageSheet";
 
 const validTaskMapDraft = {
@@ -684,7 +688,11 @@ describe("TriageSheet", () => {
       restoreFetch();
     });
 
-    it("when sorting is unavailable it says so plainly and the capture stays listed and safe", async () => {
+    it("when the AI can't be reached it says so plainly and the capture stays listed and safe", async () => {
+      // #740: `ai_unavailable` — the AI could not be reached at all. The
+      // route-level `error` text is deliberately different from the glance
+      // vocabulary here to prove the glance line is driven by `status`, not
+      // by echoing whatever string the server sent.
       vi.stubGlobal(
         "fetch",
         vi.fn(
@@ -707,8 +715,61 @@ describe("TriageSheet", () => {
       fireEvent.click(sortButton);
 
       const failure = await screen.findByTestId(/^triage-sheet-sort-failed-/);
+      // Glance line: truthful for the unreachable-AI state, reused verbatim
+      // from `lib/statusVocabulary.ts` (#739), not a new sentence.
+      expect(failure).toHaveTextContent(AI_SORTING_UNAVAILABLE_NOT_SORTED);
+      // Detail layer ("What happened?") still carries the server's literal
+      // wording, which this test deliberately made different from the
+      // glance line above.
+      expect(failure).toHaveTextContent("Parsing is unavailable right now.");
+
+      // Nothing was lost: the capture is still listed, still verbatim, and
+      // the in-band alternative is offered rather than a background retry.
+      expect(screen.getByTestId("triage-sheet-captures")).toHaveTextContent(
+        "Draft the proposal",
+      );
+      expect(screen.getByTestId("raw-draft-count")).toHaveTextContent("0");
+      expect(screen.getAllByTestId(/^triage-sheet-sort-basic-/)).toHaveLength(
+        1,
+      );
+
+      vi.unstubAllGlobals();
+    });
+
+    it("when the AI was reached but sorting failed it says THAT plainly, not that sorting is unavailable", async () => {
+      // #740: `ai_configured` (AI reachable, this attempt failed) must read
+      // as "didn't work", never as "isn't available" — the two are different
+      // claims and the previous shared copy asserted the wrong one here.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            ({
+              ok: false,
+              json: async () => ({
+                ok: false,
+                error: "The AI returned something LifeOS couldn't use.",
+                can_retry_with_mock: true,
+                status: "ai_configured",
+              }),
+            }) as Response,
+        ),
+      );
+
+      renderRawSheet();
+      fireEvent.click(screen.getByTestId("raw-capture"));
+      const sortButton = await screen.findByTestId(/^triage-sheet-sort-/);
+      fireEvent.click(sortButton);
+
+      const failure = await screen.findByTestId(/^triage-sheet-sort-failed-/);
+      // Glance line: truthful for the reached-but-failed state, reused
+      // verbatim from `lib/statusVocabulary.ts` (#739).
+      expect(failure).toHaveTextContent(AI_SORTING_FAILED_NOT_SORTED);
+      // It must NOT show the "unavailable" line — that would be the #740 bug.
+      expect(failure).not.toHaveTextContent(AI_SORTING_UNAVAILABLE_NOT_SORTED);
+      // Detail layer carries the server's literal wording.
       expect(failure).toHaveTextContent(
-        "Sorting isn’t available right now. Your thought is safe here, exactly as you wrote it.",
+        "The AI returned something LifeOS couldn't use.",
       );
 
       // Nothing was lost: the capture is still listed, still verbatim, and

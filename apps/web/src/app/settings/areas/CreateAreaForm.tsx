@@ -12,6 +12,7 @@ import { createArea } from "../../../lib/data/workflow";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { workflowAreaIdForPersistedArea } from "@/lib/workflowAreaMapping";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { isSignedOutError } from "@/lib/workflowContext/reducerCore";
 import { AREA_COLOR_PRESETS } from "@/lib/areaAccent";
 import { AreaAccentPicker } from "./AreaAccentPicker";
 
@@ -19,6 +20,12 @@ type CreateState =
   | { status: "idle" }
   | { status: "saving" }
   | { status: "saved"; areaName: string }
+  // #742: the second of the two catch sites the #692 trace found rendering
+  // the raw "Auth session missing!" library string on this screen (the
+  // other is the page's own load state, `useAreasLoadState.ts`). Same
+  // classifier, same calm treatment — signed-out is not a failed create, it
+  // is an ordinary reason a create cannot happen yet.
+  | { status: "signed-out" }
   | { status: "error"; message: string };
 
 function createFeedback(createState: CreateState) {
@@ -38,6 +45,15 @@ function createFeedback(createState: CreateState) {
       title: "Area created.",
       description: `${createState.areaName} is now available in active area pickers.`,
       nextStep: "Use it now, or keep creating the scopes you actually need.",
+    };
+  }
+
+  if (createState.status === "signed-out") {
+    return {
+      variant: "warning" as const,
+      title: "Sign in to create areas.",
+      description: "Areas are stored on your account, not on this device.",
+      nextStep: "Sign in, then try creating the area again.",
     };
   }
 
@@ -94,11 +110,15 @@ export function CreateAreaForm({
       setNewAreaColor(AREA_COLOR_PRESETS[0].value);
       setCreateState({ status: "saved", areaName: result.area.name });
     } catch (error) {
-      setCreateState({
-        status: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to create area.",
-      });
+      if (isSignedOutError(error)) {
+        setCreateState({ status: "signed-out" });
+      } else {
+        setCreateState({
+          status: "error",
+          message:
+            error instanceof Error ? error.message : "Unable to create area.",
+        });
+      }
     }
   }
 

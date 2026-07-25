@@ -4,6 +4,10 @@ import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { Button } from "@/components/ui/button";
 import { HIT_TARGET_MIN } from "./hitTarget";
+import {
+  AI_SORTING_FAILED_NOT_SORTED,
+  AI_SORTING_UNAVAILABLE_NOT_SORTED,
+} from "@/lib/statusVocabulary";
 
 /**
  * #703 (owner-ratified 2026-07-19) — the Sort action, shared by every triage
@@ -63,6 +67,7 @@ export function UnsortedCaptures({
     captureParse.phase === "failed"
       ? {
           captureId: captureParse.captureId,
+          status: captureParse.status,
           message: captureParse.message,
           canRetryWithMock: captureParse.canRetryWithMock,
         }
@@ -110,12 +115,20 @@ export function UnsortedCaptures({
                   className="grid gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200"
                   data-testid={`triage-sheet-sort-failed-${item.id}`}
                 >
-                  {/* Plain language, reassurance first: nothing was lost. The
-                      underlying wording is the deep layer, folded away until
-                      asked for (NFR-006). */}
+                  {/* #740: the glance line must match which failure this is —
+                      "AI can't be reached" (ai_unavailable) reads differently
+                      from "AI was reached and this attempt didn't work"
+                      (everything else), and showing the wrong one contradicts
+                      the detail line right below it. Reuses the #739
+                      vocabulary verbatim (statusVocabulary.ts) rather than
+                      inventing a third phrasing; "What happened?" still
+                      exists as its own disclosure because `failure.message`
+                      is the server's literal wording, which callers other
+                      than this component may override in tests. */}
                   <p className="font-semibold">
-                    Sorting isn&rsquo;t available right now. Your thought is
-                    safe here, exactly as you wrote it.
+                    {failure.status === "ai_unavailable"
+                      ? AI_SORTING_UNAVAILABLE_NOT_SORTED
+                      : AI_SORTING_FAILED_NOT_SORTED}
                   </p>
                   <details>
                     <summary className="cursor-pointer font-semibold underline-offset-2 hover:underline">

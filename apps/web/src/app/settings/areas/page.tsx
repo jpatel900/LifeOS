@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
@@ -19,6 +22,7 @@ import { useAreasLoadState } from "./useAreasLoadState";
 export default function AreasSettingsPage() {
   const { selectedAreaId, state: workflowState } = useWorkflow();
   const { state, replaceReadyAreas } = useAreasLoadState();
+  const pathname = usePathname();
 
   // #691: resolve the badge from the SAME context area list every other
   // screen reads (not this page's separately-loaded rows), and give null the
@@ -93,16 +97,41 @@ export default function AreasSettingsPage() {
         />
       ) : null}
 
+      {/* #742: nobody is signed in — a calm, ordinary state, not a failure.
+          Same `Alert variant="warning" role="status"` split
+          `OperatorProfilePanel` and `AreaCharterPanel` already use lower on
+          this exact page for the identical condition, plus the sign-in door
+          the #688 sync banner pattern established (`/login?next=…` back to
+          this page). This does NOT decide whether signed-out visitors should
+          be redirected here or stay on a local-only view of this screen —
+          that is the open OWNER-GATE on #742; either answer replaces or
+          wraps this block without touching the boundary in
+          `useAreasLoadState.ts`. */}
+      {state.status === "signed-out" ? (
+        <Alert variant="warning" role="status">
+          <AlertTitle>Sign in to see your areas.</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>Areas are stored on your account, not on this device.</span>
+            <Button asChild size="sm" variant="secondary">
+              <Link
+                href={`/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`}
+              >
+                Sign in
+              </Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {/* A GENUINE failure: Supabase reachable, someone is signed in, and the
+          load still failed. `state.message` is always plain language — see
+          `useAreasLoadState.ts`'s catch block — never the raw caught error,
+          so no provider or library text can reach this alert. */}
       {state.status === "error" ? (
         <Alert variant="destructive">
           <AlertTitle>Areas could not load</AlertTitle>
           <AlertDescription>
             <p>{state.message}</p>
-            <p>
-              If Supabase is configured, sign in and make sure the local stack
-              is running. Without Supabase env vars, this page uses local-only
-              areas.
-            </p>
           </AlertDescription>
         </Alert>
       ) : null}
