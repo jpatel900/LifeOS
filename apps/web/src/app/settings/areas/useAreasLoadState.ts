@@ -9,9 +9,29 @@ import {
 } from "../../../lib/data/workflow";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/browser";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import {
+  isSignedOutError,
+  persistedLoadFailureMessage,
+} from "@/lib/workflowContext/reducerCore";
 
 export type AreasLoadState =
   | { status: "loading" }
+  // #742: nobody is signed in. `@supabase/ssr`'s auth.getUser() rejects one
+  // branch before our own data layer's "Sign in before …" messages with its
+  // own AuthSessionMissingError ("Auth session missing!"), so this used to
+  // be the only status this hook produced for a signed-out visitor — the
+  // page rendered that raw library string verbatim inside a destructive
+  // alert. `isSignedOutError` (the same classifier `WorkflowContext.tsx`
+  // uses for `markPersistedLoadFailure`) recognizes it here too so a
+  // signed-out session gets its own calm status instead of sharing "error".
+  // Deliberately carries no message: the copy for this state lives in
+  // page.tsx next to the sign-in door, same split `OperatorProfilePanel`
+  // and `AreaCharterPanel` already use on this screen.
+  | { status: "signed-out" }
+  // A GENUINE failure — Supabase reachable, someone is signed in, and the
+  // request still failed. `message` is always plain language: never the raw
+  // caught error (see the catch block below), so nothing library- or
+  // provider-specific reaches this type's consumers.
   | { status: "error"; message: string }
   | {
       status: "ready";
@@ -81,13 +101,24 @@ export function useAreasLoadState() {
         }
       } catch (error) {
         if (!cancelled) {
-          setState({
-            status: "error",
-            message:
-              error instanceof Error
-                ? error.message
-                : "Unable to load areas right now.",
-          });
+          // #742: the boundary. Never hand the caught error's own message to
+          // `setState` — that is exactly how the library's raw
+          // "Auth session missing!" reached the page before. Signed-out gets
+          // its own calm status (no message to leak); every other failure
+          // gets one fixed plain-language sentence, reused from
+          // `persistedLoadFailureMessage` rather than invented here so this
+          // screen reads the same words `WorkflowContext` already uses for
+          // the identical "saved data would not load" state. The real error
+          // still reaches the developer console for debugging.
+          if (isSignedOutError(error)) {
+            setState({ status: "signed-out" });
+          } else {
+            console.error(
+              "[settings/areas] areas failed to load",
+              error instanceof Error ? error : new Error(String(error)),
+            );
+            setState({ status: "error", message: persistedLoadFailureMessage });
+          }
         }
       }
     }
