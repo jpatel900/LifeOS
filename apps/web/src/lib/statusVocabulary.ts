@@ -62,13 +62,11 @@ export function saveDestinationLabel(provider: DataProvider) {
  * on purpose: those already ship "saved on this device" and "to your account"
  * to the user, and this phrase has to stay the same words as they do.
  *
- * SHORT vs LONG — both say the same thing, at two lengths:
- *  - SHORT is a lower-case clause for places with no room: a toast tail after
- *    the event that happened, a nav badge, a status pill. It is always
- *    appended to something ("Review …", "Day closed — …", "3 captures …"),
- *    never used as a standalone sentence.
- *  - LONG is the standalone sentence for banners, alerts, and panels that have
- *    room to add what happens next.
+ * SHORT is a lower-case clause for places with no room: a toast tail after
+ * the event that happened, a nav badge, a status pill. It is always appended
+ * to something ("Review …", "Day closed — …", "3 captures …"), never used as
+ * a standalone sentence. `savedOnThisDeviceBanner` below builds the
+ * standalone sentence from it.
  *
  * Tone bar: this is a NORMAL state, not an error and not data loss. It must
  * read as calm and factual. Do not add warning words, and do not promise a
@@ -77,7 +75,33 @@ export function saveDestinationLabel(provider: DataProvider) {
 export const SAVED_ON_THIS_DEVICE_SHORT =
   "saved on this device and not in your account yet";
 
-export const SAVED_ON_THIS_DEVICE_LONG =
+/**
+ * THE CAPTURE-ONLY FORM, WITH THE RETRY PROMISE (#734, narrowed from #692).
+ *
+ * This shipped as `SAVED_ON_THIS_DEVICE_LONG` — a general "long form" of the
+ * phrase above, offered to any surface with room for a second sentence. The
+ * second sentence is a promise, and the promise is only true for ONE kind of
+ * write:
+ *
+ *  - Captures really are re-sent. `WorkflowContext`'s `syncOfflineQueue`
+ *    reads `listPendingCaptures()` from the device queue, pushes each one
+ *    with `syncQueuedCapture`, and marks it synced; it is armed on mount and
+ *    again on the browser's `online` event.
+ *  - Nothing else is. When the account becomes reachable,
+ *    `syncPersistedWorkflowRows` LISTS account rows and merges them into
+ *    local state. There is no path anywhere in it that re-pushes a write that
+ *    only ever landed on this device.
+ *
+ * So the general name was a trap: adopted on a plan, a review, or an approved
+ * map, it would have told the user their work was on its way when nothing was
+ * going to send it. It had reached no surface yet, so it misled nobody — the
+ * name now says the one place it may be used, and it must not be widened
+ * again unless the retry is made real for the other writes too.
+ *
+ * For every other local-only write use `savedOnThisDeviceBanner(subject)`,
+ * which stops at the fact and promises nothing.
+ */
+export const CAPTURE_SAVED_ON_THIS_DEVICE_LONG =
   "Saved on this device and not in your account yet. LifeOS will add it to your account as soon as it can.";
 
 /**
@@ -101,13 +125,13 @@ export const SAVED_ON_THIS_DEVICE_LONG =
  * signal it is reporting a different state; give that state its own constant
  * in this file rather than growing a second shape here.
  *
- * WHY IT STOPS AT THE FACT. `SAVED_ON_THIS_DEVICE_LONG` adds "LifeOS will add
- * it to your account as soon as it can." That promise is true of captures
- * (`lib/capture/offlineQueue.ts` really does re-send them) and NOT true of the
- * other local-only writes: when the account becomes reachable,
+ * WHY IT STOPS AT THE FACT. `CAPTURE_SAVED_ON_THIS_DEVICE_LONG` adds "LifeOS
+ * will add it to your account as soon as it can." That promise is true of
+ * captures (`lib/capture/offlineQueue.ts` really does re-send them) and NOT
+ * true of the other local-only writes: when the account becomes reachable,
  * `syncPersistedWorkflowRows` re-READS account rows and never re-pushes a
  * local-only write. So this form states where the work is and promises
- * nothing. Do not "improve" it by appending the LONG tail without first making
+ * nothing. Do not "improve" it by appending that tail without first making
  * the retry real.
  */
 export function savedOnThisDeviceBanner(subject: string) {
