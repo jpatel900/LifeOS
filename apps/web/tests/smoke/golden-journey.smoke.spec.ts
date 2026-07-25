@@ -128,7 +128,22 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
   await expect(page.getByTestId("capture-overlay")).toHaveCount(0, {
     timeout: 30_000,
   });
-  await expect(page.getByTestId("start-pending-triage-card")).toBeVisible({
+  // #719: the pending-triage state has TWO truthful homes, and which one
+  // renders depends on the account's data, not on the app being healthy. With
+  // nothing queued (an empty account) the pending item is PROMOTED into the
+  // flagship card `start-pending-triage-card`; once a first move exists — the
+  // normal state of the real account this smoke targets — it renders as the
+  // `start-pending-triage` line under that card instead. Asserting only the
+  // promoted card made this leg fail on any populated account: verified on
+  // 2026-07-25 by seeding one older active task, after which this expectation
+  // timed out with "waiting for getByTestId('start-pending-triage-card')".
+  // Selected tolerantly, the same way the moments parity spec does it.
+  await expect(
+    page
+      .getByTestId("start-pending-triage-card")
+      .or(page.getByTestId("start-pending-triage")),
+    "the saved thought must show up as waiting for a decision on the home surface",
+  ).toBeVisible({
     timeout: 30_000,
   });
   console.log("[smoke] PASS capture: raw capture saved without a parse.");
