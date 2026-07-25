@@ -627,11 +627,32 @@ describe("isSignedOutError (#688)", () => {
   it("matches the data layer's signed-out errors and supabase's missing-session error", async () => {
     const { isSignedOutError } =
       await import("@/lib/workflowContext/reducerCore");
+    // The "sign in before" clause, pinned to the shipped strings verbatim so a
+    // reword fails here rather than silently switching the banner from the calm
+    // signed-out state to failure language.
     expect(
       isSignedOutError(
         new Error("Sign in before loading areas from Supabase."),
       ),
     ).toBe(true);
+    expect(
+      isSignedOutError(
+        new Error("Sign in before loading captures from Supabase."),
+      ),
+    ).toBe(true);
+
+    // WHICH CLAUSE ACTUALLY FIRES (#692 Slice E finding)
+    // --------------------------------------------------
+    // This one, not the two above. `requireSupabaseUser` reaches its
+    // `unauthenticatedMessage` only when `auth.getUser()` resolves
+    // `{ user: null, error: null }`, and the real @supabase/ssr client never
+    // does: a signed-out session rejects one branch earlier with
+    // AuthSessionMissingError, so the message the data layer actually throws —
+    // and that /settings/areas renders verbatim — is this library string.
+    // Verified by rendering the page signed-out; see
+    // .github/pr-evidence/692-server-copy/. Keep this assertion first in mind
+    // when touching either clause: dropping it breaks the real path, dropping
+    // the two above breaks only a defensive one.
     expect(isSignedOutError(new Error("Auth session missing!"))).toBe(true);
   });
 

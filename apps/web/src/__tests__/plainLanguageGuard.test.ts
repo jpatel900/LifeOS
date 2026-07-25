@@ -264,7 +264,39 @@ const BASELINE: readonly BaselineEntry[] = [
       "AI task-map draft response failed schema validation.",
     ],
   },
-  // ===== SLICE E (36 strings) =====
+  // ===== SLICE E (36 strings) — TRACED, 0 REACH A USER. NOT COPY DEBT. =====
+  // Slice E traced all 36 of these to their terminus before writing any copy
+  // (table + correction on #692). None reaches a person, so none was rewritten
+  // and the pin below did not move. Recorded here so a later slice does not
+  // re-open the work:
+  //   - 7 are CAUGHT: the text is discarded and replaced before display, by
+  //     `markPersistedSaveFailure` / `markPersistedLoadFailure`
+  //     (`WorkflowContext.tsx`) or by the generic
+  //     `{ ok: false, error: "Something went wrong." }` body every Route
+  //     Handler has returned since #670.
+  //   - 29 are DEAD: unreachable `if (!client)` guards whose every caller
+  //     already returns early on a null client; `assertServerRuntime` throws in
+  //     modules no client bundle imports; `getSupabaseMessage` defaults no real
+  //     PostgrestError can trigger; three exported functions with no production
+  //     caller at all; one mock `constraints[]` entry no component renders.
+  //
+  // FIVE OF THESE ARE DEAD FOR A NON-OBVIOUS REASON, and reading the source
+  // alone gets it wrong: `areas.ts`'s four "Sign in before …" strings and
+  // `capture.ts`'s "Sign in before loading captures from Supabase.". (The
+  // other "Sign in before …" strings in this slice are dead or caught for
+  // ordinary reasons — `supabase/server.ts`'s is routed by error TYPE, and
+  // `planning.ts`/`capture.ts`'s save-path ones are replaced by
+  // `markPersistedSaveFailure`.) These five are `requireSupabaseUser`'s
+  // `unauthenticatedMessage`, reached only when `auth.getUser()` resolves
+  // `{ user: null, error: null }`. The real @supabase/ssr client never does —
+  // a signed-out session rejects one branch earlier with AuthSessionMissingError
+  // — so what `/settings/areas` actually renders is the library's own "Auth
+  // session missing!". Rewriting these would have been pure motion. Proven by
+  // rendering the page, not by reading it: .github/pr-evidence/692-server-copy/.
+  //
+  // The genuinely user-visible jargon on that screen is therefore provider text
+  // this scanner cannot see by construction (see its blind-spot list). That is
+  // an open OWNER-GATE on #692, not a copy edit.
   {
     slice: "E",
     file: "apps/web/src/lib/data/export.ts",
