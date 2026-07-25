@@ -73,8 +73,23 @@ export function canAuthenticate(env: SmokeEnv): boolean {
 
 /**
  * Form-based login via the deployed `/login` page so the Supabase browser
- * session is written into the page context and carried by the cockpit.
+ * session is written into the page context and carried by the app.
  * Returns true on success. Callers gate persisted legs on the result.
+ *
+ * #719: success is confirmed by the SESSION, not by a destination path. This
+ * helper used to wait for `/settings/areas`, but #592 moved the post-sign-in
+ * destination to Today (`/`) so Today owns the first-use decision, and #688
+ * added a `?next=` override on top of that — so the path was never a stable
+ * success signal. Observed against a local authenticated target on
+ * 2026-07-25: the sign-in SUCCEEDED (the follow-up parse request carried a
+ * bearer token and was served 200) while this helper reported failure and the
+ * journey silently degraded to its unauthenticated branch. A smoke that
+ * cannot tell "signed in" from "signed out" is the exact silent-pass failure
+ * this file exists to prevent, so the check is now:
+ *   1. the app navigated AWAY from /login (a rejected sign-in stays put and
+ *      renders a sanitized alert), and
+ *   2. a Supabase session token is actually present in the browser context —
+ *      which is the thing every persisted leg downstream depends on.
  */
 export async function login(page: Page, env: SmokeEnv): Promise<boolean> {
   if (!env.email || !env.password) {
@@ -86,25 +101,100 @@ export async function login(page: Page, env: SmokeEnv): Promise<boolean> {
   await page.locator("#password").fill(env.password);
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  // On success the app routes to /settings/areas. On failure it renders a
-  // sanitized "Sign in failed" alert instead of crashing.
   try {
-    await page.waitForURL(/\/settings\/areas$/, { timeout: 20_000 });
-    return true;
+    await page.waitForURL((url) => !url.pathname.startsWith("/login"), {
+      timeout: 20_000,
+    });
   } catch {
     return false;
   }
+
+  return (await readSupabaseAccessToken(page)) !== null;
 }
 
 /**
- * Read the Supabase access token from the browser session persisted by
- * `@supabase/supabase-js` in localStorage. Used to authenticate the
- * `/api/google-calendar/connection` probe. Returns null when unavailable.
+ * Read the Supabase access token out of the signed-in browser session. Used to
+ * confirm sign-in and to authenticate marker-scoped cleanup. Returns null when
+ * unavailable.
+ *
+ * #719: this used to read localStorage only. FR-029 moved the app's browser
+ * client to `@supabase/ssr`'s `createBrowserClient`, which stores the session
+ * in a COOKIE (`sb-<ref>-auth-token`, value `base64-<base64url JSON>`, split
+ * into `.0`/`.1`… chunks when large) so the session survives restarts and the
+ * middleware can refresh it server-side. Observed against a local
+ * authenticated target on 2026-07-25: localStorage held only
+ * `lifeos.moments.preferences`, and the single cookie `sb-127-auth-token`
+ * (2377 chars) held the session — so this helper returned null on every
+ * authenticated run and cleanup logged "could not authenticate; rows may
+ * persist" while the journey's rows stayed behind. Cookies are read first,
+ * with the old localStorage idiom kept as a fallback so a target still on the
+ * supabase-js client keeps working.
  */
 export async function readSupabaseAccessToken(
   page: Page,
 ): Promise<string | null> {
   return page.evaluate(() => {
+    const decodeSession = (raw: string): string | null => {
+      try {
+        let json = raw;
+        if (json.startsWith("base64-")) {
+          const encoded = json.slice("base64-".length);
+          // `@supabase/ssr` encodes base64url; atob needs standard base64.
+          const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+          const padded = normalized.padEnd(
+            normalized.length + ((4 - (normalized.length % 4)) % 4),
+            "=",
+          );
+          const bytes = Uint8Array.from(window.atob(padded), (character) =>
+            character.charCodeAt(0),
+          );
+          json = new TextDecoder().decode(bytes);
+        }
+        const parsed = JSON.parse(json) as { access_token?: unknown };
+        return typeof parsed?.access_token === "string"
+          ? parsed.access_token
+          : null;
+      } catch {
+        return null;
+      }
+    };
+
+    // 1. Cookie storage (@supabase/ssr, the app's current client).
+    try {
+      const chunks = new Map<string, Map<number, string>>();
+      for (const entry of document.cookie.split(";")) {
+        const separator = entry.indexOf("=");
+        if (separator === -1) {
+          continue;
+        }
+        const name = entry.slice(0, separator).trim();
+        const value = entry.slice(separator + 1).trim();
+        const match = /^(sb-.*-auth-token)(?:\.(\d+))?$/.exec(name);
+        if (!match) {
+          continue;
+        }
+        const base = match[1];
+        const index = match[2] ? Number(match[2]) : 0;
+        if (!chunks.has(base)) {
+          chunks.set(base, new Map());
+        }
+        chunks.get(base)!.set(index, decodeURIComponent(value));
+      }
+      for (const parts of chunks.values()) {
+        const ordered = [...parts.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([, value]) => value)
+          .join("");
+        const token = decodeSession(ordered);
+        if (token) {
+          return token;
+        }
+      }
+    } catch {
+      // Blocked cookies or unexpected shape: fall through to localStorage.
+    }
+
+    // 2. localStorage storage (supabase-js idiom), kept as a fallback.
     try {
       for (let index = 0; index < window.localStorage.length; index += 1) {
         const key = window.localStorage.key(index);
@@ -115,14 +205,15 @@ export async function readSupabaseAccessToken(
         if (!raw) {
           continue;
         }
-        const parsed = JSON.parse(raw) as { access_token?: unknown };
-        if (typeof parsed?.access_token === "string") {
-          return parsed.access_token;
+        const token = decodeSession(raw);
+        if (token) {
+          return token;
         }
       }
     } catch {
       // Blocked storage or unexpected shape: treat as no token.
     }
+
     return null;
   });
 }
