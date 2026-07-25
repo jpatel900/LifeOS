@@ -308,14 +308,6 @@ export async function cleanupSmokeRows(
   return results;
 }
 
-/** Navigate to a cockpit stage via the "Workflow stages" nav. */
-export async function goToStage(page: Page, stage: RegExp): Promise<void> {
-  await page
-    .getByRole("navigation", { name: "Workflow stages" })
-    .getByRole("button", { name: stage })
-    .click();
-}
-
 /**
  * Assert the JSON degraded-mode contract of an endpoint: it must answer with
  * a designed, parseable payload (never a 5xx crash), and its `status`/mode

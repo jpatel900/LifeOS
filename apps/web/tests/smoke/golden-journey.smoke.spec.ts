@@ -3,7 +3,6 @@ import {
   canAuthenticate,
   cleanupSmokeRows,
   goldenCaptureText,
-  goToStage,
   login,
   marker,
   newRunId,
@@ -16,14 +15,14 @@ import {
  * Golden journey production smoke (issue #241, B8).
  *
  * Walks the canonical journey against a deployed target:
- *   capture -> parse -> triage -> plan -> approve-gate (STOP) -> execute
- *   -> review -> health
+ *   capture -> Sort (parse) -> triage -> Start -> Flow (focus) -> Close
+ *   -> health, with the external-write STOP asserted on the way through.
  *
  * #713: the journey BRANCHES on credential availability, and each branch
  * asserts a designed truth rather than skipping:
  *
  * - Credentials present -> authenticate, then assert the full
- *   capture -> Sort -> draft -> plan -> gate -> execute -> review chain.
+ *   capture -> Sort -> draft -> today -> focus -> close chain.
  * - Credentials absent (the weekly reality today, since SMOKE_EMAIL /
  *   SMOKE_PASSWORD and the Supabase repo variables are unset) -> assert the
  *   DESIGNED DEGRADED TRUTH: `/api/parse-capture` answers 401
@@ -35,22 +34,22 @@ import {
  *   the weekly run failed with "Expected: 200 / Received: 401".
  *
  * The degraded branch STOPS at triage on purpose: with no successful parse
- * there is no draft, so "Do today" / "Accept local" / "Complete" / "Save
- * review" have nothing to act on. Health is asserted by BOTH branches — it is
- * a fresh `/health` navigation that touches no draft, so the no-draft
- * constraint does not reach it.
+ * there is no draft, so "Do today" / "Start now" / "Done" / "Close the day"
+ * have nothing to act on. Health is asserted by BOTH branches — it is a fresh
+ * `/health` navigation that touches no draft, so the no-draft constraint does
+ * not reach it.
  *
- * SURFACE ANCHORING (#687/#703/#707). The deployed app serves the moments
- * home: `/capture` redirects to `/?capture=1` (the capture overlay) and
- * `/triage` redirects to `/?sheet=triage` (the triage sheet). The demoted
- * seven-stage cockpit — and with it the "Workflow stages" nav that
- * `goToStage()` drives — is reachable only under the #590 rollback
- * (NEXT_PUBLIC_MOMENTS_HOME=false). The shared capture/triage legs below are
- * therefore anchored on the moments-home surface, verified against the
- * deployed target. The save control is selected tolerantly
- * (`capture-(overlay|page)-save`) because both surfaces expose a direct
- * equivalent; the post-save and triage-crossing assertions are anchored on
- * what the deployed app actually renders.
+ * SURFACE ANCHORING (#687/#703/#707/#719). The deployed app serves the
+ * moments home: `/capture` redirects to `/?capture=1` (the capture overlay)
+ * and `/triage` redirects to `/?sheet=triage` (the triage sheet). The demoted
+ * seven-stage cockpit — and with it the "Workflow stages" nav the old
+ * `goToStage()` helper drove — is reachable only under the #590 rollback
+ * (NEXT_PUBLIC_MOMENTS_HOME=false). EVERY leg of this journey, shared and
+ * authenticated, is therefore anchored on the moments-home surface. The save
+ * control is selected tolerantly (`capture-(overlay|page)-save`) because both
+ * surfaces expose a direct equivalent; every other assertion is anchored on
+ * what the moments home actually renders, executed end to end against a real
+ * authenticated target (#719).
  *
  * Safety posture:
  * - Every created row carries the run marker; selection is BY marker so a
@@ -65,7 +64,7 @@ import {
 const env: SmokeEnv = readSmokeEnv();
 const runId = newRunId();
 
-test("golden journey: capture -> triage -> (authenticated: plan -> gate -> execute -> review) -> health", async ({
+test("golden journey: capture -> triage Sort -> (authenticated: today -> gate -> focus -> close) -> health", async ({
   page,
   request,
 }) => {
@@ -212,7 +211,7 @@ test("golden journey: capture -> triage -> (authenticated: plan -> gate -> execu
         "capture preserved, listed, failure surfaced, retry offered.",
     );
     console.log(
-      "[smoke] NOT EXERCISED: draft -> plan -> approval-gate -> execute -> review. " +
+      "[smoke] NOT EXERCISED: draft -> today -> focus session -> close the day. " +
         "No successful parse means no draft exists for those legs to act on. " +
         "Set SMOKE_EMAIL/SMOKE_PASSWORD + NEXT_PUBLIC_SUPABASE_URL/" +
         "NEXT_PUBLIC_SUPABASE_ANON_KEY to exercise the full journey.",
@@ -273,22 +272,49 @@ test("golden journey: capture -> triage -> (authenticated: plan -> gate -> execu
 });
 
 /**
- * The post-triage journey: draft -> plan -> approval gate -> execute -> review.
+ * The post-Sort journey, on the moments surfaces: draft -> onto today ->
+ * Start -> Flow (focus session) -> Close (the day is reviewed and closed).
  *
  * Runs ONLY with credentials. It needs a draft, which only a successful parse
  * produces, so it cannot run unauthenticated (#713).
  *
- * UNVERIFIED SURFACE (#713): these legs are still anchored on the demoted
- * seven-stage cockpit — `goToStage()`'s "Workflow stages" nav, "Accept local",
- * "Start focusing", "Save review" — which the deployed moments-home surface no
- * longer serves at `/` (#687). They are preserved verbatim rather than
- * re-anchored on a guess: re-anchoring them touches `/calendar` and `/review`,
- * which #687 deliberately did NOT redirect because their capabilities are
- * owner-gated (port/keep/drop undecided). Unverified re-anchoring is exactly
- * what shipped the capture-leg break this issue had to fix. With no
- * credentials configured this path is dormant; when credentials are added it
- * will fail LOUDLY here rather than pass silently, which is the correct
- * signal that the re-anchor is still owed.
+ * #719 RE-ANCHOR. Until now these legs still drove the demoted seven-stage
+ * cockpit — `goToStage()`'s "Workflow stages" nav, "Accept local", "Start
+ * focusing", "Save review" — which `/` has not served since #687. #713 left
+ * them verbatim rather than re-anchor on a guess, and that was the right call
+ * then; this is the same re-anchor done the way #713 asked for — EXECUTED,
+ * not read. Against a local authenticated target (local Supabase + a
+ * production build of this branch) the old body failed at
+ * `goToStage(/Plan/)` — "waiting for getByRole('navigation', { name:
+ * 'Workflow stages' })" — and the body below passes end to end.
+ *
+ * WHAT MOVED, AND WHAT DID NOT:
+ * - "Accept local" (a Plan-stage time-block proposal) has NO moments-home
+ *   equivalent. The moments home's Plan sheet is a read-only summary of
+ *   today's blocks; proposals live only in the full Plan stage at `/calendar`,
+ *   which #687 deliberately did NOT redirect (owner-gated, port/keep/drop
+ *   undecided). So the journey no longer creates a time block, and the Close
+ *   moment's "Completed today" counter — which counts completed calendar
+ *   BLOCKS — is therefore not asserted here. It is not silently dropped: see
+ *   the approval-gate leg below, which asserts the invariant that actually
+ *   matters on this surface.
+ * - "Complete" became the Flow moment's Done -> end-session sheet (#572): a
+ *   session now closes with a recorded outcome, not a bare button press.
+ * - "Save review" became Close's "Close the day", whose toast reports whether
+ *   the review actually persisted — a stronger assertion than the old one,
+ *   which asserted nothing about the save at all.
+ *
+ * SAFETY POSTURE, unchanged: every row this touches is selected BY the run
+ * marker. The one leg that cannot be marker-scoped is the focus session — the
+ * moments home can only start a session on `vm.firstMove`, and `firstMove`
+ * falls back to the account's OLDEST active task, which on a populated
+ * account is somebody else's row. Starting and completing a session on it
+ * would mutate real data and leave an `execution_sessions` row that
+ * marker-scoped cleanup provably cannot reach. So the focus leg is gated on
+ * the first move carrying the marker, and when it does not, the journey
+ * asserts the accepted task is on the Start moment and says loudly that the
+ * session leg was NOT exercised — the same assert-if-present idiom the S9
+ * legs use, for the same reason.
  */
 async function runAuthenticatedJourney(
   page: import("@playwright/test").Page,
@@ -299,98 +325,193 @@ async function runAuthenticatedJourney(
   // above) preserves the title verbatim, so the marker is guaranteed present.
   // If the marker is absent we FAIL LOUDLY rather than accept an
   // ambiguous/foreign draft — the smoke never touches rows it cannot identify.
-  const journeyDraft = page.getByRole("heading", {
-    name: new RegExp(marker(runId)),
-  });
+  const journeyDraft = page
+    .getByTestId(/^triage-sheet-item-/)
+    .filter({ hasText: marker(runId) });
   await expect(
     journeyDraft,
     "journey draft not found in triage by marker (AI parser may have stripped the marker; the smoke refuses to accept an unidentifiable draft)",
   ).toBeVisible();
-  // The triage surface shows one draft at a time; "Do today" accepts it.
-  await page.getByRole("button", { name: "Do today" }).click();
-  console.log("[smoke] PASS triage: journey draft accepted into a task.");
+  // "Do today" accepts THIS draft into a task on today — scoped to the
+  // journey's own row, never "the first Do today on the sheet".
+  await journeyDraft.getByTestId(/^triage-sheet-today-/).click();
+  console.log("[smoke] PASS triage: journey draft accepted onto today.");
 
-  // ---- Journey: plan (local proposal, no external write) ------------------
-  await goToStage(page, /Plan/);
-
-  // S9 (#261) point 6a — assert-if-present: a fresh journey account has no
-  // duration-recalibration history (needs >= 3 completed sessions in the area
-  // running off-estimate), so the sourced card is absent here. When it IS
-  // present we assert it renders without crashing. The data-dependent behaviour
-  // is proven deterministically in CI with seeded history (learningLoopSurfaces).
-  const recalCard = page.getByTestId("proposal-recalibration");
-  if ((await recalCard.count()) > 0) {
-    await expect(recalCard.first()).toBeVisible();
+  // ---- Task-map offer: an OFFER, declined on purpose ----------------------
+  // Accepting a draft onto today offers to draft a task map for it. It is an
+  // offer, not a gate, and taking it would spend a real AI call on the
+  // deployed target — so the smoke asserts the offer is about ITS task and
+  // then declines it. Assert-if-present: the offer is skipped when the map
+  // surface is not enabled on the target.
+  const mapOffer = page.getByTestId("triage-map-offer");
+  if ((await mapOffer.count()) > 0) {
+    await expect(
+      mapOffer,
+      "the task-map offer must name the task it is offering to map",
+    ).toContainText(marker(runId));
+    await page.getByTestId("triage-map-offer-dismiss").click();
     console.log(
-      "[smoke] PASS S9 6a: recalibration surface present + rendered.",
+      "[smoke] PASS triage map offer: offered on the journey's own task, declined (no AI map drafted).",
     );
   } else {
     console.log(
-      "[smoke] S9 6a: no recalibration history on this account (expected on a fresh journey).",
+      "[smoke] triage map offer: not offered on this target (assert-if-present).",
     );
   }
 
-  await page.getByRole("button", { name: "Accept local", exact: true }).click();
-  console.log(
-    "[smoke] PASS plan: local proposal accepted (no external write).",
-  );
+  // ---- Journey: Start (the accepted task is on today) ---------------------
+  // Close the triage sheet before touching anything behind it: the sheet's
+  // scrim covers the whole home surface and swallows every click.
+  await page.getByTestId("moment-sheet-close").click();
+  await expect(page.getByTestId("moment-sheet")).toHaveCount(0);
+  // The opening moment is wall-clock derived (>= 17:00 opens on Close), so pin
+  // it with the 1/2/3 switch — the same pin every moments spec uses — instead
+  // of letting the hour of the run decide what this asserts.
+  await page.keyboard.press("1");
+  const startMoment = page.getByTestId("start-moment");
+  await expect(startMoment).toBeVisible({ timeout: 30_000 });
+  await expect(
+    startMoment,
+    "the accepted task must be visible on the Start moment (as the first move or in the focus list)",
+  ).toContainText(marker(runId), { timeout: 30_000 });
+  console.log("[smoke] PASS today: the accepted task is on the Start moment.");
 
   // ---- Approval gate: sacred STOP before any external write ---------------
-  // The Google approval bridge must be present and safely gated. We assert it
-  // exists and DO NOT click it — the default smoke never writes externally.
-  await expect(page.getByText("Google approvals")).toBeVisible();
-  const approveButton = page.getByRole("button", {
-    name: /Approve Google event for/,
-  });
-  if ((await approveButton.count()) > 0) {
-    // When Google is unavailable the control is disabled with plain-language
-    // copy; when available it is present but we still refuse to click it.
-    await expect(approveButton.first()).toBeVisible();
-  }
+  // The moments home's Plan surface is a summary sheet. The invariant to prove
+  // here is that NOTHING on it can write to Google: the only route to the
+  // approval bridge is an explicit link out to the full Plan stage
+  // (`/calendar`, #687 OWNER-GATE — not redirected), which the smoke asserts
+  // exists and does NOT follow. The default smoke never writes externally.
+  await page.getByTestId("pipeline-overview-stage-plan").click();
+  const planSheet = page.getByTestId("plan-sheet");
+  await expect(planSheet).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByTestId("plan-sheet-open-full"),
+    "the moments Plan sheet must still offer the route to the full Plan stage",
+  ).toBeVisible();
+  await expect(
+    planSheet.getByRole("button", { name: /Approve Google event for/ }),
+    "no Google write control may exist inline on the moments Plan surface",
+  ).toHaveCount(0);
   console.log(
-    "[smoke] PASS approval-gate: Google write gate visible; STOP before external write.",
+    "[smoke] PASS approval-gate: no inline Google write on the moments Plan surface; " +
+      "the only route out is the explicit link to the full Plan stage, deliberately not followed.",
+  );
+  console.log(
+    "[smoke] NOT EXERCISED: the Google approval bridge itself. It lives only at /calendar, " +
+      "which #687 did not redirect (owner-gated). Re-anchor once port/keep/drop is decided.",
+  );
+  await page.getByTestId("moment-sheet-close").click();
+  await expect(page.getByTestId("moment-sheet")).toHaveCount(0);
+  await expect(startMoment).toBeVisible();
+
+  // ---- Journey: Flow (focus session on the journey's OWN task) ------------
+  const firstMoveCard = page
+    .getByTestId("first-move-card")
+    .filter({ hasText: marker(runId) });
+  if ((await firstMoveCard.count()) === 0) {
+    // The account's oldest active task outranks ours as the first move, and
+    // the moments home offers no way to start a session on a specific task.
+    // Starting the offered one would mutate a row this run did not create.
+    console.log(
+      "[smoke] NOT EXERCISED: focus session + close-the-day. The first move on this " +
+        "account is an older task this run does not own, and the moments home can only " +
+        "start a session on the first move — the smoke refuses to run a session on a row " +
+        "it did not create. The accepted task IS on Start (asserted above).",
+    );
+    return;
+  }
+
+  await page.getByTestId("first-move-start").click();
+  await expect(page.getByTestId("flow-moment")).toBeVisible({
+    timeout: 30_000,
+  });
+  // The hero is the running session. It does NOT name the task here: with no
+  // calendar block behind the session (the moments home starts a session
+  // straight off the first move, and this journey never plans a block),
+  // `FlowMoment` falls back to the generic "Focus session" title — observed
+  // verbatim on 2026-07-25: "Focus sessiondeep work · 25:00 …". So this leg
+  // proves it started on the journey's own task two ways that do not depend on
+  // that title: the Start click above was scoped to the marker-bearing first
+  // move, and completing the session below removes the marker from Start.
+  const hero = page.getByTestId("current-block-hero");
+  await expect(hero).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByTestId("current-block-hero-done"),
+    "a running session must offer the way to end it",
+  ).toBeVisible();
+  console.log(
+    "[smoke] PASS execute: focus session running, started from the journey's own first move.",
   );
 
-  // ---- Journey: execute ---------------------------------------------------
-  await page.getByRole("button", { name: "Start focusing" }).click();
-  await goToStage(page, /Execute/);
-  // Pick the planned block, then complete the session.
-  const focusBlock = page.getByRole("button", {
-    name: new RegExp(marker(runId)),
+  // #572: ending a session is not a bare button — Done opens the end sheet and
+  // the outcome is recorded. "Done" is the ordinary path (the cut-scope /
+  // defer prompts only apply once the time cap is reached, which a session
+  // started seconds ago has not).
+  await page.getByTestId("current-block-hero-done").click();
+  const endSheet = page.getByTestId("end-session-sheet");
+  await expect(endSheet).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("end-session-outcome-completed").click();
+  await page.getByTestId("end-session-save").click();
+  await expect(
+    endSheet,
+    "the end-session sheet must close once the outcome is saved",
+  ).toHaveCount(0, { timeout: 30_000 });
+  await expect(
+    page.getByTestId("today-moments-toast"),
+    "ending a session must report back, not close silently",
+  ).toContainText("Session complete", { timeout: 30_000 });
+  console.log(
+    "[smoke] PASS execute: session ended through the end-session sheet with a 'Done' outcome.",
+  );
+
+  // HONEST BOUNDARY (#719, verified — do not read this as a passing claim).
+  // The step above proves the surface: the session runs, the sheet takes an
+  // outcome, and the app reports "Session complete". It does NOT prove the
+  // outcome was RECORDED, and on this path it currently is not. Observed
+  // against the local authenticated target on 2026-07-25: "Do today" leaves
+  // the task `status = active`, `startExecutionSession()` only opens a session
+  // for a task that is `scheduled` (workflow/execution.ts), and scheduling
+  // happens only in the full Plan stage at `/calendar` — the same owner-gated
+  // surface the moments home does not host. Result: `execution_sessions` held
+  // 0 rows after a full journey, while the toast still said "Session
+  // complete". That is an app-truthfulness gap, not a test gap, so it is
+  // reported here rather than asserted away — and the smoke deliberately does
+  // NOT assert "the task left Start", because on today's build it does not.
+  console.log(
+    "[smoke] NOT EXERCISED: persistence of the focus session outcome. On the moments home a " +
+      "session started from the first move of an unplanned (active, not scheduled) task records " +
+      "no execution_sessions row, though the app reports 'Session complete'. Planning a block " +
+      "lives only at /calendar (#687 owner-gated). Tracked as a separate app fix.",
+  );
+
+  // ---- Journey: Close (the day is reviewed and closed) --------------------
+  await page.keyboard.press("1");
+  await expect(startMoment).toBeVisible({ timeout: 30_000 });
+  await page.keyboard.press("3");
+  await expect(page.getByTestId("close-moment")).toBeVisible({
+    timeout: 30_000,
   });
-  if ((await focusBlock.count()) > 0) {
-    await focusBlock.first().click();
-  }
-  const completeButton = page.getByRole("button", { name: "Complete" });
-  await expect(completeButton).toBeVisible();
-  await completeButton.click();
-  console.log("[smoke] PASS execute: focus session completed.");
-
-  // ---- Journey: review ----------------------------------------------------
-  await goToStage(page, /Review/);
-
-  // S9 (#261) point 6b — assert-if-present: an override-pattern policy proposal
-  // needs >= 3 overrides of one policy in the recent window, which a fresh
-  // journey account has not accumulated, so the surface is absent here. When it
-  // IS present we assert it renders. The propose->approve decision recording is
-  // proven in CI (learningLoopSurfaces + workflow data-layer tests).
-  const policySurface = page.getByTestId("policy-proposals");
-  if ((await policySurface.count()) > 0) {
-    await expect(policySurface.first()).toBeVisible();
-    console.log(
-      "[smoke] PASS S9 6b: policy-proposal surface present + rendered.",
-    );
-  } else {
-    console.log(
-      "[smoke] S9 6b: no override-pattern proposals on this account (expected on a fresh journey).",
-    );
-  }
-
-  await page.getByRole("button", { name: "Save review" }).click();
-  // Saving a review navigates back to the "today" stage by design; the smoke
-  // does not depend on that transition, and health is asserted by the caller
-  // for BOTH branches.
-  console.log("[smoke] PASS review: review entry saved.");
+  await expect(page.getByTestId("close-moment-summary")).toBeVisible();
+  await page.getByTestId("close-moment-close-day").click();
+  const toast = page.getByTestId("today-moments-toast");
+  await expect(toast).toBeVisible({ timeout: 30_000 });
+  // The toast reports WHICH truth happened. On the authenticated branch the
+  // review must reach the account: a device-only save here means persistence
+  // is broken, and the smoke says so instead of accepting "closed" at face
+  // value. (The device-only copy is "saved on this device and not in your
+  // account yet" — statusVocabulary's SAVED_ON_THIS_DEVICE_SHORT.)
+  await expect(
+    toast,
+    "closing the day must report a saved review, not a failure",
+  ).toContainText("Day closed");
+  await expect(
+    toast,
+    "on an authenticated run the review must reach the account, not just the device",
+  ).not.toContainText("saved on this device");
+  console.log(
+    "[smoke] PASS review: the day was closed and the review entry saved to the account.",
+  );
 }
 
 /**
