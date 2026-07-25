@@ -87,8 +87,9 @@ type BaselineEntry = {
  * that owns its removal.
  *
  * Slice F is this guard's own finding: five strings the manual inventory on
- * #692 missed. Three of them (`global-error.tsx`, `settings/areas/page.tsx`,
- * `AreaRegistryCards.tsx`) are rendered copy a person can read.
+ * #692 missed. Three of them (`global-error.tsx`, the now-fixed
+ * `settings/areas/page.tsx` entry #742 removed, `AreaRegistryCards.tsx`)
+ * were rendered copy a person can read.
  */
 const BASELINE: readonly BaselineEntry[] = [
   // ===== SLICE A (21 strings) =====
@@ -293,13 +294,22 @@ const BASELINE: readonly BaselineEntry[] = [
   // `unauthenticatedMessage`, reached only when `auth.getUser()` resolves
   // `{ user: null, error: null }`. The real @supabase/ssr client never does —
   // a signed-out session rejects one branch earlier with AuthSessionMissingError
-  // — so what `/settings/areas` actually renders is the library's own "Auth
-  // session missing!". Rewriting these would have been pure motion. Proven by
-  // rendering the page, not by reading it: .github/pr-evidence/692-server-copy/.
+  // — so before #742, what `/settings/areas` actually rendered was the
+  // library's own "Auth session missing!". Rewriting these strings would have
+  // been pure motion; renaming to plain language would not have touched the
+  // real path.
   //
-  // The genuinely user-visible jargon on that screen is therefore provider text
-  // this scanner cannot see by construction (see its blind-spot list). That is
-  // an open OWNER-GATE on #692, not a copy edit.
+  // #742 fixed the real path directly, at both catch sites the trace found
+  // (this hook's `useAreasLoadState.ts`, and `CreateAreaForm.tsx`'s create
+  // failure): each now classifies a signed-out error with the shared
+  // `isSignedOutError` check before it ever reaches a message string, so the
+  // raw provider text cannot reach either alert regardless of what this
+  // static scanner can see. Proven by rendering the page, not by reading it —
+  // before/after: .github/pr-evidence/692-server-copy/ (before) and this
+  // issue's PR body (after). The scanner's blind spot (provider text arrives
+  // at runtime, not as a source literal) is still real and still applies to
+  // every OTHER runtime error message in this slice; it no longer applies to
+  // these two call sites specifically.
   {
     slice: "E",
     file: "apps/web/src/lib/data/export.ts",
@@ -433,13 +443,6 @@ const BASELINE: readonly BaselineEntry[] = [
   },
   {
     slice: "F",
-    file: "apps/web/src/app/settings/areas/page.tsx",
-    strings: [
-      "If Supabase is configured, sign in and make sure the local stack is running. Without Supabase env vars, this page uses local-only areas.",
-    ],
-  },
-  {
-    slice: "F",
     file: "apps/web/src/lib/observability/aiCallTraces.ts",
     strings: [
       "ai_call_traces: skipped trace insert because no user access token was provided.",
@@ -464,8 +467,18 @@ const BASELINE: readonly BaselineEntry[] = [
  * #743 took it 74 -> 72: replacing the two bare `!response.ok` throws in
  * `oauth.ts` with `GoogleOAuthProviderError` (whose own message carries no
  * banned term) removed both baselined strings without adding a replacement.
+ *
+ * #742 took it 72 -> 71: `settings/areas/page.tsx`'s developer-jargon
+ * paragraph ("If Supabase is configured, sign in and make sure the local
+ * stack is running…") is deleted outright, not reworded — the signed-out
+ * state it used to explain now renders its own calm copy instead of sharing
+ * the generic error alert. The other half of this issue (the raw
+ * "Auth session missing!" library string both this file and
+ * `CreateAreaForm.tsx` used to render) was never a scanner-visible literal,
+ * so it carried no baseline entry to remove; see `useAreasLoadState.ts` and
+ * `CreateAreaForm.tsx` for that fix.
  */
-const BASELINE_PINNED_STRINGS = 72;
+const BASELINE_PINNED_STRINGS = 71;
 
 const repoRoot = resolve(__dirname, "../../../..");
 
