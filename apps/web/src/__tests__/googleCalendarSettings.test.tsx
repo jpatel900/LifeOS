@@ -196,4 +196,96 @@ describe("Google Calendar settings panel", () => {
       ),
     ).toBeDefined();
   });
+
+  // #743: the owner used to see only "connecting failed safely" with no way
+  // to tell WHY. These assert the glance line reads the real reason and the
+  // details disclosure carries the sanitized code/description underneath.
+  it("shows the plain-language glance reason and sanitized details for a known Google error code", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: { session: { access_token: "supabase-access-token" } },
+      error: null,
+    });
+    mocks.createSupabaseBrowserClient.mockReturnValue({
+      auth: { getSession: mocks.getSession },
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          configured: true,
+          status: "error",
+          message:
+            "The sign-in code expired or was already used. Try connecting again.",
+          reason: {
+            code: "invalid_grant",
+            description: "Malformed auth code.",
+            glance:
+              "The sign-in code expired or was already used. Try connecting again.",
+          },
+          connection: {
+            id: "conn-1",
+            status: "error",
+            calendar_id: "primary",
+            granted_scopes_json: [],
+            connected_at: null,
+            disconnected_at: "2026-07-25T00:00:00.000Z",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    render(<GoogleCalendarConnectionPanel />);
+
+    expect(
+      await screen.findByText(
+        "The sign-in code expired or was already used. Try connecting again.",
+      ),
+    ).toBeDefined();
+    expect(screen.getByText("Why this failed")).toBeDefined();
+    expect(screen.getByText(/Google's code: invalid_grant/)).toBeDefined();
+    expect(
+      screen.getByText(/Google's message: Malformed auth code\./),
+    ).toBeDefined();
+  });
+
+  it("falls back to the generic failure message and shows no details disclosure when no reason was stored", async () => {
+    mocks.getSession.mockResolvedValue({
+      data: { session: { access_token: "supabase-access-token" } },
+      error: null,
+    });
+    mocks.createSupabaseBrowserClient.mockReturnValue({
+      auth: { getSession: mocks.getSession },
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          configured: true,
+          status: "error",
+          message:
+            "The last attempt to connect Google Calendar failed safely. Please connect again to retry.",
+          reason: null,
+          connection: {
+            id: "conn-1",
+            status: "error",
+            calendar_id: "primary",
+            granted_scopes_json: [],
+            connected_at: null,
+            disconnected_at: "2026-07-25T00:00:00.000Z",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    render(<GoogleCalendarConnectionPanel />);
+
+    expect(
+      await screen.findByText(
+        "The last attempt to connect Google Calendar failed safely. Please connect again to retry.",
+      ),
+    ).toBeDefined();
+    expect(screen.queryByText("Why this failed")).toBeNull();
+  });
 });

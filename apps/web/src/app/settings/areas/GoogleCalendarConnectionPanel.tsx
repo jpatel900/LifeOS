@@ -18,6 +18,16 @@ interface GoogleCalendarConnectionSummary {
   disconnected_at: string | null;
 }
 
+// #743: the sanitized reason a connect/refresh attempt failed. `glance` is
+// already plain language (it matches `message` when this is the active
+// failure); `code`/`description` are Google's own sanitized identifiers,
+// shown only inside the "Advanced details" disclosure below.
+interface GoogleCalendarConnectionErrorReason {
+  code: string;
+  description: string | null;
+  glance: string;
+}
+
 type GoogleCalendarPanelState =
   | {
       status: "loading";
@@ -28,6 +38,7 @@ type GoogleCalendarPanelState =
       connected: boolean;
       connection: GoogleCalendarConnectionSummary | null;
       message: string;
+      reason: GoogleCalendarConnectionErrorReason | null;
       severity: "info" | "warning" | "error" | "success";
     }
   | {
@@ -45,6 +56,7 @@ type GoogleCalendarConnectionResponse = {
   connection?: GoogleCalendarConnectionSummary | null;
   status?: "connected" | "disconnected" | "error";
   message?: string;
+  reason?: GoogleCalendarConnectionErrorReason | null;
   error?: string;
 };
 
@@ -229,6 +241,7 @@ export function GoogleCalendarConnectionPanel() {
             connection: null,
             message:
               "LifeOS isn't fully set up here, so Google Calendar isn't available. Local planning still works.",
+            reason: null,
             severity: "warning",
           });
         }
@@ -244,6 +257,7 @@ export function GoogleCalendarConnectionPanel() {
             connection: null,
             message:
               "LifeOS can't check your sign-in right now. Please sign in again before connecting Google Calendar.",
+            reason: null,
             severity: "warning",
           });
         }
@@ -260,6 +274,7 @@ export function GoogleCalendarConnectionPanel() {
             connected: false,
             connection: null,
             message: "Please sign in to LifeOS to connect Google Calendar.",
+            reason: null,
             severity: "warning",
           });
         }
@@ -299,6 +314,7 @@ export function GoogleCalendarConnectionPanel() {
             message:
               payload.message ??
               "Google Calendar connection status is available.",
+            reason: payload.reason ?? null,
             severity,
           });
         }
@@ -315,6 +331,7 @@ export function GoogleCalendarConnectionPanel() {
             connected: false,
             connection: null,
             message: normalized.message,
+            reason: null,
             severity: normalized.severity,
           });
         }
@@ -391,6 +408,7 @@ export function GoogleCalendarConnectionPanel() {
         connected: false,
         connection: null,
         message: normalized.message,
+        reason: null,
         severity: normalized.severity,
       });
       setActionState({ status: "idle" });
@@ -423,6 +441,7 @@ export function GoogleCalendarConnectionPanel() {
         connection: null,
         message:
           "LifeOS disconnected Google Calendar and deleted its saved access on our side. Your permission still lives in your Google account — remove it there too if you want to fully revoke access.",
+        reason: null,
         severity: "info",
       });
       setActionState({ status: "idle" });
@@ -438,6 +457,7 @@ export function GoogleCalendarConnectionPanel() {
         connected: true,
         connection: null,
         message: normalized.message,
+        reason: null,
         severity: normalized.severity,
       });
       setActionState({ status: "idle" });
@@ -554,6 +574,23 @@ export function GoogleCalendarConnectionPanel() {
                   Access you granted to Google:{" "}
                   {panelState.connection.granted_scopes_json.join(", ")}
                 </p>
+              </DiagnosticsDisclosure>
+            ) : null}
+
+            {/* #743: glance line lives in `panelState.message` above (already
+                plain language); this disclosure is the detail layer -- the
+                sanitized code/description behind it, never the raw provider
+                body. */}
+            {panelState.reason ? (
+              <DiagnosticsDisclosure
+                title="Why this failed"
+                className="text-sm text-muted-foreground"
+                summaryClassName="text-sm font-medium text-foreground"
+              >
+                <p>Google&apos;s code: {panelState.reason.code}</p>
+                {panelState.reason.description ? (
+                  <p>Google&apos;s message: {panelState.reason.description}</p>
+                ) : null}
               </DiagnosticsDisclosure>
             ) : null}
           </>

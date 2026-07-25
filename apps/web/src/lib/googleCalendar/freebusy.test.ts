@@ -33,11 +33,13 @@ vi.mock("./server", async () => {
   };
 });
 
+import { GoogleOAuthProviderError } from "./oauth";
 import {
   allDayContextOverlapsProposal,
   checkGoogleCalendarFreeBusyForConnection,
   extractAllDayContexts,
   getCalendarDateKey,
+  resolveGoogleCalendarAccessToken,
 } from "./freebusy";
 
 const connection = {
@@ -222,6 +224,42 @@ describe("Google Calendar free/busy helper", () => {
         encrypted_access_token: "encrypted-refreshed-access",
         encrypted_refresh_token: "encrypted-google-refresh-token",
         token_expires_at: "2026-05-09T02:00:00.000Z",
+      }),
+    );
+  });
+
+  it("persists Google's error reason on a failed refresh without changing connection status (#743)", async () => {
+    mocks.decryptGoogleCalendarToken.mockReturnValue("google-refresh-token");
+    mocks.refreshGoogleCalendarAccessToken.mockRejectedValue(
+      new GoogleOAuthProviderError({
+        phase: "refresh",
+        code: "invalid_grant",
+        description: "Token has been expired or revoked.",
+        httpStatus: 400,
+      }),
+    );
+
+    await expect(
+      resolveGoogleCalendarAccessToken({
+        connection,
+        supabaseAccessToken: "supabase-access-token",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_grant" });
+
+    expect(
+      mocks.upsertGoogleCalendarConnectionForAccessToken,
+    ).toHaveBeenCalledWith(
+      "supabase-access-token",
+      expect.objectContaining({
+        last_error_json: expect.objectContaining({
+          code: "invalid_grant",
+          description: "Token has been expired or revoked.",
+          http_status: 400,
+        }),
+        // Status is left as-is here -- this is a diagnostic write, not a
+        // connection-state change; the connection stays "connected" until
+        // the owner reconnects or a full callback marks it "error".
+        status: "connected",
       }),
     );
   });

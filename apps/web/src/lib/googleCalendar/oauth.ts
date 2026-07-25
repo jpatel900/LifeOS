@@ -49,6 +49,39 @@ export interface GoogleRefreshTokenResponse {
   tokenType: string;
 }
 
+export type GoogleOAuthErrorPhase = "exchange" | "refresh";
+
+export interface GoogleOAuthProviderErrorInit {
+  code: string;
+  description: string | null;
+  httpStatus: number;
+  phase: GoogleOAuthErrorPhase;
+}
+
+/**
+ * Carries Google's own OAuth error identifier and description (the
+ * `error`/`error_description` fields Google's token endpoint returns) so a
+ * caller can log and persist the real reason a connect/refresh failed,
+ * instead of a bare "failed" message. This must NEVER be constructed with
+ * token, client-secret, or authorization-code text — only Google's error
+ * code/description and the HTTP status.
+ */
+export class GoogleOAuthProviderError extends Error {
+  readonly code: string;
+  readonly description: string | null;
+  readonly httpStatus: number;
+  readonly phase: GoogleOAuthErrorPhase;
+
+  constructor(init: GoogleOAuthProviderErrorInit) {
+    super("Google Calendar connection step did not complete.");
+    this.name = "GoogleOAuthProviderError";
+    this.code = init.code;
+    this.description = init.description;
+    this.httpStatus = init.httpStatus;
+    this.phase = init.phase;
+  }
+}
+
 function assertServerRuntime() {
   const isTestRuntime =
     process.env.VITEST === "true" || process.env.NODE_ENV === "test";
@@ -72,6 +105,17 @@ function decodeBase64Url(value: string) {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+// #743: Google's error/error_description are external, unvalidated text that
+// ends up persisted and eventually rendered. Cap their length before they
+// travel any further so a pathological response can't bloat storage or the
+// response payload.
+export const GOOGLE_OAUTH_ERROR_CODE_MAX_LENGTH = 100;
+export const GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH = 500;
+
+export function truncateGoogleOAuthErrorText(value: string, maxLength: number) {
+  return value.length > maxLength ? value.slice(0, maxLength) : value;
 }
 
 function parseStatePayload(value: unknown): GoogleOAuthStatePayload | null {
@@ -250,6 +294,29 @@ export function getGoogleCalendarOAuthStateCookieOptions() {
   };
 }
 
+function buildProviderErrorInit(
+  payload: Record<string, unknown> | null,
+  response: Response,
+  phase: GoogleOAuthErrorPhase,
+): GoogleOAuthProviderErrorInit {
+  return {
+    phase,
+    code: isNonEmptyString(payload?.error)
+      ? truncateGoogleOAuthErrorText(
+          payload.error,
+          GOOGLE_OAUTH_ERROR_CODE_MAX_LENGTH,
+        )
+      : "unknown_error",
+    description: isNonEmptyString(payload?.error_description)
+      ? truncateGoogleOAuthErrorText(
+          payload.error_description,
+          GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH,
+        )
+      : null,
+    httpStatus: response.status,
+  };
+}
+
 export async function exchangeGoogleCalendarCode(
   params: ExchangeGoogleCodeParams,
 ): Promise<GoogleOAuthTokenResponse> {
@@ -284,7 +351,9 @@ export async function exchangeGoogleCalendarCode(
   > | null;
 
   if (!response.ok) {
-    throw new Error("Google token exchange failed.");
+    throw new GoogleOAuthProviderError(
+      buildProviderErrorInit(payload, response, "exchange"),
+    );
   }
 
   if (
@@ -346,7 +415,9 @@ export async function refreshGoogleCalendarAccessToken(
   > | null;
 
   if (!response.ok) {
-    throw new Error("Google access token refresh failed.");
+    throw new GoogleOAuthProviderError(
+      buildProviderErrorInit(payload, response, "refresh"),
+    );
   }
 
   if (

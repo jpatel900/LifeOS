@@ -4,8 +4,12 @@ import {
   exchangeGoogleCalendarCode,
   getGoogleCalendarOAuthStateCookieOptions,
   GOOGLE_CALENDAR_OAUTH_STATE_COOKIE,
+  GOOGLE_OAUTH_ERROR_CODE_MAX_LENGTH,
+  GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH,
+  GoogleOAuthProviderError,
   isGoogleCalendarOAuthStateValid,
   readGoogleCalendarOAuthStateCookie,
+  truncateGoogleOAuthErrorText,
 } from "@/lib/googleCalendar/oauth";
 import {
   getGoogleCalendarStoredConnectionForAccessToken,
@@ -16,6 +20,15 @@ import {
   buildGoogleAccessTokenExpiresAt,
   encryptGoogleCalendarToken,
 } from "@/lib/googleCalendar/tokens";
+
+// Sanitized-only inputs to markConnectionError: Google's own error code and
+// description (or a local LifeOS code like "missing_code" when Google never
+// sent one), never token/secret/authorization-code text.
+interface StoredOAuthErrorDetails {
+  code: string;
+  description: string | null;
+  http_status: number | null;
+}
 
 function getCookieValue(cookieHeader: string | null, name: string) {
   if (!cookieHeader) {
@@ -51,6 +64,7 @@ async function markConnectionError(
   accessToken: string,
   userId: string,
   scopes: string[] = [],
+  lastError: StoredOAuthErrorDetails | null = null,
 ) {
   try {
     await upsertGoogleCalendarConnectionForAccessToken(accessToken, {
@@ -58,6 +72,9 @@ async function markConnectionError(
       connected_at: null,
       disconnected_at: new Date().toISOString(),
       granted_scopes_json: scopes,
+      last_error_json: lastError
+        ? { ...lastError, at: new Date().toISOString() }
+        : null,
       status: "error",
       user_id: userId,
     });
@@ -103,7 +120,22 @@ export async function GET(request: Request) {
     }
 
     if (providerError) {
-      await markConnectionError(statePayload.accessToken, user.id);
+      const providerErrorDescription = url.searchParams.get(
+        "error_description",
+      );
+      await markConnectionError(statePayload.accessToken, user.id, [], {
+        code: truncateGoogleOAuthErrorText(
+          providerError,
+          GOOGLE_OAUTH_ERROR_CODE_MAX_LENGTH,
+        ),
+        description: providerErrorDescription
+          ? truncateGoogleOAuthErrorText(
+              providerErrorDescription,
+              GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH,
+            )
+          : null,
+        http_status: null,
+      });
       const response = NextResponse.redirect(
         buildSettingsRedirect(request, "googleCalendarError", "access_denied"),
       );
@@ -112,7 +144,11 @@ export async function GET(request: Request) {
     }
 
     if (!code) {
-      await markConnectionError(statePayload.accessToken, user.id);
+      await markConnectionError(statePayload.accessToken, user.id, [], {
+        code: "missing_code",
+        description: null,
+        http_status: null,
+      });
       const response = NextResponse.redirect(
         buildSettingsRedirect(request, "googleCalendarError", "missing_code"),
       );
@@ -137,6 +173,7 @@ export async function GET(request: Request) {
         statePayload.accessToken,
         user.id,
         tokenResponse.scope,
+        { code: "refresh_token_missing", description: null, http_status: null },
       );
       const response = NextResponse.redirect(
         buildSettingsRedirect(
@@ -158,6 +195,7 @@ export async function GET(request: Request) {
         encrypted_access_token: encryptedAccessToken,
         encrypted_refresh_token: encryptedRefreshToken,
         granted_scopes_json: tokenResponse.scope,
+        last_error_json: null,
         status: "connected",
         token_expires_at: buildGoogleAccessTokenExpiresAt(
           tokenResponse.expiresIn,
@@ -173,13 +211,40 @@ export async function GET(request: Request) {
     clearOAuthCookie(response);
     return response;
   } catch (error) {
-    await markConnectionError(statePayload.accessToken, statePayload.userId);
-
     const errorCode =
       error instanceof Error &&
       /sign in|authenticated user mismatch/i.test(error.message)
         ? "auth_required"
         : "callback_failed";
+
+    // Google's own error, when we have one, is more useful to store and log
+    // than the locally-derived redirect bucket above -- it is the actual
+    // reason (e.g. "invalid_grant"), not just "auth_required"/"callback_failed".
+    const providerDetails: StoredOAuthErrorDetails =
+      error instanceof GoogleOAuthProviderError
+        ? {
+            code: error.code,
+            description: error.description,
+            http_status: error.httpStatus,
+          }
+        : { code: errorCode, description: null, http_status: null };
+
+    await markConnectionError(
+      statePayload.accessToken,
+      statePayload.userId,
+      [],
+      providerDetails,
+    );
+
+    // #743: this used to log nothing, so a failed connect left no trace in
+    // Vercel's runtime logs. No tokens/secrets here -- only Google's own
+    // error identifiers plus the user id.
+    console.error("[google-calendar/callback] connection attempt failed", {
+      code: providerDetails.code,
+      description: providerDetails.description,
+      httpStatus: providerDetails.http_status,
+      userId: statePayload.userId,
+    });
 
     const response = NextResponse.redirect(
       buildSettingsRedirect(request, "googleCalendarError", errorCode),

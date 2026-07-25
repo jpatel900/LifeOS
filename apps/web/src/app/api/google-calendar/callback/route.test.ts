@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   buildGoogleAccessTokenExpiresAt: vi.fn(),
@@ -17,14 +17,22 @@ vi.mock("@/lib/googleCalendar/config", () => ({
   getGoogleCalendarConfig: mocks.getGoogleCalendarConfig,
 }));
 
-vi.mock("@/lib/googleCalendar/oauth", () => ({
-  exchangeGoogleCalendarCode: mocks.exchangeGoogleCalendarCode,
-  getGoogleCalendarOAuthStateCookieOptions:
-    mocks.getGoogleCalendarOAuthStateCookieOptions,
-  GOOGLE_CALENDAR_OAUTH_STATE_COOKIE: "lifeos_google_calendar_oauth",
-  isGoogleCalendarOAuthStateValid: mocks.isGoogleCalendarOAuthStateValid,
-  readGoogleCalendarOAuthStateCookie: mocks.readGoogleCalendarOAuthStateCookie,
-}));
+vi.mock("@/lib/googleCalendar/oauth", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/lib/googleCalendar/oauth")
+  >("@/lib/googleCalendar/oauth");
+
+  return {
+    exchangeGoogleCalendarCode: mocks.exchangeGoogleCalendarCode,
+    getGoogleCalendarOAuthStateCookieOptions:
+      mocks.getGoogleCalendarOAuthStateCookieOptions,
+    GOOGLE_CALENDAR_OAUTH_STATE_COOKIE: "lifeos_google_calendar_oauth",
+    GoogleOAuthProviderError: actual.GoogleOAuthProviderError,
+    isGoogleCalendarOAuthStateValid: mocks.isGoogleCalendarOAuthStateValid,
+    readGoogleCalendarOAuthStateCookie:
+      mocks.readGoogleCalendarOAuthStateCookie,
+  };
+});
 
 vi.mock("@/lib/googleCalendar/tokens", () => ({
   buildGoogleAccessTokenExpiresAt: mocks.buildGoogleAccessTokenExpiresAt,
@@ -42,6 +50,7 @@ vi.mock("@/lib/googleCalendar/server", () => ({
     mocks.upsertGoogleCalendarConnectionForAccessToken,
 }));
 
+import { GoogleOAuthProviderError } from "@/lib/googleCalendar/oauth";
 import { GET } from "./route";
 
 describe("google-calendar callback route", () => {
@@ -231,5 +240,94 @@ describe("google-calendar callback route", () => {
         status: "connected",
       }),
     );
+  });
+
+  describe("captures and persists Google's real error reason (#743)", () => {
+    let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mocks.readGoogleCalendarOAuthStateCookie.mockReturnValue({
+        state: "expected-state",
+        userId: "550e8400-e29b-41d4-a716-446655440001",
+        accessToken: "supabase-access-token",
+        createdAt: "2026-05-09T00:00:00.000Z",
+      });
+      mocks.isGoogleCalendarOAuthStateValid.mockReturnValue(true);
+      mocks.requireSupabaseServerUser.mockResolvedValue({
+        user: { id: "550e8400-e29b-41d4-a716-446655440001" },
+      });
+    });
+
+    afterEach(() => {
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("persists Google's redirect error and description when the user's consent screen fails", async () => {
+      const response = await GET(
+        new Request(
+          "http://localhost/api/google-calendar/callback?state=expected-state&error=access_denied&error_description=User+cancelled",
+          { headers: { Cookie: "lifeos_google_calendar_oauth=sealed-cookie" } },
+        ),
+      );
+
+      expect(response.status).toBe(307);
+      expect(
+        mocks.upsertGoogleCalendarConnectionForAccessToken,
+      ).toHaveBeenCalledWith(
+        "supabase-access-token",
+        expect.objectContaining({
+          last_error_json: expect.objectContaining({
+            code: "access_denied",
+            description: "User cancelled",
+          }),
+          status: "error",
+        }),
+      );
+    });
+
+    it("persists the provider's code/description from a failed exchange and logs it without secrets", async () => {
+      mocks.exchangeGoogleCalendarCode.mockRejectedValue(
+        new GoogleOAuthProviderError({
+          phase: "exchange",
+          code: "invalid_grant",
+          description: "Malformed auth code.",
+          httpStatus: 400,
+        }),
+      );
+
+      const response = await GET(
+        new Request(
+          "http://localhost/api/google-calendar/callback?state=expected-state&code=super-secret-auth-code",
+          { headers: { Cookie: "lifeos_google_calendar_oauth=sealed-cookie" } },
+        ),
+      );
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toContain(
+        "googleCalendarError=callback_failed",
+      );
+      expect(
+        mocks.upsertGoogleCalendarConnectionForAccessToken,
+      ).toHaveBeenCalledWith(
+        "supabase-access-token",
+        expect.objectContaining({
+          last_error_json: expect.objectContaining({
+            code: "invalid_grant",
+            description: "Malformed auth code.",
+            http_status: 400,
+          }),
+          status: "error",
+        }),
+      );
+
+      expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+      const [, logged] = consoleErrorSpy.mock.calls[0] as [string, unknown];
+      const serializedLog = JSON.stringify(logged);
+      expect(serializedLog).toContain("invalid_grant");
+      expect(serializedLog).toContain("550e8400-e29b-41d4-a716-446655440001");
+      expect(serializedLog).not.toContain("super-secret-auth-code");
+      expect(serializedLog).not.toContain("client-secret");
+    });
   });
 });
