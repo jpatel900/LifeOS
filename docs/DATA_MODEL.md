@@ -545,7 +545,9 @@ A confirmed win and a saved review are now written to the device-local pending-w
 | win_records    | client_write_id | text nullable, unique per user | #737-A; set by the journal replay path so a repeated replay dedupes instead of creating a duplicate win |
 | review_entries | client_write_id | text nullable, unique per user | #737-A; same key for the review save path                                                               |
 
-Both indexes are PARTIAL (`where client_write_id is not null`), so pre-existing rows and any non-journalled write path are unaffected. Writes go through `upsert(..., { onConflict: "user_id,client_write_id", ignoreDuplicates: true })`.
+Both are PLAIN (non-partial) composite unique indexes, and that is load-bearing: `ON CONFLICT (user_id, client_write_id)` can only infer a partial index when the INSERT itself carries a WHERE clause proving the index predicate, which PostgREST/supabase-js `onConflict` cannot send — a partial index fails every upsert with Postgres 42P10. Pre-existing rows are unaffected regardless, because a Postgres unique index treats NULLs as DISTINCT by default, so any number of rows may carry a NULL `client_write_id`. (`NULLS NOT DISTINCT` must not be used here.) Writes go through `upsert(..., { onConflict: "user_id,client_write_id", ignoreDuplicates: true })`.
+
+Note for `capture_items.client_capture_id` (4.15): that index IS partial and is paired with the same `onConflict` shape, so it is expected to carry the same 42P10 defect. Tracked as a follow-up on #737 — it is not touched here.
 
 No new grants and no policy change: table-level `grant select, insert, update, delete` already covers columns added later, and the owner RLS policies (section 8) are column-agnostic. The column is deliberately absent from `winRecordColumns` / `reviewEntryColumns` — unlike the capture queue, which reconciles against server rows, the journal clears its own entry once the write is confirmed, so nothing reads the key back.
 

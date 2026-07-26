@@ -564,9 +564,13 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     const title = `rls-win-null-id-${suffix}`;
 
     try {
-      // Two NULL client_write_id rows must not collide — every pre-#737 win is
-      // one of these, so a unique index that counted NULLs would break the
-      // migration on real data.
+      // Two NULL client_write_id rows must not collide — every pre-#737 win
+      // is one of these, so an index that counted NULLs as equal would break
+      // the migration on real data. This is guaranteed by Postgres treating
+      // NULLs as DISTINCT in a unique index by default, NOT by a partial
+      // predicate: the predicate was removed because `ON CONFLICT` cannot
+      // infer a partial index (42P10). This test is what proves the guarantee
+      // survived that change.
       for (const attempt of [1, 2]) {
         const { error } = await userAClient.from("win_records").insert({
           user_id: userA.id,
