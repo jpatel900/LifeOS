@@ -1,0 +1,251 @@
+/**
+ * #737-A slice 2: wins and reviews, wired through the pending-writes journal.
+ *
+ * The rule this module enforces: **the device write happens first, and the
+ * account write is a replay of it.** A user action journals its write to
+ * IndexedDB (`pendingWriteJournal.ts`) and only then does anything reach the
+ * network. So "saved on this device" is true the moment the user is told it,
+ * a new tab can read the write back, and the account write can be retried as
+ * many times as it takes without ever creating a second row.
+ *
+ * ## What this replaces
+ *
+ * `confirmWin` used to start with `if (!client) return;` — signed out or in
+ * mock mode the win was written NOWHERE, while the fallback banner said it was
+ * "saved on this device". `saveReview` went straight to `createReviewEntry`
+ * with no device tier at all: the reducer's `sessionStorage` mirror kept the
+ * review log inside ONE TAB, and closing that tab lost it silently.
+ *
+ * ## Payloads are self-contained and clock-pinned
+ *
+ * A journalled write may not replay for hours, in a different tab, after a
+ * reload. So the payload carries everything the server call needs, including
+ * the DATE THE USER ACTED. Deriving `occurred_at` (or a review period) from
+ * `new Date()` at replay time would file a win confirmed at 23:50 under the
+ * following day.
+ *
+ * ## Persisted ids: pinned if known, resolved if not, never guessed
+ *
+ * The server rows reference persisted (account) ids, but the app works in
+ * workflow-local ids. If the mapping is known at journal time it is pinned
+ * into the payload. If it is not — signed out, or the area has not synced yet
+ * — the payload keeps the local id and replay resolves it against the current
+ * mapping. A write whose ids still cannot be resolved THROWS, which the kernel
+ * treats as "keep it queued": far better a win that arrives late than a win
+ * written against the wrong area.
+ *
+ * ## Exactly once
+ *
+ * Two independent layers, because either can fail alone:
+ *
+ *  - Client: `replayPendingWrites` deletes the journal entry only after its
+ *    handler resolves, so a second replay finds nothing to send.
+ *  - Server: every call carries the journal entry's `client_write_id` and
+ *    upserts on the `(user_id, client_write_id)` partial unique index with
+ *    `ignoreDuplicates`, so a response lost *after* the row landed cannot
+ *    produce a duplicate on the retry.
+ */
+
+import type { JsonValue } from "@lifeos/schemas";
+import {
+  enqueuePendingWrite,
+  replayPendingWrites,
+  type PendingWrite,
+  type PendingWriteHandlers,
+  type ReplaySummary,
+} from "./pendingWriteJournal";
+
+/** Journalled shape of a confirmed win. Snake_case: it is stored data. */
+export interface WinWritePayload {
+  /** Workflow-local task id, so replay can re-resolve if needed. */
+  workflow_task_id: string;
+  /** Account task id when it was already known at confirm time. */
+  persisted_task_id: string | null;
+  /** Account area id when it was already known at confirm time. */
+  persisted_area_id: string | null;
+  title: string;
+  detail: string | null;
+  /** Pinned at confirm time — never re-derived from the replay clock. */
+  occurred_at: string;
+  [key: string]: unknown;
+}
+
+/** Journalled shape of a saved review entry. */
+export interface ReviewWritePayload {
+  persisted_area_id: string | null;
+  review_type: "daily" | "weekly";
+  period_start: string;
+  period_end: string;
+  summary_json: JsonValue;
+  [key: string]: unknown;
+}
+
+export interface JournalWinInput {
+  workflowTaskId: string;
+  persistedTaskId: string | null;
+  persistedAreaId: string | null;
+  title: string;
+  detail: string | null;
+  /** `YYYY-MM-DD` for the day the user confirmed the win. */
+  occurredAt: string;
+}
+
+export interface JournalReviewInput {
+  persistedAreaId: string | null;
+  reviewType: "daily" | "weekly";
+  periodStart: string;
+  periodEnd: string;
+  summaryJson: JsonValue;
+}
+
+/**
+ * Journal one confirmed win. THROWS when the device cannot hold it (no
+ * IndexedDB — private mode, a blocking extension), exactly like the capture
+ * queue's enqueue: the caller must show the failure rather than claim a save.
+ */
+export function journalWinWrite(
+  input: JournalWinInput,
+): Promise<PendingWrite<WinWritePayload>> {
+  return enqueuePendingWrite<WinWritePayload>({
+    entity: "win",
+    payload: {
+      workflow_task_id: input.workflowTaskId,
+      persisted_task_id: input.persistedTaskId,
+      persisted_area_id: input.persistedAreaId,
+      title: input.title,
+      detail: input.detail,
+      occurred_at: input.occurredAt,
+    },
+  });
+}
+
+/** Journal one saved review entry. Throws on the same terms as the win path. */
+export function journalReviewWrite(
+  input: JournalReviewInput,
+): Promise<PendingWrite<ReviewWritePayload>> {
+  return enqueuePendingWrite<ReviewWritePayload>({
+    entity: "review",
+    payload: {
+      persisted_area_id: input.persistedAreaId,
+      review_type: input.reviewType,
+      period_start: input.periodStart,
+      period_end: input.periodEnd,
+      summary_json: input.summaryJson,
+    },
+  });
+}
+
+/** The account-side call for a journalled win. */
+export interface SyncWinArgs {
+  client_write_id: string;
+  area_id: string;
+  source_task_id: string;
+  title: string;
+  detail: string | null;
+  occurred_at: string;
+}
+
+/** The account-side call for a journalled review entry. */
+export interface SyncReviewArgs {
+  client_write_id: string;
+  area_id: string | null;
+  review_type: "daily" | "weekly";
+  period_start: string;
+  period_end: string;
+  summary_json: JsonValue;
+}
+
+/**
+ * Everything replay needs from outside this module. Injected rather than
+ * imported so the dispatcher stays testable without a Supabase client and
+ * without React: the caller owns "which account" and "what maps to what".
+ */
+export interface DurableWriteServerOps {
+  syncWin(args: SyncWinArgs): Promise<{ provider: "mock" | "supabase" }>;
+  syncReview(args: SyncReviewArgs): Promise<{ provider: "mock" | "supabase" }>;
+  /**
+   * Late resolution of a win journalled before the account was reachable.
+   * Returning nulls keeps the write queued.
+   */
+  resolveWinIds?(payload: WinWritePayload): {
+    persistedTaskId: string | null;
+    persistedAreaId: string | null;
+  };
+  /** Late resolution of the review's area. Reviews allow a null area. */
+  resolveReviewAreaId?(payload: ReviewWritePayload): string | null;
+}
+
+function winHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as WinWritePayload;
+    const resolved = ops.resolveWinIds?.(payload);
+    const areaId =
+      payload.persisted_area_id ?? resolved?.persistedAreaId ?? null;
+    const taskId =
+      payload.persisted_task_id ?? resolved?.persistedTaskId ?? null;
+
+    if (!areaId || !taskId) {
+      // Not droppable and not sendable: a win must reference the task and area
+      // it came from (`CreateWinRecordInputSchema`), and inventing them would
+      // file it against the wrong area. Throwing keeps it queued for the next
+      // replay, when the mapping may exist.
+      throw new Error(
+        "Cannot send this win yet: its account task or area is not known on this device.",
+      );
+    }
+
+    await ops.syncWin({
+      client_write_id: write.client_write_id,
+      area_id: areaId,
+      source_task_id: taskId,
+      title: payload.title,
+      detail: payload.detail,
+      occurred_at: payload.occurred_at,
+    });
+  };
+}
+
+function reviewHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as ReviewWritePayload;
+    // A review entry legitimately has no area (the All-areas review), so a
+    // null area is sent as null rather than blocking the write.
+    const areaId =
+      payload.persisted_area_id ?? ops.resolveReviewAreaId?.(payload) ?? null;
+
+    await ops.syncReview({
+      client_write_id: write.client_write_id,
+      area_id: areaId,
+      review_type: payload.review_type,
+      period_start: payload.period_start,
+      period_end: payload.period_end,
+      summary_json: payload.summary_json,
+    });
+  };
+}
+
+/**
+ * The entity -> handler map this slice wires. Entities absent from this map
+ * are reported `skipped` by the kernel and stay queued, so a later slice
+ * adding an entity without a handler loses nothing — it just does not sync
+ * until it is wired.
+ */
+export function createDurableWriteHandlers(
+  ops: DurableWriteServerOps,
+): PendingWriteHandlers {
+  return {
+    win: winHandler(ops),
+    review: reviewHandler(ops),
+  };
+}
+
+/**
+ * Drain the journal to the account, oldest write first. Safe to call on every
+ * mount and every reconnect: an entry already sent is gone from the journal,
+ * and one still queued is retried idempotently.
+ */
+export function replayDurableWrites(
+  ops: DurableWriteServerOps,
+): Promise<ReplaySummary> {
+  return replayPendingWrites(createDurableWriteHandlers(ops));
+}
