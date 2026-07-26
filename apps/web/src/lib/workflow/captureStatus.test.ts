@@ -37,6 +37,8 @@ import {
  */
 
 const YESTERDAY = "2026-07-04T09:00:00.000Z";
+/** Strictly older than everything else, so "the stalest thing" is unambiguous. */
+const LAST_WEEK = "2026-06-28T09:00:00.000Z";
 const NOW = new Date("2026-07-05T12:00:00.000Z");
 const ABSENCE = {
   absent: true,
@@ -137,7 +139,9 @@ function stateWith(partial: Partial<WorkflowState>): WorkflowState {
 
 /** Exactly what a fresh session held after the audit's capture→sort→accept run. */
 const RESURRECTED_STATE = stateWith({
-  captureItems: [makeCapture({ id: "capture-1", status: "new" })],
+  captureItems: [
+    makeCapture({ id: "capture-1", status: "new", created_at: LAST_WEEK }),
+  ],
   taskDrafts: [],
   tasks: [
     makeTask({
@@ -175,7 +179,8 @@ const UNSORTED_SURFACES: ReadonlyArray<{
   },
   {
     name: "Pipeline Capture badge",
-    count: (state) => buildPipelineCounts(state, "area-1", { now: NOW }).capture,
+    count: (state) =>
+      buildPipelineCounts(state, "area-1", { now: NOW }).capture,
   },
   {
     name: "Start hero — 'N thoughts waiting for a decision.'",
@@ -205,9 +210,9 @@ describe("captureHasTriageDecision", () => {
   });
 
   it("is false for a thought nothing has been decided about", () => {
-    expect(captureHasTriageDecision(GENUINELY_UNSORTED_STATE, "capture-9")).toBe(
-      false,
-    );
+    expect(
+      captureHasTriageDecision(GENUINELY_UNSORTED_STATE, "capture-9"),
+    ).toBe(false);
   });
 });
 
@@ -278,7 +283,10 @@ describe("one item = one truth (C1 Target Card 4)", () => {
       absence: ABSENCE,
       now: NOW,
     });
-    expect(summary.stalestItem?.kind).not.toBe("capture");
+    // The capture is the oldest row in state by a week, so on main it won the
+    // "one stalest thing" slot outright — and named work already accepted.
+    expect(summary.stalest).not.toBeNull();
+    expect(summary.stalest?.kind).toBe("task");
   });
 
   it("stops flagging the area as needing attention once nothing is really waiting", () => {

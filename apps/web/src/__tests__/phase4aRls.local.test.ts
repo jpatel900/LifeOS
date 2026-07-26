@@ -497,7 +497,8 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
 
       const idByText = new Map(
         (inserted ?? []).map(
-          (row: { id: string; raw_text: string }) => [row.raw_text, row.id] as const,
+          (row: { id: string; raw_text: string }) =>
+            [row.raw_text, row.id] as const,
         ),
       );
 
