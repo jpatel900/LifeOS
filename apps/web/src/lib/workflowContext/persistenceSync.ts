@@ -35,6 +35,10 @@ import {
   type ReviewTaskTargetStatus,
 } from "../data/workflow";
 import { normalizePersonName } from "../data/personLinks";
+import {
+  hasPendingWrite,
+  journalReviewWrite,
+} from "../durability/durableWrites";
 import { savedOnThisDeviceBanner } from "../statusVocabulary";
 import { createSupabaseBrowserClient } from "../supabase/browser";
 import type {
@@ -57,6 +61,10 @@ export interface PersistenceSyncDeps {
   persistedSessionIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   selectedAreaId: string | null;
   markLocalOnly: (message: string) => void;
+  /** #737-A slice 2: the device journal refused the write; nothing holds it. */
+  markDeviceStorageBlocked: () => void;
+  /** #737-A slice 2: drain the win/review journal to the account. */
+  replayJournaledWrites: () => Promise<unknown>;
   syncPersistedWorkflowRows: (
     client: MinimalSupabaseClient | null,
   ) => Promise<void>;
@@ -72,6 +80,8 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     persistedSessionIdByLocalIdRef,
     selectedAreaId,
     markLocalOnly,
+    markDeviceStorageBlocked,
+    replayJournaledWrites,
     syncPersistedWorkflowRows,
   } = deps;
 
@@ -466,50 +476,76 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
   }
 
   // #588: surfaces the real outcome so callers can gate "day closed" copy on
-  // it — "persisted" only after the Supabase row is created, "local-only" on
-  // the recovery-oriented local fallback. Failures still throw (the caller
-  // maps them to its failure result).
+  // it. #737-A slice 2 made the outcomes TRUE rather than changing them:
+  //
+  //  - the review is written to the DEVICE JOURNAL first, so "local-only" now
+  //    means a new tab can read it back, where before it meant the review
+  //    lived in one tab's sessionStorage and closing that tab lost it;
+  //  - the account write is a replay of the journal entry, carrying its
+  //    client_write_id, so a retry can never create a second review row;
+  //  - "persisted" is still claimed only when the account actually has it.
+  //
+  // A journal write that FAILS throws (no IndexedDB — the caller maps it to
+  // its failure result and must not claim the day closed). A NETWORK failure
+  // no longer throws: the review is safely journalled and the next replay
+  // retries it, which is "local-only", not a failure.
   async function persistReviewEntry(
     next: WorkflowState,
   ): Promise<"persisted" | "local-only"> {
-    const client = createSupabaseBrowserClient();
     const persistedAreaId = selectedAreaId
       ? persistedAreaIdForWorkflowId(selectedAreaId, persistedAreasRef.current)
       : null;
 
-    if (!client || (selectedAreaId && !persistedAreaId)) {
+    // Pinned at save time: replay may not run until a later day, and a review
+    // must stay filed under the day it closed.
+    const today = new Date().toISOString().slice(0, 10);
+
+    let journalled;
+    try {
+      journalled = await journalReviewWrite({
+        persistedAreaId,
+        reviewType: "daily",
+        periodStart: today,
+        periodEnd: today,
+        summaryJson: {
+          verdict: "saved",
+          completed_sessions: next.executionSessions.filter(
+            (session) => session.status === "completed",
+          ).length,
+          missed_sessions: next.executionSessions.filter(
+            (session) => session.status === "missed",
+          ).length,
+          distracted_sessions: next.executionSessions.filter(
+            (session) => session.status === "distracted",
+          ).length,
+          open_tasks: next.tasks.filter((task) =>
+            ["active", "backlog", "scheduled", "blocked"].includes(task.status),
+          ).length,
+          scheduled_blocks: next.calendarBlocks.filter((block) =>
+            ["scheduled", "running"].includes(block.status),
+          ).length,
+          recent_log: next.reviewLog.slice(0, 8),
+        },
+      });
+    } catch (error) {
+      // The device itself refused to hold the review. Nothing has it.
+      markDeviceStorageBlocked();
+      throw error;
+    }
+
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the review stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
       markLocalOnly(savedOnThisDeviceBanner("Your review"));
       return "local-only";
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    await createReviewEntry(client, {
-      review_type: "daily",
-      period_start: today,
-      period_end: today,
-      area_id: persistedAreaId,
-      summary_json: {
-        verdict: "saved",
-        completed_sessions: next.executionSessions.filter(
-          (session) => session.status === "completed",
-        ).length,
-        missed_sessions: next.executionSessions.filter(
-          (session) => session.status === "missed",
-        ).length,
-        distracted_sessions: next.executionSessions.filter(
-          (session) => session.status === "distracted",
-        ).length,
-        open_tasks: next.tasks.filter((task) =>
-          ["active", "backlog", "scheduled", "blocked"].includes(task.status),
-        ).length,
-        scheduled_blocks: next.calendarBlocks.filter((block) =>
-          ["scheduled", "running"].includes(block.status),
-        ).length,
-        recent_log: next.reviewLog.slice(0, 8),
-      },
-    });
-
-    await syncPersistedWorkflowRows(client);
+    const client = createSupabaseBrowserClient();
+    if (client) await syncPersistedWorkflowRows(client);
     return "persisted";
   }
 

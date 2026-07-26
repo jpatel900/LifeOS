@@ -219,6 +219,47 @@ describe("replayDurableWrites", () => {
     expect(await pendingWriteCount("win")).toBe(1);
   });
 
+  it("keeps a write queued when the data layer reports mock, not a real account write", async () => {
+    // THE GUARD FOR THE WORST FAILURE MODE. `syncJournaledWin(null, ...)`
+    // resolves happily with provider "mock" when there is no Supabase client.
+    // If replay treated that as success it would DELETE the journal entry and
+    // the user's win would be gone -- the exact data loss #737 exists to end.
+    const ops = serverOps({
+      syncWin: vi.fn().mockResolvedValue({ provider: "mock" as const }),
+    });
+    await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: PERSISTED_TASK,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 0, failed: 1 });
+    expect(await pendingWriteCount("win")).toBe(1);
+  });
+
+  it("keeps a review queued when the data layer reports mock", async () => {
+    const ops = serverOps({
+      syncReview: vi.fn().mockResolvedValue({ provider: "mock" as const }),
+    });
+    await journalReviewWrite({
+      persistedAreaId: PERSISTED_AREA,
+      reviewType: "daily",
+      periodStart: CONFIRMED_ON,
+      periodEnd: CONFIRMED_ON,
+      summaryJson: { verdict: "saved" },
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 0, failed: 1 });
+    expect(await pendingWriteCount("review")).toBe(1);
+  });
+
   it("keeps a win queued when its persisted ids cannot be resolved yet", async () => {
     // Journalled while signed out: no persisted area or task exists. Sending
     // it with local workflow ids would write a wrong row, so it waits.
@@ -273,7 +314,13 @@ describe("replayDurableWrites", () => {
     // Stands in for a tab close and reopen: nothing is deleted between the
     // journal writes and the replay, and the order is the order the user
     // confirmed them in.
-    const ops = serverOps();
+    const sentTitles: string[] = [];
+    const ops = serverOps({
+      syncWin: vi.fn().mockImplementation(async (args: { title: string }) => {
+        sentTitles.push(args.title);
+        return { provider: "supabase" as const };
+      }),
+    });
     for (const title of ["first win", "second win"]) {
       await journalWinWrite({
         workflowTaskId: `task-${title}`,
@@ -287,11 +334,7 @@ describe("replayDurableWrites", () => {
 
     await replayDurableWrites(ops);
 
-    expect(
-      ops.syncWin.mock.calls.map(
-        (call) => (call[0] as { title: string }).title,
-      ),
-    ).toEqual(["first win", "second win"]);
+    expect(sentTitles).toEqual(["first win", "second win"]);
   });
 });
 

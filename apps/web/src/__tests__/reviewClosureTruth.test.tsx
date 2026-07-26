@@ -1,3 +1,9 @@
+// #737-A slice 2: the review now goes to the DEVICE JOURNAL (IndexedDB)
+// before any account write, so "local-only" is only reachable when the device
+// can actually hold it. jsdom ships no IndexedDB, so without this polyfill
+// every local-only case below would take the new "the device refused it"
+// branch and this file would be testing the wrong state.
+import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ReviewPage from "../app/review/page";
@@ -117,7 +123,10 @@ describe("#588 cockpit review shell: verdict gated on the resolved save", () => 
 
   it("local-only (real fallback path): truthful local copy, no unqualified closure claim", async () => {
     // No override: mock mode has no Supabase client, so the genuine
-    // persistReviewEntry local-only branch (markLocalOnly) runs.
+    // persistReviewEntry local-only branch (markLocalOnly) runs. Since
+    // #737-A slice 2 this branch is also where the review is genuinely
+    // DEVICE-DURABLE — journalled to IndexedDB, readable from a new tab —
+    // which is what makes the "saved on this device" wording true.
     renderReview();
 
     clickSave();

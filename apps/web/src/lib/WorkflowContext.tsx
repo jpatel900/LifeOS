@@ -48,6 +48,8 @@ import {
 import {
   createRollupSummary,
   createWinRecord,
+  syncJournaledWin,
+  syncJournaledReviewEntry,
   listAreas,
   listOverrideRecords,
   listRollupSummaries,
@@ -127,9 +129,18 @@ import {
   type DeferTaskWithSessionResult,
   type GoogleCalendarBridgeResult,
   type TaskMapDraftState,
+  type WinConfirmResult,
   type WorkflowContextValue,
   type WorkflowSyncStatus,
 } from "./workflowContext/types";
+// #737-A slice 2: wins and reviews are journalled to the device before any
+// network call, then replayed to the account idempotently.
+import {
+  hasPendingWrite,
+  journalWinWrite,
+  replayDurableWrites,
+} from "./durability/durableWrites";
+import type { ReplaySummary } from "./durability/pendingWriteJournal";
 
 // Slice 4 (#590) re-exports — same public names, new homes. Every existing
 // `import { X } from "@/lib/WorkflowContext"` site keeps compiling unchanged.
@@ -199,6 +210,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // #688: a plain local-only marker keeps an existing signed-out state
       // (the reason hasn't changed); it never invents one.
       signedOut: current.signedOut ?? false,
+      pendingLocalChanges: true,
+    }));
+  }, []);
+
+  // The browser refuses to hold anything on this device (private mode, a
+  // storage quota, a blocking extension). Extracted by #737-A slice 2 because
+  // the durable-write path needs the same state the storage-restore and
+  // state-mirror effects already set, and three hand-copied literals would
+  // drift.
+  const markDeviceStorageBlocked = useCallback(() => {
+    setSyncStatus((current) => ({
+      ...current,
+      storage: "blocked",
+      message: DEVICE_STORAGE_BLOCKED,
       pendingLocalChanges: true,
     }));
   }, []);
@@ -401,6 +426,49 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     [buildDropLocalIds, markAccountSynced, markLocalOnly],
   );
 
+  // #737-A slice 2: drain the win/review journal to the account, oldest write
+  // first. Safe to call on every mount, every reconnect, and right after a
+  // user action — an entry already delivered is gone from the journal, and one
+  // still queued is retried under its own idempotency key.
+  //
+  // Returns early with no client exactly like `syncOfflineQueue` does. This is
+  // load-bearing, not defensive: `syncJournaledWin(null, ...)` resolves with
+  // provider "mock", and the dispatcher's own `requireAccountWrite` guard
+  // rejects that so the entry survives. Two guards because losing a write here
+  // is the failure this program exists to end.
+  const replayJournaledWrites =
+    useCallback(async (): Promise<ReplaySummary> => {
+      const client = createSupabaseBrowserClient();
+      if (!client) return { synced: 0, failed: 0, skipped: 0 };
+
+      return replayDurableWrites({
+        syncWin: (args) => syncJournaledWin(client, args),
+        syncReview: (args) => syncJournaledReviewEntry(client, args),
+        // Late id resolution: a win journalled while signed out carries only its
+        // workflow-local task id. By replay time the account rows have loaded,
+        // so the mapping may now exist. If it still does not, the dispatcher
+        // keeps the write queued rather than filing it against a guessed area.
+        resolveWinIds: (payload) => {
+          const workflowTaskId = String(payload.workflow_task_id);
+          const task = stateRef.current.tasks.find(
+            (candidate) => candidate.id === workflowTaskId,
+          );
+          return {
+            persistedTaskId: persistedIdForLocalId(
+              workflowTaskId,
+              persistedTaskIdByLocalIdRef.current,
+            ),
+            persistedAreaId: task
+              ? persistedAreaIdForWorkflowId(
+                  task.area_id,
+                  persistedAreasRef.current,
+                )
+              : null,
+          };
+        },
+      });
+    }, []);
+
   const applyWorkflowState = createApplyWorkflowState(stateRef, dispatch);
 
   const persistenceOps: PersistenceSyncOps = createPersistenceSync({
@@ -412,24 +480,33 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     persistedSessionIdByLocalIdRef,
     selectedAreaId,
     markLocalOnly,
+    markDeviceStorageBlocked,
+    replayJournaledWrites,
     syncPersistedWorkflowRows,
   });
 
-  // S7 (#259): persist a user-confirmed win. Only ever called on explicit
-  // confirm (never on skip). Mirrors persistReviewEntry's local↔persisted id
-  // mapping and markLocalOnly fallback; in mock/preview mode the harvest UI
-  // holds the win locally and there is nothing to persist.
+  // S7 (#259), made durable by #737-A slice 2. Only ever called on explicit
+  // confirm (never on skip).
+  //
+  // THE ORDER IS THE POINT. This used to open with `if (!client) return;`, so
+  // a win confirmed while signed out or in mock mode was written NOWHERE while
+  // the UI said "Win logged" and the fallback banner said it was "saved on
+  // this device". Now the device journal is written FIRST and the account
+  // write is a replay of it, so:
+  //
+  //  - "saved on this device" is true before the user is told it, and a new
+  //    tab can read the win back out of the journal;
+  //  - a win confirmed offline reaches the account on the next replay;
+  //  - if the device itself refuses to hold it, the caller learns the write
+  //    failed instead of being told a comforting lie.
   const confirmWin = useCallback(
     async (input: {
       taskId: string;
       title: string;
       detail?: string | null;
-    }) => {
+    }): Promise<WinConfirmResult> => {
       const title = input.title.trim();
-      if (title.length === 0) return;
-
-      const client = createSupabaseBrowserClient();
-      if (!client) return;
+      if (title.length === 0) return "failure";
 
       const task = stateRef.current.tasks.find((t) => t.id === input.taskId);
       const persistedTaskId = persistedIdForLocalId(
@@ -439,26 +516,48 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       const persistedAreaId = task
         ? persistedAreaIdForWorkflowId(task.area_id, persistedAreasRef.current)
         : null;
+      // Pinned here, at the moment the user confirmed. Replay may not run
+      // until tomorrow; a win confirmed at 23:50 must not be filed under the
+      // following day.
+      const occurredAt = new Date().toISOString().slice(0, 10);
 
-      if (!persistedTaskId || !persistedAreaId) {
-        markLocalOnly(savedOnThisDeviceBanner("Your win"));
-        return;
-      }
-
-      const today = new Date().toISOString().slice(0, 10);
+      let journalled;
       try {
-        await createWinRecord(client, {
-          area_id: persistedAreaId,
-          source_task_id: persistedTaskId,
+        journalled = await journalWinWrite({
+          workflowTaskId: input.taskId,
+          persistedTaskId,
+          persistedAreaId,
           title,
           detail: input.detail ?? null,
-          occurred_at: today,
+          occurredAt,
         });
       } catch {
-        markLocalOnly(savedOnThisDeviceBanner("Your win"));
+        // No IndexedDB. The win is genuinely nowhere; say so and let the
+        // caller withhold its success copy.
+        markDeviceStorageBlocked();
+        return "failure";
       }
+
+      try {
+        await replayJournaledWrites();
+      } catch {
+        // Best-effort: the win stays journalled and the next replay retries.
+      }
+
+      if (await hasPendingWrite(journalled.client_write_id)) {
+        markLocalOnly(savedOnThisDeviceBanner("Your win"));
+        return "device-only";
+      }
+
+      markAccountSynced();
+      return "persisted";
     },
-    [markLocalOnly],
+    [
+      markAccountSynced,
+      markDeviceStorageBlocked,
+      markLocalOnly,
+      replayJournaledWrites,
+    ],
   );
 
   // FR-031 slice 5 — task-map draft generation/approve/completion actions.
@@ -903,14 +1002,24 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }, [refreshUnsyncedCount]);
 
   // Sync on mount and whenever connectivity returns.
+  //
+  // #737-A slice 2 arms the win/review journal on the SAME two moments as the
+  // offline capture queue, deliberately: one lifecycle to reason about, and
+  // the capture queue's is the one already proven in use. The two drains are
+  // independent — a failing capture sync must not hold back a queued win — so
+  // each is fired on its own and neither awaits the other.
   useEffect(() => {
     void refreshUnsyncedCount();
     void syncOfflineQueue();
+    void replayJournaledWrites();
     if (typeof window === "undefined") return;
-    const onOnline = () => void syncOfflineQueue();
+    const onOnline = () => {
+      void syncOfflineQueue();
+      void replayJournaledWrites();
+    };
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [refreshUnsyncedCount, syncOfflineQueue]);
+  }, [refreshUnsyncedCount, replayJournaledWrites, syncOfflineQueue]);
 
   // Extracted to workflowContext/captureParse.ts (issue #590 slice 4) — plain
   // functions (no hooks), so this factory call is positioned after

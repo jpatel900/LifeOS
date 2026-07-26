@@ -46,14 +46,28 @@
  *    produce a duplicate on the retry.
  */
 
-import type { JsonValue } from "@lifeos/schemas";
 import {
   enqueuePendingWrite,
+  listPendingWrites,
   replayPendingWrites,
   type PendingWrite,
   type PendingWriteHandlers,
   type ReplaySummary,
 } from "./pendingWriteJournal";
+
+/**
+ * Is this specific write still waiting to reach the account?
+ *
+ * A replay drains the WHOLE journal, so its `synced` count cannot tell a
+ * caller whether the write IT just made got through — an unrelated queued
+ * write would inflate it. Asking after this one id is the honest question, and
+ * it is what decides between telling the user "saved to your account" and
+ * "saved on this device".
+ */
+export async function hasPendingWrite(clientWriteId: string): Promise<boolean> {
+  const pending = await listPendingWrites();
+  return pending.some((write) => write.client_write_id === clientWriteId);
+}
 
 /** Journalled shape of a confirmed win. Snake_case: it is stored data. */
 export interface WinWritePayload {
@@ -76,7 +90,9 @@ export interface ReviewWritePayload {
   review_type: "daily" | "weekly";
   period_start: string;
   period_end: string;
-  summary_json: JsonValue;
+  // `unknown` matches the schema layer: `JsonValueSchema` is a
+  // `z.ZodType<unknown>`, so widening it here would be a fiction.
+  summary_json: unknown;
   [key: string]: unknown;
 }
 
@@ -95,7 +111,7 @@ export interface JournalReviewInput {
   reviewType: "daily" | "weekly";
   periodStart: string;
   periodEnd: string;
-  summaryJson: JsonValue;
+  summaryJson: unknown;
 }
 
 /**
@@ -152,7 +168,9 @@ export interface SyncReviewArgs {
   review_type: "daily" | "weekly";
   period_start: string;
   period_end: string;
-  summary_json: JsonValue;
+  // `unknown` matches the schema layer: `JsonValueSchema` is a
+  // `z.ZodType<unknown>`, so widening it here would be a fiction.
+  summary_json: unknown;
 }
 
 /**
@@ -175,6 +193,23 @@ export interface DurableWriteServerOps {
   resolveReviewAreaId?(payload: ReviewWritePayload): string | null;
 }
 
+/**
+ * A journal entry is cleared only when the ACCOUNT took the write.
+ *
+ * The data layer reports `provider: "mock"` when there is no Supabase client —
+ * a successful no-op, not a successful write. Letting that resolve normally
+ * would make `replayPendingWrites` delete the entry and the user's work would
+ * vanish on the first replay in a signed-out session, which is the precise bug
+ * this whole program exists to end. Throwing keeps it queued.
+ */
+function requireAccountWrite(result: { provider: "mock" | "supabase" }): void {
+  if (result.provider !== "supabase") {
+    throw new Error(
+      "Cannot send this write yet: LifeOS cannot reach your account.",
+    );
+  }
+}
+
 function winHandler(ops: DurableWriteServerOps) {
   return async (write: PendingWrite): Promise<void> => {
     const payload = write.payload as WinWritePayload;
@@ -194,7 +229,7 @@ function winHandler(ops: DurableWriteServerOps) {
       );
     }
 
-    await ops.syncWin({
+    const result = await ops.syncWin({
       client_write_id: write.client_write_id,
       area_id: areaId,
       source_task_id: taskId,
@@ -202,6 +237,7 @@ function winHandler(ops: DurableWriteServerOps) {
       detail: payload.detail,
       occurred_at: payload.occurred_at,
     });
+    requireAccountWrite(result);
   };
 }
 
@@ -213,7 +249,7 @@ function reviewHandler(ops: DurableWriteServerOps) {
     const areaId =
       payload.persisted_area_id ?? ops.resolveReviewAreaId?.(payload) ?? null;
 
-    await ops.syncReview({
+    const result = await ops.syncReview({
       client_write_id: write.client_write_id,
       area_id: areaId,
       review_type: payload.review_type,
@@ -221,6 +257,7 @@ function reviewHandler(ops: DurableWriteServerOps) {
       period_end: payload.period_end,
       summary_json: payload.summary_json,
     });
+    requireAccountWrite(result);
   };
 }
 
