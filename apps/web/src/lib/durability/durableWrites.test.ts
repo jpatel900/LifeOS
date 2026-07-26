@@ -411,9 +411,14 @@ describe("createDurableWriteHandlers", () => {
   it("registers a handler for exactly the entities this slice wired", async () => {
     // A regression guard: if a later slice adds an entity to the journal but
     // forgets its handler, `replayPendingWrites` silently reports it skipped
-    // and it never reaches the account. This pins what S2 claims to carry.
+    // and it never reaches the account. Re-anchored by #737 C1 slice S4,
+    // which wires the third entity: a focus-session outcome.
     const handlers = createDurableWriteHandlers(serverOps());
 
-    expect(Object.keys(handlers).sort()).toEqual(["review", "win"]);
+    expect(Object.keys(handlers).sort()).toEqual([
+      "execution_session",
+      "review",
+      "win",
+    ]);
   });
 });
