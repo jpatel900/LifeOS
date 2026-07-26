@@ -399,6 +399,65 @@ export async function applyTaskReviewTransition(
   };
 }
 
+export interface SyncJournaledReviewEntryInput extends CreateReviewEntryInput {
+  /** Idempotency key; matches the journal record's `client_write_id`. */
+  client_write_id: string;
+}
+
+/**
+ * #737-A slice 2: push one journalled review entry to the account.
+ *
+ * Same shape and same reasoning as `syncJournaledWin` (see
+ * `data/workflow/rollups.ts`): an upsert on the
+ * `(user_id, client_write_id)` partial unique index with `ignoreDuplicates`,
+ * so replaying the journal never creates a second review entry. No
+ * `.select().single()` — `ignoreDuplicates` returns no row on conflict, and
+ * nothing needs the row back.
+ *
+ * `createReviewEntry` below is left untouched: it is still the read-back path
+ * used by tests and any non-journalled caller.
+ */
+export async function syncJournaledReviewEntry(
+  client: MinimalSupabaseClient | null,
+  input: SyncJournaledReviewEntryInput,
+): Promise<{ provider: "mock" | "supabase" }> {
+  const parsedInput = CreateReviewEntryInputSchema.parse(input);
+  const clientWriteId = input.client_write_id?.trim();
+  if (!clientWriteId) {
+    throw new Error("A journalled review needs a client write id.");
+  }
+
+  if (!client) return { provider: "mock" };
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before creating review entries.",
+  );
+
+  const query = client.from("review_entries") as {
+    upsert: (
+      row: Record<string, unknown>,
+      options: { onConflict: string; ignoreDuplicates: boolean },
+    ) => PromiseLike<{ error: unknown }>;
+  };
+
+  const { error } = await query.upsert(
+    {
+      user_id: user.id,
+      area_id: parsedInput.area_id,
+      review_type: parsedInput.review_type,
+      period_start: parsedInput.period_start,
+      period_end: parsedInput.period_end,
+      summary_json: parsedInput.summary_json,
+      client_write_id: clientWriteId,
+    },
+    { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+  );
+
+  if (error) throw new Error(getSupabaseMessage(error));
+  return { provider: "supabase" };
+}
+
 export async function createReviewEntry(
   client: MinimalSupabaseClient | null,
   input: CreateReviewEntryInput,

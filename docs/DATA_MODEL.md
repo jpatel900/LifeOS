@@ -534,6 +534,23 @@ Instrumentation: born instrumented per NS-INV-3 — policy id `closure_ritual.v1
 
 Standard owner RLS (section 8), same pattern as sibling additive columns on existing owner-scoped tables (4.14-4.16) — no bespoke policy shape, no new table, no new RLS surface. Export coverage: `apps/web/src/lib/data/export.ts` selects `select("*")` per table (per the 4.16 precedent), so no explicit column-list change is anticipated for INV-2 coverage — to be confirmed in the build slice.
 
+### 4.18 Durable writes (#737-A) — replay idempotency keys
+
+**SHIPPED for wins and reviews (slice 2, migration `20260726120000_add_win_review_client_write_id.sql`).** Additive per NS-INV-2; no new table.
+
+A confirmed win and a saved review are now written to the device-local pending-writes journal (`apps/web/src/lib/durability/pendingWriteJournal.ts`, IndexedDB) before any network call, and replayed to the account on app start and on reconnect. Replay can legitimately run more than once for the same logical write, so each journalled write carries a client-generated id that the server dedupes on — the same mechanism `capture_items.client_capture_id` (4.15) already uses for the offline capture queue.
+
+| Table          | Column          | Type                           | Notes                                                                                                   |
+| -------------- | --------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| win_records    | client_write_id | text nullable, unique per user | #737-A; set by the journal replay path so a repeated replay dedupes instead of creating a duplicate win |
+| review_entries | client_write_id | text nullable, unique per user | #737-A; same key for the review save path                                                               |
+
+Both indexes are PARTIAL (`where client_write_id is not null`), so pre-existing rows and any non-journalled write path are unaffected. Writes go through `upsert(..., { onConflict: "user_id,client_write_id", ignoreDuplicates: true })`.
+
+No new grants and no policy change: table-level `grant select, insert, update, delete` already covers columns added later, and the owner RLS policies (section 8) are column-agnostic. The column is deliberately absent from `winRecordColumns` / `reviewEntryColumns` — unlike the capture queue, which reconciles against server rows, the journal clears its own entry once the write is confirmed, so nothing reads the key back.
+
+Rollups (`rollup_summaries`) are NOT covered by this slice and keep no idempotency key yet — they are the next durable-writes slice.
+
 ## 5. Meta-Learning Tables
 
 ### 5.1 `priority_profiles`
