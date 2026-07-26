@@ -884,9 +884,31 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         });
         await markCaptureSynced(queued.client_capture_id);
         syncedAny = true;
-      } catch {
+      } catch (error) {
         // Leave it queued; the next reconnect retries. The idempotent upsert
         // means a partially-applied drain never creates a duplicate.
+        //
+        // #759: this used to swallow the error with no trace at all, which is
+        // how a schema bug (the capture_items unique index rejecting every
+        // upsert with Postgres 42P10) went undetected in production for
+        // every offline capture, forever. Logging the real message is the
+        // NFR-004 ("external write failures must be visible") floor. The
+        // count badge (`CaptureAffordance`'s `unsyncedCount`, sourced from
+        // `unsyncedCaptureCount` below) already tells the user this item is
+        // still waiting — it stays truthful once #759's migration fix makes
+        // the retry actually succeed. Distinguishing "waiting, about to
+        // sync" from "stuck, failing every attempt" in that same badge would
+        // need a per-item status the device queue does not currently keep;
+        // that is real UI/schema surgery, out of scope for this fix.
+        // AGENT-TODO: give the offline queue a per-item last-error/attempt
+        // count (`lib/capture/offlineQueue.ts`) and surface a "couldn't
+        // sync" state through the existing capture status vocabulary
+        // (`lib/statusVocabulary.ts`) once a real failure mode exists that
+        // isn't this one.
+        console.error(
+          "[WorkflowContext] offline capture sync failed, leaving item queued",
+          error instanceof Error ? error : new Error(String(error)),
+        );
       }
     }
 

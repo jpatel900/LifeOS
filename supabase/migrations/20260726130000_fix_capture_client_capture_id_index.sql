@@ -1,0 +1,60 @@
+-- #759: fix the offline capture queue's idempotency, which has never worked.
+--
+-- `20260706150000_add_capture_client_capture_id.sql` created a PARTIAL unique
+-- index (`where client_capture_id is not null`) so a reconnect-triggered sync
+-- could dedupe a replayed insert. The client pairs it with
+-- `syncQueuedCapture`'s
+-- `upsert(..., { onConflict: "user_id,client_capture_id", ignoreDuplicates: true })`
+-- (`apps/web/src/lib/data/workflow.ts`). Every one of those upserts has been
+-- refused by Postgres with 42P10 since the index shipped, and
+-- `syncOfflineQueue` (`apps/web/src/lib/WorkflowContext.tsx`) swallows the
+-- throw, so the symptom was silent: an offline capture is queued forever and
+-- never reaches the account, on any reconnect.
+--
+-- WHY THESE ARE PLAIN UNIQUE INDEXES AND NOT PARTIAL ONES
+-- -------------------------------------------------------
+-- This is a real Postgres rule, not a quirk: `ON CONFLICT (a, b)` infers its
+-- arbiter index from the column list, and it will only consider a PARTIAL
+-- index when the INSERT statement itself carries a WHERE clause that PROVES
+-- the index predicate holds. PostgREST/supabase-js `onConflict` sends column
+-- names and nothing else, so it can never satisfy that proof and Postgres
+-- refuses the statement outright with 42P10 ("no unique or exclusion
+-- constraint matching the ON CONFLICT specification").
+--
+-- Same defect, same fix, as `20260726120000_add_win_review_client_write_id.sql`
+-- (#737-A slice 2), which hit this first for `win_records` / `review_entries`
+-- and caught it in CI before merge. This migration mirrors that corrected
+-- pattern for the table the defect originated on.
+--
+-- Dropping the predicate costs nothing, because the property it existed to
+-- protect is already guaranteed. A Postgres unique index treats NULLs as
+-- DISTINCT by default, so any number of rows may carry a NULL
+-- `client_capture_id` -- which is every capture ever written by a path that
+-- does not go through the offline queue (the direct `createCaptureItem` save
+-- path never sets this column). The RLS suite asserts exactly that ("leaves
+-- rows with no client_capture_id free to repeat").
+--
+-- `NULLS NOT DISTINCT` is deliberately NOT used: it would make two NULL-id
+-- rows collide and break every capture that was never queued offline.
+--
+-- CANNOT FAIL ON EXISTING DATA. Dropping a partial index and recreating a
+-- plain one over the same columns cannot violate uniqueness on the create:
+-- the partial index already enforced (user_id, client_capture_id) uniqueness
+-- across every row where client_capture_id was NOT NULL (the only rows a
+-- predicate-less index adds new comparisons for), so no duplicate pair can
+-- exist to reject. Rows where client_capture_id IS NULL were invisible to the
+-- old index and stay free to repeat under the new one, per NULLS DISTINCT
+-- above -- so no pre-existing NULL row can conflict either.
+--
+-- Otherwise unchanged from the original migration: additive and nullable
+-- (no existing column is altered), scoped to `(user_id, ...)` (client-minted
+-- ids are per device, so two accounts on one device must not block each
+-- other), no new grants (table-level grants from 20260706150000 already
+-- cover this column), no RLS policy change (the owner policy is
+-- column-agnostic). `docs/DATA_MODEL.md` §4.14 already describes this as
+-- "unique per user" without specifying partial vs. plain, so it needs no
+-- correction.
+drop index if exists public.capture_items_user_client_capture_id_key;
+
+create unique index capture_items_user_client_capture_id_key
+  on public.capture_items (user_id, client_capture_id);
