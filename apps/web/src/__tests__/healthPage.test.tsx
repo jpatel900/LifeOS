@@ -95,9 +95,15 @@ describe("Health cockpit", () => {
       ...live.checks.map((check) => check.id),
       ...demoHealthChecks.map((check) => check.id),
       // Signed-in-only checks, which the mock path above never reaches.
+      // #758: this hand-kept list is the hollow half of this guard — a
+      // signed-in-only check that is missing from BOTH it and the presentation
+      // map silently falls back to "Another check" and nothing fails. Any new
+      // signed-in-only check id belongs here.
       "health-transition-rpcs",
       "health-core-reads",
       "health-ai-provider-incidents",
+      "health-learning-trail",
+      "health-check-record",
     ]);
 
     const unmapped = [...ids].filter((id) => !HEALTH_CHECK_PRESENTATION[id]);

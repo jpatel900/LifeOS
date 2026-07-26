@@ -87,6 +87,13 @@ export const HEALTH_CHECK_PRESENTATION: Record<
     label: "Moving work between steps",
   },
   "health-core-reads": { group: "work", label: "Loading your saved work" },
+  // #758 — the two rows that make the verdict answerable for the learning loop
+  // and for the health screen's own write.
+  "health-learning-trail": {
+    group: "work",
+    label: "Learning from your decisions",
+  },
+  "health-check-record": { group: "work", label: "This check's own record" },
   "health-ai-parser": { group: "connections", label: "AI helper" },
   "health-ai-provider-incidents": {
     group: "connections",

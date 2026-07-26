@@ -6,6 +6,7 @@ import {
 } from "@/lib/observability";
 import type { DataProvider } from "./workflow";
 import { normalizeSupabaseRows } from "./supabaseRowNormalization";
+import { getLearningWriteFailureSnapshot } from "./learningWriteFailures";
 
 type HealthStatus = HealthCheck["status"];
 
@@ -809,6 +810,121 @@ async function probeCoreReads(client: MinimalHealthSupabaseClient) {
   );
 }
 
+/**
+ * #758 — the probe whose absence let Health say "Everything is working" while
+ * the audit trail was returning 42501 on the very same page load.
+ *
+ * These are the two tables the browser reads and writes for the learning loop
+ * (`listSuggestionRecords` / `listOverrideRecords`, and every
+ * `record*FireAndForget` write). Health probed neither, so its all-clear was
+ * true about the things it looked at and silent about the thing that was
+ * broken. `health_incidents` is deliberately NOT probed here: it is only ever
+ * touched server-side with the service role, so a browser probe of it would be
+ * a failure signal with no user-facing behaviour behind it. Its grant is
+ * covered by the migration, the local RLS suite, and the migration guard.
+ *
+ * The write side cannot be probed without writing a junk row, so it is
+ * reported from the tally that `logLearningWriteFailure` keeps instead.
+ */
+const learningTrailTables = ["suggestion_records", "override_records"] as const;
+
+async function probeLearningTrail(client: MinimalHealthSupabaseClient) {
+  const readable: string[] = [];
+  const failed: string[] = [];
+  let firstFailure = "";
+
+  for (const table of learningTrailTables) {
+    try {
+      await readCoreTable(client, table);
+      readable.push(table);
+    } catch (error) {
+      failed.push(table);
+      if (!firstFailure) {
+        firstFailure = error instanceof Error ? error.message : "";
+      }
+    }
+  }
+
+  const writeFailures = getLearningWriteFailureSnapshot();
+
+  if (failed.length > 0) {
+    const failureCode = classifyAccessFailure(firstFailure);
+
+    return makeCheck(
+      "health-learning-trail",
+      "meta-learning audit trail",
+      "critical",
+      0,
+      // The summary is built from the CLASSIFICATION, never from the database
+      // message, so no raw wording can reach the screen by any route.
+      failureCode === "sign_in_expired"
+        ? "Your sign-in could not be confirmed. Sign in again to continue."
+        : "The history of the decisions you make could not be reached. Your work and your choices are safe — only the record LifeOS learns from is affected.",
+      {
+        readable,
+        failed,
+        // Sanitized: the label, never the message. #692 keeps raw database
+        // wording off every layer of this screen, developer layer included.
+        failure_code: failureCode,
+        write_failures_this_page: writeFailures.count,
+        repair_steps: [
+          "Check suggestion_records and override_records grants, RLS, and auth state.",
+        ],
+      },
+    );
+  }
+
+  if (writeFailures.count > 0) {
+    return makeCheck(
+      "health-learning-trail",
+      "meta-learning audit trail",
+      "watch",
+      55,
+      `${writeFailures.count} decision${writeFailures.count === 1 ? "" : "s"} could not be added to the history LifeOS learns from since you opened this page. Nothing you did was lost.`,
+      {
+        readable,
+        failed,
+        write_failures_this_page: writeFailures.count,
+        write_failure_tables: writeFailures.tables,
+        repair_steps: [
+          "Check suggestion_records and override_records write grants and RLS.",
+        ],
+      },
+    );
+  }
+
+  return makeCheck(
+    "health-learning-trail",
+    "meta-learning audit trail",
+    "healthy",
+    100,
+    "The decisions you make are being kept, so LifeOS can learn from them.",
+    {
+      readable,
+      failed,
+      write_failures_this_page: 0,
+      repair_steps: [],
+    },
+  );
+}
+
+/**
+ * #758: turn a raw database message into a stable, non-leaking label. The
+ * distinction matters for whoever debugs this — `permission denied for table`
+ * is the missing-GRANT branch of 42501 (the door), while a row-level-security
+ * message is the policy branch (the filter) — but neither raw string may reach
+ * the screen, so only the label does.
+ */
+function classifyAccessFailure(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("permission denied for table")) return "no_access";
+  if (normalized.includes("row-level security")) return "row_not_yours";
+  if (normalized.includes("jwt") || normalized.includes("auth")) {
+    return "sign_in_expired";
+  }
+  return "unavailable";
+}
+
 async function persistHealthChecks(
   client: MinimalHealthSupabaseClient,
   userId: string,
@@ -853,11 +969,23 @@ export async function getHealthDashboard(
   const checks: HealthDashboardCheck[] = [
     makeCheck(
       "health-mock-mode",
-      "mock mode",
+      // #758: this row is a statement about the on-device fallback, and it is
+      // persisted to `health_checks.subsystem`. Recording "mock mode" against
+      // a signed-in account said the account was in mock mode, which it was
+      // not — the saved history of a live account was lying about which mode
+      // produced it. The name now follows the actual state; `client === null`
+      // really is mock mode and keeps the original name.
+      client === null ? "mock mode" : "on-device fallback",
       "healthy",
       100,
       "This device can keep your work on its own, so nothing is lost if your account cannot be reached.",
-      { available: true, repair_steps: [] },
+      {
+        available: true,
+        // Honest about what this row is: a capability statement, not a probe.
+        probed: false,
+        mode: client === null ? "mock_only" : "account_with_fallback",
+        repair_steps: [],
+      },
     ),
     configuredCheck(supabaseConfigured),
   ];
@@ -1065,6 +1193,7 @@ export async function getHealthDashboard(
 
     checks.push(await probeTransitionRpcs(client));
     checks.push(await probeCoreReads(client));
+    checks.push(await probeLearningTrail(client));
 
     try {
       const traces = await readProviderIncidentTraces(client, now);
@@ -1138,6 +1267,35 @@ export async function getHealthDashboard(
     userId,
     checks,
     checkedAt,
+  );
+
+  // #758: the page's own write is a probe like any other. Before this, a failed
+  // `health_checks` insert only changed the small line under the button, so the
+  // headline could read "Everything is working" directly above "a record of it
+  // could not be saved to your account" — the same contradiction this issue is
+  // about, one layer down. The row is appended AFTER the insert because it
+  // reports on that insert and cannot be part of what was written.
+  checks.push(
+    persistenceMessage
+      ? makeCheck(
+          "health-check-record",
+          "health check record",
+          "watch",
+          55,
+          "This check ran and its answers are correct, but it could not be saved to your account.",
+          {
+            persisted: false,
+            repair_steps: ["Check health_checks grants, RLS, and auth state."],
+          },
+        )
+      : makeCheck(
+          "health-check-record",
+          "health check record",
+          "healthy",
+          100,
+          "A record of this check was saved to your account.",
+          { persisted: true, repair_steps: [] },
+        ),
   );
 
   return {

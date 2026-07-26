@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getObservabilityHealthSnapshot } from "@/lib/observability";
+import { logLearningWriteFailure } from "./workflow/shared";
+import { resetLearningWriteFailures } from "./learningWriteFailures";
 import {
   deriveProviderIncidents,
   getHealthDashboard,
@@ -306,16 +308,28 @@ describe("health dashboard data provider", () => {
     expect(checkBySubsystem(result.checks, "capture persistence").status).toBe(
       "healthy",
     );
+    // #758: `health-check-record` reports on this very insert, so it is
+    // appended after it and is deliberately absent from the persisted payload.
+    // Re-anchored to that truth rather than dropped.
     expect(healthInsert).toHaveBeenCalledWith(
-      result.checks.map((check) => ({
-        user_id: userId,
-        area_id: null,
-        subsystem: check.subsystem,
-        status: check.status,
-        score: check.score,
-        details_json: check.details,
-        checked_at: "2026-05-08T20:00:00.000Z",
-      })),
+      result.checks
+        .filter((check) => check.id !== "health-check-record")
+        .map((check) => ({
+          user_id: userId,
+          area_id: null,
+          subsystem: check.subsystem,
+          status: check.status,
+          score: check.score,
+          details_json: check.details,
+          checked_at: "2026-05-08T20:00:00.000Z",
+        })),
+    );
+    // #758: a signed-in account never records "mock mode" against itself.
+    expect(result.checks.map((check) => check.subsystem)).not.toContain(
+      "mock mode",
+    );
+    expect(checkBySubsystem(result.checks, "on-device fallback").status).toBe(
+      "healthy",
     );
   });
 
@@ -782,5 +796,187 @@ describe("signed-out auth session is calm, not a failure (#688)", () => {
       expect(check.details.mode).toBe("signed_out");
       expect(check.summary).toMatch(/^Sign in to check/);
     }
+  });
+});
+
+/**
+ * #758 — the honesty half. The grants bug is fixed by a migration; these tests
+ * are about what this screen is allowed to CLAIM while its own reads and writes
+ * are failing.
+ */
+describe("health dashboard honesty (#758)", () => {
+  beforeEach(() => {
+    resetLearningWriteFailures();
+  });
+
+  function signedInClient(
+    overrides: (table: string) => unknown | undefined,
+    healthInsertError: unknown = null,
+  ) {
+    const areasEq = vi.fn().mockResolvedValue({ data: [], error: null });
+    const areasOrder = vi.fn().mockReturnValue({ eq: areasEq });
+
+    return {
+      from: vi.fn((table: string) => {
+        const override = overrides(table);
+        if (override) return override;
+        if (table === "areas") {
+          // `areas` is read twice with different chains: the area listing
+          // (`.order(...).eq(...)`) and the core-read probe (`.limit(1)`).
+          return {
+            select: vi.fn().mockReturnValue({
+              order: areasOrder,
+              limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+            }),
+          };
+        }
+        if (table === "health_checks") {
+          return {
+            insert: vi.fn().mockResolvedValue({ error: healthInsertError }),
+          };
+        }
+        if (table === "ai_call_traces") return readableTraceTable();
+        return readableTable();
+      }),
+      rpc: vi.fn().mockResolvedValue({ data: null, error: rpcExistsError }),
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: userId } }, error: null }),
+      },
+    } as MinimalHealthSupabaseClient;
+  }
+
+  function deniedTable(message: string) {
+    return {
+      select: vi.fn().mockReturnValue({
+        limit: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: "42501", message },
+        }),
+      }),
+    };
+  }
+
+  it("reports the audit trail as critical when the owner's own read is denied", async () => {
+    const denialMessage = "permission denied for table suggestion_records";
+    const result = await getHealthDashboard(
+      signedInClient((table) =>
+        table === "suggestion_records" || table === "override_records"
+          ? deniedTable(
+              table === "suggestion_records"
+                ? denialMessage
+                : "permission denied for table override_records",
+            )
+          : undefined,
+      ),
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    const check = checkBySubsystem(result.checks, "meta-learning audit trail");
+    expect(check.status).toBe("critical");
+    expect(check.details.failed).toEqual([
+      "suggestion_records",
+      "override_records",
+    ]);
+    expect(check.details.failure_code).toBe("no_access");
+
+    // The verdict the screen renders is derived from exactly this: at least one
+    // non-healthy check means the headline can no longer say all-clear.
+    expect(result.checks.some((item) => item.status !== "healthy")).toBe(true);
+  });
+
+  it("never puts a raw database message on the screen", async () => {
+    const denialMessage = "permission denied for table suggestion_records";
+    const result = await getHealthDashboard(
+      signedInClient((table) =>
+        table === "suggestion_records" ? deniedTable(denialMessage) : undefined,
+      ),
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    for (const check of result.checks) {
+      expect(check.summary).not.toContain(denialMessage);
+      expect(check.summary).not.toMatch(/permission denied/i);
+      expect(check.summary).not.toMatch(/42501/);
+      expect(JSON.stringify(check.details)).not.toContain(denialMessage);
+    }
+  });
+
+  it("counts silently-failed learning writes into a watch state", async () => {
+    logLearningWriteFailure(new Error("boom"), {
+      table: "suggestion_records",
+    });
+    logLearningWriteFailure(new Error("boom"), { table: "override_records" });
+
+    const result = await getHealthDashboard(
+      signedInClient(() => undefined),
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    const check = checkBySubsystem(result.checks, "meta-learning audit trail");
+    expect(check.status).toBe("watch");
+    expect(check.summary).toContain("2 decisions could not be added");
+    expect(check.details.write_failures_this_page).toBe(2);
+    expect(check.details.write_failure_tables).toEqual([
+      "override_records",
+      "suggestion_records",
+    ]);
+  });
+
+  it("stays healthy and all-clear when every audit-trail read and write works", async () => {
+    const result = await getHealthDashboard(
+      signedInClient(() => undefined),
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    expect(
+      checkBySubsystem(result.checks, "meta-learning audit trail").status,
+    ).toBe("healthy");
+    expect(
+      result.checks
+        .filter((check) => check.status !== "healthy")
+        .map((check) => `${check.subsystem}:${check.status}`),
+    ).toEqual([]);
+  });
+
+  it("makes a failed record of its own check part of the verdict, not just a footnote", async () => {
+    const result = await getHealthDashboard(
+      signedInClient(() => undefined, { message: "insert failed" }),
+      { now: () => fixedNow, supabaseConfigured: true },
+    );
+
+    expect(result.persistence).toBe("unavailable");
+    const check = checkBySubsystem(result.checks, "health check record");
+    expect(check.status).toBe("watch");
+    // The bug this closes: "Everything is working" rendered directly above
+    // "a record of it could not be saved to your account".
+    expect(result.checks.some((item) => item.status !== "healthy")).toBe(true);
+  });
+
+  it("does not record 'mock mode' against a signed-in account", async () => {
+    const result = await getHealthDashboard(
+      signedInClient(() => undefined),
+      {
+        now: () => fixedNow,
+        supabaseConfigured: true,
+      },
+    );
+
+    expect(result.checks.map((check) => check.subsystem)).not.toContain(
+      "mock mode",
+    );
+    const fallback = checkBySubsystem(result.checks, "on-device fallback");
+    expect(fallback.details.mode).toBe("account_with_fallback");
+    expect(fallback.details.probed).toBe(false);
+
+    // With no account at all, "mock mode" is the truthful name and stays.
+    const mockResult = await getHealthDashboard(null, {
+      now: () => fixedNow,
+      supabaseConfigured: false,
+    });
+    expect(mockResult.checks.map((check) => check.subsystem)).toContain(
+      "mock mode",
+    );
   });
 });
