@@ -1,6 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readDirCached } from "./helpers/repoWalk";
 
 /**
  * FR-023 slice F4 (#678) — no-second-writer guard.
@@ -21,6 +22,11 @@ import { describe, expect, it } from "vitest";
  * hand-rolled map->field derivation or a background sync). No back-sync from
  * a field edit into the map is F4's job either — that is F5.
  */
+
+// #761 — productionSourceFiles() below re-walks apps/web/src on every call
+// (it is called twice in this file); readDirCached dedupes the repeated
+// directory reads, and this timeout is belt-and-braces for the rest.
+vi.setConfig({ testTimeout: 30_000 });
 
 const repoRoot = resolve(__dirname, "../../../..");
 const RESOLVER_DEFINITION = "apps/web/src/lib/taskmap/graph.ts";
@@ -43,7 +49,7 @@ const IGNORED_SCAN_DIRECTORIES = new Set([
 
 function walkRepoFiles(relativePath: string): string[] {
   const currentPath = resolve(repoRoot, relativePath);
-  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
+  return readDirCached(currentPath).flatMap((entry) => {
     const nextRelativePath = `${relativePath}/${entry.name}`.replace(
       /\\/g,
       "/",

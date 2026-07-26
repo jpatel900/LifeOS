@@ -1,6 +1,12 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readDirCached } from "./helpers/repoWalk";
+
+// #761 — productionSourceFiles() below re-walks apps/web/src per call;
+// readDirCached dedupes the repeated directory reads, and this timeout is
+// belt-and-braces for whatever IO load remains.
+vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * NS-INV-1 guard — one context-assembly choke point (issue #254).
@@ -42,7 +48,7 @@ const IGNORED_SCAN_DIRECTORIES = new Set([
 function walkRepoFiles(relativePath: string): string[] {
   const currentPath = resolve(repoRoot, relativePath);
 
-  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
+  return readDirCached(currentPath).flatMap((entry) => {
     const nextRelativePath = `${relativePath}/${entry.name}`.replace(
       /\\/g,
       "/",
