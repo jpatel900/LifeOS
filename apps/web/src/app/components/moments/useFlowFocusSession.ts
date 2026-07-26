@@ -25,7 +25,8 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
 import type { MomentValue } from "./MomentSwitcher";
 import type { EndSessionOutcome } from "./EndSessionSheet";
 import type { ToastAction } from "./toast";
-import { runEndSessionPolicy } from "./endSessionPolicy";
+import { runEndSessionPolicy, type EndSessionResult } from "./endSessionPolicy";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import {
   hasRunningSession,
   readRunningSession,
@@ -72,6 +73,55 @@ interface UseFlowFocusSessionOptions {
   updateTaskFirstTinyStep: ReturnType<
     typeof useWorkflow
   >["updateTaskFirstTinyStep"];
+}
+
+/**
+ * #737 C1 card 1 — the toast is the LOUDEST claim on this screen, so it is
+ * the one that must be true.
+ *
+ * The audit watched `Session complete` appear over a session that wrote
+ * nothing at all. The copy is now chosen from what actually happened to the
+ * write, not from what the user picked:
+ *
+ *  - `persisted`      — it reached the account. Say so plainly.
+ *  - `local-only`     — the device has it and will keep retrying. Say THAT,
+ *                       in the vocabulary #734/#756 already established.
+ *  - `device-blocked` — nothing has it. Never claim a save.
+ *  - `not-an-outcome` — nothing was running. Never claim a save.
+ */
+export function endSessionToast(
+  outcome: EndSessionOutcome,
+  result: Extract<EndSessionResult, { status: "closed" | "split" }>,
+): string {
+  if (result.status === "split") {
+    return result.resolution === "defer_failed"
+      ? "Session saved — deferral failed; move it from Review"
+      : "Session saved — deferral not yet confirmed";
+  }
+
+  if (result.save === "device-blocked") {
+    return "This browser wouldn't keep your session result — write it down before you reload";
+  }
+  if (result.save === "not-an-outcome") {
+    return "Nothing was running, so nothing was recorded";
+  }
+
+  const headline =
+    result.resolution === "cut_scope"
+      ? "Scope cut and session closed"
+      : result.resolution === "deferred"
+        ? "Deferred — moved to backlog"
+        : outcome === "completed"
+          ? "Session complete"
+          : outcome === "partial"
+            ? "Partial progress saved"
+            : outcome === "skipped"
+              ? "Skipped — carried to review"
+              : "Stuck — logged for review";
+
+  return result.save === "local-only"
+    ? `${headline} — ${SAVED_ON_THIS_DEVICE_SHORT}`
+    : headline;
 }
 
 export function useFlowFocusSession({
@@ -370,23 +420,7 @@ export function useFlowFocusSession({
         total: 0,
       });
       setEndSessionOpen(false);
-      showToast(
-        result.status === "split"
-          ? result.resolution === "defer_failed"
-            ? "Session saved — deferral failed; move it from Review"
-            : "Session saved — deferral not yet confirmed"
-          : result.resolution === "cut_scope"
-            ? "Scope cut and session closed"
-            : result.resolution === "deferred"
-              ? "Deferred — saved and moved to backlog"
-              : outcome === "completed"
-                ? "Session complete"
-                : outcome === "partial"
-                  ? "Partial progress saved"
-                  : outcome === "skipped"
-                    ? "Skipped — carried to review"
-                    : "Stuck — logged for review",
-      );
+      showToast(endSessionToast(outcome, result));
     },
     [
       deferTaskWithSession,

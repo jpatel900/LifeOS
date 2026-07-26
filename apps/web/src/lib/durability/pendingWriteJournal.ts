@@ -99,7 +99,11 @@ export type PendingWriteEntity =
   | "draft_edit"
   | "project_draft_decision"
   | "wip_swap"
-  | "task_map_approval";
+  | "task_map_approval"
+  // #737 C1 card 1 (slice S4): the outcome the user picked in the end sheet.
+  // The ONLY execution-session write there is — a running session carries no
+  // outcome and is device state, never a journal entry.
+  | "execution_session";
 
 export type PendingWritePayload = Record<string, unknown>;
 

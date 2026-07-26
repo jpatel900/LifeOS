@@ -35,6 +35,20 @@ import {
   taskColumns,
 } from "./shared";
 
+/**
+ * The six values `execution_sessions_outcome_check` allows
+ * (`20260506213000_create_v1_core_tables.sql`). The device's `in_progress`
+ * state is deliberately absent — a session with no verdict is never recorded.
+ */
+const RECORDABLE_SESSION_OUTCOMES = [
+  "completed",
+  "partial",
+  "stopped",
+  "distracted",
+  "blocked",
+  "skipped",
+];
+
 function mockExecutionSession(input: CreateExecutionSessionInput) {
   return parseExecutionSession({
     id: crypto.randomUUID(),
@@ -397,6 +411,75 @@ export async function applyTaskReviewTransition(
     task: parseTask(result.task),
     blocks: parseCalendarBlocks(result.blocks ?? []),
   };
+}
+
+export interface SyncJournaledExecutionSessionInput {
+  /** Idempotency key; matches the journal record's `client_write_id`. */
+  client_write_id: string;
+  task_id: string;
+  calendar_block_id: string | null;
+  outcome: string;
+  actual_minutes: number;
+  paused_minutes: number;
+  distraction_minutes: number;
+  productivity_rating: number | null;
+  notes: string | null;
+  cap_outcome: string | null;
+  defer_task: boolean;
+}
+
+/**
+ * #737 C1 card 1: push one journalled session OUTCOME to the account.
+ *
+ * Unlike `syncJournaledWin` / `syncJournaledReviewEntry`, this is an RPC and
+ * not a table upsert, because recording a session is not one insert: the
+ * block and the task transition with it, and #613 requires the cap-DEFER case
+ * to commit as one transaction. `record_execution_session` owns all of that
+ * and does its own `client_write_id` short-circuit, so a replay returns the
+ * row the first attempt created instead of writing a second one.
+ *
+ * The outcome is validated against the same list the table's CHECK enforces,
+ * here rather than in the RPC, so a bad value fails before it reaches the
+ * database with a message that names the field.
+ */
+export async function syncJournaledExecutionSession(
+  client: MinimalSupabaseClient | null,
+  input: SyncJournaledExecutionSessionInput,
+): Promise<{ provider: "mock" | "supabase" }> {
+  const clientWriteId = input.client_write_id?.trim();
+  if (!clientWriteId) {
+    throw new Error("A journalled session needs a client write id.");
+  }
+  if (!RECORDABLE_SESSION_OUTCOMES.includes(input.outcome)) {
+    throw new Error("That session outcome is not one LifeOS can record.");
+  }
+
+  if (!client) return { provider: "mock" };
+
+  await requireSupabaseUser(client, "Sign in before saving session results.");
+
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
+  }
+
+  const { error } = await client.rpc("record_execution_session", {
+    p_task_id: input.task_id,
+    p_calendar_block_id: input.calendar_block_id,
+    p_outcome: input.outcome,
+    p_actual_minutes: input.actual_minutes,
+    p_paused_minutes: input.paused_minutes,
+    p_distraction_minutes: input.distraction_minutes,
+    p_productivity_rating: input.productivity_rating,
+    p_notes: input.notes,
+    p_cap_outcome: input.cap_outcome,
+    p_client_write_id: clientWriteId,
+    p_defer_task: input.defer_task,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return { provider: "supabase" };
 }
 
 export interface SyncJournaledReviewEntryInput extends CreateReviewEntryInput {

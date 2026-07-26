@@ -264,7 +264,7 @@ test.describe("#737 C1 card 1 — session truth", () => {
     expect(await sessionWrites(page)).toHaveLength(0);
 
     // And the way back actually works: the same session, still running.
-    await returnAffordance.click();
+    await page.getByTestId("session-running-return-action").click();
     await expect(page.getByTestId("current-block-hero")).toBeVisible();
     expect(await page.getByTestId("current-block-hero-time").innerText()).toBe(
       startedClock,
@@ -393,6 +393,14 @@ test.describe("#737 C1 card 1 — session truth", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("today-moments")).toBeVisible();
+
+    // The reload lands back on Flow (the moment preference is remembered), so
+    // the session itself is what proves it survived...
+    await expect(page.getByTestId("current-block-hero")).toBeVisible();
+
+    // ...and stepping away still offers the way back.
+    await page.getByTestId("moment-switcher-start").click();
+    await expect(page.getByTestId("start-moment")).toBeVisible();
     await expect(page.getByTestId("session-running-return")).toBeVisible();
 
     // And still nothing recorded — a reload is not an outcome either.
