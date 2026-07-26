@@ -485,13 +485,18 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
   //    client_write_id, so a retry can never create a second review row;
   //  - "persisted" is still claimed only when the account actually has it.
   //
-  // A journal write that FAILS throws (no IndexedDB — the caller maps it to
-  // its failure result and must not claim the day closed). A NETWORK failure
-  // no longer throws: the review is safely journalled and the next replay
-  // retries it, which is "local-only", not a failure.
+  // A journal write that fails returns "device-blocked" rather than throwing.
+  // Throwing would send the caller down `markPersistedSaveFailure`, whose
+  // banner says "Saving to your account didn't work" — the wrong cause
+  // entirely, since the account was never reached and the DEVICE is what
+  // refused. The caller still maps it to its failure verdict and must not
+  // claim the day closed.
+  //
+  // A NETWORK failure no longer fails at all: the review is safely journalled
+  // and the next replay retries it, which is "local-only".
   async function persistReviewEntry(
     next: WorkflowState,
-  ): Promise<"persisted" | "local-only"> {
+  ): Promise<"persisted" | "local-only" | "device-blocked"> {
     const persistedAreaId = selectedAreaId
       ? persistedAreaIdForWorkflowId(selectedAreaId, persistedAreasRef.current)
       : null;
@@ -503,6 +508,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     let journalled;
     try {
       journalled = await journalReviewWrite({
+        workflowAreaId: selectedAreaId,
         persistedAreaId,
         reviewType: "daily",
         periodStart: today,
@@ -527,10 +533,11 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
           recent_log: next.reviewLog.slice(0, 8),
         },
       });
-    } catch (error) {
-      // The device itself refused to hold the review. Nothing has it.
+    } catch {
+      // The device itself refused to hold the review. Nothing has it, and the
+      // banner must name that cause rather than blaming the account.
       markDeviceStorageBlocked();
-      throw error;
+      return "device-blocked";
     }
 
     try {

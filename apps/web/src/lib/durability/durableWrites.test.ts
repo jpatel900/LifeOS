@@ -105,6 +105,7 @@ describe("journalWinWrite", () => {
 describe("journalReviewWrite", () => {
   it("journals the review with its period pinned at save time", async () => {
     await journalReviewWrite({
+      workflowAreaId: "area-local-1",
       persistedAreaId: PERSISTED_AREA,
       reviewType: "daily",
       periodStart: CONFIRMED_ON,
@@ -179,6 +180,7 @@ describe("replayDurableWrites", () => {
   it("sends a journalled review once and clears it", async () => {
     const ops = serverOps();
     await journalReviewWrite({
+      workflowAreaId: "area-local-1",
       persistedAreaId: PERSISTED_AREA,
       reviewType: "daily",
       periodStart: CONFIRMED_ON,
@@ -247,6 +249,7 @@ describe("replayDurableWrites", () => {
       syncReview: vi.fn().mockResolvedValue({ provider: "mock" as const }),
     });
     await journalReviewWrite({
+      workflowAreaId: "area-local-1",
       persistedAreaId: PERSISTED_AREA,
       reviewType: "daily",
       periodStart: CONFIRMED_ON,
@@ -258,6 +261,72 @@ describe("replayDurableWrites", () => {
 
     expect(summary).toMatchObject({ synced: 0, failed: 1 });
     expect(await pendingWriteCount("review")).toBe(1);
+  });
+
+  it("keeps a review queued when its selected area has no account id yet", async () => {
+    // THE PRE-#737-A GUARANTEE, PRESERVED. `persistReviewEntry` used to refuse
+    // to write when `selectedAreaId && !persistedAreaId` — an area was chosen
+    // but had not synced. Sending null there would file the review under NO
+    // area, permanently, which the old code correctly never did.
+    const ops = serverOps();
+    await journalReviewWrite({
+      workflowAreaId: "area-local-1",
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: CONFIRMED_ON,
+      periodEnd: CONFIRMED_ON,
+      summaryJson: { verdict: "saved" },
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 0, failed: 1 });
+    expect(ops.syncReview).not.toHaveBeenCalled();
+    expect(await pendingWriteCount("review")).toBe(1);
+  });
+
+  it("sends an All-areas review with a null area, because that null is a real choice", async () => {
+    // The other null. `workflow_area_id === null` means the user explicitly
+    // chose All areas (#691), which is a legitimate review with no area — it
+    // must not be blocked by the guard above.
+    const ops = serverOps();
+    await journalReviewWrite({
+      workflowAreaId: null,
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: CONFIRMED_ON,
+      periodEnd: CONFIRMED_ON,
+      summaryJson: { verdict: "saved" },
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 1 });
+    expect(ops.syncReview).toHaveBeenCalledWith(
+      expect.objectContaining({ area_id: null }),
+    );
+  });
+
+  it("resolves a review's area at replay time once it has synced", async () => {
+    const ops = serverOps();
+    await journalReviewWrite({
+      workflowAreaId: "area-local-1",
+      persistedAreaId: null,
+      reviewType: "daily",
+      periodStart: CONFIRMED_ON,
+      periodEnd: CONFIRMED_ON,
+      summaryJson: { verdict: "saved" },
+    });
+
+    const summary = await replayDurableWrites({
+      ...ops,
+      resolveReviewAreaId: () => PERSISTED_AREA,
+    });
+
+    expect(summary).toMatchObject({ synced: 1 });
+    expect(ops.syncReview).toHaveBeenCalledWith(
+      expect.objectContaining({ area_id: PERSISTED_AREA }),
+    );
   });
 
   it("keeps a win queued when its persisted ids cannot be resolved yet", async () => {

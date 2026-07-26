@@ -47,7 +47,6 @@ import {
 } from "./statusVocabulary";
 import {
   createRollupSummary,
-  createWinRecord,
   syncJournaledWin,
   syncJournaledReviewEntry,
   listAreas,
@@ -466,6 +465,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               : null,
           };
         },
+        // Same late resolution for the review's area. Returning null when the
+        // area has still not synced is what keeps the review queued rather
+        // than filed under no area (see `reviewHandler`).
+        resolveReviewAreaId: (payload) =>
+          payload.workflow_area_id === null
+            ? null
+            : persistedAreaIdForWorkflowId(
+                String(payload.workflow_area_id),
+                persistedAreasRef.current,
+              ),
       });
     }, []);
 
@@ -1491,7 +1500,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // truth callers gate "day closed" copy on — resolved only after the
       // persisted write settles (or truthfully reports local-only/failure).
       try {
-        return await persistenceOps.persistReviewEntry(next);
+        const outcome = await persistenceOps.persistReviewEntry(next);
+        // #737-A slice 2: "device-blocked" is a failure to the caller, but its
+        // banner was already set by `markDeviceStorageBlocked` and must NOT be
+        // overwritten with the account-failure sentence below — the account
+        // was never the problem.
+        return outcome === "device-blocked" ? "failure" : outcome;
       } catch (error) {
         markPersistedSaveFailure(error);
         return "failure";

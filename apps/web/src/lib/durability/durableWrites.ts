@@ -86,6 +86,17 @@ export interface WinWritePayload {
 
 /** Journalled shape of a saved review entry. */
 export interface ReviewWritePayload {
+  /**
+   * The area the user had selected, in workflow-local ids, or `null` for an
+   * explicit All-areas review.
+   *
+   * Carried SEPARATELY from `persisted_area_id` because the two nulls mean
+   * opposite things and the account write must not confuse them. Before this
+   * slice `persistReviewEntry` refused to write at all when an area was
+   * selected but had not synced yet; that guarantee lives here now.
+   */
+  workflow_area_id: string | null;
+  /** Account area id when it was already known at save time. */
   persisted_area_id: string | null;
   review_type: "daily" | "weekly";
   period_start: string;
@@ -107,6 +118,7 @@ export interface JournalWinInput {
 }
 
 export interface JournalReviewInput {
+  workflowAreaId: string | null;
   persistedAreaId: string | null;
   reviewType: "daily" | "weekly";
   periodStart: string;
@@ -142,6 +154,7 @@ export function journalReviewWrite(
   return enqueuePendingWrite<ReviewWritePayload>({
     entity: "review",
     payload: {
+      workflow_area_id: input.workflowAreaId,
       persisted_area_id: input.persistedAreaId,
       review_type: input.reviewType,
       period_start: input.periodStart,
@@ -244,10 +257,20 @@ function winHandler(ops: DurableWriteServerOps) {
 function reviewHandler(ops: DurableWriteServerOps) {
   return async (write: PendingWrite): Promise<void> => {
     const payload = write.payload as ReviewWritePayload;
-    // A review entry legitimately has no area (the All-areas review), so a
-    // null area is sent as null rather than blocking the write.
     const areaId =
       payload.persisted_area_id ?? ops.resolveReviewAreaId?.(payload) ?? null;
+
+    // A null area is only legitimate when the user genuinely chose All areas.
+    // If they had an area selected and it still has no account id, sending
+    // null would file the review permanently under no area -- so it waits.
+    // This preserves the pre-#737-A guard
+    // (`if (!client || (selectedAreaId && !persistedAreaId))`), which refused
+    // to write in exactly this case.
+    if (payload.workflow_area_id !== null && areaId === null) {
+      throw new Error(
+        "Cannot send this review yet: its account area is not known on this device.",
+      );
+    }
 
     const result = await ops.syncReview({
       client_write_id: write.client_write_id,

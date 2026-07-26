@@ -10,6 +10,7 @@ import {
   listPendingWrites,
 } from "@/lib/durability/pendingWriteJournal";
 import { useEffect, useRef, useState } from "react";
+import { useCloseMomentRollups } from "@/app/components/moments/useCloseMomentRollups";
 
 /**
  * REGRESSION GUARD — wins and reviews must stay device-durable (#737-A S2).
@@ -91,6 +92,53 @@ function DurabilityHarness({ taskId }: { taskId: string }) {
   );
 }
 
+/**
+ * Drives the REAL Close-moment hook, not a re-implementation of it, so the
+ * optimistic-add-then-roll-back logic under test is the shipped one.
+ */
+function CloseMomentWinHarness() {
+  const { state, confirmWin, confirmRollup, listApprovedRollups } =
+    useWorkflow();
+  const [toast, setToast] = useState("");
+  const hasRun = useRef(false);
+
+  const { handleConfirmWin, confirmedWins } = useCloseMomentRollups({
+    state,
+    closeVM: {
+      completedToday: 1,
+      missedToday: 0,
+      carryForward: [],
+      tomorrowFirstMove: null,
+      winCandidates: [
+        {
+          taskId: "task-guard-1",
+          title: "Shipped the durable-writes slice",
+          areaLabel: "Work",
+        },
+      ],
+      rollupDrafts: [],
+    },
+    now: new Date("2026-05-08T18:00:00.000Z"),
+    showToast: (message: string) => setToast(message),
+    confirmWin,
+    confirmRollup,
+    listApprovedRollups,
+  });
+
+  useEffect(() => {
+    if (hasRun.current) return;
+    hasRun.current = true;
+    handleConfirmWin("task-guard-1", "Shipped the durable-writes slice");
+  }, [handleConfirmWin]);
+
+  return (
+    <div>
+      <span data-testid="toast">{toast}</span>
+      <span data-testid="confirmed-count">{confirmedWins.length}</span>
+    </div>
+  );
+}
+
 beforeEach(async () => {
   // Mock mode: no Supabase client. This is precisely the configuration the old
   // code silently dropped wins in.
@@ -151,6 +199,69 @@ describe("#737-A guard: wins and reviews are device-durable", () => {
     expect(screen.getByTestId("review-result")).not.toHaveTextContent(
       "persisted",
     );
+  });
+
+  it("reports failure and rolls the win back when the device refuses to store it", async () => {
+    // The one state where nothing holds the win: a browser with no usable
+    // IndexedDB (private mode, a blocking extension, a storage quota). This
+    // is the branch the truth map rests two rows on, so it is tested rather
+    // than reasoned about. Removing the global is the honest simulation --
+    // it is exactly what `hasIndexedDb()` checks.
+    const realIndexedDb = globalThis.indexedDB;
+    // @ts-expect-error deliberately removing the global to simulate a browser
+    // that does not provide it.
+    delete globalThis.indexedDB;
+
+    try {
+      render(
+        <WorkflowProvider>
+          <DurabilityHarness taskId="task-guard-1" />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() =>
+        expect(screen.getByTestId("win-result")).toHaveTextContent("failure"),
+      );
+      // Never the comforting answer. Both other outcomes claim the win is
+      // somewhere; it is not.
+      expect(screen.getByTestId("win-result")).not.toHaveTextContent(
+        "device-only",
+      );
+
+      await waitFor(() =>
+        expect(screen.getByTestId("review-result")).toHaveTextContent(
+          "failure",
+        ),
+      );
+    } finally {
+      globalThis.indexedDB = realIndexedDb;
+    }
+  });
+
+  it("takes the confirmed win back out of the list when the device refuses it", async () => {
+    // The Close moment adds the win optimistically so the moment does not
+    // stutter. On the one outcome where nothing holds the win, that optimistic
+    // row must not be left standing beside a message saying it failed.
+    const realIndexedDb = globalThis.indexedDB;
+    // @ts-expect-error see above.
+    delete globalThis.indexedDB;
+
+    try {
+      render(
+        <WorkflowProvider>
+          <CloseMomentWinHarness />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() =>
+        expect(screen.getByTestId("toast")).toHaveTextContent(
+          "Couldn't log the win — it isn't saved yet",
+        ),
+      );
+      expect(screen.getByTestId("confirmed-count")).toHaveTextContent("0");
+    } finally {
+      globalThis.indexedDB = realIndexedDb;
+    }
   });
 
   it("keeps the journalled win readable after the provider unmounts", async () => {
