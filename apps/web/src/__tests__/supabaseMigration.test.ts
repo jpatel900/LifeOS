@@ -54,6 +54,105 @@ function loadMigrationFilenames() {
   return readdirSync(migrationsDir).filter((file) => file.endsWith(".sql"));
 }
 
+const dataApiCommands = ["select", "insert", "update", "delete"] as const;
+type DataApiCommand = (typeof dataApiCommands)[number];
+
+/**
+ * #758: replay every migration in apply order and reduce it to two facts per
+ * table — which commands `authenticated` has an RLS policy for, and which
+ * commands it actually holds a privilege for. Statement order matters (a later
+ * `revoke` or `drop policy` must win), so this walks statements rather than
+ * grepping the concatenated text.
+ *
+ * Column-level grants (`grant select (a, b) on table ...`) count as the
+ * privilege: `google_calendar_connections` deliberately holds SELECT on a
+ * subset of columns and no others, and that is a satisfied door, not a gap.
+ */
+function parseAuthenticatedAccess() {
+  const policies = new Map<string, Set<DataApiCommand>>();
+  const grants = new Map<string, Set<DataApiCommand>>();
+  const revoked = new Map<string, Set<DataApiCommand>>();
+  const policyCommandByName = new Map<string, [string, DataApiCommand]>();
+
+  const statements = readdirSync(migrationsDir)
+    .filter((file) => file.endsWith(".sql"))
+    .sort()
+    .flatMap((file) =>
+      readFileSync(resolve(migrationsDir, file), "utf8")
+        // Drop `--` comments first: their prose contains semicolons that would
+        // otherwise split a statement in half.
+        .replace(/--[^\n]*/g, " ")
+        .split(";"),
+    )
+    .map(normalizeWhitespace)
+    .filter(Boolean);
+
+  function addTo(
+    target: Map<string, Set<DataApiCommand>>,
+    table: string,
+    commands: DataApiCommand[],
+  ) {
+    const existing = target.get(table) ?? new Set<DataApiCommand>();
+    for (const command of commands) existing.add(command);
+    target.set(table, existing);
+  }
+
+  function expandPrivileges(raw: string): DataApiCommand[] {
+    const normalized = raw.toLowerCase();
+    if (/\ball\b/.test(normalized)) return [...dataApiCommands];
+    return dataApiCommands.filter((command) =>
+      new RegExp(`\\b${command}\\b`).test(normalized),
+    );
+  }
+
+  for (const statement of statements) {
+    const lower = statement.toLowerCase();
+
+    const policyMatch = lower.match(
+      /^create policy (\w+) on public\.(\w+) for (select|insert|update|delete|all) to ([\w\s,]+?) (using|with check)\b/,
+    );
+    if (policyMatch && /\bauthenticated\b/.test(policyMatch[4])) {
+      const [, name, table, command] = policyMatch;
+      const commands =
+        command === "all" ? [...dataApiCommands] : [command as DataApiCommand];
+      addTo(policies, table, commands);
+      for (const each of commands) policyCommandByName.set(name, [table, each]);
+      continue;
+    }
+
+    const dropMatch = lower.match(
+      /^drop policy (?:if exists )?(\w+) on public\.(\w+)$/,
+    );
+    if (dropMatch) {
+      const known = policyCommandByName.get(dropMatch[1]);
+      if (known) policies.get(known[0])?.delete(known[1]);
+      continue;
+    }
+
+    // `grant a, b (col, col) on table public.x to authenticated`
+    const grantMatch = lower.match(
+      /^grant ([\w\s,()]+?) on table public\.(\w+) to ([\w\s,]+)$/,
+    );
+    if (grantMatch && /\bauthenticated\b/.test(grantMatch[3])) {
+      addTo(grants, grantMatch[2], expandPrivileges(grantMatch[1]));
+      continue;
+    }
+
+    const revokeMatch = lower.match(
+      /^revoke ([\w\s,()]+?) on table public\.(\w+) from ([\w\s,]+)$/,
+    );
+    if (revokeMatch && /\bauthenticated\b/.test(revokeMatch[3])) {
+      const held = grants.get(revokeMatch[2]);
+      for (const command of expandPrivileges(revokeMatch[1])) {
+        held?.delete(command);
+        addTo(revoked, revokeMatch[2], [command]);
+      }
+    }
+  }
+
+  return { policies, grants, revoked };
+}
+
 describe("Supabase local database scaffold", () => {
   it("includes local config and seed documentation", () => {
     expect(existsSync(resolve(supabaseDir, "config.toml"))).toBe(true);
@@ -152,6 +251,53 @@ describe("Supabase local database scaffold", () => {
         `grant select, insert, update, delete on table public.${table} to authenticated`,
       );
     }
+  });
+
+  /**
+   * #758 — the guard whose absence let a whole table class stay broken for its
+   * entire lifetime.
+   *
+   * In Postgres an RLS policy is a FILTER and `GRANT` is the DOOR. A table with
+   * four own-row policies for `authenticated` and no matching table privilege
+   * refuses every request first, with `42501 permission denied for table`, so
+   * the policies never run. `suggestion_records`, `override_records` and
+   * `health_incidents` shipped in that state in the v1 core migration and no
+   * test noticed, because the grants test above listed its tables by hand and
+   * the local RLS suite never touched them.
+   *
+   * This derives both sides from the migrations themselves, so a NEW table with
+   * a policy and no grant fails here — in every CI job, with no Supabase stack
+   * required — instead of failing silently in a signed-in browser.
+   */
+  it("grants authenticated every privilege its own RLS policies declare (#758)", () => {
+    const { policies, grants, revoked } = parseAuthenticatedAccess();
+
+    const gaps: string[] = [];
+    for (const [table, commands] of [...policies].sort(([left], [right]) =>
+      left.localeCompare(right),
+    )) {
+      const granted = grants.get(table) ?? new Set<string>();
+      // A privilege a migration explicitly REVOKED is a recorded decision
+      // (`google_calendar_connections`, `external_write_events`, `areas`), not
+      // the omission this guard is looking for.
+      const deliberatelyWithheld = revoked.get(table) ?? new Set<string>();
+      const missing = [...commands].filter(
+        (command) =>
+          !granted.has(command) && !deliberatelyWithheld.has(command),
+      );
+      if (missing.length > 0) {
+        gaps.push(
+          `  public.${table}: policy for ${[...missing].sort().join(", ")} with no grant`,
+        );
+      }
+    }
+
+    expect(
+      gaps,
+      `every table with an "to authenticated" RLS policy needs the matching\n` +
+        `"grant ... on table public.<t> to authenticated". Without it Postgres\n` +
+        `refuses with 42501 before the policy is ever consulted:\n${gaps.join("\n")}`,
+    ).toEqual([]);
   });
 
   it("revokes authenticated hard delete for areas so removal stays soft-delete only", () => {

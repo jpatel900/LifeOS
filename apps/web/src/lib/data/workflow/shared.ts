@@ -26,6 +26,7 @@ import {
   normalizeSupabaseRow,
   normalizeSupabaseRows,
 } from "../supabaseRowNormalization";
+import { recordLearningWriteFailure } from "../learningWriteFailures";
 
 export type DataProvider = "mock" | "supabase";
 
@@ -497,10 +498,20 @@ export async function requireSupabaseUser(
   return userData.user;
 }
 
+/**
+ * #758: the console line was already the right shape — the user's action is
+ * preserved, so the failure stays calm — but devtools was the ONLY place it
+ * landed. It now also counts into `learningWriteFailures`, which the Health
+ * screen reads, so a silent audit-trail failure has somewhere visible to show
+ * up. Behaviour for the caller is unchanged: still fire-and-forget, still never
+ * blocking the decision the person just made.
+ */
 export function logLearningWriteFailure(
   error: unknown,
   context: Record<string, unknown>,
 ) {
+  const table = typeof context.table === "string" ? context.table : "unknown";
+  recordLearningWriteFailure(table);
   console.warn("LifeOS meta-learning write failed; user action preserved.", {
     error: getSupabaseMessage(error),
     ...context,
