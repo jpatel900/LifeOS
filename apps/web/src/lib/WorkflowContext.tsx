@@ -29,6 +29,7 @@ import {
   rejectProposal,
   saveReview,
   startExecutionSession,
+  findLiveSession,
   swapWipSlot,
   syncWorkflowIdCounterFromState,
   unplanTask,
@@ -38,6 +39,7 @@ import {
   type WipRefusal,
   type WorkflowState,
 } from "./workflow";
+import type { SessionSaveResult } from "./workflowContext/persistenceSync";
 import {
   ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
@@ -49,6 +51,7 @@ import {
   createRollupSummary,
   syncJournaledWin,
   syncJournaledReviewEntry,
+  syncJournaledExecutionSession,
   listAreas,
   listOverrideRecords,
   listRollupSummaries,
@@ -443,6 +446,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       return replayDurableWrites({
         syncWin: (args) => syncJournaledWin(client, args),
         syncReview: (args) => syncJournaledReviewEntry(client, args),
+        syncExecutionSession: (args) =>
+          syncJournaledExecutionSession(client, args),
         // Late id resolution: a win journalled while signed out carries only its
         // workflow-local task id. By replay time the account rows have loaded,
         // so the mapping may now exist. If it still does not, the dispatcher
@@ -465,6 +470,23 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               : null,
           };
         },
+        // Late resolution for a session outcome journalled before its task
+        // and block had account ids. A null BLOCK id is left null on purpose:
+        // that is the blockless session (audit P0#2), not a missing mapping —
+        // the dispatcher tells the two apart by `workflow_block_id`.
+        resolveExecutionSessionIds: (payload) => ({
+          persistedTaskId: persistedIdForLocalId(
+            String(payload.workflow_task_id),
+            persistedTaskIdByLocalIdRef.current,
+          ),
+          persistedBlockId:
+            payload.workflow_block_id === null
+              ? null
+              : persistedIdForLocalId(
+                  String(payload.workflow_block_id),
+                  persistedBlockIdByLocalIdRef.current,
+                ),
+        }),
         // Same late resolution for the review's area. Returning null when the
         // area has still not synced is what keeps the review queued rather
         // than filed under no area (see `reviewHandler`).
@@ -1193,9 +1215,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     actualMinutes?: number,
     notes?: string | null,
     capOutcome?: Phase2MockExecutionSession["cap_outcome"],
-  ): Promise<void> {
+  ): Promise<SessionSaveResult> {
     const previous = stateRef.current;
-    const localSession = previous.executionSessions[0];
+    const localSession = findLiveSession(previous);
     const next = markCurrentSession(previous, status, {
       actualMinutes,
       notes,
@@ -1205,23 +1227,29 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     applyWorkflowState(next);
     recordWipRefusalIfNew(previous, next);
 
-    if (localSession) {
-      // #572: the caller awaits this so it never shows "closed"/verdict
-      // copy before the save attempt has resolved. A persistence failure
-      // still resolves (not rejects) — it is a truthful terminal state
-      // (recorded via markPersistedSaveFailure), same as the local-only
-      // fallback inside persistMarkedSession.
-      try {
-        await persistenceOps.persistMarkedSession(
-          localSession,
-          status,
-          actualMinutes,
-          notes,
-          capOutcome,
-        );
-      } catch (error) {
-        markPersistedSaveFailure(error);
-      }
+    if (!localSession) {
+      // Nothing was running, so nothing was recorded. Saying otherwise is the
+      // exact class of claim card 1 exists to end.
+      return "not-an-outcome";
+    }
+
+    // #572: the caller awaits this so it never shows "closed"/verdict copy
+    // before the save attempt has resolved. A persistence failure still
+    // resolves (not rejects) — it is a truthful terminal state (recorded via
+    // markPersistedSaveFailure), same as the local-only fallback inside
+    // persistMarkedSession. #737 C1 adds the RESULT to that contract: the
+    // caller now picks its copy from what actually happened.
+    try {
+      return await persistenceOps.persistMarkedSession(
+        localSession,
+        status,
+        actualMinutes,
+        notes,
+        capOutcome,
+      );
+    } catch (error) {
+      markPersistedSaveFailure(error);
+      return "local-only";
     }
   }
 
@@ -1239,7 +1267,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     notes: string | null,
   ): Promise<DeferTaskWithSessionResult> {
     const previous = stateRef.current;
-    const localSession = previous.executionSessions[0];
+    const localSession = findLiveSession(previous);
     const sessionApplied = markCurrentSession(previous, "stuck", {
       actualMinutes,
       notes,
@@ -1252,7 +1280,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     try {
       return await persistenceOps.persistDeferredTaskWithSession(
-        localSession,
+        localSession ?? undefined,
         taskId,
         actualMinutes,
         notes,

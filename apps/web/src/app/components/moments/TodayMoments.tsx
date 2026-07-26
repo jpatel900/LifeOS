@@ -58,6 +58,7 @@ import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
+import { RunningSessionReturn } from "./RunningSessionReturn";
 import { useCloseMomentRollups } from "./useCloseMomentRollups";
 
 /**
@@ -499,6 +500,7 @@ export function TodayMoments({
     handleStartMove,
     handleReclaimDrift,
     handleAbandonDrift,
+    hasActiveSession,
   } = useFlowFocusSession({
     state,
     now,
@@ -516,6 +518,15 @@ export function TodayMoments({
     toggleTaskMapNodeCompletion,
     updateTaskFirstTinyStep,
   });
+
+  // Name the work, never a generic label — arriving at "Focus time is still
+  // running · Untitled" tells the user nothing about whether to go back.
+  const runningSessionTitle = useMemo(() => {
+    const task = session.activeTaskId
+      ? state.tasks.find((item) => item.id === session.activeTaskId)
+      : null;
+    return task?.title ?? flowVM.currentBlock?.title ?? "Your focus session";
+  }, [session.activeTaskId, state.tasks, flowVM.currentBlock]);
 
   // #590 slice 3: Close moment's wins + rollup harvesting, extracted to
   // `useCloseMomentRollups` (see its doc comment for the full contract).
@@ -1113,6 +1124,21 @@ export function TodayMoments({
 
           {moment !== "start" ? (
             <h1 className="sr-only">LifeOS Today</h1>
+          ) : null}
+
+          {/*
+            #737 C1 card 6: leaving Flow never ends a session, so every other
+            moment carries a persistent way back to it. Rendered above the
+            moment body so it is the first thing found on arrival, and never
+            on Flow itself — there the session IS the screen.
+          */}
+          {moment !== "flow" && hasActiveSession ? (
+            <RunningSessionReturn
+              title={runningSessionTitle}
+              remaining={session.remaining}
+              running={session.running}
+              onReturn={() => setMoment("flow")}
+            />
           ) : null}
 
           {moment === "start" ? (

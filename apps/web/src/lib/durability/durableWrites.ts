@@ -107,6 +107,37 @@ export interface ReviewWritePayload {
   [key: string]: unknown;
 }
 
+/**
+ * Journalled shape of a focus-session outcome — #737 C1 card 1, slice S4.
+ *
+ * This is the ONLY execution-session write. A session that is merely running
+ * has no outcome, so it never reaches the journal; it lives in
+ * `lib/execute/runningSession.ts` on the device. What lands here is what the
+ * user picked in the end sheet, and the row the account ends up with carries
+ * exactly that.
+ */
+export interface ExecutionSessionWritePayload {
+  /** Workflow-local task id, so replay can re-resolve if needed. */
+  workflow_task_id: string;
+  /** Account task id when it was already known at save time. */
+  persisted_task_id: string | null;
+  /** Workflow-local block id, or null for a blockless session (P0#2). */
+  workflow_block_id: string | null;
+  /** Account block id when it was already known at save time. */
+  persisted_block_id: string | null;
+  /** Exactly what the user chose. Never derived, never defaulted. */
+  outcome: string;
+  actual_minutes: number;
+  paused_minutes: number;
+  distraction_minutes: number;
+  productivity_rating: number | null;
+  notes: string | null;
+  cap_outcome: string | null;
+  /** #613 atomic cap-DEFER: defer the task in the same transaction. */
+  defer_task: boolean;
+  [key: string]: unknown;
+}
+
 export interface JournalWinInput {
   workflowTaskId: string;
   persistedTaskId: string | null;
@@ -115,6 +146,21 @@ export interface JournalWinInput {
   detail: string | null;
   /** `YYYY-MM-DD` for the day the user confirmed the win. */
   occurredAt: string;
+}
+
+export interface JournalExecutionSessionInput {
+  workflowTaskId: string;
+  persistedTaskId: string | null;
+  workflowBlockId: string | null;
+  persistedBlockId: string | null;
+  outcome: string;
+  actualMinutes: number;
+  pausedMinutes?: number;
+  distractionMinutes?: number;
+  productivityRating?: number | null;
+  notes: string | null;
+  capOutcome?: string | null;
+  deferTask?: boolean;
 }
 
 export interface JournalReviewInput {
@@ -143,6 +189,34 @@ export function journalWinWrite(
       title: input.title,
       detail: input.detail,
       occurred_at: input.occurredAt,
+    },
+  });
+}
+
+/**
+ * Journal one focus-session outcome. Throws on the same terms as the win path
+ * — if the device cannot hold it, the caller must say so rather than claim a
+ * save. That throw is what stops "Session complete" from appearing over
+ * nothing.
+ */
+export function journalExecutionSessionWrite(
+  input: JournalExecutionSessionInput,
+): Promise<PendingWrite<ExecutionSessionWritePayload>> {
+  return enqueuePendingWrite<ExecutionSessionWritePayload>({
+    entity: "execution_session",
+    payload: {
+      workflow_task_id: input.workflowTaskId,
+      persisted_task_id: input.persistedTaskId,
+      workflow_block_id: input.workflowBlockId,
+      persisted_block_id: input.persistedBlockId,
+      outcome: input.outcome,
+      actual_minutes: input.actualMinutes,
+      paused_minutes: input.pausedMinutes ?? 0,
+      distraction_minutes: input.distractionMinutes ?? 0,
+      productivity_rating: input.productivityRating ?? null,
+      notes: input.notes,
+      cap_outcome: input.capOutcome ?? null,
+      defer_task: input.deferTask ?? false,
     },
   });
 }
@@ -186,6 +260,21 @@ export interface SyncReviewArgs {
   summary_json: unknown;
 }
 
+/** The account-side call for a journalled session outcome. */
+export interface SyncExecutionSessionArgs {
+  client_write_id: string;
+  task_id: string;
+  calendar_block_id: string | null;
+  outcome: string;
+  actual_minutes: number;
+  paused_minutes: number;
+  distraction_minutes: number;
+  productivity_rating: number | null;
+  notes: string | null;
+  cap_outcome: string | null;
+  defer_task: boolean;
+}
+
 /**
  * Everything replay needs from outside this module. Injected rather than
  * imported so the dispatcher stays testable without a Supabase client and
@@ -204,6 +293,18 @@ export interface DurableWriteServerOps {
   };
   /** Late resolution of the review's area. Reviews allow a null area. */
   resolveReviewAreaId?(payload: ReviewWritePayload): string | null;
+  syncExecutionSession?(
+    args: SyncExecutionSessionArgs,
+  ): Promise<{ provider: "mock" | "supabase" }>;
+  /**
+   * Late resolution of a session journalled before its task/block had account
+   * ids. A null task id keeps the write queued; a null BLOCK id is legitimate
+   * and means a blockless session.
+   */
+  resolveExecutionSessionIds?(payload: ExecutionSessionWritePayload): {
+    persistedTaskId: string | null;
+    persistedBlockId: string | null;
+  };
 }
 
 /**
@@ -284,6 +385,60 @@ function reviewHandler(ops: DurableWriteServerOps) {
   };
 }
 
+function executionSessionHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as ExecutionSessionWritePayload;
+    const sync = ops.syncExecutionSession;
+    if (!sync) {
+      // No account operation wired in this caller. Keep it queued rather than
+      // resolving, which would delete the user's outcome.
+      throw new Error(
+        "Cannot send this session yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const resolved = ops.resolveExecutionSessionIds?.(payload);
+    const taskId =
+      payload.persisted_task_id ?? resolved?.persistedTaskId ?? null;
+
+    if (!taskId) {
+      // A session must reference the task it was spent on
+      // (`record_execution_session` looks the task up to derive user and
+      // area). Inventing one would file the work against the wrong area, so
+      // this waits for the mapping instead.
+      throw new Error(
+        "Cannot send this session yet: its account task is not known on this device.",
+      );
+    }
+
+    // A null block is NOT a missing id — it is the blockless session (P0#2).
+    // Only a block the user actually had, whose account id has not synced
+    // yet, is a reason to wait.
+    const blockId =
+      payload.persisted_block_id ?? resolved?.persistedBlockId ?? null;
+    if (payload.workflow_block_id !== null && blockId === null) {
+      throw new Error(
+        "Cannot send this session yet: its account block is not known on this device.",
+      );
+    }
+
+    const result = await sync({
+      client_write_id: write.client_write_id,
+      task_id: taskId,
+      calendar_block_id: blockId,
+      outcome: payload.outcome,
+      actual_minutes: payload.actual_minutes,
+      paused_minutes: payload.paused_minutes,
+      distraction_minutes: payload.distraction_minutes,
+      productivity_rating: payload.productivity_rating,
+      notes: payload.notes,
+      cap_outcome: payload.cap_outcome,
+      defer_task: payload.defer_task,
+    });
+    requireAccountWrite(result);
+  };
+}
+
 /**
  * The entity -> handler map this slice wires. Entities absent from this map
  * are reported `skipped` by the kernel and stay queued, so a later slice
@@ -296,6 +451,7 @@ export function createDurableWriteHandlers(
   return {
     win: winHandler(ops),
     review: reviewHandler(ops),
+    execution_session: executionSessionHandler(ops),
   };
 }
 

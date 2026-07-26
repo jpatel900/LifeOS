@@ -45,7 +45,21 @@ export interface Phase2MockExecutionSession {
     | "stopped"
     | "partial"
     | "skipped";
+  /**
+   * #737 C1 card 1 — "user-chosen outcome only, never a silent 'partial'".
+   *
+   * `in_progress` is DEVICE-ONLY and exists so a session that is merely
+   * running carries no verdict. Before this, `startExecutionSession` opened
+   * every session at `"partial"`, so an abandoned one read back as a partial
+   * the user never chose (and `sessionStatusFromOutcome` turned it into a
+   * phantom "running" session forever).
+   *
+   * It is never persisted: `execution_sessions.outcome` keeps its original
+   * six-value CHECK, and the account row is only ever created from the end
+   * sheet's chosen outcome.
+   */
   outcome:
+    | "in_progress"
     | "completed"
     | "partial"
     | "stopped"

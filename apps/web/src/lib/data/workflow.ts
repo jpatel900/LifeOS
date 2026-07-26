@@ -162,8 +162,12 @@ export {
   applyTaskReviewTransition,
   createReviewEntry,
   syncJournaledReviewEntry,
+  syncJournaledExecutionSession,
 } from "./workflow/execution";
-export type { SyncJournaledReviewEntryInput } from "./workflow/execution";
+export type {
+  SyncJournaledReviewEntryInput,
+  SyncJournaledExecutionSessionInput,
+} from "./workflow/execution";
 
 // --- rollups ---
 export {

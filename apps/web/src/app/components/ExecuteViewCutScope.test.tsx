@@ -210,7 +210,13 @@ describe("ExecuteView cut-scope cap moment (FR-031 slice 7)", () => {
   it("closes the sheet after an atomic DEFER settles with closed/deferred", async () => {
     const onFinish = vi
       .fn<() => Promise<EndSessionResult>>()
-      .mockResolvedValue({ status: "closed", resolution: "deferred" });
+      // #737 C1: a closed result now also reports what the browser can back
+      // up. The atomic defer path commits to the account, so "persisted".
+      .mockResolvedValue({
+        status: "closed",
+        resolution: "deferred",
+        save: "persisted",
+      });
     renderExecuteView(approvedMapTask, onFinish);
 
     fireEvent.click(screen.getByTestId("cockpit-end-session"));

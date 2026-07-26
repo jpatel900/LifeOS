@@ -1,4 +1,5 @@
 import type { EndSessionOutcome } from "./EndSessionSheet";
+import type { SessionSaveResult } from "@/lib/workflowContext/persistenceSync";
 
 export type EndSessionAbortReason =
   | "invalid_cap_choice"
@@ -14,6 +15,13 @@ export type EndSessionResult =
       // unified close (see apply_execution_session_defer / #587's
       // collision-resolution carve-out that this issue upgrades).
       resolution: "ordinary" | "cut_scope" | "decision" | "deferred";
+      /**
+       * #737 C1 card 1: what the browser can actually back up. The caller
+       * picks its copy from this, so "Session complete" is only ever said
+       * over a write that reached the account, and a device-only save says
+       * so in the user's own words.
+       */
+      save: SessionSaveResult;
     }
   | {
       // Preserved for the local-only/failure paths: the split truth still
@@ -46,7 +54,9 @@ interface EndSessionPolicyDependencies {
     actualMinutes: number,
     note: string | null,
     capOutcome?: "cut_scope" | "deferred",
-  ): Promise<void>;
+    // #737 C1 card 1: resolves with what actually happened, so the caller's
+    // toast can be picked from the truth rather than from optimism.
+  ): Promise<SessionSaveResult>;
   // #613: the atomic cap-DEFER path — replaces the prior markSession(cap
   // "deferred") + deferTask(taskId) two-call split with one transactional
   // call that reports which of the three real outcomes happened.
@@ -94,7 +104,7 @@ export async function runEndSessionPolicy(
       if (!revisedDod)
         return { status: "aborted", reason: "missing_cut_scope" };
 
-      await dependencies.markSession(
+      const cutScopeSave = await dependencies.markSession(
         "completed",
         input.actualMinutes,
         composeEndSessionNote(
@@ -103,7 +113,7 @@ export async function runEndSessionPolicy(
         ),
         "cut_scope",
       );
-      return { status: "closed", resolution: "cut_scope" };
+      return { status: "closed", resolution: "cut_scope", save: cutScopeSave };
     }
 
     if (choice === "2" || choice === "defer" || choice === "deferred") {
@@ -123,7 +133,13 @@ export async function runEndSessionPolicy(
       );
 
       if (deferResult === "persisted") {
-        return { status: "closed", resolution: "deferred" };
+        // The atomic defer path records the session itself, so its save
+        // result is the transaction's own: it committed to the account.
+        return {
+          status: "closed",
+          resolution: "deferred",
+          save: "persisted",
+        };
       }
       return {
         status: "split",
@@ -141,18 +157,18 @@ export async function runEndSessionPolicy(
       ?.trim();
     if (!decision) return { status: "aborted", reason: "missing_decision" };
 
-    await dependencies.markSession(
+    const decisionSave = await dependencies.markSession(
       input.outcome,
       input.actualMinutes,
       composeEndSessionNote(input.note, `decision: ${decision}`),
     );
-    return { status: "closed", resolution: "decision" };
+    return { status: "closed", resolution: "decision", save: decisionSave };
   }
 
-  await dependencies.markSession(
+  const ordinarySave = await dependencies.markSession(
     input.outcome,
     input.actualMinutes,
     input.note,
   );
-  return { status: "closed", resolution: "ordinary" };
+  return { status: "closed", resolution: "ordinary", save: ordinarySave };
 }

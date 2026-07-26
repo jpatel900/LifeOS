@@ -25,7 +25,13 @@ import type { FirstMoveVM, StartVM } from "./momentsViewModel";
 import type { MomentValue } from "./MomentSwitcher";
 import type { EndSessionOutcome } from "./EndSessionSheet";
 import type { ToastAction } from "./toast";
-import { runEndSessionPolicy } from "./endSessionPolicy";
+import { runEndSessionPolicy, type EndSessionResult } from "./endSessionPolicy";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
+import {
+  hasRunningSession,
+  readRunningSession,
+  writeRunningSession,
+} from "@/lib/execute/runningSession";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -69,6 +75,55 @@ interface UseFlowFocusSessionOptions {
   >["updateTaskFirstTinyStep"];
 }
 
+/**
+ * #737 C1 card 1 — the toast is the LOUDEST claim on this screen, so it is
+ * the one that must be true.
+ *
+ * The audit watched `Session complete` appear over a session that wrote
+ * nothing at all. The copy is now chosen from what actually happened to the
+ * write, not from what the user picked:
+ *
+ *  - `persisted`      — it reached the account. Say so plainly.
+ *  - `local-only`     — the device has it and will keep retrying. Say THAT,
+ *                       in the vocabulary #734/#756 already established.
+ *  - `device-blocked` — nothing has it. Never claim a save.
+ *  - `not-an-outcome` — nothing was running. Never claim a save.
+ */
+export function endSessionToast(
+  outcome: EndSessionOutcome,
+  result: Extract<EndSessionResult, { status: "closed" | "split" }>,
+): string {
+  if (result.status === "split") {
+    return result.resolution === "defer_failed"
+      ? "Session saved — deferral failed; move it from Review"
+      : "Session saved — deferral not yet confirmed";
+  }
+
+  if (result.save === "device-blocked") {
+    return "This browser wouldn't keep your session result — write it down before you reload";
+  }
+  if (result.save === "not-an-outcome") {
+    return "Nothing was running, so nothing was recorded";
+  }
+
+  const headline =
+    result.resolution === "cut_scope"
+      ? "Scope cut and session closed"
+      : result.resolution === "deferred"
+        ? "Deferred — moved to backlog"
+        : outcome === "completed"
+          ? "Session complete"
+          : outcome === "partial"
+            ? "Partial progress saved"
+            : outcome === "skipped"
+              ? "Skipped — carried to review"
+              : "Stuck — logged for review";
+
+  return result.save === "local-only"
+    ? `${headline} — ${SAVED_ON_THIS_DEVICE_SHORT}`
+    : headline;
+}
+
 export function useFlowFocusSession({
   state,
   now,
@@ -94,6 +149,26 @@ export function useFlowFocusSession({
     remaining: 0,
     total: 0,
   });
+
+  // #737 C1 card 6: a running session is device state, so leaving — a moment
+  // switch, a reload, a closed tab — never ends it. Hydration happens in an
+  // effect rather than a lazy initializer so the first client render still
+  // matches the server's (same reason `accentThemeMounted` exists in
+  // TodayMoments). `hydrated` gates the write-back: without it the very first
+  // post-mount commit would persist the EMPTY default over the record it is
+  // about to restore.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const restored = readRunningSession();
+    if (restored) {
+      setSession(restored);
+    }
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!hydrated) return;
+    writeRunningSession(session);
+  }, [hydrated, session]);
 
   const railTaskId = useMemo(
     () => session.activeTaskId ?? startVM.firstMove?.taskId ?? null,
@@ -174,14 +249,20 @@ export function useFlowFocusSession({
       const nowIso = new Date().toISOString();
       const updatedGraph = toggleNodeCompletion(graph, nodeId, nowIso);
       const evidence = buildRevisionEvidence(
-        state.executionSessions
-          .filter((session) => session.task_id === railTaskId)
-          .map((session) => ({
-            planned_minutes: session.planned_minutes,
-            actual_minutes: session.actual_minutes,
-            outcome: session.outcome,
-            cap_outcome: session.cap_outcome ?? null,
-          })),
+        // A session still running has no verdict yet (`in_progress`), so it
+        // is not evidence about how the work went.
+        state.executionSessions.flatMap((session) =>
+          session.task_id === railTaskId && session.outcome !== "in_progress"
+            ? [
+                {
+                  planned_minutes: session.planned_minutes,
+                  actual_minutes: session.actual_minutes,
+                  outcome: session.outcome,
+                  cap_outcome: session.cap_outcome ?? null,
+                },
+              ]
+            : [],
+        ),
         // No duration profiles are plumbed into the moments shell today;
         // the kernel falls back to planned-vs-actual drift.
         [],
@@ -339,23 +420,7 @@ export function useFlowFocusSession({
         total: 0,
       });
       setEndSessionOpen(false);
-      showToast(
-        result.status === "split"
-          ? result.resolution === "defer_failed"
-            ? "Session saved — deferral failed; move it from Review"
-            : "Session saved — deferral not yet confirmed"
-          : result.resolution === "cut_scope"
-            ? "Scope cut and session closed"
-            : result.resolution === "deferred"
-              ? "Deferred — saved and moved to backlog"
-              : outcome === "completed"
-                ? "Session complete"
-                : outcome === "partial"
-                  ? "Partial progress saved"
-                  : outcome === "skipped"
-                    ? "Skipped — carried to review"
-                    : "Stuck — logged for review",
-      );
+      showToast(endSessionToast(outcome, result));
     },
     [
       deferTaskWithSession,
@@ -417,6 +482,8 @@ export function useFlowFocusSession({
 
   return {
     session,
+    /** True while a focus session is live — drives the return affordance. */
+    hasActiveSession: hasRunningSession(session),
     railTaskId,
     progressionNodes,
     focusedTask,
