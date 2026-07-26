@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { stubParseCaptureFetch } from "@/__tests__/helpers/parseCaptureFetch";
@@ -28,20 +28,46 @@ const validTaskMapDraft = {
  *
  * One sort runs at a time (FR-026: no parse queue), so this re-checks whenever
  * `captureParse` settles and picks up the next unsorted capture then.
+ *
+ * #752: this used to select the next candidate via a locally-remembered
+ * "already attempted" id set, and call `sortCaptureIntoDrafts` directly from
+ * the same effect that first observed the new capture in `state.captureItems`.
+ * That raced `WorkflowContext`'s `stateRef` (synced via its OWN effect,
+ * against the SAME commit): `sortCaptureIntoDrafts` reads `stateRef.current`
+ * to find the capture, and same-commit effect ordering between this
+ * component's effect and the provider's `stateRef`-sync effect is not
+ * reliably deterministic here — confirmed via temporary instrumentation,
+ * which caught the provider's sync effect losing the race often enough
+ * (~1/20-1/40 runs) to strand the second capture forever with the old
+ * attempted-id bookkeeping, and still often enough (~1/65 runs) to strand it
+ * with a naive same-effect retry keyed off `item.status` instead.
+ *
+ * The two-hop shape below sidesteps the ambiguous same-commit ordering
+ * entirely: effect A only *stages* the next unsorted capture's id into local
+ * state; effect B, which actually calls `sortCaptureIntoDrafts`, only runs on
+ * the FOLLOWING commit (triggered by that local state update). React always
+ * finishes flushing one commit's passive effects — including the provider's
+ * `stateRef` sync — before starting the next commit's, so by the time effect
+ * B runs, `stateRef` is guaranteed to already reflect the capture effect A
+ * saw. No attempted-id bookkeeping is needed: `item.status === "new"` is the
+ * single source of truth for "still needs a sort attempt".
  */
 function useAutoSortSeededCaptures() {
   const { state, captureParse, sortCaptureIntoDrafts } = useWorkflow();
-  const attempted = useRef<Set<string>>(new Set());
+  const [pendingCaptureId, setPendingCaptureId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (captureParse.phase === "parsing") return;
-    const next = state.captureItems.find(
-      (item) => !attempted.current.has(item.id),
-    );
+    if (captureParse.phase === "parsing" || pendingCaptureId) return;
+    const next = state.captureItems.find((item) => item.status === "new");
     if (!next) return;
-    attempted.current.add(next.id);
-    sortCaptureIntoDrafts(next.id);
-  }, [state.captureItems, captureParse, sortCaptureIntoDrafts]);
+    setPendingCaptureId(next.id);
+  }, [state.captureItems, captureParse, pendingCaptureId]);
+
+  useEffect(() => {
+    if (!pendingCaptureId) return;
+    sortCaptureIntoDrafts(pendingCaptureId);
+    setPendingCaptureId(null);
+  }, [pendingCaptureId, sortCaptureIntoDrafts]);
 }
 
 /**
@@ -527,6 +553,21 @@ describe("TriageSheet", () => {
     restoreFetch();
   });
 
+  // #752: unlike most TriageSheet tests, this one drives TWO real
+  // capture -> sort round trips (each through the actual parse-capture route
+  // handler via stubParseCaptureFetch, not a canned response), back to back.
+  // That's real async work, not a single microtask hop, so under full-suite
+  // CPU contention it can legitimately take longer than testing-library's
+  // default 1000ms `waitFor` budget — confirmed by reproducing the exact
+  // same timeout deterministically with an injected artificial delay. Both
+  // waits get the same generous `{ timeout: 5000 }` already used for real
+  // route-handler round trips elsewhere (capture.test.tsx, triage.test.tsx,
+  // TodayMoments.test.tsx). That alone isn't enough here though: with two
+  // such waits chained in one test, vitest's own default 5000ms PER-TEST
+  // timeout can clip the second wait before its own budget is reached — the
+  // same failure mode triage.test.tsx documents for JOURNEY_TEST_TIMEOUT_MS.
+  // The explicit 15s timeout below is the ceiling raised to match; no
+  // assertion is relaxed or removed.
   it("in 'All areas' mode (selectedAreaId=null), scopes to the first area — matching the badge's activeArea-fallback resolution — so a second area's draft is not shown", async () => {
     const restoreFetch = stubParseCaptureFetch();
     render(
@@ -537,9 +578,12 @@ describe("TriageSheet", () => {
     );
 
     fireEvent.click(screen.getByTestId("seed-submit-first-area"));
-    await waitFor(() => {
-      expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("triage-sheet-list")).toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
     expect(screen.getAllByTestId(/^triage-sheet-item-/)).toHaveLength(1);
 
     fireEvent.click(screen.getByTestId("seed-submit-second-area"));
@@ -547,13 +591,16 @@ describe("TriageSheet", () => {
     // Wait for the second area's capture to actually land as a pending
     // draft (two drafts total across both areas), then assert the sheet
     // still shows exactly the first area's one draft.
-    await waitFor(() => {
-      expect(screen.getByTestId("seed-draft-count")).toHaveTextContent("2");
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId("seed-draft-count")).toHaveTextContent("2");
+      },
+      { timeout: 5000 },
+    );
     expect(screen.getAllByTestId(/^triage-sheet-item-/)).toHaveLength(1);
 
     restoreFetch();
-  });
+  }, 15_000);
 
   // #703 — the Sort action: the app's parse trigger, relocated to this sheet.
   describe("#703 Sort action", () => {
