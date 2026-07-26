@@ -1,0 +1,67 @@
+-- #758: the meta-learning audit trail has never been writable by a signed-in
+-- user. Every triage decision's `suggestion_records` / `override_records` row
+-- has failed since the tables shipped, silently.
+--
+-- WHAT WAS BROKEN
+-- ---------------
+-- `20260506213000_create_v1_core_tables.sql` created `suggestion_records`,
+-- `override_records` and `health_incidents` with RLS enabled and the full set
+-- of four own-row policies for `authenticated`. It never granted the matching
+-- table privileges, and none of the later `grant_authenticated_*` migrations
+-- picked them up: `20260508072618`, `20260508162419`, `20260508194709` and
+-- `20260508202145` between them cover every other v1 table and skip these
+-- three.
+--
+-- In Postgres an RLS policy is a FILTER, not a privilege. `GRANT` decides
+-- whether the role may touch the table at all; the policy then decides which
+-- rows it sees. With the grant missing, the policy never runs — Postgres
+-- refuses first, with **42501 `permission denied for table <name>`**, for
+-- reads and writes alike. PostgREST surfaces that as HTTP 403.
+--
+-- Reproduced against a `supabase db reset` local stack with a real user JWT
+-- (`role: authenticated`), which is the only tier that shows it: the postgres
+-- role owns the tables and `service_role` carries BYPASSRLS plus its own
+-- grants, so both paths pass while a signed-in browser fails. That is exactly
+-- how this stayed invisible for the tables' whole lifetime.
+--
+-- Consequences observed on one `/health` load with the owner's own JWT:
+--   * two `POST /rest/v1/suggestion_records` 403s per triage decision — the
+--     learning loop writing to a wall (`logLearningWriteFailure` swallows it
+--     into a console warning);
+--   * `listOverrideRecords` / `listSuggestionRecords` 403 on read, so a
+--     decision recorded in a prior session cannot suppress its proposal;
+--   * `health_incidents` unreadable by `recordExternalWriteIncident`'s
+--     open-incident lookup;
+--   * all three are in `USER_DATA_EXPORT_TABLES`, so the user's own data
+--     export could never include them.
+--
+-- WHY A PLAIN `GRANT` AND NOT A `DO` BLOCK
+-- ----------------------------------------
+-- `GRANT` is idempotent in Postgres: re-granting a privilege the role already
+-- holds is a no-op, not an error. This migration is therefore safe to apply to
+-- a stack where some or all of these privileges already exist, which is the
+-- property the repair needs — we are asserting the intended end state rather
+-- than diffing against an assumed current one.
+--
+-- Unlike `20260726120000` / `20260726130000` (#737-A / #759), no index or
+-- `ON CONFLICT` arbiter is involved here: these are plain inserts and selects,
+-- so neither the partial-index 42P10 class those two fixed nor any new
+-- conflict target is introduced.
+--
+-- WHY ALL FOUR PRIVILEGES
+-- -----------------------
+-- The four own-row policies the v1 core migration already declares for each
+-- table are the recorded intent, and `supabaseMigration.test.ts` guards them.
+-- This migration makes the privileges match that declared intent and nothing
+-- wider — no new policy, no new table, no change to what any row lets you see.
+-- Narrowing the audit tables further (insert+select only, on the argument that
+-- an audit trail should not be editable) would mean DROPPING existing policies,
+-- which is a deliberate product decision rather than a repair; it is raised for
+-- human review on the pull request instead of being smuggled in here.
+--
+-- `areas` is the precedent for narrowing when the intent changes: it revoked
+-- delete and dropped its delete policy together, in one explicit migration.
+
+grant select, insert, update, delete on table public.suggestion_records to authenticated;
+grant select, insert, update, delete on table public.override_records to authenticated;
+grant select, insert, update, delete on table public.health_incidents to authenticated;
