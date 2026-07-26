@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useWorkflow } from "@/lib/WorkflowContext";
-import type { SessionSaveResult } from "@/lib/workflowContext/persistenceSync";
 
 /**
  * Moments pass P0 — packet: extract the Execute-stage focus session out of
@@ -56,7 +55,7 @@ export interface UseFocusSessionResult {
     status: "completed" | "stuck" | "missed" | "partial" | "skipped",
     actualMinutes?: number,
     notes?: string | null,
-  ): Promise<SessionSaveResult>;
+  ): Promise<void>;
   /** Clears only local clock state after another orchestrator persisted closure. */
   reset(): void;
   /** Adds `minutes` to both remaining and total without touching workflow state. */

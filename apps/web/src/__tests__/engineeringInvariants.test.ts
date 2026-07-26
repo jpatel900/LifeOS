@@ -1,16 +1,10 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { USER_DATA_EXPORT_TABLES } from "@/lib/data/export";
-import { readDirCached } from "./helpers/repoWalk";
 
 // Static guards for docs/ENGINEERING_INVARIANTS.md. Each block names the
 // invariant it enforces; weakening a guard to pass it violates the invariant.
-
-// #761 — walkRepoFiles is called over supabase/migrations, apps/web/src, and
-// apps/web/src/app (nested/overlapping) in this file; readDirCached dedupes
-// the repeated reads, and this timeout is belt-and-braces for the rest.
-vi.setConfig({ testTimeout: 30_000 });
 
 const repoRoot = resolve(__dirname, "../../../..");
 
@@ -29,7 +23,7 @@ const IGNORED_SCAN_DIRECTORIES = new Set([
 function walkRepoFiles(relativePath: string): string[] {
   const currentPath = resolve(repoRoot, relativePath);
 
-  return readDirCached(currentPath).flatMap((entry) => {
+  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
     const nextRelativePath = `${relativePath}/${entry.name}`.replace(
       /\\/g,
       "/",

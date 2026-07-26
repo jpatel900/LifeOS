@@ -1,16 +1,10 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   collectUserFacingStrings,
   findPlainLanguageViolations,
 } from "./helpers/plainLanguageScan";
-
-// #761 — collectUserFacingStrings() walks apps/web/src and packages/ui/src;
-// helpers/repoWalk.ts's readDirCached dedupes repeated directory reads
-// across the repo-walking guards, and this timeout is belt-and-braces for
-// whatever IO load remains.
-vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * REPO-WIDE PLAIN-LANGUAGE GUARD (#692 / NFR-006)

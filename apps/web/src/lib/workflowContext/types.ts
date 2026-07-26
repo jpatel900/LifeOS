@@ -12,7 +12,6 @@ import type {
   RollupSummaryContent,
 } from "@lifeos/schemas";
 import type { WorkflowState } from "../workflow";
-import type { SessionSaveResult } from "./persistenceSync";
 import type { TaskMapGraph } from "../taskmap/graph";
 import type { RevisionSignal } from "../taskmap/revision";
 import type { ProposalRecalibrationVM } from "../learning/learningSurface";
@@ -183,9 +182,7 @@ export interface WorkflowContextValue {
     actualMinutes?: number,
     notes?: string | null,
     capOutcome?: Phase2MockExecutionSession["cap_outcome"],
-    // #737 C1 card 1: resolves with what ACTUALLY happened to the outcome, so
-    // the caller's toast can only claim what the browser can back up.
-  ) => Promise<SessionSaveResult>;
+  ) => Promise<void>;
   carryForwardTask: (taskId: string) => void;
   deferTask: (taskId: string) => void;
   /**

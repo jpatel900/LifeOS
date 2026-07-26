@@ -319,18 +319,10 @@ export function CaptureCore({
           onClick={handleSave}
           disabled={!canSubmit || locked}
           className={cn(
-            "min-h-11 rounded-full border px-5 font-bold",
+            "min-h-11 rounded-full px-5 font-bold",
             canSubmit && !locked
-              ? "border-transparent bg-primary text-primary-foreground"
-              : // Audit #2 (docs/design/ux-audit-2026-07-26-fable.md, P2 "Capture's
-                // own buttons do not look like buttons"): --muted and --card share
-                // one token value (globals.css), so a disabled bg-muted button on a
-                // bg-card dialog painted with zero visible boundary — text floating
-                // with no control chrome. `border-border` (a distinct, lighter
-                // token) gives the disabled state the same outline-button vocabulary
-                // apps/web/src/components/ui/button.tsx already uses, at rest, not
-                // just on hover/focus.
-                "cursor-not-allowed border-border bg-muted text-muted-foreground",
+              ? "bg-primary text-primary-foreground"
+              : "cursor-not-allowed bg-muted text-muted-foreground",
             saveButtonClassName,
           )}
           data-testid={`${id}-save`}

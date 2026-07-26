@@ -1,12 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
-
-// #761 — walkPolicySourceFiles/walkUxTokenScanFiles below re-walk their
-// roots per call; readDirCached dedupes the repeated directory reads, and
-// this timeout is belt-and-braces for whatever IO load remains.
-vi.setConfig({ testTimeout: 30_000 });
 
 const repoRoot = resolve(__dirname, "../../../..");
 
@@ -67,7 +61,7 @@ const POLICY_ID_LITERAL_PATTERN =
 function walkPolicySourceFiles(relativePath: string): string[] {
   const currentPath = resolve(repoRoot, relativePath);
 
-  return readDirCached(currentPath).flatMap((entry) => {
+  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
     const nextRelativePath = `${relativePath}/${entry.name}`;
 
     if (entry.isDirectory()) {
@@ -362,7 +356,9 @@ const UX_TOKEN_SCAN_EXTENSIONS = new Set([".ts", ".tsx"]);
 const CANONICAL_STATE_TOKENS = new Set(["ok", "watch", "risk", "idle", "warn"]);
 
 function walkUxTokenScanFiles(relativePath: string): string[] {
-  return readDirCached(resolve(repoRoot, relativePath)).flatMap((entry) => {
+  return readdirSync(resolve(repoRoot, relativePath), {
+    withFileTypes: true,
+  }).flatMap((entry) => {
     const nextRelativePath = `${relativePath}/${entry.name}`;
 
     if (entry.isDirectory()) {

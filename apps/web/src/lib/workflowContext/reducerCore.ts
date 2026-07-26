@@ -411,8 +411,6 @@ const EXECUTION_SESSION_STATUSES = new Set([
   "stopped",
 ]);
 const EXECUTION_OUTCOMES = new Set([
-  // #737 C1 card 1: device-only "no verdict yet" (see Phase2MockExecutionSession).
-  "in_progress",
   "completed",
   "partial",
   "stopped",

@@ -346,15 +346,7 @@ describe("TodayMoments", () => {
   });
 
   it("closes the Moments sheet with split truth when the session saves but deferral is unconfirmed", async () => {
-    // Narrowed `toFake` since #737 C1 card 1: ending a session journals the
-    // outcome to IndexedDB before anything else, and `fake-indexeddb` drives
-    // its request callbacks with `setImmediate`. Faking that (vitest's
-    // default) freezes the journal write, so the sheet would sit on "Saving…"
-    // forever. Same remedy #737-A slice 2 applied to the close-day toast:
-    // fake only the timers this test's subject uses.
-    vi.useFakeTimers({
-      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"],
-    });
+    vi.useFakeTimers();
     const restoreFetch = stubParseCaptureFetch();
     vi.spyOn(window, "prompt")
       .mockReturnValueOnce("defer")
@@ -375,15 +367,7 @@ describe("TodayMoments", () => {
     });
     fireEvent.click(screen.getByTestId("current-block-hero-done"));
     fireEvent.click(screen.getByTestId("end-session-save"));
-
-    // The journal write resolves on real `setImmediate` — drain that queue
-    // until the save result lands and the sheet closes.
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      await act(async () => {
-        await new Promise((resolve) => setImmediate(resolve));
-      });
-      if (screen.getByTestId("today-moments-toast").textContent) break;
-    }
+    await act(async () => {});
 
     expect(screen.queryByTestId("end-session-sheet")).not.toBeInTheDocument();
     expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(

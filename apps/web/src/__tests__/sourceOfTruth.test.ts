@@ -1,13 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
-
-// #761 — this file walks apps/web/src/__tests__, apps/web/src, and apps/web
-// (overlapping, some more than once) across its guards; readDirCached
-// dedupes the repeated directory reads, and this generous timeout is
-// belt-and-braces for whatever IO load remains.
-vi.setConfig({ testTimeout: 30_000 });
+import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(__dirname, "../../../..");
 
@@ -45,9 +38,10 @@ function workflowStateAnnotationTestFiles() {
 }
 
 function walkRepoFiles(relativePath: string): string[] {
+  const { readdirSync } = require("node:fs") as typeof import("node:fs");
   const currentPath = resolve(repoRoot, relativePath);
 
-  return readDirCached(currentPath).flatMap((entry) => {
+  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
     const nextRelativePath = `${relativePath}/${entry.name}`.replace(
       /\\/g,
       "/",

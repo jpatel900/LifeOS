@@ -68,14 +68,7 @@ describe("runEndSessionPolicy", () => {
       deps,
     );
 
-    // #737 C1 card 1 re-anchor: a closed result now also reports what the
-    // browser can back up, so the caller's toast is picked from the truth.
-    // The atomic defer commits to the account, hence "persisted".
-    expect(result).toEqual({
-      status: "closed",
-      resolution: "deferred",
-      save: "persisted",
-    });
+    expect(result).toEqual({ status: "closed", resolution: "deferred" });
     expect(deps.markSession).not.toHaveBeenCalled();
     expect(deps.deferTaskWithSession).toHaveBeenCalledOnce();
     expect(deps.deferTaskWithSession).toHaveBeenCalledWith(

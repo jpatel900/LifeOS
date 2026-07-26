@@ -19,11 +19,14 @@ import {
   acceptTimeBlockProposal,
   applyTaskReviewTransition,
   createCaptureItem,
+  createExecutionSession,
   createReviewEntry,
   createTask,
   createTimeBlockProposal,
+  deferExecutionSessionWithTask,
   editTimeBlockProposal,
   findOrCreatePerson,
+  markExecutionSession,
   recordPersonLinkAcceptance,
   rejectTimeBlockProposal,
   supersedePendingTimeBlockProposalsForTask,
@@ -34,7 +37,6 @@ import {
 import { normalizePersonName } from "../data/personLinks";
 import {
   hasPendingWrite,
-  journalExecutionSessionWrite,
   journalReviewWrite,
 } from "../durability/durableWrites";
 import { savedOnThisDeviceBanner } from "../statusVocabulary";
@@ -66,49 +68,6 @@ export interface PersistenceSyncDeps {
   syncPersistedWorkflowRows: (
     client: MinimalSupabaseClient | null,
   ) => Promise<void>;
-}
-
-/**
- * What actually happened to a session outcome, in the user's terms.
- *
- * `not-an-outcome` is not a failure: pausing (or any non-terminal mark) makes
- * no record on purpose, and the caller must not show save copy for it.
- */
-export type SessionSaveResult =
-  | "persisted"
-  | "local-only"
-  | "device-blocked"
-  | "not-an-outcome";
-
-/**
- * The device's session status -> the outcome that may be RECORDED.
- *
- * Deliberately total and explicit: every value that reaches the table is one
- * of the six `execution_sessions_outcome_check` allows, and anything without
- * a user-chosen meaning maps to null and is never written. `in_progress`
- * cannot appear here at all — it is not a status.
- */
-function recordableOutcomeForStatus(
-  status: Phase2MockExecutionSession["status"],
-): string | null {
-  switch (status) {
-    case "completed":
-      return "completed";
-    case "missed":
-      return "skipped";
-    case "skipped":
-      return "skipped";
-    case "partial":
-      return "partial";
-    case "distracted":
-      return "distracted";
-    case "stuck":
-      return "blocked";
-    case "stopped":
-      return "stopped";
-    default:
-      return null;
-  }
 }
 
 export function createPersistenceSync(deps: PersistenceSyncDeps) {
@@ -597,65 +556,14 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     return "persisted";
   }
 
-  /**
-   * #737 C1 card 1: starting a session writes NOTHING to the account.
-   *
-   * `start_execution_session` used to insert a row here, and because
-   * `execution_sessions.outcome` is `not null` over six user-facing values it
-   * had to invent one — `'partial'`. That is audit P0#1: an outcome on the
-   * user's record that they never chose, left behind by every session they
-   * did not finish, and read back as a phantom "running" session forever.
-   *
-   * A running session is device state now
-   * (`lib/execute/runningSession.ts`). The account row is created ONCE, from
-   * the outcome the user picks in the end sheet, by `persistMarkedSession`
-   * below. Nothing is claimed at start, so nothing here may say "saved".
-   *
-   * Kept as a named no-op rather than deleted so the start path still has an
-   * explicit statement of this rule at the call site.
-   */
   async function persistStartedSession(
-    _localSession: Phase2MockExecutionSession,
-  ): Promise<void> {
-    return;
-  }
-
-  /**
-   * The end sheet's chosen outcome, journalled and then replayed — the ONE
-   * write a focus session ever produces.
-   *
-   * Device first, exactly like wins and reviews (#737-A slice 2): the outcome
-   * reaches IndexedDB before any network call, so "saved on this device" is
-   * true the moment the user is told it and a closed tab cannot lose it. The
-   * account write is a replay of that record, deduplicated server-side on
-   * `client_write_id` by `record_execution_session`.
-   *
-   * `paused` is not an outcome and never becomes a row: pausing is a
-   * statement about the clock, not about how the work went.
-   */
-  async function persistMarkedSession(
     localSession: Phase2MockExecutionSession,
-    status: Phase2MockExecutionSession["status"],
-    actualMinutes?: number,
-    notes?: string | null,
-    capOutcome?: Phase2MockExecutionSession["cap_outcome"],
-  ): Promise<SessionSaveResult> {
-    if (status === "paused" || status === "running") {
-      return "not-an-outcome";
-    }
-
-    const outcome = recordableOutcomeForStatus(status);
-    if (!outcome) {
-      return "not-an-outcome";
-    }
-
+  ) {
     if (!localSession.task_id) {
-      // Nothing to file the session against. Truthful, and the caller must
-      // not claim a save.
-      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
-      return "local-only";
+      return;
     }
 
+    const client = createSupabaseBrowserClient();
     const persistedTaskId = persistedIdForLocalId(
       localSession.task_id,
       persistedTaskIdByLocalIdRef.current,
@@ -667,107 +575,143 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         )
       : null;
 
-    let journalled;
-    try {
-      journalled = await journalExecutionSessionWrite({
-        workflowTaskId: localSession.task_id,
-        persistedTaskId,
-        workflowBlockId: localSession.calendar_block_id,
-        persistedBlockId,
-        outcome,
-        actualMinutes: actualMinutes ?? localSession.actual_minutes ?? 0,
-        pausedMinutes: localSession.paused_minutes ?? 0,
-        distractionMinutes: localSession.distraction_minutes ?? 0,
-        productivityRating: status === "completed" ? 4 : 1,
-        notes:
-          notes !== undefined
-            ? notes
-            : status === "stuck"
-              ? "Need a smaller next step."
-              : null,
-        capOutcome: capOutcome ?? null,
-        deferTask: false,
-      });
-    } catch {
-      // The device itself refused to hold it. Nothing has the outcome, and
-      // the banner must name that cause rather than blaming the account.
-      markDeviceStorageBlocked();
-      return "device-blocked";
+    if (!client || !persistedTaskId) {
+      markLocalOnly(savedOnThisDeviceBanner("Your focus session"));
+      return;
     }
 
-    try {
-      await replayJournaledWrites();
-    } catch {
-      // Best-effort: the outcome stays journalled and the next replay retries.
+    const result = await createExecutionSession(client, {
+      task_id: persistedTaskId,
+      calendar_block_id: persistedBlockId,
+    });
+    if (result.provider !== "supabase") {
+      return;
     }
 
-    if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
-      return "local-only";
+    persistedSessionIdByLocalIdRef.current.set(
+      localSession.id,
+      result.session.id,
+    );
+    if (result.block && localSession.calendar_block_id) {
+      persistedBlockIdByLocalIdRef.current.set(
+        localSession.calendar_block_id,
+        result.block.id,
+      );
     }
 
-    const client = createSupabaseBrowserClient();
-    if (client) await syncPersistedWorkflowRows(client);
-    return "persisted";
+    await syncPersistedWorkflowRows(client);
   }
 
-  // #613: atomic cap-DEFER — the session outcome AND the task deferral commit
-  // as ONE transaction, so the pair can never half-land. Under #737 C1 the
-  // session has no row yet at this point, so the atomic call is
-  // `record_execution_session(..., p_defer_task => true)` rather than
-  // `apply_execution_session_defer`; the guarantee is identical and the
-  // journal adds device durability the old path never had.
+  async function persistMarkedSession(
+    localSession: Phase2MockExecutionSession,
+    status: Phase2MockExecutionSession["status"],
+    actualMinutes?: number,
+    notes?: string | null,
+    capOutcome?: Phase2MockExecutionSession["cap_outcome"],
+  ) {
+    const client = createSupabaseBrowserClient();
+    const persistedSessionId = persistedIdForLocalId(
+      localSession.id,
+      persistedSessionIdByLocalIdRef.current,
+    );
+
+    if (!client || !persistedSessionId) {
+      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
+      return;
+    }
+
+    await markExecutionSession(client, persistedSessionId, {
+      // The persisted MarkExecutionSessionInput `status` enum
+      // (@lifeos/schemas) is a red-zone constant that doesn't carry
+      // "partial"/"skipped" — it has no DB column and is only used by
+      // `executionMarkPatch` to special-case "paused". "partial" and
+      // "skipped" map to any non-"paused" member so that branch is skipped
+      // and their real semantics ride entirely on `outcome` below, which
+      // already has both values (EXECUTION_SESSION_OUTCOMES).
+      status:
+        status === "completed"
+          ? "completed"
+          : status === "missed" || status === "skipped"
+            ? "missed"
+            : status === "distracted"
+              ? "distracted"
+              : status === "paused"
+                ? "paused"
+                : "stuck",
+      outcome:
+        status === "completed"
+          ? "completed"
+          : status === "missed"
+            ? "skipped"
+            : status === "distracted"
+              ? "distracted"
+              : status === "stuck"
+                ? "blocked"
+                : status === "partial"
+                  ? "partial"
+                  : status === "skipped"
+                    ? "skipped"
+                    : null,
+      actual_minutes:
+        status === "paused"
+          ? null
+          : (actualMinutes ?? localSession.actual_minutes ?? 0),
+      productivity_rating:
+        status === "paused" ? null : status === "completed" ? 4 : 1,
+      cap_outcome: capOutcome ?? null,
+      notes:
+        notes !== undefined
+          ? notes
+          : status === "stuck"
+            ? "Need a smaller next step."
+            : null,
+    });
+
+    await syncPersistedWorkflowRows(client);
+  }
+
+  // #613: atomic cap-DEFER — persists the execution session outcome AND the
+  // task deferral in one transaction (apply_execution_session_defer), so the
+  // caller can report a truthful unified "persisted" result instead of the
+  // prior split (session awaited, task fire-and-forget). Mirrors
+  // persistReviewEntry's #588 discriminated-result shape: "persisted" only
+  // after the Supabase RPC commits, "local-only" on the recovery-oriented
+  // local fallback when there is no real client/persisted session or task
+  // yet. Failures still throw (the caller maps them to "failure").
   async function persistDeferredTaskWithSession(
     localSession: Phase2MockExecutionSession | undefined,
     localTaskId: string,
     actualMinutes: number,
     notes: string | null,
   ): Promise<"persisted" | "local-only"> {
+    const client = createSupabaseBrowserClient();
+    const persistedSessionId = localSession
+      ? persistedIdForLocalId(
+          localSession.id,
+          persistedSessionIdByLocalIdRef.current,
+        )
+      : null;
     const persistedTaskId = persistedIdForLocalId(
       localTaskId,
       persistedTaskIdByLocalIdRef.current,
     );
-    const persistedBlockId = localSession?.calendar_block_id
-      ? persistedIdForLocalId(
-          localSession.calendar_block_id,
-          persistedBlockIdByLocalIdRef.current,
-        )
-      : null;
 
-    let journalled;
-    try {
-      journalled = await journalExecutionSessionWrite({
-        workflowTaskId: localTaskId,
-        persistedTaskId,
-        workflowBlockId: localSession?.calendar_block_id ?? null,
-        persistedBlockId,
-        outcome: "blocked",
-        actualMinutes: actualMinutes ?? localSession?.actual_minutes ?? 0,
-        pausedMinutes: localSession?.paused_minutes ?? 0,
-        distractionMinutes: localSession?.distraction_minutes ?? 0,
-        productivityRating: 1,
-        notes: notes ?? "Need a smaller next step.",
-        capOutcome: "deferred",
-        deferTask: true,
-      });
-    } catch {
-      markDeviceStorageBlocked();
-      return "local-only";
-    }
-
-    try {
-      await replayJournaledWrites();
-    } catch {
-      // Best-effort: the deferral stays journalled and the next replay retries.
-    }
-
-    if (await hasPendingWrite(journalled.client_write_id)) {
+    if (!client || !persistedSessionId || !persistedTaskId) {
       markLocalOnly(savedOnThisDeviceBanner("Your deferral"));
       return "local-only";
     }
 
-    const client = createSupabaseBrowserClient();
-    if (client) await syncPersistedWorkflowRows(client);
+    await deferExecutionSessionWithTask(
+      client,
+      persistedSessionId,
+      persistedTaskId,
+      {
+        actual_minutes: actualMinutes ?? localSession?.actual_minutes ?? 0,
+        notes: notes ?? "Need a smaller next step.",
+      },
+    );
+
+    await syncPersistedWorkflowRows(client);
     return "persisted";
   }
 

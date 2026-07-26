@@ -108,19 +108,14 @@ export function useTaskMapCloseRevisionOffer({
       const eligibility = revisionEligibility(
         graph,
         buildRevisionEvidence(
-          // Running sessions carry no verdict yet — not evidence.
-          current.executionSessions.flatMap((session) =>
-            session.task_id === task.id && session.outcome !== "in_progress"
-              ? [
-                  {
-                    planned_minutes: session.planned_minutes,
-                    actual_minutes: session.actual_minutes,
-                    outcome: session.outcome,
-                    cap_outcome: session.cap_outcome ?? null,
-                  },
-                ]
-              : [],
-          ),
+          current.executionSessions
+            .filter((session) => session.task_id === task.id)
+            .map((session) => ({
+              planned_minutes: session.planned_minutes,
+              actual_minutes: session.actual_minutes,
+              outcome: session.outcome,
+              cap_outcome: session.cap_outcome ?? null,
+            })),
           [],
           null,
         ),

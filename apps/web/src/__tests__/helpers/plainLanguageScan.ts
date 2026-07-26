@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import ts from "typescript";
 import { BANNED_ON_USER_SURFACE } from "./plainLanguageVocabulary";
-import { readDirCached } from "./repoWalk";
 
 /**
  * WHAT THIS SCANNER TREATS AS A "USER-FACING STRING"
@@ -150,7 +149,7 @@ function walkFiles(relativePath: string): string[] {
   // Sorted so the scan order — and therefore the reported violation order —
   // is identical on every machine and in CI.
   return (
-    readDirCached(currentPath)
+    readdirSync(currentPath, { withFileTypes: true })
       // Codepoint order, not `localeCompare` — locale collation can differ
       // between a developer machine and CI.
       .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))

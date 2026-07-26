@@ -1,12 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
-
-// #761 — walkMarkdownFiles below walks docs/ recursively; readDirCached
-// avoids re-reading a directory more than once, and this timeout is
-// belt-and-braces for whatever IO load remains.
-vi.setConfig({ testTimeout: 30_000 });
+import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(__dirname, "../../../..");
 
@@ -68,7 +62,7 @@ function walkMarkdownFiles(
   absoluteDir: string,
   relativePath: string,
 ): string[] {
-  return readDirCached(absoluteDir).flatMap((entry) => {
+  return readdirSync(absoluteDir, { withFileTypes: true }).flatMap((entry) => {
     const nextRelativePath =
       relativePath === "" ? entry.name : `${relativePath}/${entry.name}`;
 
