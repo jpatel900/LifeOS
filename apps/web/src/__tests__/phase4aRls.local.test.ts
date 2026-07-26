@@ -2579,7 +2579,317 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       );
     }
   });
+
+  /**
+   * #758 — the tests whose absence let the meta-learning audit trail fail in
+   * production for the whole life of these tables.
+   *
+   * They must run as a REAL user JWT (`role: authenticated`). The postgres role
+   * owns the tables and `service_role` carries BYPASSRLS plus its own grants,
+   * so both of those pass while a signed-in browser gets 42501. That is exactly
+   * why this stayed invisible.
+   *
+   * Each block asserts on the ERROR SHAPE, not just the code, because Postgres
+   * returns 42501 for two different failures:
+   *   * missing GRANT  -> "permission denied for table <name>"  (the #758 bug)
+   *   * policy denial  -> "new row violates row-level security policy for ..."
+   * A test that accepted either would go green on a future policy regression.
+   */
+  it("lets user A record and read own suggestion_records but not user B rows (#758)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userAPolicy = `rls.suggestion.a.${suffix}`;
+    const userBPolicy = `rls.suggestion.b.${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("suggestion_records")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          policy_identifier: userAPolicy,
+          suggestion_type: "triage_suggestion",
+          subject_type: "task_draft",
+          suggestion_json: { title: "audit trail" },
+          status: "pending",
+        });
+      expectNoGrantGap(insertAError);
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("suggestion_records")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          policy_identifier: userBPolicy,
+          suggestion_type: "triage_suggestion",
+          subject_type: "task_draft",
+          suggestion_json: { title: "audit trail" },
+          status: "pending",
+        });
+      expectNoGrantGap(insertBError);
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("suggestion_records")
+        .select("user_id,policy_identifier,status")
+        .in("policy_identifier", [userAPolicy, userBPolicy]);
+
+      expectNoGrantGap(selectAError);
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        {
+          user_id: userA.id,
+          policy_identifier: userAPolicy,
+          status: "pending",
+        },
+      ]);
+
+      // The owner can resolve their own pending suggestion — the update path
+      // the learning loop uses when a proposal is later accepted or declined.
+      const { data: updated, error: updateError } = await userAClient
+        .from("suggestion_records")
+        .update({ status: "accepted", decided_by: "user" })
+        .eq("policy_identifier", userAPolicy)
+        .select("status");
+      expectNoGrantGap(updateError);
+      expect(updateError).toBeNull();
+      expect(updated).toEqual([{ status: "accepted" }]);
+    } finally {
+      await deleteSuggestionRecordsByPolicy(userAClient, userAPolicy);
+      await deleteSuggestionRecordsByPolicy(userBClient, userBPolicy);
+    }
+  });
+
+  it("prevents user A from inserting suggestion_records for user B (#758)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { error } = await userAClient.from("suggestion_records").insert({
+      user_id: userB.id,
+      area_id: null,
+      policy_identifier: `rls.suggestion.cross.${suffix}`,
+      suggestion_type: "triage_suggestion",
+      subject_type: "task_draft",
+      suggestion_json: {},
+      status: "pending",
+    });
+
+    // Denied by the POLICY, not by a missing grant.
+    expectNoGrantGap(error);
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A record and read own override_records but not user B rows (#758)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userAPolicy = `rls.override.a.${suffix}`;
+    const userBPolicy = `rls.override.b.${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("override_records")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          policy_identifier: userAPolicy,
+          subject_type: "person_mention",
+          subject_id: userA.id,
+          override_type: "rejected",
+          old_value_json: { proposed_link: true },
+          new_value_json: { proposed_link: false },
+        });
+      expectNoGrantGap(insertAError);
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("override_records")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          policy_identifier: userBPolicy,
+          subject_type: "person_mention",
+          subject_id: userB.id,
+          override_type: "rejected",
+          old_value_json: { proposed_link: true },
+          new_value_json: { proposed_link: false },
+        });
+      expectNoGrantGap(insertBError);
+      expect(insertBError).toBeNull();
+
+      // This is the read `listOverrideRecords` makes for the S9 override-
+      // pattern scan; it 42501'd for every signed-in user before #758.
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("override_records")
+        .select("user_id,policy_identifier,override_type")
+        .in("policy_identifier", [userAPolicy, userBPolicy]);
+
+      expectNoGrantGap(selectAError);
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        {
+          user_id: userA.id,
+          policy_identifier: userAPolicy,
+          override_type: "rejected",
+        },
+      ]);
+    } finally {
+      await deleteOverrideRecordsByPolicy(userAClient, userAPolicy);
+      await deleteOverrideRecordsByPolicy(userBClient, userBPolicy);
+    }
+  });
+
+  it("prevents user A from inserting override_records for user B (#758)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { error } = await userAClient.from("override_records").insert({
+      user_id: userB.id,
+      area_id: null,
+      policy_identifier: `rls.override.cross.${suffix}`,
+      subject_type: "person_mention",
+      subject_id: userA.id,
+      override_type: "rejected",
+      old_value_json: {},
+      new_value_json: {},
+    });
+
+    expectNoGrantGap(error);
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  it("lets user A record and read own health_incidents but not user B rows (#758)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userACode = `rls.incident.a.${suffix}`;
+    const userBCode = `rls.incident.b.${suffix}`;
+
+    try {
+      const { error: insertAError } = await userAClient
+        .from("health_incidents")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          subsystem: "calendar_connector",
+          severity: "warning",
+          status: "open",
+          incident_code: userACode,
+        });
+      expectNoGrantGap(insertAError);
+      expect(insertAError).toBeNull();
+
+      const { error: insertBError } = await userBClient
+        .from("health_incidents")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          subsystem: "calendar_connector",
+          severity: "warning",
+          status: "open",
+          incident_code: userBCode,
+        });
+      expectNoGrantGap(insertBError);
+      expect(insertBError).toBeNull();
+
+      const { data: visibleToA, error: selectAError } = await userAClient
+        .from("health_incidents")
+        .select("user_id,incident_code,status")
+        .in("incident_code", [userACode, userBCode]);
+
+      expectNoGrantGap(selectAError);
+      expect(selectAError).toBeNull();
+      expect(visibleToA).toEqual([
+        { user_id: userA.id, incident_code: userACode, status: "open" },
+      ]);
+    } finally {
+      await deleteHealthIncidentsByCode(userAClient, userACode);
+      await deleteHealthIncidentsByCode(userBClient, userBCode);
+    }
+  });
+
+  it("prevents user A from inserting health_incidents for user B (#758)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { error } = await userAClient.from("health_incidents").insert({
+      user_id: userB.id,
+      area_id: null,
+      subsystem: "calendar_connector",
+      severity: "warning",
+      status: "open",
+      incident_code: `rls.incident.cross.${suffix}`,
+    });
+
+    expectNoGrantGap(error);
+    expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
 });
+
+/**
+ * #758 regression assertion. `permission denied for table` is the GRANT branch
+ * of 42501 — the door being shut before any policy runs. It must never be the
+ * answer an authenticated user gets on a table the app expects them to use, and
+ * naming the shape here keeps a policy regression from masquerading as this bug
+ * (or vice versa).
+ */
+function expectNoGrantGap(error: { message?: string } | null) {
+  if (!error?.message) return;
+  expect(
+    error.message,
+    `authenticated hit the missing-grant branch of 42501: ${error.message}`,
+  ).not.toMatch(/permission denied for table/i);
+}
+
+async function deleteSuggestionRecordsByPolicy(
+  client: SupabaseClient,
+  policyIdentifier: string,
+) {
+  const { error } = await client
+    .from("suggestion_records")
+    .delete()
+    .eq("policy_identifier", policyIdentifier);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up suggestion_records '${policyIdentifier}': ${error.message}`,
+    );
+  }
+}
+
+async function deleteOverrideRecordsByPolicy(
+  client: SupabaseClient,
+  policyIdentifier: string,
+) {
+  const { error } = await client
+    .from("override_records")
+    .delete()
+    .eq("policy_identifier", policyIdentifier);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up override_records '${policyIdentifier}': ${error.message}`,
+    );
+  }
+}
+
+async function deleteHealthIncidentsByCode(
+  client: SupabaseClient,
+  incidentCode: string,
+) {
+  const { error } = await client
+    .from("health_incidents")
+    .delete()
+    .eq("incident_code", incidentCode);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up health_incidents '${incidentCode}': ${error.message}`,
+    );
+  }
+}
 
 function randomFutureDateStamp(): string {
   // Far enough in the future to never collide with real usage data, random
