@@ -75,9 +75,11 @@ These are not consolation prizes. Several are at or near the bar.
 - **The end-of-session sheet is contract-complete.** Outcome (`Done` /
   `Partial` / `Skipped` / `Stuck`, each with a plain hint like
   `Blocked — needs a smaller step.`), `Actual duration (minutes)`,
-  `Note (optional)`, Cancel/Save — and when the session belongs to a scheduled
-  block it saves correctly (`outcome: completed, actual_minutes: 35, notes: …`)
-  and the Close moment updates to `1 COMPLETED TODAY`.
+  `Note (optional)`, Cancel/Save. In the one clean run observed — a session on a
+  task with a scheduled block, ended without navigating away — it saved correctly
+  (`outcome: completed, actual_minutes: 35, notes: …`) and the Close moment
+  updated to `1 COMPLETED TODAY`. That is one observation, not a proven general
+  property; the two failure paths below were each seen more than once.
 - **The focus screen shows the first move**, not just the definition of done:
   `First move — Clarify the next concrete step for: Call the accountant about the
 quarterly filing`, beside a live countdown, `Pause` and `+25 min`.
@@ -474,8 +476,12 @@ its score suggests, and further from trustworthy than its polish suggests.
 - Truth checks were made by querying the database directly with the audited
   user's own JWT after each step, so "the copy says X" and "X actually happened"
   are separately evidenced. Two draft findings were withdrawn when the database
-  contradicted them (planning does persist; a session on a scheduled block does
-  save) — both are reported above in their corrected, narrower form.
+  contradicted them: placement does persist a real block (verified twice,
+  including across a reload), and a session on a scheduled block saved correctly
+  in the one clean run observed. Both are reported above in their corrected,
+  narrower form. The clean save path was observed once; the two failure paths
+  were each observed more than once, so no claim is made that saving a scheduled
+  session always works.
 - Target sizes and overlaps were measured with `getBoundingClientRect` filtered
   by `elementFromPoint` hit-testing, so collapsed disclosures and elements behind
   a modal do not produce false overlaps. Contrast was computed per text node
