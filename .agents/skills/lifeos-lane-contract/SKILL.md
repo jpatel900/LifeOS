@@ -109,6 +109,12 @@ unverified. Ship an UNVERIFIED list with the **exact proving command** for each
 item — and note that UNVERIFIED means *not proven*, not *not done*. End with a
 SELF-AUDIT of ≤10 lines: claims→evidence, gaps, ONE improvement. Post the report
 and **END** — never babysit CI; the orchestrator watches and un-drafts.
+A lane never parks itself mid-task: no Monitors, no "waiting for a
+notification", no ending a turn with verification still running in the
+background. Run every remaining check in the foreground, read its output, then
+report and end. _Why: two lanes (2026-07-25/26) stalled at the finish line
+"waiting", one losing its session before ever opening the PR — waiting is how
+finished work fails to ship._
 
 ### 10. PR hygiene
 
