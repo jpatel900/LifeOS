@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import {
   findOrCreatePerson,
+  resolveCaptureItems,
   syncQueuedCapture,
   type MinimalSupabaseClient,
 } from "@/lib/data/workflow";
@@ -454,6 +455,124 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       expect(data).toHaveLength(2);
     } finally {
       await deleteCaptureByText(userAClient, rawText);
+    }
+  });
+
+  // Final UX Loop C1, Target Card 1 (audit P0#3): the ACCOUNT half of
+  // "sorted/accepted work never resurrects as unsorted". The unit tiers prove
+  // the accept path CALLS `resolveCaptureItems` and that no surface lists a
+  // decided thought; only this suite proves the update is actually permitted
+  // and lands — the #758 grants class and the #759 42P10 class were both
+  // writes that looked wired and silently did nothing. Calls the real client
+  // function, not a hand-typed update, so it cannot drift from what
+  // `persistAcceptedTaskDraft` sends.
+  it("advances an accepted capture from new to resolved, and never drags a decided row back", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const newText = `rls-capture-resolve-new-${suffix}`;
+    const compostedText = `rls-capture-resolve-composted-${suffix}`;
+    const client = userAClient as unknown as MinimalSupabaseClient;
+
+    try {
+      const { data: inserted, error: insertError } = await userAClient
+        .from("capture_items")
+        .insert([
+          {
+            user_id: userA.id,
+            area_id: userA.areaId,
+            raw_text: newText,
+            capture_mode: "text",
+            status: "new",
+          },
+          {
+            user_id: userA.id,
+            area_id: userA.areaId,
+            raw_text: compostedText,
+            capture_mode: "text",
+            status: "composted",
+          },
+        ])
+        .select("id,raw_text,status");
+      expect(insertError).toBeNull();
+
+      const idByText = new Map(
+        (inserted ?? []).map(
+          (row: { id: string; raw_text: string }) => [row.raw_text, row.id] as const,
+        ),
+      );
+
+      const result = await resolveCaptureItems(client, [
+        idByText.get(newText) ?? null,
+        idByText.get(compostedText) ?? null,
+      ]);
+
+      expect(result.provider).toBe("supabase");
+      // Only the undecided row moved. The composted one is out of the guarded
+      // source-status set, so a late or replayed accept cannot resurrect it.
+      expect(result.captures.map((capture) => capture.raw_text)).toEqual([
+        newText,
+      ]);
+
+      const { data: after, error: selectError } = await userAClient
+        .from("capture_items")
+        .select("raw_text,status")
+        .in("raw_text", [newText, compostedText])
+        .order("raw_text", { ascending: true });
+      expect(selectError).toBeNull();
+      expect(after).toEqual([
+        { raw_text: compostedText, status: "composted" },
+        { raw_text: newText, status: "resolved" },
+      ]);
+
+      // Replaying the same accept is a no-op, not an error and not a second
+      // transition — the row is already resolved.
+      const replay = await resolveCaptureItems(client, [
+        idByText.get(newText) ?? null,
+      ]);
+      expect(replay.captures).toEqual([]);
+    } finally {
+      await deleteCaptureByText(userAClient, newText);
+      await deleteCaptureByText(userAClient, compostedText);
+    }
+  });
+
+  it("cannot resolve another user's capture", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const rawText = `rls-capture-resolve-cross-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    try {
+      const { data: inserted, error: insertError } = await userBClient
+        .from("capture_items")
+        .insert({
+          user_id: userB.id,
+          area_id: userB.areaId,
+          raw_text: rawText,
+          capture_mode: "text",
+          status: "new",
+        })
+        .select("id")
+        .single();
+      expect(insertError).toBeNull();
+
+      // `capture_items_update_own` is the ownership boundary — the function
+      // deliberately adds no `.eq("user_id", ...)` of its own, matching the
+      // convention in lib/data/workflow/capture.ts. RLS must make the update
+      // touch nothing rather than silently succeed.
+      const result = await resolveCaptureItems(
+        userAClient as unknown as MinimalSupabaseClient,
+        [(inserted as { id: string }).id],
+      );
+      expect(result.captures).toEqual([]);
+
+      const { data: after } = await userBClient
+        .from("capture_items")
+        .select("status")
+        .eq("raw_text", rawText)
+        .single();
+      expect(after).toEqual({ status: "new" });
+    } finally {
+      await deleteCaptureByText(userBClient, rawText);
     }
   });
 
