@@ -130,6 +130,7 @@ export {
   createCaptureItem,
   syncQueuedCapture,
   listCaptureItems,
+  resolveCaptureItems,
   applyCompostTransitions,
 } from "./workflow/capture";
 export type { SyncQueuedCaptureInput } from "./workflow/capture";

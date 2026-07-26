@@ -6,6 +6,7 @@ import {
   COMPOST_ELIGIBLE_SOURCE_STATUSES,
   type CompostTransitionIntent,
 } from "../../compost/compostPolicy";
+import { RESOLVABLE_CAPTURE_SOURCE_STATUSES } from "../../workflow/captureStatus";
 import {
   type CaptureCreateResult,
   type CaptureListResult,
@@ -154,6 +155,90 @@ export async function listCaptureItems(
   const { data, error } = await query
     .select(captureColumns)
     .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  return {
+    provider: "supabase",
+    captures: parseCaptures(data),
+  };
+}
+
+/**
+ * Final UX Loop C1, Target Card 1 (audit P0#3): advance the captures a just-
+ * accepted draft came from to "resolved", so the account agrees with the
+ * decision the user already made.
+ *
+ * Before this, `persistAcceptedTaskDraft` wrote the task (carrying
+ * `source_capture_item_id`) and nothing else — `capture_items.status` stayed
+ * `"new"` forever, so every fresh session rehydrated the thought as
+ * `Captured, not sorted yet` beside the accepted task built from it.
+ *
+ * Shaped exactly like `applyCompostTransitions` below: one guarded update, no
+ * column but `status`, no `.eq("user_id", ...)` (RLS `capture_items_update_own`
+ * is the ownership boundary, matching this file's convention), and a
+ * DB-level `.in("status", ...)` guard so a late or replayed accept can never
+ * drag an already-resolved, archived or composted row backwards.
+ *
+ * **Throws on error, deliberately.** Status truth is not degradable: unlike the
+ * person-link writes in the accept path (documented as NS-INV-4 best-effort),
+ * a silently dropped status write is precisely the bug this fixes. The caller
+ * lets it propagate to `markPersistedSaveFailure`, which is how the house
+ * surfaces a save that did not land.
+ *
+ * Returns the rows it actually moved — an empty array is a legitimate no-op
+ * (nothing to move, or already moved), not a failure.
+ */
+export async function resolveCaptureItems(
+  client: MinimalSupabaseClient | null,
+  captureIds: readonly (string | null | undefined)[],
+): Promise<CompostTransitionResult> {
+  if (!client) {
+    return { provider: "mock", captures: [] };
+  }
+
+  const ids = Array.from(
+    new Set(
+      captureIds.filter(
+        (id): id is string => typeof id === "string" && id.trim().length > 0,
+      ),
+    ),
+  );
+
+  if (ids.length === 0) {
+    return { provider: "supabase", captures: [] };
+  }
+
+  await requireSupabaseUser(
+    client,
+    "Sign in before saving your triage decision.",
+  );
+
+  const query = client.from("capture_items") as {
+    update: (row: Record<string, unknown>) => {
+      in: (
+        column: string,
+        values: string[],
+      ) => {
+        in: (
+          column: string,
+          values: readonly string[],
+        ) => {
+          select: (
+            columns: string,
+          ) => Promise<{ data: unknown; error: unknown }>;
+        };
+      };
+    };
+  };
+
+  const { data, error } = await query
+    .update({ status: "resolved" })
+    .in("id", ids)
+    .in("status", RESOLVABLE_CAPTURE_SOURCE_STATUSES)
+    .select(captureColumns);
 
   if (error) {
     throw new Error(getSupabaseMessage(error));

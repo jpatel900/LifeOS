@@ -26,6 +26,7 @@ import {
   findOrCreatePerson,
   recordPersonLinkAcceptance,
   rejectTimeBlockProposal,
+  resolveCaptureItems,
   supersedePendingTimeBlockProposalsForTask,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
@@ -285,6 +286,23 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
         );
       }
     }
+
+    // Final UX Loop C1, Target Card 1 (audit P0#3): the local reducer already
+    // moved this capture to "resolved" (lib/workflow/triage.ts). Mirror that to
+    // the account, or the next session rehydrates the thought from Supabase at
+    // status "new" and offers back work the user already decided.
+    //
+    // Ordered after the task (and its proposal) on purpose: the task is what
+    // MAKES the capture resolved, so a failed insert must leave the capture
+    // waiting rather than resolve a thought that produced nothing.
+    //
+    // NOT wrapped in try/catch — unlike the person-link writes above, which are
+    // documented best-effort (NS-INV-4), a status write that fails silently is
+    // exactly the bug this fixes. It propagates to `markPersistedSaveFailure`
+    // in `acceptTaskDraftWithPersistence`, the house way to say a save did not
+    // land. A null `sourceCaptureId` (capture never reached the account) is a
+    // no-op, not an error.
+    await resolveCaptureItems(client, [sourceCaptureId]);
 
     await syncPersistedWorkflowRows(client);
   }
