@@ -147,6 +147,100 @@ describe("Google Calendar server persistence helpers", () => {
     );
   });
 
+  // #743 P0 incident: this is the verbatim production row (tokens redacted)
+  // that failed to parse in production. PostgREST serializes `timestamptz`
+  // columns with a numeric offset ("+00:00"), not a "Z" suffix -- Zod's plain
+  // `.datetime()` only accepts "Z". Every read of this table 503'd, and the
+  // OAuth callback died on this same read ~53ms before the token exchange
+  // ever ran. Fixture must stay verbatim; CI missed this because every other
+  // fixture in this suite (including `storedConnection` above) uses
+  // "Z"-suffixed datetimes, which is exactly what let the bug ship.
+  it("parses a real PostgREST row with offset-format timestamps instead of 503ing (#743 P0)", async () => {
+    const productionRow = {
+      id: "c6b5d8ac-630b-41c9-ac30-5448887513d7",
+      status: "error",
+      user_id: "bf369e8a-8b2b-4d73-b611-8f62999d510f",
+      provider: "google_calendar",
+      created_at: "2026-05-28T18:09:22.314246+00:00",
+      token_type: "Bearer",
+      updated_at: "2026-07-25T22:08:43.942452+00:00",
+      calendar_id: "primary",
+      connected_at: null,
+      disconnected_at: "2026-07-25T22:08:43.897+00:00",
+      last_error_json: {
+        at: "2026-07-25T22:08:43.897Z",
+        code: "callback_failed",
+        description: null,
+        http_status: null,
+      },
+      token_expires_at: "2026-05-28T19:09:21.239+00:00",
+      granted_scopes_json: [],
+      first_write_warning_acknowledged_at: null,
+    };
+
+    const maybeSingleUser = vi.fn().mockResolvedValue({
+      data: productionRow,
+      error: null,
+    });
+    const selectUser = vi
+      .fn()
+      .mockReturnValue({ maybeSingle: maybeSingleUser });
+    const userClient = {
+      from: vi.fn().mockReturnValue({ select: selectUser }),
+    };
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client: userClient,
+      user: { id: "bf369e8a-8b2b-4d73-b611-8f62999d510f" },
+    });
+
+    const userResult = await getGoogleCalendarConnectionForAccessToken(
+      "supabase-access-token",
+    );
+
+    expect(userResult.connection?.status).toBe("error");
+    expect(userResult.connection?.disconnected_at).toBe(
+      "2026-07-25T22:08:43.897+00:00",
+    );
+    expect(userResult.connection?.last_error_json).toEqual({
+      at: "2026-07-25T22:08:43.897Z",
+      code: "callback_failed",
+      description: null,
+      http_status: null,
+    });
+
+    const maybeSingleService = vi.fn().mockResolvedValue({
+      data: {
+        ...productionRow,
+        encrypted_access_token: null,
+        encrypted_refresh_token: "encrypted-refresh-token",
+      },
+      error: null,
+    });
+    const eqService = vi
+      .fn()
+      .mockReturnValue({ maybeSingle: maybeSingleService });
+    const selectService = vi.fn().mockReturnValue({ eq: eqService });
+    const serviceClient = {
+      from: vi.fn().mockReturnValue({ select: selectService }),
+    };
+    mocks.requireSupabaseServerUser.mockResolvedValue({
+      client: userClient,
+      user: { id: "bf369e8a-8b2b-4d73-b611-8f62999d510f" },
+    });
+    mocks.requireSupabaseServiceRoleClient.mockReturnValue(serviceClient);
+
+    const storedResult = await getGoogleCalendarStoredConnectionForAccessToken(
+      "supabase-access-token",
+    );
+
+    expect(storedResult.connection?.encrypted_refresh_token).toBe(
+      "encrypted-refresh-token",
+    );
+    expect(storedResult.connection?.created_at).toBe(
+      "2026-05-28T18:09:22.314246+00:00",
+    );
+  });
+
   it("drops a malformed last_error_json instead of failing the whole row (#743)", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
       data: {

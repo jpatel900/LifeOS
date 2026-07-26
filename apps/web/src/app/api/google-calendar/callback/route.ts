@@ -6,7 +6,7 @@ import {
   GOOGLE_CALENDAR_OAUTH_STATE_COOKIE,
   GOOGLE_OAUTH_ERROR_CODE_MAX_LENGTH,
   GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH,
-  GoogleOAuthProviderError,
+  isGoogleOAuthProviderError,
   isGoogleCalendarOAuthStateValid,
   readGoogleCalendarOAuthStateCookie,
   truncateGoogleOAuthErrorText,
@@ -216,17 +216,40 @@ export async function GET(request: Request) {
         ? "auth_required"
         : "callback_failed";
 
+    // #743 P0: a non-provider crash (e.g. the schema-validation ZodError that
+    // caused this incident) used to store `description: null` here, which is
+    // exactly what made the incident invisible -- the diagnostics feature
+    // could not diagnose its own failure to read the row. Our own thrown
+    // Error messages in this codebase are hardcoded, secret-free strings
+    // (schema errors, "sign in" guards, Supabase error metadata) -- never
+    // token/secret/authorization-code text -- so it's safe to store and log
+    // this. Still length-capped as defense in depth.
+    //
     // Google's own error, when we have one, is more useful to store and log
     // than the locally-derived redirect bucket above -- it is the actual
     // reason (e.g. "invalid_grant"), not just "auth_required"/"callback_failed".
-    const providerDetails: StoredOAuthErrorDetails =
-      error instanceof GoogleOAuthProviderError
-        ? {
-            code: error.code,
-            description: error.description,
-            http_status: error.httpStatus,
-          }
-        : { code: errorCode, description: null, http_status: null };
+    // `isGoogleOAuthProviderError` checks a `name` marker rather than class
+    // identity, so it still recognizes the error if a bundle split ever gives
+    // this route a different copy of the `GoogleOAuthProviderError` class.
+    const providerDetails: StoredOAuthErrorDetails = isGoogleOAuthProviderError(
+      error,
+    )
+      ? {
+          code: error.code,
+          description: error.description,
+          http_status: error.httpStatus,
+        }
+      : {
+          code: errorCode,
+          description:
+            error instanceof Error
+              ? truncateGoogleOAuthErrorText(
+                  error.message,
+                  GOOGLE_OAUTH_ERROR_DESCRIPTION_MAX_LENGTH,
+                )
+              : null,
+          http_status: null,
+        };
 
     await markConnectionError(
       statePayload.accessToken,
