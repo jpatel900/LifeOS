@@ -38,6 +38,10 @@ function localSession(): Phase2MockExecutionSession {
 
 function makeSync(overrides: { hasClient: boolean }) {
   const markLocalOnly = vi.fn();
+  const markDeviceStorageBlocked = vi.fn();
+  // #737-A slice 2 deps. This spec covers the cap-DEFER path, which does not
+  // journal, so a no-op replay is the faithful stand-in.
+  const replayJournaledWrites = vi.fn().mockResolvedValue(undefined);
   const syncPersistedWorkflowRows = vi.fn().mockResolvedValue(undefined);
   createSupabaseBrowserClientMock.mockReturnValue(
     overrides.hasClient ? { rpc: vi.fn() } : null,
@@ -52,6 +56,8 @@ function makeSync(overrides: { hasClient: boolean }) {
     persistedSessionIdByLocalIdRef: { current: new Map() },
     selectedAreaId: null,
     markLocalOnly,
+    markDeviceStorageBlocked,
+    replayJournaledWrites,
     syncPersistedWorkflowRows,
   });
 

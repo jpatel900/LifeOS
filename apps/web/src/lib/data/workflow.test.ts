@@ -18,6 +18,8 @@ import {
   applyCompostTransitions,
   createCaptureItem,
   syncQueuedCapture,
+  syncJournaledWin,
+  syncJournaledReviewEntry,
   createExecutionSession,
   createTask,
   deferExecutionSessionWithTask,
@@ -2175,6 +2177,107 @@ describe("workflow data provider", () => {
     });
     expect(result.provider).toBe("supabase");
     expect(result.winRecord.title).toBe("Shipped the onboarding flow");
+  });
+
+  // #737-A slice 2: the journal replay path. These four assertions are the
+  // server half of "replay twice, never duplicate" — the exact upsert options
+  // are what make a second replay a no-op at the database, mirroring
+  // `syncQueuedCapture` above. The database-level proof (two real inserts of
+  // the same client_write_id yielding one row) lives in the local RLS suite.
+  it("syncs a journalled win idempotently via upsert-ignore-duplicates", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const result = await syncJournaledWin(authenticatedClient(from), {
+      client_write_id: "journal-win-1",
+      area_id: areaId,
+      source_task_id: taskId,
+      title: "Shipped the onboarding flow",
+      occurred_at: "2026-05-08",
+    });
+
+    expect(result.provider).toBe("supabase");
+    expect(from).toHaveBeenCalledWith("win_records");
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: userId,
+        area_id: areaId,
+        source_task_id: taskId,
+        title: "Shipped the onboarding flow",
+        occurred_at: "2026-05-08",
+        client_write_id: "journal-win-1",
+      }),
+      { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+    );
+  });
+
+  it("refuses to sync a journalled win without a client write id", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    await expect(
+      syncJournaledWin(authenticatedClient(from), {
+        client_write_id: "   ",
+        area_id: areaId,
+        source_task_id: taskId,
+        title: "Shipped the onboarding flow",
+        occurred_at: "2026-05-08",
+      }),
+    ).rejects.toThrow(/client write id/i);
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("keeps journalled-win sync a no-op in mock mode", async () => {
+    const result = await syncJournaledWin(null, {
+      client_write_id: "journal-win-1",
+      area_id: areaId,
+      source_task_id: taskId,
+      title: "Shipped the onboarding flow",
+      occurred_at: "2026-05-08",
+    });
+
+    expect(result.provider).toBe("mock");
+  });
+
+  it("syncs a journalled review entry idempotently via upsert-ignore-duplicates", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn().mockReturnValue({ upsert });
+
+    const result = await syncJournaledReviewEntry(authenticatedClient(from), {
+      client_write_id: "journal-review-1",
+      area_id: areaId,
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      summary_json: { verdict: "saved" },
+    });
+
+    expect(result.provider).toBe("supabase");
+    expect(from).toHaveBeenCalledWith("review_entries");
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: userId,
+        area_id: areaId,
+        review_type: "daily",
+        period_start: "2026-05-08",
+        period_end: "2026-05-08",
+        client_write_id: "journal-review-1",
+      }),
+      { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+    );
+  });
+
+  it("keeps journalled-review sync a no-op in mock mode", async () => {
+    const result = await syncJournaledReviewEntry(null, {
+      client_write_id: "journal-review-1",
+      area_id: null,
+      review_type: "daily",
+      period_start: "2026-05-08",
+      period_end: "2026-05-08",
+      summary_json: { verdict: "saved" },
+    });
+
+    expect(result.provider).toBe("mock");
   });
 
   it("rejects a win with no source task or project", async () => {

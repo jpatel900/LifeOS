@@ -215,6 +215,73 @@ export async function listWinRecords(
   return { provider: "supabase", winRecords: parseWinRecords(data) };
 }
 
+export interface SyncJournaledWinInput extends CreateWinRecordInput {
+  /** Idempotency key; matches the journal record's `client_write_id`. */
+  client_write_id: string;
+}
+
+/**
+ * #737-A slice 2: push one journalled win to the account.
+ *
+ * The counterpart of `syncQueuedCapture` for wins, and the ONLY win write the
+ * app makes now that `confirmWin` journals first. Idempotent by construction —
+ * an upsert on the `(user_id, client_write_id)` partial unique index with
+ * `ignoreDuplicates`, so replaying a journal entry that already reached the
+ * server is a no-op rather than a second win or a thrown unique violation.
+ *
+ * Deliberately does NOT `.select().single()` like `createWinRecord`:
+ * `ignoreDuplicates` returns no row on conflict, so `.single()` would turn the
+ * successful no-op into an error. Nothing needs the row back — the caller's
+ * proof of success is the absence of an error, after which the journal entry
+ * is cleared.
+ *
+ * Mock mode (no client) reports `provider: "mock"` and writes nothing; the
+ * journal entry stays queued until an account is reachable, exactly like the
+ * offline capture queue.
+ */
+export async function syncJournaledWin(
+  client: MinimalSupabaseClient | null,
+  input: SyncJournaledWinInput,
+): Promise<{ provider: "mock" | "supabase" }> {
+  const parsedInput = CreateWinRecordInputSchema.parse(input);
+  const clientWriteId = input.client_write_id?.trim();
+  if (!clientWriteId) {
+    throw new Error("A journalled win needs a client write id.");
+  }
+
+  if (!client) return { provider: "mock" };
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before recording wins.",
+  );
+
+  const query = client.from("win_records") as {
+    upsert: (
+      row: Record<string, unknown>,
+      options: { onConflict: string; ignoreDuplicates: boolean },
+    ) => PromiseLike<{ error: unknown }>;
+  };
+
+  const { error } = await query.upsert(
+    {
+      user_id: user.id,
+      area_id: parsedInput.area_id,
+      source_task_id: parsedInput.source_task_id,
+      source_project_id: parsedInput.source_project_id,
+      title: parsedInput.title,
+      detail: parsedInput.detail,
+      occurred_at: parsedInput.occurred_at,
+      review_entry_id: parsedInput.review_entry_id,
+      client_write_id: clientWriteId,
+    },
+    { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+  );
+
+  if (error) throw new Error(getSupabaseMessage(error));
+  return { provider: "supabase" };
+}
+
 // S8 (#260): persist a user-APPROVED rollup (NS-INV-4 — drafts never reach
 // here; only an approved rollup is written). Weekly or monthly.
 export async function createRollupSummary(

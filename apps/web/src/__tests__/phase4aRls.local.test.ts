@@ -432,6 +432,166 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
   });
 
+  // #737-A slice 2 — the database half of "replay twice, never duplicate".
+  // The unit tests assert the client sends the right upsert options; only this
+  // suite proves the index actually exists and dedupes.
+  it("dedupes a replayed win on client_write_id instead of creating a second row", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const title = `rls-win-replay-${suffix}`;
+    const clientWriteId = `journal-win-${suffix}`;
+
+    try {
+      const row = {
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title,
+        occurred_at: "2026-05-08",
+        client_write_id: clientWriteId,
+      };
+
+      const { error: firstError } = await userAClient
+        .from("win_records")
+        .upsert(row, {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(firstError).toBeNull();
+
+      // The exact same journal entry replayed — a second mount, a reconnect
+      // racing the first drain, or a response lost after the row landed.
+      const { error: secondError } = await userAClient
+        .from("win_records")
+        .upsert(row, {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(secondError).toBeNull();
+
+      const { data, error: selectError } = await userAClient
+        .from("win_records")
+        .select("title")
+        .eq("title", title);
+      expect(selectError).toBeNull();
+      expect(data).toEqual([{ title }]);
+    } finally {
+      await deleteWinByTitle(userAClient, title);
+    }
+  });
+
+  it("still lets user B use the same client_write_id (the index is per user)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const userATitle = `rls-win-shared-id-a-${suffix}`;
+    const userBTitle = `rls-win-shared-id-b-${suffix}`;
+    // Journal ids are per device, so two accounts on one device can genuinely
+    // collide. The index is scoped to (user_id, client_write_id) so they do
+    // not block each other.
+    const clientWriteId = `journal-win-shared-${suffix}`;
+
+    try {
+      const { error: aError } = await userAClient.from("win_records").insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: userATitle,
+        occurred_at: "2026-05-08",
+        client_write_id: clientWriteId,
+      });
+      expect(aError).toBeNull();
+
+      const { error: bError } = await userBClient.from("win_records").insert({
+        user_id: userB.id,
+        area_id: userB.areaId,
+        title: userBTitle,
+        occurred_at: "2026-05-08",
+        client_write_id: clientWriteId,
+      });
+      expect(bError).toBeNull();
+    } finally {
+      await deleteWinByTitle(userAClient, userATitle);
+      await deleteWinByTitle(userBClient, userBTitle);
+    }
+  });
+
+  it("dedupes a replayed review entry on client_write_id", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const marker = `rls-review-replay-${suffix}`;
+    const clientWriteId = `journal-review-${suffix}`;
+
+    try {
+      const row = {
+        user_id: userA.id,
+        area_id: userA.areaId,
+        review_type: "daily",
+        period_start: "2026-05-08",
+        period_end: "2026-05-08",
+        summary_json: { marker },
+        client_write_id: clientWriteId,
+      };
+
+      const { error: firstError } = await userAClient
+        .from("review_entries")
+        .upsert(row, {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(firstError).toBeNull();
+
+      const { error: secondError } = await userAClient
+        .from("review_entries")
+        .upsert(row, {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(secondError).toBeNull();
+
+      const { data, error: selectError } = await userAClient
+        .from("review_entries")
+        .select("summary_json")
+        .contains("summary_json", { marker });
+      expect(selectError).toBeNull();
+      expect(data).toHaveLength(1);
+    } finally {
+      await deleteReviewByMarker(userAClient, marker);
+    }
+  });
+
+  it("leaves rows with no client_write_id free to repeat (partial index)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const title = `rls-win-null-id-${suffix}`;
+
+    try {
+      // Two NULL client_write_id rows must not collide — every pre-#737 win
+      // is one of these, so an index that counted NULLs as equal would break
+      // the migration on real data. This is guaranteed by Postgres treating
+      // NULLs as DISTINCT in a unique index by default, NOT by a partial
+      // predicate: the predicate was removed because `ON CONFLICT` cannot
+      // infer a partial index (42P10). This test is what proves the guarantee
+      // survived that change.
+      for (const attempt of [1, 2]) {
+        const { error } = await userAClient.from("win_records").insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          title,
+          occurred_at: "2026-05-08",
+        });
+        expect(error, `insert ${attempt} should be allowed`).toBeNull();
+      }
+
+      const { data, error: selectError } = await userAClient
+        .from("win_records")
+        .select("title")
+        .eq("title", title);
+      expect(selectError).toBeNull();
+      expect(data).toHaveLength(2);
+    } finally {
+      await deleteWinByTitle(userAClient, title);
+    }
+  });
+
   it("lets user A access own rollup_summaries but not user B rollups", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);

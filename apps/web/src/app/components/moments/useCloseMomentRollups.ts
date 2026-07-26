@@ -17,6 +17,7 @@ import {
 import type { RollupSummary, RollupSummaryContent } from "@lifeos/schemas";
 import { requestRollupProse } from "@/lib/ai/rollupProseClient";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import type { CloseWinVM } from "./CloseMoment";
 import type { ToastAction } from "./toast";
 
@@ -90,8 +91,26 @@ export function useCloseMomentRollups({
         ...prev,
         { taskId, title, areaLabel: candidate.areaLabel },
       ]);
-      void confirmWin({ taskId, title });
-      showToast("Win logged");
+      // #737-A slice 2: the toast is gated on where the win ACTUALLY landed.
+      // It used to fire unconditionally beside a fire-and-forget call that
+      // short-circuited on `if (!client) return;` — so "Win logged" was shown
+      // for a win written nowhere at all. The list update above stays
+      // optimistic (the moment should not stutter), and is rolled back on the
+      // one outcome where nothing holds the win.
+      void confirmWin({ taskId, title }).then((result) => {
+        if (result === "failure") {
+          setConfirmedWins((prev) =>
+            prev.filter((win) => win.taskId !== taskId),
+          );
+          showToast("Couldn't log the win — it isn't saved yet");
+          return;
+        }
+        if (result === "device-only") {
+          showToast(`Win ${SAVED_ON_THIS_DEVICE_SHORT}`);
+          return;
+        }
+        showToast("Win logged");
+      });
     },
     [closeVM.winCandidates, confirmWin, showToast],
   );

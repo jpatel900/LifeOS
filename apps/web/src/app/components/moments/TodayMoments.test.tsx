@@ -1,3 +1,7 @@
+// #737-A slice 2: closing the day journals the review to IndexedDB before any
+// account write. jsdom has no IndexedDB, so without this polyfill the close-day
+// path would take the "the device refused to hold it" branch.
+import "fake-indexeddb/auto";
 import {
   act,
   fireEvent,
@@ -1770,14 +1774,29 @@ describe("TodayMoments — SP-6 undo over confirm", () => {
   });
 
   it("string-only showToast still works and auto-dismisses (back-compat)", async () => {
-    vi.useFakeTimers();
+    // Narrowed `toFake` since #737-A slice 2: closing the day journals the
+    // review to IndexedDB first, and `fake-indexeddb` drives its request
+    // callbacks with `setImmediate`. Vitest fakes that by default, which would
+    // freeze the journal write and the toast would never appear. Faking only
+    // the timers the toast dismissal actually uses keeps this test's subject
+    // (auto-dismiss after 2500ms) fully controlled while leaving IndexedDB
+    // running for real.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     renderToday({ initialMoment: "close" });
 
     fireEvent.click(screen.getByTestId("close-moment-close-day"));
 
     // #588: the toast now appears only once the save result resolves
-    // (local-only in mock mode) — flush the microtask queue first.
-    await act(async () => {});
+    // (local-only in mock mode) — wait for the journal write and the result.
+    // `waitFor` polls on `setTimeout`, which is faked here, so it would hang.
+    // The journal write resolves on real `setImmediate` instead — drain that
+    // queue until the result lands.
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+      if (screen.getByTestId("today-moments-toast").textContent) break;
+    }
     expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
       `Day closed — ${SAVED_ON_THIS_DEVICE_SHORT}`,
     );

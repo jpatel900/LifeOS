@@ -161,11 +161,14 @@ export {
   unplanCalendarBlock,
   applyTaskReviewTransition,
   createReviewEntry,
+  syncJournaledReviewEntry,
 } from "./workflow/execution";
+export type { SyncJournaledReviewEntryInput } from "./workflow/execution";
 
 // --- rollups ---
 export {
   createWinRecord,
+  syncJournaledWin,
   listWinHarvestCandidates,
   listWinRecords,
   createRollupSummary,
@@ -173,3 +176,4 @@ export {
   listDurationProfiles,
   upsertDurationProfile,
 } from "./workflow/rollups";
+export type { SyncJournaledWinInput } from "./workflow/rollups";

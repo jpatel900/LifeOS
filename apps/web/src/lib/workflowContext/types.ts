@@ -210,11 +210,25 @@ export interface WorkflowContextValue {
    * "failure" must show recovery copy, never a closure claim.
    */
   saveReview: () => Promise<ReviewSaveResult>;
+  /**
+   * #737-A slice 2 (durable wins): resolves with where the win actually
+   * landed, and callers MUST gate their success copy on it. Before this the
+   * call returned `void` and fired and forgot, so "Win logged" was shown even
+   * when the whole call short-circuited on `if (!client) return;` and wrote
+   * nothing anywhere.
+   *
+   * - "persisted"  — the account has it.
+   * - "device-only" — journalled on this device, waiting for the account.
+   *   `savedOnThisDeviceBanner("Your win")` is now literally true here: a new
+   *   tab can read the win back out of the journal.
+   * - "failure"    — the device refused to hold it (no IndexedDB: private
+   *   mode, a blocking extension). The win is NOT saved. Never claim it is.
+   */
   confirmWin: (input: {
     taskId: string;
     title: string;
     detail?: string | null;
-  }) => Promise<void>;
+  }) => Promise<WinConfirmResult>;
   confirmRollup: (input: {
     areaId: string;
     periodType: "week" | "month";
@@ -269,10 +283,25 @@ export interface WorkflowContextValue {
 /**
  * #588: how a review save actually resolved.
  * - "persisted": the review entry reached the account (Supabase row created).
- * - "local-only": no real client/persisted area — saved locally, sync pending.
- * - "failure": the persisted write threw; local state kept, nothing synced.
+ * - "local-only": journalled on this device, waiting for the account.
+ * - "failure": the device could not hold the review; it is NOT saved.
+ *
+ * #737-A slice 2 re-anchored the last two values to the new truth rather than
+ * changing the vocabulary. Before this slice "local-only" meant the review sat
+ * in one tab's `sessionStorage` and closing that tab lost it; now it means the
+ * review is in the device journal and a new tab can read it back. "failure"
+ * used to mean the network write threw (the review was still in the tab); it
+ * now means the strictly worse thing — the device journal write failed, so
+ * nothing holds the review. A failed NETWORK write is "local-only" now,
+ * because the journal will retry it.
  */
 export type ReviewSaveResult = "persisted" | "local-only" | "failure";
+
+/**
+ * #737-A slice 2: how a win confirmation actually resolved. Same three states
+ * and the same rules as `ReviewSaveResult`; see `confirmWin` above.
+ */
+export type WinConfirmResult = "persisted" | "device-only" | "failure";
 
 /**
  * #613: how the atomic cap-DEFER transaction actually resolved.
