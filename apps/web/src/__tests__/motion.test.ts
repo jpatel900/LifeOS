@@ -1,6 +1,11 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readDirCached } from "./helpers/repoWalk";
+
+// #761 — belt-and-braces timeout alongside the readDirCached walk helper
+// used by the other repo-walking guards in this suite.
+vi.setConfig({ testTimeout: 30_000 });
 
 const repoRoot = resolve(__dirname, "../../../..");
 const globalsCss = readFileSync(
@@ -28,7 +33,7 @@ function distinctMatches(source: string, pattern: RegExp): string[] {
 function walkFiles(relativePath: string): string[] {
   const currentPath = resolve(repoRoot, relativePath);
 
-  return readdirSync(currentPath, { withFileTypes: true }).flatMap((entry) => {
+  return readDirCached(currentPath).flatMap((entry) => {
     const nextRelativePath = `${relativePath}/${entry.name}`.replace(
       /\\/g,
       "/",
