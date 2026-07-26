@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import {
   findOrCreatePerson,
+  syncQueuedCapture,
   type MinimalSupabaseClient,
 } from "@/lib/data/workflow";
 
@@ -374,6 +375,86 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     });
 
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
+  });
+
+  // #759: the database half of "replay the offline queue, never duplicate".
+  // The unit tests assert the client sends the right upsert options; only
+  // this suite proves the index actually exists and dedupes — the partial
+  // index shipped in 20260706150000 could not (Postgres 42P10 on every
+  // upsert, silently swallowed by `syncOfflineQueue`). This calls the real
+  // `syncQueuedCapture` client function (not a hand-typed upsert) so the
+  // test cannot drift from what `WorkflowContext.tsx`'s sync loop sends.
+  it("dedupes a replayed offline-queue capture sync on client_capture_id instead of creating a second row", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const rawText = `rls-capture-replay-${suffix}`;
+    const clientCaptureId = `queue-capture-${suffix}`;
+    const client = userAClient as unknown as MinimalSupabaseClient;
+
+    try {
+      const first = await syncQueuedCapture(client, {
+        raw_text: rawText,
+        area_id: userA.areaId,
+        return_hook: null,
+        client_capture_id: clientCaptureId,
+      });
+      expect(first.provider).toBe("supabase");
+
+      // The exact same queued item replayed — a reconnect racing a mount,
+      // or a sync that already reached the server before the client saw
+      // the response.
+      const second = await syncQueuedCapture(client, {
+        raw_text: rawText,
+        area_id: userA.areaId,
+        return_hook: null,
+        client_capture_id: clientCaptureId,
+      });
+      expect(second.provider).toBe("supabase");
+
+      const { data, error } = await userAClient
+        .from("capture_items")
+        .select("raw_text")
+        .eq("raw_text", rawText);
+      expect(error).toBeNull();
+      expect(data).toEqual([{ raw_text: rawText }]);
+    } finally {
+      await deleteCaptureByText(userAClient, rawText);
+    }
+  });
+
+  it("leaves capture rows with no client_capture_id free to repeat (partial index removed)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const rawText = `rls-capture-null-id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    try {
+      // Two NULL client_capture_id rows must not collide — every capture
+      // saved through the direct save path (not the offline queue) is one
+      // of these, so an index that counted NULLs as equal would break the
+      // migration on real data. Guaranteed by Postgres treating NULLs as
+      // DISTINCT in a unique index by default, NOT by a partial predicate:
+      // the predicate was removed because `ON CONFLICT` cannot infer a
+      // partial index (42P10). This test is what proves the guarantee
+      // survived that change.
+      for (const attempt of [1, 2]) {
+        const { error } = await userAClient.from("capture_items").insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          raw_text: rawText,
+          capture_mode: "text",
+          status: "new",
+        });
+        expect(error, `insert ${attempt} should be allowed`).toBeNull();
+      }
+
+      const { data, error: selectError } = await userAClient
+        .from("capture_items")
+        .select("raw_text")
+        .eq("raw_text", rawText);
+      expect(selectError).toBeNull();
+      expect(data).toHaveLength(2);
+    } finally {
+      await deleteCaptureByText(userAClient, rawText);
+    }
   });
 
   it("lets user A access own win_records but not user B win_records", async () => {
