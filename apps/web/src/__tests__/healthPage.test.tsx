@@ -118,7 +118,38 @@ describe("Health cockpit", () => {
         "@/lib/data/health",
       );
     mocks.createSupabaseBrowserClient.mockReturnValue({});
-    mocks.getHealthDashboard.mockResolvedValue(await getHealthDashboard(null));
+    const live = await getHealthDashboard(null);
+    // #758: the mock path can only produce signed-out checks, so the two
+    // signed-in-only rows added for this issue would never reach this
+    // assertion — the same hollow half as the coverage guard above. Their
+    // FAILING states carry the most copy, so those are the ones driven here.
+    mocks.getHealthDashboard.mockResolvedValue({
+      ...live,
+      checks: [
+        ...live.checks,
+        {
+          id: "health-learning-trail",
+          subsystem: "meta-learning audit trail",
+          status: "critical" as const,
+          score: 0,
+          summary:
+            "The history of the decisions you make could not be reached. Your work and your choices are safe — only the record LifeOS learns from is affected.",
+          details: {
+            failed: ["suggestion_records", "override_records"],
+            failure_code: "no_access",
+          },
+        },
+        {
+          id: "health-check-record",
+          subsystem: "health check record",
+          status: "watch" as const,
+          score: 55,
+          summary:
+            "This check ran and its answers are correct, but it could not be saved to your account.",
+          details: { persisted: false },
+        },
+      ],
+    });
 
     renderHealth();
     await screen.findByTestId("health-developer-details");

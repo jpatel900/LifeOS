@@ -880,7 +880,11 @@ async function probeLearningTrail(client: MinimalHealthSupabaseClient) {
       "meta-learning audit trail",
       "watch",
       55,
-      `${writeFailures.count} decision${writeFailures.count === 1 ? "" : "s"} could not be added to the history LifeOS learns from since you opened this page. Nothing you did was lost.`,
+      // "since you opened LifeOS", not "this page": the tally is module state
+      // in the browser tab, so a decision made in triage before navigating
+      // here is still counted. It resets on a full reload and never persists,
+      // which is exactly what this sentence must not overclaim.
+      `${writeFailures.count} decision${writeFailures.count === 1 ? "" : "s"} could not be added to the history LifeOS learns from since you opened LifeOS. Nothing you did was lost.`,
       {
         readable,
         failed,

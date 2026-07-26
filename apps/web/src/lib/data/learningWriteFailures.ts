@@ -14,9 +14,10 @@
  *
  * SCOPE, stated so no copy overclaims it: module state in the browser tab that
  * loaded it. `getHealthDashboard` is only ever called from `HealthView`, which
- * is client-only, so this is never shared across users. It resets on reload,
- * which is why every sentence built from it says "since you opened this page"
- * rather than implying a durable count.
+ * is client-only, so this is never shared across users. It survives client-side
+ * navigation (a triage failure is still counted once you reach Health) and
+ * resets on a full reload — which is why every sentence built from it says
+ * "since you opened LifeOS" rather than implying a durable count.
  */
 
 export interface LearningWriteFailureSnapshot {
