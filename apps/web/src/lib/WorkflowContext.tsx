@@ -29,6 +29,7 @@ import {
   rejectProposal,
   saveReview,
   startExecutionSession,
+  findLiveSession,
   swapWipSlot,
   syncWorkflowIdCounterFromState,
   unplanTask,
@@ -1195,7 +1196,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     capOutcome?: Phase2MockExecutionSession["cap_outcome"],
   ): Promise<void> {
     const previous = stateRef.current;
-    const localSession = previous.executionSessions[0];
+    const localSession = findLiveSession(previous);
     const next = markCurrentSession(previous, status, {
       actualMinutes,
       notes,
@@ -1239,7 +1240,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     notes: string | null,
   ): Promise<DeferTaskWithSessionResult> {
     const previous = stateRef.current;
-    const localSession = previous.executionSessions[0];
+    const localSession = findLiveSession(previous);
     const sessionApplied = markCurrentSession(previous, "stuck", {
       actualMinutes,
       notes,
@@ -1252,7 +1253,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
     try {
       return await persistenceOps.persistDeferredTaskWithSession(
-        localSession,
+        localSession ?? undefined,
         taskId,
         actualMinutes,
         notes,

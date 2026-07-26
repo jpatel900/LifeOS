@@ -26,6 +26,11 @@ import type { MomentValue } from "./MomentSwitcher";
 import type { EndSessionOutcome } from "./EndSessionSheet";
 import type { ToastAction } from "./toast";
 import { runEndSessionPolicy } from "./endSessionPolicy";
+import {
+  hasRunningSession,
+  readRunningSession,
+  writeRunningSession,
+} from "@/lib/execute/runningSession";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -94,6 +99,26 @@ export function useFlowFocusSession({
     remaining: 0,
     total: 0,
   });
+
+  // #737 C1 card 6: a running session is device state, so leaving — a moment
+  // switch, a reload, a closed tab — never ends it. Hydration happens in an
+  // effect rather than a lazy initializer so the first client render still
+  // matches the server's (same reason `accentThemeMounted` exists in
+  // TodayMoments). `hydrated` gates the write-back: without it the very first
+  // post-mount commit would persist the EMPTY default over the record it is
+  // about to restore.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const restored = readRunningSession();
+    if (restored) {
+      setSession(restored);
+    }
+    setHydrated(true);
+  }, []);
+  useEffect(() => {
+    if (!hydrated) return;
+    writeRunningSession(session);
+  }, [hydrated, session]);
 
   const railTaskId = useMemo(
     () => session.activeTaskId ?? startVM.firstMove?.taskId ?? null,
@@ -174,14 +199,20 @@ export function useFlowFocusSession({
       const nowIso = new Date().toISOString();
       const updatedGraph = toggleNodeCompletion(graph, nodeId, nowIso);
       const evidence = buildRevisionEvidence(
-        state.executionSessions
-          .filter((session) => session.task_id === railTaskId)
-          .map((session) => ({
-            planned_minutes: session.planned_minutes,
-            actual_minutes: session.actual_minutes,
-            outcome: session.outcome,
-            cap_outcome: session.cap_outcome ?? null,
-          })),
+        // A session still running has no verdict yet (`in_progress`), so it
+        // is not evidence about how the work went.
+        state.executionSessions.flatMap((session) =>
+          session.task_id === railTaskId && session.outcome !== "in_progress"
+            ? [
+                {
+                  planned_minutes: session.planned_minutes,
+                  actual_minutes: session.actual_minutes,
+                  outcome: session.outcome,
+                  cap_outcome: session.cap_outcome ?? null,
+                },
+              ]
+            : [],
+        ),
         // No duration profiles are plumbed into the moments shell today;
         // the kernel falls back to planned-vs-actual drift.
         [],
@@ -417,6 +448,8 @@ export function useFlowFocusSession({
 
   return {
     session,
+    /** True while a focus session is live — drives the return affordance. */
+    hasActiveSession: hasRunningSession(session),
     railTaskId,
     progressionNodes,
     focusedTask,

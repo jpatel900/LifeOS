@@ -74,6 +74,7 @@ export {
 export {
   startExecutionSession,
   markCurrentSession,
+  findLiveSession,
 } from "./workflow/execution";
 
 // --- review ---

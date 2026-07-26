@@ -2,12 +2,49 @@ import type { Phase2MockExecutionSession } from "../types";
 import { WIP_ENFORCEMENT_LIMIT, nextId, type WorkflowState } from "./shared";
 import { getWipSlotHolders, withWipRefusal } from "./wip";
 
+/**
+ * Statuses a task can be in when the user presses "Start now".
+ *
+ * #737 C1 card 1 / audit P0#2: this used to be `"scheduled"` ALONE, so
+ * pressing "Start now" on the Start moment's "oldest active commitment" — a
+ * task with no block, status `"active"` — silently returned the state
+ * unchanged. The clock still ran, the end sheet still opened, `Save` still
+ * said "Session complete", and nothing was ever recorded anywhere.
+ *
+ * The server was never the blocker: `start_execution_session`
+ * (`supabase/migrations/20260630180000_add_cockpit_persistence_transition_functions.sql`)
+ * already accepts `p_calendar_block_id => null` and derives planned minutes
+ * from the task estimate. The refusal was purely this line.
+ */
+const STARTABLE_TASK_STATUSES = ["scheduled", "active"];
+
+/**
+ * The one session the user is actually in, if any.
+ *
+ * Callers used to reach for `state.executionSessions[0]`. That is the newest
+ * row, which after `syncPersistedWorkflow` (ordered `created_at desc`) is
+ * whatever the account returned last — not necessarily a live session. With
+ * P0#2 fixed, blockless starts create sessions too, so an index-based lookup
+ * would have upgraded "writes nothing" into "writes the outcome onto the
+ * wrong session". Ask for the live one by state instead.
+ */
+export function findLiveSession(
+  state: WorkflowState,
+): Phase2MockExecutionSession | null {
+  return (
+    state.executionSessions.find(
+      (session) => session.status === "running" || session.status === "paused",
+    ) ?? null
+  );
+}
+
 export function startExecutionSession(
   state: WorkflowState,
   taskId: string,
 ): WorkflowState {
   const task = state.tasks.find(
-    (item) => item.id === taskId && item.status === "scheduled",
+    (item) =>
+      item.id === taskId && STARTABLE_TASK_STATUSES.includes(item.status),
   );
   if (!task) {
     return state;
@@ -46,7 +83,9 @@ export function startExecutionSession(
     distraction_minutes: 0,
     productivity_rating: null,
     status: "running",
-    outcome: "partial",
+    // Not "partial". A session that has only just started has no verdict, and
+    // saying otherwise is the exact lie audit P0#1 recorded in the database.
+    outcome: "in_progress",
     cap_outcome: null,
     notes: null,
   };
@@ -70,7 +109,7 @@ export function markCurrentSession(
     capOutcome?: Phase2MockExecutionSession["cap_outcome"];
   } = {},
 ): WorkflowState {
-  const current = state.executionSessions[0];
+  const current = findLiveSession(state);
   if (!current) {
     return state;
   }
@@ -92,8 +131,8 @@ export function markCurrentSession(
 
   return {
     ...state,
-    executionSessions: state.executionSessions.map((session, index) =>
-      index === 0
+    executionSessions: state.executionSessions.map((session) =>
+      session.id === current.id
         ? {
             ...session,
             status,
