@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { useReturnFocus } from "./useReturnFocus";
 import { useFocusTrap } from "./useFocusTrap";
 import { CaptureCore } from "./CaptureCore";
-import { HIT_TARGET_INVISIBLE } from "./hitTarget";
+import { HIT_TARGET_MIN } from "./hitTarget";
 
 /**
  * Moments pass P2 — packet: presentation primitives (dev-preview only).
@@ -105,8 +105,18 @@ export function CaptureOverlay({
           onClick={handleCancel}
           disabled={locked}
           className={cn(
-            HIT_TARGET_INVISIBLE,
-            "justify-self-end text-xs font-semibold text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+            HIT_TARGET_MIN,
+            // Audit #2 P2 ("Capture's own buttons do not look like buttons... Close
+            // is the lowest contrast text in the dialog"): this used to be
+            // HIT_TARGET_INVISIBLE — a bare label with an invisible tappable box,
+            // by design, for text-only affordances. That design choice is what the
+            // audit flagged: next to the primary Capture control, a borderless
+            // label doesn't read as a control at all. Same outline-button
+            // vocabulary as apps/web/src/components/ui/button.tsx's "outline"
+            // variant (border-border, hover:bg-accent), scoped to this one call
+            // site rather than the shared HIT_TARGET_INVISIBLE constant, which
+            // eight other call sites still rely on for its original purpose.
+            "justify-self-end rounded-full border border-border px-4 text-xs font-semibold text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
           )}
           data-testid="capture-overlay-close"
         >

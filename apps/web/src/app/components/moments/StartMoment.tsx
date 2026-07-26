@@ -286,7 +286,17 @@ export function StartMoment({
                 <h2 className="workflow-surface-title moments-card-title">
                   Capture a thought
                 </h2>
-                <p className="workflow-surface-body text-sm text-muted-foreground">
+                {/* Audit #2 P2 ("Mobile's primary hero tells you to press a
+                    key"): below `sm` there is no keyboard, and the bottom
+                    navigator's own "Capture" button (BottomNavigator.tsx) is
+                    the real answer — this sentence used to name a shortcut
+                    that does not exist on a phone and never mentioned it.
+                    Same split technique as CaptureAffordance.tsx's own
+                    sm:hidden / hidden sm:inline copy fork. */}
+                <p className="workflow-surface-body text-sm text-muted-foreground sm:hidden">
+                  Tap Capture below to open it.
+                </p>
+                <p className="workflow-surface-body hidden text-sm text-muted-foreground sm:block">
                   Press{" "}
                   <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
                     {momentKeyLabel("open-capture")}
