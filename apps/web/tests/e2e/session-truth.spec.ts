@@ -60,6 +60,16 @@ test.beforeEach(async ({ page }) => {
   await stubParseCaptureRoute(page);
 });
 
+// The dev server compiles `/` on its first request, and that compile has
+// exceeded this suite's 60s per-test timeout on a cold machine — the first
+// spec then fails for a reason that has nothing to do with what it asserts.
+// Pay the compile once, outside any test's budget.
+test.beforeAll(async ({ browser }) => {
+  const warmup = await browser.newPage();
+  await warmup.goto("/", { timeout: 180_000 });
+  await warmup.close();
+});
+
 interface SeedOptions {
   /** Include a scheduled task with a block that is running right now. */
   scheduled: boolean;

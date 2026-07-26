@@ -29,9 +29,28 @@
  * counter alone would resume a session at the value it had when the tab
  * closed, which would be a lie about time — the same class of bug
  * `useFocusSession`'s drift-free anchor was written to end.
+ *
+ * ## And it expires, so the ghost cannot come back here
+ *
+ * The whole point of card 1 is that an abandoned session does not haunt the
+ * user. Restoring ANY record found would just move the database phantom onto
+ * the device: a session started yesterday and never ended would show
+ * "still running · 00:00 left" on every moment, forever, until they opened
+ * Flow and filed an outcome for work they finished in their head a day ago.
+ * A record older than `STALE_AFTER_MS` is dropped on read, unrecorded —
+ * which is correct, because no outcome was ever chosen for it.
  */
 
 export const RUNNING_SESSION_KEY = "lifeos.running-session";
+
+/**
+ * How long a device record of a running session stays restorable.
+ *
+ * Twelve hours: comfortably longer than any real focus session (including one
+ * paused over a lunch break), and short enough that yesterday's abandoned
+ * session is gone by morning.
+ */
+export const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
 
 /** Device record of a session in progress. Snake_case: it is stored data. */
 export interface StoredRunningSession {
@@ -42,6 +61,8 @@ export interface StoredRunningSession {
   /** Total seconds the session was set to run for, including extensions. */
   total: number;
   saved_at_ms: number;
+  /** When the session was first started — the expiry clock. */
+  started_at_ms: number;
 }
 
 /** The in-memory shape the Flow moment works in. */
@@ -60,7 +81,8 @@ function isStoredRunningSession(value: unknown): value is StoredRunningSession {
     typeof record.running === "boolean" &&
     typeof record.remaining === "number" &&
     typeof record.total === "number" &&
-    typeof record.saved_at_ms === "number"
+    typeof record.saved_at_ms === "number" &&
+    typeof record.started_at_ms === "number"
   );
 }
 
@@ -92,6 +114,14 @@ export function readRunningSession(
     return null;
   }
   if (!isStoredRunningSession(parsed)) return null;
+
+  if (now() - parsed.started_at_ms >= STALE_AFTER_MS) {
+    // Abandoned, not running. Drop it rather than offering the user a way
+    // back into a session they left behind — and record nothing, because
+    // they never chose an outcome for it.
+    clearRunningSession();
+    return null;
+  }
 
   // A running clock kept running while the tab was gone. Charge the elapsed
   // time rather than resuming where it was paused by the tab closing.
@@ -125,11 +155,29 @@ export function writeRunningSession(
       remaining: state.remaining,
       total: state.total,
       saved_at_ms: now(),
+      // Carried forward across the per-second rewrites so the expiry clock
+      // measures the SESSION's age, not the age of the latest tick.
+      started_at_ms: readStartedAtMs() ?? now(),
     };
     window.localStorage.setItem(RUNNING_SESSION_KEY, JSON.stringify(record));
   } catch {
     // Blocked storage: the session still runs in this tab, it just cannot be
     // recovered from another one. Nothing here may claim otherwise.
+  }
+}
+
+/**
+ * The `started_at_ms` already on the device, if any. Read raw rather than
+ * through `readRunningSession`, which applies the expiry this value feeds.
+ */
+function readStartedAtMs(): number | null {
+  try {
+    const raw = window.localStorage.getItem(RUNNING_SESSION_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return isStoredRunningSession(parsed) ? parsed.started_at_ms : null;
+  } catch {
+    return null;
   }
 }
 

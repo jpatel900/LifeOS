@@ -198,19 +198,89 @@ describe("#737 C1 card 1 — recording the outcome", () => {
   });
 });
 
+describe("#737 C1 card 1 — legacy ghosts must not be mistaken for the live session", () => {
+  /**
+   * The pre-#737 start path wrote `outcome:'partial' + actual_minutes:null`,
+   * and `sessionStatusFromOutcome` reads that pair back as status "running".
+   * Every abandoned session already in a real database is one of these, they
+   * arrive on every rehydrate, and `mergePersistedRows` puts persisted rows
+   * AHEAD of the local live session. So a status-based search finds the ghost
+   * first — and the user's chosen outcome, plus the journalled account write,
+   * would be filed against the ghost's task.
+   */
+  const ghost = session("session-legacy-ghost", {
+    task_id: "task-last-tuesday",
+    status: "running",
+    outcome: "partial",
+    actual_minutes: null,
+  });
+
+  it("finds the real in-progress session, not a rehydrated ghost ahead of it", () => {
+    const state = emptyState({
+      executionSessions: [
+        ghost,
+        session("session-live", {
+          task_id: "task-today",
+          status: "running",
+          outcome: "in_progress",
+          actual_minutes: null,
+        }),
+      ],
+    });
+
+    expect(findLiveSession(state)?.id).toBe("session-live");
+  });
+
+  it("records today's outcome on today's session, leaving the ghost alone", () => {
+    const state = emptyState({
+      executionSessions: [
+        ghost,
+        session("session-live", {
+          task_id: "task-today",
+          status: "running",
+          outcome: "in_progress",
+          actual_minutes: null,
+        }),
+      ],
+    });
+
+    const next = markCurrentSession(state, "completed", { actualMinutes: 42 });
+
+    expect(next.executionSessions.find((s) => s.id === "session-live")).toEqual(
+      expect.objectContaining({ outcome: "completed", actual_minutes: 42 }),
+    );
+    expect(
+      next.executionSessions.find((s) => s.id === "session-legacy-ghost"),
+    ).toEqual(
+      expect.objectContaining({ outcome: "partial", actual_minutes: null }),
+    );
+  });
+
+  it("treats a lone ghost as no live session at all", () => {
+    const state = emptyState({ executionSessions: [ghost] });
+
+    expect(findLiveSession(state)).toBeNull();
+    expect(markCurrentSession(state, "completed", { actualMinutes: 42 })).toBe(
+      state,
+    );
+  });
+});
+
 describe("findLiveSession", () => {
-  it("finds a running or paused session and ignores closed ones", () => {
+  it("keeps a PAUSED session findable — pausing is not a verdict", () => {
     expect(
       findLiveSession(
         emptyState({
           executionSessions: [
             session("a", { status: "completed" }),
-            session("b", { status: "paused" }),
+            session("b", { status: "paused", outcome: "in_progress" }),
           ],
         }),
       )?.id,
     ).toBe("b");
+  });
 
+  it("ignores sessions that already have a verdict", () => {
     expect(
       findLiveSession(
         emptyState({

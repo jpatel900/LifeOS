@@ -26,14 +26,32 @@ const STARTABLE_TASK_STATUSES = ["scheduled", "active"];
  * whatever the account returned last — not necessarily a live session. With
  * P0#2 fixed, blockless starts create sessions too, so an index-based lookup
  * would have upgraded "writes nothing" into "writes the outcome onto the
- * wrong session". Ask for the live one by state instead.
+ * wrong session".
+ *
+ * WHY `outcome === "in_progress"` AND NOT `status === "running"`
+ * --------------------------------------------------------------
+ * Because status is not a discriminator here — it is DERIVED. Every session
+ * the old `start_execution_session` abandoned sits in real databases as
+ * `outcome:'partial' + actual_minutes:null`, and `sessionStatusFromOutcome`
+ * (`lib/data/workflowPersistedNormalization.ts`) reads exactly that pair back
+ * as status `"running"`. Those ghosts arrive from the account on every
+ * rehydrate, and `mergePersistedRows` puts them AHEAD of the local live
+ * session (persisted rows first, local rows appended). A status-based search
+ * would therefore find last Tuesday's abandoned session and file today's
+ * chosen outcome — and today's journalled account write — against ITS task.
+ *
+ * `in_progress` cannot be forged by a ghost: it is device-only and
+ * `execution_sessions_outcome_check` refuses it, so no row that came from the
+ * account can ever carry it. Paused sessions keep it too (`markCurrentSession`
+ * leaves the outcome alone for a pause, because pausing is not a verdict), so
+ * they stay findable.
  */
 export function findLiveSession(
   state: WorkflowState,
 ): Phase2MockExecutionSession | null {
   return (
     state.executionSessions.find(
-      (session) => session.status === "running" || session.status === "paused",
+      (session) => session.outcome === "in_progress",
     ) ?? null
   );
 }
