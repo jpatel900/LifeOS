@@ -108,6 +108,11 @@ export const CreateTaskInputSchema = z
     waiting_on_since: z.string().datetime().nullable().optional(),
     is_commitment: z.boolean().optional(),
     committed_to_person_id: z.string().uuid().nullable().optional(),
+    // #737 C1 S3: idempotency key for a task created by replaying a journalled
+    // triage accept. Optional and nullable so every existing call site is
+    // unaffected and keeps writing NULL, which the plain unique index on
+    // (user_id, client_write_id) leaves free to repeat.
+    client_write_id: z.string().trim().min(1).nullable().optional(),
   })
   .refine((input) => input.task_type !== "decision" || Boolean(input.due_at), {
     message: "decision tasks require due_at",

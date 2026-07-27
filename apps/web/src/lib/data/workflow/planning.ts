@@ -102,6 +102,9 @@ export async function createTask(
       waiting_on_since: parsedInput.waiting_on_since ?? null,
       is_commitment: parsedInput.is_commitment ?? false,
       committed_to_person_id: parsedInput.committed_to_person_id ?? null,
+      // #737 C1 S3: null for every non-journalled call site, which the plain
+      // unique index treats as DISTINCT and therefore free to repeat.
+      client_write_id: parsedInput.client_write_id ?? null,
     })
     .select(taskColumns)
     .single();

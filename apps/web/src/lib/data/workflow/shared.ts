@@ -106,6 +106,20 @@ export interface TimeBlockProposalAcceptResult {
   task: Task | null;
 }
 
+/**
+ * #737 C1 S3: the result of a journalled placement replay.
+ *
+ * `deduplicated` is the honest answer to "did this call create the block, or
+ * find one the last attempt already created?" — the caller clears its journal
+ * entry either way, because both mean the account has the placement.
+ */
+export interface TimeBlockPlacementResult {
+  provider: DataProvider;
+  proposal: TimeBlockProposal | null;
+  block: CalendarBlock | null;
+  deduplicated: boolean;
+}
+
 export interface TimeBlockProposalConflictCheckResult {
   provider: DataProvider;
   proposal: TimeBlockProposal;

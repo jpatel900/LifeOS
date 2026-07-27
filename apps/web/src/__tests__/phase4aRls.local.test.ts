@@ -1073,6 +1073,381 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     }
   });
 
+  // #737 C1 slice S3 — the database half of "replay twice, never duplicate"
+  // for the two write families S3 makes durable. The Playwright proofs show
+  // the journal holds exactly one entry; only this suite proves the account
+  // ends up with exactly one BLOCK and one TASK however many times it replays.
+  it("places a time block once, and a replay adds no second block", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const clientWriteId = `journal-plan-${suffix}`;
+    const taskTitle = `rls-plan-task-${suffix}`;
+
+    const { data: task, error: taskError } = await userAClient
+      .from("tasks")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: taskTitle,
+        status: "active",
+      })
+      .select("id")
+      .single();
+    expect(taskError).toBeNull();
+
+    try {
+      const args = {
+        p_task_id: task!.id,
+        // The `planTaskAtHour` shape: no proposal exists yet, so the function
+        // mints one.
+        p_proposal_id: null,
+        p_proposed_start: "2026-05-08T14:00:00.000Z",
+        p_proposed_end: "2026-05-08T15:00:00.000Z",
+        p_rationale: "rls placement",
+        p_client_write_id: clientWriteId,
+      };
+
+      const { data: first, error: firstError } = await userAClient.rpc(
+        "place_time_block",
+        args,
+      );
+      expect(firstError).toBeNull();
+      expect(first?.deduplicated).toBe(false);
+      expect(first?.proposal?.status).toBe("accepted");
+      expect(first?.block?.status).toBe("scheduled");
+      // The placement is what makes the task scheduled — all in one
+      // transaction, where the client used to make three separate calls.
+      expect(first?.task?.status).toBe("scheduled");
+
+      // The same journal entry replayed.
+      const { data: second, error: secondError } = await userAClient.rpc(
+        "place_time_block",
+        args,
+      );
+      expect(secondError).toBeNull();
+      expect(second?.deduplicated).toBe(true);
+      expect(second?.block?.id).toBe(first?.block?.id);
+
+      const { data: blocks, error: blockError } = await userAClient
+        .from("calendar_blocks")
+        .select("id")
+        .eq("task_id", task!.id);
+      expect(blockError).toBeNull();
+      expect(blocks).toHaveLength(1);
+
+      const { data: proposals, error: proposalError } = await userAClient
+        .from("time_block_proposals")
+        .select("id")
+        .eq("task_id", task!.id);
+      expect(proposalError).toBeNull();
+      expect(proposals).toHaveLength(1);
+    } finally {
+      await userAClient
+        .from("calendar_blocks")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient
+        .from("time_block_proposals")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient.from("tasks").delete().eq("id", task!.id);
+    }
+  });
+
+  it("places an EXISTING proposal without minting a second proposal row", async () => {
+    // The `acceptLocalProposal` shape. Without the optional p_proposal_id the
+    // function would insert a second proposal and leave the original pending,
+    // so this is the test that discriminates the two placement paths.
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const taskTitle = `rls-plan-existing-${suffix}`;
+
+    const { data: task } = await userAClient
+      .from("tasks")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: taskTitle,
+        status: "active",
+      })
+      .select("id")
+      .single();
+
+    const { data: proposal } = await userAClient
+      .from("time_block_proposals")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        task_id: task!.id,
+        proposed_start: "2026-05-08T16:00:00.000Z",
+        proposed_end: "2026-05-08T17:00:00.000Z",
+        status: "proposed",
+      })
+      .select("id")
+      .single();
+
+    try {
+      const args = {
+        p_task_id: task!.id,
+        p_proposal_id: proposal!.id,
+        p_proposed_start: "2026-05-08T16:00:00.000Z",
+        p_proposed_end: "2026-05-08T17:00:00.000Z",
+        p_rationale: "rls existing placement",
+        p_client_write_id: `journal-plan-existing-${suffix}`,
+      };
+
+      const { data: first, error: firstError } = await userAClient.rpc(
+        "place_time_block",
+        args,
+      );
+      expect(firstError).toBeNull();
+      expect(first?.proposal?.id).toBe(proposal!.id);
+      expect(first?.deduplicated).toBe(false);
+
+      const { data: second, error: secondError } = await userAClient.rpc(
+        "place_time_block",
+        args,
+      );
+      expect(secondError).toBeNull();
+      expect(second?.deduplicated).toBe(true);
+
+      const { data: proposals } = await userAClient
+        .from("time_block_proposals")
+        .select("id")
+        .eq("task_id", task!.id);
+      expect(proposals).toHaveLength(1);
+
+      const { data: blocks } = await userAClient
+        .from("calendar_blocks")
+        .select("id")
+        .eq("task_id", task!.id);
+      expect(blocks).toHaveLength(1);
+    } finally {
+      await userAClient
+        .from("calendar_blocks")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient
+        .from("time_block_proposals")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient.from("tasks").delete().eq("id", task!.id);
+    }
+  });
+
+  it("supersedes sibling pending proposals when a block is placed (#580)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { data: task } = await userAClient
+      .from("tasks")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: `rls-plan-supersede-${suffix}`,
+        status: "active",
+      })
+      .select("id")
+      .single();
+
+    const { data: sibling } = await userAClient
+      .from("time_block_proposals")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        task_id: task!.id,
+        proposed_start: "2026-05-08T09:00:00.000Z",
+        proposed_end: "2026-05-08T10:00:00.000Z",
+        status: "proposed",
+      })
+      .select("id")
+      .single();
+
+    try {
+      const { error } = await userAClient.rpc("place_time_block", {
+        p_task_id: task!.id,
+        p_proposal_id: null,
+        p_proposed_start: "2026-05-08T11:00:00.000Z",
+        p_proposed_end: "2026-05-08T12:00:00.000Z",
+        p_rationale: "rls supersede",
+        p_client_write_id: `journal-plan-supersede-${suffix}`,
+      });
+      expect(error).toBeNull();
+
+      // Retained, never deleted — so a later sync cannot resurrect it as an
+      // active proposal for a task that already has its block.
+      const { data: after } = await userAClient
+        .from("time_block_proposals")
+        .select("status")
+        .eq("id", sibling!.id)
+        .single();
+      expect(after?.status).toBe("superseded");
+    } finally {
+      await userAClient
+        .from("calendar_blocks")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient
+        .from("time_block_proposals")
+        .delete()
+        .eq("task_id", task!.id);
+      await userAClient.from("tasks").delete().eq("id", task!.id);
+    }
+  });
+
+  it("dedupes a replayed triage accept on tasks.client_write_id", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const title = `rls-accept-replay-${suffix}`;
+    const clientWriteId = `journal-accept-${suffix}`;
+
+    try {
+      const row = {
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title,
+        status: "active",
+        client_write_id: clientWriteId,
+      };
+
+      for (const attempt of [1, 2]) {
+        const { error } = await userAClient.from("tasks").upsert(row, {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+        expect(error, `accept replay ${attempt} must not error`).toBeNull();
+      }
+
+      const { data, error: selectError } = await userAClient
+        .from("tasks")
+        .select("title")
+        .eq("client_write_id", clientWriteId);
+      expect(selectError).toBeNull();
+      expect(data).toEqual([{ title }]);
+    } finally {
+      await userAClient
+        .from("tasks")
+        .delete()
+        .eq("client_write_id", clientWriteId);
+    }
+  });
+
+  it("still lets user B use the same task client_write_id (the index is per user)", async () => {
+    // Journal ids are minted per DEVICE, so two accounts used on one device
+    // can legitimately produce the same one and must not block each other.
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const clientWriteId = `journal-accept-shared-${suffix}`;
+
+    try {
+      for (const [client, user] of [
+        [userAClient, userA],
+        [userBClient, userB],
+      ] as const) {
+        const { error } = await client.from("tasks").insert({
+          user_id: user.id,
+          area_id: user.areaId,
+          title: `rls-accept-shared-${suffix}`,
+          status: "active",
+          client_write_id: clientWriteId,
+        });
+        expect(error).toBeNull();
+      }
+    } finally {
+      for (const client of [userAClient, userBClient]) {
+        await client
+          .from("tasks")
+          .delete()
+          .eq("client_write_id", clientWriteId);
+      }
+    }
+  });
+
+  it("leaves tasks and proposals with no client_write_id free to repeat", async () => {
+    // Every task and proposal written before S3 carries NULL here, and so does
+    // every one written by a path that does not journal. Guaranteed by
+    // Postgres treating NULLs as DISTINCT in a unique index by default -- NOT
+    // by a partial predicate, which `ON CONFLICT` cannot infer (42P10). This
+    // test is what proves the guarantee survived choosing a plain index.
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const title = `rls-null-write-id-${suffix}`;
+    const taskIds: string[] = [];
+
+    try {
+      for (const attempt of [1, 2]) {
+        const { data, error } = await userAClient
+          .from("tasks")
+          .insert({
+            user_id: userA.id,
+            area_id: userA.areaId,
+            title,
+            status: "active",
+          })
+          .select("id")
+          .single();
+        expect(error, `task insert ${attempt} should be allowed`).toBeNull();
+        taskIds.push(data!.id);
+      }
+
+      for (const [attempt, taskId] of taskIds.entries()) {
+        const { error } = await userAClient
+          .from("time_block_proposals")
+          .insert({
+            user_id: userA.id,
+            area_id: userA.areaId,
+            task_id: taskId,
+            proposed_start: "2026-05-08T13:00:00.000Z",
+            proposed_end: "2026-05-08T14:00:00.000Z",
+            status: "proposed",
+          });
+        expect(
+          error,
+          `proposal insert ${attempt + 1} should be allowed`,
+        ).toBeNull();
+      }
+    } finally {
+      for (const taskId of taskIds) {
+        await userAClient
+          .from("time_block_proposals")
+          .delete()
+          .eq("task_id", taskId);
+        await userAClient.from("tasks").delete().eq("id", taskId);
+      }
+    }
+  });
+
+  it("refuses a placement with no client write id", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const { data: task } = await userAClient
+      .from("tasks")
+      .insert({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        title: `rls-plan-nokey-${suffix}`,
+        status: "active",
+      })
+      .select("id")
+      .single();
+
+    try {
+      const { error } = await userAClient.rpc("place_time_block", {
+        p_task_id: task!.id,
+        p_proposal_id: null,
+        p_proposed_start: "2026-05-08T14:00:00.000Z",
+        p_proposed_end: "2026-05-08T15:00:00.000Z",
+        p_rationale: null,
+        p_client_write_id: "   ",
+      });
+      expect(error?.message).toMatch(/client write id/i);
+    } finally {
+      await userAClient.from("tasks").delete().eq("id", task!.id);
+    }
+  });
+
   it("lets user A access own rollup_summaries but not user B rollups", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);
