@@ -130,6 +130,7 @@ import {
   type CaptureParseState,
   type DeferTaskWithSessionResult,
   type GoogleCalendarBridgeResult,
+  type ReviewSaveResult,
   type TaskMapDraftState,
   type WinConfirmResult,
   type WorkflowContextValue,
@@ -142,7 +143,13 @@ import {
   journalWinWrite,
   replayDurableWrites,
 } from "./durability/durableWrites";
-import type { ReplaySummary } from "./durability/pendingWriteJournal";
+import {
+  listPendingWrites,
+  type ReplaySummary,
+} from "./durability/pendingWriteJournal";
+// Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
+// calendar day a close belongs to, and one answer to "is it closed already?".
+import { localIsoDate, resolveDayClose } from "./review/dayClose";
 
 // Slice 4 (#590) re-exports — same public names, new homes. Every existing
 // `import { X } from "@/lib/WorkflowContext"` site keeps compiling unchanged.
@@ -190,6 +197,32 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [decidedPolicyKeys, setDecidedPolicyKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  // Final UX Loop C1, Target Cards 1+7 (audit P0#4) — the two tiers that can
+  // hold "this day is closed", kept apart because they mean different things
+  // to the user and the copy differs:
+  //
+  //  - ACCOUNT: `period_start` of every daily `review_entries` row loaded for
+  //    this user. Outlives the device; this is what a second machine sees.
+  //  - DEVICE: `period_start` of every daily review still sitting in the
+  //    pending-write journal. Durable (IndexedDB survives a reload and is
+  //    visible to a new tab) but the account does not have it yet.
+  //
+  // Provider state rather than reducer state on purpose: both are FETCHED
+  // (one from Supabase, one from IndexedDB), the same tier as
+  // `overrideRecords` and `durationProfiles` beside them, and neither belongs
+  // in the session-storage mirror of the workflow.
+  const [accountClosedDays, setAccountClosedDays] = useState<string[]>([]);
+  const [journalledClosedDays, setJournalledClosedDays] = useState<string[]>(
+    [],
+  );
+  // Audit P0#4: the close for the day currently being written, if any. A ref
+  // rather than state because it must be readable and writable WITHIN one
+  // render — its whole job is to catch the second press that lands before the
+  // first has re-rendered anything.
+  const inFlightDayCloseRef = useRef<{
+    day: string;
+    promise: Promise<ReviewSaveResult>;
+  } | null>(null);
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
@@ -379,6 +412,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           dropLocalIds: buildDropLocalIds(),
         },
       });
+      // Audit P0#4: `reviewEntryLine` flattens each row to a display string,
+      // so the reviewLog above cannot answer "is today closed?". The dates are
+      // kept structured here instead — the account tier of that answer.
+      setAccountClosedDays(
+        executionResult.reviewEntries
+          .filter((entry) => entry.review_type === "daily")
+          .map((entry) => entry.period_start),
+      );
       markAccountSynced();
 
       // S9 (#261): load learning history for the override-pattern scan. Kept
@@ -981,6 +1022,38 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Audit P0#4 — read the DEVICE tier of "which days are closed" back out of
+   * the pending-write journal.
+   *
+   * This is the tier that makes the verdict honest offline and signed out. A
+   * close made with no account reachable is journalled, never sent, and stays
+   * in IndexedDB; without this read the Close moment would show its verdict
+   * once and then forget it on the next reload — the audit's finding again,
+   * one reload later. Reading the journal (rather than remembering in React)
+   * also means the verdict and the write agree by construction: if the entry
+   * is gone the account took it, and the account tier answers instead.
+   *
+   * Best-effort, like `refreshUnsyncedCount`: a device that cannot hold the
+   * journal at all has already told the user so via `markDeviceStorageBlocked`.
+   */
+  const refreshJournalledClosedDays = useCallback(async () => {
+    try {
+      const pending = await listPendingWrites();
+      setJournalledClosedDays(
+        pending
+          .filter((write) => write.entity === "review")
+          .map(
+            (write) =>
+              (write.payload as { period_start?: unknown }).period_start,
+          )
+          .filter((day): day is string => typeof day === "string"),
+      );
+    } catch {
+      // best-effort signal; a journal read failure must not break the shell
+    }
+  }, []);
+
   // Drain the offline queue to the spine when online. Idempotent (upsert on the
   // client_capture_id unique index), fault-isolated per item, and a failed item
   // stays queued for the next reconnect. Refreshes local rows after any sync so
@@ -1063,16 +1136,29 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // each is fired on its own and neither awaits the other.
   useEffect(() => {
     void refreshUnsyncedCount();
+    void refreshJournalledClosedDays();
     void syncOfflineQueue();
-    void replayJournaledWrites();
+    // Audit P0#4: the replay may DELETE the day's journal entry (the account
+    // took it), so the device tier is re-read after every drain — otherwise a
+    // synced close would keep showing the device-only sentence.
+    void replayJournaledWrites().finally(() => {
+      void refreshJournalledClosedDays();
+    });
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
-      void replayJournaledWrites();
+      void replayJournaledWrites().finally(() => {
+        void refreshJournalledClosedDays();
+      });
     };
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [refreshUnsyncedCount, replayJournaledWrites, syncOfflineQueue]);
+  }, [
+    refreshUnsyncedCount,
+    refreshJournalledClosedDays,
+    replayJournaledWrites,
+    syncOfflineQueue,
+  ]);
 
   // Extracted to workflowContext/captureParse.ts (issue #590 slice 4) — plain
   // functions (no hooks), so this factory call is positioned after
@@ -1313,6 +1399,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     approveTaskMapDraft: approveTaskMapDraftAction,
     toggleTaskMapNodeCompletion: toggleTaskMapNodeCompletionAction,
     unsyncedCaptureCount,
+    accountClosedDays,
+    journalledClosedDays,
     clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),
@@ -1541,25 +1629,86 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           });
       }
     },
-    saveReview: async () => {
-      const previous = stateRef.current;
-      const next = saveReview(previous);
-      applyWorkflowState(next);
+    saveReview: () => {
+      // Audit P0#4 — THE choke point for "one close per day".
+      //
+      // Pinned once, here, from the LOCAL calendar day, and then used for
+      // both the guard below and the write: two reads of the clock either
+      // side of a network round trip could straddle midnight and file the
+      // close under a day the verdict is not looking at.
+      const day = localIsoDate(new Date());
 
-      // #588: local state updates optimistically above, but the RESULT is the
-      // truth callers gate "day closed" copy on — resolved only after the
-      // persisted write settles (or truthfully reports local-only/failure).
-      try {
-        const outcome = await persistenceOps.persistReviewEntry(next);
-        // #737-A slice 2: "device-blocked" is a failure to the caller, but its
-        // banner was already set by `markDeviceStorageBlocked` and must NOT be
-        // overwritten with the account-failure sentence below — the account
-        // was never the problem.
-        return outcome === "device-blocked" ? "failure" : outcome;
-      } catch (error) {
-        markPersistedSaveFailure(error);
-        return "failure";
+      // GUARD 1 — a close for this day already IN FLIGHT.
+      //
+      // The state guard below reads `accountClosedDays`/`journalledClosedDays`
+      // out of the render closure, so two presses landing inside the same
+      // render both see an open day and both journal an entry. The database
+      // converges that (the second replay raises 23505 and the terminal-success
+      // branch drops it) but OFFLINE nothing converges it, and the journal
+      // would hold two entries for one day while the card says "once".
+      //
+      // Returning the in-flight promise is better than refusing: both callers
+      // get the same, true answer about the same close. Deliberately not
+      // cleared on settle — a later press of the SAME day is answered by the
+      // state guard, and a genuinely new day has a different key.
+      const inFlight = inFlightDayCloseRef.current;
+      if (inFlight && inFlight.day === day) {
+        return inFlight.promise;
       }
+
+      // GUARD 2 — already closed. Report where it lives and write NOTHING.
+      // The Close moment no longer offers the action at all, so this is the
+      // backstop for the callers it cannot see (the cockpit review shell, the
+      // keyboard primary, a second tab). The database has its own backstop
+      // under this one; neither is a substitute for the other.
+      const alreadyClosed = resolveDayClose(
+        accountClosedDays,
+        journalledClosedDays,
+        day,
+      );
+      if (alreadyClosed) {
+        return Promise.resolve(
+          alreadyClosed.savedToAccount ? "persisted" : "local-only",
+        );
+      }
+
+      const promise = (async () => {
+        const previous = stateRef.current;
+        const next = saveReview(previous);
+        applyWorkflowState(next);
+
+        // #588: local state updates optimistically above, but the RESULT is
+        // the truth callers gate "day closed" copy on — resolved only after
+        // the persisted write settles (or truthfully reports
+        // local-only/failure).
+        try {
+          const outcome = await persistenceOps.persistReviewEntry(next, day);
+          // Audit P0#4: refresh the device tier before resolving, so the
+          // caller that awaits this promise renders the verdict in the SAME
+          // turn the toast appears. A close that is only on the device is
+          // still a close, and the user sees it land.
+          await refreshJournalledClosedDays();
+          if (outcome === "persisted") {
+            setAccountClosedDays((days) =>
+              days.includes(day) ? days : [...days, day],
+            );
+          }
+          // #737-A slice 2: "device-blocked" is a failure to the caller, but
+          // its banner was already set by `markDeviceStorageBlocked` and must
+          // NOT be overwritten with the account-failure sentence below — the
+          // account was never the problem.
+          return outcome === "device-blocked" ? "failure" : outcome;
+        } catch (error) {
+          markPersistedSaveFailure(error);
+          // A failed close is not a close: release the latch so the user can
+          // genuinely try again.
+          inFlightDayCloseRef.current = null;
+          return "failure";
+        }
+      })();
+
+      inFlightDayCloseRef.current = { day, promise };
+      return promise;
     },
     confirmWin,
     confirmRollup,

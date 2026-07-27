@@ -14,7 +14,11 @@ import type {
   MonthlyRollupDraftVM,
   RollupDraftVM,
 } from "./momentsViewModel";
-import { formatRollupCountsComparison } from "./momentsViewModel";
+import {
+  formatDayClosePayoff,
+  formatRollupCountsComparison,
+} from "./momentsViewModel";
+import { savedOnThisDeviceBanner } from "@/lib/statusVocabulary";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
 import type { RevisionSignal } from "@/lib/taskmap/revision";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
@@ -700,29 +704,80 @@ export function CloseMoment({
             </div>
           ) : null}
 
-          <div className="grid gap-2 border-t border-border/50 pt-4">
-            <p
-              className="text-xs text-muted-foreground"
-              data-testid="close-moment-orientation"
+          {/* Final UX Loop C1, Target Cards 1+7 (audit P0#4). The action and
+              the verdict are the SAME slot, deliberately: the audit's finding
+              was that pressing `Close the day` changed nothing on screen and
+              could be pressed forever. A disabled button plus a message would
+              still leave the day's ending looking like an action you failed
+              to complete. Replacing the offer with the outcome is what makes
+              "one close per day" legible rather than enforced — and the
+              counts, carry-forward and wins the card already shows are the
+              payoff, now finally shown AT the moment of action. */}
+          {vm.dayClose ? (
+            <div
+              className="grid gap-1 border-t border-border/50 pt-4"
+              data-testid="close-moment-verdict"
             >
-              Closing saves today&apos;s counts as reviewed and carries forward
-              anything still open.
-            </p>
-            <div>
-              <Button
-                type="button"
-                variant="default"
-                onClick={onCloseDay}
-                className="min-h-[44px] touch-manipulation gap-2"
-                data-testid="close-moment-close-day"
+              {/* The emerald tick is this file's existing idiom for "this is
+                  recorded" — it already marks every confirmed win and every
+                  approved rollup above. The day's own ending gets the same
+                  mark rather than a new visual language, and one size-step
+                  above body text so the card reads as concluded at a glance
+                  without shouting. */}
+              <p className="flex items-center gap-2 text-base font-[650] tracking-tight">
+                <span aria-hidden className="text-emerald-500">
+                  ✓
+                </span>
+                Today is closed.
+              </p>
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="close-moment-verdict-payoff"
               >
-                Close the day
-                <kbd className="rounded border border-border/60 bg-black/10 px-1.5 py-0.5 text-[0.7rem] font-semibold">
-                  ↵
-                </kbd>
-              </Button>
+                {formatDayClosePayoff({
+                  completed: vm.completedToday,
+                  missed: vm.missedToday,
+                  carriedForward: vm.carryForward.length,
+                  winsLogged: confirmedWins.length,
+                })}
+              </p>
+              {/* Where the close actually lives. One phrase, from the single
+                  home for it (`statusVocabulary`) — never a new sentence for
+                  a state a dozen other surfaces already describe. */}
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="close-moment-verdict-destination"
+              >
+                {vm.dayClose.savedToAccount
+                  ? "Today's close is saved to your account."
+                  : savedOnThisDeviceBanner("Today's close")}
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="grid gap-2 border-t border-border/50 pt-4">
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="close-moment-orientation"
+              >
+                Closing saves today&apos;s counts as reviewed and carries
+                forward anything still open. You close a day once.
+              </p>
+              <div>
+                <Button
+                  type="button"
+                  variant="default"
+                  onClick={onCloseDay}
+                  className="min-h-[44px] touch-manipulation gap-2"
+                  data-testid="close-moment-close-day"
+                >
+                  Close the day
+                  <kbd className="rounded border border-border/60 bg-black/10 px-1.5 py-0.5 text-[0.7rem] font-semibold">
+                    ↵
+                  </kbd>
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -759,6 +759,123 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     }
   });
 
+  // Final UX Loop C1, Target Cards 1+7 — the database half of "one close per
+  // day". The Playwright spec proves the UI stops offering the action and the
+  // journal holds one review; only this suite proves the ACCOUNT refuses a
+  // second row, which is what protects the paths the UI cannot see (a second
+  // tab, a replay racing a mount, a future caller).
+  //
+  // The audit found five rows for the single date 2026-07-26. Each of those
+  // presses carried its OWN client_write_id, so 20260726120000's key —
+  // correct for its own job, deduping a REPLAY — could not see them as
+  // duplicates at all. This is the constraint that can.
+  it("refuses a second daily close for the same user and date", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const userBClient = await signIn(userB.email, userB.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const firstMarker = `rls-daily-close-first-${suffix}`;
+    const secondMarker = `rls-daily-close-second-${suffix}`;
+    const weeklyMarker = `rls-daily-close-weekly-${suffix}`;
+    const otherUserMarker = `rls-daily-close-userb-${suffix}`;
+    // A date of this suite's own, so the assertion is about the constraint and
+    // not about whichever sibling test ran before it.
+    const day = "2026-07-27";
+
+    try {
+      const dailyRow = (marker: string, clientWriteId: string) => ({
+        user_id: userA.id,
+        area_id: userA.areaId,
+        review_type: "daily",
+        period_start: day,
+        period_end: day,
+        summary_json: { marker },
+        client_write_id: clientWriteId,
+      });
+
+      // The genuine close.
+      const { error: firstError } = await userAClient
+        .from("review_entries")
+        .upsert(dailyRow(firstMarker, `journal-close-a-${suffix}`), {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(firstError).toBeNull();
+
+      // Replaying the SAME journal entry stays a silent no-op: the new partial
+      // index must not disturb 20260726120000's arbiter.
+      const { error: replayError } = await userAClient
+        .from("review_entries")
+        .upsert(dailyRow(firstMarker, `journal-close-a-${suffix}`), {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(replayError).toBeNull();
+
+      // A genuinely SECOND close — a different client_write_id, exactly what
+      // every extra press produced — is refused by the database.
+      const { error: secondError } = await userAClient
+        .from("review_entries")
+        .upsert(dailyRow(secondMarker, `journal-close-b-${suffix}`), {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(secondError?.message ?? "").toMatch(
+        /duplicate key value|review_entries_user_daily_close_key/i,
+      );
+
+      // A WEEKLY review may share the date. The index is partial for this
+      // reason: a week's rollup starts on the day it starts on.
+      const { error: weeklyError } = await userAClient
+        .from("review_entries")
+        .upsert(
+          {
+            user_id: userA.id,
+            area_id: userA.areaId,
+            review_type: "weekly",
+            period_start: day,
+            period_end: "2026-08-02",
+            summary_json: { marker: weeklyMarker },
+            client_write_id: `journal-close-weekly-${suffix}`,
+          },
+          { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+        );
+      expect(weeklyError).toBeNull();
+
+      // Another account closing the same day is untouched — the key is scoped
+      // to the user, like every other key in this schema.
+      const { error: otherUserError } = await userBClient
+        .from("review_entries")
+        .upsert(
+          {
+            user_id: userB.id,
+            area_id: userB.areaId,
+            review_type: "daily",
+            period_start: day,
+            period_end: day,
+            summary_json: { marker: otherUserMarker },
+            client_write_id: `journal-close-userb-${suffix}`,
+          },
+          { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+        );
+      expect(otherUserError).toBeNull();
+
+      // Exactly one daily close on the account, and it is the FIRST one — the
+      // moment the user actually finished their day, not a later re-press.
+      const { data, error: selectError } = await userAClient
+        .from("review_entries")
+        .select("summary_json")
+        .eq("review_type", "daily")
+        .eq("period_start", day);
+      expect(selectError).toBeNull();
+      expect(data).toEqual([{ summary_json: { marker: firstMarker } }]);
+    } finally {
+      await deleteReviewByMarker(userAClient, firstMarker);
+      await deleteReviewByMarker(userAClient, secondMarker);
+      await deleteReviewByMarker(userAClient, weeklyMarker);
+      await deleteReviewByMarker(userBClient, otherUserMarker);
+    }
+  });
+
   // #737 C1 card 1 — the database half of "exactly one truthful record".
   // The Playwright proofs show the journal holds exactly one outcome; only
   // this suite proves the account ends up with exactly one ROW, carrying the

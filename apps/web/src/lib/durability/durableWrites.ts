@@ -46,6 +46,7 @@
  *    produce a duplicate on the retry.
  */
 
+import { isDailyCloseConflict } from "@/lib/review/dayClose";
 import {
   enqueuePendingWrite,
   listPendingWrites,
@@ -373,14 +374,33 @@ function reviewHandler(ops: DurableWriteServerOps) {
       );
     }
 
-    const result = await ops.syncReview({
-      client_write_id: write.client_write_id,
-      area_id: areaId,
-      review_type: payload.review_type,
-      period_start: payload.period_start,
-      period_end: payload.period_end,
-      summary_json: payload.summary_json,
-    });
+    let result;
+    try {
+      result = await ops.syncReview({
+        client_write_id: write.client_write_id,
+        area_id: areaId,
+        review_type: payload.review_type,
+        period_start: payload.period_start,
+        period_end: payload.period_end,
+        summary_json: payload.summary_json,
+      });
+    } catch (error) {
+      // TERMINAL SUCCESS, NOT A FAILURE.
+      //
+      // Migration 20260727120000 makes one daily close per user per day a
+      // database fact. It is deliberately not the upsert's ON CONFLICT
+      // arbiter, so a second close of the same day RAISES rather than being
+      // ignored — see `isDailyCloseConflict` for why that is the signal we
+      // want.
+      //
+      // Every other throw in this file means "keep it queued". This one must
+      // not: the account already holds this day's close, so there is nothing
+      // left to send, and re-queuing would retry on every mount and every
+      // reconnect for the rest of the account's life. Returning normally lets
+      // `replayPendingWrites` drop the entry, which is the truth.
+      if (isDailyCloseConflict(error)) return;
+      throw error;
+    }
     requireAccountWrite(result);
   };
 }

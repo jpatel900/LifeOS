@@ -257,6 +257,8 @@ export function TodayMoments({
     refreshPersistedWorkflow,
     promoteBacklogTask,
     unsyncedCaptureCount,
+    accountClosedDays,
+    journalledClosedDays,
     taskMapDraft,
     requestTaskMapDraft,
     dismissTaskMapDraft,
@@ -303,7 +305,18 @@ export function TodayMoments({
     [state, now, selectedAreaId],
   );
   const flowVM = useMemo(() => buildFlowVM(state, { now }), [state, now]);
-  const closeVM = useMemo(() => buildCloseVM(state, { now }), [state, now]);
+  // Audit P0#4: the two day-close tiers are inputs to the Close view model,
+  // so "today is closed" is derived in ONE place (the view model) rather than
+  // re-answered by each surface that wants to know.
+  const closeVM = useMemo(
+    () =>
+      buildCloseVM(state, {
+        now,
+        accountClosedDays,
+        journalledClosedDays,
+      }),
+    [state, now, accountClosedDays, journalledClosedDays],
+  );
 
   const [moment, setMoment] = useState<MomentValue>(() => {
     if (initialMoment) return initialMoment;
@@ -654,7 +667,23 @@ export function TodayMoments({
   // only after the review save actually persisted; local-only keeps the
   // recovery-oriented fallback truth; failure shows recovery copy and never
   // claims closure.
+  //
+  // Audit P0#4: a day already closed is not re-closed. The card no longer
+  // renders the button once `closeVM.dayClose` exists, so the only way in is
+  // the keyboard primary (Enter) — which used to be the second way to write a
+  // duplicate row. It now re-states the verdict the user is already looking
+  // at instead. `saveReview` guards again at the provider, and the database
+  // guards again under that; this layer exists so the user gets an answer
+  // rather than an error.
   const handleCloseDay = useCallback(() => {
+    if (closeVM.dayClose) {
+      showToast(
+        closeVM.dayClose.savedToAccount
+          ? "Today is already closed"
+          : `Today is already closed — ${SAVED_ON_THIS_DEVICE_SHORT}`,
+      );
+      return;
+    }
     void saveReview().then((result) => {
       if (result === "persisted") {
         showToast("Day closed");
@@ -666,7 +695,7 @@ export function TodayMoments({
       }
       showToast("Couldn't close the day — review not saved yet");
     });
-  }, [saveReview, showToast]);
+  }, [closeVM.dayClose, saveReview, showToast]);
 
   const runPrimary = useCallback(() => {
     if (moment === "start") {
@@ -845,7 +874,11 @@ export function TodayMoments({
           ? "Switch time display to clock"
           : "Switch time display to countdown",
     });
-    if (moment === "close") {
+    // Audit P0#4: the palette stops offering an action the day no longer has.
+    // Leaving it listed after the close would put the old, future-tense
+    // promise back on screen in the one surface the card's verdict cannot
+    // reach.
+    if (moment === "close" && !closeVM.dayClose) {
       actions.push({
         id: "close-day",
         label: "Close the day",
@@ -855,6 +888,7 @@ export function TodayMoments({
     return actions;
   }, [
     moment,
+    closeVM.dayClose,
     startVM.firstMove,
     session.activeTaskId,
     session.total,

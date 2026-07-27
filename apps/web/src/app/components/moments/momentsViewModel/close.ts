@@ -4,6 +4,7 @@ import {
   composeMonthlyRollupDraft,
 } from "@/lib/rollups/rollupDraft";
 import type { RollupSummaryContent } from "@lifeos/schemas";
+import { resolveDayClose, type DayCloseRecord } from "@/lib/review/dayClose";
 import {
   areaName,
   isSameCalendarDay,
@@ -86,6 +87,27 @@ export interface CloseVM {
   winCandidates: { taskId: string; title: string; areaLabel: string }[];
   // S8 (#260): per-area weekly rollup drafts to approve/dismiss.
   rollupDrafts: RollupDraftVM[];
+  // Final UX Loop C1, Target Cards 1+7 (audit P0#4): the day's verdict, or
+  // `null` when today is genuinely still open. Present means BOTH "render the
+  // payoff" and "the action is spent" — the Close moment stops offering a
+  // second close, because a second close is not a thing that exists.
+  dayClose: DayCloseRecord | null;
+}
+
+/**
+ * What the Close moment needs beyond `state` to answer "is today closed?".
+ *
+ * Injected rather than read here for the same reason `approvedWeeklyRollups`
+ * is injected into the monthly composer: these are FETCHED tiers (the account
+ * rows the provider loaded, and the device journal it read back), and this
+ * module is a pure selector. Both default to empty, so a caller that has not
+ * wired them yet simply sees an open day rather than a wrong verdict.
+ */
+export interface DayCloseOption {
+  /** `period_start` of every daily review the ACCOUNT holds for this user. */
+  accountClosedDays?: readonly string[];
+  /** `period_start` of every daily review still waiting in the DEVICE journal. */
+  journalledClosedDays?: readonly string[];
 }
 
 /**
@@ -96,7 +118,7 @@ export interface CloseVM {
  */
 export function buildCloseVM(
   state: WorkflowState,
-  options: NowOption,
+  options: NowOption & DayCloseOption,
 ): CloseVM {
   const { now } = options;
 
@@ -154,6 +176,16 @@ export function buildCloseVM(
 
   const rollupDrafts = buildWeeklyRollupDrafts(state, now);
 
+  // Keyed on the LOCAL calendar day, the same derivation the write path uses
+  // (`localIsoDate`) and the same one `completedToday`/`missedToday` above are
+  // counted over. See `lib/review/dayClose.ts` for why that had to be said out
+  // loud.
+  const dayClose = resolveDayClose(
+    options.accountClosedDays ?? [],
+    options.journalledClosedDays ?? [],
+    toIsoDate(now),
+  );
+
   return {
     completedToday,
     missedToday,
@@ -161,7 +193,46 @@ export function buildCloseVM(
     tomorrowFirstMove,
     winCandidates,
     rollupDrafts,
+    dayClose,
   };
+}
+
+/**
+ * The one-line payoff shown beside "Today is closed" — audit P0#4's other
+ * half ("finishing something still feels like nothing happened").
+ *
+ * Composed ONLY from numbers the Close card is already showing, so the verdict
+ * can never contradict the detail directly above it. That is also why it is a
+ * pure function of four counts rather than a re-derivation from the persisted
+ * summary: the row records what was saved, this line reports what the user is
+ * looking at, and there is no third version of the day for them to reconcile.
+ *
+ * Zeroes are stated, not hidden: "0 missed" on a clean day is the good news,
+ * and a day with nothing in it is allowed to say so plainly rather than
+ * rendering a blank.
+ */
+export function formatDayClosePayoff(input: {
+  completed: number;
+  missed: number;
+  carriedForward: number;
+  winsLogged: number;
+}): string {
+  const plural = (count: number, word: string) =>
+    `${count} ${word}${count === 1 ? "" : "s"}`;
+
+  const parts = [
+    `${input.completed} completed`,
+    `${input.missed} missed`,
+    input.carriedForward === 0
+      ? "nothing carried forward"
+      : `${input.carriedForward} carried forward`,
+  ];
+
+  if (input.winsLogged > 0) {
+    parts.push(`${plural(input.winsLogged, "win")} logged`);
+  }
+
+  return `${parts.join(" · ")}.`;
 }
 
 const ROLLUP_WEEK_DAYS = 7;

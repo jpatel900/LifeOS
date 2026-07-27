@@ -126,6 +126,14 @@ export interface WorkflowContextValue {
   // FR-027 (F-G1a): number of raw captures saved offline and not yet synced to
   // the spine (the queue-badge signal). Drains automatically on reconnect.
   unsyncedCaptureCount: number;
+  // Final UX Loop C1, Target Cards 1+7 (audit P0#4) — the days that already
+  // have a close, split by WHERE the close lives. Two lists rather than one
+  // because the user is told a different (and equally true) sentence for each:
+  // the account has it, or this device has it and the account does not yet.
+  // Consumers should not merge them by hand — `resolveDayClose` in
+  // `lib/review/dayClose.ts` owns the precedence.
+  accountClosedDays: string[];
+  journalledClosedDays: string[];
   // Purge device-local queued raw captures (call on logout — they are
   // High-sensitivity and must not outlive the session on a shared device).
   clearOfflineCaptures: () => Promise<void>;
