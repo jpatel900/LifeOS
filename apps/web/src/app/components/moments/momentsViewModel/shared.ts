@@ -1,4 +1,5 @@
 import type { WorkflowState } from "@/lib/workflow";
+import { localIsoDate } from "@/lib/review/dayClose";
 import type {
   Phase2MockArea,
   Phase2MockCalendarBlock,
@@ -45,11 +46,15 @@ export function taskTitle(state: WorkflowState, taskId: string | null): string {
   return state.tasks.find((task) => task.id === taskId)?.title ?? "Focus block";
 }
 
+/**
+ * The LOCAL calendar day, re-exported from the one place that now defines it
+ * (`lib/review/dayClose.ts`). This function used to hold its own copy of the
+ * derivation while the review write path used the UTC day — the two disagreed
+ * every evening west of Greenwich, which is how a close could be filed under a
+ * day the readback never looked at. One derivation, both sides of the key.
+ */
 export function toIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return localIsoDate(date);
 }
 
 export interface ScheduleBlockVM {

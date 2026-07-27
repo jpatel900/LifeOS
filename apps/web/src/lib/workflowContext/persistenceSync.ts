@@ -537,14 +537,26 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
   // and the next replay retries it, which is "local-only".
   async function persistReviewEntry(
     next: WorkflowState,
+    periodStart: string,
   ): Promise<"persisted" | "local-only" | "device-blocked"> {
     const persistedAreaId = selectedAreaId
       ? persistedAreaIdForWorkflowId(selectedAreaId, persistedAreasRef.current)
       : null;
 
-    // Pinned at save time: replay may not run until a later day, and a review
-    // must stay filed under the day it closed.
-    const today = new Date().toISOString().slice(0, 10);
+    // Pinned at save time by the CALLER, and pinned to the user's LOCAL
+    // calendar day (`localIsoDate`). Two reasons it is a parameter now:
+    //
+    //  - replay may not run until a later day, and a review must stay filed
+    //    under the day it closed (the original reason);
+    //  - the caller records the same day in its own "which days are closed"
+    //    state, and the two must be the SAME instant's day, not two reads of
+    //    the clock either side of a network round trip.
+    //
+    // It used to be `new Date().toISOString().slice(0, 10)` — the UTC day —
+    // while the Close moment counted its blocks over the LOCAL day. Those
+    // disagree every evening west of Greenwich, which is precisely when the
+    // Close moment is the surface being shown.
+    const today = periodStart;
 
     let journalled;
     try {

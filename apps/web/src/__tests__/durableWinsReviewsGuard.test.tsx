@@ -117,6 +117,10 @@ function CloseMomentWinHarness() {
         },
       ],
       rollupDrafts: [],
+      // Audit P0#4: this harness is about the WIN write path, which is
+      // unaffected by whether the day is closed. An open day keeps it
+      // describing the same thing it always did.
+      dayClose: null,
     },
     now: new Date("2026-05-08T18:00:00.000Z"),
     showToast: (message: string) => setToast(message),

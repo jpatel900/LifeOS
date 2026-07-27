@@ -10,6 +10,10 @@ const baseVm: CloseVM = {
   tomorrowFirstMove: null,
   winCandidates: [],
   rollupDrafts: [],
+  // Audit P0#4: the default fixture is an OPEN day, so every pre-existing
+  // assertion in this file keeps describing the pre-close screen. The closed
+  // screen has its own describe block below.
+  dayClose: null,
 };
 
 const win: CloseWinVM = {
