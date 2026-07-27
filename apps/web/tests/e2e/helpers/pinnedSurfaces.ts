@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { pinMomentPreference } from "./momentPreference";
 
 /**
  * Final UX Loop C5 (Target Cards 8+9) — the surface inventory both pins
@@ -23,6 +24,28 @@ import { expect, type Page } from "@playwright/test";
  * a geometry/axe pin is real, separable follow-up work
  * (AGENT-TODO in the PR body), not a silent gap in this ratchet's promise.
  */
+
+/**
+ * Both pins MUST call this before any surface's `goto`.
+ *
+ * Four surfaces below (`capture-overlay`, `triage-sheet`, `plan-sheet`,
+ * `command-palette`) carry no `?moment=` param — they are an overlay or a
+ * sheet ON TOP OF whatever moment the Today surface has chosen. Left to the
+ * clock, that underlying moment is `start` before 11:00 local, `close` from
+ * 17:00 local, and `flow`/`start` in between (`TodayMoments.tsx`'s
+ * `heuristicMoment`). The four baselines in `a11y-axe-pin.spec.ts` were
+ * measured over START; on a UTC CI runner after 17:00Z the same four surfaces
+ * render CLOSE underneath and count one extra `#ffffff`-on-`#6d8bff` node,
+ * which is exactly how they went red on merged main (PR #770's run).
+ *
+ * Pinning START here does not shrink what these pins cover: `start-moment`,
+ * `flow-moment` and `close-moment` are each still walked explicitly via
+ * `?moment=`, on both viewports. It only makes "the capture overlay" name one
+ * surface instead of three.
+ */
+export async function preparePinnedSurfaces(page: Page): Promise<void> {
+  await pinMomentPreference(page, "start");
+}
 
 export const VIEWPORTS = [
   // Matches the audit's own two viewports exactly (docs/design/ux-audit-

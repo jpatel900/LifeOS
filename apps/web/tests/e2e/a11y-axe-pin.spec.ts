@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 import {
   PINNED_SURFACES,
+  preparePinnedSurfaces,
   VIEWPORTS,
   type ViewportId,
 } from "./helpers/pinnedSurfaces";
@@ -115,6 +116,11 @@ test.describe("axe WCAG AA pin (Final UX Loop C5)", () => {
     // flow a surface's goto() touches must run against the deterministic
     // mock-parser stub.
     await stubParseCaptureRoute(page);
+    // The four moment-less surfaces below sit on top of whatever moment the
+    // clock picks. Pin it, or the baselines measure a different surface
+    // depending on the runner's timezone and time of day — see
+    // helpers/pinnedSurfaces.ts.
+    await preparePinnedSurfaces(page);
   });
 
   test("the pinned total matches the sum of the per-surface table", () => {
