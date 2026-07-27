@@ -1,3 +1,7 @@
+// #737 C1 S3: a triage accept is journalled to IndexedDB BEFORE any account
+// write, so a run with no IndexedDB exercises the device-blocked branch and
+// never reaches `createTask` at all.
+import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
   afterAll,
@@ -57,7 +61,28 @@ const {
   mockCreateCaptureItem: vi.fn(),
   mockCreateTask: vi.fn(),
   mockCreateTimeBlockProposal: vi.fn(),
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  // #737 C1 S3: the replay path calls `requireSupabaseUser` and looks the task
+  // up by `client_write_id` before deciding to insert, so the stand-in client
+  // needs those two surfaces. The lookup finds nothing, which is the ordinary
+  // first attempt.
+  mockCreateSupabaseBrowserClient: vi.fn(() => {
+    const maybeSingle = vi.fn(async () => ({ data: null, error: null }));
+    const eqInner = vi.fn(() => ({ maybeSingle }));
+    const eqOuter = vi.fn(() => ({ eq: eqInner }));
+    return {
+      mocked: true,
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({ eq: eqOuter })),
+        upsert: vi.fn(async () => ({ error: null })),
+      })),
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+          error: null,
+        })),
+      },
+    };
+  }),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -76,6 +101,24 @@ vi.mock("@/lib/data/workflow", async () => {
     createTimeBlockProposal: mockCreateTimeBlockProposal,
   };
 });
+
+// #737 C1 S3: `syncJournaledTaskDraftAccept` imports its writes from the LEAF
+// modules rather than the barrel, so the barrel mock above no longer
+// intercepts them. The barrel mock stays for the `list*` reads, which
+// WorkflowContext still imports from it.
+vi.mock("@/lib/data/workflow/planning", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/data/workflow/planning")>(
+    "@/lib/data/workflow/planning",
+  )),
+  createTask: mockCreateTask,
+}));
+
+vi.mock("@/lib/data/workflow/calendar", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/data/workflow/calendar")>(
+    "@/lib/data/workflow/calendar",
+  )),
+  createTimeBlockProposal: mockCreateTimeBlockProposal,
+}));
 
 vi.mock("@/lib/supabase/browser", () => ({
   createSupabaseBrowserClient: mockCreateSupabaseBrowserClient,

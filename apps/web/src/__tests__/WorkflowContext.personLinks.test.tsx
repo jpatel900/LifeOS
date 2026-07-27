@@ -1,12 +1,27 @@
+// #737 C1 S3: a triage accept is journalled to IndexedDB BEFORE any account
+// write, so a run with no IndexedDB exercises the device-blocked branch and
+// never reaches the person-link writes these tests are about.
+import "fake-indexeddb/auto";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import type { ParsedWorkflowResult } from "@/lib/ai/parseCaptureWorkflow";
 
 // S3 (#255): accept-path person/commitment persistence. These tests drive the
-// real `persistAcceptedTaskDraft` orchestration in WorkflowContext, mocking only
-// the data-layer writes so we can assert what gets sent to `createTask`,
+// real accept orchestration from WorkflowContext, mocking only the data-layer
+// writes so we can assert what gets sent to `createTask`,
 // `findOrCreatePerson`, and `recordPersonLinkAcceptance`.
+//
+// RE-ANCHORED BY #737 C1 S3. Two things moved under these tests, and neither
+// changed what they assert:
+//
+//  1. The orchestration moved out of `persistAcceptedTaskDraft` (which now only
+//     journals) into `syncJournaledTaskDraftAccept`, which runs on REPLAY.
+//  2. That module imports its writes from the LEAF modules
+//     (`data/workflow/planning`, `/people`, `/calendar`) rather than the
+//     barrel, so the barrel mock below no longer intercepts them. The write
+//     mocks are therefore installed on the leaves; the barrel mock stays for
+//     the `list*` reads, which WorkflowContext still imports from it.
 
 const {
   mockListAreas,
@@ -27,7 +42,30 @@ const {
   mockCreateTimeBlockProposal: vi.fn(),
   mockFindOrCreatePerson: vi.fn(),
   mockRecordPersonLinkAcceptance: vi.fn(),
-  mockCreateSupabaseBrowserClient: vi.fn(() => ({ mocked: true })),
+  // #737 C1 S3: the replay path calls `requireSupabaseUser` and looks the task
+  // up by `client_write_id` before deciding to insert, so the stand-in client
+  // needs those two surfaces. Everything it would WRITE is still mocked at the
+  // leaf modules below -- this only lets the real orchestration get that far.
+  // The lookup deliberately finds nothing: these tests are about the FIRST
+  // attempt, which is the one that resolves person links.
+  mockCreateSupabaseBrowserClient: vi.fn(() => {
+    const maybeSingle = vi.fn(async () => ({ data: null, error: null }));
+    const eqInner = vi.fn(() => ({ maybeSingle }));
+    const eqOuter = vi.fn(() => ({ eq: eqInner }));
+    return {
+      mocked: true,
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({ eq: eqOuter })),
+        upsert: vi.fn(async () => ({ error: null })),
+      })),
+      auth: {
+        getUser: vi.fn(async () => ({
+          data: { user: { id: "22222222-2222-4222-8222-222222222222" } },
+          error: null,
+        })),
+      },
+    };
+  }),
 }));
 
 vi.mock("@/lib/data/workflow", async () => {
@@ -47,6 +85,29 @@ vi.mock("@/lib/data/workflow", async () => {
     recordPersonLinkAcceptance: mockRecordPersonLinkAcceptance,
   };
 });
+
+// The leaf modules `syncJournaledTaskDraftAccept` actually calls.
+vi.mock("@/lib/data/workflow/planning", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/data/workflow/planning")>(
+    "@/lib/data/workflow/planning",
+  )),
+  createTask: mockCreateTask,
+}));
+
+vi.mock("@/lib/data/workflow/people", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/data/workflow/people")>(
+    "@/lib/data/workflow/people",
+  )),
+  findOrCreatePerson: mockFindOrCreatePerson,
+  recordPersonLinkAcceptance: mockRecordPersonLinkAcceptance,
+}));
+
+vi.mock("@/lib/data/workflow/calendar", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/data/workflow/calendar")>(
+    "@/lib/data/workflow/calendar",
+  )),
+  createTimeBlockProposal: mockCreateTimeBlockProposal,
+}));
 
 vi.mock("@/lib/supabase/browser", () => ({
   createSupabaseBrowserClient: mockCreateSupabaseBrowserClient,

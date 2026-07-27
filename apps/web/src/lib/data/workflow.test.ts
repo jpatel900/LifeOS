@@ -717,6 +717,9 @@ describe("workflow data provider", () => {
       waiting_on_since: null,
       is_commitment: false,
       committed_to_person_id: null,
+      // #737 C1 S3: null for every caller that is not replaying a journalled
+      // triage accept, which the plain unique index leaves free to repeat.
+      client_write_id: null,
     });
     expect(result.provider).toBe("supabase");
     expect(result.task.status).toBe("active");

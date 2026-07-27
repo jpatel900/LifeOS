@@ -246,9 +246,13 @@ export async function syncJournaledTaskDraftAccept(
     };
   }
 
+  // Plain wording on purpose: the pre-S3 copy at this call site said "Sign in
+  // before saving tasks to Supabase", which names a vendor the user has no
+  // reason to know (#692 / NFR-006). The sibling journalled paths already say
+  // it plainly ("Sign in before recording wins").
   const user = await requireSupabaseUser(
     client,
-    "Sign in before saving tasks to Supabase.",
+    "Sign in before saving tasks.",
   );
 
   // FIRST, always: a replay whose task already landed must not re-run any of
