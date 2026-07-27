@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
+import { pinMomentPreference } from "./helpers/momentPreference";
 
 /**
  * #737 — Final UX Loop C1, Target Card 1: "a focus session ALWAYS produces
@@ -43,6 +44,13 @@ import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
  * Blocks are seeded relative to `Date.now()` at seed time so the "now block"
  * classification (`momentsViewModel/shared.ts`: `startMs <= nowMs < endMs`)
  * holds regardless of when the suite runs. No wall-clock literals appear.
+ *
+ * That covers WHICH BLOCK is current. It did not cover WHICH MOMENT the home
+ * opens on — `heuristicMoment` reads the browser's local hour, so `/` renders
+ * Start, Flow or Close depending on the runner's clock and timezone. Every
+ * spec here begins on a Start-moment card, so `openHome` now pins Start
+ * explicitly (`helpers/momentPreference.ts`). Reproduce the original failure
+ * with `PLAYWRIGHT_TZ=Pacific/Auckland` (see `playwright.config.ts`).
  */
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
@@ -219,6 +227,16 @@ async function sessionWrites(page: Page) {
 }
 
 async function openHome(page: Page, options: SeedOptions) {
+  // The blocks above are seeded relative to `Date.now()`, so WHICH block is
+  // "now" is already clock-safe. WHICH MOMENT the home opens on was not:
+  // `TodayMoments`' `heuristicMoment` reads the browser's local hour, and
+  // every spec below starts from `first-move-start`, a Start-moment card.
+  // On a UTC CI runner that card is absent from 11:00Z onward (>= 17:00Z ->
+  // Close; 11:00-17:00Z -> Flow, because these specs seed a current block),
+  // and all five specs die on a 60s `first-move-start` timeout — which is
+  // exactly what happened on merged main. Pin Start; the moment memory the
+  // last spec asserts still works, because the seed only fills an empty slot.
+  await pinMomentPreference(page, "start");
   await page.addInitScript(
     ({ key, value }) => {
       window.sessionStorage.setItem(key, JSON.stringify(value));
