@@ -192,8 +192,12 @@ export {
   listWinHarvestCandidates,
   listWinRecords,
   createRollupSummary,
+  syncJournaledRollup,
   listRollupSummaries,
   listDurationProfiles,
   upsertDurationProfile,
 } from "./workflow/rollups";
-export type { SyncJournaledWinInput } from "./workflow/rollups";
+export type {
+  SyncJournaledWinInput,
+  SyncJournaledRollupInput,
+} from "./workflow/rollups";

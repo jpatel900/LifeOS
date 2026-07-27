@@ -1,0 +1,66 @@
+-- #737 C1 slice S5 (durable writes): server-side idempotency for approved
+-- rollup summaries.
+--
+-- The last member of the wins/reviews family to get one. Slice 2 made a
+-- confirmed win and a saved review device-durable and idempotent
+-- (20260726120000); `confirmRollup` kept its pre-737 shape -- `if (!client)
+-- return;` with a "Your rollup is saved on this device" fallback banner over a
+-- write that had happened nowhere. S2's own report flagged that as a standing
+-- falsehood. S5 journals the rollup to the device first and replays it to the
+-- account, which means a replay can run more than once for the same logical
+-- write (two tabs, a reconnect racing a mount, a response lost after the row
+-- landed) and needs a key to be idempotent against.
+--
+-- The client pairs this index with
+-- `upsert(..., { onConflict: "user_id,client_write_id", ignoreDuplicates: true })`.
+--
+-- WHY A PLAIN UNIQUE INDEX AND NOT A PARTIAL ONE
+-- ----------------------------------------------
+-- House rule since 20260726120000, earned twice (and once in production, #759
+-- / 20260726130000): `ON CONFLICT (a, b)` will only use a PARTIAL index when
+-- the INSERT statement itself carries a WHERE clause proving the index
+-- predicate. PostgREST's `onConflict` sends column names and nothing else, so
+-- it can never satisfy that proof and Postgres rejects the statement outright
+-- with 42P10. A `where client_write_id is not null` predicate here would fail
+-- every rollup upsert in exactly that way.
+--
+-- Dropping the predicate costs nothing: a Postgres unique index treats NULLs
+-- as DISTINCT by default, so every rollup written before this slice keeps a
+-- NULL key and repeats freely. `NULLS NOT DISTINCT` is deliberately NOT used
+-- -- it would make two NULL-id rows collide and break every existing rollup.
+--
+-- Scoped to `(user_id, ...)` rather than the id alone: journal ids are minted
+-- per device, so two accounts used on one device can legitimately produce the
+-- same id and must not block each other.
+--
+-- WHAT THIS DELIBERATELY DOES NOT TOUCH
+-- -------------------------------------
+-- `rollup_summaries_period_key` (one rollup per area per period, from the
+-- table's original migration 20260706130000) stays exactly as it is, and is
+-- NOT made the upsert's arbiter. So a period already rolled up -- on another
+-- device, or in an earlier session -- still RAISES 23505 on that constraint
+-- rather than being silently overwritten, which preserves the original
+-- "re-approving a period conflicts, the app decides" contract. The client
+-- reads that specific constraint name (`isRollupPeriodConflict` in
+-- `lib/durability/durableWrites.ts`) and treats it as a terminal success: the
+-- account already holds this rollup, so the journal entry is dropped rather
+-- than retried forever.
+--
+-- Additive and nullable. No existing column is altered or renamed, no grant is
+-- added (`grant select, insert, update, delete` from 20260706130000 already
+-- covers every column, and PostgreSQL table privileges extend to columns added
+-- later), and no RLS policy is touched (all four are column-agnostic
+-- `auth.uid() = user_id`).
+--
+-- Not added to `rollupSummaryColumns`: nothing reads this value back. The
+-- journal clears its own entry once the write is confirmed, so the key is
+-- write-only here -- the same choice 20260726120000 made for wins and reviews.
+--
+-- Timestamp checked against `origin/main` (latest: 20260727130000) and against
+-- every open PR at the time of writing; no collision.
+
+alter table public.rollup_summaries
+  add column client_write_id text;
+
+create unique index rollup_summaries_user_client_write_id_key
+  on public.rollup_summaries (user_id, client_write_id);

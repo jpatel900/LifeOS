@@ -240,10 +240,11 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
     // And the compensating entry must not linger either: it had nothing to
     // send, because the write it compensates never reached the account.
     await expect
-      .poll(async () =>
-        (await readJournal(page)).filter(
-          (record) => record.entity === "plan_unplacement",
-        ).length,
+      .poll(
+        async () =>
+          (await readJournal(page)).filter(
+            (record) => record.entity === "plan_unplacement",
+          ).length,
       )
       .toBe(0);
 
@@ -302,9 +303,9 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
 
     // The one left is the one the user did NOT undo — identified by its task,
     // not merely by the count.
-    expect(placements(await readJournal(page))[0]!.payload.workflow_task_id).toBe(
-      KEEP_TASK_ID,
-    );
+    expect(
+      placements(await readJournal(page))[0]!.payload.workflow_task_id,
+    ).toBe(KEEP_TASK_ID);
     await expect(page.getByTestId(`hour-row-${KEEP_HOUR}`)).toContainText(
       "Tap to unplan",
     );

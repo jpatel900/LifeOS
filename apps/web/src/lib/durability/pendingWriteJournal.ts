@@ -113,7 +113,15 @@ export type PendingWriteEntity =
   // backlog. The payload carries the draft AS EDITED, which is what makes an
   // edit-then-accept durable; a draft edit with no accept has no server
   // destination and is deliberately NOT journalled (see `durableWrites.ts`).
-  | "task_draft_accept";
+  | "task_draft_accept"
+  // #737 C1 slice S5 — THE COMPENSATING ACTIONS. Both undo a write that may
+  // still be queued, and both are journalled for the same reason the write
+  // they undo is: an undo the user made offline must survive the tab, or the
+  // reconnect delivers a write the user already took back (#778's disclosed
+  // resurrection). See `SUPERSEDES_KEY` in `durableWrites.ts` for how a
+  // compensating entry cancels its target.
+  | "plan_unplacement"
+  | "task_drop";
 
 export type PendingWritePayload = Record<string, unknown>;
 

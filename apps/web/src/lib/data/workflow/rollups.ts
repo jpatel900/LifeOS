@@ -337,6 +337,76 @@ export async function createRollupSummary(
   };
 }
 
+export interface SyncJournaledRollupInput extends CreateRollupSummaryInput {
+  /** Idempotency key; matches the journal record's `client_write_id`. */
+  client_write_id: string;
+}
+
+/**
+ * #737 C1 slice S5: push one journalled, user-APPROVED rollup to the account.
+ *
+ * The counterpart of `syncJournaledWin` for rollups, and the only rollup write
+ * the app makes now that `confirmRollup` journals first. Idempotent by
+ * construction — an upsert on the `(user_id, client_write_id)` unique index
+ * (20260727140000) with `ignoreDuplicates`, so replaying an entry that already
+ * reached the server is a no-op rather than a second rollup or a thrown
+ * unique violation.
+ *
+ * Deliberately does NOT `.select().single()` like `createRollupSummary`:
+ * `ignoreDuplicates` returns no row on conflict, so `.single()` would turn the
+ * successful no-op into an error. Nothing needs the row back.
+ *
+ * NOTE ON THE OTHER CONSTRAINT. This can still raise 23505 on
+ * `rollup_summaries_period_key` (one rollup per area per period), which is NOT
+ * the arbiter and is deliberately left that way — re-approving a period must
+ * not silently overwrite. The caller (`rollupHandler`) reads that constraint
+ * name and treats it as a terminal success rather than a retry, because the
+ * account already holds a rollup for this period.
+ *
+ * Mock mode (no client) reports `provider: "mock"` and writes nothing; the
+ * journal entry stays queued until an account is reachable.
+ */
+export async function syncJournaledRollup(
+  client: MinimalSupabaseClient | null,
+  input: SyncJournaledRollupInput,
+): Promise<{ provider: "mock" | "supabase" }> {
+  const parsedInput = CreateRollupSummaryInputSchema.parse(input);
+  const clientWriteId = input.client_write_id?.trim();
+  if (!clientWriteId) {
+    throw new Error("A journalled rollup needs a client write id.");
+  }
+
+  if (!client) return { provider: "mock" };
+
+  const user = await requireSupabaseUser(
+    client,
+    "Sign in before saving rollups.",
+  );
+
+  const query = client.from("rollup_summaries") as {
+    upsert: (
+      row: Record<string, unknown>,
+      options: { onConflict: string; ignoreDuplicates: boolean },
+    ) => PromiseLike<{ error: unknown }>;
+  };
+
+  const { error } = await query.upsert(
+    {
+      user_id: user.id,
+      area_id: parsedInput.area_id,
+      period_type: parsedInput.period_type,
+      period_start: parsedInput.period_start,
+      period_end: parsedInput.period_end,
+      summary: parsedInput.summary,
+      client_write_id: clientWriteId,
+    },
+    { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+  );
+
+  if (error) throw new Error(getSupabaseMessage(error));
+  return { provider: "supabase" };
+}
+
 // Approved rollups for the review reading section (week-vs-week / month-over-
 // month) and as the rollup context source (NS-INV-1). Most-recent first.
 export async function listRollupSummaries(

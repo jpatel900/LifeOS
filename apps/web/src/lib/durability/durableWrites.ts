@@ -46,12 +46,15 @@
  *    produce a duplicate on the retry.
  */
 
+import type { RollupSummaryContent } from "@lifeos/schemas";
 import { isDailyCloseConflict } from "@/lib/review/dayClose";
 import {
   enqueuePendingWrite,
   listPendingWrites,
+  markPendingWriteSynced,
   replayPendingWrites,
   type PendingWrite,
+  type PendingWriteEntity,
   type PendingWriteHandlers,
   type ReplaySummary,
 } from "./pendingWriteJournal";
@@ -68,6 +71,140 @@ import {
 export async function hasPendingWrite(clientWriteId: string): Promise<boolean> {
   const pending = await listPendingWrites();
   return pending.some((write) => write.client_write_id === clientWriteId);
+}
+
+/**
+ * THE COMPENSATING-ACTION CONTRACT (#737 C1 S5)
+ * =============================================
+ *
+ * The payload key a compensating write uses to name the write it undoes. When
+ * a payload carries this and the named entry is STILL QUEUED, the two cancel:
+ * both leave the journal and neither is ever sent.
+ *
+ * ## The bug this exists for
+ *
+ * PR #778 made placements durable and, in the same breath, recorded the
+ * failure mode it created: place a block offline (journalled), undo it offline
+ * (NOT journalled — `persistUnplannedBlock` took a `markLocalOnly` early
+ * return because there was no persisted block id), then sign in — and the
+ * drain faithfully delivers a block the user had explicitly deleted.
+ * `syncPersistedWorkflowRows` then pulls it back into local state. The sync
+ * overruled the user's last instruction. The same shape applied to
+ * accept-then-drop.
+ *
+ * ## Why cancelling is not a violation of never-discard
+ *
+ * The kernel's rule is that a write is never dropped because DELIVERY FAILED
+ * — a handler that throws, an entity with no handler, a mock provider. That
+ * rule protects the user's work from the machinery.
+ *
+ * This is the other case entirely: the USER authored a second action that
+ * annuls the first. Keeping the placement queued would not be preserving their
+ * work, it would be preserving work they took back. The distinction that makes
+ * a removal legitimate is therefore not "who removed it" but "what authorised
+ * it": a user-authored compensating action may cancel; a failure never may.
+ * That is why this lives in `durableWrites.ts` — the layer that knows what a
+ * write MEANS — and not in the entity-agnostic kernel, which cannot tell those
+ * two cases apart and so must always keep.
+ *
+ * ## Why it is resolved BEFORE dispatch, not inside a handler
+ *
+ * `replayPendingWrites` dispatches per entity with no cross-entry visibility:
+ * the `plan_placement` handler never sees the later `plan_unplacement`. So the
+ * pairing is resolved in one pass over the journal first, and only what
+ * survives that pass is dispatched.
+ *
+ * ## When the target is NOT queued
+ *
+ * Then the placement already reached the account, and the compensating entry
+ * is a real server undo — it stays in the journal and its handler sends
+ * `unplan_calendar_block` / the `dropped` transition. Both directions are
+ * needed; `hasPendingWrite` is what tells them apart at journal time, and this
+ * pass is what tells them apart at replay time.
+ */
+const SUPERSEDES_KEY = "supersedes_client_write_id";
+
+/** Any journalled payload that may annul an earlier write. */
+export interface CompensatingWritePayload {
+  /**
+   * `client_write_id` of the write this one undoes, or `null` when there was
+   * nothing queued to undo (the original had already reached the account).
+   */
+  supersedes_client_write_id: string | null;
+  [key: string]: unknown;
+}
+
+function supersededIdOf(write: PendingWrite): string | null {
+  const value = (write.payload as Record<string, unknown>)[SUPERSEDES_KEY];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export interface SupersedeSummary {
+  /** Pairs annulled: each counts one original AND one compensating entry. */
+  cancelled: number;
+}
+
+/**
+ * Cancel every queued write whose compensating action is also queued.
+ *
+ * Runs oldest-first over a single snapshot of the journal, so a compensating
+ * entry can only annul a write that came BEFORE it — which is the only
+ * ordering that can occur, since the compensating action is authored second.
+ *
+ * Idempotent: a second run finds no pairs, because both halves of each pair
+ * are gone. Fault-isolated: a delete that fails leaves both halves in place
+ * for the next pass rather than half-cancelling a pair.
+ */
+export async function resolveSupersededWrites(): Promise<SupersedeSummary> {
+  const writes = await listPendingWrites();
+  const queuedIds = new Set(writes.map((write) => write.client_write_id));
+  const summary: SupersedeSummary = { cancelled: 0 };
+
+  for (const write of writes) {
+    const targetId = supersededIdOf(write);
+    // No target, or a target that already left the journal (delivered, or
+    // cancelled by an earlier pair in this same pass). Either way this entry
+    // is not half of a cancellable pair: leave it for its handler.
+    if (!targetId || !queuedIds.has(targetId)) continue;
+
+    try {
+      await markPendingWriteSynced(targetId);
+      await markPendingWriteSynced(write.client_write_id);
+    } catch {
+      // Leave both halves queued. A half-cancelled pair is the one state that
+      // would be worse than either whole one.
+      continue;
+    }
+
+    queuedIds.delete(targetId);
+    queuedIds.delete(write.client_write_id);
+    summary.cancelled += 1;
+  }
+
+  return summary;
+}
+
+/**
+ * The `client_write_id` of the newest queued write of `entity` that `matches`,
+ * or `null`. This is how a compensating action finds what it is undoing at the
+ * moment the user undoes it.
+ *
+ * Newest-first because a user undoing something means the most recent one:
+ * placing an hour, undoing it, placing it again and undoing THAT must annul
+ * the second placement, not re-annul the first (which is already gone anyway).
+ */
+export async function findQueuedWriteToSupersede(
+  entity: PendingWriteEntity,
+  matches: (payload: Record<string, unknown>) => boolean,
+): Promise<string | null> {
+  const writes = await listPendingWrites(entity);
+  for (let index = writes.length - 1; index >= 0; index -= 1) {
+    const write = writes[index]!;
+    if (matches(write.payload as Record<string, unknown>)) {
+      return write.client_write_id;
+    }
+  }
+  return null;
 }
 
 /** Journalled shape of a confirmed win. Snake_case: it is stored data. */
@@ -413,6 +550,127 @@ export function journalTaskDraftAcceptWrite(
   });
 }
 
+/**
+ * Journalled shape of a rollup the user APPROVED — #737 C1 S5.
+ *
+ * The last member of the wins/reviews family to reach the device. `confirmWin`
+ * was fixed in S2; `confirmRollup` kept the identical `if (!client) return;`
+ * opening plus a `savedOnThisDeviceBanner("Your rollup")` fallback, so an
+ * approved rollup in demo mode, signed out, or with an unsynced area was
+ * written NOWHERE while the banner said it was on this device. S2's report
+ * flagged it; this closes it on the same pattern.
+ *
+ * NS-INV-4 is unchanged: only an APPROVED rollup is ever journalled. A
+ * dismissed draft never reaches `confirmRollup` and so never reaches here.
+ */
+export interface RollupWritePayload {
+  /** Workflow-local area id, so replay can re-resolve if needed. */
+  workflow_area_id: string;
+  /** Account area id when it was already known at approve time. */
+  persisted_area_id: string | null;
+  period_type: "week" | "month";
+  /** Pinned at approve time — a period is never re-derived at replay. */
+  period_start: string;
+  period_end: string;
+  /**
+   * Typed, unlike `ReviewWritePayload.summary_json`. The difference is in the
+   * schema layer, not a preference: a review's summary is `JsonValueSchema`
+   * (`z.ZodType<unknown>`), while a rollup's is the structured
+   * `RollupSummaryContentSchema`, so the account call needs the real shape and
+   * pretending otherwise would only move the cast.
+   */
+  summary: RollupSummaryContent;
+  [key: string]: unknown;
+}
+
+/**
+ * Journalled shape of an unplan — #737 C1 S5.
+ *
+ * Carries the ids in both directions, because it has two jobs depending on
+ * where the placement it undoes got to (see `SUPERSEDES_KEY`): annul a queued
+ * placement, or unplan a block the account already holds.
+ */
+export interface PlanUnplacementWritePayload extends CompensatingWritePayload {
+  /** Workflow-local block id, so replay can re-resolve if needed. */
+  workflow_block_id: string;
+  /** Account block id when it was already known at unplan time. */
+  persisted_block_id: string | null;
+}
+
+/** Journalled shape of a dropped task — #737 C1 S5. Same two jobs. */
+export interface TaskDropWritePayload extends CompensatingWritePayload {
+  /** Workflow-local task id, so replay can re-resolve if needed. */
+  workflow_task_id: string;
+  /** Account task id when it was already known at drop time. */
+  persisted_task_id: string | null;
+}
+
+export interface JournalRollupInput {
+  workflowAreaId: string;
+  persistedAreaId: string | null;
+  periodType: "week" | "month";
+  periodStart: string;
+  periodEnd: string;
+  summary: RollupSummaryContent;
+}
+
+export interface JournalPlanUnplacementInput {
+  workflowBlockId: string;
+  persistedBlockId: string | null;
+  supersedesClientWriteId: string | null;
+}
+
+export interface JournalTaskDropInput {
+  workflowTaskId: string;
+  persistedTaskId: string | null;
+  supersedesClientWriteId: string | null;
+}
+
+/** Journal one approved rollup. Throws on the same terms as the win path. */
+export function journalRollupWrite(
+  input: JournalRollupInput,
+): Promise<PendingWrite<RollupWritePayload>> {
+  return enqueuePendingWrite<RollupWritePayload>({
+    entity: "rollup",
+    payload: {
+      workflow_area_id: input.workflowAreaId,
+      persisted_area_id: input.persistedAreaId,
+      period_type: input.periodType,
+      period_start: input.periodStart,
+      period_end: input.periodEnd,
+      summary: input.summary,
+    },
+  });
+}
+
+/** Journal one unplan. Throws on the same terms as the win path. */
+export function journalPlanUnplacementWrite(
+  input: JournalPlanUnplacementInput,
+): Promise<PendingWrite<PlanUnplacementWritePayload>> {
+  return enqueuePendingWrite<PlanUnplacementWritePayload>({
+    entity: "plan_unplacement",
+    payload: {
+      workflow_block_id: input.workflowBlockId,
+      persisted_block_id: input.persistedBlockId,
+      supersedes_client_write_id: input.supersedesClientWriteId,
+    },
+  });
+}
+
+/** Journal one dropped task. Throws on the same terms as the win path. */
+export function journalTaskDropWrite(
+  input: JournalTaskDropInput,
+): Promise<PendingWrite<TaskDropWritePayload>> {
+  return enqueuePendingWrite<TaskDropWritePayload>({
+    entity: "task_drop",
+    payload: {
+      workflow_task_id: input.workflowTaskId,
+      persisted_task_id: input.persistedTaskId,
+      supersedes_client_write_id: input.supersedesClientWriteId,
+    },
+  });
+}
+
 /** The account-side call for a journalled win. */
 export interface SyncWinArgs {
   client_write_id: string;
@@ -573,6 +831,48 @@ export interface DurableWriteServerOps {
     payload: TaskDraftAcceptWritePayload,
     result: SyncTaskDraftAcceptResult,
   ): void;
+  /** #737 C1 S5: write one approved rollup, idempotently. */
+  syncRollup?(args: SyncRollupArgs): Promise<{ provider: "mock" | "supabase" }>;
+  /**
+   * Late resolution of a rollup approved before its area had an account id. A
+   * null area id keeps the write queued: `rollup_summaries.area_id` is NOT
+   * NULL and area-scoped, so there is nothing to guess with.
+   */
+  resolveRollupAreaId?(payload: RollupWritePayload): string | null;
+  /** #737 C1 S5: unplan a block the account already holds. */
+  syncPlanUnplacement?(
+    args: SyncPlanUnplacementArgs,
+  ): Promise<{ provider: "mock" | "supabase" }>;
+  /** Late resolution of the block id for an unplan journalled before it synced. */
+  resolvePlanUnplacementBlockId?(
+    payload: PlanUnplacementWritePayload,
+  ): string | null;
+  /** #737 C1 S5: mark a task dropped on the account. */
+  syncTaskDrop?(
+    args: SyncTaskDropArgs,
+  ): Promise<{ provider: "mock" | "supabase" }>;
+  /** Late resolution of the task id for a drop journalled before it synced. */
+  resolveTaskDropTaskId?(payload: TaskDropWritePayload): string | null;
+}
+
+/** The account-side call for a journalled rollup. */
+export interface SyncRollupArgs {
+  client_write_id: string;
+  area_id: string;
+  period_type: "week" | "month";
+  period_start: string;
+  period_end: string;
+  summary: RollupSummaryContent;
+}
+
+/** The account-side call for a journalled unplan. */
+export interface SyncPlanUnplacementArgs {
+  block_id: string;
+}
+
+/** The account-side call for a journalled task drop. */
+export interface SyncTaskDropArgs {
+  task_id: string;
 }
 
 /**
@@ -833,6 +1133,187 @@ function taskDraftAcceptHandler(ops: DurableWriteServerOps) {
 }
 
 /**
+ * `rollup_summaries`' ORIGINAL uniqueness — one rollup per area per period,
+ * from the table's first migration (20260706130000), long predating any
+ * idempotency key. Named here so the predicate below matches on the
+ * constraint rather than on the words "duplicate key".
+ */
+export const ROLLUP_PERIOD_CONSTRAINT = "rollup_summaries_period_key";
+
+/**
+ * Did this failure mean "the account already has a rollup for this area and
+ * period"? Then there is nothing left to send.
+ *
+ * Same reasoning as `isDailyCloseConflict`, and the same danger if read
+ * wrongly: `rollupHandler` throws on any error, a throw means "keep queued",
+ * and a rollup approved on a second device would then retry forever against a
+ * row that will never go away.
+ *
+ * Matched on the CONSTRAINT NAME, never on a generic "duplicate key": that
+ * would also swallow a `(user_id, client_write_id)` violation, which means
+ * something else entirely (a genuinely replayed write, already handled by
+ * `ignoreDuplicates`).
+ */
+export function isRollupPeriodConflict(error: unknown): boolean {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message: unknown }).message)
+      : String(error ?? "");
+  return message.includes(ROLLUP_PERIOD_CONSTRAINT);
+}
+
+/**
+ * Did this failure mean "that block is already not on the calendar"?
+ *
+ * `unplan_calendar_block` (20260630180000) raises
+ * `Only scheduled blocks can be unplanned.` when the block's status is
+ * anything other than `scheduled`. On a REPLAY that is the success case: a
+ * response lost after the row already changed. Retrying it forever would be
+ * the mirror image of the bug this slice fixes — the machinery insisting on an
+ * action the account has already taken.
+ *
+ * Matched on the function's own message text, which is the only signal it
+ * gives (a plpgsql `raise exception` with no error code of its own).
+ */
+export const ALREADY_UNPLANNED_MESSAGE =
+  "Only scheduled blocks can be unplanned.";
+
+export function isAlreadyUnplanned(error: unknown): boolean {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message: unknown }).message)
+      : String(error ?? "");
+  return message.includes(ALREADY_UNPLANNED_MESSAGE);
+}
+
+function rollupHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as RollupWritePayload;
+    const sync = ops.syncRollup;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this rollup yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const areaId =
+      payload.persisted_area_id ?? ops.resolveRollupAreaId?.(payload) ?? null;
+
+    if (!areaId) {
+      // A rollup IS a per-area summary — `rollup_summaries.area_id` is NOT NULL
+      // and the whole row is meaningless against the wrong area. So it waits,
+      // the same rule the win and draft-accept handlers apply. This preserves
+      // the pre-S5 guard (`if (!persistedAreaId) { markLocalOnly(...); return; }`)
+      // rather than relaxing it.
+      throw new Error(
+        "Cannot send this rollup yet: its account area is not known on this device.",
+      );
+    }
+
+    let result;
+    try {
+      result = await sync({
+        client_write_id: write.client_write_id,
+        area_id: areaId,
+        period_type: payload.period_type,
+        period_start: payload.period_start,
+        period_end: payload.period_end,
+        summary: payload.summary,
+      });
+    } catch (error) {
+      // TERMINAL SUCCESS, NOT A FAILURE — the same shape as the daily-close
+      // conflict in `reviewHandler`, and it needs its own check for the same
+      // reason: `rollup_summaries_period_key` (one rollup per area per period,
+      // from the table's original migration) is NOT the upsert's ON CONFLICT
+      // arbiter, so a period already rolled up on ANOTHER device raises 23505
+      // on that constraint instead of being ignored.
+      //
+      // Re-queuing on it would retry forever: the conflicting row is not going
+      // anywhere. The account already holds this area's rollup for this
+      // period, which is exactly the state the write wanted, so the entry is
+      // dropped.
+      if (isRollupPeriodConflict(error)) return;
+      throw error;
+    }
+    requireAccountWrite(result);
+  };
+}
+
+/**
+ * Handle an unplan whose placement ALREADY reached the account.
+ *
+ * The queued-placement case never gets here — `resolveSupersededWrites` has
+ * already annulled both halves before dispatch. So reaching this handler means
+ * there is a real `calendar_blocks` row to unplan.
+ */
+function planUnplacementHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as PlanUnplacementWritePayload;
+    const sync = ops.syncPlanUnplacement;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this plan change yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const blockId =
+      payload.persisted_block_id ??
+      ops.resolvePlanUnplacementBlockId?.(payload) ??
+      null;
+
+    if (!blockId) {
+      // The block has no account id yet AND no queued placement was annulled,
+      // so the placement is somewhere in between — mid-flight, or queued
+      // behind this entry after an id-resolution failure. Waiting is right:
+      // unplanning a guessed block id would delete someone else's hour.
+      throw new Error(
+        "Cannot send this plan change yet: its account block is not known on this device.",
+      );
+    }
+
+    let result;
+    try {
+      result = await sync({ block_id: blockId });
+    } catch (error) {
+      // TERMINAL SUCCESS. `unplan_calendar_block` raises "Only scheduled
+      // blocks can be unplanned." on its second call, so a response lost
+      // AFTER the row changed would otherwise retry forever against a block
+      // that is already in exactly the state the user asked for.
+      if (isAlreadyUnplanned(error)) return;
+      throw error;
+    }
+    requireAccountWrite(result);
+  };
+}
+
+/** Same two jobs as the unplan handler, for a dropped task. */
+function taskDropHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as TaskDropWritePayload;
+    const sync = ops.syncTaskDrop;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this change yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const taskId =
+      payload.persisted_task_id ?? ops.resolveTaskDropTaskId?.(payload) ?? null;
+
+    if (!taskId) {
+      throw new Error(
+        "Cannot send this change yet: its account task is not known on this device.",
+      );
+    }
+
+    // No conflict case to absorb: `apply_task_review_transition` to `dropped`
+    // is a fixed-value update, so replaying it is naturally idempotent.
+    const result = await sync({ task_id: taskId });
+    requireAccountWrite(result);
+  };
+}
+
+/**
  * The entity -> handler map this slice wires. Entities absent from this map
  * are reported `skipped` by the kernel and stay queued, so a later slice
  * adding an entity without a handler loses nothing — it just does not sync
@@ -841,9 +1322,9 @@ function taskDraftAcceptHandler(ops: DurableWriteServerOps) {
  * The corollary is a rule, not a caveat: NEVER journal an entity before its
  * handler exists. An unhandled entity is kept forever, so "enqueue it now,
  * wire it later" builds an unbounded queue on the user's device. That is why
- * `draft_edit`, `project_draft_decision`, `first_tiny_step`, `wip_swap`,
- * `rollup` and `task_map_approval` are declared in `PendingWriteEntity` but
- * nothing enqueues them yet.
+ * `draft_edit`, `project_draft_decision`, `first_tiny_step`, `wip_swap` and
+ * `task_map_approval` are declared in `PendingWriteEntity` but nothing
+ * enqueues them yet.
  *
  * REPLAY MUST STAY SEQUENTIAL — handlers depend on each other's output.
  * `recordTaskDraftAcceptIds` writes the new account task id into the caller's
@@ -863,6 +1344,9 @@ export function createDurableWriteHandlers(
     execution_session: executionSessionHandler(ops),
     plan_placement: planPlacementHandler(ops),
     task_draft_accept: taskDraftAcceptHandler(ops),
+    rollup: rollupHandler(ops),
+    plan_unplacement: planUnplacementHandler(ops),
+    task_drop: taskDropHandler(ops),
   };
 }
 
@@ -870,9 +1354,20 @@ export function createDurableWriteHandlers(
  * Drain the journal to the account, oldest write first. Safe to call on every
  * mount and every reconnect: an entry already sent is gone from the journal,
  * and one still queued is retried idempotently.
+ *
+ * #737 C1 S5: annulled pairs are resolved FIRST, before any dispatch, so a
+ * write the user has taken back is never delivered. That pass is deliberately
+ * not fault-coupled to the drain — if it fails, both halves of the pair stay
+ * queued and the drain proceeds, which is the pre-S5 behaviour rather than a
+ * new failure mode.
  */
-export function replayDurableWrites(
+export async function replayDurableWrites(
   ops: DurableWriteServerOps,
 ): Promise<ReplaySummary> {
+  try {
+    await resolveSupersededWrites();
+  } catch {
+    // Nothing was cancelled; nothing was lost. The drain still runs.
+  }
   return replayPendingWrites(createDurableWriteHandlers(ops));
 }
