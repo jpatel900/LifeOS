@@ -130,6 +130,7 @@ import {
   type CaptureParseState,
   type DeferTaskWithSessionResult,
   type GoogleCalendarBridgeResult,
+  type ReviewSaveResult,
   type TaskMapDraftState,
   type WinConfirmResult,
   type WorkflowContextValue,
@@ -214,6 +215,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [journalledClosedDays, setJournalledClosedDays] = useState<string[]>(
     [],
   );
+  // Audit P0#4: the close for the day currently being written, if any. A ref
+  // rather than state because it must be readable and writable WITHIN one
+  // render — its whole job is to catch the second press that lands before the
+  // first has re-rendered anything.
+  const inFlightDayCloseRef = useRef<{
+    day: string;
+    promise: Promise<ReviewSaveResult>;
+  } | null>(null);
   const activeParseCaptureIdRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   const persistedAreasRef = useRef<Area[]>([]);
@@ -1620,7 +1629,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           });
       }
     },
-    saveReview: async () => {
+    saveReview: () => {
       // Audit P0#4 — THE choke point for "one close per day".
       //
       // Pinned once, here, from the LOCAL calendar day, and then used for
@@ -1629,48 +1638,77 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // close under a day the verdict is not looking at.
       const day = localIsoDate(new Date());
 
-      // Already closed -> report where it lives and write NOTHING. The Close
-      // moment no longer offers the action at all, so this is the backstop for
-      // the callers it cannot see (the cockpit review shell, the keyboard
-      // primary, a second tab). The database has its own backstop under this
-      // one; neither is a substitute for the other.
+      // GUARD 1 — a close for this day already IN FLIGHT.
+      //
+      // The state guard below reads `accountClosedDays`/`journalledClosedDays`
+      // out of the render closure, so two presses landing inside the same
+      // render both see an open day and both journal an entry. The database
+      // converges that (the second replay raises 23505 and the terminal-success
+      // branch drops it) but OFFLINE nothing converges it, and the journal
+      // would hold two entries for one day while the card says "once".
+      //
+      // Returning the in-flight promise is better than refusing: both callers
+      // get the same, true answer about the same close. Deliberately not
+      // cleared on settle — a later press of the SAME day is answered by the
+      // state guard, and a genuinely new day has a different key.
+      const inFlight = inFlightDayCloseRef.current;
+      if (inFlight && inFlight.day === day) {
+        return inFlight.promise;
+      }
+
+      // GUARD 2 — already closed. Report where it lives and write NOTHING.
+      // The Close moment no longer offers the action at all, so this is the
+      // backstop for the callers it cannot see (the cockpit review shell, the
+      // keyboard primary, a second tab). The database has its own backstop
+      // under this one; neither is a substitute for the other.
       const alreadyClosed = resolveDayClose(
         accountClosedDays,
         journalledClosedDays,
         day,
       );
       if (alreadyClosed) {
-        return alreadyClosed.savedToAccount ? "persisted" : "local-only";
+        return Promise.resolve(
+          alreadyClosed.savedToAccount ? "persisted" : "local-only",
+        );
       }
 
-      const previous = stateRef.current;
-      const next = saveReview(previous);
-      applyWorkflowState(next);
+      const promise = (async () => {
+        const previous = stateRef.current;
+        const next = saveReview(previous);
+        applyWorkflowState(next);
 
-      // #588: local state updates optimistically above, but the RESULT is the
-      // truth callers gate "day closed" copy on — resolved only after the
-      // persisted write settles (or truthfully reports local-only/failure).
-      try {
-        const outcome = await persistenceOps.persistReviewEntry(next, day);
-        // Audit P0#4: refresh the device tier before resolving, so the caller
-        // that awaits this promise renders the verdict in the SAME turn the
-        // toast appears. A close that is only on the device is still a close,
-        // and the user sees it land.
-        await refreshJournalledClosedDays();
-        if (outcome === "persisted") {
-          setAccountClosedDays((days) =>
-            days.includes(day) ? days : [...days, day],
-          );
+        // #588: local state updates optimistically above, but the RESULT is
+        // the truth callers gate "day closed" copy on — resolved only after
+        // the persisted write settles (or truthfully reports
+        // local-only/failure).
+        try {
+          const outcome = await persistenceOps.persistReviewEntry(next, day);
+          // Audit P0#4: refresh the device tier before resolving, so the
+          // caller that awaits this promise renders the verdict in the SAME
+          // turn the toast appears. A close that is only on the device is
+          // still a close, and the user sees it land.
+          await refreshJournalledClosedDays();
+          if (outcome === "persisted") {
+            setAccountClosedDays((days) =>
+              days.includes(day) ? days : [...days, day],
+            );
+          }
+          // #737-A slice 2: "device-blocked" is a failure to the caller, but
+          // its banner was already set by `markDeviceStorageBlocked` and must
+          // NOT be overwritten with the account-failure sentence below — the
+          // account was never the problem.
+          return outcome === "device-blocked" ? "failure" : outcome;
+        } catch (error) {
+          markPersistedSaveFailure(error);
+          // A failed close is not a close: release the latch so the user can
+          // genuinely try again.
+          inFlightDayCloseRef.current = null;
+          return "failure";
         }
-        // #737-A slice 2: "device-blocked" is a failure to the caller, but its
-        // banner was already set by `markDeviceStorageBlocked` and must NOT be
-        // overwritten with the account-failure sentence below — the account
-        // was never the problem.
-        return outcome === "device-blocked" ? "failure" : outcome;
-      } catch (error) {
-        markPersistedSaveFailure(error);
-        return "failure";
-      }
+      })();
+
+      inFlightDayCloseRef.current = { day, promise };
+      return promise;
     },
     confirmWin,
     confirmRollup,

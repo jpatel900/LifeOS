@@ -231,4 +231,60 @@ describe("#588 moments close shell: verdict gated on the resolved save", () => {
       "Day closed",
     );
   });
+
+  // Final UX Loop C1, Target Cards 1+7 (audit P0#4).
+  it("two presses inside one render write ONE review, not two", async () => {
+    // The state guard reads `accountClosedDays`/`journalledClosedDays` out of
+    // the render closure, so two clicks landing before anything re-renders
+    // would both see an open day. The database converges that (23505 ->
+    // terminal success), but OFFLINE nothing does, and the journal would hold
+    // two entries for a day the card says was closed once. The in-flight latch
+    // is what makes "exactly once" true at this tier too.
+    let calls = 0;
+    let resolveSave: (value: "persisted") => void = () => {};
+    persistReviewEntryOverride.current = () => {
+      calls += 1;
+      return new Promise((resolve) => {
+        resolveSave = resolve;
+      });
+    };
+    renderClose();
+
+    clickCloseDay();
+    clickCloseDay();
+    clickCloseDay();
+
+    expect(calls).toBe(1);
+
+    resolveSave("persisted");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+        "Day closed",
+      );
+    });
+    expect(calls).toBe(1);
+  });
+
+  it("a failed close releases the latch so it can genuinely be retried", async () => {
+    // The latch must not turn a failure into a permanently unclosable day.
+    let calls = 0;
+    persistReviewEntryOverride.current = () => {
+      calls += 1;
+      return Promise.reject(new Error("persist blew up"));
+    };
+    renderClose();
+
+    clickCloseDay();
+    await waitFor(() => {
+      expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
+        "Couldn't close the day — review not saved yet",
+      );
+    });
+
+    clickCloseDay();
+    await waitFor(() => {
+      expect(calls).toBe(2);
+    });
+  });
 });

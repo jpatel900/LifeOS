@@ -41,11 +41,6 @@ export function localIsoDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-/** `YYYY-MM-DD` for the local calendar day happening right now. */
-export function todayLocalIsoDate(): string {
-  return localIsoDate(new Date());
-}
-
 /**
  * One recorded day-close, and where it actually lives.
  *
