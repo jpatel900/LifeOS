@@ -1,4 +1,5 @@
 import type { WorkflowState } from "@/lib/workflow";
+import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
 import type { Phase2MockCalendarBlock } from "@/lib/types";
 import type { AbsenceResult } from "./detect";
 
@@ -107,10 +108,10 @@ export function buildWhileYouWereOutSummary(input: {
       googleEventId: block.google_event_id,
     }));
 
-  const pendingTriageCaptures = state.captureItems.filter(
-    (capture) =>
-      capture.status === "new" || capture.status === "triage_required",
-  );
+  // C1 Target Card 4: the shared "not sorted yet" definition, so the return
+  // ritual can never count (or name as stalest) a thought an accepted task
+  // already came from.
+  const pendingTriageCaptures = selectUnsortedCaptures(state);
 
   const openTasks = state.tasks.filter(
     (task) =>
