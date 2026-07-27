@@ -10,6 +10,10 @@ import {
   splitByFocusBudget,
 } from "@/lib/focus/dailyFocusBudget";
 import {
+  countUnsortedCaptures,
+  selectUnsortedCaptures,
+} from "@/lib/workflow/captureStatus";
+import {
   MS_PER_DAY,
   areaName,
   buildTodayBlocks,
@@ -115,8 +119,9 @@ export interface RecoveryNudgeVM {
 
 /**
  * D-8 (design alignment, #483): the single oldest capture still awaiting a
- * triage decision (same `status === "new" || "triage_required"` filter that
- * already feeds `counts.pendingTriage` — one source, no new signal). Used to
+ * triage decision (`selectUnsortedCaptures`, the same shared definition that
+ * feeds `counts.pendingTriage` and the triage sheet — one source, no new
+ * signal, and no thought an accepted task already came from). Used to
  * promote a real item into the Start hero when there is no `firstMove`, so
  * the main column never collapses to a bare text line. `summary` is the raw
  * capture text truncated for card display; `areaLabel` is `""` when the
@@ -357,11 +362,7 @@ function buildAreaHealth(
       const task = state.tasks.find((t) => t.id === entry.taskId);
       return task?.area_id === area.id;
     });
-    const pendingTriage = state.captureItems.filter(
-      (item) =>
-        item.area_id === area.id &&
-        (item.status === "new" || item.status === "triage_required"),
-    );
+    const pendingTriage = selectUnsortedCaptures(state, area.id);
 
     const noteParts = [`${openTasks.length} open`];
     if (areaWaiting.length > 0) noteParts.push(`${areaWaiting.length} waiting`);
@@ -526,9 +527,7 @@ function summarizeRawText(rawText: string): string {
 function deriveTopPendingTriageItem(
   state: WorkflowState,
 ): PendingTriageItemVM | null {
-  const pending = state.captureItems.filter(
-    (item) => item.status === "new" || item.status === "triage_required",
-  );
+  const pending = selectUnsortedCaptures(state);
   if (pending.length === 0) return null;
 
   const sorted = [...pending].sort((a, b) => {
@@ -672,9 +671,7 @@ export function buildStartVM(
   const areas = buildAreaHealth(state, now, waitingOn);
   const firstMove = deriveFirstMove(state, blocks, selectedAreaId);
 
-  const pendingTriage = state.captureItems.filter(
-    (item) => item.status === "new" || item.status === "triage_required",
-  ).length;
+  const pendingTriage = countUnsortedCaptures(state);
   const activeTasks = state.tasks.filter(
     (task) => task.status === "active",
   ).length;

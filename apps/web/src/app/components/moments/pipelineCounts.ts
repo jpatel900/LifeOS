@@ -1,4 +1,5 @@
 import type { WorkflowState } from "@/lib/workflow";
+import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
 
 /**
  * Pure, presentation-only derivation of actionable per-stage pipeline counts
@@ -61,8 +62,13 @@ export function buildPipelineCounts(
   }
 
   const now = options.now ?? new Date();
-  const actionableCapture = state.captureItems.filter(
-    (item) => item.area_id === areaId && item.status === "new",
+  // C1 Target Card 4: routed through the shared "not sorted yet" definition so
+  // the Capture badge can never count a thought an accepted task already came
+  // from (audit P0#3). The extra `status === "new"` narrowing is this badge's
+  // own long-standing semantics and is deliberately preserved: once a capture
+  // has been sorted it is counted by the Triage stage instead, never twice.
+  const actionableCapture = selectUnsortedCaptures(state, areaId).filter(
+    (item) => item.status === "new",
   );
   const pendingDrafts = state.taskDrafts.filter(
     (draft) => draft.area_id === areaId && draft.status === "pending",

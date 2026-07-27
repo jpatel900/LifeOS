@@ -9,6 +9,7 @@ import { MomentSheet } from "./MomentSheet";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
+import { countUnsortedCaptures } from "@/lib/workflow/captureStatus";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -131,23 +132,13 @@ export function TriageSheet({
   // `captureItems`. Same area scoping as the pipeline "Capture" badge
   // (`buildPipelineCounts`'s actionableCapture filter plus
   // `triage_required`, the parse-later status).
-  // A sorted capture keeps status "triage_required" while its draft sits in
-  // the pending list above — exclude any capture a draft already points at
-  // (task_drafts.capture_item_id), so a thought is never listed twice.
   // #703: the sheet still needs the *count* so the empty state stays honest;
   // the rows themselves (and the Sort action) live in the shared
-  // UnsortedCaptures component below, which applies this identical filter.
-  const draftedCaptureIds = new Set(
-    state.taskDrafts
-      .map((draft) => draft.capture_item_id)
-      .filter((id): id is string => Boolean(id)),
-  );
-  const unsortedCaptureCount = state.captureItems.filter(
-    (item) =>
-      (item.status === "new" || item.status === "triage_required") &&
-      !draftedCaptureIds.has(item.id) &&
-      (resolvedAreaId ? item.area_id === resolvedAreaId : true),
-  ).length;
+  // UnsortedCaptures component below. C1 Target Card 4: both now read the one
+  // shared definition (lib/workflow/captureStatus), so the count and the rows
+  // cannot disagree, and neither can offer back a thought an accepted task
+  // already came from.
+  const unsortedCaptureCount = countUnsortedCaptures(state, resolvedAreaId);
 
   const showMapOfferReady =
     mapOffer !== null &&

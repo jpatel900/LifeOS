@@ -8,6 +8,7 @@ import {
   AI_SORTING_FAILED_NOT_SORTED,
   AI_SORTING_UNAVAILABLE_NOT_SORTED,
 } from "@/lib/statusVocabulary";
+import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
 
 /**
  * #703 (owner-ratified 2026-07-19) — the Sort action, shared by every triage
@@ -42,21 +43,12 @@ export function UnsortedCaptures({
     retryCaptureParseWithMock,
   } = useWorkflow();
 
-  // A sorted capture keeps status "triage_required" while its draft sits in
-  // the pending list — exclude any capture a draft already points at
-  // (task_drafts.capture_item_id), so a thought is never listed twice and a
-  // successful Sort visibly moves the row out of this list.
-  const draftedCaptureIds = new Set(
-    state.taskDrafts
-      .map((draft) => draft.capture_item_id)
-      .filter((id): id is string => Boolean(id)),
-  );
-  const unsortedCaptures = state.captureItems.filter(
-    (item) =>
-      (item.status === "new" || item.status === "triage_required") &&
-      !draftedCaptureIds.has(item.id) &&
-      (areaId ? item.area_id === areaId : true),
-  );
+  // C1 Target Card 4: one definition of "not sorted yet", shared with every
+  // other surface that counts or names these (see lib/workflow/captureStatus).
+  // It excludes both a capture a draft already points at (a successful Sort
+  // visibly moves the row out of this list) and a capture an accepted task
+  // points at (audit P0#3 — the item must never be offered back as undone).
+  const unsortedCaptures = selectUnsortedCaptures(state, areaId);
 
   // Progress/failure read straight off the shared `captureParse` state the
   // parse path already maintains — no second source of truth, and keyed by
