@@ -10,6 +10,7 @@ import type {
 import {
   blockTimelineState,
   buildCloseVM,
+  formatDayClosePayoff,
   buildDaySynthesis,
   buildFlowVM,
   buildGreeting,
@@ -20,6 +21,7 @@ import {
   greetingPeriod,
   waitingOnAgingBucket,
 } from "./momentsViewModel";
+import { localIsoDate } from "@/lib/review/dayClose";
 
 /** Pinned clock — no ambient Date.now anywhere in these tests. */
 const NOW = new Date("2026-07-05T12:00:00.000Z");
@@ -732,6 +734,99 @@ describe("buildCloseVM", () => {
     const vm = buildCloseVM(state, { now: NOW });
     expect(vm.completedToday).toBe(2);
     expect(vm.missedToday).toBe(1);
+  });
+
+  // Final UX Loop C1, Target Cards 1+7 (audit P0#4). The day key is derived
+  // with `localIsoDate` rather than hardcoded, so these assertions hold on a
+  // UTC CI runner and in every developer timezone — the `NOW` constant above
+  // is a `Z` instant whose LOCAL day differs east of UTC+12.
+  describe("dayClose (audit P0#4)", () => {
+    const today = localIsoDate(NOW);
+
+    it("is null when today has no close on either tier", () => {
+      const vm = buildCloseVM(stateWith({}), { now: NOW });
+      expect(vm.dayClose).toBeNull();
+    });
+
+    it("is null when only OTHER days are closed", () => {
+      const vm = buildCloseVM(stateWith({}), {
+        now: NOW,
+        accountClosedDays: ["2026-07-04"],
+        journalledClosedDays: ["2026-07-03"],
+      });
+      expect(vm.dayClose).toBeNull();
+    });
+
+    it("reports an account close for today", () => {
+      const vm = buildCloseVM(stateWith({}), {
+        now: NOW,
+        accountClosedDays: [today],
+      });
+      expect(vm.dayClose).toEqual({ periodStart: today, savedToAccount: true });
+    });
+
+    it("reports a device-only close for today", () => {
+      const vm = buildCloseVM(stateWith({}), {
+        now: NOW,
+        journalledClosedDays: [today],
+      });
+      expect(vm.dayClose).toEqual({
+        periodStart: today,
+        savedToAccount: false,
+      });
+    });
+
+    it("keys on the LOCAL calendar day, not the UTC one", () => {
+      // 23:30 local: west of Greenwich this instant is already tomorrow in
+      // UTC, so a UTC-keyed lookup would find nothing and the verdict would
+      // vanish at exactly the hour the Close moment is meant to be used.
+      const lateEvening = new Date(2026, 6, 27, 23, 30, 0);
+      const vm = buildCloseVM(stateWith({}), {
+        now: lateEvening,
+        accountClosedDays: ["2026-07-27"],
+      });
+      expect(vm.dayClose).toEqual({
+        periodStart: "2026-07-27",
+        savedToAccount: true,
+      });
+    });
+  });
+
+  describe("formatDayClosePayoff", () => {
+    it("reads out the counts the Close card is already showing", () => {
+      expect(
+        formatDayClosePayoff({
+          completed: 3,
+          missed: 1,
+          carriedForward: 2,
+          winsLogged: 2,
+        }),
+      ).toBe("3 completed · 1 missed · 2 carried forward · 2 wins logged.");
+    });
+
+    it("states a quiet day plainly rather than rendering nothing", () => {
+      expect(
+        formatDayClosePayoff({
+          completed: 0,
+          missed: 0,
+          carriedForward: 0,
+          winsLogged: 0,
+        }),
+      ).toBe("0 completed · 0 missed · nothing carried forward.");
+    });
+
+    it("omits wins entirely when none were logged, and singularises one", () => {
+      expect(
+        formatDayClosePayoff({
+          completed: 1,
+          missed: 0,
+          carriedForward: 0,
+          winsLogged: 1,
+        }),
+      ).toBe(
+        "1 completed · 0 missed · nothing carried forward · 1 win logged.",
+      );
+    });
   });
 
   it("carries forward active/scheduled tasks linked to missed blocks, deduped", () => {

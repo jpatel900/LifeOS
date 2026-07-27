@@ -736,3 +736,92 @@ describe("CloseMoment — purpose-gauge check-in offer", () => {
     ).toBeInTheDocument();
   });
 });
+
+/**
+ * Final UX Loop C1, Target Cards 1+7 — audit P0#4: "Closing the day confirms
+ * nothing, and can be done forever".
+ *
+ * The audit pressed the button and watched the screen not change, then
+ * pressed it four more times. These assertions are the shape of that never
+ * being possible again at the component tier: the action and the verdict are
+ * the same slot, so a closed day cannot render an offer to close it.
+ */
+describe("close moment: the day's verdict (audit P0#4)", () => {
+  const closedVm: CloseVM = {
+    ...baseVm,
+    dayClose: { periodStart: "2026-07-27", savedToAccount: true },
+  };
+
+  it("renders no verdict while the day is still open", () => {
+    renderClose();
+
+    expect(screen.queryByTestId("close-moment-verdict")).toBeNull();
+    expect(screen.getByTestId("close-moment-close-day")).toBeInTheDocument();
+  });
+
+  it("replaces the action with the verdict once the day is closed", () => {
+    renderClose({ vm: closedVm });
+
+    expect(screen.getByTestId("close-moment-verdict")).toHaveTextContent(
+      "Today is closed.",
+    );
+    // THE FINDING: the button is gone, not merely disabled. A day's ending
+    // must not look like an action the user failed to finish.
+    expect(screen.queryByTestId("close-moment-close-day")).toBeNull();
+    // The future-tense orientation line goes with it — it described an action
+    // that has now happened.
+    expect(screen.queryByTestId("close-moment-orientation")).toBeNull();
+  });
+
+  it("shows the payoff from the counts the card is already showing", () => {
+    renderClose({
+      vm: {
+        ...closedVm,
+        completedToday: 2,
+        missedToday: 1,
+        carryForward: [{ taskId: "t-1", title: "Draft the brief" }],
+      },
+      confirmedWins: [{ title: "Shipped it", areaLabel: "Work" }],
+    });
+
+    expect(screen.getByTestId("close-moment-verdict-payoff")).toHaveTextContent(
+      "2 completed · 1 missed · 1 carried forward · 1 win logged.",
+    );
+  });
+
+  it("says a quiet day was quiet rather than rendering a blank", () => {
+    // Target Card 7: payoffs render content, never blank states. Zero is the
+    // good news on a clean day, not an absence.
+    renderClose({ vm: closedVm });
+
+    expect(screen.getByTestId("close-moment-verdict-payoff")).toHaveTextContent(
+      "2 completed · 0 missed · nothing carried forward.",
+    );
+  });
+
+  it("names the account when the account has the close", () => {
+    renderClose({ vm: closedVm });
+
+    expect(
+      screen.getByTestId("close-moment-verdict-destination"),
+    ).toHaveTextContent("Today's close is saved to your account.");
+  });
+
+  it("names the device, and does not claim the account, when it is unsynced", () => {
+    // The audit saw the inverse of this go wrong: a toast claiming device-only
+    // while Settings said "Saved to account". One phrase, from the single home
+    // for it, driven by the resolved tier.
+    renderClose({
+      vm: {
+        ...closedVm,
+        dayClose: { periodStart: "2026-07-27", savedToAccount: false },
+      },
+    });
+
+    const destination = screen.getByTestId("close-moment-verdict-destination");
+    expect(destination).toHaveTextContent(
+      "Today's close is saved on this device and not in your account yet.",
+    );
+    expect(destination).not.toHaveTextContent("saved to your account.");
+  });
+});

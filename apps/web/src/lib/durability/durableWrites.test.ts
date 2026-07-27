@@ -263,6 +263,66 @@ describe("replayDurableWrites", () => {
     expect(await pendingWriteCount("review")).toBe(1);
   });
 
+  it("drops a review the account already holds for that day, instead of retrying forever", async () => {
+    // Final UX Loop C1, Target Cards 1+7 (audit P0#4). Migration
+    // 20260727120000 makes a second daily close RAISE rather than be ignored
+    // (it is deliberately not the upsert's ON CONFLICT arbiter). Every other
+    // throw in this dispatcher means "keep it queued"; this one must not, or
+    // a duplicate close would be re-sent on every mount and every reconnect
+    // for the rest of the account's life.
+    const ops = serverOps({
+      syncReview: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'duplicate key value violates unique constraint "review_entries_user_daily_close_key"',
+          ),
+        ),
+    });
+    await journalReviewWrite({
+      workflowAreaId: "area-local-1",
+      persistedAreaId: PERSISTED_AREA,
+      reviewType: "daily",
+      periodStart: CONFIRMED_ON,
+      periodEnd: CONFIRMED_ON,
+      summaryJson: { verdict: "saved" },
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    // Terminal SUCCESS: the day is closed, the account has it, nothing is
+    // left to send.
+    expect(summary).toMatchObject({ synced: 1, failed: 0 });
+    expect(await pendingWriteCount("review")).toBe(0);
+  });
+
+  it("still keeps a review queued when the failure is a DIFFERENT unique violation", async () => {
+    // The narrowness of the branch above, proven. A client_write_id collision
+    // means something else entirely and must not be read as "already closed".
+    const ops = serverOps({
+      syncReview: vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'duplicate key value violates unique constraint "review_entries_user_client_write_id_key"',
+          ),
+        ),
+    });
+    await journalReviewWrite({
+      workflowAreaId: "area-local-1",
+      persistedAreaId: PERSISTED_AREA,
+      reviewType: "daily",
+      periodStart: CONFIRMED_ON,
+      periodEnd: CONFIRMED_ON,
+      summaryJson: { verdict: "saved" },
+    });
+
+    const summary = await replayDurableWrites(ops);
+
+    expect(summary).toMatchObject({ synced: 0, failed: 1 });
+    expect(await pendingWriteCount("review")).toBe(1);
+  });
+
   it("keeps a review queued when its selected area has no account id yet", async () => {
     // THE PRE-#737-A GUARANTEE, PRESERVED. `persistReviewEntry` used to refuse
     // to write when `selectedAreaId && !persistedAreaId` — an area was chosen

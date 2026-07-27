@@ -718,7 +718,18 @@ export function CloseMoment({
               className="grid gap-1 border-t border-border/50 pt-4"
               data-testid="close-moment-verdict"
             >
-              <p className="text-sm font-medium">Today is closed.</p>
+              {/* The emerald tick is this file's existing idiom for "this is
+                  recorded" — it already marks every confirmed win and every
+                  approved rollup above. The day's own ending gets the same
+                  mark rather than a new visual language, and one size-step
+                  above body text so the card reads as concluded at a glance
+                  without shouting. */}
+              <p className="flex items-center gap-2 text-base font-[650] tracking-tight">
+                <span aria-hidden className="text-emerald-500">
+                  ✓
+                </span>
+                Today is closed.
+              </p>
               <p
                 className="text-xs text-muted-foreground"
                 data-testid="close-moment-verdict-payoff"
