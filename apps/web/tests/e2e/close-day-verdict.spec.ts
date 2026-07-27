@@ -76,9 +76,14 @@ test.beforeEach(async ({ page }) => {
  * genuinely recorded — the exact precondition the audit ran under.
  * 2026-07-27T12:30Z is 2026-07-28 02:30 in Kiritimati.
  */
-function buildSeedState() {
+function buildSeedState(fixClock = true) {
   const created = "2026-07-01T00:00:00.000Z";
-  const blockStart = "2026-07-27T12:30:00.000Z";
+  // Under the fixed clock the block is pinned to the pinned day. On the real
+  // clock (the reload test) it is pinned to NOW, so `1 COMPLETED TODAY` is
+  // true on whatever day the suite happens to run.
+  const blockStart = fixClock
+    ? "2026-07-27T12:30:00.000Z"
+    : new Date().toISOString();
 
   return {
     areas: [
@@ -191,17 +196,39 @@ async function reviewWrites(page: Page) {
   );
 }
 
-/** Pin clock + moment, seed, and land on Close. */
-async function openCloseMoment(page: Page) {
-  await page.clock.setFixedTime(new Date(PINNED_NOW));
+/**
+ * Seed and land on Close.
+ *
+ * THE MOMENT IS PINNED BY THE URL, NOT ONLY BY STORAGE.
+ * -----------------------------------------------------
+ * `pinMomentPreference` is still applied (it is the house pin, and it covers
+ * the first load), but the deep link is what makes a RELOAD deterministic: a
+ * query parameter is part of the document address and survives `page.reload()`
+ * unconditionally, whereas an `addInitScript` seed is a mechanism that can
+ * silently no-op. It did: on one full-suite run this spec reloaded into the
+ * Start moment on the real wall-clock date, meaning neither init script had
+ * taken effect on that navigation. Belt (deep link) and braces (preference).
+ *
+ * `fixClock` is opt-out for the same reason. A FAKE clock is the right pin for
+ * asserting WHICH DAY a close is filed under (test 1), but it is another
+ * init-script-installed mechanism, and the reload test's claim — "the verdict
+ * outlives the document" — does not need one: the write and the readback use
+ * the same real clock on both sides of the reload, so they agree by
+ * construction. The timezone pin (UTC+14) stays on for both, so the local day
+ * still differs from the UTC day for most of the day on every runner.
+ */
+async function openCloseMoment(page: Page, { fixClock = true } = {}) {
+  if (fixClock) {
+    await page.clock.setFixedTime(new Date(PINNED_NOW));
+  }
   await pinMomentPreference(page, "close");
   await page.addInitScript(
     ({ key, value }) => {
       window.sessionStorage.setItem(key, JSON.stringify(value));
     },
-    { key: STORAGE_KEY, value: buildSeedState() },
+    { key: STORAGE_KEY, value: buildSeedState(fixClock) },
   );
-  await page.goto("/");
+  await page.goto("/?moment=close");
   await expect(page.getByTestId("today-moments")).toBeVisible();
   await expect(page.getByTestId("close-moment")).toBeVisible();
 }
@@ -258,7 +285,10 @@ test.describe("close the day renders a verdict, exactly once", () => {
     page,
     context,
   }) => {
-    await openCloseMoment(page);
+    // Real clock here — see `openCloseMoment`'s note. The claim under test is
+    // persistence across a reload, and pinning a fake instant would put an
+    // init-script-installed mechanism between the write and the readback.
+    await openCloseMoment(page, { fixClock: false });
     await page.getByTestId("close-moment-close-day").click();
     await expect(page.getByTestId("close-moment-verdict")).toBeVisible();
     await expect.poll(async () => (await reviewWrites(page)).length).toBe(1);
@@ -276,9 +306,8 @@ test.describe("close the day renders a verdict, exactly once", () => {
     // the readback honest rather than a per-tab memory — the verdict has to
     // come from the journal, the tier that actually holds the write.
     const newTab = await context.newPage();
-    await newTab.clock.setFixedTime(new Date(PINNED_NOW));
     await pinMomentPreference(newTab, "close");
-    await newTab.goto("/");
+    await newTab.goto("/?moment=close");
     await expect(newTab.getByTestId("close-moment")).toBeVisible();
     await expect(newTab.getByTestId("close-moment-verdict")).toBeVisible();
     await expect(newTab.getByTestId("close-moment-close-day")).toHaveCount(0);
