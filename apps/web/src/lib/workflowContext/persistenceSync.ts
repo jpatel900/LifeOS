@@ -16,27 +16,21 @@ import type {
   Phase2TimeBlockProposal,
 } from "@lifeos/schemas";
 import {
-  acceptTimeBlockProposal,
   applyTaskReviewTransition,
   createCaptureItem,
-  createReviewEntry,
-  createTask,
   createTimeBlockProposal,
   editTimeBlockProposal,
-  findOrCreatePerson,
-  recordPersonLinkAcceptance,
   rejectTimeBlockProposal,
-  resolveCaptureItems,
-  supersedePendingTimeBlockProposalsForTask,
   unplanCalendarBlock,
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "../data/workflow";
-import { normalizePersonName } from "../data/personLinks";
 import {
   hasPendingWrite,
   journalExecutionSessionWrite,
+  journalPlanPlacementWrite,
   journalReviewWrite,
+  journalTaskDraftAcceptWrite,
 } from "../durability/durableWrites";
 import { savedOnThisDeviceBanner } from "../statusVocabulary";
 import { createSupabaseBrowserClient } from "../supabase/browser";
@@ -159,202 +153,171 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     await syncPersistedWorkflowRows(client);
   }
 
+  /**
+   * #737 C1 S3: the triage decision reaches the DEVICE before the network.
+   *
+   * What this replaces: the whole account sequence used to run inline here,
+   * behind `if (!client || !persistedAreaId) { markLocalOnly(...); return; }`.
+   * Signed out, offline, or in an area that had not synced yet, the accepted
+   * task existed only in the reducer's per-tab `sessionStorage` mirror while
+   * the banner said it was "saved on this device" — true only until the tab
+   * closed. The sequence itself now lives in
+   * `data/workflow/draftAccept.ts` and runs as a REPLAY of the journal entry,
+   * step-by-step idempotent, so it can be retried until the account takes it.
+   *
+   * The payload is a snapshot of the draft AS THE USER LEFT IT, which is what
+   * makes an edit-then-accept durable: the reducer drops the draft the instant
+   * it is accepted, so there is nothing to re-read at replay time.
+   */
   async function persistAcceptedTaskDraft(
     draft: Phase2TaskDraft,
     localTask: Phase2MockTask,
     localProposal: Phase2TimeBlockProposal | null,
     status: "active" | "backlog",
   ) {
-    const client = createSupabaseBrowserClient();
     const persistedAreaId = persistedAreaIdForWorkflowId(
       draft.area_id,
       persistedAreasRef.current,
     );
-
-    if (!client || !persistedAreaId) {
-      markLocalOnly(savedOnThisDeviceBanner("Your triage decision"));
-      return;
-    }
-
-    const sourceCaptureId = persistedIdForLocalId(
+    const persistedCaptureId = persistedIdForLocalId(
       draft.capture_item_id,
       persistedCaptureIdByLocalIdRef.current,
     );
 
-    // S3 (#255): resolve the approved person links before the task insert (FK
-    // ordering). A mention that survived to accept was not rejected, so it is
-    // user-approved. For each such mention we find-or-create the person
-    // (idempotent per normalized_name, re-checked at accept time), then write the
-    // link column for its role. Multiple mentions of one role map to a single
-    // column, so the first resolved id wins deterministically. role "mention" is
-    // informational — it creates the person but links no column. A find/create
-    // failure degrades that one link to no-link; the task still lands (NS-INV-4).
-    const acceptTime = new Date().toISOString();
-    let waitingOnPersonId: string | null = null;
-    let committedToPersonId: string | null = null;
-    const acceptedLinks: Array<{
-      name: string;
-      role: "waiting_on" | "committed_to" | "mention";
-      personId: string | null;
-    }> = [];
+    // Pinned at the moment the user accepted. It feeds `waiting_on_since`, and
+    // a replay running tomorrow must not claim the user has been waiting on
+    // someone only since the retry.
+    const acceptedAt = new Date().toISOString();
 
-    for (const mention of draft.person_mentions) {
-      // role "mention" is informational only (deliverable b): it links no column
-      // and creates no person row — approval to create a person (FR-017) comes
-      // only with a waiting_on / committed_to link. Its pending suggestion is
-      // still resolved to accepted below.
-      let personId: string | null = null;
-      if (mention.role === "waiting_on" || mention.role === "committed_to") {
-        try {
-          const personResult = await findOrCreatePerson(client, {
-            display_name: mention.name,
-            normalized_name: normalizePersonName(mention.name),
-          });
-          personId = personResult.person?.id ?? null;
-        } catch {
-          // A person find/create failure degrades this link to no-link; never
-          // block the task creation the user just approved.
-          personId = null;
-        }
-      }
-
-      if (personId) {
-        if (mention.role === "waiting_on" && !waitingOnPersonId) {
-          waitingOnPersonId = personId;
-        } else if (mention.role === "committed_to" && !committedToPersonId) {
-          committedToPersonId = personId;
-        }
-      }
-
-      acceptedLinks.push({ name: mention.name, role: mention.role, personId });
-    }
-
-    // committed_to link OR an approved commitment draft flag both set the task as
-    // a commitment (deliverable b honors draft.is_commitment without a person).
-    const isCommitment = draft.is_commitment || committedToPersonId !== null;
-
-    const taskResult = await createTask(client, {
-      area_id: persistedAreaId,
-      source_capture_item_id: sourceCaptureId,
-      title: draft.title,
-      description: draft.description,
-      status,
-      priority_confidence: draft.confidence,
-      task_type: draft.task_type ?? "task",
-      is_reversible:
-        draft.task_type === "decision" ? (draft.is_reversible ?? null) : null,
-      due_at: draft.due_at ?? null,
-      estimated_minutes_low: draft.estimated_minutes_low,
-      estimated_minutes_high: draft.estimated_minutes_high,
-      first_tiny_step: draft.first_tiny_step,
-      waiting_on_person_id: waitingOnPersonId,
-      waiting_on_since: waitingOnPersonId ? acceptTime : null,
-      is_commitment: isCommitment,
-      committed_to_person_id: committedToPersonId,
-    });
-
-    if (taskResult.provider !== "supabase") {
+    let journalled;
+    try {
+      journalled = await journalTaskDraftAcceptWrite({
+        workflowDraftId: draft.id,
+        workflowTaskId: localTask.id,
+        workflowAreaId: draft.area_id,
+        persistedAreaId,
+        workflowCaptureId: draft.capture_item_id,
+        persistedCaptureId,
+        title: draft.title,
+        description: draft.description,
+        confidence: draft.confidence,
+        taskType: draft.task_type ?? null,
+        isReversible: draft.is_reversible ?? null,
+        dueAt: draft.due_at ?? null,
+        estimatedMinutesLow: draft.estimated_minutes_low,
+        estimatedMinutesHigh: draft.estimated_minutes_high,
+        firstTinyStep: draft.first_tiny_step,
+        isCommitment: draft.is_commitment,
+        personMentions: draft.person_mentions.map((mention) => ({
+          name: mention.name,
+          role: mention.role,
+        })),
+        taskStatus: status,
+        acceptedAt,
+        workflowProposalId:
+          localProposal && status === "active" ? localProposal.id : null,
+        proposedStart:
+          localProposal && status === "active"
+            ? localProposal.proposed_start
+            : null,
+        proposedEnd:
+          localProposal && status === "active"
+            ? localProposal.proposed_end
+            : null,
+        rationale:
+          localProposal && status === "active" ? localProposal.rationale : null,
+      });
+    } catch {
+      // The device itself refused to hold it. Nothing has the decision, and the
+      // banner must name that cause rather than blaming the account.
+      markDeviceStorageBlocked();
       return;
     }
 
-    // Resolve the pending person-link proposals to accepted (mirrors the
-    // rejection path). Fire-and-forget — a learning-write failure never affects
-    // the accept flow (NS-INV-3).
-    for (const link of acceptedLinks) {
-      recordPersonLinkAcceptance(client, {
-        area_id: persistedAreaId,
-        draft_id: draft.id,
-        name: link.name,
-        role: link.role,
-        matched_person_id: link.personId,
-      });
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the decision stays journalled and the next replay retries.
     }
 
-    persistedTaskIdByLocalIdRef.current.set(localTask.id, taskResult.task.id);
-
-    if (localProposal && status === "active") {
-      const proposalResult = await createTimeBlockProposal(client, {
-        task_id: taskResult.task.id,
-        proposed_start: localProposal.proposed_start,
-        proposed_end: localProposal.proposed_end,
-        rationale_note: localProposal.rationale,
-      });
-      if (proposalResult.provider === "supabase") {
-        persistedProposalIdByLocalIdRef.current.set(
-          localProposal.id,
-          proposalResult.proposal.id,
-        );
-      }
+    if (await hasPendingWrite(journalled.client_write_id)) {
+      markLocalOnly(savedOnThisDeviceBanner("Your triage decision"));
+      return;
     }
 
-    // Final UX Loop C1, Target Card 1 (audit P0#3): the local reducer already
-    // moved this capture to "resolved" (lib/workflow/triage.ts). Mirror that to
-    // the account, or the next session rehydrates the thought from Supabase at
-    // status "new" and offers back work the user already decided.
-    //
-    // Ordered after the task (and its proposal) on purpose: the task is what
-    // MAKES the capture resolved, so a failed insert must leave the capture
-    // waiting rather than resolve a thought that produced nothing.
-    //
-    // NOT wrapped in try/catch — unlike the person-link writes above, which are
-    // documented best-effort (NS-INV-4), a status write that fails silently is
-    // exactly the bug this fixes. It propagates to `markPersistedSaveFailure`
-    // in `acceptTaskDraftWithPersistence`, the house way to say a save did not
-    // land. A null `sourceCaptureId` (capture never reached the account) is a
-    // no-op, not an error.
-    await resolveCaptureItems(client, [sourceCaptureId]);
-
-    await syncPersistedWorkflowRows(client);
+    const client = createSupabaseBrowserClient();
+    if (client) await syncPersistedWorkflowRows(client);
   }
 
+  /**
+   * #737 C1 S3: a placed block reaches the DEVICE before the network.
+   *
+   * What this replaces: `createTimeBlockProposal` -> `accept_time_block_proposal`
+   * -> `supersedePendingTimeBlockProposalsForTask`, three round trips behind
+   * `if (!client || !persistedTaskId) { markLocalOnly("Your plan"); return; }`.
+   * Beyond the device-durability gap, that sequence could half-land: a proposal
+   * row with no block. Replay now calls `place_time_block`, which does all
+   * three inside ONE transaction under the journal entry's `client_write_id`.
+   */
   async function persistPlannedTask(
     localTaskId: string,
     localProposal: Phase2TimeBlockProposal,
     localBlock: Phase2MockCalendarBlock,
   ) {
-    const client = createSupabaseBrowserClient();
-    const persistedTaskId = persistedIdForLocalId(
-      localTaskId,
-      persistedTaskIdByLocalIdRef.current,
-    );
+    await journalAndReplayPlacement({
+      workflowTaskId: localTaskId,
+      persistedTaskId: persistedIdForLocalId(
+        localTaskId,
+        persistedTaskIdByLocalIdRef.current,
+      ),
+      workflowProposalId: localProposal.id,
+      // Freshly minted by the reducer, so the account cannot already hold it —
+      // `place_time_block` mints the row.
+      persistedProposalId: null,
+      workflowBlockId: localBlock.id,
+      proposedStart: localProposal.proposed_start,
+      proposedEnd: localProposal.proposed_end,
+      rationale: localProposal.rationale,
+    });
+  }
 
-    if (!client || !persistedTaskId) {
+  /**
+   * Journal one placement and try to deliver it, shared by both placement
+   * paths. Kept as one function because the two differ ONLY in whether the
+   * account already holds a proposal row — everything the user sees, and every
+   * truth claim made about it, is identical.
+   */
+  async function journalAndReplayPlacement(input: {
+    workflowTaskId: string;
+    persistedTaskId: string | null;
+    workflowProposalId: string | null;
+    persistedProposalId: string | null;
+    workflowBlockId: string | null;
+    proposedStart: string;
+    proposedEnd: string;
+    rationale: string | null;
+  }) {
+    let journalled;
+    try {
+      journalled = await journalPlanPlacementWrite(input);
+    } catch {
+      markDeviceStorageBlocked();
+      return;
+    }
+
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the placement stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
       markLocalOnly(savedOnThisDeviceBanner("Your plan"));
       return;
     }
 
-    const proposalResult = await createTimeBlockProposal(client, {
-      task_id: persistedTaskId,
-      proposed_start: localProposal.proposed_start,
-      proposed_end: localProposal.proposed_end,
-      rationale_note: localProposal.rationale,
-    });
-    if (proposalResult.provider !== "supabase") {
-      return;
-    }
-
-    persistedProposalIdByLocalIdRef.current.set(
-      localProposal.id,
-      proposalResult.proposal.id,
-    );
-
-    const acceptResult = await acceptTimeBlockProposal(
-      client,
-      proposalResult.proposal.id,
-    );
-    if (acceptResult.provider === "supabase") {
-      persistedBlockIdByLocalIdRef.current.set(
-        localBlock.id,
-        acceptResult.block.id,
-      );
-    }
-
-    // #580: mirror the local supersede-on-place transition so a later sync
-    // cannot resurrect a pending proposal for the task just placed. Runs
-    // after the accept RPC, so the accepted proposal is already settled.
-    await supersedePendingTimeBlockProposalsForTask(client, persistedTaskId);
-
-    await syncPersistedWorkflowRows(client);
+    const client = createSupabaseBrowserClient();
+    if (client) await syncPersistedWorkflowRows(client);
   }
 
   async function persistCreatedLocalProposal(
@@ -429,74 +392,38 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     await syncPersistedWorkflowRows(client);
   }
 
+  /**
+   * #737 C1 S3: the OTHER placement path — accepting a proposal — journalled
+   * on exactly the same terms.
+   *
+   * The one difference from `persistPlannedTask` is that the account may
+   * ALREADY hold this proposal, so its id is pinned when known. Passing it
+   * through matters: without it `place_time_block` would mint a second
+   * proposal row for one logical block and leave the original pending. That is
+   * why both paths were wired in this slice rather than one — shipping the
+   * `client_write_id` column with one placement route un-stamped would leave a
+   * silent duplicate-producing path behind.
+   */
   async function persistAcceptedLocalProposal(
     localProposal: Phase2TimeBlockProposal,
     localBlock: Phase2MockCalendarBlock | null,
   ) {
-    const client = createSupabaseBrowserClient();
-    let persistedProposalId = persistedIdForLocalId(
-      localProposal.id,
-      persistedProposalIdByLocalIdRef.current,
-    );
-
-    if (!client) {
-      markLocalOnly(savedOnThisDeviceBanner("Your accepted proposal"));
-      return;
-    }
-
-    if (!persistedProposalId) {
-      const persistedTaskId = persistedIdForLocalId(
+    await journalAndReplayPlacement({
+      workflowTaskId: localProposal.task_id,
+      persistedTaskId: persistedIdForLocalId(
         localProposal.task_id,
         persistedTaskIdByLocalIdRef.current,
-      );
-
-      if (!persistedTaskId) {
-        markLocalOnly(savedOnThisDeviceBanner("Your accepted proposal"));
-        return;
-      }
-
-      const proposalResult = await createTimeBlockProposal(client, {
-        task_id: persistedTaskId,
-        proposed_start: localProposal.proposed_start,
-        proposed_end: localProposal.proposed_end,
-        rationale_note: localProposal.rationale,
-      });
-      if (proposalResult.provider !== "supabase") {
-        return;
-      }
-      persistedProposalId = proposalResult.proposal.id;
-      persistedProposalIdByLocalIdRef.current.set(
+      ),
+      workflowProposalId: localProposal.id,
+      persistedProposalId: persistedIdForLocalId(
         localProposal.id,
-        proposalResult.proposal.id,
-      );
-    }
-
-    const acceptResult = await acceptTimeBlockProposal(
-      client,
-      persistedProposalId,
-    );
-    if (acceptResult.provider === "supabase" && localBlock) {
-      persistedBlockIdByLocalIdRef.current.set(
-        localBlock.id,
-        acceptResult.block.id,
-      );
-    }
-
-    // #580: mirror the local supersede-on-place transition (accept = place)
-    // so sibling pending proposal rows for the task cannot come back as
-    // active on the next sync. Runs after the accept RPC settles this one.
-    const persistedTaskIdForSupersede = persistedIdForLocalId(
-      localProposal.task_id,
-      persistedTaskIdByLocalIdRef.current,
-    );
-    if (persistedTaskIdForSupersede) {
-      await supersedePendingTimeBlockProposalsForTask(
-        client,
-        persistedTaskIdForSupersede,
-      );
-    }
-
-    await syncPersistedWorkflowRows(client);
+        persistedProposalIdByLocalIdRef.current,
+      ),
+      workflowBlockId: localBlock?.id ?? null,
+      proposedStart: localProposal.proposed_start,
+      proposedEnd: localProposal.proposed_end,
+      rationale: localProposal.rationale,
+    });
   }
 
   async function persistUnplannedBlock(localBlockId: string) {

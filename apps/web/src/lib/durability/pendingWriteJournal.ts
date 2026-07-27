@@ -103,7 +103,17 @@ export type PendingWriteEntity =
   // #737 C1 card 1 (slice S4): the outcome the user picked in the end sheet.
   // The ONLY execution-session write there is — a running session carries no
   // outcome and is device state, never a journal entry.
-  | "execution_session";
+  | "execution_session"
+  // #737 C1 slice S3: a block the user put on the day. Covers BOTH placement
+  // paths (`planTaskAtHour` and `acceptLocalProposal`) because they produce the
+  // same thing — one scheduled block — and differ only in whether the account
+  // already holds a proposal row for it.
+  | "plan_placement"
+  // #737 C1 slice S3: a triage draft the user accepted, to today or to the
+  // backlog. The payload carries the draft AS EDITED, which is what makes an
+  // edit-then-accept durable; a draft edit with no accept has no server
+  // destination and is deliberately NOT journalled (see `durableWrites.ts`).
+  | "task_draft_accept";
 
 export type PendingWritePayload = Record<string, unknown>;
 

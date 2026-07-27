@@ -52,6 +52,8 @@ import {
   syncJournaledWin,
   syncJournaledReviewEntry,
   syncJournaledExecutionSession,
+  placeTimeBlock,
+  syncJournaledTaskDraftAccept,
   listAreas,
   listOverrideRecords,
   listRollupSummaries,
@@ -538,6 +540,88 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
                 String(payload.workflow_area_id),
                 persistedAreasRef.current,
               ),
+
+        // --- #737 C1 S3: plans ------------------------------------------
+        syncPlanPlacement: async (args) => {
+          const result = await placeTimeBlock(client, args);
+          return {
+            provider: result.provider,
+            persistedProposalId: result.proposal?.id ?? null,
+            persistedBlockId: result.block?.id ?? null,
+          };
+        },
+        resolvePlanPlacementIds: (payload) => ({
+          persistedTaskId: persistedIdForLocalId(
+            String(payload.workflow_task_id),
+            persistedTaskIdByLocalIdRef.current,
+          ),
+          // Null is a legitimate answer, not a missing mapping: it means the
+          // account holds no proposal for this placement and `place_time_block`
+          // must mint one.
+          persistedProposalId:
+            payload.workflow_proposal_id === null
+              ? null
+              : persistedIdForLocalId(
+                  String(payload.workflow_proposal_id),
+                  persistedProposalIdByLocalIdRef.current,
+                ),
+        }),
+        // Without this the block would be delivered and still look unsynced to
+        // this device, so every later edit, unplan, or focus session on it
+        // would fall back to its local-only path.
+        recordPlanPlacementIds: (payload, result) => {
+          if (payload.workflow_proposal_id && result.persistedProposalId) {
+            persistedProposalIdByLocalIdRef.current.set(
+              String(payload.workflow_proposal_id),
+              result.persistedProposalId,
+            );
+          }
+          if (payload.workflow_block_id && result.persistedBlockId) {
+            persistedBlockIdByLocalIdRef.current.set(
+              String(payload.workflow_block_id),
+              result.persistedBlockId,
+            );
+          }
+        },
+
+        // --- #737 C1 S3: triage drafts ----------------------------------
+        syncTaskDraftAccept: async (args) => {
+          const result = await syncJournaledTaskDraftAccept(client, args);
+          return {
+            provider: result.provider,
+            persistedTaskId: result.task?.id ?? null,
+            persistedProposalId: result.proposal?.id ?? null,
+          };
+        },
+        resolveTaskDraftAcceptIds: (payload) => ({
+          persistedAreaId: persistedAreaIdForWorkflowId(
+            String(payload.workflow_area_id),
+            persistedAreasRef.current,
+          ),
+          // A null capture id is legitimate — the capture may never have
+          // reached the account — so it is left null rather than blocking.
+          persistedCaptureId:
+            payload.workflow_capture_id === null
+              ? null
+              : persistedIdForLocalId(
+                  String(payload.workflow_capture_id),
+                  persistedCaptureIdByLocalIdRef.current,
+                ),
+        }),
+        recordTaskDraftAcceptIds: (payload, result) => {
+          if (result.persistedTaskId) {
+            persistedTaskIdByLocalIdRef.current.set(
+              String(payload.workflow_task_id),
+              result.persistedTaskId,
+            );
+          }
+          if (payload.workflow_proposal_id && result.persistedProposalId) {
+            persistedProposalIdByLocalIdRef.current.set(
+              String(payload.workflow_proposal_id),
+              result.persistedProposalId,
+            );
+          }
+        },
       });
     }, []);
 

@@ -139,6 +139,87 @@ export interface ExecutionSessionWritePayload {
   [key: string]: unknown;
 }
 
+/**
+ * Journalled shape of a placed time block — #737 C1 slice S3.
+ *
+ * ONE entity for both placement paths. `planTaskAtHour` mints a fresh local
+ * proposal (so `persisted_proposal_id` is null and the server mints one too);
+ * `acceptLocalProposal` accepts a proposal the account may already hold (so the
+ * id is pinned when known and re-resolved when not). The user-visible result is
+ * identical — a block on the day — so there is one journal entry shape and one
+ * server call.
+ */
+export interface PlanPlacementWritePayload {
+  /** Workflow-local task id, so replay can re-resolve if needed. */
+  workflow_task_id: string;
+  /** Account task id when it was already known at placement time. */
+  persisted_task_id: string | null;
+  /** Workflow-local proposal id, or null when the placement minted none. */
+  workflow_proposal_id: string | null;
+  /** Account proposal id when it was already known at placement time. */
+  persisted_proposal_id: string | null;
+  /** Workflow-local block id, so the caller can map the account id back. */
+  workflow_block_id: string | null;
+  /**
+   * Absolute instants, pinned at the moment the user placed the block.
+   * NOT an hour to be re-derived at replay time: the reducer resolves "10am"
+   * against the user's LOCAL day when they act, and a replay running the next
+   * morning — or on a UTC runner — would resolve the same hour to a different
+   * instant.
+   */
+  proposed_start: string;
+  proposed_end: string;
+  rationale: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Journalled shape of an accepted triage draft — #737 C1 slice S3.
+ *
+ * Self-contained by design: the draft is removed from the reducer the instant
+ * it is accepted, so nothing can be re-read from state at replay time. Every
+ * field the account write needs is copied here AS THE USER LEFT IT, which is
+ * exactly why an edit-then-accept survives a closed tab.
+ */
+export interface TaskDraftAcceptWritePayload {
+  /** Workflow-local draft id — the join key for the learning records. */
+  workflow_draft_id: string;
+  /** Workflow-local task id the reducer minted, for the id mapping. */
+  workflow_task_id: string;
+  /** Workflow-local area id, so replay can re-resolve the account area. */
+  workflow_area_id: string;
+  /** Account area id when it was already known at accept time. */
+  persisted_area_id: string | null;
+  /** Workflow-local capture id, so replay can re-resolve. */
+  workflow_capture_id: string | null;
+  /** Account capture id when it was already known at accept time. */
+  persisted_capture_id: string | null;
+  title: string;
+  description: string | null;
+  confidence: number | null;
+  task_type: string | null;
+  is_reversible: boolean | null;
+  due_at: string | null;
+  estimated_minutes_low: number | null;
+  estimated_minutes_high: number | null;
+  first_tiny_step: string | null;
+  is_commitment: boolean;
+  person_mentions: Array<{
+    name: string;
+    role: "waiting_on" | "committed_to" | "mention";
+  }>;
+  /** Exactly what the user chose: today, or the backlog. */
+  task_status: "active" | "backlog";
+  /** Pinned at accept time — feeds `waiting_on_since`, never the replay clock. */
+  accepted_at: string;
+  /** Workflow-local proposal id the accept minted alongside an active task. */
+  workflow_proposal_id: string | null;
+  proposed_start: string | null;
+  proposed_end: string | null;
+  rationale: string | null;
+  [key: string]: unknown;
+}
+
 export interface JournalWinInput {
   workflowTaskId: string;
   persistedTaskId: string | null;
@@ -239,6 +320,99 @@ export function journalReviewWrite(
   });
 }
 
+export interface JournalPlanPlacementInput {
+  workflowTaskId: string;
+  persistedTaskId: string | null;
+  workflowProposalId: string | null;
+  persistedProposalId: string | null;
+  workflowBlockId: string | null;
+  proposedStart: string;
+  proposedEnd: string;
+  rationale: string | null;
+}
+
+export interface JournalTaskDraftAcceptInput {
+  workflowDraftId: string;
+  workflowTaskId: string;
+  workflowAreaId: string;
+  persistedAreaId: string | null;
+  workflowCaptureId: string | null;
+  persistedCaptureId: string | null;
+  title: string;
+  description: string | null;
+  confidence: number | null;
+  taskType: string | null;
+  isReversible: boolean | null;
+  dueAt: string | null;
+  estimatedMinutesLow: number | null;
+  estimatedMinutesHigh: number | null;
+  firstTinyStep: string | null;
+  isCommitment: boolean;
+  personMentions: Array<{
+    name: string;
+    role: "waiting_on" | "committed_to" | "mention";
+  }>;
+  taskStatus: "active" | "backlog";
+  acceptedAt: string;
+  workflowProposalId: string | null;
+  proposedStart: string | null;
+  proposedEnd: string | null;
+  rationale: string | null;
+}
+
+/** Journal one placed time block. Throws on the same terms as the win path. */
+export function journalPlanPlacementWrite(
+  input: JournalPlanPlacementInput,
+): Promise<PendingWrite<PlanPlacementWritePayload>> {
+  return enqueuePendingWrite<PlanPlacementWritePayload>({
+    entity: "plan_placement",
+    payload: {
+      workflow_task_id: input.workflowTaskId,
+      persisted_task_id: input.persistedTaskId,
+      workflow_proposal_id: input.workflowProposalId,
+      persisted_proposal_id: input.persistedProposalId,
+      workflow_block_id: input.workflowBlockId,
+      proposed_start: input.proposedStart,
+      proposed_end: input.proposedEnd,
+      rationale: input.rationale,
+    },
+  });
+}
+
+/** Journal one accepted triage draft. Throws on the same terms as the win path. */
+export function journalTaskDraftAcceptWrite(
+  input: JournalTaskDraftAcceptInput,
+): Promise<PendingWrite<TaskDraftAcceptWritePayload>> {
+  return enqueuePendingWrite<TaskDraftAcceptWritePayload>({
+    entity: "task_draft_accept",
+    payload: {
+      workflow_draft_id: input.workflowDraftId,
+      workflow_task_id: input.workflowTaskId,
+      workflow_area_id: input.workflowAreaId,
+      persisted_area_id: input.persistedAreaId,
+      workflow_capture_id: input.workflowCaptureId,
+      persisted_capture_id: input.persistedCaptureId,
+      title: input.title,
+      description: input.description,
+      confidence: input.confidence,
+      task_type: input.taskType,
+      is_reversible: input.isReversible,
+      due_at: input.dueAt,
+      estimated_minutes_low: input.estimatedMinutesLow,
+      estimated_minutes_high: input.estimatedMinutesHigh,
+      first_tiny_step: input.firstTinyStep,
+      is_commitment: input.isCommitment,
+      person_mentions: input.personMentions,
+      task_status: input.taskStatus,
+      accepted_at: input.acceptedAt,
+      workflow_proposal_id: input.workflowProposalId,
+      proposed_start: input.proposedStart,
+      proposed_end: input.proposedEnd,
+      rationale: input.rationale,
+    },
+  });
+}
+
 /** The account-side call for a journalled win. */
 export interface SyncWinArgs {
   client_write_id: string;
@@ -276,6 +450,59 @@ export interface SyncExecutionSessionArgs {
   defer_task: boolean;
 }
 
+/** The account-side call for a journalled placement. */
+export interface SyncPlanPlacementArgs {
+  client_write_id: string;
+  task_id: string;
+  proposal_id: string | null;
+  proposed_start: string;
+  proposed_end: string;
+  rationale_note: string | null;
+}
+
+/** What the account gave back for a placement, so ids can be mapped locally. */
+export interface SyncPlanPlacementResult {
+  provider: "mock" | "supabase";
+  persistedProposalId: string | null;
+  persistedBlockId: string | null;
+}
+
+/** The account-side call for a journalled triage accept. */
+export interface SyncTaskDraftAcceptArgs {
+  client_write_id: string;
+  area_id: string;
+  source_capture_item_id: string | null;
+  draft_id: string;
+  title: string;
+  description: string | null;
+  confidence: number | null;
+  task_type: string | null;
+  is_reversible: boolean | null;
+  due_at: string | null;
+  estimated_minutes_low: number | null;
+  estimated_minutes_high: number | null;
+  first_tiny_step: string | null;
+  is_commitment: boolean;
+  person_mentions: Array<{
+    name: string;
+    role: "waiting_on" | "committed_to" | "mention";
+  }>;
+  task_status: "active" | "backlog";
+  accepted_at: string;
+  proposal: {
+    proposed_start: string;
+    proposed_end: string;
+    rationale: string;
+  } | null;
+}
+
+/** What the account gave back for an accept, so ids can be mapped locally. */
+export interface SyncTaskDraftAcceptResult {
+  provider: "mock" | "supabase";
+  persistedTaskId: string | null;
+  persistedProposalId: string | null;
+}
+
 /**
  * Everything replay needs from outside this module. Injected rather than
  * imported so the dispatcher stays testable without a Supabase client and
@@ -306,6 +533,46 @@ export interface DurableWriteServerOps {
     persistedTaskId: string | null;
     persistedBlockId: string | null;
   };
+  /** #737 C1 S3: place a block, idempotently. */
+  syncPlanPlacement?(
+    args: SyncPlanPlacementArgs,
+  ): Promise<SyncPlanPlacementResult>;
+  /**
+   * Late resolution of a placement journalled before its task/proposal had
+   * account ids. A null TASK id keeps the write queued; a null PROPOSAL id is
+   * legitimate and means "the server should mint one".
+   */
+  resolvePlanPlacementIds?(payload: PlanPlacementWritePayload): {
+    persistedTaskId: string | null;
+    persistedProposalId: string | null;
+  };
+  /**
+   * Record what the account gave back, so later edits and sessions on this
+   * block are not treated as unsynced. Called only on a real account write.
+   */
+  recordPlanPlacementIds?(
+    payload: PlanPlacementWritePayload,
+    result: SyncPlanPlacementResult,
+  ): void;
+  /** #737 C1 S3: create the accepted draft's task, idempotently. */
+  syncTaskDraftAccept?(
+    args: SyncTaskDraftAcceptArgs,
+  ): Promise<SyncTaskDraftAcceptResult>;
+  /**
+   * Late resolution of an accept journalled before its area (and capture) had
+   * account ids. A null AREA id keeps the write queued — a task filed under a
+   * guessed area is worse than a task that arrives late. A null CAPTURE id is
+   * legitimate: the capture may never have reached the account at all.
+   */
+  resolveTaskDraftAcceptIds?(payload: TaskDraftAcceptWritePayload): {
+    persistedAreaId: string | null;
+    persistedCaptureId: string | null;
+  };
+  /** Record the account ids for the task (and proposal) the accept created. */
+  recordTaskDraftAcceptIds?(
+    payload: TaskDraftAcceptWritePayload,
+    result: SyncTaskDraftAcceptResult,
+  ): void;
 }
 
 /**
@@ -459,11 +726,124 @@ function executionSessionHandler(ops: DurableWriteServerOps) {
   };
 }
 
+function planPlacementHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as PlanPlacementWritePayload;
+    const sync = ops.syncPlanPlacement;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this plan yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const resolved = ops.resolvePlanPlacementIds?.(payload);
+    const taskId =
+      payload.persisted_task_id ?? resolved?.persistedTaskId ?? null;
+
+    if (!taskId) {
+      // A block must reference the task it holds time for. Inventing one would
+      // put the user's hour against the wrong work, so this waits for the
+      // mapping instead.
+      throw new Error(
+        "Cannot send this plan yet: its account task is not known on this device.",
+      );
+    }
+
+    // A null proposal id is NOT a missing mapping — it means the placement
+    // minted its proposal locally and the server must mint one too. Only a
+    // proposal the user actually had on the account, whose id has not synced
+    // to this device yet, would be a reason to wait; that case resolves to a
+    // value here or stays null and the server mints a fresh row, which is
+    // still exactly one block.
+    const proposalId =
+      payload.persisted_proposal_id ?? resolved?.persistedProposalId ?? null;
+
+    const result = await sync({
+      client_write_id: write.client_write_id,
+      task_id: taskId,
+      proposal_id: proposalId,
+      proposed_start: payload.proposed_start,
+      proposed_end: payload.proposed_end,
+      rationale_note: payload.rationale,
+    });
+    requireAccountWrite(result);
+    ops.recordPlanPlacementIds?.(payload, result);
+  };
+}
+
+function taskDraftAcceptHandler(ops: DurableWriteServerOps) {
+  return async (write: PendingWrite): Promise<void> => {
+    const payload = write.payload as TaskDraftAcceptWritePayload;
+    const sync = ops.syncTaskDraftAccept;
+    if (!sync) {
+      throw new Error(
+        "Cannot send this triage decision yet: LifeOS cannot reach your account.",
+      );
+    }
+
+    const resolved = ops.resolveTaskDraftAcceptIds?.(payload);
+    const areaId =
+      payload.persisted_area_id ?? resolved?.persistedAreaId ?? null;
+
+    if (!areaId) {
+      // Every task is area-scoped, and an area is the unit the whole product
+      // reasons about. Filing this under a guessed one is worse than filing it
+      // late, so it waits — the same rule the win handler applies.
+      throw new Error(
+        "Cannot send this triage decision yet: its account area is not known on this device.",
+      );
+    }
+
+    // A null capture id is legitimate: the capture may never have reached the
+    // account (a pre-existing gap #771 recorded). The task still lands; only
+    // its provenance link is absent.
+    const captureId =
+      payload.persisted_capture_id ?? resolved?.persistedCaptureId ?? null;
+
+    const result = await sync({
+      client_write_id: write.client_write_id,
+      area_id: areaId,
+      source_capture_item_id: captureId,
+      draft_id: payload.workflow_draft_id,
+      title: payload.title,
+      description: payload.description,
+      confidence: payload.confidence,
+      task_type: payload.task_type,
+      is_reversible: payload.is_reversible,
+      due_at: payload.due_at,
+      estimated_minutes_low: payload.estimated_minutes_low,
+      estimated_minutes_high: payload.estimated_minutes_high,
+      first_tiny_step: payload.first_tiny_step,
+      is_commitment: payload.is_commitment,
+      person_mentions: payload.person_mentions,
+      task_status: payload.task_status,
+      accepted_at: payload.accepted_at,
+      proposal:
+        payload.proposed_start && payload.proposed_end
+          ? {
+              proposed_start: payload.proposed_start,
+              proposed_end: payload.proposed_end,
+              rationale: payload.rationale ?? "",
+            }
+          : null,
+    });
+    requireAccountWrite(result);
+    ops.recordTaskDraftAcceptIds?.(payload, result);
+  };
+}
+
 /**
  * The entity -> handler map this slice wires. Entities absent from this map
  * are reported `skipped` by the kernel and stay queued, so a later slice
  * adding an entity without a handler loses nothing — it just does not sync
  * until it is wired.
+ *
+ * The corollary is a rule, not a caveat: NEVER journal an entity before its
+ * handler exists. An unhandled entity is kept forever, so "enqueue it now,
+ * wire it later" builds an unbounded queue on the user's device. That is why
+ * `draft_edit`, `project_draft_decision`, `first_tiny_step`, `wip_swap`,
+ * `rollup` and `task_map_approval` are declared in `PendingWriteEntity` but
+ * nothing enqueues them yet.
  */
 export function createDurableWriteHandlers(
   ops: DurableWriteServerOps,
@@ -472,6 +852,8 @@ export function createDurableWriteHandlers(
     win: winHandler(ops),
     review: reviewHandler(ops),
     execution_session: executionSessionHandler(ops),
+    plan_placement: planPlacementHandler(ops),
+    task_draft_accept: taskDraftAcceptHandler(ops),
   };
 }
 

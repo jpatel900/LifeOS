@@ -11,6 +11,7 @@ import {
   GoogleCalendarEventCreateError,
   type GoogleCalendarEventCreateResult,
   type MinimalSupabaseClient,
+  type TimeBlockPlacementResult,
   type TimeBlockProposalAcceptResult,
   type TimeBlockProposalConflictCheckResult,
   type TimeBlockProposalCreateResult,
@@ -343,6 +344,111 @@ export async function acceptTimeBlockProposal(
     proposal,
     block,
     task: result.task ? parseTask(result.task) : null,
+  };
+}
+
+/** The account-side call for a journalled placement (#737 C1 S3). */
+export interface PlaceTimeBlockInput {
+  /** Idempotency key; matches the journal record's `client_write_id`. */
+  client_write_id: string;
+  task_id: string;
+  /**
+   * The proposal row the account already holds for this placement, when there
+   * is one (`acceptLocalProposal`), or null to have the function mint it
+   * (`planTaskAtHour`). Either way the function stamps `client_write_id` onto
+   * whichever row it ends with, so the replay short-circuit finds it.
+   */
+  proposal_id: string | null;
+  proposed_start: string;
+  proposed_end: string;
+  rationale_note: string | null;
+}
+
+/**
+ * Place a time block, idempotently, in ONE transaction.
+ *
+ * This is the replayable sibling of `acceptTimeBlockProposal`, and the only
+ * placement path a journalled write may use. `accept_time_block_proposal`
+ * raises on its second call, so a replay of it would wedge the journal entry
+ * into retrying forever; `place_time_block` short-circuits on
+ * `client_write_id` and returns what the first attempt created.
+ *
+ * Unlike `syncJournaledWin` this DOES read its result back: the caller needs
+ * the proposal and block ids to record the local -> persisted mapping, without
+ * which every later edit, unplan, or focus session on this block would look
+ * unsynced.
+ *
+ * Mock mode (no client) reports `provider: "mock"` and writes nothing; the
+ * journal entry stays queued until an account is reachable, exactly like the
+ * offline capture queue.
+ */
+export async function placeTimeBlock(
+  client: MinimalSupabaseClient | null,
+  input: PlaceTimeBlockInput,
+): Promise<TimeBlockPlacementResult> {
+  const clientWriteId = input.client_write_id?.trim();
+  if (!clientWriteId) {
+    throw new Error("A placed time block needs a client write id.");
+  }
+
+  if (!client) {
+    return {
+      provider: "mock",
+      proposal: null,
+      block: null,
+      deduplicated: false,
+    };
+  }
+
+  await requireSupabaseUser(client, "Sign in before placing time blocks.");
+
+  if (!client.rpc) {
+    throw new Error("Supabase RPC support is unavailable.");
+  }
+
+  const { data, error } = await client.rpc("place_time_block", {
+    p_task_id: input.task_id,
+    p_proposal_id: input.proposal_id,
+    p_proposed_start: input.proposed_start,
+    p_proposed_end: input.proposed_end,
+    p_rationale: input.rationale_note,
+    p_client_write_id: clientWriteId,
+  });
+  if (error) {
+    throw new Error(getSupabaseMessage(error));
+  }
+
+  const result = (data ?? {}) as Record<string, unknown>;
+  const proposal = result.proposal
+    ? parseTimeBlockProposal(result.proposal)
+    : null;
+  const block = result.block ? parseCalendarBlock(result.block) : null;
+
+  // Only the first, row-creating attempt is a decision the learning layer
+  // should see. A dedupe is the same decision arriving twice.
+  if (proposal && block && result.deduplicated !== true) {
+    recordOverrideFireAndForget(client, {
+      area_id: proposal.area_id,
+      policy_identifier: "planning.default_time_block",
+      subject_type: "time_block_proposal",
+      subject_id: proposal.id,
+      override_type: "accepted",
+      old_value_json: { status: "proposed" },
+      new_value_json: {
+        status: proposal.status,
+        calendar_block_id: block.id,
+        start_at: block.start_at,
+        end_at: block.end_at,
+      },
+      reason: "User placed a time block.",
+    });
+  }
+
+  return {
+    provider: "supabase",
+    proposal,
+    block,
+    deduplicated: result.deduplicated === true,
   };
 }
 

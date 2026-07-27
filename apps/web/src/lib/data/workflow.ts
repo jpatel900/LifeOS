@@ -32,6 +32,7 @@ export type {
   TimeBlockProposalCreateResult,
   TimeBlockProposalUpdateResult,
   TimeBlockProposalAcceptResult,
+  TimeBlockPlacementResult,
   TimeBlockProposalConflictCheckResult,
   GoogleCalendarEventCreateResult,
   ExecutionReviewItemsResult,
@@ -151,7 +152,21 @@ export {
   acceptTimeBlockProposal,
   checkTimeBlockProposalConflict,
   createGoogleCalendarEventFromProposal,
+  placeTimeBlock,
 } from "./workflow/calendar";
+export type { PlaceTimeBlockInput } from "./workflow/calendar";
+
+// --- draftAccept (#737 C1 S3) ---
+export {
+  acceptProposalClientWriteId,
+  syncJournaledTaskDraftAccept,
+} from "./workflow/draftAccept";
+export type {
+  JournaledAcceptProposal,
+  JournaledPersonMention,
+  SyncJournaledTaskDraftAcceptInput,
+  SyncJournaledTaskDraftAcceptResult,
+} from "./workflow/draftAccept";
 
 // --- execution ---
 export {
