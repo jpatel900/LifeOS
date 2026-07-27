@@ -844,6 +844,15 @@ function taskDraftAcceptHandler(ops: DurableWriteServerOps) {
  * `draft_edit`, `project_draft_decision`, `first_tiny_step`, `wip_swap`,
  * `rollup` and `task_map_approval` are declared in `PendingWriteEntity` but
  * nothing enqueues them yet.
+ *
+ * REPLAY MUST STAY SEQUENTIAL — handlers depend on each other's output.
+ * `recordTaskDraftAcceptIds` writes the new account task id into the caller's
+ * id map, and a `plan_placement` queued behind it for that same task resolves
+ * its `persisted_task_id` from exactly that map. Accepting a draft and then
+ * placing it, both while offline, only survives the reconnect because the
+ * journal drains strictly FIFO and each handler completes before the next
+ * starts. Parallelising the drain would silently break that chain: the
+ * placement would find no task id and re-queue instead of landing.
  */
 export function createDurableWriteHandlers(
   ops: DurableWriteServerOps,
