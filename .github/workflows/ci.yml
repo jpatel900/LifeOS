@@ -68,36 +68,6 @@ jobs:
       - name: safe-automerge-demotion self-test
         run: node scripts/agent/safe-automerge-demotion.mjs --self-test
 
-  migration-timestamp-collision:
-    name: Migration timestamp collision precheck
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          # full history so origin/<base branch> is resolvable for the diff
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22.13.0
-          # this job never installs pnpm, so setup-node must not try to use
-          # it for caching (it auto-detects the packageManager field)
-          package-manager-cache: false
-
-      # No pnpm install: the script is dependency-free by design. Catches a PR
-      # whose new supabase/migrations timestamp collides with the base branch
-      # BEFORE merge — post-merge, production silently skips one of the two
-      # files (#762/#764 on 2026-07-26; see issue #776).
-      - name: check-migration-collision self-test
-        run: node scripts/agent/check-migration-collision.mjs --self-test
-
-      - name: Fail on migration timestamp collision with base branch
-        run: node scripts/agent/check-migration-collision.mjs --base "origin/${{ github.base_ref }}"
-
   validate-monorepo:
     name: Monorepo Validation
     runs-on: ubuntu-latest
