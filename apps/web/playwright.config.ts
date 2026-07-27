@@ -13,6 +13,19 @@ export default defineConfig({
     baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // Reproducibility lever, not a fix. `TodayMoments`' `heuristicMoment`
+    // reads the BROWSER's local hour, so a spec that visits `/` without
+    // pinning its moment renders a different surface on a UTC CI runner than
+    // on a developer's machine in the Americas — which is how
+    // session-truth.spec.ts and four of a11y-axe-pin.spec.ts's surfaces went
+    // red on merged main while green on every branch and every local run.
+    // Setting PLAYWRIGHT_TZ shifts only `getHours()` (epoch time, and so
+    // every `startMs <= nowMs < endMs` block classification, is unaffected),
+    // which makes that class of failure reproducible on demand:
+    //   PLAYWRIGHT_TZ=Pacific/Auckland  -> a late-evening local hour
+    //   PLAYWRIGHT_TZ=Asia/Dhaka        -> a midday local hour
+    // Unset (the default, and CI) leaves the browser on the system zone.
+    timezoneId: process.env.PLAYWRIGHT_TZ || undefined,
   },
   projects: [
     {

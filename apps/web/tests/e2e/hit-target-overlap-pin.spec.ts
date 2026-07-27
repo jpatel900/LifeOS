@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { stubParseCaptureRoute } from "./helpers/mockParseCapture";
 import {
   PINNED_SURFACES,
+  preparePinnedSurfaces,
   VIEWPORTS,
   type ViewportId,
 } from "./helpers/pinnedSurfaces";
@@ -128,6 +129,10 @@ test.describe("hit-target + overlap pin (Final UX Loop C5)", () => {
     // flow a surface's goto() touches must run against the deterministic
     // mock-parser stub.
     await stubParseCaptureRoute(page);
+    // Same clock pin as the axe pin: the four moment-less surfaces must not
+    // measure a different moment depending on when CI runs — see
+    // helpers/pinnedSurfaces.ts.
+    await preparePinnedSurfaces(page);
   });
 
   test("the pinned totals match the sum of the per-surface table", () => {
