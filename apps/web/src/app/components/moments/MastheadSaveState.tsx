@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { resolveDeviceSaveNotice } from "@/lib/deviceSaveNotice";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { WorkflowSyncStatus } from "@/lib/workflowContext/types";
 
 /**
@@ -59,6 +60,29 @@ import type { WorkflowSyncStatus } from "@/lib/workflowContext/types";
  * work.
  */
 export function MastheadSaveState({ status }: { status: WorkflowSyncStatus }) {
+  // DEMO MODE IS NOT THIS COMPONENT'S STATE TO REPORT, and the first draft of
+  // this row got that wrong in a way an e2e caught.
+  //
+  // With no Supabase configured, `syncPersistedWorkflowRows` marks the account
+  // local-only, so `resolveDeviceSaveNotice` produced
+  // ACCOUNT_UNREACHABLE_NOW — "LifeOS can't reach your account RIGHT NOW". In
+  // demo mode there is no account to reach and no "right now" about it: the
+  // sentence invents a transient outage and an account the user does not have.
+  // That is the same class of falsehood this slice exists to remove, arriving
+  // in the fix for it.
+  //
+  // `DemoModeBanner` already states that configuration's whole truth, above
+  // this row, permanently and loudly. Rendering both would also break
+  // `statusVocabulary`'s standing rule that one state gets one sentence — a
+  // reader seeing two would have to work out whether they mean different
+  // things.
+  //
+  // The layout consequence is real but secondary: an extra row here shifted
+  // the moments home enough to break `moments-home-parity.spec.ts`'s capture-
+  // pill clearance assertions at 1366x768, since the e2e dev server runs with
+  // no Supabase env at all.
+  if (!isSupabaseConfigured()) return null;
+
   const notice = resolveDeviceSaveNotice(status);
   if (!notice) return null;
 

@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MastheadSaveState } from "./MastheadSaveState";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
+  ACCOUNT_UNREACHABLE_NOW,
   DEVICE_STORAGE_BLOCKED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
   SOME_WORK_ON_THIS_DEVICE,
@@ -10,6 +12,10 @@ import {
   initialSyncStatus,
   type WorkflowSyncStatus,
 } from "@/lib/workflowContext/types";
+
+vi.mock("@/lib/supabase/config", () => ({
+  isSupabaseConfigured: vi.fn(() => true),
+}));
 
 vi.mock("next/link", () => ({
   default: ({
@@ -39,6 +45,35 @@ function status(overrides: Partial<WorkflowSyncStatus> = {}) {
  * indication anywhere that none of it had reached an account.
  */
 describe("MastheadSaveState (#737 C1 S5)", () => {
+  beforeEach(() => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(true);
+  });
+
+  /**
+   * The falsehood the first draft of this row shipped, and an e2e caught.
+   *
+   * With no Supabase configured the account is marked local-only, so the
+   * notice resolved to ACCOUNT_UNREACHABLE_NOW — "LifeOS can't reach your
+   * account right now" — over a configuration with no account and no "right
+   * now" about it. `DemoModeBanner` owns that state and states it truthfully;
+   * two notices for one state is what `statusVocabulary`'s doctrine forbids.
+   */
+  it("says nothing at all when there is no account to talk about", () => {
+    vi.mocked(isSupabaseConfigured).mockReturnValue(false);
+
+    const { container } = render(
+      <MastheadSaveState
+        status={status({
+          account: "local-only",
+          message: ACCOUNT_UNREACHABLE_NOW,
+          pendingLocalChanges: true,
+        })}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("renders nothing while LifeOS is still checking", () => {
     const { container } = render(
       <MastheadSaveState status={status({ account: "checking" })} />,
