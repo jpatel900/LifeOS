@@ -18,7 +18,7 @@ import {
   formatDayClosePayoff,
   formatRollupCountsComparison,
 } from "./momentsViewModel";
-import { savedOnThisDeviceBanner } from "@/lib/statusVocabulary";
+import { savedOnThisDeviceAndSendingBanner } from "@/lib/statusVocabulary";
 import type { TaskMapGraph } from "@/lib/taskmap/graph";
 import type { RevisionSignal } from "@/lib/taskmap/revision";
 import { TaskMapDraftReview } from "./TaskMapDraftReview";
@@ -743,14 +743,20 @@ export function CloseMoment({
               </p>
               {/* Where the close actually lives. One phrase, from the single
                   home for it (`statusVocabulary`) — never a new sentence for
-                  a state a dozen other surfaces already describe. */}
+                  a state a dozen other surfaces already describe.
+
+                  #737 C1 S5: the SENDING form. A close is journalled as a
+                  `review` entry and `replayDurableWrites` really does re-send
+                  it, so stopping at "it is here" understated what LifeOS was
+                  already doing and left the reader wondering whether closing
+                  the day had half-worked. */}
               <p
                 className="text-xs text-muted-foreground"
                 data-testid="close-moment-verdict-destination"
               >
                 {vm.dayClose.savedToAccount
                   ? "Today's close is saved to your account."
-                  : savedOnThisDeviceBanner("Today's close")}
+                  : savedOnThisDeviceAndSendingBanner("Today's close")}
               </p>
             </div>
           ) : (

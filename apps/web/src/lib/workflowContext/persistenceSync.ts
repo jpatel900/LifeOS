@@ -34,7 +34,10 @@ import {
   journalTaskDraftAcceptWrite,
   journalTaskDropWrite,
 } from "../durability/durableWrites";
-import { savedOnThisDeviceBanner } from "../statusVocabulary";
+import {
+  savedOnThisDeviceAndSendingBanner,
+  savedOnThisDeviceBanner,
+} from "../statusVocabulary";
 import { createSupabaseBrowserClient } from "../supabase/browser";
 import type {
   Phase2MockCalendarBlock,
@@ -243,7 +246,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your triage decision"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your triage decision"));
       return;
     }
 
@@ -314,7 +317,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your plan"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your plan"));
       return;
     }
 
@@ -482,7 +485,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your plan change"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your plan change"));
       return;
     }
 
@@ -541,7 +544,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your change"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your change"));
       return;
     }
 
@@ -652,7 +655,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your review"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your review"));
       return "local-only";
     }
 
@@ -716,7 +719,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     if (!localSession.task_id) {
       // Nothing to file the session against. Truthful, and the caller must
       // not claim a save.
-      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
+      markLocalOnly(
+        savedOnThisDeviceAndSendingBanner("Your focus session result"),
+      );
       return "local-only";
     }
 
@@ -766,7 +771,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
+      markLocalOnly(
+        savedOnThisDeviceAndSendingBanner("Your focus session result"),
+      );
       return "local-only";
     }
 
@@ -826,7 +833,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your deferral"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your deferral"));
       return "local-only";
     }
 

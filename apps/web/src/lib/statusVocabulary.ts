@@ -76,33 +76,42 @@ export const SAVED_ON_THIS_DEVICE_SHORT =
   "saved on this device and not in your account yet";
 
 /**
- * THE CAPTURE-ONLY FORM, WITH THE RETRY PROMISE (#734, narrowed from #692).
+ * THE RETRY PROMISE — one sentence, and the rule for who may say it (#734,
+ * narrowed; WIDENED by #737 C1 S5 because the retry became real).
  *
- * This shipped as `SAVED_ON_THIS_DEVICE_LONG` — a general "long form" of the
- * phrase above, offered to any surface with room for a second sentence. The
- * second sentence is a promise, and the promise is only true for ONE kind of
- * write:
+ * ## The history, because the narrowing is the interesting part
  *
- *  - Captures really are re-sent. `WorkflowContext`'s `syncOfflineQueue`
- *    reads `listPendingCaptures()` from the device queue, pushes each one
- *    with `syncQueuedCapture`, and marks it synced; it is armed on mount and
- *    again on the browser's `online` event.
- *  - Nothing else is. When the account becomes reachable,
- *    `syncPersistedWorkflowRows` LISTS account rows and merges them into
- *    local state. There is no path anywhere in it that re-pushes a write that
- *    only ever landed on this device.
+ * This tail shipped inside `SAVED_ON_THIS_DEVICE_LONG`, a general "long form"
+ * offered to any surface with room for a second sentence. #734 narrowed it to
+ * captures and renamed the constant, because at that moment captures were the
+ * ONLY write that was ever re-sent: `syncOfflineQueue` drains the device
+ * queue, while `syncPersistedWorkflowRows` merely LISTS account rows and never
+ * re-pushes anything. On a plan or a review the promise would have been a lie.
  *
- * So the general name was a trap: adopted on a plan, a review, or an approved
- * map, it would have told the user their work was on its way when nothing was
- * going to send it. It had reached no surface yet, so it misled nobody — the
- * name now says the one place it may be used, and it must not be widened
- * again unless the retry is made real for the other writes too.
+ * The narrowing note ended: "it must not be widened again unless the retry is
+ * made real for the other writes too." Slices S2-S5 of #737-A did exactly
+ * that. `replayDurableWrites` drains the pending-writes journal on mount and
+ * on reconnect, so a journalled write really is on its way.
  *
- * For every other local-only write use `savedOnThisDeviceBanner(subject)`,
- * which stops at the fact and promises nothing.
+ * ## THE RULE, and it is a rule about behavior, not about tone
+ *
+ * Say this ONLY for a write that something will actually re-send:
+ *
+ *  - captures enqueued to `lib/capture/offlineQueue.ts` (drained by
+ *    `syncOfflineQueue`), and
+ *  - the journalled entities in `durability/durableWrites.ts`'s handler map
+ *    (drained by `replayDurableWrites`).
+ *
+ * Everything else — a proposal edit, a first-move edit, an approved task map,
+ * a draft edit with no accept, a WIP swap, a signed-out-but-online capture —
+ * has no device-durable home and no re-send path, so it gets the bare
+ * `savedOnThisDeviceBanner(subject)`, which stops at the fact. Adding an
+ * entity to the handler map is what earns it this sentence; nothing else does.
  */
-export const CAPTURE_SAVED_ON_THIS_DEVICE_LONG =
-  "Saved on this device and not in your account yet. LifeOS will add it to your account as soon as it can.";
+const WILL_REACH_YOUR_ACCOUNT =
+  "LifeOS will add it to your account as soon as it can.";
+
+export const CAPTURE_SAVED_ON_THIS_DEVICE_LONG = `Saved on this device and not in your account yet. ${WILL_REACH_YOUR_ACCOUNT}`;
 
 /**
  * The banner form of the same fact, for the surfaces #692 Slice B owns.
@@ -125,17 +134,45 @@ export const CAPTURE_SAVED_ON_THIS_DEVICE_LONG =
  * signal it is reporting a different state; give that state its own constant
  * in this file rather than growing a second shape here.
  *
- * WHY IT STOPS AT THE FACT. `CAPTURE_SAVED_ON_THIS_DEVICE_LONG` adds "LifeOS
- * will add it to your account as soon as it can." That promise is true of
- * captures (`lib/capture/offlineQueue.ts` really does re-send them) and NOT
- * true of the other local-only writes: when the account becomes reachable,
- * `syncPersistedWorkflowRows` re-READS account rows and never re-pushes a
- * local-only write. So this form states where the work is and promises
- * nothing. Do not "improve" it by appending that tail without first making
- * the retry real.
+ * WHY IT STOPS AT THE FACT, and what changed in #737 C1 S5.
+ *
+ * This form promises nothing, because for the writes that still use it
+ * nothing is coming: a proposal edit, a first-move edit, an approved task
+ * map, a draft edit with no accept, a WIP swap and a signed-out-but-online
+ * capture all live in the reducer's per-tab `sessionStorage` mirror, with no
+ * device-durable home and no re-send path. Telling that user their work is on
+ * its way would be the exact lie this whole program exists to end.
+ *
+ * A write that IS re-sent says so, with
+ * `savedOnThisDeviceAndSendingBanner(subject)` below. The two are different
+ * states, not two tones for one state, which is why they are two functions
+ * rather than a flag: what separates them is whether a drain will pick the
+ * write up, and that is a fact about the code, not about the copy.
  */
 export function savedOnThisDeviceBanner(subject: string) {
   return `${subject} is ${SAVED_ON_THIS_DEVICE_SHORT}.`;
+}
+
+/**
+ * THE SAME FACT, PLUS THE PROMISE — for writes that really are re-sent.
+ *
+ * Used by every surface whose write is journalled in
+ * `durability/durableWrites.ts`'s handler map: wins, reviews and the daily
+ * close, rollups, focus-session outcomes and deferrals, placed blocks,
+ * accepted triage drafts, and the two compensating actions (an unplan, a
+ * drop). For those, "LifeOS will add it to your account as soon as it can" is
+ * a description of `replayDurableWrites`, not a reassurance.
+ *
+ * Before S5 all of these used the bare form, which was true but incomplete:
+ * it told a signed-out user where their work was and left them to wonder
+ * whether they had to do something about it. They do not.
+ *
+ * BEFORE ADOPTING THIS ON A NEW SURFACE, check that its write has a handler in
+ * that map. If it does not, the write is not going anywhere and this sentence
+ * is false — use `savedOnThisDeviceBanner` instead.
+ */
+export function savedOnThisDeviceAndSendingBanner(subject: string) {
+  return `${savedOnThisDeviceBanner(subject)} ${WILL_REACH_YOUR_ACCOUNT}`;
 }
 
 /**

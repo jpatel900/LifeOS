@@ -22,6 +22,7 @@ import {
 } from "./CountdownClockToggle";
 import { AreaSelector } from "./AreaSelector";
 import { MastheadThemeToggle } from "./MastheadThemeToggle";
+import { MastheadSaveState } from "./MastheadSaveState";
 import { formatMastheadDate } from "./formatMastheadDate";
 import { CaptureAffordance } from "./CaptureAffordance";
 import { AuthAffordance } from "./AuthAffordance";
@@ -1155,6 +1156,13 @@ export function TodayMoments({
               </div>
             </div>
           </header>
+
+          {/* #737 C1 S5: where the user's work is, STACKED under the masthead
+              rather than inline in the control cluster above — that cluster's
+              width budget is what overflowed at 390px when #736 tried to fit a
+              sentence into it. Renders nothing at all when everything has
+              reached the account. */}
+          <MastheadSaveState status={syncStatus} />
 
           {moment !== "start" ? (
             <h1 className="sr-only">LifeOS Today</h1>

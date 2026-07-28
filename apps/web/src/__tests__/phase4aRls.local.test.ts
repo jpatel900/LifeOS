@@ -227,6 +227,22 @@ async function deleteOperatorProfile(client: SupabaseClient, userId: string) {
   }
 }
 
+async function deleteRollupByPeriod(
+  client: SupabaseClient,
+  periodStart: string,
+) {
+  const { error } = await client
+    .from("rollup_summaries")
+    .delete()
+    .eq("period_start", periodStart);
+
+  if (error) {
+    throw new Error(
+      `Could not clean up rollup for '${periodStart}': ${error.message}`,
+    );
+  }
+}
+
 async function deleteWinByTitle(client: SupabaseClient, title: string) {
   const { error } = await client
     .from("win_records")
@@ -756,6 +772,108 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       expect(data).toHaveLength(1);
     } finally {
       await deleteReviewByMarker(userAClient, marker);
+    }
+  });
+
+  // #737 C1 S5 — the database half of "replay a rollup twice, never
+  // duplicate". The unit tests assert the client sends the right upsert
+  // options; only this suite proves migration 20260727140000's index actually
+  // exists and dedupes.
+  //
+  // It also proves the index is PLAIN rather than partial. A partial index
+  // would make PostgREST's `onConflict` (which sends column names and nothing
+  // else) fail with 42P10 on the very first upsert below — the production bug
+  // #759 hit on captures, and the reason the house rule exists.
+  it("dedupes a replayed rollup on client_write_id instead of creating a second row", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    // A per-run period, so concurrent runs cannot collide on the ORIGINAL
+    // uniqueness (`rollup_summaries_period_key`) and make this test look like
+    // a client_write_id failure.
+    const periodStart = `2027-01-${String((Date.now() % 28) + 1).padStart(2, "0")}`;
+    const clientWriteId = `journal-rollup-${suffix}`;
+
+    try {
+      const row = {
+        user_id: userA.id,
+        area_id: userA.areaId,
+        period_type: "week",
+        period_start: periodStart,
+        period_end: periodStart,
+        summary: { headline: `rls-rollup-${suffix}`, counts: {} },
+        client_write_id: clientWriteId,
+      };
+
+      const { error: firstError } = await userAClient
+        .from("rollup_summaries")
+        .upsert(row, {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(firstError).toBeNull();
+
+      // The same journal entry replayed: a second mount, a reconnect racing
+      // the first drain, or a response lost after the row landed.
+      const { error: secondError } = await userAClient
+        .from("rollup_summaries")
+        .upsert(row, {
+          onConflict: "user_id,client_write_id",
+          ignoreDuplicates: true,
+        });
+      expect(secondError).toBeNull();
+
+      const { data, error: selectError } = await userAClient
+        .from("rollup_summaries")
+        .select("period_start")
+        .eq("period_start", periodStart);
+      expect(selectError).toBeNull();
+      expect(data).toEqual([{ period_start: periodStart }]);
+    } finally {
+      await deleteRollupByPeriod(userAClient, periodStart);
+    }
+  });
+
+  // The OTHER constraint, deliberately left as the arbiter of nothing.
+  //
+  // `rollup_summaries_period_key` (one rollup per area per period, from the
+  // table's original migration) still RAISES on a second, genuinely different
+  // approval of the same period rather than silently overwriting it. The
+  // client reads that constraint NAME (`isRollupPeriodConflict`) and treats it
+  // as a terminal success — the account already holds this rollup — instead of
+  // re-queuing the journal entry forever against a row that will never move.
+  // If this ever stopped raising, that predicate would be dead code and a
+  // re-approval would quietly replace the user's earlier rollup.
+  it("still refuses a second rollup for the same area and period", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const periodStart = `2027-02-${String((Date.now() % 28) + 1).padStart(2, "0")}`;
+
+    try {
+      const base = {
+        user_id: userA.id,
+        area_id: userA.areaId,
+        period_type: "week",
+        period_start: periodStart,
+        period_end: periodStart,
+        summary: { headline: `rls-rollup-dup-${suffix}`, counts: {} },
+      };
+
+      const { error: firstError } = await userAClient
+        .from("rollup_summaries")
+        .insert({ ...base, client_write_id: `journal-rollup-a-${suffix}` });
+      expect(firstError).toBeNull();
+
+      const { error: secondError } = await userAClient
+        .from("rollup_summaries")
+        .upsert(
+          { ...base, client_write_id: `journal-rollup-b-${suffix}` },
+          { onConflict: "user_id,client_write_id", ignoreDuplicates: true },
+        );
+      // The name is the assertion: the client branches on it, so a rename here
+      // would silently turn a terminal success into an infinite retry.
+      expect(secondError?.message).toContain("rollup_summaries_period_key");
+    } finally {
+      await deleteRollupByPeriod(userAClient, periodStart);
     }
   });
 

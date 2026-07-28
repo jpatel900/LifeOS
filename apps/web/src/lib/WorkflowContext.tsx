@@ -45,6 +45,7 @@ import {
   DEVICE_STORAGE_BLOCKED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
   SOME_WORK_ON_THIS_DEVICE,
+  savedOnThisDeviceAndSendingBanner,
   savedOnThisDeviceBanner,
 } from "./statusVocabulary";
 import {
@@ -151,6 +152,7 @@ import {
 } from "./durability/durableWrites";
 import {
   listPendingWrites,
+  pendingWriteCount,
   type ReplaySummary,
 } from "./durability/pendingWriteJournal";
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
@@ -364,6 +366,70 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       };
     }, []);
 
+  /**
+   * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
+   *
+   * Nine call sites set this flag to `true`; not one ever set it back. So the
+   * moment anything went local-only — a signed-out session, one flaky save —
+   * every surface reading it was pinned to "some of your work is on this
+   * device" for the rest of the page's life, including long after the work had
+   * reached the account. #736's masthead indicator was built on that flag,
+   * which is why it could not be trusted and why S5 rebuilds it.
+   *
+   * ## What makes the recomputation honest rather than merely convenient
+   *
+   * The flag means "there is work on this device the account does not have".
+   * The queues answer that directly: the pending-writes journal and the
+   * offline capture queue hold exactly the writes still owed to the account.
+   *
+   * What the queues do NOT hold are the writes with no server destination at
+   * all — a proposal edit, a first-move edit, an approved task map, a draft
+   * edit with no accept, a WIP swap. Those also set the flag, and clearing it
+   * on an empty queue while one of them was outstanding would be a new
+   * falsehood in place of the old one.
+   *
+   * They are not outstanding here, and the reason is the CALLER, not this
+   * function: this runs only after a drain or a completed
+   * `syncPersistedWorkflowRows`, and that sync re-reads the account and
+   * reconciles local state against it. Anything the account lacked and could
+   * never receive has been overwritten by the account's own row by the time
+   * this runs — it is no longer on the device to be reported. So after a full
+   * sync, "work the account does not have" IS "work still queued".
+   *
+   * That is also why this is deliberately NOT called from anywhere else. Run
+   * mid-session, off the back of no sync, it would clear the flag over exactly
+   * the unsendable writes the paragraph above rules out.
+   *
+   * Best-effort on read failure: the flag is left exactly as it was rather
+   * than being cleared on a guess.
+   */
+  const refreshPendingLocalChanges = useCallback(async () => {
+    let queued: number;
+    try {
+      queued = (await pendingWriteCount()) + (await pendingCaptureCount());
+    } catch {
+      return;
+    }
+
+    setSyncStatus((current) => {
+      const pendingLocalChanges = queued > 0;
+      if (current.pendingLocalChanges === pendingLocalChanges) return current;
+      return {
+        ...current,
+        pendingLocalChanges,
+        // Silence is the resting state (`resolveDeviceSaveNotice`): with
+        // nothing owed and the account reached, there is nothing a person
+        // needs to know, and a permanent "all synced" marker is furniture.
+        // The message is only dropped when the account is genuinely reached —
+        // a `local-only` or `sync-error` state keeps its own sentence.
+        message:
+          !pendingLocalChanges && current.account === "synced"
+            ? null
+            : current.message,
+      };
+    });
+  }, []);
+
   const syncPersistedWorkflowRows = useCallback(
     async (
       client: MinimalSupabaseClient | null,
@@ -427,6 +493,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           .map((entry) => entry.period_start),
       );
       markAccountSynced();
+      // #737 C1 S5: the account has just been re-read and local state
+      // reconciled against it, which is the ONLY moment "still queued" and
+      // "not in the account" mean the same thing. See
+      // `refreshPendingLocalChanges` for why it is called here and nowhere
+      // else.
+      void refreshPendingLocalChanges();
 
       // S9 (#261): load learning history for the override-pattern scan. Kept
       // OUT of the strict provider gate above and failure-isolated — a missing
@@ -472,7 +544,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           // Non-fatal: a decided proposal may reappear until it is re-decided.
         });
     },
-    [buildDropLocalIds, markAccountSynced, markLocalOnly],
+    [
+      buildDropLocalIds,
+      markAccountSynced,
+      markLocalOnly,
+      refreshPendingLocalChanges,
+    ],
   );
 
   // #737-A slice 2: drain the win/review journal to the account, oldest write
@@ -773,7 +850,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
 
       if (await hasPendingWrite(journalled.client_write_id)) {
-        markLocalOnly(savedOnThisDeviceBanner("Your win"));
+        markLocalOnly(savedOnThisDeviceAndSendingBanner("Your win"));
         return "device-only";
       }
 
@@ -866,7 +943,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
 
       if (await hasPendingWrite(journalled.client_write_id)) {
-        markLocalOnly(savedOnThisDeviceBanner("Your rollup"));
+        markLocalOnly(savedOnThisDeviceAndSendingBanner("Your rollup"));
         return;
       }
 
@@ -1330,12 +1407,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // synced close would keep showing the device-only sentence.
     void replayJournaledWrites().finally(() => {
       void refreshJournalledClosedDays();
+      // #737 C1 S5: a drain that emptied the journal must be able to CLEAR
+      // the device-only indicator, not only ever raise it.
+      void refreshPendingLocalChanges();
     });
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
       void replayJournaledWrites().finally(() => {
         void refreshJournalledClosedDays();
+        void refreshPendingLocalChanges();
       });
     };
     window.addEventListener("online", onOnline);
@@ -1343,6 +1424,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }, [
     refreshUnsyncedCount,
     refreshJournalledClosedDays,
+    refreshPendingLocalChanges,
     replayJournaledWrites,
     syncOfflineQueue,
   ]);
