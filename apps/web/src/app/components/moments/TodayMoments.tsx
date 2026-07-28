@@ -1311,8 +1311,18 @@ export function TodayMoments({
           // to branch on here — the offline case is simply "offline".
           const offline =
             typeof navigator !== "undefined" && navigator.onLine === false;
+          // #737 C1 S5 — WAS " Saved on this device — sign in to keep it
+          // everywhere.", and that was false. A signed-out capture made while
+          // ONLINE never reaches a device store: `submitCaptureText` only
+          // routes to the durable queue when `navigator.onLine === false`, so
+          // this one is staged in the reducer and mirrored to per-TAB
+          // sessionStorage. It survives a reload and dies with the tab.
+          //
+          // The words now say the narrower true thing. Widening them back is
+          // earned by making the capture durable (Target Card 3), not by
+          // rephrasing — see the AGENT-TODO on this slice's PR.
           const signedOutNote = syncStatus.signedOut
-            ? " Saved on this device — sign in to keep it everywhere."
+            ? " Sign in to keep it — until then it's only in this tab."
             : "";
           if (offline) {
             showToast(

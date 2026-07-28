@@ -178,16 +178,14 @@ function RollupHarness() {
         periodType: "week",
         periodStart: "2026-05-04",
         periodEnd: "2026-05-10",
+        // The real `RollupSummaryContent` shape, not a convenient stand-in:
+        // this payload is what a replay hands to `CreateRollupSummaryInputSchema`,
+        // so a test that journalled a different shape would prove the write is
+        // durable while hiding that it is undeliverable.
         summary: {
-          headline: "A steady week",
-          counts: {
-            completed: 3,
-            missed: 1,
-            captured: 5,
-            tasksCreated: 4,
-          },
-          highlights: [],
-          nextFocus: null,
+          highlights: ["Shipped the durable-writes slice"],
+          misses: [],
+          counts: { completed: 3, missed: 1 },
         },
       });
       setDone(true);
