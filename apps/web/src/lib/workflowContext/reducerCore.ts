@@ -377,6 +377,29 @@ export function persistedIdForLocalId(
   return idMap.get(id) ?? null;
 }
 
+/**
+ * The inverse of `persistedIdForLocalId`: an ACCOUNT id back to the workflow id
+ * the UI is holding, or `null` when this device has no local alias for it.
+ *
+ * #737 C1 re-score GAP 1. Account rows carry account uuids
+ * (`win_records.source_task_id`); the Close moment's candidates carry workflow
+ * ids, which are the same uuid for anything that came from the account and a
+ * local id for anything created here and not yet synced. Comparing the two
+ * spaces without this resolution is how a readback silently matches nothing.
+ *
+ * Returns `null` rather than the input so the caller decides the fallback —
+ * for a row that never had a local alias, the account id IS the workflow id.
+ */
+export function workflowIdForPersistedId(
+  persistedId: string,
+  idMap: Map<string, string>,
+): string | null {
+  for (const [localId, mapped] of idMap) {
+    if (mapped === persistedId) return localId;
+  }
+  return null;
+}
+
 const TASK_STATUSES = new Set([
   "draft",
   "active",

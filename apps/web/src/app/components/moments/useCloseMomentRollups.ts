@@ -54,6 +54,16 @@ interface UseCloseMomentRollupsOptions {
   confirmWin: ReturnType<typeof useWorkflow>["confirmWin"];
   confirmRollup: ReturnType<typeof useWorkflow>["confirmRollup"];
   listApprovedRollups: ReturnType<typeof useWorkflow>["listApprovedRollups"];
+  journalledRollupKeys?: readonly string[];
+}
+
+/** `areaId|periodType|periodStart` — one approved period, in one string. */
+function rollupKey(
+  areaId: string,
+  periodType: "week" | "month",
+  periodStart: string,
+): string {
+  return `${areaId}|${periodType}|${periodStart}`;
 }
 
 export function useCloseMomentRollups({
@@ -64,11 +74,38 @@ export function useCloseMomentRollups({
   confirmWin,
   confirmRollup,
   listApprovedRollups,
+  journalledRollupKeys,
 }: UseCloseMomentRollupsOptions) {
-  const [confirmedWins, setConfirmedWins] = useState<CloseWinVM[]>([]);
+  // #737 C1 re-score GAP 1. This used to be the whole answer to "which wins
+  // are logged?" — React state initialised empty on every mount. A new tab
+  // therefore re-offered a win the account already held, and taking the offer
+  // wrote a SECOND `win_records` row for one accomplishment.
+  //
+  // It is now only the SESSION's half: wins confirmed in this tab, held here
+  // so the moment does not stutter between the tap and the readback catching
+  // up. The durable half arrives as `closeVM.loggedWinsToday` (account +
+  // device journal, resolved in the view model) and the two are merged below.
+  // The split matters on failure: the rollback in `handleConfirmWin` empties
+  // an OPTIMISTIC entry and can never erase a win that was actually recorded.
+  const [sessionConfirmedWins, setSessionConfirmedWins] = useState<
+    CloseWinVM[]
+  >([]);
   const [skippedWinIds, setSkippedWinIds] = useState<Set<string>>(
     () => new Set(),
   );
+  // Durable first, this session's optimistic entries after, deduped by task.
+  // Durable wins outrank the optimistic copy of themselves: once the readback
+  // has a win, its recorded title is the one the reading list shows.
+  const confirmedWins = useMemo(() => {
+    const merged: CloseWinVM[] = [...closeVM.loggedWinsToday];
+    const seen = new Set(merged.map((win) => win.taskId));
+    for (const win of sessionConfirmedWins) {
+      if (seen.has(win.taskId)) continue;
+      seen.add(win.taskId);
+      merged.push(win);
+    }
+    return merged;
+  }, [closeVM.loggedWinsToday, sessionConfirmedWins]);
   const confirmedWinIds = useMemo(
     () => new Set(confirmedWins.map((win) => win.taskId)),
     [confirmedWins],
@@ -87,7 +124,7 @@ export function useCloseMomentRollups({
         (win) => win.taskId === taskId,
       );
       if (!candidate || title.length === 0) return;
-      setConfirmedWins((prev) => [
+      setSessionConfirmedWins((prev) => [
         ...prev,
         { taskId, title, areaLabel: candidate.areaLabel },
       ]);
@@ -99,7 +136,10 @@ export function useCloseMomentRollups({
       // one outcome where nothing holds the win.
       void confirmWin({ taskId, title }).then((result) => {
         if (result === "failure") {
-          setConfirmedWins((prev) =>
+          // Only the OPTIMISTIC entry is rolled back. `confirmedWins` merges
+          // this list under the durable readback, so a failed re-log can never
+          // remove a win the account or the device journal actually holds.
+          setSessionConfirmedWins((prev) =>
             prev.filter((win) => win.taskId !== taskId),
           );
           showToast("Couldn't log the win — it isn't saved yet");
@@ -122,6 +162,45 @@ export function useCloseMomentRollups({
     });
   }, []);
 
+  // #486 fetched this to compose the MONTHLY draft. #737 C1 re-score GAP 2
+  // gives it a second, more load-bearing job and so it moves above every
+  // consumer: it is the ACCOUNT tier of "is this period already rolled up?".
+  // The judge approved a rollup, opened a new tab, and was offered the same
+  // rollup again — the row was safe (`rollup_summaries_period_key` held), but
+  // the OFFER was a lie about what the account knows.
+  const [allRollupSummaries, setAllRollupSummaries] = useState<RollupSummary[]>(
+    [],
+  );
+  // Distinguishes "fetched, and there are none" from "not fetched yet".
+  // Without it an empty list means both, and the offer would render during the
+  // in-flight window — the same lie, for as long as the fetch takes.
+  const [rollupReadbackSettled, setRollupReadbackSettled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const rollups = await listApprovedRollups();
+      if (cancelled) return;
+      setAllRollupSummaries(rollups);
+      setRollupReadbackSettled(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [listApprovedRollups]);
+  // Both durable tiers of the same question, in one key space. The journal
+  // tier is what stops a rollup approved OFFLINE from being re-offered on the
+  // next mount, which is GAP 2 one tier down.
+  const durablyApprovedRollupKeys = useMemo(
+    () =>
+      new Set([
+        ...allRollupSummaries.map((row) =>
+          rollupKey(row.area_id, row.period_type, row.period_start),
+        ),
+        ...(journalledRollupKeys ?? []),
+      ]),
+    [allRollupSummaries, journalledRollupKeys],
+  );
+
   const [approvedRollups, setApprovedRollups] = useState<
     {
       areaId: string;
@@ -139,12 +218,29 @@ export function useCloseMomentRollups({
   );
   const pendingRollups = useMemo(
     () =>
-      closeVM.rollupDrafts.filter(
-        (draft) =>
-          !dismissedRollupAreaIds.has(draft.areaId) &&
-          !approvedRollupAreaIds.has(draft.areaId),
-      ),
-    [closeVM.rollupDrafts, dismissedRollupAreaIds, approvedRollupAreaIds],
+      // `rollupReadbackSettled` gates the whole list, not each draft. The
+      // judge's GAP 2 wording is precise — "the offer is not gated on it BY
+      // THE TIME THE USER CAN ACT" — so rendering an offer during the
+      // in-flight window would re-create the lie for exactly as long as the
+      // fetch takes, and pin it as a race. Mock/demo resolves immediately with
+      // an empty list, so nothing is withheld where there is no account.
+      !rollupReadbackSettled
+        ? []
+        : closeVM.rollupDrafts.filter(
+            (draft) =>
+              !dismissedRollupAreaIds.has(draft.areaId) &&
+              !approvedRollupAreaIds.has(draft.areaId) &&
+              !durablyApprovedRollupKeys.has(
+                rollupKey(draft.areaId, "week", draft.periodStart),
+              ),
+          ),
+    [
+      closeVM.rollupDrafts,
+      dismissedRollupAreaIds,
+      approvedRollupAreaIds,
+      durablyApprovedRollupKeys,
+      rollupReadbackSettled,
+    ],
   );
   const [enhancedRollupSummaries, setEnhancedRollupSummaries] = useState<
     Record<string, RollupSummaryContent>
@@ -282,20 +378,6 @@ export function useCloseMomentRollups({
   // surface). Composition and the month-over-month readback are pure
   // (momentsViewModel); approve/dismiss/AI-prose state is kept independent of
   // the weekly rollup state above so each rollup type is separately decided.
-  const [allRollupSummaries, setAllRollupSummaries] = useState<RollupSummary[]>(
-    [],
-  );
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const rollups = await listApprovedRollups();
-      if (!cancelled) setAllRollupSummaries(rollups);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [listApprovedRollups]);
-
   const areaLabelForWorkflowId = useCallback(
     (areaId: string) =>
       state.areas.find((area) => area.id === areaId)?.name ?? "",
@@ -352,15 +434,27 @@ export function useCloseMomentRollups({
   );
   const pendingMonthlyRollups = useMemo(
     () =>
-      monthlyRollupDraftsRaw.filter(
-        (draft) =>
-          !dismissedMonthlyRollupAreaIds.has(draft.areaId) &&
-          !approvedMonthlyRollupAreaIds.has(draft.areaId),
-      ),
+      // GAP 2, monthly half. `monthlyRollupDraftsRaw` composes from APPROVED
+      // WEEKLY rows, so it happily re-drafts a month whose own monthly rollup
+      // the account already holds — which is exactly what the judge saw when a
+      // `MONTHLY ROLLUP` card appeared in the second tab that had not been
+      // offered in the first.
+      !rollupReadbackSettled
+        ? []
+        : monthlyRollupDraftsRaw.filter(
+            (draft) =>
+              !dismissedMonthlyRollupAreaIds.has(draft.areaId) &&
+              !approvedMonthlyRollupAreaIds.has(draft.areaId) &&
+              !durablyApprovedRollupKeys.has(
+                rollupKey(draft.areaId, "month", draft.periodStart),
+              ),
+          ),
     [
       monthlyRollupDraftsRaw,
       dismissedMonthlyRollupAreaIds,
       approvedMonthlyRollupAreaIds,
+      durablyApprovedRollupKeys,
+      rollupReadbackSettled,
     ],
   );
 

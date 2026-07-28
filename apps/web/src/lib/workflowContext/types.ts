@@ -12,6 +12,7 @@ import type {
   RollupSummaryContent,
 } from "@lifeos/schemas";
 import type { WorkflowState } from "../workflow";
+import type { LoggedWinRecord } from "../review/loggedWins";
 import type { SessionSaveResult } from "./persistenceSync";
 import type { TaskMapGraph } from "../taskmap/graph";
 import type { RevisionSignal } from "../taskmap/revision";
@@ -134,6 +135,18 @@ export interface WorkflowContextValue {
   // `lib/review/dayClose.ts` owns the precedence.
   accountClosedDays: string[];
   journalledClosedDays: string[];
+  // #737 C1 re-score GAP 1 — the wins already logged, split by WHERE they live,
+  // exactly like the two lists above and for the same reason. Task ids are
+  // resolved into WORKFLOW id space by the provider, so consumers compare
+  // against `winCandidates` without knowing that account ids exist.
+  // `resolveLoggedWinsForDay` in `lib/review/loggedWins.ts` owns the merge —
+  // consumers should not union them by hand.
+  accountLoggedWins: LoggedWinRecord[];
+  journalledLoggedWins: LoggedWinRecord[];
+  // #737 C1 re-score GAP 2 — periods this device has an APPROVED rollup for
+  // but has not sent yet, keyed `areaId|periodType|periodStart`. The account
+  // tier of the same question is fetched on demand by `listApprovedRollups`.
+  journalledRollupKeys: string[];
   // Purge device-local queued raw captures (call on logout — they are
   // High-sensitivity and must not outlive the session on a shared device).
   clearOfflineCaptures: () => Promise<void>;

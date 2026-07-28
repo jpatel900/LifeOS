@@ -260,6 +260,9 @@ export function TodayMoments({
     unsyncedCaptureCount,
     accountClosedDays,
     journalledClosedDays,
+    accountLoggedWins,
+    journalledLoggedWins,
+    journalledRollupKeys,
     taskMapDraft,
     requestTaskMapDraft,
     dismissTaskMapDraft,
@@ -315,8 +318,20 @@ export function TodayMoments({
         now,
         accountClosedDays,
         journalledClosedDays,
+        // #737 C1 re-score GAP 1: and the same two tiers for "which wins are
+        // already logged", so the offer and the verdict are both answered from
+        // durable facts rather than from this tab's memory.
+        accountLoggedWins,
+        journalledLoggedWins,
       }),
-    [state, now, accountClosedDays, journalledClosedDays],
+    [
+      state,
+      now,
+      accountClosedDays,
+      journalledClosedDays,
+      accountLoggedWins,
+      journalledLoggedWins,
+    ],
   );
 
   const [moment, setMoment] = useState<MomentValue>(() => {
@@ -568,6 +583,7 @@ export function TodayMoments({
     confirmWin,
     confirmRollup,
     listApprovedRollups,
+    journalledRollupKeys,
   });
 
   // FR-031 slice F5 (#679): the single Close map-revision offer — kernel
