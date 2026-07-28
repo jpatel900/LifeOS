@@ -152,8 +152,32 @@ export interface SupersedeSummary {
  * ordering that can occur, since the compensating action is authored second.
  *
  * Idempotent: a second run finds no pairs, because both halves of each pair
- * are gone. Fault-isolated: a delete that fails leaves both halves in place
- * for the next pass rather than half-cancelling a pair.
+ * are gone.
+ *
+ * ## THE ORDER OF THE TWO DELETES IS CHOSEN, AND IT IS NOT SYMMETRIC
+ *
+ * They are two IndexedDB transactions, so a device failing between them can
+ * leave a pair half-cancelled. The order picks WHICH half, and the two are not
+ * equally bad:
+ *
+ *  - Target first (what this does). A failure after it leaves an orphan
+ *    compensating entry whose original is gone. Its handler then throws on
+ *    every replay — a single stuck entry, retried and never delivered.
+ *  - Compensating first. A failure after it leaves the PLACEMENT queued with
+ *    nothing left to annul it, so the next drain delivers a block the user
+ *    deleted. That is the exact bug this function exists to end.
+ *
+ * So a stuck entry is accepted to make the resurrection impossible. It is also
+ * self-limiting in practice: an IndexedDB delete failing mid-pass means device
+ * storage is failing, which `markDeviceStorageBlocked` already reports loudly
+ * on the write path.
+ *
+ * Deliberately NOT "solved" by letting the handler drop a compensating entry
+ * whose original is missing. That case is ambiguous: the original may be
+ * missing because it was cancelled OR because another tab DELIVERED it between
+ * the undo and this pass, and in the second case the entry carries a real
+ * server undo that must not be discarded. Distinguishing them needs state this
+ * function does not keep — see the AGENT-TODO on #737 C1 S5's PR.
  */
 export async function resolveSupersededWrites(): Promise<SupersedeSummary> {
   const writes = await listPendingWrites();
@@ -171,8 +195,9 @@ export async function resolveSupersededWrites(): Promise<SupersedeSummary> {
       await markPendingWriteSynced(targetId);
       await markPendingWriteSynced(write.client_write_id);
     } catch {
-      // Leave both halves queued. A half-cancelled pair is the one state that
-      // would be worse than either whole one.
+      // A failure on the FIRST delete leaves both halves queued, which is the
+      // pre-S5 state and safe. A failure on the second leaves the orphan
+      // described above — deliberately preferred over a live resurrection.
       continue;
     }
 
