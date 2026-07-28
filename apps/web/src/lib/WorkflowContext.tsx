@@ -45,10 +45,12 @@ import {
   DEVICE_STORAGE_BLOCKED,
   SIGNED_OUT_SAVING_ON_THIS_DEVICE,
   SOME_WORK_ON_THIS_DEVICE,
+  savedOnThisDeviceAndSendingBanner,
   savedOnThisDeviceBanner,
 } from "./statusVocabulary";
 import {
-  createRollupSummary,
+  applyTaskReviewTransition,
+  syncJournaledRollup,
   syncJournaledWin,
   syncJournaledReviewEntry,
   syncJournaledExecutionSession,
@@ -69,6 +71,7 @@ import {
   recordPersonLinkRejection,
   recordWipEnforcementEvent,
   syncQueuedCapture,
+  unplanCalendarBlock,
   type MinimalSupabaseClient,
 } from "./data/workflow";
 import {
@@ -142,11 +145,14 @@ import {
 // network call, then replayed to the account idempotently.
 import {
   hasPendingWrite,
+  journalRollupWrite,
   journalWinWrite,
   replayDurableWrites,
+  resolveSupersededWrites,
 } from "./durability/durableWrites";
 import {
   listPendingWrites,
+  pendingWriteCount,
   type ReplaySummary,
 } from "./durability/pendingWriteJournal";
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
@@ -360,6 +366,70 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       };
     }, []);
 
+  /**
+   * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
+   *
+   * Nine call sites set this flag to `true`; not one ever set it back. So the
+   * moment anything went local-only — a signed-out session, one flaky save —
+   * every surface reading it was pinned to "some of your work is on this
+   * device" for the rest of the page's life, including long after the work had
+   * reached the account. #736's masthead indicator was built on that flag,
+   * which is why it could not be trusted and why S5 rebuilds it.
+   *
+   * ## What makes the recomputation honest rather than merely convenient
+   *
+   * The flag means "there is work on this device the account does not have".
+   * The queues answer that directly: the pending-writes journal and the
+   * offline capture queue hold exactly the writes still owed to the account.
+   *
+   * What the queues do NOT hold are the writes with no server destination at
+   * all — a proposal edit, a first-move edit, an approved task map, a draft
+   * edit with no accept, a WIP swap. Those also set the flag, and clearing it
+   * on an empty queue while one of them was outstanding would be a new
+   * falsehood in place of the old one.
+   *
+   * They are not outstanding here, and the reason is the CALLER, not this
+   * function: this runs only after a drain or a completed
+   * `syncPersistedWorkflowRows`, and that sync re-reads the account and
+   * reconciles local state against it. Anything the account lacked and could
+   * never receive has been overwritten by the account's own row by the time
+   * this runs — it is no longer on the device to be reported. So after a full
+   * sync, "work the account does not have" IS "work still queued".
+   *
+   * That is also why this is deliberately NOT called from anywhere else. Run
+   * mid-session, off the back of no sync, it would clear the flag over exactly
+   * the unsendable writes the paragraph above rules out.
+   *
+   * Best-effort on read failure: the flag is left exactly as it was rather
+   * than being cleared on a guess.
+   */
+  const refreshPendingLocalChanges = useCallback(async () => {
+    let queued: number;
+    try {
+      queued = (await pendingWriteCount()) + (await pendingCaptureCount());
+    } catch {
+      return;
+    }
+
+    setSyncStatus((current) => {
+      const pendingLocalChanges = queued > 0;
+      if (current.pendingLocalChanges === pendingLocalChanges) return current;
+      return {
+        ...current,
+        pendingLocalChanges,
+        // Silence is the resting state (`resolveDeviceSaveNotice`): with
+        // nothing owed and the account reached, there is nothing a person
+        // needs to know, and a permanent "all synced" marker is furniture.
+        // The message is only dropped when the account is genuinely reached —
+        // a `local-only` or `sync-error` state keeps its own sentence.
+        message:
+          !pendingLocalChanges && current.account === "synced"
+            ? null
+            : current.message,
+      };
+    });
+  }, []);
+
   const syncPersistedWorkflowRows = useCallback(
     async (
       client: MinimalSupabaseClient | null,
@@ -423,6 +493,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           .map((entry) => entry.period_start),
       );
       markAccountSynced();
+      // #737 C1 S5: the account has just been re-read and local state
+      // reconciled against it, which is the ONLY moment "still queued" and
+      // "not in the account" mean the same thing. See
+      // `refreshPendingLocalChanges` for why it is called here and nowhere
+      // else.
+      void refreshPendingLocalChanges();
 
       // S9 (#261): load learning history for the override-pattern scan. Kept
       // OUT of the strict provider gate above and failure-isolated — a missing
@@ -468,7 +544,12 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           // Non-fatal: a decided proposal may reappear until it is re-decided.
         });
     },
-    [buildDropLocalIds, markAccountSynced, markLocalOnly],
+    [
+      buildDropLocalIds,
+      markAccountSynced,
+      markLocalOnly,
+      refreshPendingLocalChanges,
+    ],
   );
 
   // #737-A slice 2: drain the win/review journal to the account, oldest write
@@ -483,6 +564,27 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // is the failure this program exists to end.
   const replayJournaledWrites =
     useCallback(async (): Promise<ReplaySummary> => {
+      // #737 C1 S5 — BEFORE the client check, deliberately.
+      //
+      // Cancelling a write the user took back is a DEVICE-tier operation: it
+      // involves no account, and it is exactly the signed-out/offline session
+      // where the bug it fixes bites (#778's disclosed resurrection needs the
+      // placement to be queued, which only happens when the account is
+      // unreachable). If this sat after the early return, an undo made in
+      // demo mode or while signed out would leave the placement queued until
+      // the first replay that found a client — i.e. until the moment it was
+      // about to be delivered, which is too late.
+      //
+      // `replayDurableWrites` runs the same pass again below. That is not a
+      // bug: the pass is idempotent (a resolved pair is gone from the
+      // journal), and keeping it inside `replayDurableWrites` is what makes
+      // that function correct for every OTHER caller, including its tests.
+      try {
+        await resolveSupersededWrites();
+      } catch {
+        // Nothing cancelled, nothing lost; both halves stay queued.
+      }
+
       const client = createSupabaseBrowserClient();
       if (!client) return { synced: 0, failed: 0, skipped: 0 };
 
@@ -622,6 +724,45 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             );
           }
         },
+
+        // --- #737 C1 S5: rollups ----------------------------------------
+        syncRollup: (args) => syncJournaledRollup(client, args),
+        // Same late resolution as the review's area, and the same rule: a
+        // rollup whose area still has no account id waits rather than being
+        // filed against a guess. `rollup_summaries.area_id` is NOT NULL, so
+        // "no area" is not even an available answer here.
+        resolveRollupAreaId: (payload) =>
+          persistedAreaIdForWorkflowId(
+            String(payload.workflow_area_id),
+            persistedAreasRef.current,
+          ),
+
+        // --- #737 C1 S5: the compensating actions -----------------------
+        // These only ever run for an undo whose original ALREADY reached the
+        // account — a queued original is annulled before dispatch, without a
+        // network call. So they are real server undos, not cancellations.
+        syncPlanUnplacement: async (args) => {
+          const result = await unplanCalendarBlock(client, args.block_id);
+          return { provider: result.provider };
+        },
+        resolvePlanUnplacementBlockId: (payload) =>
+          persistedIdForLocalId(
+            String(payload.workflow_block_id),
+            persistedBlockIdByLocalIdRef.current,
+          ),
+        syncTaskDrop: async (args) => {
+          const result = await applyTaskReviewTransition(
+            client,
+            args.task_id,
+            "dropped",
+          );
+          return { provider: result.provider };
+        },
+        resolveTaskDropTaskId: (payload) =>
+          persistedIdForLocalId(
+            String(payload.workflow_task_id),
+            persistedTaskIdByLocalIdRef.current,
+          ),
       });
     }, []);
 
@@ -675,7 +816,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // Pinned here, at the moment the user confirmed. Replay may not run
       // until tomorrow; a win confirmed at 23:50 must not be filed under the
       // following day.
-      const occurredAt = new Date().toISOString().slice(0, 10);
+      //
+      // #737 C1 S5: and pinned to the user's LOCAL calendar day. This was
+      // `new Date().toISOString().slice(0, 10)` — the UTC day — which is the
+      // same defect #775 fixed for `period_start` and #778 flagged here as the
+      // next instance of the pattern. It matters precisely where wins are
+      // harvested: the Close moment counts its day with `localIsoDate`, so
+      // west of Greenwich every evening win was filed under TOMORROW and
+      // vanished from the very surface that logged it.
+      const occurredAt = localIsoDate(new Date());
 
       let journalled;
       try {
@@ -701,7 +850,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
 
       if (await hasPendingWrite(journalled.client_write_id)) {
-        markLocalOnly(savedOnThisDeviceBanner("Your win"));
+        markLocalOnly(savedOnThisDeviceAndSendingBanner("Your win"));
         return "device-only";
       }
 
@@ -740,8 +889,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // S8 (#260, extended #486): persist a user-APPROVED rollup (NS-INV-4 —
   // dismissed drafts never reach here). `periodType` is caller-supplied
   // (weekly and monthly rollups share this exact persistence path — no new
-  // write path per #486); same local↔persisted area mapping + markLocalOnly
-  // fallback as confirmWin. Mock/preview keeps the approval local.
+  // write path per #486).
+  //
+  // #737 C1 S5 — MADE TRUE. This was the last member of the wins/reviews
+  // family still opening with `if (!client) return;` and still ending in a
+  // `markLocalOnly(savedOnThisDeviceBanner("Your rollup"))` over a write that
+  // had happened NOWHERE: not on the device, not in the account. S2's report
+  // flagged it as a standing falsehood and this closes it on S2's own
+  // pattern — the device journal first, the account write as a replay of it —
+  // so "saved on this device" is true before the user is told it, another tab
+  // can read the rollup back, and a rollup approved offline reaches the
+  // account on the next replay.
   const confirmRollup = useCallback(
     async (input: {
       areaId: string;
@@ -750,31 +908,53 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       periodEnd: string;
       summary: RollupSummaryContent;
     }) => {
-      const client = createSupabaseBrowserClient();
-      if (!client) return;
-
+      // Resolved if known, left to replay if not — the win/review rule. It is
+      // no longer a reason to give up on the write: `rollupHandler` re-resolves
+      // it and keeps the entry queued until the area has an account id.
       const persistedAreaId = persistedAreaIdForWorkflowId(
         input.areaId,
         persistedAreasRef.current,
       );
-      if (!persistedAreaId) {
-        markLocalOnly(savedOnThisDeviceBanner("Your rollup"));
+
+      let journalled;
+      try {
+        journalled = await journalRollupWrite({
+          workflowAreaId: input.areaId,
+          persistedAreaId,
+          periodType: input.periodType,
+          // Period bounds come from the caller's rollup draft and are already
+          // pinned to the period they summarise; nothing here re-derives a day
+          // from the replay clock.
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          summary: input.summary,
+        });
+      } catch {
+        // No IndexedDB. The rollup is genuinely nowhere — say so rather than
+        // claiming the device has it.
+        markDeviceStorageBlocked();
         return;
       }
 
       try {
-        await createRollupSummary(client, {
-          area_id: persistedAreaId,
-          period_type: input.periodType,
-          period_start: input.periodStart,
-          period_end: input.periodEnd,
-          summary: input.summary,
-        });
+        await replayJournaledWrites();
       } catch {
-        markLocalOnly(savedOnThisDeviceBanner("Your rollup"));
+        // Best-effort: the rollup stays journalled and the next replay retries.
       }
+
+      if (await hasPendingWrite(journalled.client_write_id)) {
+        markLocalOnly(savedOnThisDeviceAndSendingBanner("Your rollup"));
+        return;
+      }
+
+      markAccountSynced();
     },
-    [markLocalOnly],
+    [
+      markAccountSynced,
+      markDeviceStorageBlocked,
+      markLocalOnly,
+      replayJournaledWrites,
+    ],
   );
 
   // #486: read-only fetch of this user's already-APPROVED rollups, resolved
@@ -1227,12 +1407,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     // synced close would keep showing the device-only sentence.
     void replayJournaledWrites().finally(() => {
       void refreshJournalledClosedDays();
+      // #737 C1 S5: a drain that emptied the journal must be able to CLEAR
+      // the device-only indicator, not only ever raise it.
+      void refreshPendingLocalChanges();
     });
     if (typeof window === "undefined") return;
     const onOnline = () => {
       void syncOfflineQueue();
       void replayJournaledWrites().finally(() => {
         void refreshJournalledClosedDays();
+        void refreshPendingLocalChanges();
       });
     };
     window.addEventListener("online", onOnline);
@@ -1240,6 +1424,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   }, [
     refreshUnsyncedCount,
     refreshJournalledClosedDays,
+    refreshPendingLocalChanges,
     replayJournaledWrites,
     syncOfflineQueue,
   ]);
@@ -1706,11 +1891,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       applyWorkflowState(next);
 
       if (next !== previous) {
-        void persistenceOps
-          .persistTaskReviewTransition(taskId, "dropped")
-          .catch((error) => {
-            markPersistedSaveFailure(error);
-          });
+        // #737 C1 S5: routed through `persistDroppedTask`, not the generic
+        // transition, because a drop can be a COMPENSATING action — it may
+        // annul a triage accept that is still queued (#778's accept-then-drop
+        // resurrection). Defer and carry-forward deliberately keep the generic
+        // path: they move a task the user still wants.
+        void persistenceOps.persistDroppedTask(taskId).catch((error) => {
+          markPersistedSaveFailure(error);
+        });
       }
     },
     saveReview: () => {

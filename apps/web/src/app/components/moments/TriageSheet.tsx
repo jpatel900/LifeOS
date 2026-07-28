@@ -325,13 +325,19 @@ export function TriageSheet({
       <UnsortedCaptures areaId={resolvedAreaId} />
 
       {/* #689 item 3: when signed out, say where these live, plainly, with
-          the door right here. */}
+          the door right here.
+
+          #737 C1 S5: it said "Saved on this device." A signed-out capture
+          made online is staged in the reducer and mirrored to per-TAB
+          sessionStorage — never to a device store — so "this device" claimed
+          more than was true. The door and the reason for it are unchanged;
+          only the claim narrowed to what actually holds. */}
       {syncStatus.signedOut ? (
         <p
           className="text-xs text-muted-foreground"
           data-testid="triage-sheet-signedout-note"
         >
-          Saved on this device.{" "}
+          These captures are only in this browser tab.{" "}
           <Link
             href="/login?next=/"
             className="font-semibold text-foreground underline underline-offset-2"

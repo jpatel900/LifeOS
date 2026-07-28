@@ -72,7 +72,11 @@ describe("LoginPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Accounts aren't set up here yet, so there's nothing to sign in to. Your notes are still saved on this device.",
+      // Re-anchored by #737 C1 S5: "saved on this device" claimed a device
+      // store that a demo-mode capture never reaches (it is staged in the
+      // reducer and mirrored to per-tab sessionStorage). "stay in this
+      // browser" is what is true of everything here.
+      "Accounts aren't set up here yet, so there's nothing to sign in to. Your notes stay in this browser.",
     );
     expect(mocks.signInWithPassword).not.toHaveBeenCalled();
   });

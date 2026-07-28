@@ -62,7 +62,7 @@ function LoginForm() {
         // #692 plain language: no vendor/config vocabulary — say what it means
         // for the person.
         message:
-          "Accounts aren't set up here yet, so there's nothing to sign in to. Your notes are still saved on this device.",
+          "Accounts aren't set up here yet, so there's nothing to sign in to. Your notes stay in this browser.",
       });
       return;
     }

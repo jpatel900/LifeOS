@@ -1,7 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createPersistenceSync } from "./persistenceSync";
 import type { Phase2MockExecutionSession } from "../types";
-import { savedOnThisDeviceBanner } from "../statusVocabulary";
+// Re-anchored by #737 C1 S5, not weakened: a deferral is journalled as an
+// `execution_session`, so `replayDurableWrites` really does re-send it and the
+// banner now says so. The bare form is reserved for writes nothing will send.
+import { savedOnThisDeviceAndSendingBanner } from "../statusVocabulary";
 
 // #613: unit coverage for the atomic cap-DEFER persistence seam
 // (persistDeferredTaskWithSession) in isolation from the full React
@@ -137,7 +140,7 @@ describe("persistDeferredTaskWithSession (#613 atomic cap-DEFER seam)", () => {
 
     expect(result).toBe("local-only");
     expect(markLocalOnly).toHaveBeenCalledWith(
-      savedOnThisDeviceBanner("Your deferral"),
+      savedOnThisDeviceAndSendingBanner("Your deferral"),
     );
   });
 
@@ -197,7 +200,7 @@ describe("persistDeferredTaskWithSession (#613 atomic cap-DEFER seam)", () => {
 
     expect(result).toBe("local-only");
     expect(markLocalOnly).toHaveBeenCalledWith(
-      savedOnThisDeviceBanner("Your deferral"),
+      savedOnThisDeviceAndSendingBanner("Your deferral"),
     );
   });
 });

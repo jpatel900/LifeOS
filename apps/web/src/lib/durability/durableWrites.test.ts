@@ -473,15 +473,22 @@ describe("createDurableWriteHandlers", () => {
     // forgets its handler, `replayPendingWrites` silently reports it skipped
     // and -- because an unhandled entity is KEPT, not dropped -- it queues on
     // the device forever without ever reaching the account. Re-anchored by
-    // #737 C1 slice S4 (a focus-session outcome) and again by slice S3, which
-    // wires a placed block and an accepted triage draft.
+    // #737 C1 slice S4 (a focus-session outcome), again by slice S3 (a placed
+    // block and an accepted triage draft), and again by slice S5, which wires
+    // an approved rollup plus the two COMPENSATING actions -- an unplan and a
+    // drop. Those two matter most to this guard: an unhandled compensating
+    // entry would be kept forever AND would never annul the write it exists to
+    // annul, so the resurrection it fixes would come back silently.
     const handlers = createDurableWriteHandlers(serverOps());
 
     expect(Object.keys(handlers).sort()).toEqual([
       "execution_session",
       "plan_placement",
+      "plan_unplacement",
       "review",
+      "rollup",
       "task_draft_accept",
+      "task_drop",
       "win",
     ]);
   });

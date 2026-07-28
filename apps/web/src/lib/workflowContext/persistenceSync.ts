@@ -21,18 +21,23 @@ import {
   createTimeBlockProposal,
   editTimeBlockProposal,
   rejectTimeBlockProposal,
-  unplanCalendarBlock,
   type MinimalSupabaseClient,
   type ReviewTaskTargetStatus,
 } from "../data/workflow";
 import {
+  findQueuedWriteToSupersede,
   hasPendingWrite,
   journalExecutionSessionWrite,
   journalPlanPlacementWrite,
+  journalPlanUnplacementWrite,
   journalReviewWrite,
   journalTaskDraftAcceptWrite,
+  journalTaskDropWrite,
 } from "../durability/durableWrites";
-import { savedOnThisDeviceBanner } from "../statusVocabulary";
+import {
+  savedOnThisDeviceAndSendingBanner,
+  savedOnThisDeviceBanner,
+} from "../statusVocabulary";
 import { createSupabaseBrowserClient } from "../supabase/browser";
 import type {
   Phase2MockCalendarBlock,
@@ -241,7 +246,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your triage decision"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your triage decision"));
       return;
     }
 
@@ -312,7 +317,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your plan"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your plan"));
       return;
     }
 
@@ -426,20 +431,125 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     });
   }
 
+  /**
+   * #737 C1 S5: the undo is journalled too, so the sync can never overrule it.
+   *
+   * What this replaces, and why it was a bug worth its own slice: the whole
+   * body used to be the account call behind
+   * `if (!client || !persistedBlockId) { markLocalOnly("Your plan change"); return; }`.
+   * After S3 made the PLACEMENT durable, that early return became a data
+   * defect rather than a harmless fallback — the placement was queued, the
+   * undo was not, and the next reconnect delivered a block the user had
+   * explicitly deleted (#778 disclosed the exact sequence).
+   *
+   * Both cases are now journalled, and the payload's
+   * `supersedes_client_write_id` is what tells them apart:
+   *
+   *  - the placement is STILL QUEUED -> the entry names it, and
+   *    `resolveSupersededWrites` annuls both before either is dispatched. No
+   *    network call is made, because none is owed: the account never heard
+   *    about the block in the first place.
+   *  - the placement ALREADY LANDED -> the entry names nothing, survives the
+   *    pass, and its handler sends the real `unplan_calendar_block`.
+   */
   async function persistUnplannedBlock(localBlockId: string) {
-    const client = createSupabaseBrowserClient();
     const persistedBlockId = persistedIdForLocalId(
       localBlockId,
       persistedBlockIdByLocalIdRef.current,
     );
 
-    if (!client || !persistedBlockId) {
-      markLocalOnly(savedOnThisDeviceBanner("Your plan change"));
+    // Matched on the workflow-local block id, which both halves carry and
+    // which exists whether or not the account has ever seen this block. The
+    // persisted id would be null in exactly the case that matters.
+    const supersedes = await findQueuedWriteToSupersede(
+      "plan_placement",
+      (payload) => payload.workflow_block_id === localBlockId,
+    );
+
+    let journalled;
+    try {
+      journalled = await journalPlanUnplacementWrite({
+        workflowBlockId: localBlockId,
+        persistedBlockId,
+        supersedesClientWriteId: supersedes,
+      });
+    } catch {
+      markDeviceStorageBlocked();
       return;
     }
 
-    await unplanCalendarBlock(client, persistedBlockId);
-    await syncPersistedWorkflowRows(client);
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the change stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your plan change"));
+      return;
+    }
+
+    const client = createSupabaseBrowserClient();
+    if (client) await syncPersistedWorkflowRows(client);
+  }
+
+  /**
+   * #737 C1 S5: the accept-then-drop half of the same fix.
+   *
+   * #778 named this as the second shape of the resurrection: accept a draft
+   * offline (a `task_draft_accept` is queued), drop the task offline, and the
+   * replay still creates it on the account as `active`. Identical mechanism to
+   * `persistUnplannedBlock` — annul the queued accept, or send the real
+   * `dropped` transition if the accept already landed.
+   *
+   * Only DROP gets this treatment, not defer or carry-forward: those move a
+   * task the user still wants, so the accept must still be delivered and the
+   * transition applied on top of it. Drop is the one that says "this should
+   * not exist", which is the only intent an annulment can honestly represent.
+   */
+  async function persistDroppedTask(localTaskId: string) {
+    const persistedTaskId = persistedIdForLocalId(
+      localTaskId,
+      persistedTaskIdByLocalIdRef.current,
+    );
+
+    const supersedes = await findQueuedWriteToSupersede(
+      "task_draft_accept",
+      (payload) => payload.workflow_task_id === localTaskId,
+    );
+
+    // Nothing queued to annul AND the account already knows this task: this is
+    // an ordinary transition with no compensating role, so it keeps the
+    // established path rather than growing a second one.
+    if (!supersedes && persistedTaskId) {
+      return persistTaskReviewTransition(localTaskId, "dropped");
+    }
+
+    let journalled;
+    try {
+      journalled = await journalTaskDropWrite({
+        workflowTaskId: localTaskId,
+        persistedTaskId,
+        supersedesClientWriteId: supersedes,
+      });
+    } catch {
+      markDeviceStorageBlocked();
+      return;
+    }
+
+    try {
+      await replayJournaledWrites();
+    } catch {
+      // Best-effort: the drop stays journalled and the next replay retries.
+    }
+
+    if (await hasPendingWrite(journalled.client_write_id)) {
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your change"));
+      return;
+    }
+
+    const client = createSupabaseBrowserClient();
+    if (client) await syncPersistedWorkflowRows(client);
   }
 
   async function persistTaskReviewTransition(
@@ -545,7 +655,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your review"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your review"));
       return "local-only";
     }
 
@@ -609,7 +719,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     if (!localSession.task_id) {
       // Nothing to file the session against. Truthful, and the caller must
       // not claim a save.
-      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
+      markLocalOnly(
+        savedOnThisDeviceAndSendingBanner("Your focus session result"),
+      );
       return "local-only";
     }
 
@@ -659,7 +771,9 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your focus session result"));
+      markLocalOnly(
+        savedOnThisDeviceAndSendingBanner("Your focus session result"),
+      );
       return "local-only";
     }
 
@@ -719,7 +833,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     }
 
     if (await hasPendingWrite(journalled.client_write_id)) {
-      markLocalOnly(savedOnThisDeviceBanner("Your deferral"));
+      markLocalOnly(savedOnThisDeviceAndSendingBanner("Your deferral"));
       return "local-only";
     }
 
@@ -737,6 +851,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     persistRejectedLocalProposal,
     persistAcceptedLocalProposal,
     persistUnplannedBlock,
+    persistDroppedTask,
     persistTaskReviewTransition,
     persistReviewEntry,
     persistStartedSession,

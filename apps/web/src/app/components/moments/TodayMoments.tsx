@@ -22,6 +22,7 @@ import {
 } from "./CountdownClockToggle";
 import { AreaSelector } from "./AreaSelector";
 import { MastheadThemeToggle } from "./MastheadThemeToggle";
+import { MastheadSaveState } from "./MastheadSaveState";
 import { formatMastheadDate } from "./formatMastheadDate";
 import { CaptureAffordance } from "./CaptureAffordance";
 import { AuthAffordance } from "./AuthAffordance";
@@ -1156,6 +1157,13 @@ export function TodayMoments({
             </div>
           </header>
 
+          {/* #737 C1 S5: where the user's work is, STACKED under the masthead
+              rather than inline in the control cluster above — that cluster's
+              width budget is what overflowed at 390px when #736 tried to fit a
+              sentence into it. Renders nothing at all when everything has
+              reached the account. */}
+          <MastheadSaveState status={syncStatus} />
+
           {moment !== "start" ? (
             <h1 className="sr-only">LifeOS Today</h1>
           ) : null}
@@ -1303,8 +1311,18 @@ export function TodayMoments({
           // to branch on here — the offline case is simply "offline".
           const offline =
             typeof navigator !== "undefined" && navigator.onLine === false;
+          // #737 C1 S5 — WAS " Saved on this device — sign in to keep it
+          // everywhere.", and that was false. A signed-out capture made while
+          // ONLINE never reaches a device store: `submitCaptureText` only
+          // routes to the durable queue when `navigator.onLine === false`, so
+          // this one is staged in the reducer and mirrored to per-TAB
+          // sessionStorage. It survives a reload and dies with the tab.
+          //
+          // The words now say the narrower true thing. Widening them back is
+          // earned by making the capture durable (Target Card 3), not by
+          // rephrasing — see the AGENT-TODO on this slice's PR.
           const signedOutNote = syncStatus.signedOut
-            ? " Saved on this device — sign in to keep it everywhere."
+            ? " Sign in to keep it — until then it's only in this tab."
             : "";
           if (offline) {
             showToast(
