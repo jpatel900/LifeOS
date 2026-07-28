@@ -9,6 +9,9 @@ const baseVm: CloseVM = {
   carryForward: [],
   tomorrowFirstMove: null,
   winCandidates: [],
+  // #737 C1 re-score GAP 1: nothing logged yet in the default fixture, so
+  // every pre-existing assertion still describes an unharvested day.
+  loggedWinsToday: [],
   rollupDrafts: [],
   // Audit P0#4: the default fixture is an OPEN day, so every pre-existing
   // assertion in this file keeps describing the pre-close screen. The closed

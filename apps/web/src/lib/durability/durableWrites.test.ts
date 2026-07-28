@@ -100,6 +100,136 @@ describe("journalWinWrite", () => {
 
     expect(await pendingWriteCount("win")).toBe(1);
   });
+
+  // #737 C1 re-score GAP 1. The judge logged one win, opened a NEW TAB, was
+  // offered the same win again, took the offer, and the account ended up
+  // holding TWO `win_records` rows for one accomplishment -- the only defect
+  // in the C1 set that makes the app invent a record of the user's work.
+  //
+  // `win_records_user_client_write_id_key` (20260726120000) was already there
+  // and already enforced. It caught nothing because the VALUE was minted per
+  // action (`crypto.randomUUID()`), so the second mount produced a key the
+  // index had never seen. The key is now derived from the FACT -- this task,
+  // this local day -- which is what makes the index the backstop it was built
+  // to be. The user is deliberately absent from the key: the index is already
+  // scoped `(user_id, client_write_id)`, and asking for an identity at journal
+  // time would break the journal-before-network order that slice 2 exists for.
+  it("derives the same idempotency key for the same task on the same local day", async () => {
+    const first = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: PERSISTED_TASK,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+    const second = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: PERSISTED_TASK,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+
+    expect(second.client_write_id).toBe(first.client_write_id);
+    // And the journal itself collapses the replay rather than queueing twice.
+    expect(await pendingWriteCount("win")).toBe(1);
+  });
+
+  it("keys on the ACCOUNT task id when there is one, so a task that syncs mid-day cannot mint a second key", async () => {
+    // The trap this pins: a task created locally carries a non-uuid workflow
+    // id until it syncs, after which the account uuid IS its workflow id.
+    // Keying on the workflow id alone would give the pre-sync tab and the
+    // post-sync tab two different keys for one win -- GAP 1 again, one sync
+    // boundary later.
+    const beforeSync = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: PERSISTED_TASK,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+    const afterSync = await journalWinWrite({
+      workflowTaskId: PERSISTED_TASK,
+      persistedTaskId: PERSISTED_TASK,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+
+    expect(afterSync.client_write_id).toBe(beforeSync.client_write_id);
+    expect(await pendingWriteCount("win")).toBe(1);
+  });
+
+  // The seam this records, deliberately rather than by omission: a win
+  // journalled with NO account id yet keys on the local id, and the same task
+  // after it syncs would key on the account uuid. Those keys differ, and that
+  // is safe -- but only because the OTHER half of the fix covers it. The
+  // journal payload keeps both ids, the Close moment reports both as aliases
+  // (`LoggedWinRecord.taskIdAliases`), so the offer is withdrawn across the
+  // sync boundary and the second key is never derived by a user action. Pinned
+  // in `momentsViewModel.test.ts` ("still withdraws the offer after the task
+  // crosses the sync boundary"). If that suppression is ever removed, this
+  // difference becomes a duplicate again -- which is why it is stated here.
+  it("keys a win with no account id on the local id, and says so", async () => {
+    const preSync = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: null,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+
+    expect(preSync.client_write_id).toBe(`win:task-local-1:${CONFIRMED_ON}`);
+    // Confirming the SAME pre-sync win twice is still idempotent -- the case
+    // that actually repeats without a network round trip.
+    const preSyncAgain = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: null,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+    expect(preSyncAgain.client_write_id).toBe(preSync.client_write_id);
+    expect(await pendingWriteCount("win")).toBe(1);
+  });
+
+  it("keeps different tasks, and the same task on a different day, distinct", async () => {
+    const a = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: PERSISTED_TASK,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+    const otherTask = await journalWinWrite({
+      workflowTaskId: "task-local-2",
+      persistedTaskId: null,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Something else",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+    const otherDay = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: PERSISTED_TASK,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: "2026-05-09",
+    });
+
+    expect(
+      new Set([a, otherTask, otherDay].map((w) => w.client_write_id)).size,
+    ).toBe(3);
+    expect(await pendingWriteCount("win")).toBe(3);
+  });
 });
 
 describe("journalReviewWrite", () => {
@@ -450,10 +580,17 @@ describe("replayDurableWrites", () => {
         return { provider: "supabase" as const };
       }),
     });
-    for (const title of ["first win", "second win"]) {
+    // Two DIFFERENT tasks, which is what two different wins are. The fixture
+    // used to give both the same `persistedTaskId`; since the C1 re-score fix
+    // the idempotency key is derived from (account task, local day), so a
+    // shared task id would correctly collapse these into ONE journal entry and
+    // the ordering this test exists to pin would have nothing to order. The
+    // assertion below is unchanged — only the fixture stopped describing one
+    // win as two.
+    for (const [index, title] of ["first win", "second win"].entries()) {
       await journalWinWrite({
         workflowTaskId: `task-${title}`,
-        persistedTaskId: PERSISTED_TASK,
+        persistedTaskId: `550e8400-e29b-41d4-a716-44665544030${index}`,
         persistedAreaId: PERSISTED_AREA,
         title,
         detail: null,

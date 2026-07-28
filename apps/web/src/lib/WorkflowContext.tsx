@@ -59,6 +59,7 @@ import {
   listAreas,
   listOverrideRecords,
   listRollupSummaries,
+  listWinRecords,
   listDurationProfiles,
   upsertDurationProfile,
   listPlanningItems,
@@ -113,6 +114,7 @@ import {
   NIL_UUID,
   persistedAreaIdForWorkflowId,
   persistedIdForLocalId,
+  workflowIdForPersistedId,
   isSignedOutError,
   persistedLoadFailureMessage,
   persistedSaveFailureMessage,
@@ -158,6 +160,7 @@ import {
 // Final UX Loop C1, Target Cards 1+7 (audit P0#4): one definition of which
 // calendar day a close belongs to, and one answer to "is it closed already?".
 import { localIsoDate, resolveDayClose } from "./review/dayClose";
+import type { LoggedWinRecord } from "./review/loggedWins";
 
 // Slice 4 (#590) re-exports — same public names, new homes. Every existing
 // `import { X } from "@/lib/WorkflowContext"` site keeps compiling unchanged.
@@ -221,6 +224,26 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // in the session-storage mirror of the workflow.
   const [accountClosedDays, setAccountClosedDays] = useState<string[]>([]);
   const [journalledClosedDays, setJournalledClosedDays] = useState<string[]>(
+    [],
+  );
+  // #737 C1 re-score GAP 1 — the same two tiers, for the same reason, one
+  // question over: "has this win already been logged?". Before these, the
+  // Close moment answered it from React state initialised empty on every
+  // mount, so a new tab re-offered a win the account already held and taking
+  // the offer wrote a SECOND row for one accomplishment. See
+  // `lib/review/loggedWins.ts`.
+  const [accountLoggedWins, setAccountLoggedWins] = useState<LoggedWinRecord[]>(
+    [],
+  );
+  const [journalledLoggedWins, setJournalledLoggedWins] = useState<
+    LoggedWinRecord[]
+  >([]);
+  // #737 C1 re-score GAP 2 — approved rollups this device holds but has not
+  // sent yet, keyed `areaId|periodType|periodStart`. The ACCOUNT tier of the
+  // same question is already fetched by `listApprovedRollups`; this is the
+  // offline half, so a rollup approved with no account reachable is not
+  // re-offered on the next mount.
+  const [journalledRollupKeys, setJournalledRollupKeys] = useState<string[]>(
     [],
   );
   // Audit P0#4: the close for the day currently being written, if any. A ref
@@ -499,6 +522,42 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       // `refreshPendingLocalChanges` for why it is called here and nowhere
       // else.
       void refreshPendingLocalChanges();
+
+      // #737 C1 re-score GAP 1: the ACCOUNT tier of "which wins are already
+      // logged". Failure-isolated and kept OUT of the strict provider gate
+      // above for the same reason the override read is: a missing wins read
+      // must never knock the workflow sync into local-only. The cost of it
+      // failing is the pre-fix behaviour (the win is offered again), and the
+      // derived `client_write_id` still stops that offer from writing a second
+      // row — the two halves of the fix are independent on purpose.
+      void listWinRecords(client)
+        .then((result) => {
+          if (result.provider !== "supabase") return;
+          setAccountLoggedWins(
+            result.winRecords
+              .filter(
+                (row): row is typeof row & { source_task_id: string } =>
+                  typeof row.source_task_id === "string",
+              )
+              .map((row) => ({
+                // Resolved into WORKFLOW id space here, at the only layer that
+                // holds the mapping, so no consumer below has to know that two
+                // id spaces exist. A task that came from the account already
+                // carries its uuid as its workflow id, which is why the
+                // fallback is the id itself rather than a drop.
+                taskId:
+                  workflowIdForPersistedId(
+                    row.source_task_id,
+                    persistedTaskIdByLocalIdRef.current,
+                  ) ?? row.source_task_id,
+                title: row.title,
+                occurredAt: row.occurred_at,
+              })),
+          );
+        })
+        .catch(() => {
+          // Non-fatal: the Close moment falls back to offering the win again.
+        });
 
       // S9 (#261): load learning history for the override-pattern scan. Kept
       // OUT of the strict provider gate above and failure-isolated — a missing
@@ -1301,7 +1360,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
    * Best-effort, like `refreshUnsyncedCount`: a device that cannot hold the
    * journal at all has already told the user so via `markDeviceStorageBlocked`.
    */
-  const refreshJournalledClosedDays = useCallback(async () => {
+  const refreshJournalledDurableState = useCallback(async () => {
     try {
       const pending = await listPendingWrites();
       setJournalledClosedDays(
@@ -1312,6 +1371,71 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               (write.payload as { period_start?: unknown }).period_start,
           )
           .filter((day): day is string => typeof day === "string"),
+      );
+      // #737 C1 re-score GAP 1. Read out of the SAME `listPendingWrites()`
+      // pass, and therefore on exactly the same lifecycle as the closed days
+      // above (mount, after every replay drain, and on `online`). That is not
+      // tidiness: a win logged offline and then drained must stop being
+      // reported as device-only in the same beat the drain finishes, or the
+      // Close moment shows a stale tier — which is the audit's finding again,
+      // one refresh later.
+      setJournalledLoggedWins(
+        pending
+          .filter((write) => write.entity === "win")
+          .map((write) => write.payload as Record<string, unknown>)
+          .filter(
+            (
+              payload,
+            ): payload is {
+              workflow_task_id: string;
+              persisted_task_id?: unknown;
+              title: string;
+              occurred_at: string;
+            } =>
+              typeof payload.workflow_task_id === "string" &&
+              typeof payload.title === "string" &&
+              typeof payload.occurred_at === "string",
+          )
+          // BOTH id spaces, because the journal deliberately stores both and
+          // the task can cross the sync boundary while its win is queued.
+          // Pre-sync the candidate carries the local id; once the task syncs,
+          // `dropLocalIds` replaces the row and the candidate carries the
+          // account uuid — while the queued payload still says the local id.
+          // Reporting only one of the two would re-offer the win at exactly
+          // that moment, and confirming would derive a SECOND key
+          // (`deriveWinClientWriteId` prefers the account id) and a second row.
+          .map((payload) => ({
+            taskId: payload.workflow_task_id,
+            taskIdAliases:
+              typeof payload.persisted_task_id === "string"
+                ? [payload.persisted_task_id]
+                : undefined,
+            title: payload.title,
+            occurredAt: payload.occurred_at,
+          })),
+      );
+      // #737 C1 re-score GAP 2: the device tier of "is this period already
+      // rolled up?", keyed the same way the hook keys its account tier.
+      setJournalledRollupKeys(
+        pending
+          .filter((write) => write.entity === "rollup")
+          .map((write) => write.payload as Record<string, unknown>)
+          .filter(
+            (
+              payload,
+            ): payload is {
+              workflow_area_id: string;
+              period_type: string;
+              period_start: string;
+            } =>
+              typeof payload.workflow_area_id === "string" &&
+              typeof payload.period_type === "string" &&
+              typeof payload.period_start === "string",
+          )
+          .map(
+            (payload) =>
+              `${payload.workflow_area_id}|${payload.period_type}|${payload.period_start}`,
+          ),
       );
     } catch {
       // best-effort signal; a journal read failure must not break the shell
@@ -1400,13 +1524,13 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // each is fired on its own and neither awaits the other.
   useEffect(() => {
     void refreshUnsyncedCount();
-    void refreshJournalledClosedDays();
+    void refreshJournalledDurableState();
     void syncOfflineQueue();
     // Audit P0#4: the replay may DELETE the day's journal entry (the account
     // took it), so the device tier is re-read after every drain — otherwise a
     // synced close would keep showing the device-only sentence.
     void replayJournaledWrites().finally(() => {
-      void refreshJournalledClosedDays();
+      void refreshJournalledDurableState();
       // #737 C1 S5: a drain that emptied the journal must be able to CLEAR
       // the device-only indicator, not only ever raise it.
       void refreshPendingLocalChanges();
@@ -1415,7 +1539,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     const onOnline = () => {
       void syncOfflineQueue();
       void replayJournaledWrites().finally(() => {
-        void refreshJournalledClosedDays();
+        void refreshJournalledDurableState();
         void refreshPendingLocalChanges();
       });
     };
@@ -1423,7 +1547,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("online", onOnline);
   }, [
     refreshUnsyncedCount,
-    refreshJournalledClosedDays,
+    refreshJournalledDurableState,
     refreshPendingLocalChanges,
     replayJournaledWrites,
     syncOfflineQueue,
@@ -1670,6 +1794,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     unsyncedCaptureCount,
     accountClosedDays,
     journalledClosedDays,
+    accountLoggedWins,
+    journalledLoggedWins,
+    journalledRollupKeys,
     clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),
@@ -1959,7 +2086,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           // caller that awaits this promise renders the verdict in the SAME
           // turn the toast appears. A close that is only on the device is
           // still a close, and the user sees it land.
-          await refreshJournalledClosedDays();
+          await refreshJournalledDurableState();
           if (outcome === "persisted") {
             setAccountClosedDays((days) =>
               days.includes(day) ? days : [...days, day],

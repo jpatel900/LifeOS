@@ -6,6 +6,11 @@ import {
 import type { RollupSummaryContent } from "@lifeos/schemas";
 import { resolveDayClose, type DayCloseRecord } from "@/lib/review/dayClose";
 import {
+  loggedWinTaskIdsOf,
+  resolveLoggedWinsForDay,
+  type LoggedWinRecord,
+} from "@/lib/review/loggedWins";
+import {
   areaName,
   isSameCalendarDay,
   oldestActiveTask,
@@ -84,7 +89,17 @@ export interface CloseVM {
   tomorrowFirstMove: FirstMoveVM | null;
   // S7 (#259): candidate wins to harvest at close — tasks completed today,
   // surfaced for the user to confirm/edit/skip into the evidence log.
+  //
+  // #737 C1 re-score GAP 1: a task whose win is ALREADY logged today (on
+  // either tier) is no longer a candidate. It used to be, on every mount, in
+  // every tab — and taking the offer wrote a second record of one
+  // accomplishment.
   winCandidates: { taskId: string; title: string; areaLabel: string }[];
+  // #737 C1 re-score GAP 1: the wins this user has already logged for TODAY,
+  // merged across the account and the device journal. The Close moment shows
+  // these as the confirmed reading list and counts them in the verdict tail,
+  // so both are facts read back rather than memories of this session.
+  loggedWinsToday: LoggedWinVM[];
   // S8 (#260): per-area weekly rollup drafts to approve/dismiss.
   rollupDrafts: RollupDraftVM[];
   // Final UX Loop C1, Target Cards 1+7 (audit P0#4): the day's verdict, or
@@ -110,6 +125,35 @@ export interface DayCloseOption {
   journalledClosedDays?: readonly string[];
 }
 
+/** A logged win as the Close moment renders it (area label resolved). */
+export interface LoggedWinVM {
+  taskId: string;
+  title: string;
+  areaLabel: string;
+}
+
+/**
+ * #737 C1 re-score, GAP 1 — the wins already logged, from both durable tiers.
+ *
+ * Injected for the same reason the two `*ClosedDays` lists are: they are
+ * FETCHED tiers and this module is a pure selector. Both default to empty, so
+ * a caller that has not wired them yet sees the pre-fix behaviour (every
+ * completed task offered) rather than a wrong one.
+ *
+ * Two lists rather than one merged list, mirroring the day close, because the
+ * tiers answer different questions: the account tier is what a SECOND MACHINE
+ * sees, the journal tier is what THIS DEVICE holds but has not sent yet. Both
+ * mean "the user already logged this", which is the only question the offer
+ * needs answered — so unlike `resolveDayClose` there is no precedence to
+ * resolve here, just a union.
+ */
+export interface LoggedWinsOption {
+  /** Today's `win_records` rows the ACCOUNT holds for this user. */
+  accountLoggedWins?: readonly LoggedWinRecord[];
+  /** Wins still waiting in the DEVICE journal, not yet in the account. */
+  journalledLoggedWins?: readonly LoggedWinRecord[];
+}
+
 /**
  * Close moment view model — today's completed/missed counts, carry-forward
  * tasks, and tomorrow's first move. Carry-forward rule (kept deliberately
@@ -118,7 +162,7 @@ export interface DayCloseOption {
  */
 export function buildCloseVM(
   state: WorkflowState,
-  options: NowOption & DayCloseOption,
+  options: NowOption & DayCloseOption & LoggedWinsOption,
 ): CloseVM {
   const { now } = options;
 
@@ -158,12 +202,46 @@ export function buildCloseVM(
     };
   })();
 
+  // #737 C1 re-score GAP 1. Keyed on the LOCAL calendar day — the same
+  // derivation `confirmWin` files the win under (`localIsoDate`) and the same
+  // one `dayClose` below resolves against. A UTC-keyed lookup here would find
+  // nothing after 17:00 west of Greenwich, which is precisely when the Close
+  // moment is designed to be used, and the win logged ten minutes ago would be
+  // offered again.
+  const todayIso = toIsoDate(now);
+  const loggedWinRecordsToday = resolveLoggedWinsForDay(
+    options.accountLoggedWins ?? [],
+    options.journalledLoggedWins ?? [],
+    todayIso,
+  );
+  const loggedWinsToday: LoggedWinVM[] = loggedWinRecordsToday.map((record) => {
+    const task = state.tasks.find((t) => t.id === record.taskId);
+    return {
+      taskId: record.taskId,
+      // The DURABLE row's title, not the task's. The user may have edited the
+      // wording before logging it, and what was recorded is what gets read
+      // back — the reading list must not quietly show a different sentence.
+      title: record.title,
+      areaLabel: task ? areaName(state.areas, task.area_id) : "",
+    };
+  });
+  // Suppression covers every id a logged win answers to (see
+  // `LoggedWinRecord.taskIdAliases`); the VM list above stays one-per-win so
+  // the verdict's `· N wins logged` tail counts wins, not names.
+  const loggedWinTaskIds = new Set(
+    loggedWinRecordsToday.flatMap((record) => loggedWinTaskIdsOf(record)),
+  );
+
   const winCandidates: { taskId: string; title: string; areaLabel: string }[] =
     [];
   const winSeen = new Set<string>();
   for (const block of todayBlocksRaw) {
     if (block.status !== "completed" || !block.task_id) continue;
     if (winSeen.has(block.task_id)) continue;
+    // Already logged today, on either tier: not an offer any more. This is the
+    // screen's half of GAP 1 — without it the candidate is re-derived from the
+    // completed block on every mount, in every tab, forever.
+    if (loggedWinTaskIds.has(block.task_id)) continue;
     const task = state.tasks.find((t) => t.id === block.task_id);
     if (!task) continue;
     winSeen.add(block.task_id);
@@ -183,7 +261,7 @@ export function buildCloseVM(
   const dayClose = resolveDayClose(
     options.accountClosedDays ?? [],
     options.journalledClosedDays ?? [],
-    toIsoDate(now),
+    todayIso,
   );
 
   return {
@@ -192,6 +270,7 @@ export function buildCloseVM(
     carryForward,
     tomorrowFirstMove,
     winCandidates,
+    loggedWinsToday,
     rollupDrafts,
     dayClose,
   };

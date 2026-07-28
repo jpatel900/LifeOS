@@ -109,6 +109,7 @@ function CloseMomentWinHarness() {
       missedToday: 0,
       carryForward: [],
       tomorrowFirstMove: null,
+      loggedWinsToday: [],
       winCandidates: [
         {
           taskId: "task-guard-1",

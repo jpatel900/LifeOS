@@ -902,6 +902,196 @@ describe("buildCloseVM", () => {
     expect(vm.winCandidates).toEqual([]);
   });
 
+  // #737 C1 re-score, GAP 1: "the account knows, and the screen forgets".
+  // A win logged in one tab was offered again as un-logged in the next, and
+  // taking the offer wrote a SECOND `win_records` row for one accomplishment.
+  // The screen's half of that fix is here: the same two-tier readback the day
+  // close already uses (`accountClosedDays`/`journalledClosedDays`), so the
+  // question "is this win already logged?" is answered in ONE place.
+  describe("loggedWinsToday (C1 re-score GAP 1)", () => {
+    const today = localIsoDate(NOW);
+    const winState = () =>
+      stateWith({
+        tasks: [makeTask({ id: "t-win", title: "Shipped onboarding" })],
+        calendarBlocks: [
+          makeBlock({ id: "b-w1", task_id: "t-win", status: "completed" }),
+        ],
+      });
+
+    it("is empty, and offers the candidate, when neither tier holds a win", () => {
+      const vm = buildCloseVM(winState(), { now: NOW });
+      expect(vm.loggedWinsToday).toEqual([]);
+      expect(vm.winCandidates).toHaveLength(1);
+    });
+
+    it("withdraws the offer and reports the win once the ACCOUNT holds it", () => {
+      const vm = buildCloseVM(winState(), {
+        now: NOW,
+        accountLoggedWins: [
+          { taskId: "t-win", title: "Shipped onboarding", occurredAt: today },
+        ],
+      });
+      expect(vm.winCandidates).toEqual([]);
+      expect(vm.loggedWinsToday).toHaveLength(1);
+      expect(vm.loggedWinsToday[0]).toMatchObject({
+        taskId: "t-win",
+        title: "Shipped onboarding",
+      });
+    });
+
+    it("withdraws the offer for a win still waiting in the DEVICE journal", () => {
+      // Logged offline. The account has never seen it, but the user has
+      // already logged it and must not be asked to log it again.
+      const vm = buildCloseVM(winState(), {
+        now: NOW,
+        journalledLoggedWins: [
+          { taskId: "t-win", title: "Shipped onboarding", occurredAt: today },
+        ],
+      });
+      expect(vm.winCandidates).toEqual([]);
+      expect(vm.loggedWinsToday).toHaveLength(1);
+    });
+
+    it("counts a win held on BOTH tiers once", () => {
+      const vm = buildCloseVM(winState(), {
+        now: NOW,
+        accountLoggedWins: [
+          { taskId: "t-win", title: "Shipped onboarding", occurredAt: today },
+        ],
+        journalledLoggedWins: [
+          { taskId: "t-win", title: "Shipped onboarding", occurredAt: today },
+        ],
+      });
+      expect(vm.loggedWinsToday).toHaveLength(1);
+    });
+
+    it("ignores a win logged on another day, and still offers today's", () => {
+      // Recurring work: the same task can earn a win on more than one day.
+      // Yesterday's win must not silence today's offer.
+      const vm = buildCloseVM(winState(), {
+        now: NOW,
+        accountLoggedWins: [
+          {
+            taskId: "t-win",
+            title: "Shipped onboarding",
+            occurredAt: "2026-07-04",
+          },
+        ],
+      });
+      expect(vm.loggedWinsToday).toEqual([]);
+      expect(vm.winCandidates).toHaveLength(1);
+    });
+
+    it("keys on the LOCAL calendar day, not the UTC one", () => {
+      // 23:30 local, west of Greenwich: UTC has already rolled over. The write
+      // path files the win under the LOCAL day (`localIsoDate` in
+      // `confirmWin`), so a UTC-keyed readback would find nothing and re-offer
+      // a win that was logged ten minutes ago — the audit's failure class
+      // (#773/#775/#778) inside the readback this time.
+      const lateEvening = new Date(2026, 6, 27, 23, 30, 0);
+      const state = stateWith({
+        tasks: [makeTask({ id: "t-win", title: "Shipped onboarding" })],
+        calendarBlocks: [
+          makeBlock({
+            id: "b-w1",
+            task_id: "t-win",
+            status: "completed",
+            start_at: new Date(2026, 6, 27, 10, 0, 0).toISOString(),
+            end_at: new Date(2026, 6, 27, 11, 0, 0).toISOString(),
+          }),
+        ],
+      });
+      const vm = buildCloseVM(state, {
+        now: lateEvening,
+        accountLoggedWins: [
+          {
+            taskId: "t-win",
+            title: "Shipped onboarding",
+            occurredAt: "2026-07-27",
+          },
+        ],
+      });
+      expect(vm.winCandidates).toEqual([]);
+      expect(vm.loggedWinsToday).toHaveLength(1);
+    });
+
+    it("still withdraws the offer after the task crosses the sync boundary", () => {
+      // The narrow case the readback would otherwise miss. A task created
+      // locally carries a non-uuid workflow id; its win is journalled under
+      // that id. When the task syncs, `dropLocalIds` replaces the row and the
+      // Close moment's candidate carries the ACCOUNT uuid, while the queued
+      // payload still names the local id. Without the alias the win is offered
+      // again at exactly that moment — and confirming would derive a second
+      // key (`deriveWinClientWriteId` prefers the account id) and a second
+      // row. GAP 1 again, one sync boundary later.
+      const accountTaskId = "00000000-0000-4000-8000-000000000777";
+      const state = stateWith({
+        tasks: [makeTask({ id: accountTaskId, title: "Shipped onboarding" })],
+        calendarBlocks: [
+          makeBlock({
+            id: "b-w1",
+            task_id: accountTaskId,
+            status: "completed",
+          }),
+        ],
+      });
+      const vm = buildCloseVM(state, {
+        now: NOW,
+        journalledLoggedWins: [
+          {
+            taskId: "task-local-1",
+            taskIdAliases: [accountTaskId],
+            title: "Shipped onboarding",
+            occurredAt: today,
+          },
+        ],
+      });
+      expect(vm.winCandidates).toEqual([]);
+      // ONE win, not two: aliases widen suppression and are never counted, or
+      // the verdict's `· N wins logged` tail would say 2 for one win.
+      expect(vm.loggedWinsToday).toHaveLength(1);
+    });
+
+    it("counts one win when the two tiers name the same task differently", () => {
+      const accountTaskId = "00000000-0000-4000-8000-000000000778";
+      const vm = buildCloseVM(stateWith({}), {
+        now: NOW,
+        accountLoggedWins: [
+          {
+            taskId: accountTaskId,
+            title: "Shipped onboarding",
+            occurredAt: today,
+          },
+        ],
+        journalledLoggedWins: [
+          {
+            taskId: "task-local-1",
+            taskIdAliases: [accountTaskId],
+            title: "Shipped onboarding",
+            occurredAt: today,
+          },
+        ],
+      });
+      expect(vm.loggedWinsToday).toHaveLength(1);
+    });
+
+    it("reports a logged win whose task has no completed block today", () => {
+      // The verdict's `· N wins logged` tail must count what was LOGGED, not
+      // what happens to still be offerable. A block un-completed after the win
+      // was logged must not make the tail disagree across tabs.
+      const vm = buildCloseVM(stateWith({}), {
+        now: NOW,
+        accountLoggedWins: [
+          { taskId: "t-gone", title: "Shipped onboarding", occurredAt: today },
+        ],
+      });
+      expect(vm.loggedWinsToday).toHaveLength(1);
+      expect(vm.loggedWinsToday[0]).toMatchObject({
+        title: "Shipped onboarding",
+      });
+    });
+  });
+
   it("composes a per-area weekly rollup draft from the last 7 days", () => {
     const state = stateWith({
       tasks: [
