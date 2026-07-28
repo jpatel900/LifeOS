@@ -155,6 +155,51 @@ export interface LoggedWinsOption {
 }
 
 /**
+ * Finished focus sessions from today that NO block can already account for —
+ * #737 C1 re-score GAP 4.
+ *
+ * ## Why this exists
+ *
+ * `completedToday` counted calendar blocks and nothing else. Audit P0#2's fix
+ * made a session on an UNSCHEDULED task persist a real `execution_sessions`
+ * row (`calendar_block_id: null`), so the exact path that fix rescued was the
+ * one the day's summary could not see: a finished blockless session read back
+ * as `0 COMPLETED TODAY`. That is the inverse of a phantom save — the app
+ * under-reporting a write that genuinely happened — and it is still a false
+ * number on the Close card.
+ *
+ * ## The three rules, each chosen rather than fallen into
+ *
+ * 1. **Only `calendar_block_id === null`.** A session attached to a block is
+ *    already represented by that block in the count above; counting it again
+ *    would turn one hour of work into two.
+ * 2. **`outcome`, never `status`.** `findLiveSession` (`lib/workflow/
+ *    execution.ts`) records why in full: status is DERIVED, and every session
+ *    the pre-P0#1 `start_execution_session` abandoned reads back from the
+ *    account as `outcome:"partial"` and therefore status `"running"`. Counting
+ *    on status would file those ghosts as today's completions.
+ * 3. **No dedupe by task.** Two genuine blockless sessions on one task are two
+ *    completions. Collapsing them would be the same class of under-report this
+ *    function exists to end.
+ *
+ * A session with NO timestamp is not counted: the device shape carried none
+ * before this change, so an older `sessionStorage` mirror can still restore
+ * one, and choosing a day for it would invent the fact Close reports.
+ */
+function countCompletedBlocklessSessions(
+  state: WorkflowState,
+  now: Date,
+): number {
+  return state.executionSessions.filter(
+    (session) =>
+      session.calendar_block_id === null &&
+      session.outcome === "completed" &&
+      typeof session.created_at === "string" &&
+      isSameCalendarDay(session.created_at, now),
+  ).length;
+}
+
+/**
  * Close moment view model — today's completed/missed counts, carry-forward
  * tasks, and tomorrow's first move. Carry-forward rule (kept deliberately
  * simple): active/scheduled tasks linked to at least one of today's missed
@@ -171,9 +216,9 @@ export function buildCloseVM(
       block.status !== "cancelled" && isSameCalendarDay(block.start_at, now),
   );
 
-  const completedToday = todayBlocksRaw.filter(
-    (block) => block.status === "completed",
-  ).length;
+  const completedToday =
+    todayBlocksRaw.filter((block) => block.status === "completed").length +
+    countCompletedBlocklessSessions(state, now);
   const missedBlocks = todayBlocksRaw.filter(
     (block) => block.status === "missed",
   );

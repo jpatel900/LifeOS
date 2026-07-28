@@ -1,5 +1,10 @@
 import type { Phase2MockExecutionSession } from "../types";
-import { WIP_ENFORCEMENT_LIMIT, nextId, type WorkflowState } from "./shared";
+import {
+  WIP_ENFORCEMENT_LIMIT,
+  nextId,
+  nowIso,
+  type WorkflowState,
+} from "./shared";
 import { getWipSlotHolders, withWipRefusal } from "./wip";
 
 /**
@@ -106,6 +111,12 @@ export function startExecutionSession(
     outcome: "in_progress",
     cap_outcome: null,
     notes: null,
+    // #737 C1 re-score GAP 4: stamped when the session starts, so the Close
+    // moment can tell today's blockless session from last week's. Same field
+    // the account row carries (`execution_sessions.created_at`), and stamped
+    // with the same `nowIso()` the other reducers in this layer already use
+    // for `updated_at`.
+    created_at: nowIso(),
   };
 
   return {

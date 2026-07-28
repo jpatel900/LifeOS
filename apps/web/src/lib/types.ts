@@ -68,6 +68,21 @@ export interface Phase2MockExecutionSession {
     | "skipped";
   cap_outcome?: "cut_scope" | "deferred" | null;
   notes?: string | null;
+  /**
+   * When the session happened, as an absolute instant — #737 C1 re-score
+   * GAP 4.
+   *
+   * OPTIONAL, and the absent case is decided rather than defaulted: a session
+   * with no timestamp is not counted in any per-day total. The device shape
+   * carried no timestamp at all before this, so an older `sessionStorage`
+   * mirror can still restore one, and picking a day for it would invent the
+   * fact the Close moment is supposed to report.
+   *
+   * Mirrors `execution_sessions.created_at` (already selected by
+   * `executionSessionColumns`), so the account tier and the device tier answer
+   * "which day was this?" with the same field.
+   */
+  created_at?: string | null;
 }
 
 export interface Phase2MockDailyReviewSummary {
