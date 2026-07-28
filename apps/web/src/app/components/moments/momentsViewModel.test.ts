@@ -1015,6 +1015,66 @@ describe("buildCloseVM", () => {
       expect(vm.loggedWinsToday).toHaveLength(1);
     });
 
+    it("still withdraws the offer after the task crosses the sync boundary", () => {
+      // The narrow case the readback would otherwise miss. A task created
+      // locally carries a non-uuid workflow id; its win is journalled under
+      // that id. When the task syncs, `dropLocalIds` replaces the row and the
+      // Close moment's candidate carries the ACCOUNT uuid, while the queued
+      // payload still names the local id. Without the alias the win is offered
+      // again at exactly that moment — and confirming would derive a second
+      // key (`deriveWinClientWriteId` prefers the account id) and a second
+      // row. GAP 1 again, one sync boundary later.
+      const accountTaskId = "00000000-0000-4000-8000-000000000777";
+      const state = stateWith({
+        tasks: [makeTask({ id: accountTaskId, title: "Shipped onboarding" })],
+        calendarBlocks: [
+          makeBlock({
+            id: "b-w1",
+            task_id: accountTaskId,
+            status: "completed",
+          }),
+        ],
+      });
+      const vm = buildCloseVM(state, {
+        now: NOW,
+        journalledLoggedWins: [
+          {
+            taskId: "task-local-1",
+            taskIdAliases: [accountTaskId],
+            title: "Shipped onboarding",
+            occurredAt: today,
+          },
+        ],
+      });
+      expect(vm.winCandidates).toEqual([]);
+      // ONE win, not two: aliases widen suppression and are never counted, or
+      // the verdict's `· N wins logged` tail would say 2 for one win.
+      expect(vm.loggedWinsToday).toHaveLength(1);
+    });
+
+    it("counts one win when the two tiers name the same task differently", () => {
+      const accountTaskId = "00000000-0000-4000-8000-000000000778";
+      const vm = buildCloseVM(stateWith({}), {
+        now: NOW,
+        accountLoggedWins: [
+          {
+            taskId: accountTaskId,
+            title: "Shipped onboarding",
+            occurredAt: today,
+          },
+        ],
+        journalledLoggedWins: [
+          {
+            taskId: "task-local-1",
+            taskIdAliases: [accountTaskId],
+            title: "Shipped onboarding",
+            occurredAt: today,
+          },
+        ],
+      });
+      expect(vm.loggedWinsToday).toHaveLength(1);
+    });
+
     it("reports a logged win whose task has no completed block today", () => {
       // The verdict's `· N wins logged` tail must count what was LOGGED, not
       // what happens to still be offerable. A block un-completed after the win

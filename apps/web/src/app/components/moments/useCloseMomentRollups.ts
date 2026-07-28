@@ -178,10 +178,19 @@ export function useCloseMomentRollups({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const rollups = await listApprovedRollups();
-      if (cancelled) return;
-      setAllRollupSummaries(rollups);
-      setRollupReadbackSettled(true);
+      try {
+        const rollups = await listApprovedRollups();
+        if (cancelled) return;
+        setAllRollupSummaries(rollups);
+      } finally {
+        // In a `finally` because this flag now gates the ONLY way to approve a
+        // rollup. `listApprovedRollups` catches its own failures today, but if
+        // anything ever threw past it, leaving the flag false would hide every
+        // rollup offer permanently with no error path — a worse failure than
+        // the one being fixed. Settling anyway degrades to the pre-fix
+        // behaviour (the offer shows) instead of removing the action.
+        if (!cancelled) setRollupReadbackSettled(true);
+      }
     })();
     return () => {
       cancelled = true;

@@ -54,6 +54,27 @@ export interface LoggedWinRecord {
   title: string;
   /** The LOCAL calendar day the win was filed under (`occurred_at`). */
   occurredAt: string;
+  /**
+   * Other ids that name the SAME task, when the tier knows more than one.
+   *
+   * A task created locally carries a non-uuid workflow id until it syncs;
+   * afterwards `dropLocalIds` replaces the row and the candidate carries the
+   * account uuid — while a win still queued in the journal names the OLD id.
+   * Without the alias the offer would return at exactly that moment, and
+   * confirming would derive a second key (`deriveWinClientWriteId` prefers the
+   * account id) and a second row. So the journal tier, which stores both ids,
+   * reports both.
+   *
+   * Aliases widen SUPPRESSION only. They are never counted: one record is one
+   * win however many names it answers to, which is what keeps the verdict's
+   * `· N wins logged` tail honest.
+   */
+  taskIdAliases?: readonly string[];
+}
+
+/** Every id that names this record's task — the id itself plus its aliases. */
+export function loggedWinTaskIdsOf(record: LoggedWinRecord): readonly string[] {
+  return [record.taskId, ...(record.taskIdAliases ?? [])];
 }
 
 /**
@@ -77,8 +98,12 @@ export function resolveLoggedWinsForDay(
   const seenTaskIds = new Set<string>();
   for (const record of [...accountWins, ...journalledWins]) {
     if (record.occurredAt !== day) continue;
-    if (seenTaskIds.has(record.taskId)) continue;
-    seenTaskIds.add(record.taskId);
+    const ids = loggedWinTaskIdsOf(record);
+    // Deduped across ALL of a record's names, so the account tier's uuid and
+    // the journal tier's local alias for one win collapse into one entry
+    // rather than counting twice.
+    if (ids.some((id) => seenTaskIds.has(id))) continue;
+    for (const id of ids) seenTaskIds.add(id);
     merged.push(record);
   }
   return merged;

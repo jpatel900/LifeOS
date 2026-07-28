@@ -6,6 +6,7 @@ import {
 import type { RollupSummaryContent } from "@lifeos/schemas";
 import { resolveDayClose, type DayCloseRecord } from "@/lib/review/dayClose";
 import {
+  loggedWinTaskIdsOf,
   resolveLoggedWinsForDay,
   type LoggedWinRecord,
 } from "@/lib/review/loggedWins";
@@ -208,11 +209,12 @@ export function buildCloseVM(
   // moment is designed to be used, and the win logged ten minutes ago would be
   // offered again.
   const todayIso = toIsoDate(now);
-  const loggedWinsToday: LoggedWinVM[] = resolveLoggedWinsForDay(
+  const loggedWinRecordsToday = resolveLoggedWinsForDay(
     options.accountLoggedWins ?? [],
     options.journalledLoggedWins ?? [],
     todayIso,
-  ).map((record) => {
+  );
+  const loggedWinsToday: LoggedWinVM[] = loggedWinRecordsToday.map((record) => {
     const task = state.tasks.find((t) => t.id === record.taskId);
     return {
       taskId: record.taskId,
@@ -223,8 +225,11 @@ export function buildCloseVM(
       areaLabel: task ? areaName(state.areas, task.area_id) : "",
     };
   });
+  // Suppression covers every id a logged win answers to (see
+  // `LoggedWinRecord.taskIdAliases`); the VM list above stays one-per-win so
+  // the verdict's `· N wins logged` tail counts wins, not names.
   const loggedWinTaskIds = new Set(
-    loggedWinsToday.map((record) => record.taskId),
+    loggedWinRecordsToday.flatMap((record) => loggedWinTaskIdsOf(record)),
   );
 
   const winCandidates: { taskId: string; title: string; areaLabel: string }[] =

@@ -164,6 +164,41 @@ describe("journalWinWrite", () => {
     expect(await pendingWriteCount("win")).toBe(1);
   });
 
+  // The seam this records, deliberately rather than by omission: a win
+  // journalled with NO account id yet keys on the local id, and the same task
+  // after it syncs would key on the account uuid. Those keys differ, and that
+  // is safe -- but only because the OTHER half of the fix covers it. The
+  // journal payload keeps both ids, the Close moment reports both as aliases
+  // (`LoggedWinRecord.taskIdAliases`), so the offer is withdrawn across the
+  // sync boundary and the second key is never derived by a user action. Pinned
+  // in `momentsViewModel.test.ts` ("still withdraws the offer after the task
+  // crosses the sync boundary"). If that suppression is ever removed, this
+  // difference becomes a duplicate again -- which is why it is stated here.
+  it("keys a win with no account id on the local id, and says so", async () => {
+    const preSync = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: null,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+
+    expect(preSync.client_write_id).toBe(`win:task-local-1:${CONFIRMED_ON}`);
+    // Confirming the SAME pre-sync win twice is still idempotent -- the case
+    // that actually repeats without a network round trip.
+    const preSyncAgain = await journalWinWrite({
+      workflowTaskId: "task-local-1",
+      persistedTaskId: null,
+      persistedAreaId: PERSISTED_AREA,
+      title: "Shipped the onboarding flow",
+      detail: null,
+      occurredAt: CONFIRMED_ON,
+    });
+    expect(preSyncAgain.client_write_id).toBe(preSync.client_write_id);
+    expect(await pendingWriteCount("win")).toBe(1);
+  });
+
   it("keeps different tasks, and the same task on a different day, distinct", async () => {
     const a = await journalWinWrite({
       workflowTaskId: "task-local-1",

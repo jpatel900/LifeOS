@@ -1388,6 +1388,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               payload,
             ): payload is {
               workflow_task_id: string;
+              persisted_task_id?: unknown;
               title: string;
               occurred_at: string;
             } =>
@@ -1395,10 +1396,20 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
               typeof payload.title === "string" &&
               typeof payload.occurred_at === "string",
           )
+          // BOTH id spaces, because the journal deliberately stores both and
+          // the task can cross the sync boundary while its win is queued.
+          // Pre-sync the candidate carries the local id; once the task syncs,
+          // `dropLocalIds` replaces the row and the candidate carries the
+          // account uuid — while the queued payload still says the local id.
+          // Reporting only one of the two would re-offer the win at exactly
+          // that moment, and confirming would derive a SECOND key
+          // (`deriveWinClientWriteId` prefers the account id) and a second row.
           .map((payload) => ({
-            // Already workflow-scoped in the journal payload — the journal
-            // deliberately keeps both id spaces so a replay can re-resolve.
             taskId: payload.workflow_task_id,
+            taskIdAliases:
+              typeof payload.persisted_task_id === "string"
+                ? [payload.persisted_task_id]
+                : undefined,
             title: payload.title,
             occurredAt: payload.occurred_at,
           })),
