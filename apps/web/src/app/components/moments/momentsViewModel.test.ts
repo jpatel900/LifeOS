@@ -736,6 +736,160 @@ describe("buildCloseVM", () => {
     expect(vm.missedToday).toBe(1);
   });
 
+  /**
+   * Final UX Loop C1 re-score GAP 4 — a completed BLOCKLESS session counts.
+   *
+   * The inverse of a phantom save: the row exists, and the day's summary
+   * could not see it. Audit P0#2's fix made a session on an unscheduled task
+   * persist (`execution_sessions` with `outcome:"completed"` and
+   * `calendar_block_id: null`); this count still read `calendarBlocks` alone,
+   * so the exact path that fix rescued was the path Close under-reported as
+   * `0 COMPLETED TODAY`.
+   */
+  describe("completedToday counts blockless sessions (re-score GAP 4)", () => {
+    it("counts a completed blockless session from today", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: "s-blockless-done",
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: null,
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(1);
+    });
+
+    it("adds blockless sessions to the completed-block count", () => {
+      const state = stateWith({
+        calendarBlocks: [makeBlock({ id: "b-done", status: "completed" })],
+        executionSessions: [
+          makeSession({
+            id: "s-blockless-done",
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: null,
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(2);
+    });
+
+    it("never double-counts a session that belongs to a counted block", () => {
+      const state = stateWith({
+        calendarBlocks: [makeBlock({ id: "b-done", status: "completed" })],
+        executionSessions: [
+          makeSession({
+            id: "s-on-block",
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: "b-done",
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(1);
+    });
+
+    it("counts two genuine blockless sessions as two", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: "s-1",
+            status: "completed",
+            outcome: "completed",
+            task_id: "task-1",
+            created_at: atTodayHour(9),
+          }),
+          makeSession({
+            id: "s-2",
+            status: "completed",
+            outcome: "completed",
+            task_id: "task-1",
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(2);
+    });
+
+    it("ignores a blockless session from another day", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: "s-yesterday",
+            status: "completed",
+            outcome: "completed",
+            created_at: daysBefore(1),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(0);
+    });
+
+    /**
+     * `outcome`, never `status`. `findLiveSession`'s own doc comment
+     * (`lib/workflow/execution.ts`) records why: status is DERIVED, and every
+     * session the pre-P0#1 `start_execution_session` abandoned reads back
+     * from the account as `outcome:"partial"` -> status `"running"`. Counting
+     * on status would resurrect those ghosts as today's completions.
+     */
+    it("ignores outcomes the user did not pick as completed", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: "s-skipped",
+            status: "skipped",
+            outcome: "skipped",
+            created_at: atTodayHour(10),
+          }),
+          makeSession({
+            id: "s-partial-ghost",
+            status: "running",
+            outcome: "partial",
+            created_at: atTodayHour(11),
+          }),
+          makeSession({
+            id: "s-live",
+            status: "running",
+            outcome: "in_progress",
+            created_at: atTodayHour(12),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(0);
+    });
+
+    /**
+     * A session with no timestamp is NOT counted. The device shape carried no
+     * `created_at` before this change, so an older `sessionStorage` mirror can
+     * still restore one; counting it would be inventing a day for it, which is
+     * the same class of untruth as the under-report this fixes.
+     */
+    it("does not count a session with no timestamp", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: "s-no-timestamp",
+            status: "completed",
+            outcome: "completed",
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(0);
+    });
+  });
+
   // Final UX Loop C1, Target Cards 1+7 (audit P0#4). The day key is derived
   // with `localIsoDate` rather than hardcoded, so these assertions hold on a
   // UTC CI runner and in every developer timezone — the `NOW` constant above
