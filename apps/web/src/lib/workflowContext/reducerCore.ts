@@ -80,6 +80,15 @@ export type WorkflowAction =
       payload: PersistedWorkflowPayload;
     }
   | {
+      /**
+       * #737 C1 re-score GAP 3 — put back the pending triage drafts this
+       * DEVICE was holding (`lib/durability/draftStore.ts`), in a tab that
+       * has never seen them.
+       */
+      type: "restoreDeviceDrafts";
+      drafts: Phase2TaskDraft[];
+    }
+  | {
       type: "addArea";
       name: string;
       color: string;
@@ -687,6 +696,31 @@ export function workflowReducer(
           ),
         ],
       };
+    /**
+     * #737 C1 re-score GAP 3 — restore the device's pending triage drafts.
+     *
+     * UNION BY ID, and the reducer's own copy always wins. Two reasons, both
+     * load-bearing:
+     *
+     *  - A same-tab reload has already restored the draft from
+     *    `sessionStorage`, and that copy is the newest. Overwriting it with
+     *    the store's would undo an edit made between the last store write and
+     *    the reload.
+     *  - A draft the user has already decided about is no longer `pending`,
+     *    and it must not be resurrected as undecided — audit P0#3's exact
+     *    failure. Skipping ids the state already holds keeps that impossible.
+     */
+    case "restoreDeviceDrafts": {
+      const known = new Set(state.taskDrafts.map((draft) => draft.id));
+      const missing = action.drafts.filter((draft) => !known.has(draft.id));
+      if (missing.length === 0) {
+        return state;
+      }
+      return {
+        ...state,
+        taskDrafts: [...state.taskDrafts, ...missing],
+      };
+    }
     case "addArea":
       return addWorkflowArea(state, { name: action.name, color: action.color });
     case "updateAreaColor":

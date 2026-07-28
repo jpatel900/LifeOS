@@ -103,10 +103,17 @@ export const SAVED_ON_THIS_DEVICE_SHORT =
  *    (drained by `replayDurableWrites`).
  *
  * Everything else — a proposal edit, a first-move edit, an approved task map,
- * a draft edit with no accept, a WIP swap, a signed-out-but-online capture —
- * has no device-durable home and no re-send path, so it gets the bare
- * `savedOnThisDeviceBanner(subject)`, which stops at the fact. Adding an
- * entity to the handler map is what earns it this sentence; nothing else does.
+ * an unaccepted triage draft, a WIP swap, a signed-out-but-online capture —
+ * has no re-send path, so it gets the bare `savedOnThisDeviceBanner(subject)`,
+ * which stops at the fact. Adding an entity to the handler map is what earns
+ * this sentence; nothing else does.
+ *
+ * #737 C1 re-score GAP 3 sharpened that list rather than shortening it. An
+ * unaccepted triage draft now DOES have a device-durable home
+ * (`durability/draftStore.ts`, so it survives the tab), and it still has no
+ * re-send path, because a draft nobody has decided about has no account row
+ * to become. Device-durable and account-bound are two different properties;
+ * only the second one earns this sentence.
  */
 const WILL_REACH_YOUR_ACCOUNT =
   "LifeOS will add it to your account as soon as it can.";
@@ -138,10 +145,16 @@ export const CAPTURE_SAVED_ON_THIS_DEVICE_LONG = `Saved on this device and not i
  *
  * This form promises nothing, because for the writes that still use it
  * nothing is coming: a proposal edit, a first-move edit, an approved task
- * map, a draft edit with no accept, a WIP swap and a signed-out-but-online
- * capture all live in the reducer's per-tab `sessionStorage` mirror, with no
- * device-durable home and no re-send path. Telling that user their work is on
- * its way would be the exact lie this whole program exists to end.
+ * map, a WIP swap and a signed-out-but-online capture all live in the
+ * reducer's per-tab `sessionStorage` mirror, with no device-durable home and
+ * no re-send path. Telling that user their work is on its way would be the
+ * exact lie this whole program exists to end.
+ *
+ * An unaccepted triage draft belongs to this form too, but for only HALF that
+ * reason since #737 C1 re-score GAP 3: it is device-durable now
+ * (`durability/draftStore.ts` holds it across the tab), and it is still going
+ * nowhere, because a draft the user has not decided about has no account row
+ * to become. The promise is about the account, so it stays unsaid.
  *
  * A write that IS re-sent says so, with
  * `savedOnThisDeviceAndSendingBanner(subject)` below. The two are different
