@@ -132,6 +132,14 @@ async function openHome(page: Page) {
   await expect(page.getByTestId("today-moments")).toBeVisible();
 }
 
+/** Switch to Close through the app's own control — no navigation. */
+async function openClose(page: Page) {
+  await page.getByTestId("moment-switcher-close").click();
+  await expect(page.getByTestId("close-moment-summary")).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
 test.describe("#737 C1 GAP 4 — Close counts a blockless completed session", () => {
   test("finishing a session on an unscheduled task makes Close read 1 completed", async ({
     page,
@@ -173,10 +181,14 @@ test.describe("#737 C1 GAP 4 — Close counts a blockless completed session", ()
       )
       .toBe(1);
 
-    await page.goto("/?moment=close");
-    await expect(page.getByTestId("close-moment-summary")).toBeVisible({
-      timeout: 15_000,
-    });
+    // Switch moment IN PLACE — never re-navigate. `openHome`'s
+    // `addInitScript` re-runs on every navigation and re-seeds
+    // `sessionStorage` with the ORIGINAL state, which would wipe the session
+    // this test just recorded and make the assertion below fail for a reason
+    // that has nothing to do with the count. (Caught by this spec's first
+    // run; the same trap is why `session-truth.spec.ts`'s reload test can
+    // only assert what `lib/execute/runningSession.ts` holds.)
+    await openClose(page);
 
     // THE ASSERTION. Before the fix this read "0" while the row above existed.
     await expect(page.getByTestId("close-moment-completed")).toHaveText("1");
@@ -186,11 +198,7 @@ test.describe("#737 C1 GAP 4 — Close counts a blockless completed session", ()
     page,
   }) => {
     await openHome(page);
-
-    await page.goto("/?moment=close");
-    await expect(page.getByTestId("close-moment-summary")).toBeVisible({
-      timeout: 15_000,
-    });
+    await openClose(page);
 
     await expect(page.getByTestId("close-moment-completed")).toHaveText("0");
   });
