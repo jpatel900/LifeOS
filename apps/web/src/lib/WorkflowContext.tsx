@@ -1846,6 +1846,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       markPersistedSaveFailure(error);
       return "local-only";
+    } finally {
+      // #737 C1 re-score GAP 4: the save has just journalled a session (and
+      // possibly drained it to the account), so the DEVICE tier of "what was
+      // finished today" has changed. Re-read it here for the same reason the
+      // day close does at its own call site: the mount effect's refresh
+      // already ran, and without this the Close moment would not see the
+      // session until the next mount — which is the under-report this fixes,
+      // one navigation later. `finally`, because a failed account write still
+      // leaves a queued entry that must be counted.
+      void refreshJournalledDurableState();
     }
   }
 
