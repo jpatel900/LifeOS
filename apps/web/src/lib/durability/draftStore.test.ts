@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { Phase2TaskDraft } from "../types";
+import type { Phase2TaskDraft } from "@lifeos/schemas";
 import {
   clearStoredTaskDrafts,
   listStoredTaskDrafts,

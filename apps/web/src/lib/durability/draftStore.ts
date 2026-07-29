@@ -67,7 +67,7 @@
  * already raises.
  */
 
-import type { Phase2TaskDraft } from "../types";
+import type { Phase2TaskDraft } from "@lifeos/schemas";
 
 const DB_NAME = "lifeos-triage-drafts";
 const DB_VERSION = 1;
