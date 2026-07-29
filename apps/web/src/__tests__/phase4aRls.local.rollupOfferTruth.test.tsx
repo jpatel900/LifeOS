@@ -153,9 +153,12 @@ function AccountRollupOfferHarness({ periodStart }: { periodStart: string }) {
   return (
     <div>
       <span data-testid="offer-count">{displayedRollups.length}</span>
+      {/* Diagnostics, deliberately null-tolerant: on a build that does not
+          expose these at all the pin must still go red on the OFFER, which is
+          the judge's finding, rather than erroring in the harness. */}
       <span data-testid="areas-settled">{String(areasReadbackSettled)}</span>
       <span data-testid="alias-count">
-        {Object.keys(workflowAreaIdByPersistedId).length}
+        {Object.keys(workflowAreaIdByPersistedId ?? {}).length}
       </span>
       <span data-testid="toast">{toast}</span>
     </div>
@@ -267,6 +270,26 @@ describeLocalRls(
     }, 60_000);
 
     it("still offers a week the account has NOT approved (positive control)", async () => {
+      // Asserted on the OFFER only, and deliberately so: this must pass on the
+      // broken build too, otherwise the reproduction below would be red for
+      // want of a working harness rather than for the defect.
+      render(
+        <WorkflowProvider>
+          <AccountRollupOfferHarness periodStart={UNAPPROVED_PERIOD_START} />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(
+        () => expect(screen.getByTestId("offer-count")).toHaveTextContent("1"),
+        { timeout: 30_000 },
+      );
+    }, 90_000);
+
+    it("resolves the account's areas into workflow id space on this mount", async () => {
+      // The bridge the fix resolves the suppression key through. Asserted
+      // separately from the offer so each red says one thing: this one says
+      // "the map the key needs does not exist", the next says "the offer is
+      // still being made". Both were true before the fix.
       render(
         <WorkflowProvider>
           <AccountRollupOfferHarness periodStart={UNAPPROVED_PERIOD_START} />
@@ -278,17 +301,11 @@ describeLocalRls(
           expect(screen.getByTestId("areas-settled")).toHaveTextContent("true"),
         { timeout: 30_000 },
       );
-      // The alias map is the bridge the fix resolves through; if it were empty
-      // the test below would pass for the wrong reason.
       await waitFor(
         () =>
           expect(
             Number(screen.getByTestId("alias-count").textContent),
           ).toBeGreaterThan(0),
-        { timeout: 30_000 },
-      );
-      await waitFor(
-        () => expect(screen.getByTestId("offer-count")).toHaveTextContent("1"),
         { timeout: 30_000 },
       );
     }, 90_000);
