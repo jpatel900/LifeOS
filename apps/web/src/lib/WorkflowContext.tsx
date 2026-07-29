@@ -245,6 +245,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [journalledLoggedWins, setJournalledLoggedWins] = useState<
     LoggedWinRecord[]
   >([]);
+  // #737 C1 re-score GAP 4 — the DEVICE tier of "which blockless sessions did
+  // the user finish today?", one local-day string per queued write. The
+  // ACCOUNT tier of the same question is the uuid-id rows the workflow sync
+  // already brings in, which is why only this half needs carrying: see
+  // `countCompletedBlocklessSessions` for why the reducer's own optimistic
+  // row is counted by neither tier.
+  const [journalledCompletedSessionDays, setJournalledCompletedSessionDays] =
+    useState<string[]>([]);
   // #737 C1 re-score GAP 2 — approved rollups this device holds but has not
   // sent yet, keyed `areaId|periodType|periodStart`. The ACCOUNT tier of the
   // same question is already fetched by `listApprovedRollups`; this is the
@@ -1497,6 +1505,32 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             occurredAt: payload.occurred_at,
           })),
       );
+      // #737 C1 re-score GAP 4: the device tier of "how many blockless
+      // sessions were finished today?". Read out of the SAME
+      // `listPendingWrites()` pass as everything above, so the moment a drain
+      // moves a session to the account it stops being reported here and starts
+      // being reported by the account tier — never both, never neither.
+      //
+      // The day comes from the JOURNAL ENTRY's own `created_at` (the instant
+      // the user saved the end sheet), resolved to their LOCAL day. Deriving
+      // it at read time from `new Date()` would re-date a session finished at
+      // 23:50 to the following morning.
+      setJournalledCompletedSessionDays(
+        pending
+          .filter((write) => write.entity === "execution_session")
+          .filter((write) => {
+            const payload = write.payload as {
+              outcome?: unknown;
+              workflow_block_id?: unknown;
+            };
+            return (
+              payload.outcome === "completed" &&
+              payload.workflow_block_id === null
+            );
+          })
+          .map((write) => localIsoDate(new Date(write.created_at)))
+          .filter((day) => !Number.isNaN(Date.parse(day))),
+      );
       // #737 C1 re-score GAP 2: the device tier of "is this period already
       // rolled up?", keyed the same way the hook keys its account tier.
       setJournalledRollupKeys(
@@ -1879,6 +1913,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     journalledClosedDays,
     accountLoggedWins,
     journalledLoggedWins,
+    journalledCompletedSessionDays,
     journalledRollupKeys,
     clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>
