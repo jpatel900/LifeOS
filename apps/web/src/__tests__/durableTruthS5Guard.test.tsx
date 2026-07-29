@@ -17,6 +17,7 @@ import {
   clearPendingWrites,
   listPendingWrites,
 } from "@/lib/durability/pendingWriteJournal";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
 
 /**
  * REGRESSION GUARDS FOR SLICE S5 — the last two save-truths in the program.
@@ -220,14 +221,50 @@ function AcceptThenDropHarness({ drop }: { drop: boolean }) {
 
   const draftId = state.taskDrafts[0]?.id ?? null;
 
+  // FIXTURE RE-ANCHOR (#737 C1 re-score follow-up). The ASSERTIONS below are
+  // untouched; how this harness reaches them is what changed, and why is worth
+  // recording because it took a CI-only failure to find.
+  //
+  // ## What was wrong with the old shape
+  //
+  // Both steps used to be `hasX.current = true; const t = setTimeout(fn, 0);
+  // return () => clearTimeout(t);`. `acceptTaskDraft` and `dropTask` are plain
+  // functions rebuilt on EVERY provider render, so they are new dep identities
+  // every render, so each effect re-runs constantly. A re-render landing inside
+  // that 0 ms window ran the cleanup — cancelling the pending timer — and the
+  // re-run then returned early on the `hasX` ref, so the action was never
+  // rescheduled. The harness stalled at `"accepted"` forever and the drop the
+  // test exists to make never happened.
+  //
+  // It was always fragile; it became reachable when the provider gained two
+  // more async state updates (the device draft-store read, and the journalled
+  // completed-session days), and CI's slower machine hit the window reliably.
+  // A guard that can silently stop performing its own precondition is worse
+  // than no guard, so the scheduling is now unconditional and the WAIT is
+  // explicit.
+  //
+  // ## Why each delay is still here
+  //
+  // The accept must not run in the same tick as this effect: a CHILD effect
+  // fires before its PARENT's, so the provider's `stateRef.current = state`
+  // has not run yet and `acceptTaskDraft` would read a pre-hydration ref and
+  // return null. One macrotask hop fixes that, and it is what the original
+  // `setTimeout(…, 0)` was really buying.
+  //
+  // The drop no longer GUESSES that the accept has reached IndexedDB — it
+  // waits until the entry is actually queued. That is the precondition the
+  // guarantee is about ("a queued accept is cancelled by the drop"), so
+  // asserting it here makes the test stricter, not looser: if the accept never
+  // queues, this stalls and fails instead of vacuously passing.
   useEffect(() => {
     if (hasAccepted.current || !draftId) return;
     hasAccepted.current = true;
-    const timer = setTimeout(() => {
+    // Deliberately NO cleanup: cancelling this on a re-render is the bug above.
+    void (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
       acceptedTaskId.current = acceptTaskDraft(draftId);
       setPhase("accepted");
-    }, 0);
-    return () => clearTimeout(timer);
+    })();
   }, [acceptTaskDraft, draftId]);
 
   useEffect(() => {
@@ -235,11 +272,14 @@ function AcceptThenDropHarness({ drop }: { drop: boolean }) {
     const taskId = acceptedTaskId.current;
     if (!taskId) return;
     hasDropped.current = true;
-    const timer = setTimeout(() => {
+    void (async () => {
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        if ((await listPendingWrites("task_draft_accept")).length > 0) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
       dropTask(taskId);
       setPhase("dropped");
-    }, 0);
-    return () => clearTimeout(timer);
+    })();
   }, [drop, dropTask, phase]);
 
   return <span data-testid="phase">{phase}</span>;
@@ -253,12 +293,19 @@ beforeEach(async () => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
   window.sessionStorage.clear();
   await clearPendingWrites();
+  // #737 C1 re-score GAP 3 added a SECOND device store (pending triage
+  // drafts). It is restored into state on mount, so a draft another test file
+  // left behind in the same worker would arrive here as an extra
+  // `state.taskDrafts` entry this fixture never seeded. Cleared on both sides
+  // for the same reason the journal is.
+  await clearStoredTaskDrafts();
 });
 
 afterEach(async () => {
   vi.unstubAllEnvs();
   window.sessionStorage.clear();
   await clearPendingWrites();
+  await clearStoredTaskDrafts();
 });
 
 describe("#737 C1 S5 guard: rollups are device-durable", () => {
