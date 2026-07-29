@@ -152,6 +152,11 @@ export function toWorkflowSession(
     outcome: session.outcome,
     cap_outcome: session.cap_outcome ?? null,
     notes: session.notes,
+    // #737 C1 re-score GAP 4: the account's own timestamp, carried through
+    // unchanged. Close counts a blockless completed session against the LOCAL
+    // day this instant falls in, so the account tier and the device tier
+    // answer "which day was this?" from the same field.
+    created_at: session.created_at,
   };
 }
 

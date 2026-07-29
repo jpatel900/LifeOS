@@ -736,6 +736,208 @@ describe("buildCloseVM", () => {
     expect(vm.missedToday).toBe(1);
   });
 
+  /**
+   * Final UX Loop C1 re-score GAP 4 — a completed BLOCKLESS session counts.
+   *
+   * The inverse of a phantom save: the row exists, and the day's summary could
+   * not see it. Audit P0#2's fix made a session on an unscheduled task persist
+   * (`execution_sessions` with `outcome:"completed"` and
+   * `calendar_block_id: null`); this count still read `calendarBlocks` alone,
+   * so the exact path that fix rescued was the path Close under-reported as
+   * `0 COMPLETED TODAY`.
+   *
+   * The count reads the two DURABLE tiers, never the reducer's own optimistic
+   * row — see `countCompletedBlocklessSessions` for the measured double-count
+   * that rules the obvious implementation out. These tests therefore use
+   * account UUIDs for the account tier and `journalledCompletedSessionDays`
+   * for the device tier, and pin that a local `session-N` row counts for
+   * neither.
+   */
+  describe("completedToday counts blockless sessions (re-score GAP 4)", () => {
+    const today = localIsoDate(NOW);
+    const ACCOUNT_SESSION_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+    const ACCOUNT_SESSION_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
+
+    it("counts a completed blockless session the ACCOUNT holds", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: null,
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(1);
+    });
+
+    it("counts a completed blockless session still queued on the DEVICE", () => {
+      const vm = buildCloseVM(stateWith({}), {
+        now: NOW,
+        journalledCompletedSessionDays: [today],
+      });
+
+      expect(vm.completedToday).toBe(1);
+    });
+
+    it("adds blockless sessions to the completed-block count", () => {
+      const state = stateWith({
+        calendarBlocks: [makeBlock({ id: "b-done", status: "completed" })],
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: null,
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(2);
+    });
+
+    /**
+     * THE DOUBLE-COUNT THIS DESIGN EXISTS TO PREVENT. `mergePersistedRows`
+     * keeps the optimistic `session-N` row alongside the account's uuid row
+     * (nothing populates `persistedSessionIdByLocalIdRef`), so a count over
+     * `state.executionSessions` alone reports one finished session as two.
+     */
+    it("never counts the optimistic local row beside its account twin", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: null,
+            created_at: atTodayHour(14),
+          }),
+          makeSession({
+            id: "session-1",
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: null,
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(1);
+    });
+
+    it("never double-counts a session that belongs to a counted block", () => {
+      const state = stateWith({
+        calendarBlocks: [makeBlock({ id: "b-done", status: "completed" })],
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "completed",
+            outcome: "completed",
+            calendar_block_id: "b-done",
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(1);
+    });
+
+    it("counts two genuine blockless sessions as two", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "completed",
+            outcome: "completed",
+            task_id: "task-1",
+            created_at: atTodayHour(9),
+          }),
+          makeSession({
+            id: ACCOUNT_SESSION_B,
+            status: "completed",
+            outcome: "completed",
+            task_id: "task-1",
+            created_at: atTodayHour(14),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(2);
+    });
+
+    it("ignores a blockless session from another day, on either tier", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "completed",
+            outcome: "completed",
+            created_at: daysBefore(1),
+          }),
+        ],
+      });
+
+      expect(
+        buildCloseVM(state, {
+          now: NOW,
+          journalledCompletedSessionDays: ["2026-07-04"],
+        }).completedToday,
+      ).toBe(0);
+    });
+
+    /**
+     * `outcome`, never `status`. `findLiveSession`'s own doc comment
+     * (`lib/workflow/execution.ts`) records why: status is DERIVED, and every
+     * session the pre-P0#1 `start_execution_session` abandoned reads back
+     * from the account as `outcome:"partial"` -> status `"running"`. Counting
+     * on status would resurrect those ghosts as today's completions.
+     */
+    it("ignores outcomes the user did not pick as completed", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "skipped",
+            outcome: "skipped",
+            created_at: atTodayHour(10),
+          }),
+          makeSession({
+            id: ACCOUNT_SESSION_B,
+            status: "running",
+            outcome: "partial",
+            created_at: atTodayHour(11),
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(0);
+    });
+
+    /**
+     * An account row with no `created_at` is not counted.
+     * `execution_sessions.created_at` is NOT NULL and required by
+     * `ExecutionSessionSchema`, so an absent one means a row this app cannot
+     * date — and choosing a day for it would invent the fact Close reports.
+     */
+    it("does not count an account session with no timestamp", () => {
+      const state = stateWith({
+        executionSessions: [
+          makeSession({
+            id: ACCOUNT_SESSION_A,
+            status: "completed",
+            outcome: "completed",
+          }),
+        ],
+      });
+
+      expect(buildCloseVM(state, { now: NOW }).completedToday).toBe(0);
+    });
+  });
+
   // Final UX Loop C1, Target Cards 1+7 (audit P0#4). The day key is derived
   // with `localIsoDate` rather than hardcoded, so these assertions hold on a
   // UTC CI runner and in every developer timezone — the `NOW` constant above

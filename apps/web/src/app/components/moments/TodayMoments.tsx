@@ -262,6 +262,7 @@ export function TodayMoments({
     journalledClosedDays,
     accountLoggedWins,
     journalledLoggedWins,
+    journalledCompletedSessionDays,
     journalledRollupKeys,
     taskMapDraft,
     requestTaskMapDraft,
@@ -323,6 +324,10 @@ export function TodayMoments({
         // durable facts rather than from this tab's memory.
         accountLoggedWins,
         journalledLoggedWins,
+        // #737 C1 re-score GAP 4: the device tier of "a blockless session was
+        // finished today". The account tier of the same fact rides in on
+        // `state.executionSessions`.
+        journalledCompletedSessionDays,
       }),
     [
       state,
@@ -331,6 +336,7 @@ export function TodayMoments({
       journalledClosedDays,
       accountLoggedWins,
       journalledLoggedWins,
+      journalledCompletedSessionDays,
     ],
   );
 
