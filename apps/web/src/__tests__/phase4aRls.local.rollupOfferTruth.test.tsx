@@ -14,7 +14,6 @@ import { useState } from "react";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { useCloseMomentRollups } from "@/app/components/moments/useCloseMomentRollups";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
-import { createInitialWorkflowState } from "@/lib/workflow";
 
 /**
  * ACCOUNT-TIER pin for #737 C1 re-score ROUND 2, GAP 2 — the tier the defect
