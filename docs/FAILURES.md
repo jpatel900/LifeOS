@@ -144,3 +144,11 @@ Entry schema: **Symptom → Root cause → Evidence → Status → Date** (+ **R
 ---
 
 _Seeded 2026-07-02 from repo history and operator memory. Dead branches at seeding time (`agent/single-review-policy`, `codex/...a4-governance-restructure...`, `fix/plan-single-task-scheduling`, `ui/handoff-cockpit-pass`) were not chronicled — whoever closes or deletes one adds its entry._
+
+## Owner decisions decided in chat, never written back — the work map drifted
+
+- **Symptom:** The generated work map's "Owner Queue" showed five decisions as pending (#737 make-it-true, #742 door, merge/apply gates on #775/#777/#778) that the owner had already made days earlier. The owner discovered the drift by asking whether the map was accurate (2026-07-28).
+- **Root cause:** A closure-ritual asymmetry with a dual-store state. The program formalized how decisions are ASKED (plain-language `- [ ] OWNER-GATE:` checkboxes on issues/PRs — machine-harvested by the map generator) but never formalized how they are CLOSED. Decisions happened in the orchestrator's chat and were recorded in the orchestrator's private layer (handover/program docs, session memory) — a second store the map does not read. The write-back to the canonical store (GitHub) was manual, unowned, and therefore skipped. Classic dual-write drift: the authoritative artifact was the one nobody was required to update.
+- **Evidence:** 2026-07-28 map render listed all five resolved gates as open; each gate's issue/PR body still carried the unticked checkbox while the orchestrator's PROGRAM/TARGET-CARDS docs recorded the decisions with dates.
+- **Status:** Fixed at instance and cause. Instance: all five gates ticked `- [x]` with DECIDED comments (see #737/#742 comments of 2026-07-28). Cause: standing closure ritual — the session in which the owner decides must, in that same turn, tick the gate's checkbox and post a one-line DECIDED comment on the artifact; the map is regenerated at every major milestone as part of the checkpoint. A decision is not done until the artifact says so.
+- **Date:** 2026-07-28
