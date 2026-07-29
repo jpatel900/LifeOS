@@ -264,6 +264,8 @@ export function TodayMoments({
     journalledLoggedWins,
     journalledCompletedSessionDays,
     journalledRollupKeys,
+    workflowAreaIdByPersistedId,
+    areasReadbackSettled,
     taskMapDraft,
     requestTaskMapDraft,
     dismissTaskMapDraft,
@@ -590,6 +592,8 @@ export function TodayMoments({
     confirmRollup,
     listApprovedRollups,
     journalledRollupKeys,
+    workflowAreaIdByPersistedId,
+    areasReadbackSettled,
   });
 
   // FR-031 slice F5 (#679): the single Close map-revision offer — kernel

@@ -14,7 +14,13 @@ import {
   buildMonthlyRollupDrafts,
   deriveMonthOverMonthReadback,
 } from "./momentsViewModel";
-import type { RollupSummary, RollupSummaryContent } from "@lifeos/schemas";
+import type { RollupSummaryContent } from "@lifeos/schemas";
+import {
+  resolveDurablyApprovedRollupKeys,
+  resolvedRollupAreaId,
+  rollupKey,
+  type ApprovedRollupSummary,
+} from "@/lib/review/approvedRollups";
 import { requestRollupProse } from "@/lib/ai/rollupProseClient";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
@@ -55,15 +61,24 @@ interface UseCloseMomentRollupsOptions {
   confirmRollup: ReturnType<typeof useWorkflow>["confirmRollup"];
   listApprovedRollups: ReturnType<typeof useWorkflow>["listApprovedRollups"];
   journalledRollupKeys?: readonly string[];
-}
-
-/** `areaId|periodType|periodStart` — one approved period, in one string. */
-function rollupKey(
-  areaId: string,
-  periodType: "week" | "month",
-  periodStart: string,
-): string {
-  return `${areaId}|${periodType}|${periodStart}`;
+  /**
+   * #737 C1 re-score ROUND 2 GAP 2 — the LIVE persisted-uuid -> workflow-area
+   * map, so the suppression key is resolved at USE and recomputes as hydration
+   * lands. See `lib/review/approvedRollups.ts` for why resolving at fetch time
+   * could not work.
+   *
+   * Required, not optional-with-a-default: a caller that forgets it would
+   * silently ship the exact defect this fix closes, and the compiler is the
+   * only thing that reliably notices.
+   */
+  workflowAreaIdByPersistedId: Readonly<Record<string, string>>;
+  /**
+   * Whether the account-areas load ATTEMPT has finished — in every terminal
+   * state, including no client at all (mock/demo), signed out, and failure.
+   * Never "areas are present": mock/demo has none and must still be able to
+   * approve a rollup.
+   */
+  areasReadbackSettled: boolean;
 }
 
 export function useCloseMomentRollups({
@@ -75,6 +90,8 @@ export function useCloseMomentRollups({
   confirmRollup,
   listApprovedRollups,
   journalledRollupKeys,
+  workflowAreaIdByPersistedId,
+  areasReadbackSettled,
 }: UseCloseMomentRollupsOptions) {
   // #737 C1 re-score GAP 1. This used to be the whole answer to "which wins
   // are logged?" — React state initialised empty on every mount. A new tab
@@ -168,9 +185,9 @@ export function useCloseMomentRollups({
   // The judge approved a rollup, opened a new tab, and was offered the same
   // rollup again — the row was safe (`rollup_summaries_period_key` held), but
   // the OFFER was a lie about what the account knows.
-  const [allRollupSummaries, setAllRollupSummaries] = useState<RollupSummary[]>(
-    [],
-  );
+  const [allRollupSummaries, setAllRollupSummaries] = useState<
+    ApprovedRollupSummary[]
+  >([]);
   // Distinguishes "fetched, and there are none" from "not fetched yet".
   // Without it an empty list means both, and the offer would render during the
   // in-flight window — the same lie, for as long as the fetch takes.
@@ -199,15 +216,20 @@ export function useCloseMomentRollups({
   // Both durable tiers of the same question, in one key space. The journal
   // tier is what stops a rollup approved OFFLINE from being re-offered on the
   // next mount, which is GAP 2 one tier down.
+  //
+  // ROUND 2: the account tier's area id is resolved HERE, against the live
+  // area map, rather than frozen when the row was fetched. That is the entire
+  // fix — this memo recomputes as hydration lands, so a readback that won the
+  // race and could only key the row by its persisted uuid stops being wrong
+  // the moment the map that can translate it exists.
   const durablyApprovedRollupKeys = useMemo(
     () =>
-      new Set([
-        ...allRollupSummaries.map((row) =>
-          rollupKey(row.area_id, row.period_type, row.period_start),
-        ),
-        ...(journalledRollupKeys ?? []),
-      ]),
-    [allRollupSummaries, journalledRollupKeys],
+      resolveDurablyApprovedRollupKeys(
+        allRollupSummaries,
+        journalledRollupKeys ?? [],
+        workflowAreaIdByPersistedId,
+      ),
+    [allRollupSummaries, journalledRollupKeys, workflowAreaIdByPersistedId],
   );
 
   const [approvedRollups, setApprovedRollups] = useState<
@@ -233,7 +255,13 @@ export function useCloseMomentRollups({
       // in-flight window would re-create the lie for exactly as long as the
       // fetch takes, and pin it as a race. Mock/demo resolves immediately with
       // an empty list, so nothing is withheld where there is no account.
-      !rollupReadbackSettled
+      //
+      // ROUND 2 adds `areasReadbackSettled` for the identical reason one layer
+      // down: the KEY the readback is compared through is built from the area
+      // map, so an offer rendered before that map settles is the same lie for
+      // as long as the AREAS fetch takes. It is settled-not-present, so
+      // mock/demo (which never has persisted areas) still offers normally.
+      !rollupReadbackSettled || !areasReadbackSettled
         ? []
         : closeVM.rollupDrafts.filter(
             (draft) =>
@@ -249,6 +277,7 @@ export function useCloseMomentRollups({
       approvedRollupAreaIds,
       durablyApprovedRollupKeys,
       rollupReadbackSettled,
+      areasReadbackSettled,
     ],
   );
   const [enhancedRollupSummaries, setEnhancedRollupSummaries] = useState<
@@ -397,13 +426,19 @@ export function useCloseMomentRollups({
     () =>
       allRollupSummaries
         .filter((row) => row.period_type === "week")
-        .map((row) => ({
-          areaId: row.area_id,
-          areaLabel: areaLabelForWorkflowId(row.area_id),
-          periodStart: row.period_start,
-          summary: row.summary,
-        })),
-    [allRollupSummaries, areaLabelForWorkflowId],
+        .map((row) => {
+          // ROUND 2: resolved late, like the key set — an area id left in
+          // persisted-uuid space finds no label in `state.areas` and the
+          // monthly card renders with an empty area name.
+          const areaId = resolvedRollupAreaId(row, workflowAreaIdByPersistedId);
+          return {
+            areaId,
+            areaLabel: areaLabelForWorkflowId(areaId),
+            periodStart: row.period_start,
+            summary: row.summary,
+          };
+        }),
+    [allRollupSummaries, areaLabelForWorkflowId, workflowAreaIdByPersistedId],
   );
   const monthlyRollupDraftsRaw = useMemo(
     () => buildMonthlyRollupDrafts(approvedWeeklyRollupsThisMonth, now),
@@ -415,12 +450,12 @@ export function useCloseMomentRollups({
       allRollupSummaries
         .filter((row) => row.period_type === "month")
         .map((row) => ({
-          areaId: row.area_id,
+          areaId: resolvedRollupAreaId(row, workflowAreaIdByPersistedId),
           periodStart: row.period_start,
           periodEnd: row.period_end,
           summary: row.summary,
         })),
-    [allRollupSummaries],
+    [allRollupSummaries, workflowAreaIdByPersistedId],
   );
   const monthOverMonthReadback = useMemo(
     () => deriveMonthOverMonthReadback(priorMonthRollups, now),
@@ -448,7 +483,7 @@ export function useCloseMomentRollups({
       // the account already holds — which is exactly what the judge saw when a
       // `MONTHLY ROLLUP` card appeared in the second tab that had not been
       // offered in the first.
-      !rollupReadbackSettled
+      !rollupReadbackSettled || !areasReadbackSettled
         ? []
         : monthlyRollupDraftsRaw.filter(
             (draft) =>
@@ -464,6 +499,7 @@ export function useCloseMomentRollups({
       approvedMonthlyRollupAreaIds,
       durablyApprovedRollupKeys,
       rollupReadbackSettled,
+      areasReadbackSettled,
     ],
   );
 
