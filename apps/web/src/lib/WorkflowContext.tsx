@@ -101,6 +101,10 @@ import {
   markCaptureSynced,
   pendingCaptureCount,
 } from "./capture/offlineQueue";
+import {
+  listStoredTaskDrafts,
+  reconcileStoredTaskDrafts,
+} from "./durability/draftStore";
 import type { Phase2MockExecutionSession } from "./types";
 import { workflowAreaIdForPersistedArea } from "./workflowAreaMapping";
 import {
@@ -185,6 +189,9 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     state.areas[0]?.id ?? null,
   );
   const [hasHydratedFromStorage, setHasHydratedFromStorage] = useState(false);
+  // #737 C1 re-score GAP 3: gates the draft-store MIRROR on the draft-store
+  // READ having finished. See the two effects below for why the order matters.
+  const [hasRestoredDeviceDrafts, setHasRestoredDeviceDrafts] = useState(false);
   const [syncStatus, setSyncStatus] =
     useState<WorkflowSyncStatus>(initialSyncStatus);
   const [captureParse, setCaptureParse] = useState<CaptureParseState>({
@@ -238,6 +245,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [journalledLoggedWins, setJournalledLoggedWins] = useState<
     LoggedWinRecord[]
   >([]);
+  // #737 C1 re-score GAP 4 — the DEVICE tier of "which blockless sessions did
+  // the user finish today?", one local-day string per queued write. The
+  // ACCOUNT tier of the same question is the uuid-id rows the workflow sync
+  // already brings in, which is why only this half needs carrying: see
+  // `countCompletedBlocklessSessions` for why the reducer's own optimistic
+  // row is counted by neither tier.
+  const [journalledCompletedSessionDays, setJournalledCompletedSessionDays] =
+    useState<string[]>([]);
   // #737 C1 re-score GAP 2 — approved rollups this device holds but has not
   // sent yet, keyed `areaId|periodType|periodStart`. The ACCOUNT tier of the
   // same question is already fetched by `listApprovedRollups`; this is the
@@ -1326,6 +1341,82 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     }
   }, [hasHydratedFromStorage, state]);
 
+  /**
+   * #737 C1 re-score GAP 3, read half — put back the pending triage drafts
+   * this DEVICE is holding.
+   *
+   * Runs once, after the `sessionStorage` hydration, because the reducer's own
+   * copy of a draft is the newer one and the restore deliberately does not
+   * overwrite it (see the `restoreDeviceDrafts` case).
+   *
+   * `setHasRestoredDeviceDrafts(true)` runs in every path — including a read
+   * failure — because the flag gates the WRITE half below, and a device that
+   * cannot be read from is not a reason to stop saving new drafts to it.
+   */
+  useEffect(() => {
+    if (!hasHydratedFromStorage) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const drafts = await listStoredTaskDrafts();
+        if (!cancelled && drafts.length > 0) {
+          dispatch({ type: "restoreDeviceDrafts", drafts });
+        }
+      } catch {
+        // A read failure loses nothing that was not already lost. The write
+        // half reports a device that cannot hold work, which is the state the
+        // user actually needs to know about.
+      } finally {
+        if (!cancelled) {
+          setHasRestoredDeviceDrafts(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasHydratedFromStorage]);
+
+  /**
+   * #737 C1 re-score GAP 3, write half — mirror the UNDECIDED triage drafts to
+   * the device store.
+   *
+   * ## Why the whole pending set, rather than per-action calls
+   *
+   * Seven reducer paths change a draft (parse, edit, mention-reject, split,
+   * merge, accept, backlog, reject). Reconciling the set after the fact means
+   * none of them can be forgotten, and an accept or a reject removes the draft
+   * for free: the decision flips its status off `pending`, so it drops out of
+   * the filter and `reconcileStoredTaskDrafts` deletes it.
+   *
+   * ## Why it is gated on the RESTORE, not just on hydration
+   *
+   * A fresh tab's reducer holds no drafts until the read above lands. Running
+   * this effect on that empty state would delete the very drafts it is about
+   * to restore — the store would be wiped by the first tab that opened after
+   * the one that made them.
+   *
+   * A failure here is reported with the SAME banner the `sessionStorage`
+   * mirror raises, because it is the same fact: this browser will not hold the
+   * user's work, and a draft they are editing is only in this tab.
+   */
+  useEffect(() => {
+    if (!hasRestoredDeviceDrafts) {
+      return;
+    }
+
+    const pending = state.taskDrafts.filter(
+      (draft) => draft.status === "pending",
+    );
+    void reconcileStoredTaskDrafts(pending).catch(() => {
+      markDeviceStorageBlocked();
+    });
+  }, [hasRestoredDeviceDrafts, state.taskDrafts, markDeviceStorageBlocked]);
+
   // #691: persist the area selection whenever it changes, gated on hydration
   // (like the state save above) so the pre-restore default never overwrites
   // the stored choice.
@@ -1413,6 +1504,32 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             title: payload.title,
             occurredAt: payload.occurred_at,
           })),
+      );
+      // #737 C1 re-score GAP 4: the device tier of "how many blockless
+      // sessions were finished today?". Read out of the SAME
+      // `listPendingWrites()` pass as everything above, so the moment a drain
+      // moves a session to the account it stops being reported here and starts
+      // being reported by the account tier — never both, never neither.
+      //
+      // The day comes from the JOURNAL ENTRY's own `created_at` (the instant
+      // the user saved the end sheet), resolved to their LOCAL day. Deriving
+      // it at read time from `new Date()` would re-date a session finished at
+      // 23:50 to the following morning.
+      setJournalledCompletedSessionDays(
+        pending
+          .filter((write) => write.entity === "execution_session")
+          .filter((write) => {
+            const payload = write.payload as {
+              outcome?: unknown;
+              workflow_block_id?: unknown;
+            };
+            return (
+              payload.outcome === "completed" &&
+              payload.workflow_block_id === null
+            );
+          })
+          .map((write) => localIsoDate(new Date(write.created_at)))
+          .filter((day) => !Number.isNaN(Date.parse(day))),
       );
       // #737 C1 re-score GAP 2: the device tier of "is this period already
       // rolled up?", keyed the same way the hook keys its account tier.
@@ -1729,6 +1846,16 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       markPersistedSaveFailure(error);
       return "local-only";
+    } finally {
+      // #737 C1 re-score GAP 4: the save has just journalled a session (and
+      // possibly drained it to the account), so the DEVICE tier of "what was
+      // finished today" has changed. Re-read it here for the same reason the
+      // day close does at its own call site: the mount effect's refresh
+      // already ran, and without this the Close moment would not see the
+      // session until the next mount — which is the under-report this fixes,
+      // one navigation later. `finally`, because a failed account write still
+      // leaves a queued entry that must be counted.
+      void refreshJournalledDurableState();
     }
   }
 
@@ -1796,6 +1923,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     journalledClosedDays,
     accountLoggedWins,
     journalledLoggedWins,
+    journalledCompletedSessionDays,
     journalledRollupKeys,
     clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>

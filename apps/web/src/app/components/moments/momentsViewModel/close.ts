@@ -5,6 +5,7 @@ import {
 } from "@/lib/rollups/rollupDraft";
 import type { RollupSummaryContent } from "@lifeos/schemas";
 import { resolveDayClose, type DayCloseRecord } from "@/lib/review/dayClose";
+import { isUuid } from "@/lib/workflowContext/reducerCore";
 import {
   loggedWinTaskIdsOf,
   resolveLoggedWinsForDay,
@@ -155,6 +156,106 @@ export interface LoggedWinsOption {
 }
 
 /**
+ * #737 C1 re-score GAP 4 — the DEVICE tier of "which blockless sessions did
+ * the user finish today?".
+ *
+ * Injected for the same reason the two `*ClosedDays` lists and the two logged-
+ * win lists are: it is a FETCHED tier (a read of the pending-writes journal)
+ * and this module is a pure selector. Defaults to empty, so a caller that has
+ * not wired it yet sees the account tier alone rather than a wrong number.
+ *
+ * A list of LOCAL calendar days (one entry per queued write), not a count, so
+ * the view model applies its own "is this today?" test with the same day
+ * derivation everything else here uses.
+ */
+export interface CompletedSessionsOption {
+  /** Local day of every queued blockless COMPLETED session write. */
+  journalledCompletedSessionDays?: readonly string[];
+}
+
+/**
+ * "How many blockless sessions did the user finish today?", answered from the
+ * two DURABLE tiers — #737 C1 re-score GAP 4.
+ *
+ * ## Why this exists at all
+ *
+ * `completedToday` counted calendar blocks and nothing else. Audit P0#2's fix
+ * made a session on an UNSCHEDULED task persist a real `execution_sessions`
+ * row (`calendar_block_id: null`), so the exact path that fix rescued was the
+ * one the day's summary could not see: a finished blockless session read back
+ * as `0 COMPLETED TODAY`. That is the inverse of a phantom save — the app
+ * under-reporting a write that genuinely happened.
+ *
+ * ## WHY IT DOES NOT COUNT THE REDUCER'S OWN ROWS, WHICH IS THE WHOLE TRICK
+ *
+ * The obvious implementation — filter `state.executionSessions` — DOUBLE
+ * COUNTS, and this was measured, not guessed. `mergePersistedRows` drops a
+ * local row only when `dropLocalIds` names it, and nothing ever populates
+ * `persistedSessionIdByLocalIdRef`, so after a sync the reducer holds BOTH the
+ * optimistic `session-N` row and the account's uuid row for one session. A
+ * probe against the real reducer returned
+ * `["794b7d18-…", "session-1"]` — one finished session, two rows. Counting
+ * those would have replaced an under-report with an over-report, which is the
+ * worse of the two errors and the exact class C1 exists to end.
+ *
+ * So the count reads the two tiers that hold exactly one record each, the same
+ * shape `resolveDayClose` and `resolveLoggedWinsForDay` already use:
+ *
+ *  - the ACCOUNT tier — sessions whose id is an account uuid. A local row can
+ *    never be one (`nextId` mints `session-N`), and `mergePersistedRows` uses
+ *    this same discriminator to decide what is an account row.
+ *  - the DEVICE JOURNAL tier — queued `execution_session` writes this device
+ *    holds and has not sent. Without it a session finished offline or signed
+ *    out would not be counted at all, which is the original bug one tier down.
+ *
+ * A session is in exactly one of them: the journal entry is deleted the moment
+ * the account takes the write. The optimistic reducer row is in neither, and
+ * that is correct — it is a copy of whichever tier holds the real record.
+ *
+ * A session that reached NEITHER tier (the device refused to journal it) is
+ * not counted, and must not be: `markDeviceStorageBlocked` has already told
+ * the user that browser will not hold their work.
+ *
+ * ## The other two rules, each chosen rather than fallen into
+ *
+ * 1. **Only `calendar_block_id === null`.** A session attached to a block is
+ *    already represented by that block in the count above; counting it again
+ *    would turn one hour of work into two.
+ * 2. **`outcome`, never `status`.** `findLiveSession` (`lib/workflow/
+ *    execution.ts`) records why in full: status is DERIVED, and every session
+ *    the pre-P0#1 `start_execution_session` abandoned reads back from the
+ *    account as `outcome:"partial"` and therefore status `"running"`. Counting
+ *    on status would file those ghosts as today's completions.
+ *
+ * There is deliberately NO dedupe by task: two genuine blockless sessions on
+ * one task are two completions, and collapsing them would be the same class of
+ * under-report this function exists to end.
+ *
+ * An account row with no `created_at` is not counted — the column is NOT NULL
+ * and the schema requires it, so an absent one means a row this app cannot
+ * date, and choosing a day for it would invent the fact Close reports.
+ */
+function countCompletedBlocklessSessions(
+  state: WorkflowState,
+  now: Date,
+  journalledDays: readonly string[],
+): number {
+  const accountTier = state.executionSessions.filter(
+    (session) =>
+      isUuid(session.id) &&
+      session.calendar_block_id === null &&
+      session.outcome === "completed" &&
+      typeof session.created_at === "string" &&
+      isSameCalendarDay(session.created_at, now),
+  ).length;
+
+  const today = toIsoDate(now);
+  const deviceTier = journalledDays.filter((day) => day === today).length;
+
+  return accountTier + deviceTier;
+}
+
+/**
  * Close moment view model — today's completed/missed counts, carry-forward
  * tasks, and tomorrow's first move. Carry-forward rule (kept deliberately
  * simple): active/scheduled tasks linked to at least one of today's missed
@@ -162,7 +263,10 @@ export interface LoggedWinsOption {
  */
 export function buildCloseVM(
   state: WorkflowState,
-  options: NowOption & DayCloseOption & LoggedWinsOption,
+  options: NowOption &
+    DayCloseOption &
+    LoggedWinsOption &
+    CompletedSessionsOption,
 ): CloseVM {
   const { now } = options;
 
@@ -171,9 +275,13 @@ export function buildCloseVM(
       block.status !== "cancelled" && isSameCalendarDay(block.start_at, now),
   );
 
-  const completedToday = todayBlocksRaw.filter(
-    (block) => block.status === "completed",
-  ).length;
+  const completedToday =
+    todayBlocksRaw.filter((block) => block.status === "completed").length +
+    countCompletedBlocklessSessions(
+      state,
+      now,
+      options.journalledCompletedSessionDays ?? [],
+    );
   const missedBlocks = todayBlocksRaw.filter(
     (block) => block.status === "missed",
   );

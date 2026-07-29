@@ -7,3 +7,17 @@
 # build error). Explicit beats heuristic for a file whose corruption is invisible
 # until render.
 *.woff2 binary
+
+# #737 C1 re-score follow-up: the same hazard, found the hard way. `text=auto`
+# above plus this repo's `core.autocrlf=true` line-ending-converted six
+# `.github/pr-evidence/*.png` blobs during a routine `git add -A` — twice in one
+# session, invisible in a diff, fatal to the image. A screenshot is evidence;
+# evidence that silently rots is worse than none. Explicit beats heuristic for
+# any file whose corruption does not fail a build.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary

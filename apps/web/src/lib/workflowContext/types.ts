@@ -143,6 +143,12 @@ export interface WorkflowContextValue {
   // consumers should not union them by hand.
   accountLoggedWins: LoggedWinRecord[];
   journalledLoggedWins: LoggedWinRecord[];
+  // #737 C1 re-score GAP 4 — local days of blockless COMPLETED session writes
+  // this device holds and has not sent. The ACCOUNT tier of the same question
+  // is already in `state.executionSessions` (the uuid-id rows), so only this
+  // half is carried; `countCompletedBlocklessSessions` explains why the
+  // reducer's own optimistic row belongs to neither tier.
+  journalledCompletedSessionDays: string[];
   // #737 C1 re-score GAP 2 — periods this device has an APPROVED rollup for
   // but has not sent yet, keyed `areaId|periodType|periodStart`. The account
   // tier of the same question is fetched on demand by `listApprovedRollups`.
