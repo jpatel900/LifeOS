@@ -57,10 +57,14 @@ right. _Why: contracts cited reports instead of files._
 ### 3. Skills
 
 Name the skills to load. Routing table lives in `AGENTS.md`; repo-local
-`.agents/skills` beat general ones, and `lifeos-*` beat `agentic-*`. Cockpit UI
-work also reads `design_handoff_lifeos/README.md`. The lane reports which skills
-it loaded and **whether any changed a decision**. _Why: an audit found zero skill
-invocations across a full session — availability is not use._
+`.agents/skills` beat general ones, and `lifeos-*` beat `agentic-*`. UI lanes
+load `frontend-ui-engineering`; rendered-behavior proof loads
+`browser-testing-with-devtools` or uses bounded Playwright. Cockpit UI also
+reads the root-level `design_handoff_lifeos/README.md` as a historical design
+reference; requirements, UX flows, ADRs, and verified shipped behavior remain
+authoritative. The lane reports which skills and references it loaded and
+**whether any changed a decision**. _Why: an audit found zero skill invocations
+across a full session — availability is not use._
 
 ### 4. Checkpointing
 
@@ -78,7 +82,12 @@ uncommitted edits._
 - `pnpm lint`, `pnpm type-check`, `prettier --check`.
 - Vitest uses the threads pool on Windows.
 - Pin calendar/clock-dependent moments in specs.
-- UI work: capture the first screenshot **and look at it**.
+- UI work: run focused tests while iterating, then the full floor above. The
+  final proof packet covers accessibility/axe, one bounded primary browser
+  journey, keyboard and touch behavior, desktop and mobile viewports,
+  motion/reduced-motion when changed, and a before/after visual comparison when
+  appearance changes. Capture the first screenshot **and look at it**. Mark an
+  inapplicable proof item `N/A` with one reason.
 - Confirm no stale dev server squats the port — check the listener PID's commandline.
 
 ### 6. Guards are sacred
@@ -90,10 +99,15 @@ number look better. Ratchets move by **strict equality**, deliberately.
 
 ### 7. Truth mapping — copy and UX work
 
-List the safety and truth guarantees carried by the old text. Prove each one
-survives, before → after. Verify every claim of state against the code path that
-produces it. Where words and behavior disagree, **STOP and escalate**:
-make-it-true versus say-the-truth is an owner call, not a lane call.
+Before UI or copy implementation, write a compact delivery brief: objective,
+intended feeling, non-negotiable invariants, and expected user-visible behavior
+for loading, empty, partial, error, and success states. Cover keyboard, touch,
+mobile/responsive, and motion/reduced-motion behavior; mark an inapplicable
+state or input axis `N/A` with one reason. List the safety and truth guarantees
+carried by the old UI/text and prove each survives, before → after. Verify every
+claim of state against the code path that produces it. Where words and behavior
+disagree, **STOP and escalate**: make-it-true versus say-the-truth is an owner
+call, not a lane call.
 
 ### 8. Reach trace — sweeps
 
