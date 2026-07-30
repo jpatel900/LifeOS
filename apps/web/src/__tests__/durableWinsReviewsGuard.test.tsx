@@ -128,6 +128,11 @@ function CloseMomentWinHarness() {
     confirmWin,
     confirmRollup,
     listApprovedRollups,
+    // Mock mode: no persisted areas exist and the load attempt has settled
+    // (there is no client to wait for). This harness is about the WIN path,
+    // and these are the values the provider hands it there.
+    workflowAreaIdByPersistedId: {},
+    areasReadbackSettled: true,
   });
 
   useEffect(() => {

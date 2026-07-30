@@ -10,11 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  type Area,
-  type RollupSummary,
-  type RollupSummaryContent,
-} from "@lifeos/schemas";
+import { type Area, type RollupSummaryContent } from "@lifeos/schemas";
+import type { ApprovedRollupSummary } from "./review/approvedRollups";
 import {
   acceptDraft,
   acceptProposal,
@@ -261,6 +258,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   const [journalledRollupKeys, setJournalledRollupKeys] = useState<string[]>(
     [],
   );
+  // #737 C1 re-score ROUND 2 GAP 2 — `persistedAreasRef` as REACTIVE state,
+  // narrowed to the one thing a consumer needs from it: persisted uuid ->
+  // workflow area id. A ref cannot re-render anything, so a memo built on it
+  // stays wrong for the life of the mount; that is precisely how an approved
+  // rollup went on being offered forever. See `lib/review/approvedRollups.ts`.
+  const [workflowAreaIdByPersistedId, setWorkflowAreaIdByPersistedId] =
+    useState<Readonly<Record<string, string>>>({});
+  // Whether the account-areas load ATTEMPT has finished, in EVERY terminal
+  // state — no client (mock/demo), signed out, load failure, success. It gates
+  // an offer whose key is built from the area map, so it must never mean
+  // "areas are present": mock/demo has none and must still be able to approve.
+  const [areasReadbackSettled, setAreasReadbackSettled] = useState(false);
   // Audit P0#4: the close for the day currently being written, if any. A ref
   // rather than state because it must be readable and writable WITHIN one
   // render — its whole job is to catch the second press that lands before the
@@ -371,6 +380,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
 
   const applyPersistedAreas = useCallback((areas: Area[]) => {
     persistedAreasRef.current = areas;
+    // The reactive twin of the ref above, set in the same beat so the two can
+    // never disagree. Consumers that must RECOMPUTE when areas land (the
+    // rollup suppression key) read this; everything that only needs the value
+    // synchronously inside a callback keeps reading the ref.
+    setWorkflowAreaIdByPersistedId(
+      Object.fromEntries(
+        areas.map((area) => [area.id, workflowAreaIdForPersistedArea(area)]),
+      ),
+    );
     const syncedAreas = areas.map((area) => ({
       id: workflowAreaIdForPersistedArea(area),
       user_id: area.user_id,
@@ -1038,8 +1056,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // new persistence path. Mock/preview (no client) returns an empty list, the
   // same "nothing to show" the rest of the rollup surface already treats as
   // honest, not degraded.
+  //
+  // #737 C1 re-score ROUND 2 GAP 2: the mapping here is a BEST EFFORT, not the
+  // answer. It runs when the fetch resolves, and the fetch usually beats
+  // hydration, so `persistedAreasRef.current` is routinely still empty and the
+  // resolution falls through to the raw uuid. That is why every row now also
+  // carries `areaIdAliases` with the persisted uuid it was read with: the
+  // consumer finishes the resolution at USE, against a live area map, in a
+  // memo that recomputes when hydration lands. The mapped `area_id` stays
+  // because the monthly composer looks the area LABEL up by it.
   const listApprovedRollups = useCallback(async (): Promise<
-    RollupSummary[]
+    ApprovedRollupSummary[]
   > => {
     const client = createSupabaseBrowserClient();
     if (!client) return [];
@@ -1053,6 +1080,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             row.area_id,
             persistedAreasRef.current,
           ) ?? row.area_id,
+        areaIdAliases: [row.area_id],
       }));
     } catch {
       return [];
@@ -1310,7 +1338,19 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    void syncPersistedAreas();
+    // #737 C1 re-score ROUND 2 GAP 2: settled in a `finally`, for the same
+    // reason `rollupReadbackSettled` is. This flag now gates a rollup offer,
+    // so a path that left it false would remove the approve action with no
+    // error surface at all — a worse failure than the one being fixed. Every
+    // branch of `syncPersistedAreas` above already returns rather than
+    // throwing; the `finally` is what keeps that true if one ever stops.
+    void (async () => {
+      try {
+        await syncPersistedAreas();
+      } finally {
+        if (!cancelled) setAreasReadbackSettled(true);
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -1925,6 +1965,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     journalledLoggedWins,
     journalledCompletedSessionDays,
     journalledRollupKeys,
+    workflowAreaIdByPersistedId,
+    areasReadbackSettled,
     clearOfflineCaptures,
     addParsedWorkflowResult: (parsed) =>
       dispatch({ type: "appendParsedWorkflowResult", parsed }),

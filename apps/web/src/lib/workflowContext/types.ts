@@ -8,10 +8,10 @@ import type {
   Area,
   Phase2TaskDraft,
   Phase2TimeBlockProposal,
-  RollupSummary,
   RollupSummaryContent,
 } from "@lifeos/schemas";
 import type { WorkflowState } from "../workflow";
+import type { ApprovedRollupSummary } from "../review/approvedRollups";
 import type { LoggedWinRecord } from "../review/loggedWins";
 import type { SessionSaveResult } from "./persistenceSync";
 import type { TaskMapGraph } from "../taskmap/graph";
@@ -153,6 +153,18 @@ export interface WorkflowContextValue {
   // but has not sent yet, keyed `areaId|periodType|periodStart`. The account
   // tier of the same question is fetched on demand by `listApprovedRollups`.
   journalledRollupKeys: string[];
+  // #737 C1 re-score ROUND 2 GAP 2 — persisted area uuid -> workflow area id,
+  // as REACTIVE state rather than the provider's ref. An account row names its
+  // area by uuid and a Close-moment draft names it by workflow id; the bridge
+  // arrives with hydration, LATER than the rollup readback usually resolves.
+  // Consumers that must recompute when it lands read this. Empty until
+  // hydration, and permanently empty in mock/demo — so it is never a proxy for
+  // "signed in". See `lib/review/approvedRollups.ts`.
+  workflowAreaIdByPersistedId: Readonly<Record<string, string>>;
+  // Whether the account-areas load ATTEMPT has finished, in every terminal
+  // state (no client, signed out, failure, success). Gates surfaces whose
+  // correctness depends on the map above existing; never means "areas exist".
+  areasReadbackSettled: boolean;
   // Purge device-local queued raw captures (call on logout — they are
   // High-sensitivity and must not outlive the session on a shared device).
   clearOfflineCaptures: () => Promise<void>;
@@ -269,7 +281,7 @@ export interface WorkflowContextValue {
   // #486: read-only, workflow-area-scoped fetch of already-approved rollups
   // (weekly and monthly), used for the monthly composer and month-over-month
   // readback. See `listApprovedRollups` for the mapping/fallback details.
-  listApprovedRollups: () => Promise<RollupSummary[]>;
+  listApprovedRollups: () => Promise<ApprovedRollupSummary[]>;
   // S9 (#261) learning-loop consumer. Reads are derived from loaded
   // override_records + execution-session actuals; decisions are propose->approve
   // and NEVER auto-apply a default (the recorded decision is the only mutation).
