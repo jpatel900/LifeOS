@@ -130,6 +130,17 @@ describe("parse capture server service", () => {
     }
   });
 
+  it("normalizes trailing title punctuation without backtracking over hostile input", async () => {
+    const trailingPunctuation = "!?.".repeat(20_000);
+    const result = await parseCaptureWithFallback(
+      { rawText: `Review migration${trailingPunctuation}` },
+      { env: { AI_MODEL_STANDARD: "standard-model" } },
+    );
+
+    expect(result.parser).toBe("mock");
+    expect(result.response.drafts[0]?.title).toBe("Review migration");
+  });
+
   it("emits a project draft from mock parsing for clearly project-shaped captures", async () => {
     const result = await parseCaptureWithFallback(
       { rawText: "Need a project to organize volunteer ops system." },

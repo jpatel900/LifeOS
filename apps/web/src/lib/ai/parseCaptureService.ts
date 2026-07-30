@@ -201,18 +201,32 @@ export function getParseCaptureStatus(
   return { status: "ai_configured", preferredParser: "ai" };
 }
 
+function stripTrailingTitlePunctuation(value: string) {
+  let end = value.length;
+
+  while (end > 0) {
+    const character = value.charCodeAt(end - 1);
+    if (character !== 33 && character !== 46 && character !== 63) {
+      break;
+    }
+    end -= 1;
+  }
+
+  return value.slice(0, end);
+}
+
 function makeTitle(rawText: string) {
   const normalized = rawText
     .trim()
     .replace(/^need to\s+/i, "")
-    .replace(/\s+/g, " ")
-    .replace(/[.!?]+$/, "");
+    .replace(/\s+/g, " ");
+  const withoutTrailingPunctuation = stripTrailingTitlePunctuation(normalized);
 
-  if (normalized.length <= 72) {
-    return normalized;
+  if (withoutTrailingPunctuation.length <= 72) {
+    return withoutTrailingPunctuation;
   }
 
-  return `${normalized.slice(0, 69).trim()}...`;
+  return `${withoutTrailingPunctuation.slice(0, 69).trim()}...`;
 }
 
 function makeProjectTitle(rawText: string) {
