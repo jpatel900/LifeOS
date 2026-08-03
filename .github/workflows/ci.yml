@@ -164,14 +164,97 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @lifeos/web exec playwright install --with-deps msedge
 
-      - name: Run Playwright E2E suite
-        run: pnpm --filter @lifeos/web test:e2e
+      # `--grep-invert @signed-in` excludes the signed-in tier, which needs a
+      # Supabase-backed server this job deliberately does not have. Those specs
+      # run in `e2e-signed-in` below. Everything else is unchanged: no
+      # device-tier spec left this job.
+      - name: Run Playwright E2E suite (device tier)
+        run: pnpm --filter @lifeos/web test:e2e --grep-invert "@signed-in"
 
       - name: Upload traces on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
+          path: apps/web/test-results/
+          retention-days: 7
+
+  e2e-signed-in:
+    # The seam #737's ROUND 3 re-score recorded and could not close:
+    #
+    #   "The CI `e2e` job still sets no Supabase env, so every Playwright pin
+    #    outside `migrations-rls` runs device-tier only. […] the other criteria
+    #    are still pinned at two tiers that never meet in a signed-in browser.
+    #    This drive is the only account-tier browser evidence for them, and a
+    #    drive is not a pin. Recommend a lane of its own: an `e2e` job with
+    #    Supabase env."
+    #
+    # This is that job. It is a SEPARATE job on purpose rather than extra steps
+    # inside `migrations-rls`: a browser-journey failure must not redden a check
+    # named "Migrations + RLS Verification", and the owner needs an
+    # independently named signal for the signed-in tier.
+    #
+    # The budget is held by `--grep`, not by sharing a runner: only the four
+    # `@signed-in` specs run here (one per C1 criterion family). The whole
+    # Playwright suite is NOT run twice.
+    name: Playwright E2E (signed-in tier)
+    needs: changes
+    if: needs.changes.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm --filter @lifeos/web exec playwright install --with-deps msedge
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # same pin as `migrations-rls` — bump the two together, deliberately
+          version: 2.109.1
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Apply migrations and seed from scratch
+        run: supabase db reset
+
+      # ONE `run:` block on purpose. `supabase status -o env` is evaluated into
+      # this shell, and environment set in one step does not cross into the
+      # next — splitting this would start the dev server with no Supabase env
+      # and produce a green run of a signed-OUT suite, which is precisely the
+      # vacuity this job exists to end. `tests/e2e/helpers/signedInAccount.ts`
+      # carries a second guard (`requireSupabaseEnv`) that fails loudly if the
+      # env is ever missing anyway.
+      - name: Run the signed-in Playwright tier against the live local stack
+        run: |
+          eval "$(supabase status -o env | sed 's/^/export /')"
+          NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+          NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" \
+          pnpm --filter @lifeos/web test:e2e --grep "@signed-in"
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-signed-in
           path: apps/web/test-results/
           retention-days: 7
 

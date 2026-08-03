@@ -31,6 +31,12 @@ const warmRoutes = [
   // an on-demand dev compile mid-test can blow the specs' 5s expect window.
   "/areas",
   "/today",
+  // The signed-in tier (`tests/e2e/signed-in-account-truth.spec.ts`) starts
+  // every journey at `/login`. Left unwarmed it is compiled on demand at the
+  // first `goto`, which is the same on-demand-compile stall the comment above
+  // describes — only now it lands on the very first action of every signed-in
+  // spec instead of a mid-test navigation.
+  "/login",
   "/api/parse-capture",
 ];
 const serverLogBuffer = [];
