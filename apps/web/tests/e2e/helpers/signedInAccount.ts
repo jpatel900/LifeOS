@@ -283,43 +283,99 @@ export async function purgeOwnRows(account: AccountClient): Promise<void> {
 }
 
 /**
- * Diagnostic, deliberately NOT an assertion.
+ * ONE known account failure is tolerated. Everything else is a test failure.
  *
  * The first thing this tier saw when it was pointed at a signed-in browser was
- * a silent `400` from the app's own fire-and-forget meta-learning write:
+ * a silent `400` from the app's own fire-and-forget meta-learning write on the
+ * triage-accept path:
  *
  *   POST /rest/v1/suggestion_records ->
  *   {"code":"23514","message":"new row for relation \"suggestion_records\"
  *    violates check constraint \"suggestion_records_resolved_after_created_check\""}
  *
- * That is a real account-tier failure on the triage-accept path and it belongs
- * to C1 criterion 5 ("triage audit-trail writes succeed signed-in"), not to
- * this infrastructure lane — fixing it means touching app source, which this
- * lane does not own. Turning it into an assertion here would leave the new job
- * permanently red and the seam would stay closed to everything else. So it is
- * PRINTED, with its body, into the CI log of every signed-in run: visible,
- * attributable, and impossible to lose. See the PR body's AGENT-TODO.
+ * It reproduces on GitHub's runners, so it is a product defect, not local clock
+ * skew. It belongs to C1 criterion 5 ("triage audit-trail writes succeed
+ * signed-in") and fixing it means touching app source, which this lane does not
+ * own. Asserting it here would leave the new job permanently red on day one and
+ * the seam would stay closed to everything else — so it is tolerated, and
+ * PRINTED with its body into the CI log of every signed-in run. See the PR
+ * body's AGENT-TODO.
+ *
+ * The tolerance is NARROW on purpose. An unconditional "log every 4xx" would
+ * also swallow the next one — a broken grant answering `403` on `capture_items`
+ * would print a single line into a green job and change nothing. So the known
+ * case is named by table and status, and every other failed account call is
+ * collected for the caller to assert on (`expectOnlyKnownAccountFailures`).
  */
-export function logFailedAccountWrites(page: Page): void {
+const TOLERATED_ACCOUNT_FAILURE = {
+  table: "suggestion_records",
+  status: 400,
+} as const;
+
+export interface AccountFailureWatch {
+  /** Failed account calls that are NOT the known criterion-5 defect. */
+  unexpected: string[];
+}
+
+/**
+ * Watch this page's PostgREST traffic.
+ *
+ * Set `SIGNED_IN_VERBOSE=1` to also print every `/rest/v1/` status/method/path
+ * as it happens — the fastest way to tell "the app never issued the write" from
+ * "the write was rejected" when a signed-in spec fails in CI.
+ */
+export function watchAccountFailures(page: Page): AccountFailureWatch {
   const verbose = process.env.SIGNED_IN_VERBOSE === "1";
+  const watch: AccountFailureWatch = { unexpected: [] };
+
   page.on("response", (response) => {
     const url = response.url();
     if (!url.includes("/rest/v1/")) return;
+
+    const method = response.request().method();
+    const path = url.split("?")[0]!;
+    const status = response.status();
+
     if (verbose) {
-      console.log(
-        `[signed-in] ${response.status()} ${response.request().method()} ${url.split("?")[0]}`,
-      );
+      console.log(`[signed-in] ${status} ${method} ${path}`);
     }
-    if (response.status() < 400) return;
+    if (status < 400) return;
+
+    // Classified synchronously, from status + table alone: the body arrives on
+    // a promise that may resolve after the test ends, and a check that can miss
+    // its own input is not a check.
+    const tolerated =
+      status === TOLERATED_ACCOUNT_FAILURE.status &&
+      path.endsWith(`/${TOLERATED_ACCOUNT_FAILURE.table}`);
+    if (!tolerated) {
+      watch.unexpected.push(`${status} ${method} ${path}`);
+    }
+
     void response
       .text()
       .catch(() => "")
       .then((body) => {
         console.log(
-          `[signed-in] account write/read FAILED ${response.status()} ${response.request().method()} ${url.split("?")[0]} :: ${body.slice(0, 400)}`,
+          `[signed-in] account call FAILED${tolerated ? " (known, tolerated)" : ""} ${status} ${method} ${path} :: ${body.slice(0, 400)}`,
         );
       });
   });
+
+  return watch;
+}
+
+/**
+ * Fail the test if any account call failed other than the one known defect.
+ * Called from `afterEach` so it covers every page a spec opened.
+ */
+export function expectOnlyKnownAccountFailures(
+  watches: readonly AccountFailureWatch[],
+): void {
+  const unexpected = watches.flatMap((watch) => watch.unexpected);
+  expect(
+    unexpected,
+    `An account read or write failed that is NOT the known #737 criterion-5 defect (${TOLERATED_ACCOUNT_FAILURE.status} on ${TOLERATED_ACCOUNT_FAILURE.table}). A signed-in job must not stay green through a broken grant, policy or column.`,
+  ).toEqual([]);
 }
 
 /** Today's date as the BROWSER's local calendar day (`YYYY-MM-DD`). */

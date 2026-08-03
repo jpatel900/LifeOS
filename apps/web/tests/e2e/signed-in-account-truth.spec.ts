@@ -5,14 +5,16 @@ import {
   SEEDED_USERS,
   SIGNED_IN_TAG,
   accountClient,
+  expectOnlyKnownAccountFailures,
   localDay,
-  logFailedAccountWrites,
+  watchAccountFailures,
   gotoWithAccountSync,
   purgeOwnRows,
   reloadWithAccountSync,
   requireSupabaseEnv,
   signIn,
   type AccountClient,
+  type AccountFailureWatch,
   type SeededUser,
   type SupabaseEnv,
 } from "./helpers/signedInAccount";
@@ -88,6 +90,24 @@ interface SignedInFixture {
 }
 
 /**
+ * Every page a test opens is watched, and `afterEach` asserts that the only
+ * failed account call was the known criterion-5 defect. Without this the tier
+ * would be green over the next broken grant — it would print one line and
+ * carry on, which is the shape of failure this whole job exists to end.
+ */
+const watches: AccountFailureWatch[] = [];
+
+function watchPage(page: Page): void {
+  watches.push(watchAccountFailures(page));
+}
+
+test.afterEach(() => {
+  const seen = [...watches];
+  watches.length = 0;
+  expectOnlyKnownAccountFailures(seen);
+});
+
+/**
  * Sign in, wipe this user's own rows, and land on a clean Today.
  *
  * The purge runs BEFORE the drive and is followed by a fresh document load so
@@ -100,7 +120,7 @@ async function openSignedInToday(
   page: Page,
   user: SeededUser,
 ): Promise<SignedInFixture> {
-  logFailedAccountWrites(page);
+  watchPage(page);
   await stubParseCaptureRoute(page);
   await pinMomentPreference(page, "start");
   await signIn(page, user);
@@ -172,6 +192,7 @@ async function openSecondTab(
   path = "/",
 ): Promise<Page> {
   const tab = await context.newPage();
+  watchPage(tab);
   await stubParseCaptureRoute(tab);
   await gotoWithAccountSync(tab, path);
   await expect(tab.getByTestId("today-moments")).toBeVisible({
@@ -435,7 +456,7 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
     const second = await browser.newContext();
     const secondPage = await second.newPage();
     try {
-      logFailedAccountWrites(secondPage);
+      watchPage(secondPage);
       await stubParseCaptureRoute(secondPage);
       await signIn(secondPage, user);
       const account = await accountClient(secondPage, user, env);
