@@ -3671,9 +3671,9 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
       // The server, not the browser, is authoritative for both clocks: it
       // must overwrite the client's resolved_at just as it already
       // overwrites created_at, so the two land on the same server instant.
-      expect(new Date(data!.resolved_at as string).getTime()).toBeGreaterThanOrEqual(
-        new Date(data!.created_at as string).getTime(),
-      );
+      expect(
+        new Date(data!.resolved_at as string).getTime(),
+      ).toBeGreaterThanOrEqual(new Date(data!.created_at as string).getTime());
     } finally {
       await deleteSuggestionRecordsByPolicy(userAClient, policyIdentifier);
     }

@@ -630,6 +630,11 @@ Indexes:
 | created_at      | timestamptz          |
 | resolved_at     | timestamptz nullable |
 
+`created_at` and, when non-null, `resolved_at` are both server-generated on
+insert (migrations `20260704160000`, `20260803120000`) — a client clock can
+never set either, so a suggestion born already-resolved always satisfies
+`resolved_at >= created_at`.
+
 Statuses:
 
 - pending
