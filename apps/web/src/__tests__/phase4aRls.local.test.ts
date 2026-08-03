@@ -3625,6 +3625,60 @@ describeLocalRls("Phase 4A local Supabase RLS", () => {
     expect(error?.message).toMatch(/row-level security|violates row-level/i);
   });
 
+  /**
+   * 23514 (PR #801's C1 criterion-5 CI find) — a single-insert already-resolved
+   * suggestion. Every fire-and-forget write in metaLearning.ts (e.g.
+   * recordWipEnforcementEvent, recordRejectedTaskDraft) stamps `resolved_at`
+   * with the BROWSER's clock in the same INSERT payload that carries
+   * `created_at`. Migration 20260704160000 force-overwrites created_at to the
+   * server's now() for authenticated callers, but that overwrite lands after
+   * the browser already captured its own resolved_at — so created_at ends up
+   * strictly later than resolved_at, and
+   * suggestion_records_resolved_after_created_check (resolved_at >=
+   * created_at) fails with 23514 on every such insert. This must run against
+   * the REAL trigger stack (a mocked client can't reproduce a server-side
+   * clock race), which is why it lives in the RLS suite, not a unit test.
+   */
+  it("lets user A insert a suggestion already resolved with a client-stamped resolved_at (23514)", async () => {
+    const userAClient = await signIn(userA.email, userA.password);
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const policyIdentifier = `rls.suggestion.resolved-at-insert.${suffix}`;
+
+    // Mirrors the app's call shape exactly: resolved_at captured on the
+    // client BEFORE the request is sent, in the same insert as created_at.
+    const clientResolvedAt = new Date().toISOString();
+
+    try {
+      const { data, error } = await userAClient
+        .from("suggestion_records")
+        .insert({
+          user_id: userA.id,
+          area_id: userA.areaId,
+          policy_identifier: policyIdentifier,
+          suggestion_type: "wip_refused",
+          subject_type: "task",
+          suggestion_json: { title: "audit trail" },
+          status: "rejected",
+          decided_by: "system",
+          resolved_at: clientResolvedAt,
+        })
+        .select("created_at,resolved_at")
+        .single();
+
+      expectNoGrantGap(error);
+      expect(error).toBeNull();
+      expect(data).not.toBeNull();
+      // The server, not the browser, is authoritative for both clocks: it
+      // must overwrite the client's resolved_at just as it already
+      // overwrites created_at, so the two land on the same server instant.
+      expect(new Date(data!.resolved_at as string).getTime()).toBeGreaterThanOrEqual(
+        new Date(data!.created_at as string).getTime(),
+      );
+    } finally {
+      await deleteSuggestionRecordsByPolicy(userAClient, policyIdentifier);
+    }
+  });
+
   it("lets user A record and read own override_records but not user B rows (#758)", async () => {
     const userAClient = await signIn(userA.email, userA.password);
     const userBClient = await signIn(userB.email, userB.password);
