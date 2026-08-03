@@ -7,7 +7,9 @@ import {
   accountClient,
   localDay,
   logFailedAccountWrites,
+  gotoWithAccountSync,
   purgeOwnRows,
+  reloadWithAccountSync,
   requireSupabaseEnv,
   signIn,
   type AccountClient,
@@ -106,7 +108,7 @@ async function openSignedInToday(
   const account = await accountClient(page, user, env);
   await purgeOwnRows(account);
 
-  await page.goto("/");
+  await gotoWithAccountSync(page, "/");
   await expect(page.getByTestId("today-moments")).toBeVisible({
     timeout: 30_000,
   });
@@ -171,7 +173,7 @@ async function openSecondTab(
 ): Promise<Page> {
   const tab = await context.newPage();
   await stubParseCaptureRoute(tab);
-  await tab.goto(path);
+  await gotoWithAccountSync(tab, path);
   await expect(tab.getByTestId("today-moments")).toBeVisible({
     timeout: 30_000,
   });
@@ -189,19 +191,21 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
 
     await captureAndSort(page, text);
 
+    // The user owns exactly one capture in this run (the purge saw to that),
+    // so the row is identified by ownership rather than by a PostgREST text
+    // filter — the filter is a second thing that can be wrong, and it was.
+    const ownCaptures = () =>
+      account.rows<{ id: string; status: string; raw_text: string }>(
+        "capture_items?select=id,status,raw_text",
+      );
+
     // Positive control, in the same run: before the accept the account holds
     // the thought as genuinely unsorted. Without this, the `resolved`
     // assertion below could pass on a build that resolved everything.
     await expect
-      .poll(
-        async () =>
-          (
-            await account.rows<{ status: string }>(
-              `capture_items?select=status&raw_text=eq.${encodeURIComponent(text)}`,
-            )
-          ).map((row) => row.status),
-        { timeout: 20_000 },
-      )
+      .poll(async () => (await ownCaptures()).map((row) => row.status), {
+        timeout: 20_000,
+      })
       .toEqual(["new"]);
 
     await page
@@ -214,19 +218,21 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
 
     // THE ACCOUNT-TIER CLAIM. `resolved` here is a row PostgREST returned for
     // this user under RLS, not a screen reading.
-    const captures = await rowsEventually<{ id: string; status: string }>(
-      account,
-      `capture_items?select=id,status&raw_text=eq.${encodeURIComponent(text)}`,
-      1,
-    );
-    expect(captures[0]!.status).toBe("resolved");
+    await expect
+      .poll(async () => (await ownCaptures()).map((row) => row.status), {
+        timeout: 30_000,
+      })
+      .toEqual(["resolved"]);
+    const captures = await ownCaptures();
+    expect(captures[0]!.raw_text).toBe(text);
 
     // And the task the account created points back at it — the backlink that
     // makes "one item, one truth" checkable rather than asserted.
-    const tasks = await account.rows<{ source_capture_item_id: string | null }>(
-      `tasks?select=id,title,source_capture_item_id&title=eq.${encodeURIComponent(text)}`,
-    );
-    expect(tasks).toHaveLength(1);
+    const tasks = await rowsEventually<{
+      title: string;
+      source_capture_item_id: string | null;
+    }>(account, "tasks?select=id,title,source_capture_item_id", 1);
+    expect(tasks[0]!.title).toBe(text);
     expect(tasks[0]!.source_capture_item_id).toBe(captures[0]!.id);
 
     // THE REPRODUCTION: a tab that never saw the decision must not offer the
@@ -298,7 +304,7 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
 
     // A reload re-arms the journal's mount replay. The `client_write_id` must
     // make that replay a no-op against the real unique index, not a second row.
-    await page.reload({ waitUntil: "domcontentloaded" });
+    await reloadWithAccountSync(page);
     await expect(page.getByTestId("today-moments")).toBeVisible({
       timeout: 30_000,
     });
@@ -313,7 +319,7 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
     const { account } = await openSignedInToday(page, user);
     const today = await localDay(page);
 
-    await page.goto("/?moment=close");
+    await gotoWithAccountSync(page, "/?moment=close");
     await expect(page.getByTestId("close-moment")).toBeVisible({
       timeout: 30_000,
     });
@@ -330,6 +336,23 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
       await page.getByTestId("close-moment-verdict-payoff").textContent()
     )?.trim();
 
+    // A second close is not offered, because a second close is not a thing.
+    await expect(page.getByTestId("close-moment-close-day")).toHaveCount(0);
+
+    // ## The close is JOURNALLED first and DELIVERED on the next mount
+    //
+    // Measured on this branch, not assumed: 30 s of polling after the click
+    // finds `review_entries` still empty, and the app says so itself —
+    // `close-moment-verdict-destination` renders the "saved on this device and
+    // sending" form, not "saved to your account". `replayDurableWrites` drains
+    // the journal from `WorkflowProvider`'s mount effect, so the reload below
+    // is what arms delivery. Asserting the row without it would be asserting
+    // a behaviour the app does not claim.
+    await reloadWithAccountSync(page);
+    await expect(page.getByTestId("close-moment")).toBeVisible({
+      timeout: 30_000,
+    });
+
     // ONE row, keyed on the BROWSER's local calendar day — the property the
     // unique index `review_entries_user_daily_close_key` protects and the one
     // that was wrong when the write keyed on the UTC date.
@@ -340,18 +363,24 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
     );
     expect(reviews[0]!.period_start).toBe(today);
 
-    // A second close is not offered, because a second close is not a thing.
-    await expect(page.getByTestId("close-moment-close-day")).toHaveCount(0);
-
-    // And a hard reload reads the same closed day back out of the account.
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("close-moment")).toBeVisible({
-      timeout: 30_000,
-    });
+    // The screen's own claim now matches the row. This phrase is the one that
+    // must never be shown over an undelivered write.
+    await expect(
+      page.getByTestId("close-moment-verdict-destination"),
+    ).toHaveText("Today's close is saved to your account.");
     await expect(page.getByTestId("close-moment-verdict-payoff")).toHaveText(
       verdict!,
     );
     await expect(page.getByTestId("close-moment-close-day")).toHaveCount(0);
+
+    // A SECOND mount re-arms the replay. The journal's idempotency key and the
+    // unique index must between them leave the row count alone — a second row
+    // here is the "closed the day five times" defect the audit found.
+    await reloadWithAccountSync(page);
+    await expect(page.getByTestId("close-moment")).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(3_000);
     expect(await account.rows("review_entries?select=id")).toHaveLength(1);
   });
 
@@ -366,7 +395,7 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
     let verdict: string;
     try {
       const { account } = await openSignedInToday(firstPage, user);
-      await firstPage.goto("/?moment=close");
+      await gotoWithAccountSync(firstPage, "/?moment=close");
       await expect(firstPage.getByTestId("close-moment")).toBeVisible({
         timeout: 30_000,
       });
@@ -380,6 +409,13 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
             .getByTestId("close-moment-verdict-payoff")
             .textContent()
         )?.trim() ?? "";
+
+      // Same delivery mechanic as criterion 4: the close is journalled on
+      // click and drained by the next mount's replay.
+      await reloadWithAccountSync(firstPage);
+      await expect(firstPage.getByTestId("close-moment")).toBeVisible({
+        timeout: 30_000,
+      });
       await expect
         .poll(
           async () => (await account.rows("review_entries?select=id")).length,
@@ -404,7 +440,7 @@ test.describe("#737 C1 — the signed-in browser tier", () => {
       await signIn(secondPage, user);
       const account = await accountClient(secondPage, user, env);
 
-      await secondPage.goto("/?moment=close");
+      await gotoWithAccountSync(secondPage, "/?moment=close");
       await expect(secondPage.getByTestId("close-moment")).toBeVisible({
         timeout: 30_000,
       });

@@ -117,7 +117,7 @@ export async function signIn(page: Page, user: SeededUser): Promise<void> {
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await page.waitForURL("**/");
 
-  await page.goto("/");
+  await gotoWithAccountSync(page, "/");
   await expect(page.getByTestId("today-moments")).toBeVisible({
     timeout: 30_000,
   });
@@ -125,6 +125,47 @@ export async function signIn(page: Page, user: SeededUser): Promise<void> {
   await expect(page.getByTestId("masthead-auth-signed-in")).toContainText(
     user.email.split("@")[0]!,
   );
+}
+
+/**
+ * Navigate, and do not return until the app has actually READ this user's rows
+ * out of the account.
+ *
+ * ## Why every signed-in navigation has to go through here
+ *
+ * `WorkflowProvider` loads areas, then `syncPersistedWorkflowRows` reads the
+ * row tables. Until that finishes the provider is still in its local-only
+ * posture, and a write made in that window is journalled for a later replay
+ * instead of going to the account. Measured on this branch: a capture typed
+ * immediately after `today-moments` became visible produced NO
+ * `POST /rest/v1/capture_items` at all and left the account empty through 20 s
+ * of polling, while the identical journey with the load settled produced the
+ * row in under four seconds. `today-moments` being visible means React
+ * mounted; it does not mean the account arrived.
+ *
+ * `capture_items` is the gate because it is inside `syncPersistedWorkflowRows`,
+ * which only runs once `listAreas` has returned as a real Supabase provider —
+ * so a 200 here is proof of account mode, not merely of a request going out.
+ * The listener is armed BEFORE the navigation so the response cannot be missed.
+ */
+export async function gotoWithAccountSync(
+  page: Page,
+  path = "/",
+): Promise<void> {
+  const rowsLoaded = page.waitForResponse(
+    (response) =>
+      response.url().includes("/rest/v1/capture_items") &&
+      response.request().method() === "GET" &&
+      response.ok(),
+    { timeout: 60_000 },
+  );
+  await page.goto(path);
+  await rowsLoaded;
+}
+
+/** `page.reload()` with the same account-sync gate. */
+export async function reloadWithAccountSync(page: Page): Promise<void> {
+  await gotoWithAccountSync(page, page.url());
 }
 
 /**
@@ -260,9 +301,16 @@ export async function purgeOwnRows(account: AccountClient): Promise<void> {
  * attributable, and impossible to lose. See the PR body's AGENT-TODO.
  */
 export function logFailedAccountWrites(page: Page): void {
+  const verbose = process.env.SIGNED_IN_VERBOSE === "1";
   page.on("response", (response) => {
     const url = response.url();
-    if (!url.includes("/rest/v1/") || response.status() < 400) return;
+    if (!url.includes("/rest/v1/")) return;
+    if (verbose) {
+      console.log(
+        `[signed-in] ${response.status()} ${response.request().method()} ${url.split("?")[0]}`,
+      );
+    }
+    if (response.status() < 400) return;
     void response
       .text()
       .catch(() => "")
