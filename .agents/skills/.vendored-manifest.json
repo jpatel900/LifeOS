@@ -14,6 +14,9 @@
     "frontend-ui-engineering": {
       "source": "addy-agent-skills"
     },
+    "impeccable": {
+      "source": "local-hub"
+    },
     "security-and-hardening": {
       "source": "addy-agent-skills"
     },
