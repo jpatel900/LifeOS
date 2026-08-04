@@ -74,7 +74,6 @@ Use the smallest trusted skill set. Repo-local `.agents/skills` are preferred; `
 | Docs/ADRs/runbooks/agent memory                     | `agentic-docs-and-writing` or `documentation-and-adrs`                                      |
 | Security-sensitive surfaces                         | `security-and-hardening` plus the relevant `lifeos-*` skill                                 |
 | Browser proof                                       | `browser-testing-with-devtools` or Playwright only for bounded UI behavior validation       |
-| OpenAI API/docs questions                           | `openai-docs`, restricted to official OpenAI sources                                        |
 
 Avoid unrelated communication suites, design marketplaces, mobile/native stacks, unrelated hosting vendors, CRM/project-management suites, and broad plugins “just in case.”
 
@@ -85,6 +84,8 @@ Run the smallest focused checks while iterating, then the required final checks 
 ## PR requirements
 
 Branch narrowly from `origin/main` when available; one issue per PR. PRs state purpose, files/changes, tests run, risks, and rollback plan. Engineering automations may write only to isolated branches and approved GitHub metadata; never directly to `main`, production data, secrets, non-GitHub systems, or LifeOS runtime state.
+
+Merge authority, in one place: T0 docs-only PRs may auto-merge after CI per `.github/AGENT_AUTOMATION_POLICY.md`; an agent never merges its own PR (the self-approval classifier blocks it — the owner merges those); the Claude lane merges Codex-lane work per `docs/agent/LANES.md`; T2+ surfaces always get human review before merge. If another doc states a different merge rule, this paragraph wins — fix that doc.
 
 ## Tooling
 

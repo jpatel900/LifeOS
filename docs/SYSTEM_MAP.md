@@ -42,19 +42,19 @@ overplanning, missed-block collapse) is a design input everywhere.
 
 ## Where truth lives
 
-| Kind of truth              | Location                                                      |
-| -------------------------- | ------------------------------------------------------------- |
-| Agent governance           | `AGENTS.md` (authority), `CLAUDE.md` (Claude entry)           |
-| Requirements / scope       | `docs/REQUIREMENTS.md` (FR-001..; non-goals are binding)      |
-| Architecture decisions     | `docs/adr/` (0002 north star; 0005 staged evolution)          |
-| Data shapes                | `docs/DATA_MODEL.md` (target shapes = frozen contracts)       |
-| Invariants + enforcement   | `docs/ENGINEERING_INVARIANTS.md` (+ guard tests in CI)        |
-| UX contract                | `docs/UX_FLOWS.md`, ADR 0003, design tokens in `globals.css`  |
-| Current status handoff     | `docs/PROJECT_STATE.md` (<=120 lines, replaced in place)      |
-| Failure / success patterns | `docs/FAILURES.md` / `docs/PLAYS.md`                          |
-| Rituals and procedures     | `.agents/skills/` (stage-contract authoring, drift response…) |
-| Roadmap + vision placement | Curated `docs/vision/`; tracker #293; stage cards and epics   |
-| Work in flight             | Open PRs/issues + epic decision logs (comments)               |
+| Kind of truth              | Location                                                                                                   |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Agent governance           | `AGENTS.md` (authority), `CLAUDE.md` (Claude entry)                                                        |
+| Requirements / scope       | `docs/REQUIREMENTS.md` (FR-001..; non-goals are binding)                                                   |
+| Architecture decisions     | `docs/adr/` — see its README index (0002 north star; 0005 staged evolution; 0007 automation control-plane) |
+| Data shapes                | `docs/DATA_MODEL.md` (target shapes = frozen contracts)                                                    |
+| Invariants + enforcement   | `docs/ENGINEERING_INVARIANTS.md` (+ guard tests in CI)                                                     |
+| UX contract                | `docs/UX_FLOWS.md`, ADR 0003, design tokens in `globals.css`                                               |
+| Current status handoff     | `docs/PROJECT_STATE.md` (<=120 lines, replaced in place)                                                   |
+| Failure / success patterns | `docs/FAILURES.md` / `docs/PLAYS.md`                                                                       |
+| Rituals and procedures     | `.agents/skills/` (stage-contract authoring, drift response…)                                              |
+| Roadmap + vision placement | Curated `docs/vision/`; tracker #293; stage cards and epics                                                |
+| Work in flight             | Open PRs/issues + epic decision logs (comments)                                                            |
 
 ## How to change things safely
 

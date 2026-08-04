@@ -135,7 +135,7 @@ The default `pnpm test` run skips this suite because it requires Docker-backed l
 
 Run from the repository root after `pnpm install`.
 
-Recommended local validation order for routine checks: `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`.
+Recommended local validation order for routine checks: `pnpm format:check`, `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`. (`format:check` is a blocking CI step and checks the whole repo — omitting it locally is how main went red in the PR #471/#472 race; see `docs/FAILURES.md`.)
 
 | Command                         | Purpose                                                          |
 | ------------------------------- | ---------------------------------------------------------------- |
