@@ -18,7 +18,7 @@ Cross-lane overlap checked at: <UTC + other lane's branch SHA>
 
 ## Validation evidence
 
-<!-- exact commands + decisive output lines; "should work" is banned (AGENTS.md rule 15) -->
+<!-- exact commands + decisive output lines; "should work" is banned (AGENTS.md verified-claims rule 11) -->
 
 ## NOT VERIFIED
 
@@ -28,6 +28,6 @@ Cross-lane overlap checked at: <UTC + other lane's branch SHA>
 
 <!-- blast radius + how to revert -->
 
-## SELF-AUDIT
+## Weak points
 
-<!-- ≤10 lines: weakest points of this change -->
+<!-- the honest short list: what could be wrong with this change, what it didn't cover -->

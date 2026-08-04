@@ -11,3 +11,4 @@ Decision records amending `docs/ARCHITECTURE.md` and product doctrine. Append-on
 | [0005](0005-staged-evolution-after-v1.md)          | Capability-specific evidence gates replace the blanket stage usage gate               | Accepted; supersedes 0002 D3's usage gate                |
 | [0006](0006-multi-client-doctrine.md)              | One authoritative domain layer, many thin clients (`/api/v1` + CLI)                   | Accepted; amends 0001's phrasing, 0002 scope wording     |
 | [0007](0007-github-automation-control-plane.md)    | GitHub automation is engineering control-plane only, label/path/validation gated      | Accepted; renumbered from duplicate 0002 on 2026-08-04   |
+| [0008](0008-trust-rungs-for-sota-models.md)        | Widen agent trust rungs for current-generation models (per-class, INV-10-gated)       | **PROPOSED** — awaiting owner ratification               |

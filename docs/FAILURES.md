@@ -3,7 +3,7 @@
 Status: Living chronicle of closed battles — investigations, dead ends, and reverted approaches, so no session re-fights them.
 Read when: BEFORE investigating any recurring symptom, and before proposing an approach that feels obvious (check it wasn't already tried).
 Rule: every revert, abandoned branch, and multi-hour dead-end investigation adds an entry. Retirement with a documented "why" is a success outcome; silent abandonment is the failure.
-Distinction: live, tolerated flaws belong in `docs/KNOWN_ISSUES.md`. This file records _settled_ matters: what was tried, why it lost, and what replaced it. Method reference: the `agentic-failure-archaeology` skill in `.agents/skills/`.
+Distinction: live, tolerated flaws belong in `docs/KNOWN_ISSUES.md`. This file records _settled_ matters: what was tried, why it lost, and what replaced it. Method reference: the `agentic-failure-archaeology` skill in the maintainer's skill hub (no longer vendored in-repo since the 2026-08-04 skills prune).
 
 Apparatus-sunset convention (vision harvest, 2026-07-05): when an entry's Status is a standing _fence_ — a workaround, protocol, or ceremony that compensates for a tool/environment/model limitation (e.g. patch-paste delivery, mention-kick tokens, degraded-tier runbooks) — add a **Retirement condition** line stating the observable event that should trigger a deliberate retest, and delete the fence if the retest passes. Process volume is not trust; gates and guard tests are. The quarterly distillation (#289) sweeps these: a fence whose failure has not recurred in ~90 days gets retested, not kept by default.
 

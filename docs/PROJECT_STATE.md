@@ -9,7 +9,7 @@ stale — check docs/program/final-ux-loop.md §6 and recent merged PRs before t
 
 ## Current objective
 
-**The Final UX Loop is the governing program** (`docs/program/final-ux-loop.md`, owner directive 2026-07-26): while it runs, the board's priority order comes from it, and new feature work is frozen (program rule R8) except 737-A durability slices and P0 production incidents. The program ends only when a full re-audit scores every dimension at or above its ratified target (`docs/program/target-cards.md`) AND the owner's U3 hour of real use confirms it feels right.
+**The Final UX Loop is the governing program** (`docs/program/final-ux-loop.md`, owner directive 2026-07-26): while it runs, the board's priority order comes from it, and new feature work is frozen (program rule R8) except 737-A durability slices (issue #737's device-durability work — the Trust campaign's follow-through) and P0 production incidents. The program ends only when a full re-audit scores every dimension at or above its ratified target (`docs/program/target-cards.md`) AND the owner's U3 hour of real use confirms it feels right.
 
 State as of 2026-08-04: **Campaign C1 (Trust & state truth) closed 2026-07-30 at 10/10** with every criterion pinned in CI. **Campaign C2 (Structure) is in flight** (`docs/program/campaign-c2-structure.md`): the sign-in door landed (#803); the Plan-surface port merged (#804) but its truth spec then failed on main, so the main-red guard opened revert #806 (auto-merge armed) — S2 re-lands with the fix; the Review port (#809) waits behind it. The moments home is the single shell; all four legacy screens are being ported into it (owner-ratified).
 
@@ -34,7 +34,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 - Before any work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; one implementation lane at a time (program R7).
 - Before feature work, map the task to `docs/REQUIREMENTS.md`, define acceptance criteria, identify tests, and flag risky surfaces.
 - New user-owned tables require RLS policies, export coverage, and multi-user tests in the same change.
-- Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review.
+- Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review (the full ten-surface list lives in AGENTS.md "Human review required" — that list governs).
 - Docs may not grow by creating session-note files; durable decisions go to ADRs, status goes here, program state goes to `docs/program/`.
 
 ## Open questions

@@ -1,5 +1,7 @@
 # End-to-end slice map — north star, complete path
 
+**STATUS: HISTORICAL (frozen 2026-08-04).** The stage-epic slice relay is dormant — the Final UX Loop (`docs/program/`) superseded it as the active program, and formal retirement of the relay workflow is owner-gated (see `docs/PROJECT_STATE.md`). The status columns below reflect the July 2026 relay state and are not current; treat them as provenance, not a work queue.
+
 **NON-BINDING strategic map.** Future slices are active vision candidates, not current status or automatic code authorization. Pick them up one-by-one through `SKILL.md`: reconcile with current REQUIREMENTS/ADRs, record IMPLEMENT/MERGE/REJECT/DEFER disposition, and create a bounded issue only for the next owner-ratified work. Data-independent foundations may proceed when structural prerequisites are met; capability-specific evidence, trust, safety, privacy, and external-write gates remain binding. Expect names and counts to change at contract time.
 
 Status legend: FILED = live GitHub issue. NAMED = exists only here.
