@@ -46,6 +46,9 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/OBSERVABILITY_RUNBOOK.md",
   "docs/VERCEL_PRODUCTION_CHECKLIST.md",
   "docs/agent/CODEX_PROMPT_TEMPLATE.md",
+  // Role→model mapping (owner mandate 2026-08-04): the ONE file where model
+  // names may appear; every other doc uses role names.
+  "docs/agent/MODEL_LANES.md",
   "docs/vision/vision-fable-final-pass.md",
   "docs/vision/vision-fable-deeper-pass.md",
   "docs/vision/vision-fable-wider-pass.md",

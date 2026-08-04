@@ -389,7 +389,7 @@ function printMigrationDrift() {
 }
 
 // ---------------------------------------------------------------------------
-// OWNER-GATE / AGENT-TODO mechanical triage collector (AGENTS.md rule 15).
+// OWNER-GATE / AGENT-TODO mechanical triage collector (AGENTS.md rule 11).
 //
 // Agent-authored PRs/issues leave follow-up items as checkbox lines tagged
 // `OWNER-GATE:` or `AGENT-TODO:`. This scans open issues, open PRs, and the
