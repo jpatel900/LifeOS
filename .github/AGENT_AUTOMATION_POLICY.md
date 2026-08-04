@@ -69,7 +69,7 @@ Typical paths:
 - Shared automation path policy: `scripts/agent/automation-policy.mjs`
 - Shared automation path guard: `scripts/agent/check-automation-scope.mjs`
 - PR risk classification: `scripts/agent/classify-pr-risk.mjs`
-- PR evidence guidance: `AGENTS.md` rule 15 (verified claims, validation evidence, SELF-AUDIT)
+- PR evidence guidance: `AGENTS.md` rule 11 (verified claims: evidence or UNVERIFIED; OWNER-GATE/AGENT-TODO markers)
 - Decision review guidance: `docs/adr/` (architecture decisions) and `AGENTS.md` change-control rules
 
 ## Hands-off path matrix
