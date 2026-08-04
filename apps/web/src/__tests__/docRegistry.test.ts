@@ -85,6 +85,9 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
 
 const CANONICAL_ALLOWLIST_PATTERNS = [
   /^docs\/adr\/[^/]+\.md$/,
+  // Governing-program docs (owner mandate 2026-08-04: one truth store — the
+  // active program lives in the repo, not in out-of-repo planning folders).
+  /^docs\/program\/[^/]+\.md$/,
   /^\.agents\/skills\/.+\.md$/,
   /^\.cursor\/.+\.md$/,
   /^\.github\/.+\.md$/,
