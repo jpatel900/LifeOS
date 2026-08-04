@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { DiagnosticsDisclosure } from "../../components/DiagnosticsDisclosure";
 import { WorkflowLoadingState } from "../../components/WorkflowLoadingState";
 import { saveModeLabel } from "../../../lib/statusVocabulary";
@@ -23,6 +22,23 @@ export default function AreasSettingsPage() {
   const { selectedAreaId, state: workflowState } = useWorkflow();
   const { state, replaceReadyAreas } = useAreasLoadState();
   const pathname = usePathname();
+  const router = useRouter();
+
+  // #742 OWNER-GATE resolved (2026-07-26 Target Cards ratification, re-
+  // confirmed on the issue): signed-out visitors to this page are sent to
+  // the sign-in door instead of staying on a local-only view. This does NOT
+  // touch `useAreasLoadState.ts`'s classification boundary (#753) — that
+  // hook still turns the raw `AuthSessionMissingError` into the calm
+  // `status: "signed-out"` value; this effect just reacts to that value with
+  // navigation instead of an in-place alert. `router.replace` (not `push`)
+  // so Back does not return to a screen that immediately redirects again.
+  useEffect(() => {
+    if (state.status === "signed-out") {
+      router.replace(
+        `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
+      );
+    }
+  }, [state.status, pathname, router]);
 
   // #691: resolve the badge from the SAME context area list every other
   // screen reads (not this page's separately-loaded rows), and give null the
@@ -97,30 +113,17 @@ export default function AreasSettingsPage() {
         />
       ) : null}
 
-      {/* #742: nobody is signed in — a calm, ordinary state, not a failure.
-          Same `Alert variant="warning" role="status"` split
-          `OperatorProfilePanel` and `AreaCharterPanel` already use lower on
-          this exact page for the identical condition, plus the sign-in door
-          the #688 sync banner pattern established (`/login?next=…` back to
-          this page). This does NOT decide whether signed-out visitors should
-          be redirected here or stay on a local-only view of this screen —
-          that is the open OWNER-GATE on #742; either answer replaces or
-          wraps this block without touching the boundary in
-          `useAreasLoadState.ts`. */}
+      {/* #742: nobody is signed in. The redirect effect above is already on
+          its way to `/login`; this is only the brief frame before that
+          navigation lands, so it reuses the same calm, dashed-card shape as
+          the "loading" state just above rather than a full alert with its
+          own sign-in button — there is nothing left to decide here, the
+          door itself renders next. */}
       {state.status === "signed-out" ? (
-        <Alert variant="warning" role="status">
-          <AlertTitle>Sign in to see your areas.</AlertTitle>
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>Areas are stored on your account, not on this device.</span>
-            <Button asChild size="sm" variant="secondary">
-              <Link
-                href={`/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`}
-              >
-                Sign in
-              </Link>
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <WorkflowLoadingState
+          title="Redirecting to sign in"
+          description="Areas are stored on your account, not on this device."
+        />
       ) : null}
 
       {/* A GENUINE failure: Supabase reachable, someone is signed in, and the

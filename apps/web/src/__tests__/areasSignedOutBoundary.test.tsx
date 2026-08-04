@@ -7,29 +7,38 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AreasSettingsPage from "../app/settings/areas/page";
+import { CreateAreaForm } from "../app/settings/areas/CreateAreaForm";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 
 /**
- * #742: the signed-out /settings/areas boundary.
+ * #742: the signed-out /settings/areas boundary, and (Final UX Loop C2-S0,
+ * owner-ratified 2026-07-26) the door policy in front of it.
  *
- * Before this fix, a signed-out visitor made `@supabase/ssr`'s
- * `auth.getUser()` reject with its own `AuthSessionMissingError` ("Auth
- * session missing!"), and BOTH catch sites on this screen
- * (`useAreasLoadState.ts`'s load, `CreateAreaForm.tsx`'s create) rendered
- * that raw library string verbatim inside a destructive alert, next to a
- * developer-jargon paragraph ("If Supabase is configured… local stack…").
- * Evidence: `.github/pr-evidence/692-server-copy/`.
+ * Before #753, a signed-out visitor made `@supabase/ssr`'s `auth.getUser()`
+ * reject with its own `AuthSessionMissingError` ("Auth session missing!"),
+ * and BOTH catch sites on this screen (`useAreasLoadState.ts`'s load,
+ * `CreateAreaForm.tsx`'s create) rendered that raw library string verbatim
+ * inside a destructive alert, next to a developer-jargon paragraph ("If
+ * Supabase is configured… local stack…"). Evidence:
+ * `.github/pr-evidence/692-server-copy/`. #753 built the boundary
+ * (`isSignedOutError` classification, never leaking `.message`) but left the
+ * door policy — stay viewable vs. redirect — as an open OWNER-GATE. C2-S0
+ * resolves it: redirect. The boundary in `useAreasLoadState.ts` is
+ * UNCHANGED by that; only page.tsx's reaction to `status: "signed-out"`
+ * changed from an in-place alert to `router.replace("/login?next=…")`.
  *
  * The guard this file exists to enforce: NO caught error's own `.message`
  * may reach the DOM on this screen while signed out. If a future change
  * reintroduces `error.message` (or any raw provider/library text) into
- * either alert, the negative assertions below fail.
+ * either surface, the negative assertions below fail.
  */
 
 const mocks = vi.hoisted(() => ({
   createSupabaseBrowserClient: vi.fn(),
   getUser: vi.fn(),
   getSession: vi.fn(),
+  routerReplace: vi.fn(),
+  routerPush: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/browser", () => ({
@@ -38,7 +47,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings/areas",
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mocks.routerPush, replace: mocks.routerReplace }),
 }));
 
 // The real @supabase/ssr client rejects `auth.getUser()` with this shape
@@ -91,48 +100,56 @@ function renderAreasPage() {
   );
 }
 
-describe("signed-out /settings/areas boundary (#742)", () => {
-  it("never renders the raw provider string, signed out on initial load", async () => {
+describe("signed-out /settings/areas boundary + door (#742, Final UX Loop C2-S0)", () => {
+  it("redirects to the sign-in door on initial load, signed out", async () => {
     renderAreasPage();
 
+    // The door: `router.replace` (never `push` — Back must not return to a
+    // screen that immediately redirects again), carrying `?next=` back here.
     await waitFor(() => {
-      expect(screen.getByText("Sign in to see your areas.")).toBeDefined();
+      expect(mocks.routerReplace).toHaveBeenCalledWith(
+        "/login?next=%2Fsettings%2Fareas",
+      );
     });
+    expect(mocks.routerReplace).toHaveBeenCalledTimes(1);
 
-    // The guard: the exact library string, anywhere in the rendered DOM.
+    // C2-S0 removed the in-place calm state #753 shipped — this screen no
+    // longer renders its own "Sign in" door once it decides to redirect.
+    expect(screen.queryByText("Sign in to see your areas.")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+
+    // The transitional frame is truthful about what's happening, and reads
+    // as an ordinary status (role="status"), never an alarm.
+    const redirectingRegion = screen
+      .getByText("Redirecting to sign in")
+      .closest("[role]");
+    expect(redirectingRegion?.getAttribute("role")).toBe("status");
+
+    // The raw-text guard survives the redirect change: still nothing from
+    // the caught library error reaches this screen at any point.
     expect(screen.queryByText(/Auth session missing/i)).toBeNull();
     expect(document.body.textContent).not.toMatch(/Auth session missing/i);
-
-    // The developer-jargon paragraph #742 deleted must not come back either.
     expect(screen.queryByText(/local stack is running/i)).toBeNull();
     expect(screen.queryByText(/env vars/i)).toBeNull();
 
-    // The calm state reads as an ordinary status, not an alarm: `role="status"`
-    // (matching `OperatorProfilePanel`/`AreaCharterPanel`'s signed-out
-    // treatment on this same page), never `role="alert"`.
-    const signedOutRegion = screen
-      .getByText("Sign in to see your areas.")
-      .closest("[role]");
-    expect(signedOutRegion?.getAttribute("role")).toBe("status");
-
-    // The door back in (#688's pattern), pointed at this page.
-    const signInLink = screen.getByRole("link", { name: "Sign in" });
-    expect(signInLink.getAttribute("href")).toBe(
-      "/login?next=%2Fsettings%2Fareas",
-    );
-
-    // No destructive "Areas could not load" alert alongside it — signed-out
-    // and genuine-failure are different states now, not one shared alert.
+    // No destructive "Areas could not load" alert either — signed-out and
+    // genuine-failure are still different states, not one shared alert.
     expect(screen.queryByText("Areas could not load")).toBeNull();
   });
 
-  it("never renders the raw provider string when creating an area while signed out", async () => {
-    renderAreasPage();
-
-    // Let the (signed-out) initial load settle first.
-    await waitFor(() => {
-      expect(screen.getByText("Sign in to see your areas.")).toBeDefined();
-    });
+  it("never renders the raw provider string when creating an area while signed out (session expires mid-use)", async () => {
+    // This models the OTHER way a signed-out create can happen after C2-S0:
+    // the visitor was signed in when the page loaded (no redirect fired) and
+    // their session lapsed before they submitted the form — CreateAreaForm's
+    // own catch site (#753) is the last line of defense for that, independent
+    // of the page-level redirect gate. Rendered standalone (not the full
+    // page) precisely because the page-level gate would otherwise navigate
+    // this scenario away before it could be exercised.
+    render(
+      <WorkflowProvider>
+        <CreateAreaForm currentAreas={[]} replaceReadyAreas={vi.fn()} />
+      </WorkflowProvider>,
+    );
 
     fireEvent.change(screen.getByLabelText("Area name"), {
       target: { value: "Side Project" },
