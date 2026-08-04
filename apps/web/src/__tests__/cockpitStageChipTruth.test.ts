@@ -91,6 +91,8 @@ describe("cockpit stage chips tell the truth (C2-S2 port premises)", () => {
 
     const vm = buildWorkflowCockpitViewModel(state);
     expect(vm.counts.plan).toBe(1);
-    expect(vm.counts.plan).toBe(buildPipelineCounts(state, GOLDEN_AREA_ID).plan);
+    expect(vm.counts.plan).toBe(
+      buildPipelineCounts(state, GOLDEN_AREA_ID).plan,
+    );
   });
 });

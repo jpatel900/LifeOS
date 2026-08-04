@@ -55,6 +55,7 @@ import { readDayShapePreferences } from "@/lib/onboarding/onboarding";
 import { buildPipelineCounts } from "./pipelineCounts";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
+import { useSheetUrlState } from "./useSheetUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 import type { ToastAction } from "./toast";
@@ -358,9 +359,11 @@ export function TodayMoments({
     readStoredCaptureDraft(),
   );
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [activeSheet, setActiveSheet] = useState<null | "triage" | "plan">(
-    null,
-  );
+  // C2 Target Card 2: the sheet is URL-visible and Back/Forward-correct.
+  // `openSheet` pushes `?sheet=<value>`, `closeSheet` undoes exactly that,
+  // and popstate re-reads the URL as the authority — see useSheetUrlState.
+  const { activeSheet, openSheet, closeSheet, adoptSheetFromUrl } =
+    useSheetUrlState();
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -454,13 +457,14 @@ export function TodayMoments({
     if (deepLink.moment) setMoment(deepLink.moment);
     if (deepLink.overlay === "capture") setCaptureOpen(true);
     if (deepLink.overlay === "palette") setPaletteOpen(true);
-    if (deepLink.sheet) setActiveSheet(deepLink.sheet);
+    if (deepLink.sheet) adoptSheetFromUrl(deepLink.sheet);
   }, [
     deepLink,
     ritualActive,
     ritual.pending,
     onboardingActive,
     onboarding.pending,
+    adoptSheetFromUrl,
   ]);
 
   // FR-027 (F-G1b) share target: text shared into the installed PWA lands on
@@ -678,11 +682,11 @@ export function TodayMoments({
   const handleDrillPipeline = useCallback(
     (stage: string) => {
       if (stage === "triage") {
-        setActiveSheet("triage");
+        openSheet("triage");
         return;
       }
       if (stage === "plan") {
-        setActiveSheet("plan");
+        openSheet("plan");
         return;
       }
       showToast("Opens with the full shell");
@@ -764,9 +768,9 @@ export function TodayMoments({
       return;
     }
     if (activeSheet) {
-      setActiveSheet(null);
+      closeSheet();
     }
-  }, [paletteOpen, captureOpen, activeSheet]);
+  }, [paletteOpen, captureOpen, activeSheet, closeSheet]);
 
   // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
   // = [stalest open task, then each planned task deferral], deduped by
@@ -939,10 +943,10 @@ export function TodayMoments({
           setCaptureOpen(true);
           break;
         case "open-triage":
-          setActiveSheet("triage");
+          openSheet("triage");
           break;
         case "open-plan":
-          setActiveSheet("plan");
+          openSheet("plan");
           break;
         case "start-first-move":
           if (startVM.firstMove) handleStartMove(startVM.firstMove);
@@ -1221,7 +1225,7 @@ export function TodayMoments({
               pipelineCounts={pipelineCounts}
               onDrillPipeline={handleDrillPipeline}
               onOpenRecovery={() => setMoment("close")}
-              onOpenTriage={() => setActiveSheet("triage")}
+              onOpenTriage={() => openSheet("triage")}
             />
           ) : null}
 
@@ -1357,7 +1361,7 @@ export function TodayMoments({
           } else {
             showToast(`Captured — it's in your triage pile.${signedOutNote}`, {
               label: "Open triage",
-              run: () => setActiveSheet("triage"),
+              run: () => openSheet("triage"),
             });
           }
           setCaptureOpen(false);
@@ -1379,12 +1383,12 @@ export function TodayMoments({
       <TriageSheet
         open={activeSheet === "triage"}
         selectedAreaId={selectedAreaId}
-        onClose={() => setActiveSheet(null)}
+        onClose={() => closeSheet()}
       />
 
       <PlanSheet
         open={activeSheet === "plan"}
-        onClose={() => setActiveSheet(null)}
+        onClose={() => closeSheet()}
         blocks={startVM.blocks}
         timeDisplay={timeDisplay}
         now={now}
