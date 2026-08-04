@@ -1,9 +1,6 @@
 {
   "description": "Grandfathered legacy markdown files. Shrink-only: entries may be removed when files are deleted, never added. New docs belong in the canonical allowlist in apps/web/src/__tests__/docRegistry.test.ts (decisions -> docs/adr/, status -> docs/PROJECT_STATE.md, skills -> .agents/skills/).",
   "grandfathered": [
-    "design_handoff_lifeos/AGENTS.md",
-    "design_handoff_lifeos/CLAUDE.md",
-    "design_handoff_lifeos/README.md",
     "docs/implementation-planning/lifeos-flow-audit-findings-2026-06-30.md",
     "docs/implementation-planning/lifeos-user-flow-edge-case-map.md",
     "docs/skills/next-phase-gate-review.md"

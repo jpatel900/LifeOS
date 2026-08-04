@@ -303,8 +303,11 @@ describe("source-of-truth boundaries", () => {
       readRepoFile("apps/web/src/app/globals.css"),
     );
     const agents = normalizeWhitespace(readRepoFile("AGENTS.md"));
+    // 2026-08-04 docs cleanup: the design-handoff spec is archived history
+    // (docs/_archive/); live UI authority is UX_FLOWS + ADR 0003 + shipped
+    // behavior, and AGENTS.md's routing row now points there.
     const handoffReadme = normalizeWhitespace(
-      readRepoFile("design_handoff_lifeos/README.md"),
+      readRepoFile("docs/_archive/design-handoff-README.md"),
     );
     // #556: the capture stage's primary save action was extracted into the
     // shared CaptureCore component (reused by every capture surface), so
@@ -350,7 +353,7 @@ describe("source-of-truth boundaries", () => {
     expect(planView).toContain("Google writes are separate");
     expect(overviewView).toContain("All areas overview");
     expect(globalsCss).toContain(".lifeos-cockpit");
-    expect(agents).toContain("design_handoff_lifeos/README.md");
+    expect(agents).toContain("docs/UX_FLOWS.md");
     expect(handoffReadme).toContain("One screen component");
     expect(handoffReadme).toContain("view router");
   });
