@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -32,8 +32,26 @@ export default function AreasSettingsPage() {
   // `status: "signed-out"` value; this effect just reacts to that value with
   // navigation instead of an in-place alert. `router.replace` (not `push`)
   // so Back does not return to a screen that immediately redirects again.
+  //
+  // `hasRedirectedRef` makes the navigation fire exactly once. Root cause
+  // this guards against (found via CI: `router.replace` called 2 times, not
+  // 1 — reproduced locally 6/6 runs once isolated): `useWorkflow()` owns
+  // its own independent Supabase load (persisted rows, unrelated to
+  // `useAreasLoadState`'s areas fetch), and that load settling after mount
+  // updates WorkflowContext's value and re-renders this component while
+  // `state.status` is STILL "signed-out" — same status, but a second render,
+  // and `next/navigation`'s `useRouter()` is not guaranteed to return the
+  // same object identity across renders (this repo's own test double
+  // intentionally does not, and did not before this fix either — it just
+  // never surfaced the bug because nothing depended on identity). Without
+  // the ref, that second render re-runs the effect and calls
+  // `router.replace` again. A ref (not a dependency-array tweak) is the fix
+  // because the actual invariant is "navigate once, ever" — not "only when
+  // these particular values happen to be referentially stable."
+  const hasRedirectedRef = useRef(false);
   useEffect(() => {
-    if (state.status === "signed-out") {
+    if (state.status === "signed-out" && !hasRedirectedRef.current) {
+      hasRedirectedRef.current = true;
       router.replace(
         `/login?next=${encodeURIComponent(pathname ?? "/settings/areas")}`,
       );
