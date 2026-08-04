@@ -157,6 +157,28 @@ describe("useSheetUrlState (C2 Target Card 2)", () => {
     push.mockRestore();
   });
 
+  // C2-S3: the ported Review surface has to satisfy Target Card 2 from birth,
+  // so it is held to the same four behaviours as the other two sheets.
+  it("the review sheet is URL-visible, refresh-stable and Back-correct", () => {
+    const { result } = renderHook(() => useSheetUrlState());
+
+    act(() => result.current.openSheet("review"));
+    expect(window.location.search).toBe("?sheet=review");
+
+    // A refresh (or a direct URL) lands on that entry and adopts it.
+    goto("/?sheet=review");
+    const reloaded = renderHook(() => useSheetUrlState());
+    act(() => reloaded.result.current.adoptSheetFromUrl("review"));
+    expect(reloaded.result.current.activeSheet).toBe("review");
+
+    // Back is authoritative: the URL, not a guess, decides the sheet.
+    goto("/");
+    act(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(reloaded.result.current.activeSheet).toBeNull();
+  });
+
   it("switching sheets swaps the param", () => {
     const { result } = renderHook(() => useSheetUrlState());
 

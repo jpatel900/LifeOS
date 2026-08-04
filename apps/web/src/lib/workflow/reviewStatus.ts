@@ -119,7 +119,7 @@ export function selectNeedsDecision(
               : ("stuck" as const),
       };
     })
-    .filter((item): item is ReviewQueueItem => Boolean(item));
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   const fromMissedBlocks = state.calendarBlocks
     .filter((block) => block.area_id === areaId && block.status === "missed")
@@ -136,7 +136,7 @@ export function selectNeedsDecision(
         reason: "missed" as const,
       };
     })
-    .filter((item): item is ReviewQueueItem => Boolean(item));
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   const fromBlockedTasks = state.tasks
     .filter((task) => task.area_id === areaId && task.status === "blocked")
@@ -187,6 +187,81 @@ export function selectNeedsDecision(
  */
 export function countNeedsDecision(items: ReviewQueueItem[]): number {
   return items.length;
+}
+
+/**
+ * C2-S3 — the planned-vs-actual list, with the post-sync double removed.
+ *
+ * ## The double is measured, not hypothetical
+ *
+ * `momentsViewModel/close.ts` records it in full: `mergePersistedRows` drops a
+ * local row only when `dropLocalIds` names it, and nothing ever populates
+ * `persistedSessionIdByLocalIdRef`, so after a sync the reducer holds BOTH the
+ * optimistic `session-N` row and the account's uuid row for one session. A
+ * probe against the real reducer returned `["794b7d18-…", "session-1"]` — one
+ * finished session, two rows. `close.ts` sidesteps this by counting the two
+ * DURABLE tiers instead of `state.executionSessions`; a list that renders rows
+ * has no such option, so it must dedupe.
+ *
+ * ## The rule, and the residual it knowingly accepts
+ *
+ * An account row (uuid id) is always kept. A local row is dropped when an
+ * account row already covers the same `(task_id, calendar_block_id)` pair —
+ * which is exactly the shape the measured double takes.
+ *
+ * The residual: two genuine sessions on one task, one synced and one not, show
+ * as one row. That is an under-report of one, and it is chosen deliberately
+ * over the measured alternative — rendering one hour of work as two lines on a
+ * review screen. `close.ts` names over-reporting "the worse of the two errors";
+ * this list agrees with it rather than inventing a second policy.
+ *
+ * The provable claim, and the only one made anywhere about this list: **no
+ * session appears twice.** It is NOT claimed to equal `completedToday`, which
+ * is a differently-scoped number (today only, blockless only, completed only).
+ */
+export function dedupeSessionsForDisplay(
+  sessions: readonly Phase2MockExecutionSession[],
+): Phase2MockExecutionSession[] {
+  const accountCovered = new Set(
+    sessions
+      .filter((session) => isAccountId(session.id))
+      .map(
+        (session) =>
+          `${session.task_id ?? ""}::${session.calendar_block_id ?? ""}`,
+      ),
+  );
+  return sessions.filter(
+    (session) =>
+      isAccountId(session.id) ||
+      !accountCovered.has(
+        `${session.task_id ?? ""}::${session.calendar_block_id ?? ""}`,
+      ),
+  );
+}
+
+/**
+ * An id the account minted, as opposed to one the reducer minted. The same
+ * discriminator `mergePersistedRows` and `close.ts` already use: local ids are
+ * `session-N`, account ids are uuids.
+ */
+function isAccountId(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    id,
+  );
+}
+
+/**
+ * Whether a session can be compared against a plan at all.
+ *
+ * A blockless session (audit P0#2's rescued path) has no `planned_minutes`, and
+ * the legacy bar computed `actual / Math.max(planned ?? 1, 1)` — so it drew a
+ * FULL bar against "/0m", a comparison that does not exist rendered as a
+ * perfect one. Those rows show their actual time and no bar.
+ */
+export function hasPlanToCompare(session: Phase2MockExecutionSession): boolean {
+  return (
+    typeof session.planned_minutes === "number" && session.planned_minutes > 0
+  );
 }
 
 /**
