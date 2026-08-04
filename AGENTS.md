@@ -79,7 +79,7 @@ Smallest focused checks while iterating; final sequence for code changes: `pnpm 
 
 Branch narrowly from `origin/main`; one issue per PR; PRs state purpose, changes, tests run, risks, and rollback. Engineering automations write only to isolated branches and approved GitHub metadata — never to `main`, production data, secrets, non-GitHub systems, or LifeOS runtime state.
 
-Merge authority, in one place: T0 docs-only PRs may auto-merge after CI per `.github/AGENT_AUTOMATION_POLICY.md`; an agent never merges its own PR (the self-approval classifier blocks it — the owner merges those); the Claude lane merges Codex-lane work per `docs/agent/LANES.md`; T2+ surfaces always get human review before merge. If another doc states a different merge rule, this paragraph wins — fix that doc.
+Merge authority, in one place: T0 docs-only PRs may auto-merge after CI per `.github/AGENT_AUTOMATION_POLICY.md` (tier definitions T0-T4 live there); an agent never merges its own PR (the self-approval classifier blocks it — the owner merges those; auto-merge armed by the T0 policy lane counts as the policy's merge, not the author's); the Claude lane merges Codex-lane work per `docs/agent/LANES.md`; T2+ surfaces always get human review before merge. If another doc states a different merge rule, this paragraph wins — fix that doc.
 
 ## Tooling
 

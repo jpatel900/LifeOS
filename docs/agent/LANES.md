@@ -23,7 +23,7 @@ surfaces — copies drift.
 | `PROJECT_STATE.md` | Materially changed shipped state                                          |
 
 Session continuity lives in `docs/PROJECT_STATE.md` and `docs/program/` —
-never in per-session handover files (the former `docs/agent/HANDOVER.md`
+never in per-session handover files (the former docs/agent handover file
 was deleted 2026-07-15), and never used as a cross-lane communication bus.
 
 ## Lane definitions
