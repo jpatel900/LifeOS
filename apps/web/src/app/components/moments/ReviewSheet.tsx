@@ -288,10 +288,13 @@ export function ReviewSheet({
                   data-testid={`review-sheet-aging-${item.task.id}`}
                 >
                   <p className="text-sm font-semibold">{item.task.title}</p>
+                  {/* The threshold is a default rule (`agingRules.ts`), not
+                      something the user set — so the line reports the rule
+                      rather than attributing it to them. */}
                   <p className="text-xs text-muted-foreground">
                     Waiting {Math.floor(item.ageDays)} day
-                    {Math.floor(item.ageDays) === 1 ? "" : "s"} — you said you
-                    would chase it after {item.thresholdDays}.
+                    {Math.floor(item.ageDays) === 1 ? "" : "s"} — past the{" "}
+                    {item.thresholdDays}-day mark.
                   </p>
                 </li>
               ))}
