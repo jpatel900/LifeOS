@@ -55,7 +55,6 @@ import { readDayShapePreferences } from "@/lib/onboarding/onboarding";
 import { buildPipelineCounts } from "./pipelineCounts";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
-import { useSheetUrlState } from "./useSheetUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 import type { ToastAction } from "./toast";
@@ -359,11 +358,9 @@ export function TodayMoments({
     readStoredCaptureDraft(),
   );
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // C2 Target Card 2: the sheet is URL-visible and Back/Forward-correct.
-  // `openSheet` pushes `?sheet=<value>`, `closeSheet` undoes exactly that,
-  // and popstate re-reads the URL as the authority — see useSheetUrlState.
-  const { activeSheet, openSheet, closeSheet, adoptSheetFromUrl } =
-    useSheetUrlState();
+  const [activeSheet, setActiveSheet] = useState<null | "triage" | "plan">(
+    null,
+  );
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -457,14 +454,13 @@ export function TodayMoments({
     if (deepLink.moment) setMoment(deepLink.moment);
     if (deepLink.overlay === "capture") setCaptureOpen(true);
     if (deepLink.overlay === "palette") setPaletteOpen(true);
-    if (deepLink.sheet) adoptSheetFromUrl(deepLink.sheet);
+    if (deepLink.sheet) setActiveSheet(deepLink.sheet);
   }, [
     deepLink,
     ritualActive,
     ritual.pending,
     onboardingActive,
     onboarding.pending,
-    adoptSheetFromUrl,
   ]);
 
   // FR-027 (F-G1b) share target: text shared into the installed PWA lands on
@@ -682,11 +678,11 @@ export function TodayMoments({
   const handleDrillPipeline = useCallback(
     (stage: string) => {
       if (stage === "triage") {
-        openSheet("triage");
+        setActiveSheet("triage");
         return;
       }
       if (stage === "plan") {
-        openSheet("plan");
+        setActiveSheet("plan");
         return;
       }
       showToast("Opens with the full shell");
@@ -768,9 +764,9 @@ export function TodayMoments({
       return;
     }
     if (activeSheet) {
-      closeSheet();
+      setActiveSheet(null);
     }
-  }, [paletteOpen, captureOpen, activeSheet, closeSheet]);
+  }, [paletteOpen, captureOpen, activeSheet]);
 
   // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
   // = [stalest open task, then each planned task deferral], deduped by
@@ -943,10 +939,10 @@ export function TodayMoments({
           setCaptureOpen(true);
           break;
         case "open-triage":
-          openSheet("triage");
+          setActiveSheet("triage");
           break;
         case "open-plan":
-          openSheet("plan");
+          setActiveSheet("plan");
           break;
         case "start-first-move":
           if (startVM.firstMove) handleStartMove(startVM.firstMove);
@@ -1225,7 +1221,7 @@ export function TodayMoments({
               pipelineCounts={pipelineCounts}
               onDrillPipeline={handleDrillPipeline}
               onOpenRecovery={() => setMoment("close")}
-              onOpenTriage={() => openSheet("triage")}
+              onOpenTriage={() => setActiveSheet("triage")}
             />
           ) : null}
 
@@ -1361,7 +1357,7 @@ export function TodayMoments({
           } else {
             showToast(`Captured — it's in your triage pile.${signedOutNote}`, {
               label: "Open triage",
-              run: () => openSheet("triage"),
+              run: () => setActiveSheet("triage"),
             });
           }
           setCaptureOpen(false);
@@ -1383,17 +1379,15 @@ export function TodayMoments({
       <TriageSheet
         open={activeSheet === "triage"}
         selectedAreaId={selectedAreaId}
-        onClose={() => closeSheet()}
+        onClose={() => setActiveSheet(null)}
       />
 
       <PlanSheet
         open={activeSheet === "plan"}
-        onClose={() => closeSheet()}
-        selectedAreaId={selectedAreaId}
+        onClose={() => setActiveSheet(null)}
         blocks={startVM.blocks}
         timeDisplay={timeDisplay}
         now={now}
-        onToast={showToast}
       />
 
       <EndSessionSheet

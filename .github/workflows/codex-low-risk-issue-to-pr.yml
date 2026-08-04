@@ -4,6 +4,7 @@ on:
   issues:
     types:
       - labeled
+      - edited
   workflow_dispatch:
     inputs:
       issue_number:
@@ -22,9 +23,6 @@ permissions:
 jobs:
   resolve-issue:
     name: Resolve issue scope
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.action == 'labeled' && github.event.label.name == 'agent:ready')
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
@@ -37,29 +35,12 @@ jobs:
       allow_safe_automerge: ${{ steps.resolve.outputs.allow_safe_automerge }}
 
     steps:
-      - name: Checkout approval policy
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
       - name: Load issue details and eligibility
         id: resolve
         uses: actions/github-script@v8
         with:
           github-token: ${{ github.token }}
           script: |
-            const path = require('path');
-            const { pathToFileURL } = require('url');
-            const policyPath = path.join(
-              process.env.GITHUB_WORKSPACE,
-              'scripts/agent/low-risk-issue-policy.mjs',
-            );
-            const {
-              evaluateLowRiskEligibility,
-              resolveApprovedIssueInput,
-            } = await import(pathToFileURL(policyPath).href);
-
             const issueNumber =
               context.eventName === 'workflow_dispatch'
                 ? Number(context.payload.inputs?.issue_number)
@@ -81,45 +62,28 @@ jobs:
             );
             const hasLabel = (name) => labels.includes(name);
 
-            const approval = resolveApprovedIssueInput({
-              eventName: context.eventName,
-              eventAction: context.payload.action ?? null,
-              eventLabel: context.payload.label?.name ?? null,
-              eventIssue: context.payload.issue ?? null,
-              currentIssue: issue,
-            });
-
             // Claim protocol (AGENTS.md rule 14): never start work someone else
             // already owns. A claim is an assignee, the agent:claimed label, or
             // an open PR that references this issue.
             const alreadyAssigned = (issue.assignees ?? []).length > 0;
             const alreadyClaimed = hasLabel('agent:claimed');
-            let linkedOpenPr = null;
-            if (approval.authorized) {
-              const { data: prSearch } = await github.rest.search.issuesAndPullRequests({
-                q: `repo:${context.repo.owner}/${context.repo.repo} is:pr is:open "#${issue.number}" in:body`,
-                per_page: 5,
-              });
-              linkedOpenPr = prSearch.items.find((item) => item.pull_request) ?? null;
-            }
-
-            const eligibility = evaluateLowRiskEligibility({
-              approval,
-              issueState: issue.state,
-              labels,
-              alreadyAssigned,
-              alreadyClaimed,
-              linkedOpenPr: Boolean(linkedOpenPr),
+            const { data: prSearch } = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:pr is:open "#${issue.number}" in:body`,
+              per_page: 5,
             });
-            const shouldRun = eligibility.eligible;
-            const allowSafeAutomerge = shouldRun && hasLabel('automerge:safe');
+            const linkedOpenPr = prSearch.items.find((item) => item.pull_request);
 
-            if (!approval.authorized) {
-              core.notice(
-                `Skipping issue #${issue.number}: approval=${approval.reason}. ` +
-                  'Remove and reapply agent:ready after the approved title/body is final.',
-              );
-            }
+            const shouldRun =
+              issue.state === 'open' &&
+              hasLabel('agent:ready') &&
+              hasLabel('risk:low') &&
+              !hasLabel('needs:human-decision') &&
+              !hasLabel('risk:medium') &&
+              !hasLabel('risk:high') &&
+              !alreadyAssigned &&
+              !alreadyClaimed &&
+              !linkedOpenPr;
+            const allowSafeAutomerge = shouldRun && hasLabel('automerge:safe');
 
             if (issue.state === 'open' && (alreadyAssigned || alreadyClaimed || linkedOpenPr)) {
               core.notice(
@@ -142,17 +106,16 @@ jobs:
 
             core.setOutput('should_run', String(shouldRun));
             core.setOutput('issue_number', String(issue.number));
-            core.setOutput('issue_title', approval.issue.title);
+            core.setOutput('issue_title', issue.title ?? '');
             core.setOutput('issue_url', issue.html_url ?? issue.url ?? '');
-            core.setOutput('issue_body', approval.issue.body);
+            core.setOutput('issue_body', issue.body ?? '');
             core.setOutput('branch_name', `codex/issue-${issue.number}-low-risk`);
             core.setOutput('source_labels', labels.join(', '));
             core.setOutput('allow_safe_automerge', String(allowSafeAutomerge));
 
             if (!shouldRun) {
               core.notice(
-                `Skipping issue #${issue.number}: reasons=${eligibility.reasons.join(', ') || 'none'}, ` +
-                  `state=${issue.state}, labels=${labels.join(', ') || 'none'}`,
+                `Skipping issue #${issue.number}: state=${issue.state}, labels=${labels.join(', ') || 'none'}`,
               );
             }
 
@@ -209,27 +172,23 @@ jobs:
             const fs = require('fs');
             const path = require('path');
 
-            const issuePath = path.join(
-              process.env.GITHUB_WORKSPACE,
-              '.git',
-              'codex',
-              'low-risk-issue.json',
-            );
+            const issuePath = path.join(process.env.GITHUB_WORKSPACE, '.git', 'codex', 'low-risk-issue.md');
             fs.mkdirSync(path.dirname(issuePath), { recursive: true });
 
-            const issueContext = {
-              schema_version: 1,
-              trust: 'untrusted',
-              source: 'github_issue',
-              issue: {
-                number: Number(process.env.ISSUE_NUMBER),
-                url: process.env.ISSUE_URL ?? '',
-                title: process.env.ISSUE_TITLE ?? '',
-                body: process.env.ISSUE_BODY ?? '',
-              },
-            };
+            const body = [
+              `# GitHub Issue #${process.env.ISSUE_NUMBER}`,
+              '',
+              `URL: ${process.env.ISSUE_URL}`,
+              '',
+              '## Title',
+              process.env.ISSUE_TITLE ?? '',
+              '',
+              '## Body',
+              process.env.ISSUE_BODY ?? '',
+              '',
+            ].join('\n');
 
-            fs.writeFileSync(issuePath, `${JSON.stringify(issueContext, null, 2)}\n`, 'utf8');
+            fs.writeFileSync(issuePath, body, 'utf8');
 
       - name: Run Codex low-risk implementation
         id: run_codex
