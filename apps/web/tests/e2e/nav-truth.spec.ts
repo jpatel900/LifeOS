@@ -211,6 +211,49 @@ test("/settings/areas content is centered, not stretched edge-to-edge (#687)", a
   expect(box!.x).toBeGreaterThan(40);
 });
 
+// Final UX Loop C2-S0 (#742): signed-out visits to /settings/areas now
+// redirect to the sign-in door (`useAreasLoadState.ts`'s status:"signed-out"
+// drives a `router.replace("/login?next=…")` in page.tsx). This spec's dev
+// server runs with NO Supabase env (see the file-level comment at the top of
+// this suite), the same "demo mode" every other test here already relies on
+// -- `createSupabaseBrowserClient()` returns null, `listAreas(null)` resolves
+// with `provider: "mock"` and never rejects, so `status` goes straight to
+// "ready" and the "signed-out" branch this redirect lives in is never
+// reached. That is true of every ordinary (non-`@signed-in`) e2e spec in this
+// repo, and was equally true of the in-place calm state #753 shipped before
+// this change -- neither ever had device-tier coverage, only vitest coverage
+// (`src/__tests__/areasSignedOutBoundary.test.tsx`, which drives the real
+// client-side code path against a mocked Supabase client that actually
+// rejects `getUser()`). Reaching the redirect in a real browser needs a
+// Supabase-configured dev server, which only the `e2e-signed-in` CI job
+// boots -- and that job signs a seeded user IN, so it cannot exercise a
+// signed-OUT visit either without a second, differently-configured server
+// this lane does not own (workflows are out of scope here). So: what THIS
+// tier can honestly prove is the regression guard -- demo-mode visits keep
+// loading normally and do not accidentally redirect -- at both viewports.
+test.describe("/settings/areas demo-mode load is unaffected by the C2-S0 redirect (#742)", () => {
+  for (const viewport of [
+    { name: "desktop", width: 1280, height: 800 },
+    { name: "mobile", width: 390, height: 844 },
+  ] as const) {
+    test(`${viewport.name}: stays on /settings/areas, no accidental redirect to /login`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
+      await page.goto("/settings/areas");
+
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Areas" }),
+      ).toBeVisible();
+      await expect(page).toHaveURL(/\/settings\/areas$/);
+      await expect(page.getByTestId("areas-create-card")).toBeVisible();
+    });
+  }
+});
+
 test("moments home: View area health reaches /health in one interaction", async ({
   page,
 }) => {
