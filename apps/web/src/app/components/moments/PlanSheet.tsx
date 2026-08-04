@@ -11,6 +11,7 @@ import { GoogleCalendarApprovalBridge } from "../GoogleCalendarApprovalBridge";
 // the same proposal-length maths the legacy Plan screen uses, so the ported
 // surface can never round or name a time differently from the one it replaces.
 import { estimate, formatHour, proposalMinutes } from "../cockpit/shared";
+import { formatClock } from "./formatTime";
 import { MomentSheet } from "./MomentSheet";
 import { ScheduleList } from "./ScheduleList";
 import type { ScheduleBlockVM } from "./momentsViewModel";
@@ -460,8 +461,14 @@ export function PlanSheet({
                           className="text-xs text-muted-foreground"
                           data-testid={`plan-sheet-proposal-when-${proposal.id}`}
                         >
-                          {formatHour(hour)} · {proposalMinutes(proposal)}{" "}
-                          minutes
+                          {/* The real clock time, not just the hour. The
+                              legacy card printed `formatHour(hour)`, so
+                              "Move later" — which shifts the draft by 30
+                              minutes — changed nothing a reader could see.
+                              `formatClock` is the same wall-clock formatter
+                              the schedule rows use. */}
+                          {formatClock(proposal.proposed_start)} ·{" "}
+                          {proposalMinutes(proposal)} minutes
                         </p>
                         {allDayContexts.map((context) => (
                           <p
