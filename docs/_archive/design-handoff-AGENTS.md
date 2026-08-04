@@ -1,3 +1,5 @@
+> **HISTORICAL (archived 2026-08-04).** Design-handoff bundle agent guide (its CLAUDE.md twin was byte-identical and deleted). The single-stage-router architecture it mandates predates the shipped multi-route app and the moments shell. Successor: `docs/UX_FLOWS.md` + ADR 0003 + shipped behavior.
+
 # LifeOS — agent build guide
 
 This bundle is a historical design reference, not current product or implementation authority. Start with the repository root `AGENTS.md`, `docs/REQUIREMENTS.md`, `docs/UX_FLOWS.md`, and applicable ADRs; use this bundle to inform visual intent only. Use `tokens.css` / `tokens.json` for reference values and `accent.js` for color derivation. The `LifeOS Prototype.dc.html` is a prototype reference (open in a browser with `support.js` alongside), not a source of truth.

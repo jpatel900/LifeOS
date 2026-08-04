@@ -1,3 +1,5 @@
+> **HISTORICAL (archived 2026-08-04).** The original design-handoff spec. Non-markdown assets (tokens, prototype HTML) remain at `design_handoff_lifeos/`. Successor: `docs/UX_FLOWS.md` + ADR 0003 + shipped behavior; tokens live in `apps/web/src/app/globals.css`.
+
 # Handoff: LifeOS — calm, glanceable workflow cockpit
 
 > **Status:** Historical design reference. This bundle preserves important visual intent, but it does not authorize product scope or override the repository's `AGENTS.md`, requirements, UX contract, or ADRs. Reuse its ideas through reviewed current contracts.
