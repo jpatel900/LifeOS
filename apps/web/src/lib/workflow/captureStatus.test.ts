@@ -4,6 +4,7 @@ import type { Phase2MockArea, Phase2MockTask } from "@/lib/types";
 import { createInitialWorkflowState, type WorkflowState } from "@/lib/workflow";
 import { buildPipelineCounts } from "@/app/components/moments/pipelineCounts";
 import { buildStartVM } from "@/app/components/moments/momentsViewModel/start";
+import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import { buildWhileYouWereOutSummary } from "@/lib/reEntry/summary";
 import {
   captureHasTriageDecision,
@@ -181,6 +182,18 @@ const UNSORTED_SURFACES: ReadonlyArray<{
     name: "Pipeline Capture badge",
     count: (state) =>
       buildPipelineCounts(state, "area-1", { now: NOW }).capture,
+  },
+  {
+    // C2-S2 / FINDING 4 of the C2-S1 capability inventory (#687): the legacy
+    // `/calendar` masthead's "N Capture" chip filtered `state.captureItems`
+    // by AREA ONLY — no status filter, no triage-decision check — so it
+    // counted resolved, archived and composted thoughts as still waiting.
+    // It is the same question every row above answers, so it belongs in the
+    // same table: the port must not carry a second answer onto the moments
+    // surface.
+    name: "Cockpit masthead Capture chip",
+    count: (state) =>
+      buildCockpitViewModel(state, "area-1", true, { now: NOW }).counts.capture,
   },
   {
     name: "Start hero — 'N thoughts waiting for a decision.'",
