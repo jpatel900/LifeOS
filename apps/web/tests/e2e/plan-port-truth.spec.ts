@@ -71,14 +71,31 @@ test.afterEach(() => {
   expectOnlyKnownAccountFailures(seen);
 });
 
+/**
+ * The failure watcher is armed AFTER sign-in, deliberately.
+ *
+ * `signIn` finishes with `/login`'s own `router.push("/")` — a CLIENT-side
+ * navigation that lands on the home before `WorkflowProvider`'s one-shot sync
+ * has a session (that is exactly why `signIn` then does a full reload; see its
+ * doc comment). In that window the app issues `GET /areas`,
+ * `GET /rollup_summaries` and `POST /brief_views` unauthenticated, and Postgres
+ * correctly answers 401. Measured on this branch: those four 401s appear only
+ * when the run is cold (they showed up on the first test of a full-tier run and
+ * not when this file ran alone), which is what makes them a timing artefact of
+ * signing in rather than evidence about the drive.
+ *
+ * A 401 for a caller with no session is the grant working, not a broken one —
+ * so watching it would report the opposite of what the guard exists to say. The
+ * guard itself is untouched and still covers every call this spec's drive makes.
+ */
 async function openSignedInToday(
   page: Page,
   user: SeededUser,
 ): Promise<AccountClient> {
-  watchPage(page);
   await stubParseCaptureRoute(page);
   await pinMomentPreference(page, "start");
   await signIn(page, user);
+  watchPage(page);
 
   const account = await accountClient(page, user, env);
   await purgeOwnRows(account);
