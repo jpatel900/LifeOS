@@ -11,13 +11,14 @@ import { HIT_TARGET_INVISIBLE } from "./hitTarget";
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
  *
  * Generic right-side slide-over shell reused by TriageSheet/PlanSheet.
- * Fallback surface decision (see PR body): LifeOSCockpit's TriageView and
- * PlanView are not importable without editing the hot file — both are
- * deeply embedded in the single ~2000-line component (local `useState`,
- * closures over sibling state, no exported sub-component boundary). Rather
- * than extract them (out of scope for this packet, and risky mid-flight
- * with six concurrent packets touching the same file), this shell hosts a
- * thin SUMMARY body plus a link-out to the real stage view.
+ *
+ * P5 shipped this as a SUMMARY shell with a link-out to the legacy stage
+ * route, because LifeOSCockpit's TriageView/PlanView were not importable
+ * without editing that ~2000-line component. That is no longer the shape:
+ * #703 moved the real triage actions in, and C2-S2 (#687) ported the whole
+ * Plan surface in. Both sheets now hold the actual controls and call the same
+ * `useWorkflow()` actions the stage views call — the cockpit views were never
+ * imported, so the original obstacle was routed around rather than removed.
  *
  * Escape handling mirrors CaptureOverlay/CommandPalette: focus lands on the
  * dialog on open, and Escape is handled via onKeyDown on the focused
@@ -32,6 +33,14 @@ export interface MomentSheetProps {
   title: string;
   onClose(): void;
   children: ReactNode;
+  /**
+   * C2-S2: the ported Plan surface carries an 11-row hour rail beside four
+   * decision panels — at `max-w-md` that is a single 2,000px scroll on a
+   * 1440px screen. `"wide"` gives it room for the two-column layout the
+   * legacy Plan screen used; every existing caller keeps the original width
+   * by omitting the prop.
+   */
+  width?: "default" | "wide";
 }
 
 export function MomentSheet({
@@ -39,6 +48,7 @@ export function MomentSheet({
   title,
   onClose,
   children,
+  width = "default",
 }: MomentSheetProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -85,7 +95,10 @@ export function MomentSheet({
         aria-label={title}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="workflow-primary-card relative z-10 grid h-full w-full max-w-sm content-start gap-5 overflow-y-auto border-l border-border bg-card p-6 outline-none motion-reduce:transition-none motion-reduce:duration-0 sm:max-w-md"
+        className={cn(
+          "workflow-primary-card relative z-10 grid h-full w-full content-start gap-5 overflow-y-auto border-l border-border bg-card p-6 outline-none motion-reduce:transition-none motion-reduce:duration-0",
+          width === "wide" ? "max-w-full sm:max-w-3xl" : "max-w-sm sm:max-w-md",
+        )}
         style={{
           transitionDuration: "var(--motion-base)",
           transitionTimingFunction: "var(--motion-ease)",
