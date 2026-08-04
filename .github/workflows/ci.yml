@@ -60,13 +60,16 @@ jobs:
           # it for caching (it auto-detects the packageManager field)
           package-manager-cache: false
 
-      # No pnpm install: both scripts are dependency-free by design so the
+      # No pnpm install: these scripts are dependency-free by design so the
       # Level-5 automerge policy gate can never be skipped for cost reasons.
       - name: check-safe-automerge self-test
         run: node scripts/agent/check-safe-automerge.mjs --self-test
 
       - name: safe-automerge-demotion self-test
         run: node scripts/agent/safe-automerge-demotion.mjs --self-test
+
+      - name: low-risk issue authorization self-test
+        run: node scripts/agent/low-risk-issue-policy.mjs --self-test
 
   migration-timestamp-collision:
     name: Migration timestamp collision precheck
