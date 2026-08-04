@@ -70,6 +70,7 @@ Use the smallest trusted skill set. Repo-local `.agents/skills` are preferred; `
 | Planning scope/acceptance criteria                  | `lifeos-planning`                                                                           |
 | Shipping/deployment readiness                       | `lifeos-shipping`                                                                           |
 | Frontend primitives, route UX, shell behavior       | `frontend-ui-engineering`; UI authority is `docs/UX_FLOWS.md` + ADR 0003 + shipped behavior |
+| Design polish, premium quality pass (campaign C6)   | `impeccable` — owner-kept 2026-08-04; the design-taste playbook for the payoff/polish bar   |
 | Docs/ADRs/runbooks/agent memory                     | `agentic-docs-and-writing` or `documentation-and-adrs`                                      |
 | Security-sensitive surfaces                         | `security-and-hardening` plus the relevant `lifeos-*` skill                                 |
 | Browser proof                                       | `browser-testing-with-devtools` or Playwright only for bounded UI behavior validation       |
