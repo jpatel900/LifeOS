@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LifeOSCockpit, ReviewView } from "../app/components/LifeOSCockpit";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
-import type { WorkflowState } from "@/lib/workflow";
 import {
   acceptLatestDraft,
   backlogLatestDraft,
@@ -68,7 +67,7 @@ const STORAGE_KEY = "lifeos.phase2.workflow";
  * in one area. Distinct open items: 4. Recovery cards: 3 (the scheduled task
  * is not in the queue). Legacy headline on 873c6ed7: 6.
  */
-function inventorySeedState(): WorkflowState {
+function inventorySeedState() {
   let state = workflowSeed();
   state = captureWorkflow(state, "First open thing.");
   state = acceptLatestDraft(state);
@@ -84,7 +83,7 @@ function inventorySeedState(): WorkflowState {
   return state;
 }
 
-function seedStorage(state: WorkflowState): void {
+function seedStorage(state: ReturnType<typeof inventorySeedState>): void {
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
