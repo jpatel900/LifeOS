@@ -47,6 +47,6 @@ Issues written far from execution rot: PR #227 died against a drifted main; cont
 
 ## Non-goals
 
-- Implementing slices (Codex does that via the relay).
+- Implementing slices (the implementer lane does that via the relay).
 - Re-litigating doctrine (current REQUIREMENTS and ADRs, including ADR 0005, own it).
 - Filing issues beyond the rolling-wave horizon.

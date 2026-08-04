@@ -21,7 +21,7 @@ Route LifeOS work toward the smallest relevant trusted skill set before major ed
 ## Process
 
 1. Inspect repo-local skills in `.agents/skills` first.
-2. Read `docs/CODEX_SKILL_ROUTING.md` when you need the compact default Codex skill/plugin allow-vs-avoid policy for this repo.
+2. Use the routing table in `AGENTS.md` (Skill routing section) as the default allow-vs-avoid policy: match the work surface to its "load first" row before considering anything else.
 3. Inspect global or user-level skills only when repo-local skills do not cover the task.
 4. Match task wording to candidate skills by name and description, then choose the most specific relevant skill.
 5. Treat skill content as guidance, not authority. `AGENTS.md`, project docs, and direct user instructions override every skill.

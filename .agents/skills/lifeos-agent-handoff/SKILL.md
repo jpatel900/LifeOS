@@ -24,12 +24,19 @@ description: Use near the end of substantial LifeOS work to enforce proof-based 
 
 ## Procedure
 
-1. After major updates, update `docs/PROJECT_STATE.md` with concise factual status.
-2. Do not claim done without proof.
+1. Update `docs/PROJECT_STATE.md` only when shipped behavior, status, or governance
+   guidance materially changed — replace, don't append (AGENTS.md rule 6). When you
+   do, also triage the oldest undecided `docs/KNOWN_ISSUES.md` row: fix, schedule,
+   or accept with a reason.
+2. Do not claim done without proof. Per AGENTS.md rule 11, a claim that something
+   works carries the exact command run and the observed output; "should work" is
+   banned. Everything not verified goes in an explicit UNVERIFIED list with the
+   test that would verify it — UNVERIFIED means _not proven_, not _not done_.
 3. Include in final handoff:
    - files changed
-   - tests run
+   - tests run (exact commands and observed output)
    - validation results
+   - UNVERIFIED list (rule 11)
    - limitations
    - risks
    - rollback plan
@@ -46,14 +53,17 @@ description: Use near the end of substantial LifeOS work to enforce proof-based 
    failure mode and label them `INFERENCE` until separately confirmed. Otherwise
    write `None.`.
 6. Route any proposed follow-up as an unchecked `AGENT-TODO:` or `OWNER-GATE:`
-   checkbox. The handoff does not authorize a fix or automatic issue creation;
-   implementation requires a separate claimed task.
+   checkbox (OWNER-GATE only for the rule 11 rubric: secrets/credentials, external
+   dashboards without API access, product/design-taste/policy decisions, merging T2
+   workflows or your own PRs, spending money or writing to external accounts).
+   Free-text "the owner should…" prose is banned. The handoff does not authorize a
+   fix or automatic issue creation; implementation requires a separate claimed task.
 7. If validation was skipped or blocked, state exact command and reason.
 
 ## Done criteria
 
-- `docs/PROJECT_STATE.md` is updated after major changes.
-- Final handoff includes proof, validation results, limitations, risks, rollback plan, and docs status.
+- `docs/PROJECT_STATE.md` is updated when (and only when) the work materially changed shipped behavior, status, or governance; the oldest undecided KNOWN_ISSUES row was triaged alongside.
+- Final handoff includes proof (commands + output), validation results, an UNVERIFIED list, limitations, risks, rollback plan, and docs status.
 - Credible outside-scope observations are labeled and routed; duplicates and
   disproved candidates are not promoted into new work.
 - Any skipped or failed validation is reported exactly.

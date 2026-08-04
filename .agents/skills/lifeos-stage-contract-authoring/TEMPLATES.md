@@ -6,7 +6,7 @@ Fill-in-the-blanks skeletons. Prior artifacts #252, #251, and #253–#261 illust
 
 ```markdown
 **Stage <N> (epic #<E>) - slice 1 of <K>. Blocks every other Stage <N> slice.
-Gate: <owner review | Claude fidelity review per epic decision log>.**
+Gate: <owner review | driver fidelity review per epic decision log>.**
 
 ## Context
 
@@ -26,7 +26,8 @@ MUST NOT touch: code, migrations, prompts, tests other than doc-guard expectatio
 
 ## Acceptance criteria
 
-- All FRs + shapes internally consistent and consistent with ADR 0002; doc-guard tests pass;
+- All FRs + shapes internally consistent and consistent with the north-star ADR
+  (docs/adr/0002-north-star-stages-and-trust-ladder.md); doc-guard tests pass;
   no code changes; gate reviewer approval on the PR.
 
 ## Appendix A - draft requirement text (integrate, do not invent alternatives)

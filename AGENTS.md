@@ -58,15 +58,19 @@ Use the smallest trusted skill set. Repo-local `.agents/skills` are preferred; `
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Skill/plugin selection or governance                | `skill-router`, then the most specific skill below                                          |
 | Authoring or receiving any lane contract            | `lifeos-lane-contract`                                                                      |
+| Stage/capability-wave contracting (relay dormant)   | `lifeos-stage-contract-authoring`                                                           |
 | AI parser, prompts, structured outputs, model tiers | `lifeos-schema-ai`                                                                          |
 | Calendar, free/busy, OAuth, external writes         | `lifeos-calendar-external-writes`                                                           |
 | Supabase, migrations, RLS, grants, persistence      | `lifeos-supabase-rls`                                                                       |
+| Migration Drift workflow red / prod schema drift    | `lifeos-migration-drift-response`                                                           |
 | Tests, guard failures, validation proof             | `lifeos-testing` and `verification-before-completion`                                       |
 | Contracts, route handlers, schemas, interfaces      | `lifeos-contract-review`                                                                    |
 | Debugging LifeOS failures                           | `lifeos-debugging`                                                                          |
+| Final handoff/report on substantial work            | `lifeos-agent-handoff`                                                                      |
 | Planning scope/acceptance criteria                  | `lifeos-planning`                                                                           |
 | Shipping/deployment readiness                       | `lifeos-shipping`                                                                           |
 | Frontend primitives, route UX, shell behavior       | `frontend-ui-engineering`; UI authority is `docs/UX_FLOWS.md` + ADR 0003 + shipped behavior |
+| Design polish, premium quality pass (campaign C6)   | `impeccable` — owner-kept 2026-08-04; the design-taste playbook for the payoff/polish bar   |
 | Docs/ADRs/runbooks/agent memory                     | `agentic-docs-and-writing` or `documentation-and-adrs`                                      |
 | Security-sensitive surfaces                         | `security-and-hardening` plus the relevant `lifeos-*` skill                                 |
 | Browser proof                                       | `browser-testing-with-devtools` or Playwright only for bounded UI behavior validation       |
