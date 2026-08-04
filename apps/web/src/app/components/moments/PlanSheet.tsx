@@ -268,11 +268,35 @@ export function PlanSheet({
         {/* Hour rail. Second on small screens (the decision comes before the
             grid), first from `lg:` up where both fit side by side — the same
             order swap the legacy Plan screen made for the same reason. */}
-        <section className="order-2 grid content-start gap-3 lg:order-1">
+        {/* Explicit ordering, not a two-column wrapper: on a phone the page
+            reads pick -> place -> refine (To place, the rail, then drafts,
+            backlog and Google), and from `lg:` up the rail moves into its own
+            tall left column beside the four decision panels. A wrapper div
+            around the panels would have pushed the rail below ALL of them on
+            mobile — the surface's whole point, three scrolls down. */}
+        <section className="order-2 grid content-start gap-3 lg:order-1 lg:col-start-1 lg:row-span-4 lg:row-start-1">
           <div className="flex items-center justify-between gap-3">
             <SectionTitle>Today’s hours</SectionTitle>
             <span className="text-xs text-muted-foreground">8a–6p</span>
           </div>
+          {/* What is being placed is said ONCE, here, instead of eleven times
+              down the rail. The first draft repeated the task's title in every
+              open row — eleven copies of the same sentence, each wrapping to
+              two lines. The rows still carry the title in their aria-label, so
+              a screen reader hears which task each hour would take without the
+              eye having to read it over and over. */}
+          {taskToPlace && hasFirstMove(taskToPlace) ? (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="plan-sheet-placing"
+            >
+              Placing{" "}
+              <span className="font-semibold text-foreground">
+                {taskToPlace.title}
+              </span>
+              . Pick an hour.
+            </p>
+          ) : null}
           <div className="grid gap-2">
             {rail.map((row) => {
               const collapsed = row.collapsible && !showEmptyHours;
@@ -282,7 +306,13 @@ export function PlanSheet({
                   key={row.hour}
                   type="button"
                   data-testid={`plan-sheet-hour-${row.hour}`}
-                  aria-label={`${formatHour(row.hour)} — ${label}`}
+                  // The visible row is short; the accessible name still says
+                  // which task this hour would take.
+                  aria-label={
+                    row.action.kind === "place"
+                      ? `${formatHour(row.hour)} — tap to put “${row.action.taskTitle}” here`
+                      : `${formatHour(row.hour)} — ${label}`
+                  }
                   onClick={() => {
                     switch (row.action.kind) {
                       case "unplan":
@@ -327,9 +357,7 @@ export function PlanSheet({
                       </>
                     ) : (
                       <span className="text-sm text-muted-foreground">
-                        {row.action.kind === "place"
-                          ? `Tap to put “${row.action.taskTitle}” here`
-                          : label}
+                        {label}
                       </span>
                     )}
                   </span>
@@ -361,281 +389,126 @@ export function PlanSheet({
           </div>
         </section>
 
-        <div className="order-1 grid content-start gap-5 lg:order-2">
-          <section className="grid gap-2">
-            <SectionTitle>To place</SectionTitle>
-            {taskToPlace && !hasFirstMove(taskToPlace) ? (
-              <FirstMoveCard
-                taskId={taskToPlace.id}
-                taskTitle={taskToPlace.title}
-                value={firstMoveDrafts[taskToPlace.id] ?? ""}
-                inputRef={firstMoveInputRef}
-                onChange={(value) =>
-                  setFirstMoveDrafts((current) => ({
-                    ...current,
-                    [taskToPlace.id]: value,
-                  }))
-                }
-                onSave={() => saveFirstMove(taskToPlace.id)}
-              />
-            ) : null}
-            {vm.today.length ? (
-              <ul className="grid gap-2" data-testid="plan-sheet-to-place">
-                {vm.today.map((task) => (
-                  <li key={task.id}>
-                    <button
-                      type="button"
-                      aria-pressed={taskIdToPlace === task.id}
-                      onClick={() =>
-                        setSelectedTaskId(
-                          selectedTaskId === task.id ? null : task.id,
-                        )
-                      }
-                      className={cn(
-                        HIT_TARGET_ROW,
-                        "w-full rounded-[var(--surface-radius-sm)] border p-3 text-left",
-                        taskIdToPlace === task.id
-                          ? "border-primary/60 bg-primary/10"
-                          : "border-border bg-card",
-                      )}
-                      data-testid={`plan-sheet-task-${task.id}`}
-                    >
-                      <span className="block text-sm font-semibold">
-                        {task.title}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        about {estimate(task)} minutes
-                        {hasFirstMove(task)
-                          ? ""
-                          : " · needs a first move before it can go on the rail"}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p
-                className="text-sm text-muted-foreground"
-                data-testid="plan-sheet-to-place-empty"
-              >
-                Nothing waiting to be placed.
-              </p>
-            )}
-          </section>
+        <section className="order-1 grid gap-2 lg:order-2 lg:col-start-2 lg:row-start-1">
+          <SectionTitle>To place</SectionTitle>
+          {taskToPlace && !hasFirstMove(taskToPlace) ? (
+            <FirstMoveCard
+              taskId={taskToPlace.id}
+              taskTitle={taskToPlace.title}
+              value={firstMoveDrafts[taskToPlace.id] ?? ""}
+              inputRef={firstMoveInputRef}
+              onChange={(value) =>
+                setFirstMoveDrafts((current) => ({
+                  ...current,
+                  [taskToPlace.id]: value,
+                }))
+              }
+              onSave={() => saveFirstMove(taskToPlace.id)}
+            />
+          ) : null}
+          {vm.today.length ? (
+            <ul className="grid gap-2" data-testid="plan-sheet-to-place">
+              {vm.today.map((task) => (
+                <li key={task.id}>
+                  <button
+                    type="button"
+                    aria-pressed={taskIdToPlace === task.id}
+                    onClick={() =>
+                      setSelectedTaskId(
+                        selectedTaskId === task.id ? null : task.id,
+                      )
+                    }
+                    className={cn(
+                      HIT_TARGET_ROW,
+                      "w-full rounded-[var(--surface-radius-sm)] border p-3 text-left",
+                      taskIdToPlace === task.id
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border bg-card",
+                    )}
+                    data-testid={`plan-sheet-task-${task.id}`}
+                  >
+                    <span className="block text-sm font-semibold">
+                      {task.title}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      about {estimate(task)} minutes
+                      {hasFirstMove(task)
+                        ? ""
+                        : " · needs a first move before it can go on the rail"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="plan-sheet-to-place-empty"
+            >
+              Nothing waiting to be placed.
+            </p>
+          )}
+        </section>
 
-          <section className="grid gap-2">
-            <div className="flex items-center justify-between gap-3">
-              <SectionTitle>Drafted blocks</SectionTitle>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!taskToPlace || !hasFirstMove(taskToPlace)}
-                onClick={() =>
-                  taskToPlace && hasFirstMove(taskToPlace)
-                    ? draftBlock(taskToPlace.id)
-                    : undefined
-                }
-                className={cn(HIT_TARGET_MIN, "touch-manipulation")}
-                data-testid="plan-sheet-draft-block"
-              >
-                Draft a block
-              </Button>
-            </div>
-            {vm.proposals.length ? (
-              <ul className="grid gap-2" data-testid="plan-sheet-proposals">
-                {vm.proposals.map(
-                  ({ allDayContexts, proposal, task, hour }) => {
-                    const recal = recalibrationForProposal(
-                      proposal.area_id,
-                      estimate(task),
-                    );
-                    return (
-                      <li
-                        key={proposal.id}
-                        className="workflow-compact-item moments-row grid gap-2 p-3"
-                        data-testid={`plan-sheet-proposal-${proposal.id}`}
-                      >
-                        <p className="text-sm font-semibold">{task.title}</p>
-                        <p
-                          className="text-xs text-muted-foreground"
-                          data-testid={`plan-sheet-proposal-when-${proposal.id}`}
-                        >
-                          {/* The real clock time, not just the hour. The
+        <section className="order-3 grid gap-2 lg:col-start-2 lg:row-start-2">
+          <div className="flex items-center justify-between gap-3">
+            <SectionTitle>Drafted blocks</SectionTitle>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!taskToPlace || !hasFirstMove(taskToPlace)}
+              onClick={() =>
+                taskToPlace && hasFirstMove(taskToPlace)
+                  ? draftBlock(taskToPlace.id)
+                  : undefined
+              }
+              className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+              data-testid="plan-sheet-draft-block"
+            >
+              Draft a block
+            </Button>
+          </div>
+          {vm.proposals.length ? (
+            <ul className="grid gap-2" data-testid="plan-sheet-proposals">
+              {vm.proposals.map(({ allDayContexts, proposal, task, hour }) => {
+                const recal = recalibrationForProposal(
+                  proposal.area_id,
+                  estimate(task),
+                );
+                return (
+                  <li
+                    key={proposal.id}
+                    className="workflow-compact-item moments-row grid gap-2 p-3"
+                    data-testid={`plan-sheet-proposal-${proposal.id}`}
+                  >
+                    <p className="text-sm font-semibold">{task.title}</p>
+                    <p
+                      className="text-xs text-muted-foreground"
+                      data-testid={`plan-sheet-proposal-when-${proposal.id}`}
+                    >
+                      {/* The real clock time, not just the hour. The
                               legacy card printed `formatHour(hour)`, so
                               "Move later" — which shifts the draft by 30
                               minutes — changed nothing a reader could see.
                               `formatClock` is the same wall-clock formatter
                               the schedule rows use. */}
-                          {formatClock(proposal.proposed_start)} ·{" "}
-                          {proposalMinutes(proposal)} minutes
-                        </p>
-                        {allDayContexts.map((context) => (
-                          <p
-                            key={`${proposal.id}:${context.id}`}
-                            className="text-xs text-muted-foreground"
-                          >
-                            All day that day: {context.summary}
-                          </p>
-                        ))}
-                        {task.first_tiny_step?.trim() ? (
-                          <p className="text-xs text-muted-foreground">
-                            First move: {task.first_tiny_step}
-                          </p>
-                        ) : (
-                          <FirstMoveCard
-                            taskId={task.id}
-                            taskTitle={task.title}
-                            value={firstMoveDrafts[task.id] ?? ""}
-                            onChange={(value) =>
-                              setFirstMoveDrafts((current) => ({
-                                ...current,
-                                [task.id]: value,
-                              }))
-                            }
-                            onSave={() => saveFirstMove(task.id)}
-                          />
-                        )}
-                        {recal && !decidedRecalIds.has(proposal.id) ? (
-                          <div
-                            className="rounded-[var(--surface-radius-sm)] border border-border p-2 text-xs"
-                            data-testid={`plan-sheet-recalibration-${proposal.id}`}
-                          >
-                            <p className="font-semibold">{recal.label}</p>
-                            <p className="mt-1 text-muted-foreground">
-                              Based on {recal.recalibration.sampleCount}{" "}
-                              finished focus sessions in this area.
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {(
-                                [
-                                  ["accepted", `Use ${recal.adjustedMinutes}m`],
-                                  [
-                                    "dismissed",
-                                    `Keep ${recal.estimateMinutes}m`,
-                                  ],
-                                ] as const
-                              ).map(([decision, label]) => (
-                                <Button
-                                  key={decision}
-                                  type="button"
-                                  size="sm"
-                                  variant={
-                                    decision === "accepted"
-                                      ? "default"
-                                      : "ghost"
-                                  }
-                                  onClick={() => {
-                                    decideDurationRecalibration(
-                                      {
-                                        proposalId: proposal.id,
-                                        proposedStart: proposal.proposed_start,
-                                        areaId: proposal.area_id,
-                                        recalibration: recal,
-                                      },
-                                      decision,
-                                    );
-                                    setDecidedRecalIds((current) =>
-                                      new Set(current).add(proposal.id),
-                                    );
-                                  }}
-                                  className={cn(
-                                    HIT_TARGET_MIN,
-                                    "touch-manipulation",
-                                  )}
-                                  data-testid={`plan-sheet-recalibration-${decision}-${proposal.id}`}
-                                >
-                                  {label}
-                                </Button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={!task.first_tiny_step?.trim()}
-                            onClick={() => {
-                              acceptLocalProposal(proposal.id);
-                              onToast?.("Put on the rail");
-                            }}
-                            className={cn(HIT_TARGET_MIN, "touch-manipulation")}
-                            data-testid={`plan-sheet-proposal-accept-${proposal.id}`}
-                          >
-                            Put it on the rail
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => moveProposalLater(proposal.id)}
-                            className={cn(HIT_TARGET_MIN, "touch-manipulation")}
-                            data-testid={`plan-sheet-proposal-later-${proposal.id}`}
-                          >
-                            Move later
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              rejectLocalProposal(proposal.id);
-                              onToast?.("Draft dropped");
-                            }}
-                            className={cn(
-                              HIT_TARGET_MIN,
-                              "touch-manipulation text-muted-foreground",
-                            )}
-                            data-testid={`plan-sheet-proposal-reject-${proposal.id}`}
-                          >
-                            Drop it
-                          </Button>
-                        </div>
-                      </li>
-                    );
-                  },
-                )}
-              </ul>
-            ) : (
-              <p
-                className="text-sm text-muted-foreground"
-                data-testid="plan-sheet-proposals-empty"
-              >
-                {vm.today.length > 1
-                  ? "Pick something above, then draft a block for it."
-                  : "Draft a block to try a time before you commit to it."}
-              </p>
-            )}
-          </section>
-
-          <section className="grid gap-2">
-            <SectionTitle>Put off for later</SectionTitle>
-            {vm.backlog.length ? (
-              <ul className="grid gap-2" data-testid="plan-sheet-backlog">
-                {vm.backlog.map((task) => (
-                  <li
-                    key={task.id}
-                    className="workflow-compact-item moments-row grid gap-2 p-3"
-                  >
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={!hasFirstMove(task)}
-                      onClick={() => {
-                        promoteBacklogTask(task.id);
-                        onToast?.("Moved to today");
-                      }}
-                      className={cn(
-                        HIT_TARGET_MIN,
-                        "touch-manipulation justify-start text-left",
-                      )}
-                      data-testid={`plan-sheet-promote-${task.id}`}
-                    >
-                      Move to today: {task.title}
-                    </Button>
-                    {hasFirstMove(task) ? null : (
+                      {formatClock(proposal.proposed_start)} ·{" "}
+                      {proposalMinutes(proposal)} minutes
+                    </p>
+                    {allDayContexts.map((context) => (
+                      <p
+                        key={`${proposal.id}:${context.id}`}
+                        className="text-xs text-muted-foreground"
+                      >
+                        All day that day: {context.summary}
+                      </p>
+                    ))}
+                    {task.first_tiny_step?.trim() ? (
+                      <p className="text-xs text-muted-foreground">
+                        First move: {task.first_tiny_step}
+                      </p>
+                    ) : (
                       <FirstMoveCard
                         taskId={task.id}
                         taskTitle={task.title}
@@ -649,31 +522,177 @@ export function PlanSheet({
                         onSave={() => saveFirstMove(task.id)}
                       />
                     )}
+                    {recal && !decidedRecalIds.has(proposal.id) ? (
+                      <div
+                        className="rounded-[var(--surface-radius-sm)] border border-border p-2 text-xs"
+                        data-testid={`plan-sheet-recalibration-${proposal.id}`}
+                      >
+                        <p className="font-semibold">{recal.label}</p>
+                        <p className="mt-1 text-muted-foreground">
+                          Based on {recal.recalibration.sampleCount} finished
+                          focus sessions in this area.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(
+                            [
+                              ["accepted", `Use ${recal.adjustedMinutes}m`],
+                              ["dismissed", `Keep ${recal.estimateMinutes}m`],
+                            ] as const
+                          ).map(([decision, label]) => (
+                            <Button
+                              key={decision}
+                              type="button"
+                              size="sm"
+                              variant={
+                                decision === "accepted" ? "default" : "ghost"
+                              }
+                              onClick={() => {
+                                decideDurationRecalibration(
+                                  {
+                                    proposalId: proposal.id,
+                                    proposedStart: proposal.proposed_start,
+                                    areaId: proposal.area_id,
+                                    recalibration: recal,
+                                  },
+                                  decision,
+                                );
+                                setDecidedRecalIds((current) =>
+                                  new Set(current).add(proposal.id),
+                                );
+                              }}
+                              className={cn(
+                                HIT_TARGET_MIN,
+                                "touch-manipulation",
+                              )}
+                              data-testid={`plan-sheet-recalibration-${decision}-${proposal.id}`}
+                            >
+                              {label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!task.first_tiny_step?.trim()}
+                        onClick={() => {
+                          acceptLocalProposal(proposal.id);
+                          onToast?.("Put on the rail");
+                        }}
+                        className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+                        data-testid={`plan-sheet-proposal-accept-${proposal.id}`}
+                      >
+                        Put it on the rail
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => moveProposalLater(proposal.id)}
+                        className={cn(HIT_TARGET_MIN, "touch-manipulation")}
+                        data-testid={`plan-sheet-proposal-later-${proposal.id}`}
+                      >
+                        Move later
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          rejectLocalProposal(proposal.id);
+                          onToast?.("Draft dropped");
+                        }}
+                        className={cn(
+                          HIT_TARGET_MIN,
+                          "touch-manipulation text-muted-foreground",
+                        )}
+                        data-testid={`plan-sheet-proposal-reject-${proposal.id}`}
+                      >
+                        Drop it
+                      </Button>
+                    </div>
                   </li>
-                ))}
-              </ul>
-            ) : (
-              <p
-                className="text-sm text-muted-foreground"
-                data-testid="plan-sheet-backlog-empty"
-              >
-                Nothing put off for later.
-              </p>
-            )}
-          </section>
-
-          <section className="grid gap-2">
-            <SectionTitle>Google Calendar</SectionTitle>
-            <p className="text-xs text-muted-foreground">
-              The hours above are yours alone. Nothing reaches your Google
-              Calendar until you approve it here, one block at a time.
+                );
+              })}
+            </ul>
+          ) : (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="plan-sheet-proposals-empty"
+            >
+              {vm.today.length > 1
+                ? "Pick something above, then draft a block for it."
+                : "Draft a block to try a time before you commit to it."}
             </p>
-            <GoogleCalendarApprovalBridge
-              proposals={vm.proposals}
-              planned={vm.planned}
-            />
-          </section>
-        </div>
+          )}
+        </section>
+
+        <section className="order-4 grid gap-2 lg:col-start-2 lg:row-start-3">
+          <SectionTitle>Put off for later</SectionTitle>
+          {vm.backlog.length ? (
+            <ul className="grid gap-2" data-testid="plan-sheet-backlog">
+              {vm.backlog.map((task) => (
+                <li
+                  key={task.id}
+                  className="workflow-compact-item moments-row grid gap-2 p-3"
+                >
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!hasFirstMove(task)}
+                    onClick={() => {
+                      promoteBacklogTask(task.id);
+                      onToast?.("Moved to today");
+                    }}
+                    className={cn(
+                      HIT_TARGET_MIN,
+                      "touch-manipulation justify-start text-left",
+                    )}
+                    data-testid={`plan-sheet-promote-${task.id}`}
+                  >
+                    Move to today: {task.title}
+                  </Button>
+                  {hasFirstMove(task) ? null : (
+                    <FirstMoveCard
+                      taskId={task.id}
+                      taskTitle={task.title}
+                      value={firstMoveDrafts[task.id] ?? ""}
+                      onChange={(value) =>
+                        setFirstMoveDrafts((current) => ({
+                          ...current,
+                          [task.id]: value,
+                        }))
+                      }
+                      onSave={() => saveFirstMove(task.id)}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="plan-sheet-backlog-empty"
+            >
+              Nothing put off for later.
+            </p>
+          )}
+        </section>
+
+        <section className="order-5 grid gap-2 lg:col-start-2 lg:row-start-4">
+          <SectionTitle>Google Calendar</SectionTitle>
+          <p className="text-xs text-muted-foreground">
+            The hours above are yours alone. Nothing reaches your Google
+            Calendar until you approve it here, one block at a time.
+          </p>
+          <GoogleCalendarApprovalBridge
+            proposals={vm.proposals}
+            planned={vm.planned}
+          />
+        </section>
       </div>
     </MomentSheet>
   );

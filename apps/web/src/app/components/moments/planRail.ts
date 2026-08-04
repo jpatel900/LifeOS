@@ -120,7 +120,11 @@ export function buildPlanRail(input: BuildPlanRailInput): PlanRailRow[] {
       placement,
       action,
       hasProposal,
-      collapsible: !placement && !hasProposal,
+      // An empty hour is only noise when there is nothing to put in it. The
+      // moment a task is ready to place, the open hours ARE the surface — a
+      // phone that collapsed them left "Placing X. Pick an hour." sitting
+      // directly above "Show 11 open hours", with no hour to pick.
+      collapsible: !placement && !hasProposal && action.kind !== "place",
     };
   });
 }

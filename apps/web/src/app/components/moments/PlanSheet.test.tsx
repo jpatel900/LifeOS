@@ -179,10 +179,19 @@ describe("PlanSheet — the ported Plan surface", () => {
       saveFirstMove();
 
       await waitFor(() => {
-        expect(screen.getByTestId("plan-sheet-hour-9")).toHaveTextContent(
-          `Tap to put “${TODAY_TASK.title}” here`,
+        // The task is named once, above the rail...
+        expect(screen.getByTestId("plan-sheet-placing")).toHaveTextContent(
+          `Placing ${TODAY_TASK.title}. Pick an hour.`,
         );
       });
+      // ...and every open hour offers to take it, in its accessible name too.
+      expect(screen.getByTestId("plan-sheet-hour-9")).toHaveTextContent(
+        "Tap to put it here",
+      );
+      expect(screen.getByTestId("plan-sheet-hour-9")).toHaveAttribute(
+        "aria-label",
+        `9a — tap to put “${TODAY_TASK.title}” here`,
+      );
     });
   });
 

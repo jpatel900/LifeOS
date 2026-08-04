@@ -132,6 +132,26 @@ describe("buildPlanRail", () => {
     expect(rail.find((row) => row.hour === 14)?.collapsible).toBe(false);
     expect(rail.find((row) => row.hour === 9)?.collapsible).toBe(true);
   });
+
+  it("never collapses the open hours while something is ready to be placed", () => {
+    const rail = buildPlanRail({
+      ...EMPTY,
+      taskToPlace: task({ id: "task-1", first_tiny_step: "open the doc" }),
+      candidateCount: 1,
+    });
+    expect(rail.every((row) => !row.collapsible)).toBe(true);
+  });
+
+  it("still collapses them when the chosen task cannot be placed yet", () => {
+    const rail = buildPlanRail({
+      ...EMPTY,
+      taskToPlace: task({ id: "task-1", first_tiny_step: null }),
+      candidateCount: 1,
+    });
+    // Nothing can go on the rail until the first move exists, so eleven empty
+    // hours are noise standing between the user and the field that unblocks it.
+    expect(rail.every((row) => row.collapsible)).toBe(true);
+  });
 });
 
 describe("firstOpenHour", () => {

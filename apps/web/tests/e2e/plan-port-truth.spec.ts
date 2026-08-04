@@ -171,7 +171,7 @@ test.describe("C2-S2 — the ported Plan surface, signed in", () => {
       [],
     );
     await expect(page.getByTestId("plan-sheet-hour-10")).toContainText(
-      "Tap to put",
+      "Tap to put it here",
       { timeout: 20_000 },
     );
 
