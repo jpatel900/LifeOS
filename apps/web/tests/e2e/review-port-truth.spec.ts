@@ -170,6 +170,17 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     await seedDoTodayTask(page, A);
     await seedDoTodayTask(page, B);
 
+    // Every control below is addressed by its OWN task id, never by list
+    // position: the list re-orders as decisions land (do-today items come
+    // before put-off ones), so `.first()` would silently drift onto the wrong
+    // card and the assertion after it would be about a task nobody clicked.
+    const ids = Object.fromEntries(
+      (await account.rows<TaskRow>("tasks?select=id,title")).map((row) => [
+        row.title,
+        row.id,
+      ]),
+    );
+
     await openReviewSheet(page);
 
     // FINDING 5: the number the headline prints IS the length of the list it
@@ -183,10 +194,7 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     );
 
     // PUT OFF (the legacy "Defer").
-    await page
-      .getByTestId(/^review-sheet-defer-/)
-      .first()
-      .click();
+    await page.getByTestId(`review-sheet-defer-${ids[A]}`).click();
     await expect
       .poll(async () => (await taskStatuses(account))[A], { timeout: 30_000 })
       .toBe("backlog");
@@ -198,10 +206,7 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     await expect(page.getByTestId(/^review-sheet-decision-/)).toHaveCount(2);
 
     // CARRY FORWARD — the same task, now listed as put off, comes back.
-    await page
-      .getByTestId(/^review-sheet-carry-forward-/)
-      .first()
-      .click();
+    await page.getByTestId(`review-sheet-carry-forward-${ids[A]}`).click();
     await expect
       .poll(async () => (await taskStatuses(account))[A], { timeout: 30_000 })
       .toBe("active");
@@ -209,10 +214,7 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     await expect(page.getByTestId("review-sheet-close-day")).toBeVisible();
 
     // DROP.
-    await page
-      .getByTestId(/^review-sheet-drop-/)
-      .last()
-      .click();
+    await page.getByTestId(`review-sheet-drop-${ids[B]}`).click();
     await expect
       .poll(async () => (await taskStatuses(account))[B], { timeout: 30_000 })
       .toBe("dropped");
