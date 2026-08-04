@@ -1,3 +1,5 @@
+> **STATUS: REFERENCE — enumerated user-flow/edge-case map (2026-07-01).** Input to the flow audits; not a plan and not a status claim.
+
 # LifeOS User Flow and Edge Case Map
 
 Status: Planning map for implementation, QA, and product review

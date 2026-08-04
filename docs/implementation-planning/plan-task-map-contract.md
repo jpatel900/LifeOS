@@ -20,7 +20,7 @@ Strategic sources: owner-ratified staging note in issue #292 comment (2026-07-05
 
 _(exact REQUIREMENTS.md FR format)_
 
-### FR-031 — AI-Drafted Task Node Map
+### FR-031 — Task-Map v1 (DAG Progression Map)
 
 **Priority:** MUST
 
