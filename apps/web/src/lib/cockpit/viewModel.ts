@@ -17,6 +17,7 @@ import {
 import { cardBg } from "./accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
 import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import { selectTasksToPlace } from "@/lib/workflow/planStatus";
 
 export type CockpitStage =
   | "today"
@@ -158,33 +159,6 @@ function makePipelineCard(
     area,
     cardColor: cardColorFor(area, dark),
   };
-}
-
-/**
- * C2-S2 / FINDING 3: the same calendar-day test `pipelineCounts.ts` uses for
- * its Plan node. Local-calendar-day, not UTC — a block is "on today's rail"
- * exactly when the rail would draw it.
- */
-function isSameCalendarDay(value: string, now: Date) {
-  const date = new Date(value);
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  );
-}
-
-function hasOpenBlockToday(
-  state: WorkflowState,
-  taskId: string,
-  now: Date,
-): boolean {
-  return state.calendarBlocks.some(
-    (block) =>
-      block.task_id === taskId &&
-      ["scheduled", "running"].includes(block.status) &&
-      isSameCalendarDay(block.start_at, now),
-  );
 }
 
 function uniqueReviewItems(
@@ -429,11 +403,11 @@ export function buildCockpitViewModel(
       // The inventory ratified `pipelineCounts.ts`'s semantics as the truthful
       // ones: what is left TO plan is an active task that does not already
       // hold an open block on today's rail. Same shape as
-      // `buildPipelineCounts`' `doTodayUnplacedTasks`, so the legacy chip and
-      // the moments Plan node answer with the same number (pinned by
+      // `selectTasksToPlace` — the ONE definition, shared with the moments
+      // Plan badge and the ported Plan sheet's own list, so none of the three
+      // can drift (pinned by `lib/workflow/planStatus.test.ts` and
       // `__tests__/cockpitStageChipTruth.test.ts`).
-      plan: today.filter((task) => !hasOpenBlockToday(state, task.id, now))
-        .length,
+      plan: selectTasksToPlace(state, areaId, now).length,
       // Deliberately unchanged by this slice: `execute` is day-unscoped but
       // does count blocks (the inventory called it "roughly honest"), and
       // `review`'s disagreement with `/review`'s own headline is FINDING 5,

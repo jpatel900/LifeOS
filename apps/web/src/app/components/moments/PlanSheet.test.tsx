@@ -2,11 +2,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
+import { buildPipelineCounts } from "./pipelineCounts";
 import {
   acceptLatestDraft,
   backlogLatestDraft,
   captureWorkflow,
   GOLDEN_AREA_ID,
+  planLatestActiveTask,
   workflowSeed,
 } from "@/__tests__/helpers/workflowReachability";
 import { PlanSheet } from "./PlanSheet";
@@ -286,12 +288,15 @@ describe("PlanSheet — the ported Plan surface", () => {
 
       // Still exactly one draft — moved, not duplicated.
       await waitFor(() => expect(probe("probe-proposals")).toBe(1));
-      expect(
-        screen
-          .getByTestId("plan-sheet-proposals")
-          .querySelector('[data-testid^="plan-sheet-proposal-when-"]')
-          ?.textContent,
-      ).not.toBe(before);
+      const after = screen
+        .getByTestId("plan-sheet-proposals")
+        .querySelector(
+          '[data-testid^="plan-sheet-proposal-when-"]',
+        )?.textContent;
+      expect(after).not.toBe(before);
+      // The legacy card's `edited` status survives the port, in plain words.
+      expect(before).not.toContain("moved");
+      expect(after).toContain("moved");
     });
 
     it("drops a draft", async () => {
@@ -346,6 +351,65 @@ describe("PlanSheet — the ported Plan surface", () => {
         ).toBeInTheDocument(),
       );
     });
+  });
+
+  // The Pipeline rail's Plan badge and this list are visible at the same time
+  // (the sheet is a slide-over; the rail stays behind it at desktop width), so
+  // a badge reading 0 beside a row is a contradiction one glance catches.
+  // `KNOWN_ISSUES` row 11 is the state where the two derivations could
+  // disagree: a stale accept left the block `scheduled` while the task stayed
+  // `active`. Built with the same reducer transitions as
+  // `lib/workflow/planStatus.test.ts`'s fixture, so both guards describe one
+  // state rather than two lookalikes.
+  it("never lists a task the Plan badge has already stopped counting", async () => {
+    // `planLatestActiveTask` stamps the block from the real clock, so "today"
+    // has to be the real today or the same-calendar-day test would compare a
+    // block on one date against a `now` on another.
+    const today = new Date();
+    let state = workflowSeed();
+    state = captureWorkflow(state, "One thing, counted once.");
+    state = acceptLatestDraft(state);
+    state = planLatestActiveTask(state, 10);
+    const placed = state.calendarBlocks.find(
+      (block) => block.status === "scheduled" && block.task_id,
+    )!;
+    const drifted = {
+      ...state,
+      tasks: state.tasks.map((task) =>
+        task.id === placed.task_id
+          ? { ...task, status: "active" as const }
+          : task,
+      ),
+    };
+
+    const badge = buildPipelineCounts(drifted, AREA, { now: today }).plan;
+    expect(badge, "the badge stops counting a task already on the rail").toBe(
+      0,
+    );
+
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(drifted));
+    render(
+      <WorkflowProvider>
+        <PlanSheet
+          open
+          onClose={vi.fn()}
+          selectedAreaId={AREA}
+          blocks={[]}
+          timeDisplay="clock"
+          now={today}
+        />
+      </WorkflowProvider>,
+    );
+
+    // The provider hydrates from device storage in an effect, so the mount
+    // settles a tick after render.
+    await waitFor(() =>
+      expect(screen.getByTestId("plan-sheet-hour-8")).toBeInTheDocument(),
+    );
+    const rows =
+      screen.queryByTestId("plan-sheet-to-place")?.querySelectorAll("li")
+        .length ?? 0;
+    expect(rows, "the list agrees with the badge").toBe(badge);
   });
 
   it("mounts the Google approval gate rather than writing anything itself", () => {

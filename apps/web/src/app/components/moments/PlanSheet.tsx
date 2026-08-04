@@ -5,6 +5,7 @@ import type { ReactNode, Ref } from "react";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
+import { selectTasksToPlace } from "@/lib/workflow/planStatus";
 import { Button } from "@/components/ui/button";
 import { GoogleCalendarApprovalBridge } from "../GoogleCalendarApprovalBridge";
 // Reused, not re-derived: the same hour label, the same estimate fallback and
@@ -188,10 +189,19 @@ export function PlanSheet({
     [state, selectedAreaId, now],
   );
 
-  const onlyReadyTaskId = vm.today.length === 1 ? vm.today[0].id : null;
+  // NOT `vm.today` (every active task): the same `selectTasksToPlace` rule the
+  // Pipeline rail's Plan badge counts with. The rail is visible behind this
+  // sheet, so a badge reading 0 beside a row here is a contradiction one glance
+  // catches — and it was reachable (KNOWN_ISSUES row 11). Pinned by
+  // `lib/workflow/planStatus.test.ts`.
+  const toPlace = useMemo(
+    () => selectTasksToPlace(state, vm.activeArea.id, now),
+    [state, vm.activeArea.id, now],
+  );
+
+  const onlyReadyTaskId = toPlace.length === 1 ? toPlace[0].id : null;
   const taskIdToPlace = selectedTaskId ?? onlyReadyTaskId;
-  const taskToPlace =
-    vm.today.find((task) => task.id === taskIdToPlace) ?? null;
+  const taskToPlace = toPlace.find((task) => task.id === taskIdToPlace) ?? null;
 
   const placements: PlanRailPlacement[] = vm.planned;
   const rail = useMemo(
@@ -200,9 +210,9 @@ export function PlanSheet({
         placements,
         proposalHours: vm.proposals.map((item) => item.hour),
         taskToPlace,
-        candidateCount: vm.today.length,
+        candidateCount: toPlace.length,
       }),
-    [placements, vm.proposals, taskToPlace, vm.today.length],
+    [placements, vm.proposals, taskToPlace, toPlace.length],
   );
 
   const collapsedCount = rail.filter(
@@ -406,9 +416,9 @@ export function PlanSheet({
               onSave={() => saveFirstMove(taskToPlace.id)}
             />
           ) : null}
-          {vm.today.length ? (
+          {toPlace.length ? (
             <ul className="grid gap-2" data-testid="plan-sheet-to-place">
-              {vm.today.map((task) => (
+              {toPlace.map((task) => (
                 <li key={task.id}>
                   <button
                     type="button"
@@ -495,6 +505,13 @@ export function PlanSheet({
                               the schedule rows use. */}
                       {formatClock(proposal.proposed_start)} ·{" "}
                       {proposalMinutes(proposal)} minutes
+                      {/* The legacy card printed the raw status word
+                          (`proposed` / `edited`). The fact it carried — that
+                          this draft has been moved from where it started — is
+                          kept; the internal word is not. `proposed` adds
+                          nothing a reader of a card headed "Drafted blocks"
+                          does not already know, so it says nothing. */}
+                      {proposal.status === "edited" ? " · moved" : ""}
                     </p>
                     {allDayContexts.map((context) => (
                       <p
@@ -622,7 +639,7 @@ export function PlanSheet({
               className="text-sm text-muted-foreground"
               data-testid="plan-sheet-proposals-empty"
             >
-              {vm.today.length > 1
+              {toPlace.length > 1
                 ? "Pick something above, then draft a block for it."
                 : "Draft a block to try a time before you commit to it."}
             </p>
