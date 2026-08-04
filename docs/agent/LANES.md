@@ -22,8 +22,9 @@ surfaces — copies drift.
 | ADRs               | Durable architecture/product decisions                                    |
 | `PROJECT_STATE.md` | Materially changed shipped state                                          |
 
-`docs/agent/HANDOVER.md` is Claude-lane session continuity only — never a
-cross-lane communication bus.
+Session continuity lives in `docs/PROJECT_STATE.md` and `docs/program/` —
+never in per-session handover files (the former `docs/agent/HANDOVER.md`
+was deleted 2026-07-15), and never used as a cross-lane communication bus.
 
 ## Lane definitions
 

@@ -30,7 +30,6 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "README.md",
   "SECURITY.md",
   "PRODUCT.md",
-  "BUILD_BACKLOG.md",
   "EXTRA_INFO_AND_RULES.md",
   "docs/REQUIREMENTS.md",
   "docs/ARCHITECTURE.md",
@@ -88,6 +87,9 @@ const CANONICAL_ALLOWLIST_PATTERNS = [
   // Governing-program docs (owner mandate 2026-08-04: one truth store — the
   // active program lives in the repo, not in out-of-repo planning folders).
   /^docs\/program\/[^/]+\.md$/,
+  // Archived pilot-era docs (owner mandate 2026-08-04): historical, frozen,
+  // excluded from formatting; agents skip this folder.
+  /^docs\/_archive\/[^/]+\.md$/,
   /^\.agents\/skills\/.+\.md$/,
   /^\.cursor\/.+\.md$/,
   /^\.github\/.+\.md$/,

@@ -56,7 +56,7 @@ Slice issues cite these by ID. Violating one requires stopping work and recordin
 - **NS-INV-1 — One context-assembly choke point.** All personalization context injected into AI prompts (area charter, operator profile, rollups, people context) flows through a single assembly module. Later slices extend it; no slice wires its own prompt-context plumbing.
 - **NS-INV-2 — Additive-only schema within an epic.** No slice alters, renames, or repurposes a column/table introduced by an earlier slice of the same epic. Target schema shapes are specified up front in DATA_MODEL.md by the epic's contract slice; later slices only add.
 - **NS-INV-3 — Born instrumented.** Every new AI judgment surface writes `suggestion_records` / `override_records` (issue #235 vocabulary, stable policy identifiers) from its first merge. Trust-ladder graduation (D1) is impossible for surfaces that skipped this.
-- **NS-INV-4 — No new silent write paths.** New AI-generated artifacts follow the existing pattern: propose → validate against strict schema → user approval → persist. External writes stay approval-gated per AGENTS.md rule 1.
+- **NS-INV-4 — No new silent write paths.** New AI-generated artifacts follow the existing pattern: propose → validate against strict schema → user approval → persist. External writes stay approval-gated per AGENTS.md's calendar-approval invariant.
 - **NS-INV-5 — Binding touch manifests.** Each slice issue declares what it may touch (tables, packages, prompts, routes) and what it must not. Out-of-manifest changes require stopping and logging in the epic first.
 - **NS-INV-6 — Sequential execution.** One slice in flight at a time, relay-ordered via the pipeline manifest (epic #243 mechanics). No parallel slices on shared surfaces.
 - **NS-INV-7 — Frozen contracts.** Once a slice merges, its public contract (table columns, zod schemas, module signatures) is frozen for the remainder of the epic; changes require an epic decision-log entry and human approval.
@@ -65,7 +65,7 @@ Slice issues cite these by ID. Violating one requires stopping work and recordin
 
 ### D5. Process contract for stage epics
 
-Each stage runs as one epic issue that acts as the campaign file: frozen success criterion + check evidence, slice list with dependency order, append-only decision log (issue comments), and wrong-paths section. Slice 0 of every stage epic amends REQUIREMENTS.md / DATA_MODEL.md first (AGENTS.md rule 13) and gets human review — it is the contract all later slices build against. Stage 1's epic and slices are defined in the follow-up issues referencing this ADR.
+Each stage runs as one epic issue that acts as the campaign file: frozen success criterion + check evidence, slice list with dependency order, append-only decision log (issue comments), and wrong-paths section. Slice 0 of every stage epic amends REQUIREMENTS.md / DATA_MODEL.md first (AGENTS.md's docs-first invariant: scope expansion starts in `docs/REQUIREMENTS.md`, not code) and gets human review — it is the contract all later slices build against. Stage 1's epic and slices are defined in the follow-up issues referencing this ADR.
 
 ## Consequences
 

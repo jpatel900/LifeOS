@@ -1,3 +1,5 @@
+> **HISTORICAL (archived 2026-08-04).** The original V1 build-out ticket catalog — every phase here shipped months ago. Successor: `docs/PROJECT_STATE.md` for status and `docs/program/` for the governing program. Kept for provenance only.
+
 # BUILD_BACKLOG.md
 
 # Build Backlog — Area-Scoped Personal Workflow Cockpit

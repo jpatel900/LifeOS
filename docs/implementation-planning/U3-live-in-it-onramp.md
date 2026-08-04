@@ -1,3 +1,5 @@
+> **STATUS: SUPERSEDED — historical.** The open-ended live-in-it week was replaced by the owner's scripted U3 test plan (owner-held material). The U3 hour is now Phase F's second terminal key in `docs/program/final-ux-loop.md`.
+
 # U3 → live-in-it week: the on-ramp
 
 _The on-ramp for evidence-dependent behavior, not a blanket gate on all downstream engineering. This turns "populate real data" into a concrete, ordered path and names what each step lights up. Grounded in the actual surfaces (verified 2026-07-08, session 9; governance reconciled 2026-07-15). Keep it a brain-dump-and-go, not a planning ritual — the point is to start living in it, not to perfect the data._

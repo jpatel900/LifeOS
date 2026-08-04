@@ -48,6 +48,10 @@ const ALLOWLISTED_LITERALS = new Set([
   // supabase/seed.sql for local Phase 4A smoke tests only, never a real
   // mailbox (uses the RFC 2606 reserved `.test` TLD).
   "user_a@example.test",
+  // Second seeded local test user, quoted in the archived Cursor cloud
+  // skill (docs/_archive/cursor-cloud-agent-starter-SKILL.md) — same fake
+  // `.test` TLD, never a real mailbox.
+  "user_b@example.test",
 ]);
 
 const IGNORED_SCAN_DIRECTORIES = new Set([

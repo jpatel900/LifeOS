@@ -1,3 +1,5 @@
+> **STATUS: RATIFIED INTO ADR 0004 (2026-07-05) — historical.** This plan's mechanism shipped: registry, guards (CO-1..CO-7), and `docs/adr/0004-coherence-framework.md`. The contradictions it narrates as open (C-0A FR numbering, C-0B token vocabulary) were RESOLVED by the ADR the same week. Do not re-open them from this file.
+
 # Plan — System Coherence Framework (the standing mechanism that keeps the corpus aligned)
 
 Status: Preserved strategic planning artifact (READ-ONLY), not current status or implementation authority. The shipped decision now lives in ADR 0004 and the implemented registries/guards; remaining feature ideas stay eligible for one-by-one disposition under ADR 0005. Author role: System Coherence Architect. Owner: jpatel900.

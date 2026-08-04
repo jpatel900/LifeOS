@@ -1,8 +1,8 @@
-# ADR 0002: GitHub automation control-plane safety
+# ADR 0007: GitHub automation control-plane safety
 
 ## Status
 
-Accepted
+Accepted. Renumbered from a duplicate "ADR 0002" on 2026-08-04 (two ADRs shared the number; every bare "ADR 0002" citation in this repo means the north-star ADR, so this one moved). Decision text unchanged.
 
 ## Context
 

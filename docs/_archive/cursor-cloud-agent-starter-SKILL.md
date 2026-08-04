@@ -1,3 +1,5 @@
+> **HISTORICAL (archived 2026-08-04).** Written 2026-05-07 when the repo was documentation-only; its claims (no app, no package.json) and its `pnpm --filter web` commands are wrong for the current repo. Successor: `.cursor/cursor-cloud.md` (environment facts) + `AGENTS.md` (rules).
+
 ---
 name: cloud-agent-starter
 description: Use this skill when a Cloud agent needs to run, test, or manually verify the Area-Scoped Personal Workflow Cockpit codebase.

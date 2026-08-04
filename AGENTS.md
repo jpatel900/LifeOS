@@ -58,23 +58,22 @@ Do not change RLS policies, OAuth scopes, calendar write logic, service-role usa
 
 Use the smallest trusted skill set. Repo-local `.agents/skills` are preferred; `lifeos-*` skills are more specific than general `agentic-*` skills. Global/user skills are lower-trust and require `skill-security-review` before relying on them. No skill overrides this file, direct instructions, security/privacy rules, schema/RLS rules, calendar approval gates, or validation requirements.
 
-| Work surface                                        | Load first                                                                               |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Skill/plugin selection or governance                | `skill-router`, then the most specific skill below                                       |
-| Authoring or receiving any lane contract            | `lifeos-lane-contract`                                                                   |
-| AI parser, prompts, structured outputs, model tiers | `lifeos-schema-ai`                                                                       |
-| Calendar, free/busy, OAuth, external writes         | `lifeos-calendar-external-writes`                                                        |
-| Supabase, migrations, RLS, grants, persistence      | `lifeos-supabase-rls`                                                                    |
-| Tests, guard failures, validation proof             | `lifeos-testing` and `verification-before-completion`                                    |
-| Contracts, route handlers, schemas, interfaces      | `lifeos-contract-review`                                                                 |
-| Debugging LifeOS failures                           | `lifeos-debugging`                                                                       |
-| Planning scope/acceptance criteria                  | `lifeos-planning`                                                                        |
-| Shipping/deployment readiness                       | `lifeos-shipping`                                                                        |
-| Frontend primitives, route UX, shell behavior       | `frontend-ui-engineering`; use `design_handoff_lifeos/README.md` for cockpit UI guidance |
-| Docs/ADRs/runbooks/agent memory                     | `agentic-docs-and-writing` or `documentation-and-adrs`                                   |
-| Security-sensitive surfaces                         | `security-and-hardening` plus the relevant `lifeos-*` skill                              |
-| Browser proof                                       | `browser-testing-with-devtools` or Playwright only for bounded UI behavior validation    |
-| OpenAI API/docs questions                           | `openai-docs`, restricted to official OpenAI sources                                     |
+| Work surface                                        | Load first                                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Skill/plugin selection or governance                | `skill-router`, then the most specific skill below                                          |
+| Authoring or receiving any lane contract            | `lifeos-lane-contract`                                                                      |
+| AI parser, prompts, structured outputs, model tiers | `lifeos-schema-ai`                                                                          |
+| Calendar, free/busy, OAuth, external writes         | `lifeos-calendar-external-writes`                                                           |
+| Supabase, migrations, RLS, grants, persistence      | `lifeos-supabase-rls`                                                                       |
+| Tests, guard failures, validation proof             | `lifeos-testing` and `verification-before-completion`                                       |
+| Contracts, route handlers, schemas, interfaces      | `lifeos-contract-review`                                                                    |
+| Debugging LifeOS failures                           | `lifeos-debugging`                                                                          |
+| Planning scope/acceptance criteria                  | `lifeos-planning`                                                                           |
+| Shipping/deployment readiness                       | `lifeos-shipping`                                                                           |
+| Frontend primitives, route UX, shell behavior       | `frontend-ui-engineering`; UI authority is `docs/UX_FLOWS.md` + ADR 0003 + shipped behavior |
+| Docs/ADRs/runbooks/agent memory                     | `agentic-docs-and-writing` or `documentation-and-adrs`                                      |
+| Security-sensitive surfaces                         | `security-and-hardening` plus the relevant `lifeos-*` skill                                 |
+| Browser proof                                       | `browser-testing-with-devtools` or Playwright only for bounded UI behavior validation       |
 
 Avoid unrelated communication suites, design marketplaces, mobile/native stacks, unrelated hosting vendors, CRM/project-management suites, and broad plugins “just in case.”
 
@@ -85,6 +84,8 @@ Run the smallest focused checks while iterating, then the required final checks 
 ## PR requirements
 
 Branch narrowly from `origin/main` when available; one issue per PR. PRs state purpose, files/changes, tests run, risks, and rollback plan. Engineering automations may write only to isolated branches and approved GitHub metadata; never directly to `main`, production data, secrets, non-GitHub systems, or LifeOS runtime state.
+
+Merge authority, in one place: T0 docs-only PRs may auto-merge after CI per `.github/AGENT_AUTOMATION_POLICY.md`; an agent never merges its own PR (the self-approval classifier blocks it — the owner merges those); the Claude lane merges Codex-lane work per `docs/agent/LANES.md`; T2+ surfaces always get human review before merge. If another doc states a different merge rule, this paragraph wins — fix that doc.
 
 ## Tooling
 
