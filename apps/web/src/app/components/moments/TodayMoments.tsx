@@ -1389,9 +1389,11 @@ export function TodayMoments({
       <PlanSheet
         open={activeSheet === "plan"}
         onClose={() => closeSheet()}
+        selectedAreaId={selectedAreaId}
         blocks={startVM.blocks}
         timeDisplay={timeDisplay}
         now={now}
+        onToast={showToast}
       />
 
       <EndSessionSheet
