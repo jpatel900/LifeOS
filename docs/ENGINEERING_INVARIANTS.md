@@ -36,9 +36,11 @@ Every cockpit state rendered by `apps/web/src/lib/cockpit/viewModel.ts` or `apps
 
 Enforcement: `apps/web/src/__tests__/sourceOfTruth.test.ts` fails if cockpit model tests call model builders directly outside the reachability helper; journey tests reuse the helper's golden capture → triage → plan → approve → execute → review seed.
 
-## INV-6 — Degradation visibility (open)
+## INV-6 — Degradation visibility
 
-Repeated external-provider failures (AI parse, calendar) must surface as Health incidents, not only observability logs. Status: NOT yet wired — tracked in `docs/KNOWN_ISSUES.md`. Do not claim it; do close it.
+Repeated external-provider failures (AI parse, calendar) must surface as Health incidents, not only observability logs.
+
+Enforcement: deterministic provider-incident derivation from `ai_call_traces` in `apps/web/src/lib/data/health.ts`, covered by `apps/web/src/lib/data/health.test.ts` (wired 2026-07-13 — issue #535 / PR #545; `docs/KNOWN_ISSUES.md` row 3 records the closure).
 
 ## INV-7 — CI tells the truth
 
@@ -103,7 +105,7 @@ The invariants below are defined in `docs/adr/0002-north-star-stages-and-trust-l
 
 All personalization context injected into AI prompts (area charter, operator profile, rollups, people context) flows through a single assembly module: `apps/web/src/lib/ai/contextAssembly.ts` (alongside the existing `parseCapture` modules). No slice wires its own prompt-context plumbing.
 
-Enforcement: (target, slice S2) a guard test asserting no prompt-construction code imports charter/profile/rollup/people context outside `contextAssembly.ts`. Status: NOT yet wired — the module and its guard test do not exist yet; this entry names the frozen path so later slices land in the same place. Do not claim it enforced until the guard test merges.
+Enforcement: WIRED — the module exists (`apps/web/src/lib/ai/contextAssembly.ts`, with `contextAssembly.test.ts`, `contextAssembly.budget.test.ts`, `contextAssembly.rollupProse.test.ts`) and `apps/web/src/__tests__/contextAssemblyChokePoint.test.ts` guards the choke point. INV-9's fixture-budget guard builds on this module.
 
 ### NS-INV-2 — Additive-only schema within an epic
 

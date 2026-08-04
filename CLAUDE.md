@@ -23,7 +23,7 @@ Run from the repo root after `pnpm install`. Node 22 (`.nvmrc`), pnpm workspaces
 | `pnpm build`                        | Build all workspaces                        |
 | `pnpm format` / `pnpm format:check` | Prettier                                    |
 
-Scale validation to the change. Docs-only work needs doc/guard tests and formatting; code changes normally need lint, type-check, tests, and build. E2E runs through `pnpm --filter @lifeos/web test:e2e`. Supabase RLS tests are opt-in with `RUN_SUPABASE_RLS_TESTS=1` and local Supabase env values.
+Scale validation to the change. Docs-only work needs doc/guard tests and formatting; code changes normally need format:check, lint, type-check, tests, and build (`pnpm format:check` is a blocking CI step — do not skip it locally). E2E runs through `pnpm --filter @lifeos/web test:e2e`. Supabase RLS tests are opt-in with `RUN_SUPABASE_RLS_TESTS=1` and local Supabase env values.
 
 ## Architecture snapshot
 
