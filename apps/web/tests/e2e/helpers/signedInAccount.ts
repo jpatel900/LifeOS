@@ -212,6 +212,22 @@ export interface AccountClient {
   rows: <T = Record<string, unknown>>(path: string) => Promise<T[]>;
   /** `delete` from `table` for this user only. Fails on non-2xx. */
   purge: (table: string) => Promise<void>;
+  /**
+   * `insert` rows into `table` with this user's own JWT, returning them.
+   *
+   * C2-S3 added this for the columns that have **no UI writer at all**: the
+   * S3 people/commitment columns (`waiting_on_person_id`, `waiting_on_since`,
+   * `is_commitment`) exist to be READ by the review surface and are set by
+   * paths outside it. Seeding them here proves the render against real account
+   * rows under real RLS, which is the claim; it is never used to stand in for
+   * a write the app itself performs (those are always driven through the UI).
+   */
+  insert: <T = Record<string, unknown>>(
+    table: string,
+    rows: Record<string, unknown>[],
+  ) => Promise<T[]>;
+  /** `patch` rows matching `path` (e.g. `tasks?id=eq.x`). Fails on non-2xx. */
+  patch: (path: string, body: Record<string, unknown>) => Promise<void>;
 }
 
 export async function accountClient(
@@ -237,6 +253,41 @@ export async function accountClient(
         );
       }
       return JSON.parse(body) as T[];
+    },
+    async insert<T = Record<string, unknown>>(
+      table: string,
+      rows: Record<string, unknown>[],
+    ): Promise<T[]> {
+      const response = await page.request.post(`${env.url}/rest/v1/${table}`, {
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        data: rows,
+      });
+      const body = await response.text();
+      if (!response.ok()) {
+        throw new Error(
+          `PostgREST POST ${table} failed ${response.status()}: ${body}`,
+        );
+      }
+      return JSON.parse(body) as T[];
+    },
+    async patch(path: string, body: Record<string, unknown>): Promise<void> {
+      const response = await page.request.patch(`${env.url}/rest/v1/${path}`, {
+        headers: {
+          ...headers,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        data: body,
+      });
+      if (!response.ok()) {
+        throw new Error(
+          `PostgREST PATCH ${path} failed ${response.status()}: ${await response.text()}`,
+        );
+      }
     },
     async purge(table: string): Promise<void> {
       const response = await page.request.delete(

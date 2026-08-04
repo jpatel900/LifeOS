@@ -136,7 +136,7 @@ describe("ReviewSheet — the ported Review surface", () => {
     const rows = screen.getAllByTestId(/^review-sheet-decision-/);
     expect(rows).toHaveLength(3);
     expect(screen.getByTestId("review-sheet-headline").textContent).toBe(
-      "3 need a decision",
+      "3 open items need a decision",
     );
   });
 

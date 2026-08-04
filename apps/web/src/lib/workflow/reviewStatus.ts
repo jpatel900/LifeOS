@@ -269,8 +269,17 @@ export function hasPlanToCompare(session: Phase2MockExecutionSession): boolean {
  *
  * Never "carry over": see the module note above — that phrasing claims every
  * still-open item, and a `scheduled` task is still open and not in this list.
+ *
+ * It names its SET, not just its size, and that is load-bearing. The moments
+ * Pipeline rail's **Review** node counts a different thing on purpose —
+ * today's finished and missed blocks, captioned "how today went"
+ * (`pipelineCounts.ts`, C1-ratified) — and it is the control that opens this
+ * surface. So a reader can arrive from a badge reading `0 Review` and find
+ * items listed here. Two numbers about one thing would be a contradiction;
+ * two sentences about two clearly-named things is not, and the only way to
+ * tell them apart from the strings alone is for this one to say what it counts.
  */
 export function needsDecisionHeadline(count: number): string {
   if (count === 0) return "Ready to close";
-  return `${count} ${count === 1 ? "needs" : "need"} a decision`;
+  return `${count} open ${count === 1 ? "item needs" : "items need"} a decision`;
 }

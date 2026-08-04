@@ -115,8 +115,17 @@ describe("what needs a decision has one answer (C2-S3)", () => {
       expect(needsDecisionHeadline(count)).not.toMatch(/carry over/i);
     }
     expect(needsDecisionHeadline(0)).toBe("Ready to close");
-    expect(needsDecisionHeadline(1)).toBe("1 needs a decision");
-    expect(needsDecisionHeadline(3)).toBe("3 need a decision");
+    expect(needsDecisionHeadline(1)).toBe("1 open item needs a decision");
+    expect(needsDecisionHeadline(3)).toBe("3 open items need a decision");
+  });
+
+  it("names its set, so the Pipeline rail's differently-scoped Review node cannot be read as the same number", () => {
+    // The rail counts today's finished/missed blocks ("how today went"); this
+    // counts standing open work. A reader must be able to tell the two apart
+    // from the strings alone.
+    for (const count of [1, 4]) {
+      expect(needsDecisionHeadline(count)).toMatch(/open item/);
+    }
   });
 
   it("scopes to one area, and answers nothing for no area", () => {
