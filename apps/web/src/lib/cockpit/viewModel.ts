@@ -16,6 +16,7 @@ import {
 } from "@/lib/agingRules";
 import { cardBg } from "./accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
+import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
 
 export type CockpitStage =
   | "today"
@@ -159,6 +160,33 @@ function makePipelineCard(
   };
 }
 
+/**
+ * C2-S2 / FINDING 3: the same calendar-day test `pipelineCounts.ts` uses for
+ * its Plan node. Local-calendar-day, not UTC — a block is "on today's rail"
+ * exactly when the rail would draw it.
+ */
+function isSameCalendarDay(value: string, now: Date) {
+  const date = new Date(value);
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
+function hasOpenBlockToday(
+  state: WorkflowState,
+  taskId: string,
+  now: Date,
+): boolean {
+  return state.calendarBlocks.some(
+    (block) =>
+      block.task_id === taskId &&
+      ["scheduled", "running"].includes(block.status) &&
+      isSameCalendarDay(block.start_at, now),
+  );
+}
+
 function uniqueReviewItems(
   items: CockpitViewModel["reviewQueue"],
 ): CockpitViewModel["reviewQueue"] {
@@ -176,6 +204,11 @@ export function buildCockpitViewModel(
   dark: boolean,
   agingOptions: AgingRulesOptions = {},
 ): CockpitViewModel {
+  // C2-S2 / FINDING 3: the Plan chip is now day-scoped, so it needs a clock.
+  // Reuses the options bag the aging rules already inject `now` through
+  // (`AgingRulesOptions.now`) rather than adding a second clock parameter, so
+  // every existing caller and test keeps its single source of "now".
+  const now = agingOptions.now ?? new Date();
   // #691: ONE active-area resolver shared with the moments home's accent
   // derivation (#701) — this used to be an inline second copy of the same
   // `find ?? areas[0]` rule, which is exactly how two screens drift apart.
@@ -378,10 +411,33 @@ export function buildCockpitViewModel(
     global,
     counts: {
       today: today.length,
-      capture: state.captureItems.filter((item) => item.area_id === areaId)
-        .length,
+      // C2-S2 / FINDING 4 (#687 C2-S1 inventory): this filtered by AREA ONLY.
+      // It counted resolved, archived and composted thoughts as still waiting,
+      // and it counted a thought an accepted task already came from. Both are
+      // the exact lies `lib/workflow/captureStatus` exists to make impossible,
+      // and the extra `status === "new"` narrowing is the moments Capture
+      // badge's own long-standing semantics (`pipelineCounts.ts`): once a
+      // thought is sorted it is counted by Triage instead, never twice. Pinned
+      // by `lib/workflow/captureStatus.test.ts`'s UNSORTED_SURFACES table, so
+      // this chip can never drift away from the other five surfaces again.
+      capture: selectUnsortedCaptures(state, areaId).filter(
+        (item) => item.status === "new",
+      ).length,
       triage: inbox.length,
-      plan: today.length,
+      // C2-S2 / FINDING 3 (#687 C2-S1 inventory): this was `today.length` —
+      // the ACTIVE-task count under a label that reads as "things planned".
+      // The inventory ratified `pipelineCounts.ts`'s semantics as the truthful
+      // ones: what is left TO plan is an active task that does not already
+      // hold an open block on today's rail. Same shape as
+      // `buildPipelineCounts`' `doTodayUnplacedTasks`, so the legacy chip and
+      // the moments Plan node answer with the same number (pinned by
+      // `__tests__/cockpitStageChipTruth.test.ts`).
+      plan: today.filter((task) => !hasOpenBlockToday(state, task.id, now))
+        .length,
+      // Deliberately unchanged by this slice: `execute` is day-unscoped but
+      // does count blocks (the inventory called it "roughly honest"), and
+      // `review`'s disagreement with `/review`'s own headline is FINDING 5,
+      // which belongs to the C2-S3 Review port, not here.
       execute: planned.length,
       review: reviewQueue.length + sessions.length,
     },
