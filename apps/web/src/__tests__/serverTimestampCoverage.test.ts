@@ -136,6 +136,73 @@ function tablesDeclaringCreatedAt(sql: string): string[] {
   ];
 }
 
+// Fix 23514: a resolved-state timestamp (`resolved_at`) that a client stamps
+// at INSERT time alongside a server-forced `created_at` always loses the race
+// — the server's created_at override lands after the round trip that already
+// captured the client's resolved_at, so resolved_at ends up earlier than
+// created_at and the table's `resolved_at >= created_at` check constraint
+// fails with 23514. Migration 20260803120000 closes this for
+// `suggestion_records` the same way 20260704160000 closed it for created_at:
+// a BEFORE INSERT trigger forces resolved_at to the server's now() too, for
+// any table that carries this exact column shape. This guard locks that
+// coverage in and sounds a drift alarm if a future table adds its own
+// client-stamped resolved-state timestamp without the same protection.
+const EXPECTED_RESOLVED_AT_TABLES = ["suggestion_records"];
+
+function tablesWithResolvedAtInCreateBlock(sql: string): string[] {
+  return createTableBlocks(sql)
+    .filter(({ body }) => /\bresolved_at\b/i.test(body))
+    .map(({ name }) => name);
+}
+
+// Mirrors tablesAddingCreatedAtViaAlter: a resolved_at introduced later via
+// ALTER must still be discovered so it cannot silently slip the create-table-
+// only scan.
+function tablesAddingResolvedAtViaAlter(sql: string): string[] {
+  const names = new Set<string>();
+
+  for (const rawStatement of sql.split(";")) {
+    const statement = normalizeWhitespace(rawStatement).toLowerCase();
+    const nameMatch = statement.match(
+      /alter table (?:if exists )?(?:only )?public\.([a-z0-9_]+)\b/,
+    );
+
+    if (
+      nameMatch &&
+      /\badd column (?:if not exists )?resolved_at\b/.test(statement)
+    ) {
+      names.add(nameMatch[1]);
+    }
+  }
+
+  return [...names];
+}
+
+function tablesDeclaringResolvedAt(sql: string): string[] {
+  return [
+    ...new Set([
+      ...tablesWithResolvedAtInCreateBlock(sql),
+      ...tablesAddingResolvedAtViaAlter(sql),
+    ]),
+  ];
+}
+
+// Names of tables that declare a `resolved_at` column but lack a covering
+// server-authoritative BEFORE INSERT trigger forcing it server-side when set.
+function uncoveredResolvedAtTables(sql: string): string[] {
+  const normalized = normalizeWhitespace(sql).toLowerCase();
+
+  return tablesDeclaringResolvedAt(sql).filter((name) => {
+    const trigger = new RegExp(
+      `create trigger [a-z0-9_]+ before insert(?: or update)? on public\\.${name} ` +
+        `for each row execute (?:function|procedure) ` +
+        `public\\.set_server_resolved_at\\(\\)`,
+    );
+
+    return !trigger.test(normalized);
+  });
+}
+
 // Names of tables that declare a `created_at` column but lack a covering
 // server-authoritative BEFORE INSERT trigger.
 function uncoveredCreatedAtTables(sql: string): string[] {
@@ -237,5 +304,64 @@ describe("server-authoritative created_at coverage", () => {
     `;
 
     expect(uncoveredCreatedAtTables(covered)).toEqual([]);
+  });
+});
+
+describe("server-authoritative resolved_at coverage (fix 23514)", () => {
+  it("covers every resolved_at table with a set_server_resolved_at BEFORE INSERT trigger", () => {
+    const uncovered = uncoveredResolvedAtTables(loadAllMigrationsSql());
+
+    expect(
+      uncovered,
+      `Tables declaring resolved_at without a set_server_resolved_at BEFORE ` +
+        `INSERT trigger: ${uncovered.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("discovers exactly the known resolved_at tables (drift alarm on new tables)", () => {
+    const discovered = tablesDeclaringResolvedAt(loadAllMigrationsSql()).sort();
+
+    expect(discovered).toEqual([...EXPECTED_RESOLVED_AT_TABLES].sort());
+  });
+
+  it("has teeth: reports an uncovered resolved_at table (negative control)", () => {
+    const forged = `
+      create table public.forged_y (
+        id uuid primary key,
+        user_id uuid not null,
+        created_at timestamptz not null default now(),
+        resolved_at timestamptz
+      );
+    `;
+
+    expect(uncoveredResolvedAtTables(forged)).toEqual(["forged_y"]);
+  });
+
+  it("accepts a properly covered resolved_at table (positive control)", () => {
+    const covered = `
+      create table public.covered_y (
+        id uuid primary key,
+        created_at timestamptz not null default now(),
+        resolved_at timestamptz
+      );
+      create trigger covered_y_set_server_resolved_at
+        before insert on public.covered_y
+        for each row execute function public.set_server_resolved_at();
+    `;
+
+    expect(uncoveredResolvedAtTables(covered)).toEqual([]);
+  });
+
+  it("has teeth for an ALTER-added resolved_at: reports it uncovered (negative control)", () => {
+    const forged = `
+      create table public.altered_y (
+        id uuid primary key,
+        user_id uuid not null
+      );
+      alter table public.altered_y
+        add column resolved_at timestamptz;
+    `;
+
+    expect(uncoveredResolvedAtTables(forged)).toEqual(["altered_y"]);
   });
 });
