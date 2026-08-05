@@ -35,7 +35,7 @@ Phase F  CLOSE        (owner)    Full re-audit (all 11) + owner U3 hour = the on
 - **R4 (kills #1):** Every campaign PR carries the experience gate: the implementing lane drives the flow, screenshots it, and judges feel — and the closing re-score is done by a DIFFERENT agent (implementer never grades their own work).
 - **R5 (kills #5):** All scoring happens at the running-build tier, desktop + 390px mobile. File reads prove nothing about experience. Prod-only defects count double — they're what the owner actually hits.
 - **R6 (kills #6):** Dependency order is law: Structure → Truth → Flow → Polish. Polish campaigns are LAST and have an explicit entry condition (all structural/truth campaigns closed), so the thaw is defined, not vibes.
-- **R7 (standing):** One implementation lane at a time; read-only audit/score lanes may run in parallel. All existing repo rules (lane playbook, guards sacred, plain-language pin) apply unchanged.
+- **R7 (amended by owner 2026-08-05; was "one implementation lane at a time"):** Concurrent implementation lanes are allowed when each lane has claimed its issue and declared a file manifest, and the manifests are disjoint (overlap → COLLISION protocol in `docs/agent/LANES.md`; second lane waits or renegotiates). Hot-file surfaces (the LANES.md red zones plus any files two campaigns both touch) stay single-lane. Merges still serialize through the queue — CI and the Main Red Guard own integration truth. Within one lane, a driver may parallelize its own subagents freely inside the lane's manifest. Read-only audit/score lanes remain unrestricted. All other repo rules (lane playbook, guards sacred, plain-language pin) apply unchanged.
 - **R8 (scope honesty):** New feature work is frozen while the program runs, except: 737-A durability slices (they ARE the Trust dimension's campaign) and P0 production incidents. Anything else queues behind Phase F.
 
 ## 4. Campaigns (final composition, set by the Phase 0 scorecard and the ratified Target Cards)
@@ -54,7 +54,7 @@ Ordered by dependency, not by score. (An earlier draft of this section listed se
 1. **Ratify the Target Card** — DONE 2026-07-26 (targets locked: Trust 10, rest 9; legacy screens = port all four; settings door = require sign-in).
 2. **Per-campaign close sign-off** — a 5-minute glance at the re-score evidence, not a work session.
 3. **Standing decision still open:** onboarding ritual content (gates C3 close only).
-4. **U3 hour** — Phase F's second key. Cannot be delegated.
+4. **U3 hour** — Phase F's second key. Cannot be delegated. Precondition (recorded 2026-08-05, previously owner-folder-only): the scripted U3 test plan in the owner's plans folder predates the C2 legacy-screen ports — it needs a refresh pass against the current build before the hour is run.
 
 ## 6. Program state (live — update at every checkpoint; newest first)
 

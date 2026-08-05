@@ -1050,10 +1050,10 @@ Non-goals (binding):
 - Auto-drafted demotion proposals for unused surfaces ("hide, not delete"), driven off Mirror data — reserved for a future FR once a trust-ledger primitive is ratified; this contract makes Mirror read-only/observational, not an actuator. <!-- source: vision-fable-final-pass.md §2c "teeth" paragraph; docs/vision/vision-execution-companion.md item 4 "Trust Kernel" (feature-demotion listed as a still-unbuilt ladder) -->
 - Expanding the proxy-gauge set beyond the four named above without an owner ADR. <!-- source: pattern established by FR-033 non-goals ("without an owner ADR") -->
 
-Open questions (owner):
+Decided (owner, 2026-07-23 backlog sitting; written back 2026-08-05 — these were stranded in a superseded planning file):
 
-- Minimum sample count (or calendar window) before the purpose-gauge trend renders as a line rather than the not-enough-data state?
-- Should the four proxy gauges be individually hideable, or is the fixed four-gauge set itself the doctrine (no partial views)?
+- Minimum sample count before a trend renders as a line: **3** (shipped default).
+- The fixed four-gauge set is the doctrine — gauges are **not** individually hideable (no partial views).
 
 ---
 
@@ -1084,11 +1084,11 @@ Non-goals (binding):
 - Time-conditioned reminders ("remind me at 3pm") — those are ordinary calendar/task rows already covered elsewhere; Triggers are context-conditioned only. <!-- source: vision-fable-final-pass.md §3a ("Time triggers are calendar rows; context triggers have no home in any commercial tool") -->
 - Any ambient-clock read inside the matching/expiry policy kernel itself. <!-- source: established repo doctrine — compostPolicy.ts / rupturePolicy.ts caller-supplied-time pattern -->
 
-Open questions (owner):
+Decided (owner, 2026-07-23 backlog sitting; written back 2026-08-05 — these were stranded in a superseded planning file):
 
-- Is `expires_at` required at declaration, or does an undeclared expiry get a system default horizon (and if so, what default)?
-- Does `date_window` overlap with existing calendar/time-block rows, or is it strictly for windows that don't warrant a calendar entry (e.g., "sometime next month")?
-- `manual_review` is named in the schema but its firing cadence isn't specified in the vision artifact beyond "surface in brief" — fire on every brief render until resolved, or on some other cadence?
+- `expires_at`: an undeclared expiry gets a system default horizon of **90 days**.
+- `date_window` is **strictly for windows that don't warrant a calendar entry** (e.g., "sometime next month") — it never overlaps calendar/time-block rows.
+- `manual_review` fires **once per local day** while unresolved, not on every brief render.
 
 ---
 
