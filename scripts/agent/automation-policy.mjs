@@ -1,4 +1,24 @@
 export const SAFE_AUTOMERGE_REQUIRED_LABELS = ["automerge:safe", "risk:low"];
+
+// ADR 0008 move 1b (owner-ratified 2026-08-04): strictly-additive test-only
+// PRs may ride the safe auto-merge lane under their own label. "Strictly
+// additive" is machine-checked in check-safe-automerge.mjs: every changed
+// file matches these patterns AND the diff contains zero deleted lines
+// (renames, deletions, and binary changes disqualify). A new test cannot
+// weaken an existing assertion; CI still gates the merge.
+export const ADDITIVE_TESTS_LABEL = "automerge:tests-additive";
+export const ADDITIVE_TESTS_REQUIRED_LABELS = [
+  ADDITIVE_TESTS_LABEL,
+  "risk:low",
+];
+export const ADDITIVE_TESTS_ALLOWED_PATH_PATTERNS = [
+  "apps/web/src/__tests__/**",
+  "apps/web/tests/e2e/**",
+  "apps/**/*.test.ts",
+  "apps/**/*.test.tsx",
+  "packages/**/*.test.ts",
+  "packages/**/*.test.tsx",
+];
 export const SAFE_AUTOMERGE_BLOCKING_LABELS = [
   "risk:medium",
   "risk:high",
@@ -142,6 +162,10 @@ function compilePatterns(patterns) {
 const POLICY_DEFS = {
   "safe-automerge": {
     allowed: compilePatterns(SAFE_AUTOMERGE_ALLOWED_PATH_PATTERNS),
+    forbidden: compilePatterns(HIGH_RISK_PATH_PATTERNS),
+  },
+  "additive-tests": {
+    allowed: compilePatterns(ADDITIVE_TESTS_ALLOWED_PATH_PATTERNS),
     forbidden: compilePatterns(HIGH_RISK_PATH_PATTERNS),
   },
   "low-risk": {
