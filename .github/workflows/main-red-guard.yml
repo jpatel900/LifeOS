@@ -3,10 +3,22 @@ name: Main Red Guard
 # Safety net for merging PRs without the strict up-to-date requirement:
 # if CI fails on a push to main (e.g. two individually-green PRs conflict
 # semantically), first retry the failed jobs once (flake guard). If the
-# failure reproduces, open a revert PR back to the last green commit and
-# arm auto-merge on it — it lands on its own once its checks pass, so
-# recovery needs no human in the loop. Closing the guard PR cancels the
-# revert when a forward fix is preferred.
+# failure reproduces, open a revert PR back to the last green commit.
+#
+# Owner decision 2026-08-05 — "notify and hold + automatic stand-down + a
+# diagnosis step": the revert PR is NEVER auto-armed. On 2026-08-05 the guard
+# armed PR #841 against 5 commits (an app re-land plus 4 docs-only commits)
+# over what the evidence said was tier nondeterminism; only the revert's own
+# coincidentally-red CI stopped it from landing. So now:
+#   - the revert PR opens HELD; nothing merges until a human adds
+#     `revert:confirm` (closing the PR still cancels the revert),
+#   - a diagnosis step reads every attempt of the failed run and says, in
+#     plain language, whether the change or the environment is suspect,
+#   - if the revert's own CI fails the SAME job that made main red, the guard
+#     stands down on its own: `revert:wont-fix` + a comment, and it disarms
+#     auto-merge if a human had already confirmed.
+# Detection is unchanged: double-red still triggers, and both safe-automerge
+# demotion jobs below are untouched.
 
 on:
   workflow_run:
@@ -17,6 +29,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - labeled
 
 concurrency:
   group: main-red-guard-${{ github.event.workflow_run.head_sha || github.sha }}
@@ -51,7 +66,7 @@ jobs:
           echo "Red main at attempt 1: re-ran failed jobs. Only a reproduced failure (attempt 2+) triggers the auto-revert."
 
   guard:
-    name: Open auto-merging revert PR when main stays red
+    name: Open a HELD revert PR when main stays red
     runs-on: ubuntu-latest
     if: >-
       github.event.workflow_run.conclusion == 'failure' &&
@@ -115,6 +130,7 @@ jobs:
 
       - name: Create revert branch and PR
         if: steps.dedupe.outputs.skip != 'true'
+        id: revert
         env:
           GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
           GREEN_SHA: ${{ steps.green.outputs.sha }}
@@ -147,15 +163,104 @@ jobs:
               --base main \
               --head "$branch" \
               --title "Auto-revert: main went red at ${short}" \
-              --body "$(printf 'CI failed on main twice (original + flake-guard retry): %s\n\nThis PR reverts main back to the last green commit `%s` and has auto-merge armed — it lands on its own once its checks pass. **Close this PR to cancel the revert** if a forward fix is faster.\n\nReverted commits:\n```\n%s\n```\n\nOpened automatically by Main Red Guard.' "$RUN_URL" "${base:0:8}" "$commits")")"
-            gh pr merge --squash --auto "$pr_url" \
-              || gh pr comment "$pr_url" --body "Auto-merge could not be armed (likely missing CODEX_KICK_TOKEN or checks not reporting on this PR). Merge manually to restore green."
+              --body "$(printf 'CI failed on main twice (original + flake-guard retry): %s\n\nThis PR reverts main back to the last green commit `%s`.\n\n**This revert is HELD — nothing merges until a human adds the `revert:confirm` label. Close this PR to cancel the revert.**\n\nBefore confirming, read the diagnosis comment below: it says whether the failure looks like the change or like a flaky test tier. If this revert PR fails the same job that made main red, the guard labels it `revert:wont-fix` and a revert cannot fix main.\n\nReverted commits:\n```\n%s\n```\n\nOpened automatically by Main Red Guard (owner decision 2026-08-05: notify and hold + automatic stand-down + a diagnosis step).' "$RUN_URL" "${base:0:8}" "$commits")")"
+            echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
           else
             git revert --abort || true
             gh issue create \
               --title "main is red at ${short} and auto-revert could not apply" \
               --body "$(printf 'CI failed on main: %s\n\nAutomatic revert of `%s..%s` hit conflicts, so no revert PR was opened. Manual intervention needed.\n\nCommits since last green:\n```\n%s\n```' "$RUN_URL" "${base:0:8}" "$short" "$commits")"
           fi
+
+      # Diagnosis is advisory: it must never stop the revert PR from existing,
+      # so both steps are continue-on-error AND the script exits 0 on its own
+      # failures, degrading to "diagnosis unavailable: <reason>".
+      - name: Set up Node.js for the diagnosis step
+        if: steps.dedupe.outputs.skip != 'true' && steps.revert.outputs.pr_url != ''
+        continue-on-error: true
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          # dependency-free script, same as the policy self-test job
+          package-manager-cache: false
+
+      - name: Diagnose the red and post it on the held revert PR
+        if: steps.dedupe.outputs.skip != 'true' && steps.revert.outputs.pr_url != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          node scripts/agent/red-guard-diagnose.mjs \
+            --diagnose \
+            --repo "${{ github.repository }}" \
+            --pr "${{ steps.revert.outputs.pr_url }}" \
+            --run-id "${{ github.event.workflow_run.id }}"
+
+  confirm-to-arm:
+    name: Arm auto-merge when a human confirms the revert
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'revert:confirm' &&
+      startsWith(github.event.pull_request.head.ref, 'guard/revert-main-')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          package-manager-cache: false
+
+      # Arms only when `revert:confirm` is present and `revert:wont-fix` is
+      # absent; the conflicting-label case gets an explaining comment instead.
+      - name: Evaluate the confirmation
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+        run: |
+          node scripts/agent/red-guard-diagnose.mjs \
+            --confirm-arm \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}"
+
+  stand-down:
+    name: Stand down when the revert does not fix main
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      startsWith(github.event.workflow_run.head_branch, 'guard/revert-main-')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          package-manager-cache: false
+
+      - name: Compare the revert's failures with the failures that reddened main
+        env:
+          GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          pr="$(gh pr list --repo "${{ github.repository }}" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number')"
+          if [ -z "$pr" ]; then
+            echo "No open guard revert PR for ${HEAD_BRANCH}; nothing to stand down."
+            exit 0
+          fi
+          node scripts/agent/red-guard-diagnose.mjs \
+            --stand-down \
+            --repo "${{ github.repository }}" \
+            --pr "$pr" \
+            --revert-run-id "${{ github.event.workflow_run.id }}"
+
   demote-red-main-safe-automerge-class:
     name: Open safe auto-merge class demotion PR after red main
     runs-on: ubuntu-latest
