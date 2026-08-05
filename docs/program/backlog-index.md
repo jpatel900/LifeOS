@@ -50,13 +50,13 @@ STATUS: LIVE — owner-ratified 2026-08-05. This is a MAP, not an authority: eac
 
 ## Vision items with exactly ONE home (rescued from invisibility by this index)
 
-| Item                                                                                                 | Sole home                                   |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Cadence stack (one ritual per time-altitude, fixed budgets)                                          | vision-fable-horizon-pass H4                |
-| Meaning line / Future-Jay as user class                                                              | horizon-pass H6.1                           |
-| Claims ledger (docs/CLAIMS.md gate before any public artifact)                                       | vision-fable-wider-pass W4                  |
-| Voice-as-policy - delight budget - novelty-to-utility gauge - ten-year pre-mortem - lineage of minds | vision-fable-deeper-pass 1b/2b/1d/3c/Part 8 |
-| Second dyad note - sibling harvest - operator-only boundary - RiseUp METHOD run (not a repo task)    | wider-pass W2/W3/W5                         |
+| Item                                                                                                 | Sole home                                     |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Cadence stack (one ritual per time-altitude, fixed budgets)                                          | `vision-fable-horizon-pass` H4                |
+| Meaning line / Future-Jay as user class                                                              | horizon-pass H6.1                             |
+| Claims ledger (docs/CLAIMS.md gate before any public artifact)                                       | `vision-fable-wider-pass` W4                  |
+| Voice-as-policy - delight budget - novelty-to-utility gauge - ten-year pre-mortem - lineage of minds | `vision-fable-deeper-pass` 1b/2b/1d/3c/Part 8 |
+| Second dyad note - sibling harvest - operator-only boundary - RiseUp METHOD run (not a repo task)    | wider-pass W2/W3/W5                           |
 
 ## Stage contents with no FR and no issue (ADR 0002 D3)
 
