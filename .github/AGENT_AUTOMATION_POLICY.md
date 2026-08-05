@@ -24,6 +24,8 @@ Current deterministic safe auto-merge allowlist:
 - `.github/ISSUE_TEMPLATE/**`
 - `.agents/skills/**` (owner-approved 2026-07-03 after the epic #243 pipeline proved the lane)
 
+Second T0 route (ADR 0008 move 1b, owner-ratified 2026-08-04): strictly-additive test-only PRs under `automerge:tests-additive` + `risk:low`. Machine-checked, not claimed: every changed file must match the test-path allowlist in `scripts/agent/automation-policy.mjs` and the diff must contain zero deleted lines (renames, deletions, and binary changes disqualify). CI still gates the merge, and the Main Red Guard demotion applies to this class on any incident.
+
 ## T1 — Agent PR allowed, human review recommended
 
 Agent may implement and open a PR. Human review is recommended before merge.
@@ -45,7 +47,7 @@ Planning-only note:
 Agent may implement, but a human must review before merge or rollout.
 
 - small test fixes
-- test-only additions or assertion-affecting test changes until a stronger assertion-preservation guard exists
+- assertion-affecting test changes (modifying or deleting existing assertions). Strictly-ADDITIVE test-only PRs are the exception: per ADR 0008 move 1b they may ride the auto-merge lane under `automerge:tests-additive` — the guard machine-checks that every file is a test path and the diff deletes zero lines (`scripts/agent/check-safe-automerge.mjs`)
 - workflow file changes
 - automation control-plane files such as `.github/codex/prompts/**`
 - cross-flow UX
