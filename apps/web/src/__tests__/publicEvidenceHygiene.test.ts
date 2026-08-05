@@ -15,7 +15,7 @@ const repoRoot = resolve(__dirname, "../../../..");
  *
  * This repo is public. Docs must never carry production identifiers or
  * personal data that a reader could use to fingerprint the live deployment
- * or its owner (AGENTS.md rule 13). This test scans documentation markdown
+ * or its owner (AGENTS.md rule 9, public repo). This test scans documentation markdown
  * (docs/** and top-level repo markdown like README.md/AGENTS.md) for:
  *   - UUID-shaped strings (often row/user/task IDs pulled from prod)
  *   - the known production Supabase project ref
@@ -48,6 +48,10 @@ const ALLOWLISTED_LITERALS = new Set([
   // supabase/seed.sql for local Phase 4A smoke tests only, never a real
   // mailbox (uses the RFC 2606 reserved `.test` TLD).
   "user_a@example.test",
+  // Second seeded local test user, quoted in the archived Cursor cloud
+  // skill (docs/_archive/cursor-cloud-agent-starter-SKILL.md) — same fake
+  // `.test` TLD, never a real mailbox.
+  "user_b@example.test",
 ]);
 
 const IGNORED_SCAN_DIRECTORIES = new Set([
@@ -185,7 +189,7 @@ describe("public evidence hygiene", () => {
       findings,
       [
         "Public docs must not contain production identifiers or personal data",
-        "(AGENTS.md rule 13). Replace the offending value with a placeholder",
+        "(AGENTS.md rule 9, public repo). Replace the offending value with a placeholder",
         "(e.g. <prod-project-ref>, <owner-email>) or, if it's a genuinely fake",
         "documented example, add the exact literal to ALLOWLISTED_LITERALS in",
         "apps/web/src/__tests__/publicEvidenceHygiene.test.ts with a comment.",

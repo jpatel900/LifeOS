@@ -1,5 +1,7 @@
 # Model-degradation runbook
 
+**STATUS: HISTORICAL (frozen 2026-08-04).** Written for the stage-epic relay, which is dormant (formal retirement owner-gated — see `docs/PROJECT_STATE.md`). Model names below are provenance from when it was written; the current role→model mapping lives only in `docs/agent/MODEL_LANES.md`.
+
 What changes when the strongest available model tier drops (e.g., Fable-class unavailable; best executors are Opus-4.8-class and GPT-5.5-class). Principle: **capability lives in the artifacts; trust lives in the gates.** When executor capability drops, the artifacts stay constant and the gates tighten. Nothing about the destination changes — only the width of the checkpoints.
 
 ## Tier roles
@@ -25,7 +27,7 @@ The relay's @codex mention lane is replaceable: any competent coding agent can i
 
 ## What never degrades
 
-- The invariants (NS-INV-1..9), the trust ladder (ADR 0002 D1), approval gates, and the "never" row (irreversible actions capped at L2).
+- The invariants (NS-INV-1..9), the trust ladder (D1 of `docs/adr/0002-north-star-stages-and-trust-ladder.md`), approval gates, and the "never" row (irreversible actions capped at L2).
 - The relay's sequential discipline (NS-INV-6).
 - The rule that uncertainty escalates instead of merging.
 

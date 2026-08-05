@@ -150,11 +150,39 @@ interface BlockRow {
   id: string;
   status: string;
   task_id: string | null;
+  proposal_id?: string | null;
 }
 interface TaskRow {
   id: string;
   status: string;
   first_tiny_step: string | null;
+}
+interface ProposalRow {
+  id: string;
+  status: string;
+  rationale_json: { note?: string } | null;
+}
+
+const PROPOSAL_SELECT = "time_block_proposals?select=id,status,rationale_json";
+
+/** Account-held proposal statuses, sorted so the assertion is order-free. */
+async function proposalStatuses(account: AccountClient): Promise<string[]> {
+  return (await account.rows<ProposalRow>(PROPOSAL_SELECT))
+    .map((row) => row.status)
+    .sort();
+}
+
+/**
+ * The accept controls on screen — one per proposal still awaiting a decision.
+ * Diffing this list across the draft tap is how the drafted proposal's OWN
+ * control is identified; `.first()` is a coin flip once two exist.
+ */
+async function acceptTestIds(page: Page): Promise<string[]> {
+  return page
+    .getByTestId(/^plan-sheet-proposal-accept-/)
+    .evaluateAll((nodes) =>
+      nodes.map((node) => (node as HTMLElement).dataset.testid ?? ""),
+    );
 }
 
 test.describe("C2-S2 — the ported Plan surface, signed in", () => {
@@ -240,55 +268,100 @@ test.describe("C2-S2 — the ported Plan surface, signed in", () => {
       .toEqual(["active"]);
   });
 
-  test(`${SIGNED_IN_TAG} draft a block, then put it on the rail — proposal accepted, block created, task scheduled`, async ({
+  test(`${SIGNED_IN_TAG} draft a block, then put it on the rail — the DRAFTED proposal is accepted, the block points at it, nothing is left pending`, async ({
     page,
   }) => {
     const account = await openSignedInToday(page, SEEDED_USERS.a);
     await seedDoTodayTask(page, "Ported plan: draft then accept");
-    await openPlanSheet(page);
 
+    // POSITIVE CONTROL, in the shape the placement test above uses on
+    // `calendar_blocks`. Sorting a capture to "Do today" ALREADY leaves one
+    // pending proposal for the task: the triage draft-accept mints a first
+    // focus block ("Create one local focus block for the first useful move",
+    // `lib/data/workflow/draftAccept.ts`). Naming that row HERE is what makes
+    // every assertion below about the draft and nothing else.
+    //
+    // The first cut of this spec (#804) skipped this control and assumed the
+    // account held no proposal, so it asserted a row COUNT that only held when
+    // the drafted row lost a race to persist. That accident is why it passed on
+    // its branch and red-flagged main twice (reverted by #806). What follows
+    // asserts identity, not counts.
+    await expect
+      .poll(async () => proposalStatuses(account), { timeout: 30_000 })
+      .toEqual(["proposed"]);
+    const [triageProposal] = await account.rows<ProposalRow>(PROPOSAL_SELECT);
+
+    await openPlanSheet(page);
     await expect(page.getByTestId("plan-sheet-draft-block")).toBeEnabled({
       timeout: 20_000,
     });
+    // Triage's proposal must already be ON SCREEN before the diff below can
+    // mean anything — otherwise "the control that appeared" is just whichever
+    // of the two rendered first.
+    await expect(page.getByTestId(/^plan-sheet-proposal-accept-/)).toHaveCount(
+      1,
+      { timeout: 30_000 },
+    );
+    const acceptsBeforeDraft = await acceptTestIds(page);
+
+    // THE DRAFT — it reaches the ACCOUNT as its own row, beside triage's.
     await page.getByTestId("plan-sheet-draft-block").click();
+    await expect
+      .poll(async () => proposalStatuses(account), { timeout: 30_000 })
+      .toEqual(["proposed", "proposed"]);
+    await expect(page.getByTestId(/^plan-sheet-proposal-accept-/)).toHaveCount(
+      2,
+      { timeout: 30_000 },
+    );
+    const draftedProposal = (
+      await account.rows<ProposalRow>(PROPOSAL_SELECT)
+    ).find((row) => row.id !== triageProposal.id);
+    expect(draftedProposal?.rationale_json?.note).toContain("Drafted a block");
 
+    // THE ACCEPT — of the DRAFTED card specifically.
+    const draftedAccept = (await acceptTestIds(page)).find(
+      (id) => !acceptsBeforeDraft.includes(id),
+    );
+    expect(
+      draftedAccept,
+      "the drafted proposal renders its own accept control",
+    ).toBeTruthy();
+    await page.getByTestId(draftedAccept as string).click();
+
+    // #580 "placement wins": the accepted proposal is the DRAFTED one, and the
+    // proposal triage left is superseded — retained as history, never pending.
+    await expect
+      .poll(async () => proposalStatuses(account), { timeout: 30_000 })
+      .toEqual(["accepted", "superseded"]);
+    const settled = await account.rows<ProposalRow>(PROPOSAL_SELECT);
+    const accepted = settled.filter((row) => row.status === "accepted");
+    expect(accepted.map((row) => row.id)).toEqual([draftedProposal?.id]);
+    expect(
+      settled.filter((row) => row.status === "superseded").map((row) => row.id),
+    ).toEqual([triageProposal.id]);
+    // Nothing for this task is left awaiting a decision.
+    expect(
+      settled.filter((row) => ["proposed", "edited"].includes(row.status)),
+    ).toEqual([]);
+
+    // Exactly one block, and it points AT the proposal that was accepted —
+    // the link the old assertion never checked.
     await expect
       .poll(
         async () =>
           (
-            await account.rows<{ status: string }>(
-              "time_block_proposals?select=id,status",
+            await account.rows<BlockRow>(
+              "calendar_blocks?select=id,status,task_id,proposal_id",
             )
-          ).map((row) => row.status),
-        { timeout: 30_000 },
-      )
-      .toEqual(["proposed"]);
-
-    await page
-      .getByTestId(/^plan-sheet-proposal-accept-/)
-      .first()
-      .click();
-
-    await expect
-      .poll(
-        async () =>
-          (
-            await account.rows<{ status: string }>(
-              "time_block_proposals?select=id,status",
-            )
-          ).map((row) => row.status),
-        { timeout: 30_000 },
-      )
-      .toEqual(["accepted"]);
-    await expect
-      .poll(
-        async () =>
-          (
-            await account.rows<BlockRow>("calendar_blocks?select=id,status")
           ).map((row) => row.status),
         { timeout: 30_000 },
       )
       .toEqual(["scheduled"]);
+    const blocks = await account.rows<BlockRow>(
+      "calendar_blocks?select=id,status,task_id,proposal_id",
+    );
+    expect(blocks.map((row) => row.proposal_id)).toEqual([accepted[0].id]);
+
     await expect
       .poll(
         async () =>

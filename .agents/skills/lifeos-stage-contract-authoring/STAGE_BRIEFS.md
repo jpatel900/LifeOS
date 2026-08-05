@@ -1,5 +1,7 @@
 # Stage design briefs — durable constraints for Stages 2, 3, 4
 
+**STATUS: REFERENCE (marked 2026-08-04).** Strategic design input preserved for a future stage boundary. The stage relay that consumed these briefs is dormant (formal retirement owner-gated — see `docs/PROJECT_STATE.md`); nothing here is current status or a work queue.
+
 These briefs preserve important strategic design input for future capabilities: safety constraints, decision rules, acceptance shapes, candidates, and named anti-patterns. They are an active vision backlog, not direct implementation authority. Disposition candidates one-by-one through the process in `SKILL.md`; current REQUIREMENTS and ADRs control the resulting contract. They deliberately contain NO schemas, file paths, or thresholds tied to today's code — those are authored fresh against current main. Safety, privacy, trust, RLS, transaction, and external-write constraints remain mandatory.
 
 Written 2026-07-03 while frontier-model context was available. Purpose: a mid-tier model at a future boundary inherits the judgment, not just the goals.

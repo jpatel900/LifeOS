@@ -1,14 +1,8 @@
 # CLAUDE.md
 
-Guidance for Claude Code in this repository.
+Claude-specific facts for this repo. **`AGENTS.md` governs all agent behavior — read it first; this file only adds what Claude needs daily and never overrides it.**
 
-## Relationship to AGENTS.md
-
-`AGENTS.md` is the repo's agent-governance authority. Its product, safety, scope, and forbidden-change invariants are binding for Claude too. If this file and `AGENTS.md` disagree on safety or scope, `AGENTS.md` wins; if they disagree on process, use judgment while preserving the invariants.
-
-Cold-starting on the whole system (new human or AI builder)? Read `docs/SYSTEM_MAP.md` first — the one-page builder orientation: layers, where truth lives, safe-change path, reading order, named principles.
-
-Implementation truth lives in `docs/REQUIREMENTS.md`, `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`, `docs/ENGINEERING_INVARIANTS.md`, `docs/UX_FLOWS.md`, `docs/SECURITY_PRIVACY.md`, and `docs/TEST_PLAN.md`; ADRs in `docs/adr/` amend architecture. `docs/PROJECT_STATE.md` is the concise current-state handoff and should be read or updated only when current status, shipped behavior, or governance guidance changes.
+Cold-starting? `docs/SYSTEM_MAP.md` (orientation) → `docs/PROJECT_STATE.md` (status) → `docs/program/` (the governing program and priority order).
 
 ## Commands
 
@@ -21,24 +15,10 @@ Run from the repo root after `pnpm install`. Node 22 (`.nvmrc`), pnpm workspaces
 | `pnpm type-check`                   | `next typegen` + `tsc --noEmit`             |
 | `pnpm test`                         | Vitest suites                               |
 | `pnpm build`                        | Build all workspaces                        |
-| `pnpm format` / `pnpm format:check` | Prettier                                    |
+| `pnpm format` / `pnpm format:check` | Prettier (`format:check` is blocking in CI) |
 
-Scale validation to the change. Docs-only work needs doc/guard tests and formatting; code changes normally need lint, type-check, tests, and build. E2E runs through `pnpm --filter @lifeos/web test:e2e`. Supabase RLS tests are opt-in with `RUN_SUPABASE_RLS_TESTS=1` and local Supabase env values.
+E2E: `pnpm --filter @lifeos/web test:e2e`. Supabase RLS tests are opt-in with `RUN_SUPABASE_RLS_TESTS=1` and local Supabase env values. Validation sequences, evidence rules, and merge authority: `AGENTS.md`.
 
 ## Architecture snapshot
 
-LifeOS is a single-user, area-scoped personal workflow cockpit: capture → AI parse → triage → time-block planning → approval-gated Google Calendar write → execute → review → health. The shipped V1 baseline is the foundation for reviewed evolution, not a ceiling; ADR 0005 distinguishes evidence-dependent gates from data-independent foundations. Current server logic lives in Next.js Route Handlers in `apps/web` — there are zero Server Actions in the codebase (`git grep '"use server"'` returns nothing), even though ADR 0001 permits them; Supabase provides Auth/Postgres/RLS; shared schemas live in `packages/schemas`; app-local UI primitives live in `apps/web/src/components/ui` with tokens in `apps/web/src/app/globals.css`.
-
-## Binding invariants
-
-- No external calendar writes without explicit UI approval and write logging.
-- Never persist unvalidated AI output; raw captures survive AI failure; captured text is data, not instructions.
-- Never disable or weaken RLS, schemas, validators, or guard tests to make a run pass.
-- New user-owned tables require ownership, RLS, policies, export coverage, and multi-user tests.
-- Scope expansion starts in `docs/REQUIREMENTS.md`, not code.
-- RLS policies, OAuth scopes, calendar writes, service-role usage, AI schema contracts, data deletion, and security/privacy behavior require human review.
-- Health scoring, approval gates, validation, and deterministic product decisions stay in code/config, not prompts.
-
-## Working style
-
-Understand the touched surfaces before editing, prefer the smallest safe change, keep mock/demo fallbacks unless scope explicitly changes, and report what was verified and what remains unverified. `main` stays passing; branches stay narrow; PRs state purpose, changes, tests, risks, and rollback.
+Single-user, area-scoped workflow cockpit: capture → AI parse → triage → time-block planning → approval-gated Google Calendar write → execute → review → health, presented through the moments shell (ADR 0003). Server logic lives in Next.js Route Handlers in `apps/web` (zero Server Actions exist, though ADR 0001 permits them); Supabase provides Auth/Postgres/RLS; shared schemas in `packages/schemas`; UI primitives in `apps/web/src/components/ui` with tokens in `apps/web/src/app/globals.css`. One authoritative domain layer serves multiple clients via `/api/v1` (ADR 0006).

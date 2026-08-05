@@ -1,0 +1,89 @@
+# ADR 0008 move 2 (owner-ratified 2026-08-04): 30-minute notified
+# self-merge window for risk:low, non-T2+ agent PRs.
+#
+# notify: when a PR gains the opt-in label (or pushes new commits while
+#   opted in), post the owner-notification comment that starts the clock.
+# scan: every 10 minutes, arm auto-merge on opted-in PRs whose window has
+#   elapsed and whose guards all pass (see selfmerge-window.mjs). The lane
+#   pauses itself whenever main is red or a guard revert PR is open.
+# Demotion: flip SELFMERGE_WINDOW.enabled to false in
+#   scripts/agent/automation-policy.mjs (one-line PR).
+
+name: Self-merge Window
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - labeled
+      - synchronize
+      - ready_for_review
+  schedule:
+    - cron: "*/10 * * * *"
+  # The live test 2026-08-05 showed GitHub's cron never fired for 2+ hours
+  # on this new workflow. workflow_run makes the scan event-driven: it also
+  # fires whenever a CI run completes, so arming happens promptly during
+  # active periods even if the cron sleeps.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: selfmerge-window-${{ github.event.pull_request.number || 'scan' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  notify:
+    name: Notify owner (start the clock)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.13.0
+          package-manager-cache: false
+
+      - name: Notify (Telegram + marker comment) and arm instantly
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scripts/agent/selfmerge-window.mjs --notify
+
+  scan:
+    name: Arm eligible PRs past their window
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.13.0
+          package-manager-cache: false
+
+      - name: Self-test the evaluator before acting
+        run: node scripts/agent/selfmerge-window.mjs --self-test
+
+      - name: Scan and arm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/agent/selfmerge-window.mjs --scan

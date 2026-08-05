@@ -89,7 +89,7 @@ Adding another backend beyond Next + Supabase data would increase cost, deployme
   /seed
 /docs
   /adr
-    0001-v1-server-boundary.md
+    README.md (index) + 000N-*.md decision records
   PROJECT_STATE.md
   PRODUCT.md
   REQUIREMENTS.md
@@ -313,11 +313,7 @@ Do not log:
 
 ## 11. Architecture Decision Records
 
-Architecture Decision Records live under `/docs/adr/`.
-
-| ADR                                         | Decision                                                                                                                                         | Status   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
-| [0001](docs/adr/0001-v1-server-boundary.md) | Baseline server boundary: Next.js Route Handlers + Server Actions; Supabase Edge Functions remain default-no except for justified ADR exceptions | Accepted |
+Architecture Decision Records live under `docs/adr/`. The one authoritative list is the index at [adr/README.md](adr/README.md) — it names every ADR (0001-0007), what each decided, and supersession status. This section deliberately does not duplicate that table.
 
 Additional invariants:
 

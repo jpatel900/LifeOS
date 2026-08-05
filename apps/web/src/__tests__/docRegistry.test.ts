@@ -30,7 +30,6 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "README.md",
   "SECURITY.md",
   "PRODUCT.md",
-  "BUILD_BACKLOG.md",
   "EXTRA_INFO_AND_RULES.md",
   "docs/REQUIREMENTS.md",
   "docs/ARCHITECTURE.md",
@@ -47,6 +46,9 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
   "docs/OBSERVABILITY_RUNBOOK.md",
   "docs/VERCEL_PRODUCTION_CHECKLIST.md",
   "docs/agent/CODEX_PROMPT_TEMPLATE.md",
+  // Role→model mapping (owner mandate 2026-08-04): the ONE file where model
+  // names may appear; every other doc uses role names.
+  "docs/agent/MODEL_LANES.md",
   "docs/vision/vision-fable-final-pass.md",
   "docs/vision/vision-fable-deeper-pass.md",
   "docs/vision/vision-fable-wider-pass.md",
@@ -85,6 +87,12 @@ const CANONICAL_ALLOWLIST_EXACT = new Set([
 
 const CANONICAL_ALLOWLIST_PATTERNS = [
   /^docs\/adr\/[^/]+\.md$/,
+  // Governing-program docs (owner mandate 2026-08-04: one truth store — the
+  // active program lives in the repo, not in out-of-repo planning folders).
+  /^docs\/program\/[^/]+\.md$/,
+  // Archived pilot-era docs (owner mandate 2026-08-04): historical, frozen,
+  // excluded from formatting; agents skip this folder.
+  /^docs\/_archive\/[^/]+\.md$/,
   /^\.agents\/skills\/.+\.md$/,
   /^\.cursor\/.+\.md$/,
   /^\.github\/.+\.md$/,

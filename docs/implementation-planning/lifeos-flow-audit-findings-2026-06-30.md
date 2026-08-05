@@ -1,3 +1,5 @@
+> **STATUS: HISTORICAL.** Superseded by two later full audits: `docs/design/ux-audit-2026-07-13-codex.md` and `docs/design/ux-audit-2026-07-26-fable.md`. Do not use this file as a work source.
+
 # LifeOS Flow Audit Findings - 2026-06-30
 
 Status: Diagnostic audit plus first repair batch status

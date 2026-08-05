@@ -22,3 +22,4 @@ apps/web/src/app/fonts/**
 # then check still fails), which redded main on 2026-07-10 (#496 -> revert
 # #499). See issue #508.
 .agents/skills/**
+docs/_archive/**

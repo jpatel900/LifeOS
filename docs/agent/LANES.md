@@ -22,21 +22,42 @@ surfaces — copies drift.
 | ADRs               | Durable architecture/product decisions                                    |
 | `PROJECT_STATE.md` | Materially changed shipped state                                          |
 
-`docs/agent/HANDOVER.md` is Claude-lane session continuity only — never a
-cross-lane communication bus.
+Session continuity lives in `docs/PROJECT_STATE.md` and `docs/program/` —
+never in per-session handover files (the former docs/agent handover file
+was deleted 2026-07-15), and never used as a cross-lane communication bus.
 
 ## Lane definitions
 
+A lane is a DRIVER (strongest-tier model, per `docs/agent/MODEL_LANES.md`)
+plus the implementer/verifier subagents it runs. Drivers hold the roles that
+need judgment; subagents get tighter contracts, not more supervision text.
+
 - **Claude lane:** visual/experience work, architecture and doctrine-sensitive
   changes, contract authoring for both lanes, final verification (including the
-  visual/experience gate), ALL merges (both lanes' PRs), continuity.
+  visual/experience gate), merges per AGENTS.md merge authority (that paragraph
+  wins over any restatement here), continuity.
 - **Codex lane:** contracted implementation with text-verifiable results (pure
   logic, data layer, guard tests, e2e specs), standing audits, second opinions
   on design notes.
 
 **Root orchestrators only** write GitHub comments. Both lanes delegate
 implementation to bounded subagents; subagents report internally to their root
-and never claim issues or post status themselves.
+and never claim issues or post status themselves. The driver verifies subagent
+work against repo state (diffs, tests it runs itself) — never against the
+subagent's own report; an implementer subagent never grades its own slice.
+
+## Concurrency (owner amendment 2026-08-05 — supersedes one-lane-at-a-time)
+
+Multiple implementation lanes may run at once when ALL hold:
+
+1. Each lane claimed its issue (AGENTS.md claim-before-build) BEFORE building.
+2. Each claim declares the lane's file manifest; manifests are disjoint.
+   Overlap → COLLISION protocol below; the later claimant waits or renegotiates.
+3. Red-zone files and any file two live lanes both need stay single-lane.
+4. Merges serialize through the merge queue; integration truth belongs to CI
+   and the Main Red Guard, never to cross-lane coordination promises.
+5. Inside one lane, the driver may parallelize its own subagents freely within
+   the lane's manifest — intra-lane collision handling is the driver's job.
 
 ## Red zones (Claude-lane-edit-only shared surfaces)
 

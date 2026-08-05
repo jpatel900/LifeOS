@@ -3,7 +3,7 @@
 This file defines the required human gate for agent-driven repo changes and GitHub automation in LifeOS.
 
 LifeOS product/runtime automation remains tightly restricted by `AGENTS.md` and product authority docs.
-Engineering automations may write only to isolated branches and approved GitHub metadata surfaces such as pull requests or issue comments. They must be label-gated, path-guarded, validation-gated, and must not touch production data, secrets, non-GitHub external systems, or LifeOS runtime state.
+Engineering automations may write only to isolated branches and approved GitHub metadata surfaces such as pull requests or issue comments. They must be label-gated, path-guarded, validation-gated, and must not touch production data, secrets, non-GitHub external systems (sole exception: owner-configured notify-only channels — see the instant self-merge section), or LifeOS runtime state.
 Safe auto-merge also requires the repository-level GitHub auto-merge setting to be enabled. Without that repo setting, the workflow remains a guard/evaluator and cannot successfully arm auto-merge.
 
 If a task spans multiple categories, apply the highest tier.
@@ -23,6 +23,14 @@ Current deterministic safe auto-merge allowlist:
 - `README.md`
 - `.github/ISSUE_TEMPLATE/**`
 - `.agents/skills/**` (owner-approved 2026-07-03 after the epic #243 pipeline proved the lane)
+
+Second T0 route (ADR 0008 move 1b, owner-ratified 2026-08-04): strictly-additive test-only PRs under `automerge:tests-additive` + `risk:low`. Machine-checked, not claimed: every changed file must match the test-path allowlist in `scripts/agent/automation-policy.mjs` and the diff must contain zero deleted lines (renames, deletions, and binary changes disqualify). CI still gates the merge, and the Main Red Guard demotion applies to this class on any incident.
+
+## Instant self-merge with owner notification (ADR 0008 move 2, amended 2026-08-05)
+
+A `risk:low`, non-T2+ agent PR may opt in with the `selfmerge:auto` label (`selfmerge:30m` remains an alias). On labeling, the workflow sends a 1-2 line Telegram notice to the owner and posts a marker comment, then arms GitHub auto-merge IMMEDIATELY — the required CI checks are the only wait, and the check runtime is the owner's veto window (add `needs:human-decision`, request changes, or close the PR before checks pass). Guards still required at arm time: main green, no open guard-revert PR, no blocking label, no changes-requested review, no T2+ path, no merge conflicts. Owner decision recorded plainly: NO delivery fallback was chosen — if the Telegram send fails or its secrets are absent, the merge proceeds with no notice; compensating controls are the low-risk scope, the Main Red Guard, and class demotion (`SELFMERGE_WINDOW.enabled: false`, one-line PR).
+
+Notification-channel carve-out (same amendment): the ban on automations touching non-GitHub systems has exactly one exception — notify-only messages to the owner's own configured channel (Telegram via `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` secrets). Nothing may be read from, or written to, any other external surface.
 
 ## T1 — Agent PR allowed, human review recommended
 
@@ -45,7 +53,7 @@ Planning-only note:
 Agent may implement, but a human must review before merge or rollout.
 
 - small test fixes
-- test-only additions or assertion-affecting test changes until a stronger assertion-preservation guard exists
+- assertion-affecting test changes (modifying or deleting existing assertions). Strictly-ADDITIVE test-only PRs are the exception: per ADR 0008 move 1b they may ride the auto-merge lane under `automerge:tests-additive` — the guard machine-checks that every file is a test path and the diff deletes zero lines (`scripts/agent/check-safe-automerge.mjs`)
 - workflow file changes
 - automation control-plane files such as `.github/codex/prompts/**`
 - cross-flow UX
@@ -69,20 +77,20 @@ Typical paths:
 - Shared automation path policy: `scripts/agent/automation-policy.mjs`
 - Shared automation path guard: `scripts/agent/check-automation-scope.mjs`
 - PR risk classification: `scripts/agent/classify-pr-risk.mjs`
-- PR evidence guidance: `AGENTS.md` rule 15 (verified claims, validation evidence, SELF-AUDIT)
+- PR evidence guidance: `AGENTS.md` rule 11 (verified claims: evidence or UNVERIFIED; OWNER-GATE/AGENT-TODO markers)
 - Decision review guidance: `docs/adr/` (architecture decisions) and `AGENTS.md` change-control rules
 
 ## Hands-off path matrix
 
 Use this as the deterministic routing summary before opening or merging an automation-driven PR.
 
-| Tier | Hands-off status                                                  | Allowed path examples                                                                                                                                                                 | Notes                                                                                                                                      |
-| ---- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| T0   | Safe auto-merge allowed after CI and review gates                 | `docs/**`, `README.md`, `.github/ISSUE_TEMPLATE/**`, `.agents/skills/**`                                                                                                              | Requires `agent:ready`, `risk:low`, and `automerge:safe`. The safe auto-merge allowlist must stay exactly here unless separately approved. |
-| T1   | Agent may open PR; human review recommended                       | Narrow `apps/web/src/app/**` copy-only edits, bounded route-smoke coverage                                                                                                            | Not auto-merge eligible. Use when the blast radius is still low but not purely documentation metadata.                                     |
-| T2   | Agent may open PR; human review required                          | `.github/workflows/**`, `.github/codex/prompts/**`, `scripts/agent/**`, meaningful test assertion changes                                                                             | Control-plane and assertion-bearing work stays out of hands-off merge lanes.                                                               |
-| T3   | Planning first; implementation only after explicit human approval | `supabase/**`, `**/migrations/**`, `apps/web/src/lib/supabase/**`, `apps/web/src/lib/ai/**`, `apps/web/src/lib/googleCalendar/**`, `apps/web/src/app/api/google-calendar/**`, `.env*` | Sensitive auth, persistence, parser, calendar, secrets, and deployment-adjacent surfaces.                                                  |
-| T4   | Human decision before any implementation                          | New vendor/service surfaces, new background automation surfaces, scope-expansion surfaces                                                                                             | Requires an explicit human decision and usually requirements/policy updates first.                                                         |
+| Tier | Hands-off status                                                  | Allowed path examples                                                                                                                                                                 | Notes                                                                                                                                                                                                                                                                                                                                   |
+| ---- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T0   | Safe auto-merge allowed after CI and review gates                 | `docs/**`, `README.md`, `.github/ISSUE_TEMPLATE/**`, `.agents/skills/**`                                                                                                              | Requires `agent:ready`, `risk:low`, and `automerge:safe`. The safe auto-merge allowlist must stay exactly here unless separately approved. Per ADR 0008 move 1a (owner-ratified 2026-08-04), agents may apply these labels themselves to `docs/program/**` program-state PRs — status updates ride this lane by standing authorization. |
+| T1   | Agent may open PR; human review recommended                       | Narrow `apps/web/src/app/**` copy-only edits, bounded route-smoke coverage                                                                                                            | Not auto-merge eligible. Use when the blast radius is still low but not purely documentation metadata.                                                                                                                                                                                                                                  |
+| T2   | Agent may open PR; human review required                          | `.github/workflows/**`, `.github/codex/prompts/**`, `scripts/agent/**`, meaningful test assertion changes                                                                             | Control-plane and assertion-bearing work stays out of hands-off merge lanes.                                                                                                                                                                                                                                                            |
+| T3   | Planning first; implementation only after explicit human approval | `supabase/**`, `**/migrations/**`, `apps/web/src/lib/supabase/**`, `apps/web/src/lib/ai/**`, `apps/web/src/lib/googleCalendar/**`, `apps/web/src/app/api/google-calendar/**`, `.env*` | Sensitive auth, persistence, parser, calendar, secrets, and deployment-adjacent surfaces.                                                                                                                                                                                                                                               |
+| T4   | Human decision before any implementation                          | New vendor/service surfaces, new background automation surfaces, scope-expansion surfaces                                                                                             | Requires an explicit human decision and usually requirements/policy updates first.                                                                                                                                                                                                                                                      |
 
 ## T3 — Planning or implementation only with explicit human approval
 

@@ -37,12 +37,13 @@ Every LifeOS repo-local skill should include:
 
 ## Current baseline
 
-- Use `skill-router` before substantial work to choose the smallest relevant trusted skill set.
-- Use `docs/agent/ANTI_RATIONALIZATIONS.md` when a skill needs explicit shortcut traps and rebuttals.
+- Use `skill-router` before substantial work to choose the smallest relevant trusted skill set; the routing table lives in `AGENTS.md` (Skill routing).
+- Shortcut traps and rebuttals live inside each skill's own "Common rationalizations" section (required anatomy above) — there is no separate repo-wide file.
+- The vendored set below is allowlisted by `.vendored-manifest.json` (pruned 2026-08-04 to the skills the `AGENTS.md` routing table names). To vendor a new skill, add its manifest entry in a reviewed PR; the daily sync only manages manifest-listed dirs.
 
 <!-- vendored-skills:begin (managed by sync-skills-to-lifeos.ps1; do not edit inside markers) -->
 
-## Vendored skills (synced 2026-08-04)
+## Vendored skills (synced 2026-08-05)
 
 Everything below is auto-vendored from the maintainer's curated hub so cloud agents get the
 same skills as local tools. Do not hand-edit vendored skills here - fix them at their source
@@ -50,11 +51,10 @@ and let the daily sync PR carry the change. Ownership list: `.vendored-manifest.
 Repo-native skills (`lifeos-*`, `skill-router`, etc.) always win on any overlap.
 Third-party skills remain under their upstream repos' licenses.
 
-- **addy-agent-skills**: api-and-interface-design, browser-testing-with-devtools, ci-cd-and-automation, code-review-and-quality, code-simplification, context-engineering, deprecation-and-migration, documentation-and-adrs, frontend-ui-engineering, idea-refine, incremental-implementation, performance-optimization, planning-and-task-breakdown, security-and-hardening, shipping-and-launch, spec-driven-development, test-driven-development, using-agent-skills
-- **claude-user-skills**: agentic-architecture-contract, agentic-change-control, agentic-config-and-environment, agentic-context-engineering-reference, agentic-debugging-playbook, agentic-diagnostics-and-tooling, agentic-docs-and-writing, agentic-external-positioning, agentic-failure-archaeology, agentic-long-horizon-campaign, agentic-project-onboarding, agentic-proof-and-analysis-toolkit, agentic-research-frontier, agentic-research-methodology, agentic-run-and-operate, agentic-validation-and-qa
-- **local-hub**: find-skills
-- **mattpocock-skills**: codebase-design, domain-modeling, grill-me, grilling, handoff, prototype, to-issues
-- **superpowers**: finishing-a-development-branch, receiving-code-review, requesting-code-review, systematic-debugging, verification-before-completion, writing-skills
+- **addy-agent-skills**: browser-testing-with-devtools, documentation-and-adrs, frontend-ui-engineering, security-and-hardening
+- **claude-user-skills**: agentic-docs-and-writing
+- **local-hub**: impeccable
+- **superpowers**: verification-before-completion
 
 <!-- vendored-skills:end -->
 

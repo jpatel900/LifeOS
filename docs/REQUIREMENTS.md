@@ -659,6 +659,8 @@ Non-goals:
 
 ### FR-031 — Task-Map v1 (DAG Progression Map)
 
+_Forward-binding guard (vision harvest, landed 2026-08-05): any map altitude above the week — the v2+ life-arc zoom — renders only from approved retrospective evidence, never from predicted futures. This sentence binds every future map slice._
+
 **Priority:** MUST
 
 **Stage:** Approved contract — owner-ratified through issue #484 and PR #487. Implementation follows the S2 → S3 (#255) → FR-031 dependency chain in `docs/implementation-planning/plan-task-map-contract.md` and requires an issue-scoped build contract.
@@ -840,6 +842,24 @@ Non-goals (binding):
 - Any archive path that can include secrets or token material (FR-016's exclusion list holds).
 
 ---
+
+### Trust kernel (`trust_ledger`) — shared primitive, pre-FR dependency contract
+
+_Vision-harvest residue landed 2026-08-05 (execution-companion item 4; previously the schema existed only in `docs/vision/`). FR-047 already cites this primitive as a dependency._
+
+All trust ladders — autonomy, initiative, surface-area, and any future ladder — instantiate ONE shared primitive; parallel bespoke trust mechanisms are forbidden. Eventual shape (build is its own owner-ratified issue): `trust_ledger(class_id text pk, domain enum, current_rung int, cap int nullable, evidence_count int, window_override_rate numeric, last_demotion_at, graduation_rule_id)`, fed by existing suggestion/override records via a policy_id → class_id mapping. Rungs move only via recorded evidence; demotion is deterministic; irreversible classes carry a cap that is NEVER raised without an owner-signed ADR.
+
+### Compensation classes — prosthesis / exoskeleton / teacher (design doctrine)
+
+_Vision-harvest residue landed 2026-08-05 (deeper-pass Part 7; the one-line axiom landed in July, the classification table did not). Classify each compensation when its build slice is contracted._
+
+| Class       | Meaning                                       | Build consequence                                                                                               | Examples                                                  |
+| ----------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Prosthesis  | Replaces a function minds hold badly, forever | Build deep, reliable, invisible; never plan its removal                                                         | Prospective memory (Triggers), commitment aging, records  |
+| Exoskeleton | Amplifies a function under load               | Flexes with conditions — tight on low days, near-silent on clear ones                                           | Focus budgets, WIP refusal, 2-minute first move, re-entry |
+| Teacher     | Builds the function, then steps back          | Instrument for graduation; when evidence says the skill internalized, the system proposes removing the scaffold | Duration estimation, map-drafting decomposition           |
+
+Success is re-allocation, not independence or dependence: everything sits with whichever member of the dyad holds it best, and the boundary is renegotiated by evidence.
 
 > FR-039 through FR-045 are the 2026-07-10 framework-gap reservations: a section-by-section audit of the General Productivity Framework against this document found these as the only prescriptions with neither shipped code nor an existing reservation. They follow the FR-031 docs-first pattern — this text is the requirement; each build slice needs owner ratification and its actual dependencies. Under ADR 0005, only capabilities that depend on personal evidence wait for that evidence; the shared Stage label is not a blanket hold on data-independent foundations.
 
@@ -1023,7 +1043,9 @@ Non-goals (binding):
 
 ---
 
-### FR-047 (reservation) — Mirror (dyad vital-signs surface)
+### FR-047 — Mirror (dyad vital-signs surface)
+
+_Status truth (2026-08-05): slice 1 shipped (issue #668 closed — trend kernel + Mirror panel on Health); M3/M4 remainder unbuilt. Was mislabeled "(reservation)" while code shipped._
 
 **Priority:** SHOULD
 
@@ -1050,14 +1072,16 @@ Non-goals (binding):
 - Auto-drafted demotion proposals for unused surfaces ("hide, not delete"), driven off Mirror data — reserved for a future FR once a trust-ledger primitive is ratified; this contract makes Mirror read-only/observational, not an actuator. <!-- source: vision-fable-final-pass.md §2c "teeth" paragraph; docs/vision/vision-execution-companion.md item 4 "Trust Kernel" (feature-demotion listed as a still-unbuilt ladder) -->
 - Expanding the proxy-gauge set beyond the four named above without an owner ADR. <!-- source: pattern established by FR-033 non-goals ("without an owner ADR") -->
 
-Open questions (owner):
+Decided (owner, 2026-07-23 backlog sitting; written back 2026-08-05 — these were stranded in a superseded planning file):
 
-- Minimum sample count (or calendar window) before the purpose-gauge trend renders as a line rather than the not-enough-data state?
-- Should the four proxy gauges be individually hideable, or is the fixed four-gauge set itself the doctrine (no partial views)?
+- Minimum sample count before a trend renders as a line: **3** (shipped default).
+- The fixed four-gauge set is the doctrine — gauges are **not** individually hideable (no partial views).
 
 ---
 
-### FR-048 (reservation) — Triggers (context-conditioned prospective memory)
+### FR-048 — Triggers (context-conditioned prospective memory)
+
+_Status truth (2026-08-05): matching kernel merged (issue #669 closed) with zero consumers; persistence/RLS/UI/firing (T2-T5) unbuilt. Was mislabeled "(reservation)" while kernel code shipped._
 
 **Priority:** SHOULD
 
@@ -1084,11 +1108,11 @@ Non-goals (binding):
 - Time-conditioned reminders ("remind me at 3pm") — those are ordinary calendar/task rows already covered elsewhere; Triggers are context-conditioned only. <!-- source: vision-fable-final-pass.md §3a ("Time triggers are calendar rows; context triggers have no home in any commercial tool") -->
 - Any ambient-clock read inside the matching/expiry policy kernel itself. <!-- source: established repo doctrine — compostPolicy.ts / rupturePolicy.ts caller-supplied-time pattern -->
 
-Open questions (owner):
+Decided (owner, 2026-07-23 backlog sitting; written back 2026-08-05 — these were stranded in a superseded planning file):
 
-- Is `expires_at` required at declaration, or does an undeclared expiry get a system default horizon (and if so, what default)?
-- Does `date_window` overlap with existing calendar/time-block rows, or is it strictly for windows that don't warrant a calendar entry (e.g., "sometime next month")?
-- `manual_review` is named in the schema but its firing cadence isn't specified in the vision artifact beyond "surface in brief" — fire on every brief render until resolved, or on some other cadence?
+- `expires_at`: an undeclared expiry gets a system default horizon of **90 days**.
+- `date_window` is **strictly for windows that don't warrant a calendar entry** (e.g., "sometime next month") — it never overlaps calendar/time-block rows.
+- `manual_review` fires **once per local day** while unresolved, not on every brief render.
 
 ---
 

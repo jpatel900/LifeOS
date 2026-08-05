@@ -8,7 +8,7 @@ description: Use when authoring or receiving a LifeOS lane contract — the brie
 Per-lane mechanics. Every clause below was earned by a named failure; each carries
 its one-line why. Read it as a checklist, not an essay.
 
-**Growth rule (AGENTS.md rule 16 lineage): clauses grow one-in-one-out.** Adding a
+**Growth rule (lineage: the retired 2026-07 AGENTS.md rule 16; the principle lives on here): clauses grow one-in-one-out.** Adding a
 clause requires retiring or merging one. A new failure that an existing clause
 already covers sharpens that clause's wording — it does not get its own.
 
@@ -25,7 +25,8 @@ that executes it.
 - Receiving one — read it before setup, then run the authority check (clause 2).
 
 Companion, not overlap: `lifeos-stage-contract-authoring` is **wave-level
-scoping** (stage gate → epic → slice barrage, ADR 0002). This skill is the
+scoping** (stage gate → epic → slice barrage, governed by ADR 0005 —
+`docs/adr/0005-staged-evolution-after-v1.md`). This skill is the
 **per-lane mechanics** inside any one of those slices. Authoring a stage
 boundary uses both; authoring a one-off fix lane uses only this one.
 
@@ -118,11 +119,12 @@ closed.
 
 ### 9. Report contract
 
-Evidence-anchored only: "should" and "probably" are banned for anything
-unverified. Ship an UNVERIFIED list with the **exact proving command** for each
-item — and note that UNVERIFIED means *not proven*, not *not done*. End with a
-SELF-AUDIT of ≤10 lines: claims→evidence, gaps, ONE improvement. Post the report
-and **END** — never babysit CI; the orchestrator watches and un-drafts.
+Evidence-anchored only, per AGENTS.md rule 11: every "it works" claim carries
+the exact command and observed output; "should" and "probably" are banned for
+anything unverified. Ship an UNVERIFIED list with the **exact proving command**
+for each item — and note that UNVERIFIED means *not proven*, not *not done*.
+Post the report and **END** — never babysit CI; the orchestrator watches and
+un-drafts.
 A lane never parks itself mid-task: no Monitors, no "waiting for a
 notification", no ending a turn with verification still running in the
 background. Run every remaining check in the foreground, read its output, then
@@ -163,11 +165,11 @@ trade-offs.
 - Contract premises verified or the lane aborted with evidence.
 - Work committed and pushed per unit; validation floor run in full.
 - PR drafted with `closes #N` and checkbox-only follow-ups.
-- Report posted with SELF-AUDIT; lane ended without babysitting CI.
+- Report posted per rule 11 (evidence-anchored, UNVERIFIED list); lane ended without babysitting CI.
 
 ## Authority / safety boundaries
 
 - `AGENTS.md`, the authority docs, and direct owner instructions override this skill.
 - This skill does not authorize weakening guards, widening scope, editing ADRs,
   or bypassing the external-write, RLS, schema, or secrets rules.
-- It does not authorize merging: agent self-authored PRs are OWNER-GATE (rule 15d).
+- It does not authorize merging: agent self-authored PRs are OWNER-GATE (AGENTS.md rule 11 rubric).
