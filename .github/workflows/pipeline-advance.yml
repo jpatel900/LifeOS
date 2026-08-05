@@ -1,22 +1,15 @@
 name: Pipeline Advance
 
-# Advances the sequential agent pipeline defined in scripts/agent/pipeline-manifest.json.
-# - When a PR that closes a pipeline issue merges into main, kicks the next issue
-#   (posts an @codex implementation comment, or pauses with an owner notification).
-# - When a PR that closes an automerge-eligible pipeline issue is opened, applies the
-#   safe auto-merge request labels. The deterministic path evaluator in
-#   scripts/agent/check-safe-automerge.mjs remains the actual merge gate.
+# RETIRED as live machinery (owner-gated retirement, merged via the PR that
+# carries this comment). The Final UX Loop program (docs/program/) superseded
+# the stage-epic slice relay as the board's governing program — see
+# docs/PROJECT_STATE.md and ADR 0008's ratification record. The manifest
+# (scripts/agent/pipeline-manifest.json) is historical state.
+# workflow_dispatch is kept for archaeology/manual re-runs; the pull_request
+# and schedule triggers that made this workflow act on its own are removed.
 # Per .github/AGENT_AUTOMATION_POLICY.md this file is T2: changes require human review.
 
 on:
-  pull_request:
-    types:
-      - closed
-      - opened
-  schedule:
-    # Watchdog: recover from missed/failed kicks (e.g. Codex 5-hour/weekly usage
-    # limits). Re-kicks a stalled issue after quota windows reset.
-    - cron: "23 */6 * * *"
   workflow_dispatch:
     inputs:
       kick_issue:

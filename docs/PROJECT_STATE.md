@@ -23,7 +23,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 - Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification`; GitHub auto-merge gates on these. The Main Red Guard auto-opens a revert PR when main goes red twice.
 - Per ADR 0006 (multi-client doctrine): one deployable Next.js app is the single authoritative domain/security layer for multiple clients; web UI and headless `@lifeos/cli` consume shared, versioned `/api/v1` contracts with user-scoped bearer auth. No client reimplements business rules or writes to the database directly. Supabase Edge Functions are default-no unless a specific scheduled or integration constraint justifies them.
 - Per ADR 0005 (staged evolution): stage labels order dependencies and risk; data-independent foundations may proceed when owner-ratified; evidence-dependent behavior stays gated on usage evidence. The FR-032/034/037 policy kernels are merged and mutation-tested but remain 1/4 overall — "kernel merged" and "feature shipped" are distinct claims.
-- The stage-epic slice relay (`scripts/agent/pipeline-manifest.json` + `pipeline-advance.yml`) is **dormant**: the Final UX Loop superseded it as the active program. Formal retirement of the workflow is owner-gated (T2 surface); until then treat manifest state as historical.
+- The stage-epic slice relay (`scripts/agent/pipeline-manifest.json` + `pipeline-advance.yml`) is **retired**: the Final UX Loop superseded it as the active program, and the workflow's automatic triggers were removed (owner-merged, 2026-08-05). `workflow_dispatch` remains for manual archaeology; the manifest is historical state.
 - Persistence is intentionally mixed: authenticated Supabase paths where implemented; local/session fallback remains the recovery path when sync or env is unavailable.
 - `design_handoff_lifeos/README.md` is a historical design reference; current UI authority lives in requirements, UX flows, ADRs, and shipped behavior.
 - Governance docs are budgeted: `AGENTS.md` and `CLAUDE.md` stay small; detailed rulebooks live in `.agents/skills`; `docs/agent/` keeps `CODEX_PROMPT_TEMPLATE.md` and `LANES.md` (the Claude/Codex cross-lane protocol).
@@ -41,7 +41,6 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 - Onboarding ritual content (three steps, what they create) — OWNER-GATE; gates campaign C3's close only.
 - Historical fake-"partial" session rows: backfill or leave as-is — OWNER-GATE from merged #764; left as-is until the owner decides.
-- Formal retirement of `pipeline-advance.yml` (see Decisions) — OWNER-GATE, T2 workflow surface.
 - Consumer wiring for the FR-032/034/037 policy kernels is unscoped — each needs its own owner-ratified issue before becoming user-visible.
 - CI `e2e` job still lacks a Supabase-env leg (C1 residual) — infrastructure lane, queued.
 
