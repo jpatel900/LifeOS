@@ -31,7 +31,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Constraints
 
-- Before any work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; one implementation lane at a time (program R7).
+- Before any work, check `docs/program/final-ux-loop.md` §6 for the live campaign and slice; concurrent lanes allowed with disjoint declared manifests (program R7 as amended 2026-08-05; rules in `docs/agent/LANES.md`).
 - Before feature work, map the task to `docs/REQUIREMENTS.md`, define acceptance criteria, identify tests, and flag risky surfaces.
 - New user-owned tables require RLS policies, export coverage, and multi-user tests in the same change.
 - Calendar/OAuth/RLS/schema/security/privacy/data-deletion changes require human review (the full ten-surface list lives in AGENTS.md "Human review required" — that list governs).
