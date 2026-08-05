@@ -54,7 +54,7 @@ Ordered by dependency, not by score. (An earlier draft of this section listed se
 1. **Ratify the Target Card** — DONE 2026-07-26 (targets locked: Trust 10, rest 9; legacy screens = port all four; settings door = require sign-in).
 2. **Per-campaign close sign-off** — a 5-minute glance at the re-score evidence, not a work session.
 3. **Standing decision still open:** onboarding ritual content (gates C3 close only).
-4. **U3 hour** — Phase F's second key. Cannot be delegated.
+4. **U3 hour** — Phase F's second key. Cannot be delegated. Precondition (recorded 2026-08-05, previously owner-folder-only): the scripted U3 test plan in the owner's plans folder predates the C2 legacy-screen ports — it needs a refresh pass against the current build before the hour is run.
 
 ## 6. Program state (live — update at every checkpoint; newest first)
 
