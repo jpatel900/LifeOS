@@ -152,6 +152,43 @@ async function taskStatuses(
   return Object.fromEntries(rows.map((row) => [row.title, row.status]));
 }
 
+/**
+ * The seeded tasks' ids by title, once the ACCOUNT holds every one of them.
+ *
+ * `seedDoTodayTask` returns when the triage sheet reports itself empty — that
+ * is React state, not the account. Reading `tasks` once at that instant is a
+ * read-your-write race, and it lost: measured on this branch, both rows were
+ * in Postgres (`select title from tasks` returned two) while the single
+ * PostgREST read taken right after the second seed saw only the first. Every
+ * control addressed from that map then resolved to `review-sheet-*-undefined`
+ * and the test failed somewhere else entirely.
+ *
+ * Polling until all expected titles are present is the same account-sync gate
+ * `gotoWithAccountSync` applies to navigation, and it strengthens the claim:
+ * the seed is not merely on screen, it is in the account.
+ */
+async function taskIdsByTitle(
+  account: AccountClient,
+  titles: string[],
+): Promise<Record<string, string>> {
+  let ids: Record<string, string> = {};
+  await expect
+    .poll(
+      async () => {
+        ids = Object.fromEntries(
+          (await account.rows<TaskRow>("tasks?select=id,title")).map((row) => [
+            row.title,
+            row.id,
+          ]),
+        );
+        return titles.filter((title) => ids[title]).length;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(titles.length);
+  return ids;
+}
+
 /** The number the headline prints, parsed out of it. */
 async function headlineCount(page: Page): Promise<number | null> {
   const text = (await page.getByTestId("review-sheet-headline").textContent())!;
@@ -174,12 +211,7 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     // position: the list re-orders as decisions land (do-today items come
     // before put-off ones), so `.first()` would silently drift onto the wrong
     // card and the assertion after it would be about a task nobody clicked.
-    const ids = Object.fromEntries(
-      (await account.rows<TaskRow>("tasks?select=id,title")).map((row) => [
-        row.title,
-        row.id,
-      ]),
-    );
+    const ids = await taskIdsByTitle(account, [A, B]);
 
     await openReviewSheet(page);
 
@@ -301,9 +333,9 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     await seedDoTodayTask(page, WAITING);
     await seedDoTodayTask(page, OWED);
 
-    const tasks = await account.rows<TaskRow>("tasks?select=id,title,status");
-    const waiting = tasks.find((row) => row.title === WAITING)!;
-    const owed = tasks.find((row) => row.title === OWED)!;
+    const ids = await taskIdsByTitle(account, [WAITING, OWED]);
+    const waiting = { id: ids[WAITING] };
+    const owed = { id: ids[OWED] };
 
     // No UI writes these columns — they exist to be READ here. Seeded with the
     // browser's own JWT, so RLS is exercised exactly as the app exercises it.
@@ -370,37 +402,75 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
     await seedDoTodayTask(page, "Ported review: the policy pattern");
 
     // `scanOverridePatterns` proposes when 3 of the last 5 decisions on one
-    // (policy, area) were overrides. Rejecting a drafted block writes
+    // (policy, area) were overrides. Rejecting a proposal writes
     // `override_type: "rejected"` on `planning.default_time_block` — the app's
     // own path, so nothing here is hand-written.
+    //
+    // Two semantics govern the loop below, and the first cut of this spec
+    // respected neither:
+    //
+    //  1. Sorting a capture to "Do today" ALREADY mints a pending proposal
+    //     (triage draft-accept). So the plan surface opens with one proposal
+    //     on it, and a bare `toHaveCount(1)` after a draft tap is asserting an
+    //     environment, not a claim — the trap `plan-port-truth.spec.ts` on
+    //     main documents at length.
+    //  2. `rejectTimeBlockProposal` UPDATEs `time_block_proposals` BY ID and
+    //     only records the override once that update succeeds
+    //     (`lib/data/workflow/calendar.ts`). Rejecting a card that is still
+    //     carrying an optimistic client id updates zero rows and records
+    //     nothing, while the card still leaves the screen. Measured on this
+    //     branch: three reject taps, three proposals in Postgres, two of them
+    //     still `proposed`, and exactly ONE override_records row.
+    //
+    // So each pass rejects a proposal THE ACCOUNT HOLDS, addressed by its own
+    // id, and does not move on until that rejection is in the account.
+    const rejectedOverrides = async (): Promise<number> =>
+      (
+        await account.rows<{ override_type: string }>(
+          "override_records?select=override_type&policy_identifier=eq.planning.default_time_block",
+        )
+      ).filter((row) => row.override_type === "rejected").length;
+
+    const pendingProposalIds = async (): Promise<string[]> =>
+      (
+        await account.rows<{ id: string; status: string }>(
+          "time_block_proposals?select=id,status",
+        )
+      )
+        .filter((row) => row.status === "proposed")
+        .map((row) => row.id);
+
     await page.getByTestId("pipeline-overview-stage-plan").click();
     await expect(page.getByTestId("plan-sheet")).toBeVisible({
       timeout: 20_000,
     });
-    for (let i = 0; i < 3; i += 1) {
-      await page.getByTestId("plan-sheet-draft-block").click();
-      await expect(
-        page.getByTestId(/^plan-sheet-proposal-reject-/),
-      ).toHaveCount(1, { timeout: 20_000 });
-      await page
-        .getByTestId(/^plan-sheet-proposal-reject-/)
-        .first()
-        .click();
-      await expect(page.getByTestId("plan-sheet-proposals-empty")).toBeVisible({
-        timeout: 20_000,
-      });
+
+    for (let pass = 1; pass <= 3; pass += 1) {
+      if ((await pendingProposalIds()).length === 0) {
+        await expect(page.getByTestId("plan-sheet-draft-block")).toBeEnabled({
+          timeout: 20_000,
+        });
+        await page.getByTestId("plan-sheet-draft-block").click();
+        await expect
+          .poll(async () => (await pendingProposalIds()).length, {
+            timeout: 30_000,
+          })
+          .toBeGreaterThan(0);
+      }
+
+      const [target] = await pendingProposalIds();
+      const reject = page.getByTestId(`plan-sheet-proposal-reject-${target}`);
+      await expect(reject).toBeVisible({ timeout: 30_000 });
+      await reject.click();
+
+      // The account, not the screen, decides that this pass happened.
+      await expect
+        .poll(rejectedOverrides, { timeout: 30_000 })
+        .toBeGreaterThanOrEqual(pass);
     }
 
     await expect
-      .poll(
-        async () =>
-          (
-            await account.rows<{ override_type: string }>(
-              "override_records?select=override_type&policy_identifier=eq.planning.default_time_block",
-            )
-          ).filter((row) => row.override_type === "rejected").length,
-        { timeout: 30_000 },
-      )
+      .poll(rejectedOverrides, { timeout: 30_000 })
       .toBeGreaterThanOrEqual(3);
 
     // `override_records` load once at mount, so the proposal appears after a
