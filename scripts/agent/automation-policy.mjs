@@ -33,8 +33,12 @@ export const SAFE_AUTOMERGE_BLOCKING_LABELS = [
 // revert PR is open.
 export const SELFMERGE_WINDOW = {
   enabled: true,
-  label: "selfmerge:30m",
-  windowMinutes: 30,
+  // Owner amendment 2026-08-05: instant mode, no fallback (chosen knowingly
+  // over a delivery-confirmed fallback). The Telegram notice is best-effort;
+  // a failed send still merges. windowMinutes 0 = arm immediately; required
+  // CI checks remain the only wait. `selfmerge:30m` stays as an alias.
+  labels: ["selfmerge:auto", "selfmerge:30m"],
+  windowMinutes: 0,
   ownerLogin: "jpatel900",
 };
 

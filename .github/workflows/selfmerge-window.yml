@@ -55,10 +55,12 @@ jobs:
           node-version: 22.13.0
           package-manager-cache: false
 
-      - name: Post or refresh the notification marker
+      - name: Notify (Telegram + marker comment) and arm instantly
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: node scripts/agent/selfmerge-window.mjs --notify
 
   scan:

@@ -51,8 +51,8 @@ export function evaluateSelfmergeCandidate({
     return { armable: false, reasons, renotify: false };
   }
 
-  if (!labels.includes(SELFMERGE_WINDOW.label)) {
-    reasons.push(`Missing opt-in label \`${SELFMERGE_WINDOW.label}\`.`);
+  if (!SELFMERGE_WINDOW.labels.some((l) => labels.includes(l))) {
+    reasons.push(`Missing opt-in label \`${SELFMERGE_WINDOW.labels[0]}\`.`);
   }
   if (!labels.includes("risk:low")) {
     reasons.push("Missing required label `risk:low`.");
@@ -74,10 +74,10 @@ export function evaluateSelfmergeCandidate({
   if (guardRevertOpen) {
     reasons.push("A Main Red Guard revert PR is open — lane paused.");
   }
-  if (mergeStateStatus !== "CLEAN") {
-    reasons.push(
-      `Merge state is \`${mergeStateStatus}\` — arming requires CLEAN (all required checks green, no blocks).`,
-    );
+  // Instant mode: arm while checks run — GitHub auto-merge + branch
+  // protection are the gate. Only a conflicted PR cannot arm.
+  if (mergeStateStatus === "DIRTY") {
+    reasons.push("PR has merge conflicts — resolve before arming.");
   }
 
   if (!Array.isArray(changedPaths) || changedPaths.length === 0) {
@@ -158,9 +158,67 @@ function postNotification(prNumber, headSha) {
     `To stop it: add \`needs:human-decision\`, request changes, or close the PR.`,
   ].join("\n");
   gh(["pr", "comment", String(prNumber), "--body", body]);
+  sendTelegram(prNumber);
   console.log(
     `notified PR #${prNumber} at ${notifiedAt} (head ${headSha.slice(0, 8)})`,
   );
+}
+
+// Best-effort by owner decision 2026-08-05 (no-fallback chosen knowingly):
+// a failed send logs a warning and the merge proceeds regardless.
+function sendTelegram(prNumber) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) {
+    console.log(
+      "telegram: secrets not set; skipping notice (instant mode continues).",
+    );
+    return;
+  }
+  try {
+    const pr = ghJson(["pr", "view", String(prNumber), "--json", "title,url"]);
+    const text = `LifeOS PR #${prNumber} — ${pr.title}
+Merges when tests pass. Stop it: add needs:human-decision or close ${pr.url}`;
+    execFileSync(
+      "curl",
+      [
+        "-s",
+        "-m",
+        "10",
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        "-d",
+        `chat_id=${chatId}`,
+        "--data-urlencode",
+        `text=${text}`,
+      ],
+      { encoding: "utf8" },
+    );
+    console.log("telegram: notice sent.");
+  } catch (error) {
+    console.log(
+      `telegram: send failed (${String(error).slice(0, 120)}); instant mode continues per owner decision.`,
+    );
+  }
+}
+
+// Instant mode: try to arm in the same run that notified.
+function armIfEligible(number) {
+  const health = mainHealth();
+  const context = collectPr(number);
+  const result = evaluateSelfmergeCandidate({
+    enabled: SELFMERGE_WINDOW.enabled,
+    ...context,
+    ...health,
+    nowIso: new Date().toISOString(),
+    windowMinutes: SELFMERGE_WINDOW.windowMinutes,
+  });
+  if (result.armable) {
+    gh(["pr", "merge", String(number), "--squash", "--auto"]);
+    console.log(`ARMED auto-merge for PR #${number} (instant mode).`);
+  } else {
+    const lines = result.reasons.map((r) => `  - ${r}`).join("\n");
+    console.log(`PR #${number} not armed:\n${lines}`);
+  }
 }
 
 function mainHealth() {
@@ -227,16 +285,20 @@ function runNotify() {
     return;
   }
   const labels = (pullRequest.labels ?? []).map((label) => label?.name);
-  if (!labels.includes(SELFMERGE_WINDOW.label) || pullRequest.draft) {
+  if (
+    !SELFMERGE_WINDOW.labels.some((l) => labels.includes(l)) ||
+    pullRequest.draft
+  ) {
     console.log("PR not opted in (or draft); nothing to notify.");
     return;
   }
   const context = collectPr(pullRequest.number);
-  if (context.notifiedHeadSha === context.headSha) {
-    console.log("Notification for this head already exists; clock is running.");
-    return;
+  if (context.notifiedHeadSha !== context.headSha) {
+    postNotification(pullRequest.number, context.headSha);
+  } else {
+    console.log("Notification for this head already exists.");
   }
-  postNotification(pullRequest.number, context.headSha);
+  armIfEligible(pullRequest.number);
 }
 
 function runScan() {
@@ -251,7 +313,7 @@ function runScan() {
     "--state",
     "open",
     "--label",
-    SELFMERGE_WINDOW.label,
+    SELFMERGE_WINDOW.labels.join(","),
     "--json",
     "number",
   ]);
@@ -285,7 +347,7 @@ function runScan() {
 function runSelfTest() {
   const eligible = {
     enabled: true,
-    labels: [SELFMERGE_WINDOW.label, "risk:low"],
+    labels: [SELFMERGE_WINDOW.labels[0], "risk:low"],
     draft: false,
     mergeStateStatus: "CLEAN",
     mainHealthy: true,
@@ -349,8 +411,13 @@ function runSelfTest() {
       expected: { armable: false },
     },
     {
-      name: "pending checks block (mergeState not CLEAN)",
+      name: "pending checks do NOT block instant arming (auto-merge waits on them)",
       input: { ...eligible, mergeStateStatus: "BLOCKED" },
+      expected: { armable: true },
+    },
+    {
+      name: "merge conflicts block arming",
+      input: { ...eligible, mergeStateStatus: "DIRTY" },
       expected: { armable: false },
     },
     {
