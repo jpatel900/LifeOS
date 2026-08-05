@@ -19,6 +19,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 - **Program governance (owner 2026-07-26):** the Final UX Loop owns priority; campaigns close only by fresh-eyes re-score against ratified Target Cards; every passed criterion ships a CI pin in the same PR.
 - **Merge lanes live (ADR 0008, owner-ratified; amended 2026-08-05):** program-doc auto-merge, additive-tests auto-merge, and the instant Telegram-notified self-merge lane (`selfmerge:auto`) are all live and lane-tested; the veto window is the CI runtime. Demotion: one-line `SELFMERGE_WINDOW.enabled` flip.
+- **Owner decisions 2026-08-05 (parked calls cleared):** onboarding ritual content = the existing plan (`docs/implementation-planning/plan-onboarding-ritual.md`) is ratified as-is; the owner judges the built result at C3's experience gate. The #764 fake-"partial" session-rows gate closed as a **no-op** — prod verified 2026-08-05: zero such rows exist (2 total sessions, none `partial`). The KNOWN_ISSUES update-coupling rule (any PROJECT_STATE update triages the oldest undecided row) is **kept**, owner-affirmed.
 - **Plain language for humans (owner 2026-08-04):** anything shown to a human — UI copy, reports, owner options — uses simple, easy-to-understand language. Technical density belongs in agent-to-agent docs only.
 - Safety boundaries are unchanged: no silent external writes, no autonomous rescheduling, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
 - Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification`; GitHub auto-merge gates on these. The Main Red Guard auto-opens a revert PR when main goes red twice.
@@ -40,8 +41,6 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Open questions
 
-- Onboarding ritual content (three steps, what they create) — OWNER-GATE; gates campaign C3's close only.
-- Historical fake-"partial" session rows: backfill or leave as-is — OWNER-GATE from merged #764; left as-is until the owner decides.
 - Consumer wiring for the FR-032/034/037 policy kernels is unscoped — each needs its own owner-ratified issue before becoming user-visible.
 - CI `e2e` job still lacks a Supabase-env leg (C1 residual) — infrastructure lane, queued.
 

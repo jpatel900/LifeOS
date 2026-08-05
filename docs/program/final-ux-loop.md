@@ -53,7 +53,7 @@ Ordered by dependency, not by score. (An earlier draft of this section listed se
 
 1. **Ratify the Target Card** — DONE 2026-07-26 (targets locked: Trust 10, rest 9; legacy screens = port all four; settings door = require sign-in).
 2. **Per-campaign close sign-off** — a 5-minute glance at the re-score evidence, not a work session.
-3. **Standing decision still open:** onboarding ritual content (gates C3 close only).
+3. **Onboarding ritual content — DECIDED 2026-08-05:** the existing plan (`docs/implementation-planning/plan-onboarding-ritual.md`) is ratified as-is; the owner judges the built result at C3's experience gate. C3's close no longer waits on any owner decision.
 4. **U3 hour** — Phase F's second key. Cannot be delegated. Precondition (recorded 2026-08-05, previously owner-folder-only): the scripted U3 test plan in the owner's plans folder predates the C2 legacy-screen ports — it needs a refresh pass against the current build before the hour is run.
 
 ## 6. Program state (live — update at every checkpoint; newest first)
@@ -63,6 +63,7 @@ Ordered by dependency, not by score. (An earlier draft of this section listed se
 > Trajectory: 3.5 (baseline) → 7.5 (R1) → 8.75 (R2) → **10 (R3)**. Round-3 judge (issue #737, "ROUND 3" comment): all six criteria PASS with driven evidence, pins mutation-verified independently, criteria 3+5 driven at 390px. Held by: per-surface phrase guards, session write-at-end pins, capture status guards, daily-close idempotency (DB + e2e), grants static guard + authenticated RLS tests, five-noun durability pins including the first account-tier Playwright pin riding migrations-rls.
 > **Residual (infrastructure):** give the CI `e2e` job a Supabase-env leg so all six criteria get the seam-free signed-in tier.
 
+- **2026-08-05 — parked owner calls cleared (owner, same sitting):** onboarding ritual content DECIDED — the existing plan ratified as-is, owner judges the built result at the experience gate; C3's close gate is clear. The #764 fake-"partial" rows gate closed as a no-op (prod verified: zero such rows). KNOWN_ISSUES' update-coupling rule kept, owner-affirmed.
 - **2026-08-04 — C2 in flight, one setback:** S0 sign-in door landed (#803). S2 Plan-surface port merged (#804) but its own truth spec failed on main twice; Main Red Guard revert #806 is armed to take main back to #803 — S2 re-lands with the fix. S3 Review port is drafted (#809) and waits behind the S2 re-land. The skill-hub sync (#805) was swept up in the same revert and re-lands separately.
 - **NEXT: C2 STRUCTURE** (card 2, IA 5.0→9): port ALL FOUR legacy screens (owner-ratified; preserve hour-rail placement, unplan, proposal accept/reject/nudge, Google approval, planned-vs-actual, policy proposals), require-sign-in door on /settings/areas. Slice plan: `docs/program/campaign-c2-structure.md`.
 
