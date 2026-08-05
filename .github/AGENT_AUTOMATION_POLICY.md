@@ -3,7 +3,7 @@
 This file defines the required human gate for agent-driven repo changes and GitHub automation in LifeOS.
 
 LifeOS product/runtime automation remains tightly restricted by `AGENTS.md` and product authority docs.
-Engineering automations may write only to isolated branches and approved GitHub metadata surfaces such as pull requests or issue comments. They must be label-gated, path-guarded, validation-gated, and must not touch production data, secrets, non-GitHub external systems, or LifeOS runtime state.
+Engineering automations may write only to isolated branches and approved GitHub metadata surfaces such as pull requests or issue comments. They must be label-gated, path-guarded, validation-gated, and must not touch production data, secrets, non-GitHub external systems (sole exception: owner-configured notify-only channels — see the instant self-merge section), or LifeOS runtime state.
 Safe auto-merge also requires the repository-level GitHub auto-merge setting to be enabled. Without that repo setting, the workflow remains a guard/evaluator and cannot successfully arm auto-merge.
 
 If a task spans multiple categories, apply the highest tier.
@@ -26,9 +26,11 @@ Current deterministic safe auto-merge allowlist:
 
 Second T0 route (ADR 0008 move 1b, owner-ratified 2026-08-04): strictly-additive test-only PRs under `automerge:tests-additive` + `risk:low`. Machine-checked, not claimed: every changed file must match the test-path allowlist in `scripts/agent/automation-policy.mjs` and the diff must contain zero deleted lines (renames, deletions, and binary changes disqualify). CI still gates the merge, and the Main Red Guard demotion applies to this class on any incident.
 
-## Self-merge window (ADR 0008 move 2)
+## Instant self-merge with owner notification (ADR 0008 move 2, amended 2026-08-05)
 
-A `risk:low`, non-T2+ agent PR may opt into the self-merge window with the `selfmerge:30m` label. The workflow (`.github/workflows/selfmerge-window.yml` + `scripts/agent/selfmerge-window.mjs`) posts an owner-notification comment that starts a 30-minute clock (owner-set at ratification), then arms GitHub auto-merge only if ALL of: window elapsed, merge state CLEAN (required checks green), main green, no open guard-revert PR, no blocking label, no changes-requested review, no T2+ path touched, and no commits after the notification (new commits reset the clock with a fresh notice). To stop one PR: add `needs:human-decision`, request changes, or close it. To demote the whole class: set `SELFMERGE_WINDOW.enabled` to `false` in `scripts/agent/automation-policy.mjs` (one-line PR); the lane also pauses itself automatically whenever main is red.
+A `risk:low`, non-T2+ agent PR may opt in with the `selfmerge:auto` label (`selfmerge:30m` remains an alias). On labeling, the workflow sends a 1-2 line Telegram notice to the owner and posts a marker comment, then arms GitHub auto-merge IMMEDIATELY — the required CI checks are the only wait, and the check runtime is the owner's veto window (add `needs:human-decision`, request changes, or close the PR before checks pass). Guards still required at arm time: main green, no open guard-revert PR, no blocking label, no changes-requested review, no T2+ path, no merge conflicts. Owner decision recorded plainly: NO delivery fallback was chosen — if the Telegram send fails or its secrets are absent, the merge proceeds with no notice; compensating controls are the low-risk scope, the Main Red Guard, and class demotion (`SELFMERGE_WINDOW.enabled: false`, one-line PR).
+
+Notification-channel carve-out (same amendment): the ban on automations touching non-GitHub systems has exactly one exception — notify-only messages to the owner's own configured channel (Telegram via `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` secrets). Nothing may be read from, or written to, any other external surface.
 
 ## T1 — Agent PR allowed, human review recommended
 
