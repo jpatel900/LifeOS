@@ -65,6 +65,9 @@ jobs:
       - name: check-safe-automerge self-test
         run: node scripts/agent/check-safe-automerge.mjs --self-test
 
+      - name: selfmerge-window self-test
+        run: node scripts/agent/selfmerge-window.mjs --self-test
+
       - name: safe-automerge-demotion self-test
         run: node scripts/agent/safe-automerge-demotion.mjs --self-test
 

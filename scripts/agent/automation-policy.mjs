@@ -25,6 +25,19 @@ export const SAFE_AUTOMERGE_BLOCKING_LABELS = [
   "needs:human-decision",
 ];
 
+// ADR 0008 move 2 (owner-ratified 2026-08-04, window owner-set to 30
+// minutes): a risk:low, non-T2+ agent PR may arm auto-merge after sitting
+// open for the window with the owner notified. Flip `enabled` to false to
+// demote the whole class (the ADR's reversal trigger); the scan also
+// pauses itself automatically whenever main is red or a Main Red Guard
+// revert PR is open.
+export const SELFMERGE_WINDOW = {
+  enabled: true,
+  label: "selfmerge:30m",
+  windowMinutes: 30,
+  ownerLogin: "jpatel900",
+};
+
 export const SAFE_AUTOMERGE_ALLOWED_PATH_PATTERNS = [
   "docs/**",
   "README.md",

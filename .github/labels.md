@@ -30,6 +30,7 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 - `needs:human-decision` - The issue is blocked on scope, policy, approval, or risk decisions a human must make.
 - `automerge:safe` - The issue is explicitly approved for the T0 safe auto-merge lane when deterministic path checks also pass.
 - `automerge:tests-additive` - Strictly-additive test-only PR opting into the ADR 0008 move-1b auto-merge route; the guard verifies test-paths-only and zero deleted lines.
+- `selfmerge:30m` - Low-risk agent PR opting into the ADR 0008 move-2 self-merge window: the owner is notified, and auto-merge arms 30 minutes later if every guard passes.
 - `agent:claimed` - An agent has claimed this issue and is actively working it; do not start parallel work (AGENTS.md claim-before-build rule).
 - `usability` / `enjoyability` - Lane labels driving the two-lane work-map view; apply one at issue creation.
 
