@@ -26,6 +26,10 @@ Current deterministic safe auto-merge allowlist:
 
 Second T0 route (ADR 0008 move 1b, owner-ratified 2026-08-04): strictly-additive test-only PRs under `automerge:tests-additive` + `risk:low`. Machine-checked, not claimed: every changed file must match the test-path allowlist in `scripts/agent/automation-policy.mjs` and the diff must contain zero deleted lines (renames, deletions, and binary changes disqualify). CI still gates the merge, and the Main Red Guard demotion applies to this class on any incident.
 
+## Self-merge window (ADR 0008 move 2)
+
+A `risk:low`, non-T2+ agent PR may opt into the self-merge window with the `selfmerge:30m` label. The workflow (`.github/workflows/selfmerge-window.yml` + `scripts/agent/selfmerge-window.mjs`) posts an owner-notification comment that starts a 30-minute clock (owner-set at ratification), then arms GitHub auto-merge only if ALL of: window elapsed, merge state CLEAN (required checks green), main green, no open guard-revert PR, no blocking label, no changes-requested review, no T2+ path touched, and no commits after the notification (new commits reset the clock with a fresh notice). To stop one PR: add `needs:human-decision`, request changes, or close it. To demote the whole class: set `SELFMERGE_WINDOW.enabled` to `false` in `scripts/agent/automation-policy.mjs` (one-line PR); the lane also pauses itself automatically whenever main is red.
+
 ## T1 — Agent PR allowed, human review recommended
 
 Agent may implement and open a PR. Human review is recommended before merge.
