@@ -659,6 +659,8 @@ Non-goals:
 
 ### FR-031 — Task-Map v1 (DAG Progression Map)
 
+_Forward-binding guard (vision harvest, landed 2026-08-05): any map altitude above the week — the v2+ life-arc zoom — renders only from approved retrospective evidence, never from predicted futures. This sentence binds every future map slice._
+
 **Priority:** MUST
 
 **Stage:** Approved contract — owner-ratified through issue #484 and PR #487. Implementation follows the S2 → S3 (#255) → FR-031 dependency chain in `docs/implementation-planning/plan-task-map-contract.md` and requires an issue-scoped build contract.
@@ -840,6 +842,24 @@ Non-goals (binding):
 - Any archive path that can include secrets or token material (FR-016's exclusion list holds).
 
 ---
+
+### Trust kernel (`trust_ledger`) — shared primitive, pre-FR dependency contract
+
+_Vision-harvest residue landed 2026-08-05 (execution-companion item 4; previously the schema existed only in `docs/vision/`). FR-047 already cites this primitive as a dependency._
+
+All trust ladders — autonomy, initiative, surface-area, and any future ladder — instantiate ONE shared primitive; parallel bespoke trust mechanisms are forbidden. Eventual shape (build is its own owner-ratified issue): `trust_ledger(class_id text pk, domain enum, current_rung int, cap int nullable, evidence_count int, window_override_rate numeric, last_demotion_at, graduation_rule_id)`, fed by existing suggestion/override records via a policy_id → class_id mapping. Rungs move only via recorded evidence; demotion is deterministic; irreversible classes carry a cap that is NEVER raised without an owner-signed ADR.
+
+### Compensation classes — prosthesis / exoskeleton / teacher (design doctrine)
+
+_Vision-harvest residue landed 2026-08-05 (deeper-pass Part 7; the one-line axiom landed in July, the classification table did not). Classify each compensation when its build slice is contracted._
+
+| Class       | Meaning                                       | Build consequence                                                                                               | Examples                                                  |
+| ----------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Prosthesis  | Replaces a function minds hold badly, forever | Build deep, reliable, invisible; never plan its removal                                                         | Prospective memory (Triggers), commitment aging, records  |
+| Exoskeleton | Amplifies a function under load               | Flexes with conditions — tight on low days, near-silent on clear ones                                           | Focus budgets, WIP refusal, 2-minute first move, re-entry |
+| Teacher     | Builds the function, then steps back          | Instrument for graduation; when evidence says the skill internalized, the system proposes removing the scaffold | Duration estimation, map-drafting decomposition           |
+
+Success is re-allocation, not independence or dependence: everything sits with whichever member of the dyad holds it best, and the boundary is renegotiated by evidence.
 
 > FR-039 through FR-045 are the 2026-07-10 framework-gap reservations: a section-by-section audit of the General Productivity Framework against this document found these as the only prescriptions with neither shipped code nor an existing reservation. They follow the FR-031 docs-first pattern — this text is the requirement; each build slice needs owner ratification and its actual dependencies. Under ADR 0005, only capabilities that depend on personal evidence wait for that evidence; the shared Stage label is not a blanket hold on data-independent foundations.
 
@@ -1023,7 +1043,9 @@ Non-goals (binding):
 
 ---
 
-### FR-047 (reservation) — Mirror (dyad vital-signs surface)
+### FR-047 — Mirror (dyad vital-signs surface)
+
+_Status truth (2026-08-05): slice 1 shipped (issue #668 closed — trend kernel + Mirror panel on Health); M3/M4 remainder unbuilt. Was mislabeled "(reservation)" while code shipped._
 
 **Priority:** SHOULD
 
@@ -1057,7 +1079,9 @@ Decided (owner, 2026-07-23 backlog sitting; written back 2026-08-05 — these we
 
 ---
 
-### FR-048 (reservation) — Triggers (context-conditioned prospective memory)
+### FR-048 — Triggers (context-conditioned prospective memory)
+
+_Status truth (2026-08-05): matching kernel merged (issue #669 closed) with zero consumers; persistence/RLS/UI/firing (T2-T5) unbuilt. Was mislabeled "(reservation)" while kernel code shipped._
 
 **Priority:** SHOULD
 
