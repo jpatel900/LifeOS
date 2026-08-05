@@ -74,9 +74,6 @@ jobs:
       - name: low-risk issue authorization self-test
         run: node scripts/agent/low-risk-issue-policy.mjs --self-test
 
-      - name: red-guard diagnosis self-test
-        run: node scripts/agent/red-guard-diagnose.mjs --self-test
-
   migration-timestamp-collision:
     name: Migration timestamp collision precheck
     if: github.event_name == 'pull_request'

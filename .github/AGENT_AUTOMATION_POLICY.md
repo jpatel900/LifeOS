@@ -32,17 +32,6 @@ A `risk:low`, non-T2+ agent PR may opt in with the `selfmerge:auto` label (`self
 
 Notification-channel carve-out (same amendment): the ban on automations touching non-GitHub systems has exactly one exception — notify-only messages to the owner's own configured channel (Telegram via `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` secrets). Nothing may be read from, or written to, any other external surface.
 
-## Main Red Guard — notify and hold (owner decision 2026-08-05)
-
-Detection is unchanged: CI failing on a push to `main` re-runs the failed jobs once, and only a reproduced failure (attempt 2+) fires the guard. What changed is what happens next. **The guard never arms auto-merge on its own revert PRs.** Owner decision recorded verbatim: "notify and hold + automatic stand-down + a diagnosis step".
-
-- **Hold.** The revert PR still opens on double-red main, and its body says plainly: this revert is HELD, nothing merges until a human adds `revert:confirm`, and closing the PR cancels the revert.
-- **Diagnose.** `scripts/agent/red-guard-diagnose.mjs` reads every attempt of the failed run, quotes the failing spec lines back, and classifies in plain language: the same test failing the same way on every attempt means the change or a real race is suspect; the same test failing in different ways, or different tests failing per attempt, means a flaky tier or the environment is suspect and a revert probably will not fix it. Fewer than two readable attempts degrades to "diagnosis unavailable: `<reason>`" rather than a confident guess. The read is posted on the PR and compressed to a 1-2 line Telegram notice under the carve-out above; if the send fails the guard proceeds without a notice and says so in the PR comment.
-- **Confirm to arm.** Adding `revert:confirm` to an open guard revert PR arms auto-merge — unless `revert:wont-fix` is present, which gets an explaining comment instead.
-- **Stand down.** When the revert PR's own CI completes, if a job with the same name as the one that reddened main also failed here, the revert cannot fix main: the guard adds `revert:wont-fix`, comments that a forward fix is indicated, and disarms auto-merge if a human had already confirmed.
-
-Why: on 2026-08-05 the guard auto-armed PR #841 against five commits (an app re-land plus four docs-only commits) over what the evidence showed was tier nondeterminism — the same new spec failing two different ways across attempts. Only the revert's own coincidentally-red CI stopped it from landing.
-
 ## T1 — Agent PR allowed, human review recommended
 
 Agent may implement and open a PR. Human review is recommended before merge.
@@ -88,7 +77,6 @@ Typical paths:
 - Shared automation path policy: `scripts/agent/automation-policy.mjs`
 - Shared automation path guard: `scripts/agent/check-automation-scope.mjs`
 - PR risk classification: `scripts/agent/classify-pr-risk.mjs`
-- Main Red Guard hold, diagnosis, and stand-down: `.github/workflows/main-red-guard.yml` and `scripts/agent/red-guard-diagnose.mjs`
 - PR evidence guidance: `AGENTS.md` rule 11 (verified claims: evidence or UNVERIFIED; OWNER-GATE/AGENT-TODO markers)
 - Decision review guidance: `docs/adr/` (architecture decisions) and `AGENTS.md` change-control rules
 

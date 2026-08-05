@@ -34,13 +34,6 @@ Use labels to show agent readiness, owning surface, expected risk, and automatio
 - `agent:claimed` - An agent has claimed this issue and is actively working it; do not start parallel work (AGENTS.md claim-before-build rule).
 - `usability` / `enjoyability` - Lane labels driving the two-lane work-map view; apply one at issue creation.
 
-## Main Red Guard revert PRs (owner decision 2026-08-05: notify and hold)
-
-Guard revert PRs open HELD and never arm auto-merge on their own.
-
-- `revert:confirm` - A human confirms the revert: auto-merge arms and the revert lands once its checks pass. Only a person adds this. Ignored when `revert:wont-fix` is also present.
-- `revert:wont-fix` - Applied by the guard itself when the revert PR's own CI fails the same job that made main red: reverting will not restore green, so a forward fix is indicated.
-
 ## Suggested combinations
 
 - Typical bounded UI task: `agent:ready`, `agent:codex`, `area:ui`, `risk:low`
