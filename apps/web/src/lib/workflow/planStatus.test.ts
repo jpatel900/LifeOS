@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildPipelineCounts } from "@/app/components/moments/pipelineCounts";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import type { WorkflowState } from "@/lib/workflow";
@@ -27,6 +27,27 @@ import { selectTasksToPlace } from "./planStatus";
  */
 
 const NOW = new Date("2026-08-04T12:00:00");
+
+/**
+ * The clock is pinned to `NOW`, not just read as `NOW` (lane contract clause 5,
+ * "pin calendar/clock-dependent moments in specs").
+ *
+ * `planLatestActiveTask` -> `planTaskAtHour` builds its block from the REAL
+ * `new Date()`, while every surface below is asked "what is left to place?"
+ * as of `NOW`. Without this pin those two dates are the same day only on
+ * 2026-08-04 itself: from 2026-08-05 onward the drift block lands on a rail
+ * `NOW` calls tomorrow, so the "already holds a block on today's rail" cases
+ * counted 1 instead of 0. That is how this file passed in CI on the day #804
+ * merged and failed on the next day's local run.
+ */
+beforeAll(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 /**
  * The `KNOWN_ISSUES` row 11 shape (2026-07-03 production smoke, also pinned by
