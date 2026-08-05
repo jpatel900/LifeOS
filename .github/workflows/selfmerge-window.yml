@@ -21,6 +21,13 @@ on:
       - ready_for_review
   schedule:
     - cron: "*/10 * * * *"
+  # The live test 2026-08-05 showed GitHub's cron never fired for 2+ hours
+  # on this new workflow. workflow_run makes the scan event-driven: it also
+  # fires whenever a CI run completes, so arming happens promptly during
+  # active periods even if the cron sleeps.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   workflow_dispatch:
 
 concurrency:
@@ -56,7 +63,7 @@ jobs:
 
   scan:
     name: Arm eligible PRs past their window
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
