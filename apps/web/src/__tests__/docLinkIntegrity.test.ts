@@ -204,12 +204,12 @@ describe("doc link integrity", () => {
     const offenders: { doc: string; match: string }[] = [];
 
     for (const doc of scopes) {
-      // Backtick spans are file paths/identifiers (e.g. an audit filename
-      // that happens to contain a model name), not lane assignments.
-      const content = readFileSync(resolve(repoRoot, doc), "utf8").replace(
-        /`[^`\n]*`/g,
-        "",
-      );
+      // Backtick spans and markdown link targets are file paths/identifiers
+      // (e.g. a vision filename that happens to contain a model name), not
+      // lane assignments. Prose stays fully checked.
+      const content = readFileSync(resolve(repoRoot, doc), "utf8")
+        .replace(/`[^`\n]*`/g, "")
+        .replace(/\]\([^)\n]*\)/g, "]");
       const match = content.match(MODEL_TOKENS);
       if (match) offenders.push({ doc, match: match[0] });
     }
