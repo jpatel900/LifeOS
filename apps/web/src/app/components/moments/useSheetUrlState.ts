@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isSheetValue, type SheetValue } from "./sheetValues";
 
 /**
  * Final UX Loop C2 — Target Card 2 (Structure): "every state change is
@@ -39,10 +40,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * remount the sheet's own state on every open and close.
  */
 
-export type SheetValue = "triage" | "plan";
+export type { SheetValue };
 
 export function parseSheetParam(value: string | null): SheetValue | null {
-  return value === "triage" || value === "plan" ? value : null;
+  return isSheetValue(value) ? value : null;
 }
 
 /** Current URL with `sheet` set to `sheet`, or removed when null. */

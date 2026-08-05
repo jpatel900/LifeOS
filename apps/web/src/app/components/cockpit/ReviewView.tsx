@@ -1,5 +1,9 @@
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import type { PolicyChangeCandidate } from "@/lib/learning/overrideScan";
+import {
+  countNeedsDecision,
+  needsDecisionHeadline,
+} from "@/lib/workflow/reviewStatus";
 import { cn } from "@/lib/utils";
 import { HIT_TARGET_MIN } from "../moments/hitTarget";
 import { Panel, ringStyle } from "./shared";
@@ -28,13 +32,22 @@ export function ReviewView({
   onDrop: (taskId: string) => void;
   onSave: () => void;
 }) {
-  const total =
-    vm.done.length +
-    vm.planned.length +
-    vm.today.length +
-    vm.reviewQueue.length;
+  // C2-S3 / FINDING 5. This used to be
+  // `done + planned + today + reviewQueue`, minus `done` — and `reviewQueue`
+  // already contains every `today` and every `backlog` task, so each one was
+  // counted twice and every planned block was counted as work carried over.
+  // The inventory measured the result on one screen at one instant: headline
+  // 6, stage chip 3, cards rendered 3.
+  //
+  // Both halves are fixed here, because arithmetic alone was not the bug:
+  // - the NUMBER is the length of the list rendered below, via the shared
+  //   `reviewStatus` definition, so the two cannot drift; and
+  // - the WORDS are no longer "carry over", which claimed every still-open
+  //   item while a `scheduled` task is still open and deliberately not in
+  //   this list. See `lib/workflow/reviewStatus.ts`.
+  const needsDecision = countNeedsDecision(vm.reviewQueue);
   const done = vm.done.length;
-  const carry = Math.max(total - done, 0);
+  const total = done + needsDecision;
   return (
     <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
       <Panel className="grid place-items-center text-center">
@@ -74,7 +87,7 @@ export function ReviewView({
               (overshoots the fixed type scale and the 700-weight cap) onto
               the shared h1 grammar (2.25rem/700, .moments-greeting). */}
           <h1 className="moments-greeting mt-4" data-testid="review-headline">
-            {carry === 0 ? "Ready to close" : `${carry} carry over`}
+            {needsDecisionHeadline(needsDecision)}
           </h1>
         </div>
         <button

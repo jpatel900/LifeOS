@@ -61,6 +61,16 @@ describe("deepLinkTargetFromParams", () => {
     });
   });
 
+  // C2-S3: the Review sheet joined the URL contract. Inbound (here) and
+  // outbound (`useSheetUrlState`) now read one shared list, `sheetValues.ts`,
+  // so a sheet can never be openable from the rail and unopenable from a
+  // refresh — the Target Card 2 failure #804 fixed for the other two.
+  it("maps ?sheet=review to the review sheet", () => {
+    expect(deepLinkTargetFromParams({ sheet: "review" })).toEqual({
+      sheet: "review",
+    });
+  });
+
   it("maps ?capture and ?palette flags to their overlays", () => {
     expect(deepLinkTargetFromParams({ capture: "1" })).toEqual({
       overlay: "capture",

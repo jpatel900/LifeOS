@@ -55,6 +55,7 @@ import { readDayShapePreferences } from "@/lib/onboarding/onboarding";
 import { buildPipelineCounts } from "./pipelineCounts";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
+import { ReviewSheet } from "./ReviewSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
@@ -689,9 +690,19 @@ export function TodayMoments({
         openSheet("plan");
         return;
       }
+      // C2-S3: the Review node used to land here, on a toast that named a
+      // shell the user cannot open — a control that says it does something and
+      // does not, which is FINDING 1's class. It now opens the ported Review
+      // surface. Capture and Execute still fall through deliberately: neither
+      // has been ported yet, and inventing a destination for them would repeat
+      // the defect this line just removed.
+      if (stage === "review") {
+        openSheet("review");
+        return;
+      }
       showToast("Opens with the full shell");
     },
-    [showToast],
+    [openSheet, showToast],
   );
 
   // #588: the only close-day path in this shell. "Day closed" is reported
@@ -1393,6 +1404,19 @@ export function TodayMoments({
         blocks={startVM.blocks}
         timeDisplay={timeDisplay}
         now={now}
+        onToast={showToast}
+      />
+
+      {/* C2-S3: the day-close truth is passed IN. `handleCloseDay` is the one
+          close path in this shell (its own comment says so) and `closeVM`
+          holds C1's verdict, so the sheet renders both and owns neither. */}
+      <ReviewSheet
+        open={activeSheet === "review"}
+        onClose={() => closeSheet()}
+        selectedAreaId={selectedAreaId}
+        now={now}
+        dayClose={closeVM.dayClose}
+        onCloseDay={handleCloseDay}
         onToast={showToast}
       />
 

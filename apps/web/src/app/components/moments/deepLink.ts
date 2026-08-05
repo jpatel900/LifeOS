@@ -7,10 +7,12 @@
  * that TodayMoments' `deepLink` prop consumes.
  */
 
+import { isSheetValue, type SheetValue } from "./sheetValues";
+
 export type DeepLinkTarget = {
   moment?: "start" | "flow" | "close";
   overlay?: "capture" | "palette";
-  sheet?: "triage" | "plan";
+  sheet?: SheetValue;
 } | null;
 
 const DEEP_LINK_MAP: Record<string, DeepLinkTarget> = {
@@ -59,8 +61,12 @@ export function deepLinkTargetFromParams(
     return { moment };
   }
 
+  // C2-S3: one list of sheet names, shared with `useSheetUrlState`. The inbound
+  // parser and the outbound writer drifting apart is precisely how `?sheet=`
+  // ends up opening on a rail tap but not on a refresh — the Target Card 2
+  // failure #804 fixed for the two sheets that existed then.
   const sheet = first(params.sheet);
-  if (sheet === "triage" || sheet === "plan") {
+  if (isSheetValue(sheet)) {
     return { sheet };
   }
 

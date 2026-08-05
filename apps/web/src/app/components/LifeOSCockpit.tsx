@@ -709,10 +709,15 @@ export function LifeOSCockpit({
               vm={vm}
               policyProposals={overridePolicyProposals}
               onDecidePolicy={decideOverridePolicyProposal}
-              onCarryForward={(taskId) => {
-                carryForwardTask(taskId);
-                navigate("plan");
-              }}
+              // C2-S3 / FINDING 6: this used to also `navigate("plan")`. One
+              // press on the first card left the review screen, taking the
+              // remaining cards, Defer, Drop and Save review with it —
+              // measured: 2 recovery cards before the click, 0 Carry forward
+              // and 0 Save review buttons after. Defer and Drop, in the same
+              // button row, always stayed. A review is a pass over several
+              // items; deciding one is not a reason to end it. Pinned by
+              // `__tests__/reviewSurfaceTruth.test.tsx`.
+              onCarryForward={carryForwardTask}
               onDefer={deferTask}
               onDrop={dropTask}
               onSave={() => {

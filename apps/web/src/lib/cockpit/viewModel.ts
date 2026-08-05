@@ -18,6 +18,10 @@ import { cardBg } from "./accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
 import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
 import { selectTasksToPlace } from "@/lib/workflow/planStatus";
+import {
+  selectNeedsDecision,
+  type ReviewQueueItem,
+} from "@/lib/workflow/reviewStatus";
 
 export type CockpitStage =
   | "today"
@@ -63,12 +67,12 @@ export interface CockpitViewModel {
   done: Phase2MockTask[];
   sessions: Phase2MockExecutionSession[];
   healthChecks: WorkflowState["healthChecks"];
-  reviewQueue: {
-    task: Phase2MockTask;
-    block: Phase2MockCalendarBlock | null;
-    session: Phase2MockExecutionSession | null;
-    reason: "open" | "backlog" | "stuck" | "missed" | "partial";
-  }[];
+  /**
+   * C2-S3: the shape and the rule now live in
+   * `lib/workflow/reviewStatus.ts` — the shared "needs a decision" definition
+   * every review surface counts and lists from.
+   */
+  reviewQueue: ReviewQueueItem[];
   /** S4 (#256): rule-based waiting-on aging, scoped to the active area. */
   agingWaitingOn: AgingWaitingOnItem<Phase2MockTask>[];
   /** S4 (#256): open commitments owed by the user, oldest first, scoped to the active area. */
@@ -161,17 +165,6 @@ function makePipelineCard(
   };
 }
 
-function uniqueReviewItems(
-  items: CockpitViewModel["reviewQueue"],
-): CockpitViewModel["reviewQueue"] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (seen.has(item.task.id)) return false;
-    seen.add(item.task.id);
-    return true;
-  });
-}
-
 export function buildCockpitViewModel(
   state: WorkflowState,
   selectedAreaId: string | null,
@@ -255,82 +248,9 @@ export function buildCockpitViewModel(
   const sessions = state.executionSessions.filter(
     (session) => session.area_id === areaId,
   );
-  const reviewQueue = uniqueReviewItems([
-    ...state.executionSessions
-      .filter(
-        (session) =>
-          session.area_id === areaId &&
-          [
-            "stuck",
-            "missed",
-            "stopped",
-            "distracted",
-            "partial",
-            "skipped",
-          ].includes(session.status),
-      )
-      .map((session) => {
-        const task = state.tasks.find((item) => item.id === session.task_id);
-        const block =
-          state.calendarBlocks.find(
-            (item) => item.id === session.calendar_block_id,
-          ) ?? null;
-        if (!task) return null;
-        return {
-          task,
-          block,
-          session,
-          reason:
-            session.status === "missed" || session.status === "skipped"
-              ? ("missed" as const)
-              : session.status === "partial"
-                ? ("partial" as const)
-                : ("stuck" as const),
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
-    ...state.calendarBlocks
-      .filter((block) => block.area_id === areaId && block.status === "missed")
-      .map((block) => {
-        const task = state.tasks.find((item) => item.id === block.task_id);
-        if (!task) return null;
-        return {
-          task,
-          block,
-          session:
-            state.executionSessions.find(
-              (session) => session.calendar_block_id === block.id,
-            ) ?? null,
-          reason: "missed" as const,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item)),
-    ...state.tasks
-      .filter((task) => task.area_id === areaId && task.status === "blocked")
-      .map((task) => ({
-        task,
-        block:
-          state.calendarBlocks.find((block) => block.task_id === task.id) ??
-          null,
-        session:
-          state.executionSessions.find(
-            (session) => session.task_id === task.id,
-          ) ?? null,
-        reason: "stuck" as const,
-      })),
-    ...today.map((task) => ({
-      task,
-      block: null,
-      session: null,
-      reason: "open" as const,
-    })),
-    ...backlog.map((task) => ({
-      task,
-      block: null,
-      session: null,
-      reason: "backlog" as const,
-    })),
-  ]);
+  // C2-S3 / FINDING 5: one definition, shared with every review surface.
+  // The count a surface prints and the list it renders are the same array.
+  const reviewQueue = selectNeedsDecision(state, areaId);
   const globalPlannedBlocks = state.calendarBlocks.filter(
     (block) => ["scheduled", "running"].includes(block.status) && block.task_id,
   );
