@@ -31,7 +31,11 @@ import {
   runSelfTest,
 } from "./red-guard-diagnose.mjs";
 
-function attempt(number, logText, jobNames = ["Playwright E2E (signed-in)"]) {
+function attempt(
+  number,
+  logText,
+  jobNames = ["Playwright E2E (signed-in tier)"],
+) {
   return {
     attempt: number,
     logsAvailable: true,
@@ -108,7 +112,7 @@ test("the diagnosis comment states the hold and round-trips its marker", () => {
   ]);
   const marker = renderMarker({
     failedRunId: "31039290572",
-    failedJobNames: ["Playwright E2E (signed-in)"],
+    failedJobNames: ["Playwright E2E (signed-in tier)"],
     verdict: classification.verdict,
   });
   const body = renderDiagnosisComment({
@@ -121,7 +125,7 @@ test("the diagnosis comment states the hold and round-trips its marker", () => {
   assert.match(body, new RegExp(CONFIRM_LABEL));
   const parsed = parseMarker([{ body: "unrelated" }, { body }]);
   assert.equal(parsed.failedRunId, "31039290572");
-  assert.deepEqual(parsed.failedJobNames, ["Playwright E2E (signed-in)"]);
+  assert.deepEqual(parsed.failedJobNames, ["Playwright E2E (signed-in tier)"]);
 });
 
 test("the Telegram notice is at most two lines and names the hold", () => {
@@ -163,8 +167,11 @@ test("confirm-to-arm only arms on a human label, never against wont-fix", () => 
 
 test("stand-down fires only on a same-named failing job, and disarms if armed", () => {
   const fired = evaluateStandDown({
-    mainFailedJobNames: ["Playwright E2E (signed-in)", "Monorepo Validation"],
-    revertFailedJobNames: ["Playwright E2E (signed-in)"],
+    mainFailedJobNames: [
+      "Playwright E2E (signed-in tier)",
+      "Monorepo Validation",
+    ],
+    revertFailedJobNames: ["Playwright E2E (signed-in tier)"],
     autoMergeArmed: true,
   });
   assert.equal(fired.standDown, true);
@@ -172,7 +179,7 @@ test("stand-down fires only on a same-named failing job, and disarms if armed", 
   assert.match(fired.comment, /does not fix main/);
 
   const different = evaluateStandDown({
-    mainFailedJobNames: ["Playwright E2E (signed-in)"],
+    mainFailedJobNames: ["Playwright E2E (signed-in tier)"],
     revertFailedJobNames: ["Monorepo Validation"],
     autoMergeArmed: true,
   });

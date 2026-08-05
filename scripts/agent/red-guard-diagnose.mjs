@@ -394,16 +394,18 @@ function repoSlug(argv) {
 }
 
 function failedJobsForRun(repo, runId, attempt) {
+  // No leading slash: gh accepts it, and a leading slash gets rewritten into
+  // a filesystem path by MSYS/Git Bash when this script is run on Windows.
   const path =
     attempt === undefined
-      ? `/repos/${repo}/actions/runs/${runId}/jobs?per_page=100`
-      : `/repos/${repo}/actions/runs/${runId}/attempts/${attempt}/jobs?per_page=100`;
+      ? `repos/${repo}/actions/runs/${runId}/jobs?per_page=100`
+      : `repos/${repo}/actions/runs/${runId}/attempts/${attempt}/jobs?per_page=100`;
   const payload = ghJson(["api", path]);
   return (payload.jobs ?? []).filter((job) => job.conclusion === "failure");
 }
 
 function collectAttempts(repo, runId) {
-  const run = ghJson(["api", `/repos/${repo}/actions/runs/${runId}`]);
+  const run = ghJson(["api", `repos/${repo}/actions/runs/${runId}`]);
   const total = Number(run.run_attempt ?? 1);
   const attempts = [];
 
@@ -434,7 +436,7 @@ function collectAttempts(repo, runId) {
     for (const job of jobs) {
       let logText;
       try {
-        logText = gh(["api", `/repos/${repo}/actions/jobs/${job.id}/logs`]);
+        logText = gh(["api", `repos/${repo}/actions/jobs/${job.id}/logs`]);
       } catch (error) {
         reason = `logs for job "${job.name}" could not be fetched (${String(error).slice(0, 120)})`;
         continue;
@@ -692,30 +694,26 @@ function runStandDown(argv) {
 // Fixtures + self-test (real 2026-08-05 signatures, PR #841)
 // ---------------------------------------------------------------------------
 
+// Verbatim excerpts from the 2026-08-05 incident, including the ANSI colour
+// codes Playwright emits ([...m) — the extractor must survive them.
+// Job name on all three runs: "Playwright E2E (signed-in tier)".
 export const FIXTURES = {
-  // main run 31039290572, attempt 1: deep-equality failure at 12.4s.
+  // main run 31039290572 attempt 1, job 92419383255: deep-equality failure.
   mainAttempt1: `
-2026-08-05T18:41:02.1Z Running 41 tests using 4 workers
-2026-08-05T18:41:44.9Z   1) [signed-in] › tests/e2e/plan-port-truth.spec.ts:271:5 › plan surface truth › ports every plan row
-2026-08-05T18:41:44.9Z     Error: expect(received).toEqual(expected) // deep equality
-2026-08-05T18:41:44.9Z     - Expected  - 1
-2026-08-05T18:41:44.9Z     + Received  + 1
-2026-08-05T18:41:45.0Z   ✘  12 [signed-in] › tests/e2e/plan-port-truth.spec.ts:271:5 › plan surface truth › ports every plan row (12.4s)
-2026-08-05T18:41:46.0Z   1 failed
+2026-08-05T19:29:57.5816039Z   ✘  2 [msedge] › tests/e2e/plan-port-truth.spec.ts:271:7 › C2-S2 — the ported Plan surface, signed in › @signed-in draft a block, then put it on the rail — the DRAFTED proposal is accepted (12.4s)
+2026-08-05T19:31:16.9388037Z     Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+2026-08-05T19:31:16.9391707Z     > 338 |     expect(accepted.map((row) => row.id)).toEqual([draftedProposal?.id]);
 `,
-  // main run 31039290572, attempt 2: same spec, click timeout at 60s.
+  // main run 31039290572 attempt 2, job 92421883278: SAME spec, click timeout.
   mainAttempt2: `
-2026-08-05T19:02:11.4Z Running 41 tests using 4 workers
-2026-08-05T19:03:14.2Z   1) [signed-in] › tests/e2e/plan-port-truth.spec.ts:271:5 › plan surface truth › ports every plan row
-2026-08-05T19:03:14.2Z     TimeoutError: locator.click: Timeout 60000ms exceeded.
-2026-08-05T19:03:14.3Z   ✘  12 [signed-in] › tests/e2e/plan-port-truth.spec.ts:271:5 › plan surface truth › ports every plan row (1.0m)
-2026-08-05T19:03:15.0Z   1 failed
+2026-08-05T19:40:02.1932091Z   ✘  2 [msedge] › tests/e2e/plan-port-truth.spec.ts:271:7 › C2-S2 — the ported Plan surface, signed in › @signed-in draft a block, then put it on the rail — the DRAFTED proposal is accepted (1.5m)
+2026-08-05T19:41:30.8388206Z     Error: locator.click: Test timeout of 60000ms exceeded.
 `,
-  // revert PR #841 run 31040629745: a different spec, PGRST303.
+  // revert PR #841's own run 31040629745: a DIFFERENT spec, PGRST303.
   revertRun: `
-2026-08-05T19:44:02.9Z   1) [signed-in] › tests/e2e/signed-in-account-truth.spec.ts:205:5 › account truth › criterion 3
-2026-08-05T19:44:02.9Z     Error: PGRST303: JWT expired
-2026-08-05T19:44:03.1Z   ✘  3 [signed-in] › tests/e2e/signed-in-account-truth.spec.ts:205:5 › account truth › criterion 3 (5.2s)
+2026-08-05T19:46:51.5940710Z [signed-in] account call FAILED 401 GET http://127.0.0.1:15431/rest/v1/rollup_summaries :: {"code":"PGRST303","message":"JWT issued at future"}
+2026-08-05T19:47:02.6907910Z   ✘  1 [msedge] › tests/e2e/signed-in-account-truth.spec.ts:205:7 › #737 C1 — the signed-in browser tier › @signed-in criterion 3: an accepted capture is resolved in the ACCOUNT (5.2s)
+2026-08-05T19:47:53.9703988Z     Error: An account read or write failed that is NOT the known #737 criterion-5 defect (400 on suggestion_records).
 `,
 };
 
@@ -724,7 +722,7 @@ function attemptFromFixture(attempt, logText) {
   return {
     attempt,
     logsAvailable: true,
-    jobNames: ["Playwright E2E (signed-in)"],
+    jobNames: ["Playwright E2E (signed-in tier)"],
     ...signals,
   };
 }
@@ -784,7 +782,7 @@ export function runSelfTest() {
   // The comment always states the hold and round-trips the marker.
   const marker = renderMarker({
     failedRunId: "31039290572",
-    failedJobNames: ["Playwright E2E (signed-in)"],
+    failedJobNames: ["Playwright E2E (signed-in tier)"],
     verdict: nondet.verdict,
   });
   const comment = renderDiagnosisComment({
@@ -797,7 +795,7 @@ export function runSelfTest() {
   assert.match(comment, /plan-port-truth\.spec\.ts:271/);
   const parsed = parseMarker([{ body: comment }]);
   assert.equal(parsed.failedRunId, "31039290572");
-  assert.deepEqual(parsed.failedJobNames, ["Playwright E2E (signed-in)"]);
+  assert.deepEqual(parsed.failedJobNames, ["Playwright E2E (signed-in tier)"]);
   assert.equal(parseMarker([{ body: "no marker here" }]), null);
 
   // Telegram notice compresses to two lines.
@@ -838,18 +836,21 @@ export function runSelfTest() {
 
   // Stand-down: same job name failing on the revert too.
   const standDown = evaluateStandDown({
-    mainFailedJobNames: ["Playwright E2E (signed-in)", "Monorepo Validation"],
-    revertFailedJobNames: ["Playwright E2E (signed-in)"],
+    mainFailedJobNames: [
+      "Playwright E2E (signed-in tier)",
+      "Monorepo Validation",
+    ],
+    revertFailedJobNames: ["Playwright E2E (signed-in tier)"],
     autoMergeArmed: true,
   });
   assert.equal(standDown.standDown, true);
   assert.equal(standDown.disarm, true);
-  assert.deepEqual(standDown.overlap, ["Playwright E2E (signed-in)"]);
+  assert.deepEqual(standDown.overlap, ["Playwright E2E (signed-in tier)"]);
   assert.match(standDown.comment, /does not fix main/);
   assert.match(standDown.comment, /disarmed/);
 
   const noOverlap = evaluateStandDown({
-    mainFailedJobNames: ["Playwright E2E (signed-in)"],
+    mainFailedJobNames: ["Playwright E2E (signed-in tier)"],
     revertFailedJobNames: ["Monorepo Validation"],
     autoMergeArmed: false,
   });
