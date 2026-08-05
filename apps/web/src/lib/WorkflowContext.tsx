@@ -499,6 +499,30 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      /**
+       * #840 follow-up — THE DROP-SET IS SNAPSHOT BEFORE THE READS, NOT AFTER.
+       *
+       * `dropLocalIds` names the local rows whose account counterpart is
+       * already known, so the merge can retire the optimistic copy. Built
+       * AFTER the awaits below, it described a moment the payload knew nothing
+       * about: anything persisted DURING the read window landed in the id maps
+       * and was dropped from state by a payload whose read predates it. The
+       * row then existed on the account and on no screen.
+       *
+       * Main run 31039290572 caught exactly that — a block drafted mid-read
+       * vanished from the Plan sheet while the account held it, leaving the
+       * user (and the truth spec) looking at a sheet that disagreed with the
+       * account. Taken here, the set can only name rows the reads below had a
+       * chance to see, which is the invariant the merge always assumed:
+       *
+       *   a local row is retired only by a payload whose read could have
+       *   contained its account counterpart.
+       *
+       * Anything created after this line simply survives to the NEXT sync,
+       * which reads after it exists and retires it cleanly.
+       */
+      const dropLocalIds = buildDropLocalIds();
+
       const [capturesResult, planningResult, executionResult] =
         await Promise.all([
           listCaptureItems(client),
@@ -537,7 +561,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             toWorkflowSession(session, areas),
           ),
           reviewLog: executionResult.reviewEntries.map(reviewEntryLine),
-          dropLocalIds: buildDropLocalIds(),
+          dropLocalIds,
         },
       });
       // Audit P0#4: `reviewEntryLine` flattens each row to a display string,
