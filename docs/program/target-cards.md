@@ -2,7 +2,7 @@
 
 **STATUS: RATIFIED.** These cards define "done" for every campaign. A campaign closes only when a fresh-eyes re-drive scores AT/ABOVE target and every passed criterion ships a CI pin. Criteria are pass/fail on a running build, desktop + 390px mobile.
 
-> Decisions ratified the same sitting: **Legacy screens: PORT ALL FOUR** (owner chose full coherence over the port-two recommendation — C2 scope grows accordingly; the four ports must preserve every legacy-only capability: hour-rail placement, unplan, proposal accept/reject/nudge, Google approval, planned-vs-actual, policy proposals). **Settings door: REQUIRE SIGN-IN** (signed-out /settings/areas redirects to the door with a calm note). Onboarding ritual content remains the one open OWNER-GATE (gates C3's close only).
+> Decisions ratified the same sitting: **Legacy screens: PORT ALL FOUR** (owner chose full coherence over the port-two recommendation — C2 scope grows accordingly; the four ports must preserve every legacy-only capability: hour-rail placement, unplan, proposal accept/reject/nudge, Google approval, planned-vs-actual, policy proposals). **Settings door: REQUIRE SIGN-IN** (signed-out /settings/areas redirects to the door with a calm note). Onboarding ritual content — the last open OWNER-GATE — was DECIDED 2026-08-05 (see "Open owner gates" below).
 
 Baseline: audit v2 (`docs/design/ux-audit-2026-07-26-fable.md`, PR #757). Overall experienced UX 4.2 → **5.0**.
 
@@ -80,4 +80,4 @@ Baseline: audit v2 (`docs/design/ux-audit-2026-07-26-fable.md`, PR #757). Overal
 
 ## Open owner gates
 
-1. Onboarding ritual content (three steps, what they create) — gates C3's close only. All other Phase-1 decisions were ratified 2026-07-26 and are recorded in the header above.
+None. The last gate — onboarding ritual content — was DECIDED 2026-08-05: the existing plan (`docs/implementation-planning/plan-onboarding-ritual.md`) is ratified as-is; the owner judges the built result at C3's experience gate. All other Phase-1 decisions were ratified 2026-07-26 and are recorded in the header above.
