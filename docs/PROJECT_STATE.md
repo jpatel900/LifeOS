@@ -18,6 +18,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 ## Decisions in effect
 
 - **Program governance (owner 2026-07-26):** the Final UX Loop owns priority; campaigns close only by fresh-eyes re-score against ratified Target Cards; every passed criterion ships a CI pin in the same PR.
+- **Merge lanes live (ADR 0008, owner-ratified; amended 2026-08-05):** program-doc auto-merge, additive-tests auto-merge, and the instant Telegram-notified self-merge lane (`selfmerge:auto`) are all live and lane-tested; the veto window is the CI runtime. Demotion: one-line `SELFMERGE_WINDOW.enabled` flip.
 - **Plain language for humans (owner 2026-08-04):** anything shown to a human — UI copy, reports, owner options — uses simple, easy-to-understand language. Technical density belongs in agent-to-agent docs only.
 - Safety boundaries are unchanged: no silent external writes, no autonomous rescheduling, no AI-triggered calendar writes, no parser contract weakening, and no raw-capture loss on parse failure.
 - Branch protection on `main` requires `Monorepo Validation`, `Playwright E2E`, and `Migrations + RLS Verification`; GitHub auto-merge gates on these. The Main Red Guard auto-opens a revert PR when main goes red twice.
