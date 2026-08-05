@@ -1,9 +1,5 @@
 import type { WorkflowState } from "@/lib/workflow";
 import { selectUnsortedCaptures } from "@/lib/workflow/captureStatus";
-import {
-  isSameCalendarDay,
-  selectTasksToPlace,
-} from "@/lib/workflow/planStatus";
 
 /**
  * Pure, presentation-only derivation of actionable per-stage pipeline counts
@@ -33,6 +29,28 @@ function activeAreaId(state: WorkflowState, selectedAreaId: string | null) {
   );
 }
 
+function isSameCalendarDay(value: string, now: Date) {
+  const date = new Date(value);
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
+
+function hasOpenBlockToday(
+  state: WorkflowState,
+  taskId: string,
+  now: Date,
+): boolean {
+  return state.calendarBlocks.some(
+    (block) =>
+      block.task_id === taskId &&
+      ["scheduled", "running"].includes(block.status) &&
+      isSameCalendarDay(block.start_at, now),
+  );
+}
+
 export function buildPipelineCounts(
   state: WorkflowState,
   selectedAreaId: string | null = null,
@@ -55,10 +73,12 @@ export function buildPipelineCounts(
   const pendingDrafts = state.taskDrafts.filter(
     (draft) => draft.area_id === areaId && draft.status === "pending",
   );
-  // C2-S2: this rule now lives in `lib/workflow/planStatus`, shared with the
-  // cockpit Plan chip and the ported Plan sheet's "To place" list, so a badge
-  // can never disagree with the list it points at (planStatus.test.ts).
-  const doTodayUnplacedTasks = selectTasksToPlace(state, areaId, now);
+  const doTodayUnplacedTasks = state.tasks.filter(
+    (task) =>
+      task.area_id === areaId &&
+      task.status === "active" &&
+      !hasOpenBlockToday(state, task.id, now),
+  );
   const plannedUnstartedBlocksToday = state.calendarBlocks.filter(
     (block) =>
       block.area_id === areaId &&
