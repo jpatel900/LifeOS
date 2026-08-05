@@ -547,7 +547,7 @@ function prContext(repo, prNumber) {
     "--repo",
     repo,
     "--json",
-    "number,state,labels,headRefName,autoMergeRequest,comments,url",
+    "number,state,labels,headRefName,autoMergeRequest,body,comments,url",
   ]);
   return {
     number: pr.number,
@@ -555,9 +555,21 @@ function prContext(repo, prNumber) {
     labels: (pr.labels ?? []).map((label) => label.name),
     headRef: pr.headRefName,
     autoMergeArmed: Boolean(pr.autoMergeRequest),
+    body: pr.body ?? "",
     comments: pr.comments ?? [],
     url: pr.url,
   };
+}
+
+/**
+ * Marker sources, poorest first. `parseMarker` walks backwards, so the
+ * diagnosis comment (which carries `failedJobNames`) wins over the PR body
+ * (which the guard writes with only `failedRunId`, so stand-down still works
+ * when the diagnosis step never landed its comment). Reversing this order
+ * would silently prefer the poorer marker.
+ */
+function markerSources(context) {
+  return [{ body: context.body ?? "" }, ...(context.comments ?? [])];
 }
 
 function ensureLabel(repo, name, color, description) {
@@ -625,7 +637,7 @@ function runStandDown(argv) {
   if (!revertRunId) throw new Error("--stand-down requires --revert-run-id.");
 
   const context = prContext(repo, argv.pr);
-  const marker = parseMarker(context.comments);
+  const marker = parseMarker(markerSources(context));
 
   let mainFailedJobNames = marker?.failedJobNames ?? [];
   if (mainFailedJobNames.length === 0 && marker?.failedRunId) {
@@ -797,6 +809,25 @@ export function runSelfTest() {
   assert.equal(parsed.failedRunId, "31039290572");
   assert.deepEqual(parsed.failedJobNames, ["Playwright E2E (signed-in tier)"]);
   assert.equal(parseMarker([{ body: "no marker here" }]), null);
+
+  // The guard writes a body marker carrying only the run id, so stand-down
+  // still finds the failed run when the diagnosis comment never landed.
+  const bodyOnly = parseMarker([
+    {
+      body: `Reverted commits...\n\n<!-- red-guard-diagnosis: {"failedRunId":"31039290572"} -->`,
+    },
+  ]);
+  assert.equal(bodyOnly.failedRunId, "31039290572");
+  assert.equal(bodyOnly.failedJobNames, undefined);
+
+  // Precedence: body first in the list, so the richer comment marker wins.
+  const bothSources = parseMarker([
+    { body: `<!-- red-guard-diagnosis: {"failedRunId":"31039290572"} -->` },
+    { body: comment },
+  ]);
+  assert.deepEqual(bothSources.failedJobNames, [
+    "Playwright E2E (signed-in tier)",
+  ]);
 
   // Telegram notice compresses to two lines.
   const notice = renderTelegramNotice({

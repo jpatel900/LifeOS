@@ -136,6 +136,12 @@ jobs:
           GREEN_SHA: ${{ steps.green.outputs.sha }}
           FAILED_SHA: ${{ steps.green.outputs.failed_sha }}
           RUN_URL: ${{ github.event.workflow_run.html_url }}
+          # Written into the PR body as a marker so the stand-down job can
+          # still find the failed run even if the diagnosis step never lands
+          # its comment. Without this, a failed diagnosis would silently make
+          # stand-down inert — reopening the #841 destruction path for anyone
+          # who then adds `revert:confirm`.
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
           git config user.name "main-red-guard[bot]"
@@ -163,7 +169,7 @@ jobs:
               --base main \
               --head "$branch" \
               --title "Auto-revert: main went red at ${short}" \
-              --body "$(printf 'CI failed on main twice (original + flake-guard retry): %s\n\nThis PR reverts main back to the last green commit `%s`.\n\n**This revert is HELD — nothing merges until a human adds the `revert:confirm` label. Close this PR to cancel the revert.**\n\nBefore confirming, read the diagnosis comment below: it says whether the failure looks like the change or like a flaky test tier. If this revert PR fails the same job that made main red, the guard labels it `revert:wont-fix` and a revert cannot fix main.\n\nReverted commits:\n```\n%s\n```\n\nOpened automatically by Main Red Guard (owner decision 2026-08-05: notify and hold + automatic stand-down + a diagnosis step).' "$RUN_URL" "${base:0:8}" "$commits")")"
+              --body "$(printf 'CI failed on main twice (original + flake-guard retry): %s\n\nThis PR reverts main back to the last green commit `%s`.\n\n**This revert is HELD — nothing merges until a human adds the `revert:confirm` label. Close this PR to cancel the revert.**\n\nBefore confirming, read the diagnosis comment below: it says whether the failure looks like the change or like a flaky test tier. If this revert PR fails the same job that made main red, the guard labels it `revert:wont-fix` and a revert cannot fix main.\n\nReverted commits:\n```\n%s\n```\n\nOpened automatically by Main Red Guard (owner decision 2026-08-05: notify and hold + automatic stand-down + a diagnosis step).\n\n<!-- red-guard-diagnosis: {"failedRunId":"%s"} -->' "$RUN_URL" "${base:0:8}" "$commits" "$RUN_ID")")"
             echo "pr_url=${pr_url}" >> "$GITHUB_OUTPUT"
           else
             git revert --abort || true
