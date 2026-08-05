@@ -313,7 +313,7 @@ test.describe("C2-S2 — the ported Plan surface, signed in", () => {
     // it — twice the diff named triage's freshly re-keyed control and accepted
     // the WRONG proposal, once the click hit the local-id node in the instant
     // it was replaced ("element was detached from the DOM"). Both shapes
-    // reproduced locally at 2/10.
+    // reproduced locally: 3 failures in 18 runs.
     //
     // Waiting for the drafted proposal's OWN control is strictly stronger than
     // the diff: it asserts the screen is showing the ACCOUNT's row, under the
