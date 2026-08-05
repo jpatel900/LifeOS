@@ -368,7 +368,9 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
         calendar_block_id: null,
         planned_minutes: null,
         actual_minutes: 25,
-        status: "completed",
+        // `outcome` is the table's only verdict column and it is NOT NULL;
+        // there is no `status` column on `execution_sessions` (checked against
+        // the live schema — an invented one 400s with PGRST204).
         outcome: "completed",
         notes: "Finished without a planned length.",
       },
@@ -475,7 +477,19 @@ test.describe("C2-S3 — the ported Review surface, signed in", () => {
 
     // `override_records` load once at mount, so the proposal appears after a
     // fresh document load — the same way the legacy screen surfaced it.
-    await reloadWithAccountSync(page);
+    //
+    // The Plan sheet is closed FIRST, and the reload is a fresh `/`. Target
+    // Card 2 is working here: the sheet is in the URL, so reloading the
+    // current URL brings the Plan sheet straight back up, and its dialog then
+    // sits over the pipeline strip and swallows the tap on Review.
+    await page.getByTestId("moment-sheet-close").click();
+    await expect(page.getByTestId("moment-sheet")).toHaveCount(0, {
+      timeout: 20_000,
+    });
+    await gotoWithAccountSync(page, "/");
+    await expect(page.getByTestId("today-moments")).toBeVisible({
+      timeout: 30_000,
+    });
     await openReviewSheet(page);
 
     const proposal = page.getByTestId(
