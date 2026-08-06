@@ -18,8 +18,14 @@ test.beforeEach(async ({ page }) => {
  * #687 update: /today, /capture, /triage, and /execute are now flag-gated
  * redirect shims into the moments home (the demoted cockpit surfaces there
  * were old versions of live moments surfaces). Their URL truth is asserted
- * as redirects below. /calendar, /review, /health, and /areas keep the
- * cockpit renderer (OWNER-GATE: capabilities exist only there).
+ * as redirects below. /calendar, /review, /health, and /areas still RENDER the
+ * cockpit, so their URL truth is asserted against it here.
+ *
+ * C2-S4 note: for /health that is now a sequencing fact, not a capability one.
+ * Every Health capability lives on the moments home at `?sheet=health`; the
+ * route survives only until C2-S6 retires the legacy shell in one piece. The
+ * assertion below is kept exactly because the route is still live — retiring it
+ * early would leave that window unpinned.
  */
 
 interface StageCase {
@@ -254,7 +260,17 @@ test.describe("/settings/areas demo-mode load is unaffected by the C2-S0 redirec
   }
 });
 
-test("moments home: View area health reaches /health in one interaction", async ({
+/**
+ * C2-S4 RE-ANCHOR (#687), not a deletion.
+ *
+ * This test used to assert that "View area health" LEFT the moments home for
+ * the legacy `/health` route, and that the cockpit shell rendered there. Both
+ * halves were true, and both were the Target Card 2 violation the Health port
+ * exists to remove. The criterion the test is really pinning — "Health is
+ * reachable from the home in one interaction" — is unchanged and still
+ * asserted; what changed is where one interaction now lands.
+ */
+test("moments home: View area health opens Health in one interaction, without leaving the home", async ({
   page,
 }) => {
   await page.goto("/");
@@ -266,13 +282,24 @@ test("moments home: View area health reaches /health in one interaction", async 
 
   await page.getByRole("button", { name: /View area health/ }).click();
 
-  await expect(page).toHaveURL(/\/health$/);
-  await expect(page.getByTestId("lifeos-cockpit")).toBeVisible();
+  // One interaction, and the moments home is still the shell.
+  await expect(page.getByTestId("health-sheet")).toBeVisible();
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
+
+  // The state change is in the URL, which is the half the old jump got right
+  // for the wrong reason.
+  await expect(page).toHaveURL(/\?sheet=health$/);
   await expect(
     page.getByRole("heading", {
       name: /Everything is working|\d+ things? needs? a look/,
     }),
   ).toBeVisible();
+
+  // Back steps the moment, it does not leave the shell.
+  await page.goBack();
+  await expect(page.getByTestId("health-sheet")).toHaveCount(0);
+  await expect(page.getByTestId("today-moments")).toBeVisible();
 });
 
 test("moments home: Settings link reaches /settings/areas in one interaction", async ({
