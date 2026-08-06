@@ -289,7 +289,13 @@ test("moments home: View area health opens Health in one interaction, without le
 
   // The state change is in the URL, which is the half the old jump got right
   // for the wrong reason.
-  await expect(page).toHaveURL(/\?sheet=health$/);
+  //
+  // Read as a PARAM, not as a URL suffix: `urlWithSheet` preserves whatever
+  // query the home already carried, so `/?moment=start&sheet=health` is an
+  // equally correct result and a `/\?sheet=health$/` regex would fail on it.
+  // Pinning the suffix would pass today only because nothing else writes the
+  // home's query yet, and break silently the day something does.
+  expect(new URL(page.url()).searchParams.get("sheet")).toBe("health");
   await expect(
     page.getByRole("heading", {
       name: /Everything is working|\d+ things? needs? a look/,
