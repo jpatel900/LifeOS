@@ -939,3 +939,190 @@ test("stripMarkdown: gate item markup never reaches the rendered page", () => {
   assert.ok(!html.includes("**A drafted block"));
   assert.match(html, /source merged/);
 });
+
+// ---------------------------------------------------------------------------
+// Escape path: every value on this page comes from GitHub (PR titles, issue
+// bodies, branch names, error strings) or from a repo markdown file. None of
+// it is trusted. Escaping happens exactly ONCE, at the point of insertion --
+// a rule worth pinning, because the first real render shipped a double-escape
+// bug ("&lt;1h ago" printed literally) which is the same rule broken the
+// other way.
+//
+// This drives a hostile payload through every GitHub-sourced field at once
+// and asserts none of it survives as live markup.
+// ---------------------------------------------------------------------------
+
+const XSS = "<script>alert(1)</script>";
+const BREAKOUT = '"><img src=x onerror=alert(1)>';
+
+test("renderStatusHtml: hostile text in any GitHub-sourced field is escaped, never live markup", () => {
+  const html = renderStatusHtml({
+    generatedAt: `2026-08-06T12:00:00.000Z${XSS}`,
+    ghAvailable: true,
+    ghError: null,
+    ownerQueue: [
+      {
+        text: `gate ${XSS}`,
+        refLabel: `Issue ${BREAKOUT}`,
+        url: `https://example.invalid/${BREAKOUT}`,
+        sourceState: "open",
+        sourceAge: XSS,
+      },
+      `merge PR #1 ${XSS}`,
+    ],
+    prs: [
+      {
+        number: 1,
+        title: `PR title ${XSS}`,
+        author: `author${BREAKOUT}`,
+        status: "green",
+        isDraft: false,
+        url: `https://example.invalid/${BREAKOUT}`,
+        awaiting: true,
+      },
+    ],
+    prsError: null,
+    lanes: {
+      mode: "usability-enjoyability",
+      groups: {
+        usability: [
+          {
+            number: 2,
+            title: `issue ${XSS}`,
+            labels: [`label${BREAKOUT}`],
+            url: `https://example.invalid/${BREAKOUT}`,
+          },
+        ],
+        enjoyability: [],
+      },
+    },
+    issuesError: null,
+    workflows: [
+      {
+        file: "provider-canary.yml",
+        label: `wf ${XSS}`,
+        found: true,
+        healthy: false,
+        conclusion: `fail ${XSS}`,
+        age: XSS,
+      },
+    ],
+    mainFreshness: {
+      branch: `branch${BREAKOUT}`,
+      headSha: XSS,
+      headDate: XSS,
+      originSha: XSS,
+      originDate: XSS,
+      aheadOfOrigin: 1,
+    },
+    coherence: {
+      featureCount: 1,
+      edgeCount: 1,
+      unresolvedCount: 0,
+      error: null,
+    },
+    drift: {
+      found: true,
+      red: false,
+      conclusion: `ok ${XSS}`,
+      age: XSS,
+      error: null,
+    },
+    mainHealth: {
+      runs: [
+        { name: `run ${XSS}`, status: "completed", conclusion: "failure" },
+      ],
+      error: null,
+    },
+    program: {
+      campaigns: [
+        {
+          id: "C1",
+          name: `camp ${XSS}`,
+          detail: `detail ${XSS}`,
+          state: "in-flight",
+        },
+      ],
+      latestNote: { date: "2026-08-06", text: `note ${XSS}` },
+      campaignsPath: `docs/${BREAKOUT}`,
+      campaignsAge: XSS,
+      slices: [{ id: "S0", name: `slice ${XSS}`, detail: XSS }],
+      slicesPath: `docs/${BREAKOUT}`,
+      slicesAge: XSS,
+      slicesCampaign: `C1 ${XSS}`,
+    },
+    allIssues: [
+      {
+        number: 3,
+        title: `all ${XSS}`,
+        state: "OPEN",
+        labels: [`l${BREAKOUT}`],
+        url: `https://example.invalid/${BREAKOUT}`,
+        createdAt: "2026-08-01T00:00:00Z",
+        closedAt: null,
+      },
+    ],
+    allIssuesError: null,
+    plans: [
+      {
+        path: `docs/${XSS}`,
+        status: `STATUS ${XSS}`,
+        complete: false,
+        url: `https://example.invalid/${BREAKOUT}`,
+      },
+    ],
+    plansError: null,
+    agentPickupQueue: [
+      {
+        text: `todo ${XSS}`,
+        refLabel: `PR ${BREAKOUT}`,
+        url: `https://example.invalid/${BREAKOUT}`,
+        sourceState: "merged",
+        sourceAge: XSS,
+      },
+    ],
+    gateItemsError: `err ${XSS}`,
+    epicsError: `err ${XSS}`,
+    pipelineError: `err ${XSS}`,
+  });
+
+  // The payload must never appear as live markup anywhere in the document.
+  // Note the invariant is about MARKUP, not about the substring: the words
+  // "onerror=alert(1)" legitimately survive as inert escaped text, because
+  // nothing on this page is ever silently dropped. What must not exist is an
+  // unescaped tag or an attribute breakout.
+  assert.ok(!html.includes(XSS), "raw <script> payload leaked into the page");
+  assert.ok(!html.includes("<img"), "an img tag was created from input");
+  assert.ok(
+    !html.includes('"><img'),
+    "attribute breakout leaked into the page",
+  );
+
+  // ...and it must still be VISIBLE, escaped -- never silently dropped.
+  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.ok(
+    html.includes("&lt;img src=x onerror=alert(1)&gt;"),
+    "the breakout payload should survive as escaped, readable text",
+  );
+
+  // The page's own inline filter script is the only real <script> block.
+  assert.equal(html.match(/<script>/g).length, 1);
+});
+
+test("escapeHtml: escaping is applied exactly once, not twice", () => {
+  // Guards the defect this page actually shipped: a health-cell detail was
+  // escaped by its builder AND again by the renderer, printing "&lt;1h ago".
+  const html = renderStatusHtml(
+    baseFixture({
+      drift: {
+        found: true,
+        red: false,
+        conclusion: "success",
+        age: "<1h",
+        error: null,
+      },
+    }),
+  );
+  assert.match(html, /drift check success, &lt;1h ago/);
+  assert.ok(!html.includes("&amp;lt;1h"), "detail was escaped twice");
+});
