@@ -43,21 +43,36 @@ import { HIT_TARGET_MIN } from "./hitTarget";
  * stepping a moment. Health now opens as a sheet at `?sheet=health`, so it is
  * in the address bar, survives a refresh, and Back closes it.
  *
- * ## The check runs when the sheet OPENS — not when the home renders
+ * ## Closed means closed: nothing runs, nothing subscribes, nothing computes
  *
- * `HealthView` runs its system check in a mount effect, which is right for a
- * screen you navigated to. This component is mounted by `TodayMoments` on
- * every home render (that is how all four sheets work: `open` is a prop, not a
- * mount condition), so the same mount effect would fire the whole probe suite
- * — including four deliberate 400s and a `health_checks` write — on every
- * single visit to the home, for every user, whether or not they ever asked
- * about health.
+ * `TodayMoments` mounts every sheet on every home render — `open` is a prop,
+ * not a mount condition. So the outer component here does nothing but decide,
+ * and ALL the work lives in `OpenHealthSheet`, which only exists while Health
+ * is open. Two things follow, and both are load-bearing:
  *
- * So the effect is gated on `open`. That is not merely an optimisation; it is
- * FR-047's own I0/asked-only doctrine (`MirrorPanel.tsx`: "it never pushes,
- * interjects, or notifies") applied to the surface that hosts it. The
- * behaviour a person sees is identical to the legacy screen: arrive at Health,
- * the check has already run.
+ *  1. **The system check is asked-only.** `HealthView` runs its check in a
+ *     mount effect, right for a screen you navigate to. Inherited as-is it
+ *     would have fired the whole probe suite — four deliberate 400s and a
+ *     `health_checks` write — on every visit to the home, for every user,
+ *     asked for or not. Here, mounting IS opening, so the same mount effect is
+ *     exactly right. This is FR-047's own I0/asked-only doctrine
+ *     (`MirrorPanel.tsx`: "it never pushes, interjects, or notifies") applied
+ *     to the surface that hosts it.
+ *
+ *  2. **A closed Health costs nothing.** No `useWorkflow` subscription, no
+ *     `buildCockpitViewModel`. That is not a micro-optimisation: `now` ticks
+ *     on this shell, so a view model built in the closed sheet's body would be
+ *     rebuilt every second, forever, for a surface nobody opened. Measured on
+ *     this branch — the first cut of this file did exactly that, and it was
+ *     enough extra per-tick work to tip `signed-in-account-truth`'s criterion 2
+ *     (the focus-session write) from passing to failing under a full-file run,
+ *     while passing in isolation. The split removed it.
+ *
+ * `PlanSheet` and `ReviewSheet` still carry the older always-computing shape;
+ * bringing them to this one is separable follow-up work, noted on the PR.
+ *
+ * The behaviour a person sees is identical to the legacy screen: arrive at
+ * Health, the check has already run.
  *
  * ## The four 400s are the probe working, not a fault
  *
@@ -134,12 +149,21 @@ export interface HealthSheetProps {
   now: Date;
 }
 
-export function HealthSheet({
-  open,
+/**
+ * The whole component is the gate. Deliberately hook-free: `open` flipping
+ * MOUNTS and UNMOUNTS the body below, which is what makes the body's hook
+ * order stable and lets its mount effect be the "you asked" signal.
+ */
+export function HealthSheet({ open, ...rest }: HealthSheetProps) {
+  if (!open) return null;
+  return <OpenHealthSheet {...rest} />;
+}
+
+function OpenHealthSheet({
   onClose,
   selectedAreaId,
   now,
-}: HealthSheetProps) {
+}: Omit<HealthSheetProps, "open">) {
   const { state } = useWorkflow();
 
   // The shipped derivation, not a second one — same reason PlanSheet and
@@ -187,16 +211,21 @@ export function HealthSheet({
     }
   }
 
-  // Gated on `open` — see this file's doc comment. Opening the sheet is the
-  // ask; a home render is not.
+  // Mounting IS opening — see this file's doc comment. A home render never
+  // reaches here, so this effect cannot fire unasked.
   useEffect(() => {
-    if (!open) return;
+    let cancelled = false;
     void runSystemCheck();
     void readPurposeGaugeSamples(createSupabaseBrowserClient()).then(
-      (samples) => setPurposeSamples(samples),
+      (samples) => {
+        if (!cancelled) setPurposeSamples(samples);
+      },
     );
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, []);
 
   const viewChecks = checks as ViewCheck[];
   const critical = viewChecks.filter(
@@ -246,7 +275,8 @@ export function HealthSheet({
 
   return (
     <MomentSheet
-      open={open}
+      // This body only exists while Health is open, so the shell is always on.
+      open
       title="How LifeOS is doing"
       onClose={onClose}
       width="wide"
