@@ -190,11 +190,28 @@ async function newHealthCheckIds(
   return rows.map((row) => row.id).filter((id) => !before.has(id));
 }
 
+/**
+ * Open Health, and do not return until all four probes have ANSWERED.
+ *
+ * The wait is not politeness, it is what keeps this file's own allowlist
+ * honest. Measured on this branch (run of 2026-08-06, five tests): without it,
+ * the URL-criteria test finished with only 2 of the 4 probe responses received
+ * and the verdict test with 0 — so those tests tolerated a set they had never
+ * actually been handed, and a probe that silently stopped firing would not have
+ * shown up as a failure anywhere but in the one test that polled for it.
+ *
+ * Waiting on the exact four also means the classification is strictly a
+ * pass/fail on the RESPONSE: a probe answering 403, 404 or 500 never matches
+ * `matchedProbe`, lands in `unexpected`, and fails the test.
+ */
 async function openHealthSheet(page: Page): Promise<void> {
   await page.getByTestId("side-rail-open-health").click();
   await expect(page.getByTestId("health-sheet")).toBeVisible({
     timeout: 20_000,
   });
+  await expect
+    .poll(() => [...new Set(observedProbes())].sort(), { timeout: 30_000 })
+    .toEqual([...HEALTH_PROBE_RPCS].sort());
 }
 
 test.describe("C2-S4 — the ported Health surface, signed in", () => {
@@ -217,15 +234,11 @@ test.describe("C2-S4 — the ported Health surface, signed in", () => {
     expect(await newHealthCheckIds(account, before)).toEqual([]);
     expect(observedProbes()).toEqual([]);
 
-    // THE ASK.
+    // THE ASK. `openHealthSheet` does not return until all four probes have
+    // answered — asserting they were SEEN is what stops this file's own
+    // allowlist from hiding their absence: a spec that tolerated four 400s and
+    // never received them would be green and empty.
     await openHealthSheet(page);
-
-    // Now the probes run — all four of them. Asserting they were SEEN is what
-    // stops this file's own allowlist from hiding their absence: a spec that
-    // tolerated four 400s and never received them would be green and empty.
-    await expect
-      .poll(() => [...new Set(observedProbes())].sort(), { timeout: 30_000 })
-      .toEqual([...HEALTH_PROBE_RPCS].sort());
 
     // And the check reached the account as new rows attributable to this open.
     await expect
@@ -370,5 +383,12 @@ test.describe("C2-S4 — the ported Health surface, signed in", () => {
     await expect(page.getByTestId("today-moments")).toBeVisible();
     await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
     expect(new URL(page.url()).pathname).toBe("/");
+
+    // Reached by URL, the surface behaves identically: the same four probes
+    // answer. Waited on for the same reason `openHealthSheet` waits — so the
+    // tolerance is never applied to a set this test did not actually receive.
+    await expect
+      .poll(() => [...new Set(observedProbes())].sort(), { timeout: 30_000 })
+      .toEqual([...HEALTH_PROBE_RPCS].sort());
   });
 });
