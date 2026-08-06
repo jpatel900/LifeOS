@@ -197,12 +197,24 @@ jobs:
           GH_TOKEN: ${{ secrets.CODEX_KICK_TOKEN || github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FAILED_SHA: ${{ steps.green.outputs.failed_sha }}
+          PR_URL: ${{ steps.revert.outputs.pr_url }}
         run: |
-          node scripts/agent/red-guard-diagnose.mjs \
+          # The workspace is still on the revert branch here. When the reverted
+          # range touches the guard's own files, the revert has DELETED this
+          # script from disk — the guard's first live firing (#845, reverting
+          # #843 itself) died exactly this way. Restore the script from the
+          # commit being diagnosed before running it.
+          git checkout "$FAILED_SHA" -- scripts/agent/red-guard-diagnose.mjs || true
+          if ! node scripts/agent/red-guard-diagnose.mjs \
             --diagnose \
             --repo "${{ github.repository }}" \
-            --pr "${{ steps.revert.outputs.pr_url }}" \
-            --run-id "${{ github.event.workflow_run.id }}"
+            --pr "$PR_URL" \
+            --run-id "${{ github.event.workflow_run.id }}"; then
+            # Degrade at the WORKFLOW level: the script's own degrade path
+            # cannot run if the script is missing or crashed on load.
+            gh pr comment "$PR_URL" --body "Diagnosis unavailable: the diagnosis step itself failed in the guard run — open the failed CI run linked in the PR body and read it directly before confirming this revert. The stand-down safety (PR-body marker) still applies."
+          fi
 
   confirm-to-arm:
     name: Arm auto-merge when a human confirms the revert
@@ -214,6 +226,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          # Run the guard's script from main, never from the PR merge ref: a
+          # guard revert that touches the guard's own files DELETES this script
+          # from the merge ref, which would break confirmation exactly when it
+          # is most sensitive (same failure family as #845's missing diagnosis).
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -242,6 +260,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          # Explicit for the same reason as confirm-to-arm: the guard's script
+          # always runs from main's trusted, present copy.
+          ref: main
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
