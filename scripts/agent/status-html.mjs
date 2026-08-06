@@ -182,10 +182,14 @@ function leadSentence(text) {
 // byte-compatible.
 // ---------------------------------------------------------------------------
 
+// Owner-decided ranking (2026-08-06, PR #848 gate c): a RED migration drift
+// floats ABOVE the merge queue. Prod being behind main is more urgent than
+// merging a green PR, and it is the one item here that means production is
+// already wrong rather than merely waiting.
 const QUEUE_RANK = {
   gate: 1,
-  merge: 2,
-  drift: 3,
+  drift: 2,
+  merge: 3,
   investigate: 4,
   epic: 5,
   other: 6,
@@ -448,14 +452,37 @@ function buildHealthCells(data) {
       detail: "no Migration Drift runs found",
     });
   } else if (drift.found) {
-    cells.push({
-      label: "Prod database",
-      tone: drift.red ? "bad" : "ok",
-      verdict: drift.red ? "behind main" : "up to date with main",
-      // Not escaped here: renderHealthStrip escapes every field once. Escaping
-      // twice is what printed a literal "&lt;1h ago" on the first real render.
-      detail: `drift check ${drift.conclusion ?? "?"}, ${drift.age ?? "?"} ago`,
-    });
+    // "Not red" is NOT the same as "green": a queued or in-progress drift run
+    // has conclusion "queued"/"in_progress" and red === false, which used to
+    // render as "up to date with main" while the check had not actually run.
+    // Only a settled, successful run may claim prod is current.
+    const conclusion = drift.conclusion ?? "?";
+    const settled = conclusion === "success" || conclusion === "skipped";
+    // Not escaped here: renderHealthStrip escapes every field once. Escaping
+    // twice is what printed a literal "&lt;1h ago" on the first real render.
+    const detail = `drift check ${conclusion}, ${drift.age ?? "?"} ago`;
+    if (drift.red) {
+      cells.push({
+        label: "Prod database",
+        tone: "bad",
+        verdict: "behind main",
+        detail,
+      });
+    } else if (settled) {
+      cells.push({
+        label: "Prod database",
+        tone: "ok",
+        verdict: "up to date with main",
+        detail,
+      });
+    } else {
+      cells.push({
+        label: "Prod database",
+        tone: "unknown",
+        verdict: "check still running",
+        detail,
+      });
+    }
   }
 
   // Scheduled workflows run off main's push cycle, so a failing one can sit
@@ -594,14 +621,21 @@ function renderCampaignStrip(program) {
     : "";
 
   const detailBody = `
-    <p class="dim src">Read from <code>${escapeHtml(program.campaignsPath ?? "?")}</code> section 4, last changed ${escapeHtml(program.campaignsAge ?? "?")} ago. The wording below is the file's own, quoted unchanged.</p>
+    <p class="dim src">Read from <code>${escapeHtml(program.campaignsPath ?? "?")}</code>, last changed ${escapeHtml(program.campaignsAge ?? "?")} ago. That file is the source of truth for campaign state; a self-test fails the build if it and <code>final-ux-loop.md</code> section 4 disagree.</p>
     <ul class="rows">${campaigns
-      .map(
-        (campaign) => `<li class="row">
-          <b>${escapeHtml(campaign.id)} ${escapeHtml(campaign.name)} <span class="tag tag-${campaign.state}">${escapeHtml(CAMPAIGN_STATE_LABEL[campaign.state] ?? campaign.state)}</span></b>
+      .map((campaign) => {
+        const closed =
+          campaign.closedOn || campaign.score
+            ? ` <span class="dim">closed ${escapeHtml(campaign.closedOn ?? "?")}${
+                campaign.score ? ` at ${escapeHtml(campaign.score)}` : ""
+              }</span>`
+            : "";
+        return `<li class="row">
+          <b>${escapeHtml(campaign.id)} ${escapeHtml(campaign.name)} <span class="tag tag-${campaign.state}">${escapeHtml(CAMPAIGN_STATE_LABEL[campaign.state] ?? campaign.state)}</span>${closed}</b>
           <span class="dim">${escapeHtml(stripMarkdown(campaign.detail))}</span>
-        </li>`,
-      )
+          ${campaign.note ? `<span class="dim">${escapeHtml(stripMarkdown(campaign.note))}</span>` : ""}
+        </li>`;
+      })
       .join("\n")}</ul>
     ${
       note
@@ -618,16 +652,31 @@ function renderCampaignStrip(program) {
     ${drawer("campaign-detail", "What each campaign covers", null, detailBody)}`;
 }
 
+const SLICE_STATE_LABEL = {
+  done: "done",
+  merged: "merged",
+  "in-flight": "in flight",
+  queued: "later",
+};
+
 function renderSlicePlan(program) {
   const slices = program?.slices ?? [];
   if (slices.length === 0) return "";
-  return `<h3 class="sub-h">${escapeHtml(program.slicesCampaign ?? "Current campaign")} slice plan</h3>
-    <p class="dim src">Slice names from <code>${escapeHtml(program.slicesPath ?? "?")}</code>, last changed ${escapeHtml(program.slicesAge ?? "?")} ago. That file states its own slice states are not authoritative &mdash; it points at <code>final-ux-loop.md</code> section 6 (the note above) for live state, so no per-slice state is shown here.</p>
+  return `<h3 class="sub-h">${escapeHtml(program.slicesCampaign ?? "Current campaign")} slices</h3>
+    <p class="dim src">From <code>${escapeHtml(program.slicesPath ?? "?")}</code>, last changed ${escapeHtml(program.slicesAge ?? "?")} ago. These states are authoritative &mdash; a self-test fails the build if this file and the program doc disagree.</p>
     <ol class="slices">${slices
-      .map(
-        (slice) =>
-          `<li><b>${escapeHtml(slice.id)}</b> ${escapeHtml(slice.name)}</li>`,
-      )
+      .map((slice) => {
+        const state = slice.state ?? "queued";
+        const current = state === "in-flight";
+        return `<li class="slice slice-${escapeHtml(state)}"${current ? ' aria-current="step"' : ""}>
+          <b>${escapeHtml(slice.id)}</b> ${escapeHtml(slice.name)}
+          <span class="tag tag-${escapeHtml(state)}">${escapeHtml(SLICE_STATE_LABEL[state] ?? state)}</span>${
+            slice.ref
+              ? ` <span class="dim">#${escapeHtml(slice.ref)}</span>`
+              : ""
+          }
+        </li>`;
+      })
       .join("\n")}</ol>`;
 }
 
@@ -1033,8 +1082,11 @@ function renderStatusHtml(data) {
       }
       .tag-gate { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--accent); background: var(--accent-soft); }
       .tag-drift { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad); }
-      .tag-closed { color: var(--ok); }
+      .tag-closed, .tag-done, .tag-merged { color: var(--ok); }
       .tag-in-flight { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+      .slices li { margin: 0.3rem 0; }
+      .slice-merged, .slice-done { color: var(--ink-soft); }
+      .slice-in-flight > b { color: var(--accent); }
 
       /* --- health strip --- */
       /* A 1px grid gap over a --line background draws the separators, so the

@@ -828,15 +828,19 @@ function gatherPlansAndIdeas() {
 
 // Program state for the campaign strip.
 //
-// There is no machine-readable campaign source in this repo (verified
-// 2026-08-05: zero milestones, zero campaign labels, no manifest, and issue
-// titles matching /C[1-6]/ hit an unrelated coherence series). The canonical
-// prose list is docs/program/final-ux-loop.md section 4, which self-declares
-// canonical. We read it, and we stamp every block with the file's last-commit
-// age so a reader can weigh it -- an undated doc quote is how a map starts
-// lying.
+// Campaign and slice state come from docs/program/campaigns.json and NOTHING
+// else (owner decision 2026-08-06, PR #848 gate b). Before that file existed
+// this parsed prose out of final-ux-loop.md section 4, because the repo had no
+// machine-readable campaign source at all -- no milestones, no labels, no
+// manifest. Parsing prose meant the strip drifted whenever the wording moved.
+//
+// The prose doc still supplies the human narrative, and the newest dated
+// bullet from its section 6 is still read as the "latest program note". The
+// two are kept honest by a self-test that fails when campaigns.json and
+// section 4 disagree on ids, names, or states -- so drift is a red build
+// rather than a quietly wrong map.
+const CAMPAIGNS_JSON = path.join("docs", "program", "campaigns.json");
 const PROGRAM_DOC = path.join("docs", "program", "final-ux-loop.md");
-const SLICE_DOC = path.join("docs", "program", "campaign-c2-structure.md");
 
 function docLastChangedAge(relPath) {
   try {
@@ -853,44 +857,65 @@ function docLastChangedAge(relPath) {
 
 function gatherProgram() {
   const posix = (p) => p.split(path.sep).join("/");
+  let program;
   try {
-    const markdown = readFileSync(path.join(REPO_ROOT, PROGRAM_DOC), "utf8");
-    const campaigns = parseCampaigns(markdown);
-    const latestNote = parseLatestProgramNote(markdown);
-    const program = {
-      campaigns,
-      latestNote,
-      campaignsPath: posix(PROGRAM_DOC),
-      campaignsAge: docLastChangedAge(PROGRAM_DOC),
+    const raw = JSON.parse(
+      readFileSync(path.join(REPO_ROOT, CAMPAIGNS_JSON), "utf8"),
+    );
+    const campaigns = Array.isArray(raw.campaigns) ? raw.campaigns : [];
+    program = {
+      campaigns: campaigns.map((c) => ({
+        id: c.id,
+        name: c.name,
+        state: c.state,
+        detail: c.summary ?? "",
+        note: c.note ?? null,
+        closedOn: c.closed_on ?? null,
+        score: c.score ?? null,
+      })),
+      campaignsPath: posix(CAMPAIGNS_JSON),
+      campaignsAge: docLastChangedAge(CAMPAIGNS_JSON),
       slices: [],
       slicesPath: null,
       slicesAge: null,
       slicesCampaign: null,
+      latestNote: null,
       error:
         campaigns.length === 0
-          ? `no campaign bullets found in ${posix(PROGRAM_DOC)} section 4`
+          ? `no campaigns listed in ${posix(CAMPAIGNS_JSON)}`
           : null,
     };
 
-    // The in-flight campaign's slice plan, when one exists. Names only -- see
-    // parseSlices() for why no per-slice state is read.
+    // Slices for the in-flight campaign, states included -- they are now
+    // authoritative, which is the whole point of the JSON.
     const current = campaigns.find((c) => c.state === "in-flight");
-    if (current) {
-      try {
-        const sliceMd = readFileSync(path.join(REPO_ROOT, SLICE_DOC), "utf8");
-        program.slices = parseSlices(sliceMd);
-        program.slicesPath = posix(SLICE_DOC);
-        program.slicesAge = docLastChangedAge(SLICE_DOC);
-        program.slicesCampaign = `${current.id} ${current.name}`;
-      } catch {
-        // No slice plan for this campaign (only C2 has one). Not an error --
-        // the strip renders without it.
-      }
+    if (current && Array.isArray(current.slices)) {
+      program.slices = current.slices.map((s) => ({
+        id: s.id,
+        name: s.name,
+        state: s.state,
+        ref: s.ref ?? null,
+      }));
+      program.slicesPath = posix(CAMPAIGNS_JSON);
+      program.slicesAge = program.campaignsAge;
+      program.slicesCampaign = `${current.id} ${current.name}`;
     }
-    return program;
   } catch (err) {
     return { campaigns: [], error: err.message.split("\n")[0] };
   }
+
+  // The prose doc still owns the running narrative. Its absence is not fatal:
+  // the strip renders from JSON either way.
+  try {
+    const markdown = readFileSync(path.join(REPO_ROOT, PROGRAM_DOC), "utf8");
+    program.latestNote = parseLatestProgramNote(markdown);
+    program.notePath = posix(PROGRAM_DOC);
+    program.noteAge = docLastChangedAge(PROGRAM_DOC);
+  } catch (err) {
+    program.noteError = err.message.split("\n")[0];
+  }
+
+  return program;
 }
 
 // Local read of the coherence registry -- the same signal printCoherenceStatus

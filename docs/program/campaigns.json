@@ -1,0 +1,68 @@
+{
+  "$comment": "MACHINE-READABLE SOURCE OF TRUTH for Final UX Loop campaign state. Owner-decided 2026-08-06 (PR #848, gate b). The generated work map (scripts/agent/status.mjs --html) reads THIS FILE and nothing else for campaign and slice state, so the map can never disagree with the program. docs/program/final-ux-loop.md keeps the prose -- the rationale, the rules of engagement, the running program log -- and section 4 stays the human-readable campaign list. A self-test (scripts/agent/status.test.mjs) fails the build if this file and final-ux-loop.md section 4 disagree on campaign ids, names, or states, so drift becomes a red build instead of a lying map. Update this file in the same PR that changes a campaign's state.",
+  "updated": "2026-08-06",
+  "prose_doc": "docs/program/final-ux-loop.md",
+  "campaign_states": ["closed", "in-flight", "queued"],
+  "slice_states": ["done", "merged", "in-flight", "queued"],
+  "campaigns": [
+    {
+      "id": "C1",
+      "name": "Trust & state truth",
+      "state": "closed",
+      "closed_on": "2026-07-30",
+      "score": "10/10",
+      "summary": "Sessions, durability, resurrecting work, close verdicts, honest Health."
+    },
+    {
+      "id": "C2",
+      "name": "Structure & navigation",
+      "state": "in-flight",
+      "summary": "One shell: port all four legacy screens into moments language, sign-in door, URL truth.",
+      "slice_plan_doc": "docs/program/campaign-c2-structure.md",
+      "slices": [
+        { "id": "S0", "name": "Door", "state": "merged", "ref": 803 },
+        { "id": "S1", "name": "Capability inventory", "state": "done" },
+        {
+          "id": "S2",
+          "name": "Port Plan/calendar",
+          "state": "merged",
+          "ref": 840
+        },
+        { "id": "S3", "name": "Port Review", "state": "merged", "ref": 809 },
+        { "id": "S4", "name": "Port Health", "state": "in-flight" },
+        { "id": "S5", "name": "Port All-areas", "state": "queued" },
+        { "id": "S6", "name": "Shell close-out", "state": "queued" },
+        {
+          "id": "RE-SCORE",
+          "name": "Fresh-eyes judge, full card 2",
+          "state": "queued"
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "name": "First-run & onboarding",
+      "state": "queued",
+      "summary": "New-account ritual to first capture.",
+      "note": "Ritual content DECIDED 2026-08-05 — the existing plan is ratified as-is and the owner judges the built result at the experience gate. No owner gate remains on C3's close."
+    },
+    {
+      "id": "C4",
+      "name": "Flow completeness",
+      "state": "queued",
+      "summary": "Capture/triage/plan/execute residual contract gaps."
+    },
+    {
+      "id": "C5",
+      "name": "Pins for mobile & accessibility",
+      "state": "queued",
+      "summary": "Hit-targets, axe-at-AA in CI; cheap, high ratchet value; may interleave."
+    },
+    {
+      "id": "C6",
+      "name": "Payoff & polish",
+      "state": "queued",
+      "summary": "Completion payoffs, premium pass. Entry condition: C1-C5 closed."
+    }
+  ]
+}

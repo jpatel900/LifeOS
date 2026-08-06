@@ -12,6 +12,8 @@
 // the `isDirectRun` check at the bottom of status.mjs).
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -1125,4 +1127,179 @@ test("escapeHtml: escaping is applied exactly once, not twice", () => {
   );
   assert.match(html, /drift check success, &lt;1h ago/);
   assert.ok(!html.includes("&amp;lt;1h"), "detail was escaped twice");
+});
+
+// ---------------------------------------------------------------------------
+// Campaign source-of-truth drift guard (owner decision 2026-08-06, PR #848
+// gate b).
+//
+// docs/program/campaigns.json is the machine-readable source of truth: the
+// work map reads it and nothing else for campaign state. final-ux-loop.md
+// section 4 keeps the human-readable list. Two files holding the same facts
+// is exactly how a map starts lying, so this test fails the build the moment
+// they disagree on ids, names, or states.
+//
+// It deliberately compares ONLY the structured facts. The prose summary in
+// each file is allowed to differ -- the markdown carries rationale the JSON
+// does not.
+// ---------------------------------------------------------------------------
+
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
+
+function readCampaignsJson() {
+  return JSON.parse(
+    readFileSync(
+      path.join(REPO_ROOT, "docs", "program", "campaigns.json"),
+      "utf8",
+    ),
+  );
+}
+
+function readProgramMarkdown() {
+  return readFileSync(
+    path.join(REPO_ROOT, "docs", "program", "final-ux-loop.md"),
+    "utf8",
+  );
+}
+
+// The markdown states are prose; map them onto the JSON vocabulary.
+function markdownStateOf(campaign) {
+  return campaign.state;
+}
+
+test("campaigns.json and final-ux-loop.md section 4 agree on every campaign", () => {
+  const json = readCampaignsJson();
+  const fromMarkdown = parseCampaigns(readProgramMarkdown());
+
+  assert.ok(
+    fromMarkdown.length > 0,
+    "section 4 of final-ux-loop.md produced no campaigns -- either the doc moved or the parser broke",
+  );
+  assert.equal(
+    json.campaigns.length,
+    fromMarkdown.length,
+    `campaigns.json lists ${json.campaigns.length} campaigns, final-ux-loop.md section 4 lists ${fromMarkdown.length}`,
+  );
+
+  for (const [i, expected] of fromMarkdown.entries()) {
+    const actual = json.campaigns[i];
+    assert.equal(
+      actual.id,
+      expected.id,
+      `campaign ${i + 1}: campaigns.json says ${actual.id}, the doc says ${expected.id}`,
+    );
+    assert.equal(
+      actual.name,
+      expected.name,
+      `${expected.id}: campaigns.json name "${actual.name}" != doc name "${expected.name}"`,
+    );
+    assert.equal(
+      markdownStateOf(actual),
+      expected.state,
+      `${expected.id}: campaigns.json state "${actual.state}" != doc state "${expected.state}" -- update both in the same PR`,
+    );
+  }
+});
+
+test("campaigns.json uses only the states it declares", () => {
+  const json = readCampaignsJson();
+  const campaignStates = new Set(json.campaign_states);
+  const sliceStates = new Set(json.slice_states);
+  for (const campaign of json.campaigns) {
+    assert.ok(
+      campaignStates.has(campaign.state),
+      `${campaign.id} has undeclared state "${campaign.state}"`,
+    );
+    for (const slice of campaign.slices ?? []) {
+      assert.ok(
+        sliceStates.has(slice.state),
+        `${campaign.id}/${slice.id} has undeclared state "${slice.state}"`,
+      );
+    }
+  }
+});
+
+test("exactly one campaign is in flight", () => {
+  const json = readCampaignsJson();
+  const inFlight = json.campaigns.filter((c) => c.state === "in-flight");
+  assert.equal(
+    inFlight.length,
+    1,
+    `expected exactly one in-flight campaign, found ${inFlight.length}: ${inFlight.map((c) => c.id).join(", ")}`,
+  );
+});
+
+test("renderStatusHtml: slice states from campaigns.json are shown and the current one is marked", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      program: {
+        campaigns: [
+          {
+            id: "C2",
+            name: "Structure & navigation",
+            state: "in-flight",
+            detail: "one shell",
+          },
+        ],
+        campaignsPath: "docs/program/campaigns.json",
+        campaignsAge: "1h",
+        slicesPath: "docs/program/campaigns.json",
+        slicesAge: "1h",
+        slicesCampaign: "C2 Structure & navigation",
+        slices: [
+          { id: "S2", name: "Port Plan/calendar", state: "merged", ref: 840 },
+          { id: "S4", name: "Port Health", state: "in-flight", ref: null },
+          { id: "S5", name: "Port All-areas", state: "queued", ref: null },
+        ],
+      },
+    }),
+  );
+  assert.match(html, /slice slice-in-flight/);
+  assert.match(html, /aria-current="step"/);
+  assert.match(html, /Port Health/);
+  assert.match(html, /#840/);
+  // The old behaviour -- refusing to show slice state because the doc was not
+  // authoritative -- is gone now that a source of truth exists.
+  assert.ok(!html.includes("no per-slice state is shown here"));
+});
+
+test("partitionOwnerQueue: a RED migration drift outranks the merge queue", () => {
+  // Owner decision 2026-08-06 (gate c). Prod being behind main beats merging.
+  const { live } = partitionOwnerQueue([
+    "merge PR #42 (green, non-draft)",
+    "apply pending prod migrations (Migration Drift RED): pnpm drift:assemble <files>",
+    { text: "a gate", refLabel: "Issue #1", sourceState: "open" },
+  ]);
+  assert.deepEqual(
+    live.map((entry) => entry.kind),
+    ["gate", "drift", "merge"],
+  );
+});
+
+test("buildHealthCells: a queued drift run reads unknown, never up-to-date", () => {
+  // A run that has not finished must not claim prod is current. This is the
+  // false all-clear class again: red === false is not the same as green.
+  const cells = buildHealthCells({
+    drift: {
+      found: true,
+      red: false,
+      conclusion: "queued",
+      age: "<1h",
+      error: null,
+    },
+  });
+  const cell = cells.find((c) => c.label === "Prod database");
+  assert.equal(cell.tone, "unknown");
+  assert.match(cell.verdict, /still running/);
+});
+
+test("buildHealthCells: only a settled successful drift run claims up to date", () => {
+  for (const conclusion of ["success", "skipped"]) {
+    const cells = buildHealthCells({
+      drift: { found: true, red: false, conclusion, age: "1h", error: null },
+    });
+    const cell = cells.find((c) => c.label === "Prod database");
+    assert.equal(cell.tone, "ok", conclusion + " should read ok");
+    assert.match(cell.verdict, /up to date with main/);
+  }
 });
