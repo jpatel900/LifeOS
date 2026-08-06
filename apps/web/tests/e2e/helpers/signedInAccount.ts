@@ -1,4 +1,9 @@
-import { expect, type Page } from "@playwright/test";
+import {
+  expect,
+  type APIResponse,
+  type Page,
+  type Response,
+} from "@playwright/test";
 
 /**
  * The signed-in browser tier — the seam #737's ROUND 3 judge left open.
@@ -147,20 +152,67 @@ export async function signIn(page: Page, user: SeededUser): Promise<void> {
  * which only runs once `listAreas` has returned as a real Supabase provider —
  * so a 200 here is proof of account mode, not merely of a request going out.
  * The listener is armed BEFORE the navigation so the response cannot be missed.
+ *
+ * ## PGRST303 — this is the app's OWN first PostgREST call, so it is the most
+ * likely place the #841 clock race hits first
+ *
+ * `signIn()` calls this immediately after the `/login` form submits, which
+ * makes the `capture_items` GET below the very first PostgREST request the
+ * freshly-minted session's JWT is used for — closest in wall-clock terms to
+ * a `supabase db reset` that just ran. If that GET 401s with the exact
+ * PGRST303 shape (see `isPgrst303` / the constants above `accountClient`),
+ * it is retried by re-running the WHOLE navigation (bounded, with a settle
+ * wait) rather than by masking it: nothing here decides the read succeeded
+ * when it did not. Any other failure shape on this same endpoint — or a
+ * timeout with no PGRST303 ever observed — rethrows the original
+ * `waitForResponse` timeout unchanged, exactly as before this retry existed.
  */
 export async function gotoWithAccountSync(
   page: Page,
   path = "/",
 ): Promise<void> {
-  const rowsLoaded = page.waitForResponse(
-    (response) =>
-      response.url().includes("/rest/v1/capture_items") &&
-      response.request().method() === "GET" &&
-      response.ok(),
-    { timeout: 60_000 },
-  );
-  await page.goto(path);
-  await rowsLoaded;
+  const isCaptureItemsGet = (response: Response) =>
+    response.url().includes("/rest/v1/capture_items") &&
+    response.request().method() === "GET";
+
+  for (let attempt = 1; attempt <= PGRST303_MAX_ATTEMPTS; attempt++) {
+    let sawPgrst303 = false;
+    const onResponse = (response: Response) => {
+      if (!isCaptureItemsGet(response) || response.ok()) return;
+      void response
+        .text()
+        .catch(() => "")
+        .then((body) => {
+          if (isPgrst303(response.status(), body)) {
+            sawPgrst303 = true;
+          }
+        });
+    };
+    page.on("response", onResponse);
+
+    const rowsLoaded = page.waitForResponse(
+      (response) => isCaptureItemsGet(response) && response.ok(),
+      { timeout: 60_000 },
+    );
+
+    try {
+      await page.goto(path);
+      await rowsLoaded;
+      return;
+    } catch (err) {
+      if (!sawPgrst303 || attempt === PGRST303_MAX_ATTEMPTS) {
+        throw err;
+      }
+      console.log(
+        `[signed-in] PGRST303 (JWT not yet valid) on capture_items during gotoWithAccountSync(${path}), attempt ${attempt}/${PGRST303_MAX_ATTEMPTS} — settling ${PGRST303_SETTLE_WAIT_MS}ms and retrying the navigation.`,
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, PGRST303_SETTLE_WAIT_MS),
+      );
+    } finally {
+      page.off("response", onResponse);
+    }
+  }
 }
 
 /** `page.reload()` with the same account-sync gate. */
@@ -230,6 +282,81 @@ export interface AccountClient {
   patch: (path: string, body: Record<string, unknown>) => Promise<void>;
 }
 
+/**
+ * PGRST303 ("JWT not yet valid") — bounded, signature-specific settle/retry.
+ *
+ * #841's closing comment (id 5197883937) named this the KNOWN post-`db
+ * reset` clock race: this revert PR's OWN signed-in tier failed on run
+ * 31040629745 / job 92423880451, `signed-in-account-truth.spec.ts:205`, with
+ * PGRST303, on a tree containing none of that day's commits — the tier
+ * itself is unstable right after a fresh reset, independent of app code.
+ *
+ * The exact wire shape was confirmed directly against the running local
+ * Supabase stack (read-only probe: an HS256 JWT signed with the dev
+ * JWT_SECRET, `nbf`/`iat` pushed into the future, sent to `GET
+ * /rest/v1/capture_items`, no reset, no writes):
+ *
+ *   skew ≤ 5s  -> 200 (PostgREST's own leeway absorbs it)
+ *   skew ≥ 120s -> 401 {"code":"PGRST303","message":"JWT not yet valid"}
+ *
+ * That is exactly the shape a freshly `supabase db reset` Postgres
+ * container racing a freshly minted GoTrue token can produce for a few
+ * seconds right after boot, and it is genuinely self-resolving: unlike every
+ * other account failure this file tolerates or asserts on, PGRST303 clears
+ * itself the moment real wall-clock time catches up past the token's `nbf`
+ * — nothing is being masked, the SAME request is re-sent unmodified against
+ * the SAME token after a short wait.
+ *
+ * The match stays narrow ON PURPOSE, the same way `TOLERATED_ACCOUNT_FAILURE`
+ * above does: HTTP 401 AND a parsed JSON body with `code === "PGRST303"`,
+ * nothing looser. A 403 from a broken RLS policy, a 400 from a bad column, a
+ * 500, or any other 401 shape all rethrow on the FIRST attempt, immediately,
+ * exactly as before this helper existed — a signed-in job must not stay
+ * green through a broken grant, policy or column, and a retry that could
+ * swallow one of those would be exactly that.
+ */
+const PGRST303_MAX_ATTEMPTS = 3;
+const PGRST303_SETTLE_WAIT_MS = 1_500;
+
+function isPgrst303(status: number, body: string): boolean {
+  if (status !== 401) return false;
+  try {
+    const parsed = JSON.parse(body) as { code?: unknown };
+    return parsed.code === "PGRST303";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sends `send()` up to `PGRST303_MAX_ATTEMPTS` times. Retries ONLY on the
+ * exact PGRST303 signature above, waiting `PGRST303_SETTLE_WAIT_MS` between
+ * attempts; every other response (ok or not) returns on the first attempt.
+ */
+async function sendWithPgrst303Retry(
+  send: () => Promise<APIResponse>,
+  describe: string,
+): Promise<{ response: APIResponse; body: string }> {
+  for (let attempt = 1; attempt <= PGRST303_MAX_ATTEMPTS; attempt++) {
+    const response = await send();
+    const body = await response.text();
+    if (response.ok() || !isPgrst303(response.status(), body)) {
+      return { response, body };
+    }
+    if (attempt === PGRST303_MAX_ATTEMPTS) {
+      return { response, body };
+    }
+    console.log(
+      `[signed-in] PGRST303 (JWT not yet valid) on ${describe}, attempt ${attempt}/${PGRST303_MAX_ATTEMPTS} — settling ${PGRST303_SETTLE_WAIT_MS}ms and retrying the same request.`,
+    );
+    await new Promise((resolve) =>
+      setTimeout(resolve, PGRST303_SETTLE_WAIT_MS),
+    );
+  }
+  // Unreachable — the loop always returns by its last iteration.
+  throw new Error(`sendWithPgrst303Retry exhausted attempts for ${describe}`);
+}
+
 export async function accountClient(
   page: Page,
   user: SeededUser,
@@ -243,10 +370,10 @@ export async function accountClient(
 
   return {
     async rows<T = Record<string, unknown>>(path: string): Promise<T[]> {
-      const response = await page.request.get(`${env.url}/rest/v1/${path}`, {
-        headers,
-      });
-      const body = await response.text();
+      const { response, body } = await sendWithPgrst303Retry(
+        () => page.request.get(`${env.url}/rest/v1/${path}`, { headers }),
+        `GET ${path}`,
+      );
       if (!response.ok()) {
         throw new Error(
           `PostgREST GET ${path} failed ${response.status()}: ${body}`,
@@ -258,15 +385,18 @@ export async function accountClient(
       table: string,
       rows: Record<string, unknown>[],
     ): Promise<T[]> {
-      const response = await page.request.post(`${env.url}/rest/v1/${table}`, {
-        headers: {
-          ...headers,
-          "Content-Type": "application/json",
-          Prefer: "return=representation",
-        },
-        data: rows,
-      });
-      const body = await response.text();
+      const { response, body } = await sendWithPgrst303Retry(
+        () =>
+          page.request.post(`${env.url}/rest/v1/${table}`, {
+            headers: {
+              ...headers,
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            },
+            data: rows,
+          }),
+        `POST ${table}`,
+      );
       if (!response.ok()) {
         throw new Error(
           `PostgREST POST ${table} failed ${response.status()}: ${body}`,
@@ -275,28 +405,36 @@ export async function accountClient(
       return JSON.parse(body) as T[];
     },
     async patch(path: string, body: Record<string, unknown>): Promise<void> {
-      const response = await page.request.patch(`${env.url}/rest/v1/${path}`, {
-        headers: {
-          ...headers,
-          "Content-Type": "application/json",
-          Prefer: "return=minimal",
-        },
-        data: body,
-      });
+      const { response, body: responseBody } = await sendWithPgrst303Retry(
+        () =>
+          page.request.patch(`${env.url}/rest/v1/${path}`, {
+            headers: {
+              ...headers,
+              "Content-Type": "application/json",
+              Prefer: "return=minimal",
+            },
+            data: body,
+          }),
+        `PATCH ${path}`,
+      );
       if (!response.ok()) {
         throw new Error(
-          `PostgREST PATCH ${path} failed ${response.status()}: ${await response.text()}`,
+          `PostgREST PATCH ${path} failed ${response.status()}: ${responseBody}`,
         );
       }
     },
     async purge(table: string): Promise<void> {
-      const response = await page.request.delete(
-        `${env.url}/rest/v1/${table}?user_id=eq.${user.id}`,
-        { headers: { ...headers, Prefer: "return=minimal" } },
+      const { response, body } = await sendWithPgrst303Retry(
+        () =>
+          page.request.delete(
+            `${env.url}/rest/v1/${table}?user_id=eq.${user.id}`,
+            { headers: { ...headers, Prefer: "return=minimal" } },
+          ),
+        `DELETE ${table}`,
       );
       if (!response.ok()) {
         throw new Error(
-          `PostgREST DELETE ${table} failed ${response.status()}: ${await response.text()}`,
+          `PostgREST DELETE ${table} failed ${response.status()}: ${body}`,
         );
       }
     },
@@ -369,6 +507,62 @@ export interface AccountFailureWatch {
 }
 
 /**
+ * PGRST303, for app-initiated background traffic this file cannot retry.
+ *
+ * `accountClient`'s own reads/writes and `gotoWithAccountSync`'s
+ * `capture_items` gate (above) retry a PGRST303 by re-sending the SAME
+ * request — that only works for traffic THIS file issues or explicitly
+ * gates. Confirmed live during a 15x local repetition of this spec (proof
+ * run for this lane, no `supabase db reset`, no seeded-data change): the
+ * app's OWN background read of `rollup_summaries` hit the exact same clock
+ * race —
+ *   `[signed-in] account call FAILED 401 GET .../rollup_summaries ::
+ *    {"code":"PGRST303","details":null,"hint":null,"message":"JWT issued at
+ *    future"}`
+ * — a request this file never issues and cannot re-send. Left unhandled,
+ * that single transient response would permanently fail
+ * `expectOnlyKnownAccountFailures`'s `afterEach` for the rest of that test,
+ * which is exactly the false-red #841 exists to end.
+ *
+ * The fix is classification, not a retry: PostgREST's Kong gateway names its
+ * OWN error code in a response HEADER the instant headers land — before the
+ * body is downloaded — so it is safe to read from the SAME synchronous-risk
+ * standpoint `TOLERATED_ACCOUNT_FAILURE` below already relies on (headers
+ * arrive with `Network.responseReceived`; only the BODY needs a further
+ * network wait, which is why this file's other classification stays off
+ * `response.text()`). Confirmed live, read-only, against the shared local
+ * stack, that the header names the SPECIFIC PostgREST error rather than
+ * "some auth failure" — nothing looser is tolerated:
+ *   RLS/grant denial (42501)      -> proxy-status: PostgREST; error=42501
+ *   malformed/wrong-sig JWT (301) -> proxy-status: PostgREST; error=PGRST301
+ *   clock-skew JWT (303)          -> proxy-status: PostgREST; error=PGRST303
+ *
+ * `isPgrst303Response`'s header read is still one microtask hop of latency,
+ * so `watchAccountFailures` below pushes every qualifying failure into
+ * `unexpected` FIRST — the same conservative default as always — and only
+ * retracts the specific entry once the header check proves it PGRST303. If
+ * that check is ever slower than the rest of the test (it resolves off
+ * already-buffered header data, not a network wait, so in practice it is
+ * not), the entry simply stays classified as unexpected: this can only ever
+ * make the guard STRICTER than intended, never quieter than intended — a
+ * signed-in job still cannot stay green through a broken grant, policy or
+ * column by racing this check.
+ */
+function isPgrst303ProxyStatus(proxyStatus: string | undefined): boolean {
+  return /(?:^|,)\s*PostgREST;\s*error=PGRST303\b/i.test(proxyStatus ?? "");
+}
+
+async function isPgrst303Response(response: Response): Promise<boolean> {
+  if (response.status() !== 401) return false;
+  try {
+    const headers = await response.headers();
+    return isPgrst303ProxyStatus(headers["proxy-status"]);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Watch this page's PostgREST traffic.
  *
  * Set `SIGNED_IN_VERBOSE=1` to also print every `/rest/v1/` status/method/path
@@ -395,21 +589,31 @@ export function watchAccountFailures(page: Page): AccountFailureWatch {
     // Classified synchronously, from status + table alone: the body arrives on
     // a promise that may resolve after the test ends, and a check that can miss
     // its own input is not a check.
-    const tolerated =
+    const knownTolerated =
       status === TOLERATED_ACCOUNT_FAILURE.status &&
       path.endsWith(`/${TOLERATED_ACCOUNT_FAILURE.table}`);
-    if (!tolerated) {
-      watch.unexpected.push(`${status} ${method} ${path}`);
+
+    const entry = `${status} ${method} ${path}`;
+    // Conservative default: push it. The PGRST303 check below may retract
+    // THIS entry once it resolves — see isPgrst303Response's comment for why
+    // that retraction cannot arrive too late in practice, and why "too late"
+    // still fails safe (stricter, not quieter) even if it did.
+    if (!knownTolerated) {
+      watch.unexpected.push(entry);
     }
 
-    void response
-      .text()
-      .catch(() => "")
-      .then((body) => {
-        console.log(
-          `[signed-in] account call FAILED${tolerated ? " (known, tolerated)" : ""} ${status} ${method} ${path} :: ${body.slice(0, 400)}`,
-        );
-      });
+    void (async () => {
+      const pgrst303 = !knownTolerated && (await isPgrst303Response(response));
+      if (pgrst303) {
+        const index = watch.unexpected.indexOf(entry);
+        if (index !== -1) watch.unexpected.splice(index, 1);
+      }
+      const tolerated = knownTolerated || pgrst303;
+      const body = await response.text().catch(() => "");
+      console.log(
+        `[signed-in] account call FAILED${tolerated ? ` (known, tolerated${pgrst303 ? " — PGRST303 clock-skew" : ""})` : ""} ${status} ${method} ${path} :: ${body.slice(0, 400)}`,
+      );
+    })();
   });
 
   return watch;
@@ -425,7 +629,7 @@ export function expectOnlyKnownAccountFailures(
   const unexpected = watches.flatMap((watch) => watch.unexpected);
   expect(
     unexpected,
-    `An account read or write failed that is NOT the known #737 criterion-5 defect (${TOLERATED_ACCOUNT_FAILURE.status} on ${TOLERATED_ACCOUNT_FAILURE.table}). A signed-in job must not stay green through a broken grant, policy or column.`,
+    `An account read or write failed that is NOT the known #737 criterion-5 defect (${TOLERATED_ACCOUNT_FAILURE.status} on ${TOLERATED_ACCOUNT_FAILURE.table}) and NOT a PGRST303 clock-skew read (#841). A signed-in job must not stay green through a broken grant, policy or column.`,
   ).toEqual([]);
 }
 
