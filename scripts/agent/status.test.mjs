@@ -23,6 +23,15 @@ import {
   parseArgs,
   renderStatusHtml,
 } from "./status.mjs";
+import {
+  buildHealthCells,
+  classifyOwnerItem,
+  collectDataProblems,
+  parseCampaigns,
+  parseLatestProgramNote,
+  parseSlices,
+  partitionOwnerQueue,
+} from "./status-html.mjs";
 
 // ---------------------------------------------------------------------------
 // buildSuggestedActions -- pure owner-queue logic
@@ -154,8 +163,11 @@ test("renderStatusHtml: renders the owner queue box with fixture items", () => {
       ],
     }),
   );
-  assert.match(html, /<div class="owner-queue">/);
-  assert.match(html, /<h2>Owner Queue<\/h2>/);
+  // Re-anchored 2026-08-05 (work map redesign): the section keeps its
+  // `owner-queue` hook, but its heading is now the plain-language "Waiting on
+  // you" rather than the jargon "Owner Queue". Same section, new words.
+  assert.match(html, /class="block owner-queue"/);
+  assert.match(html, /Waiting on you/);
   assert.match(html, /merge PR #42 \(green, non-draft\)/);
   assert.match(html, /Migration Drift RED/);
 });
@@ -559,7 +571,10 @@ test("renderStatusHtml: AGENT-TODO items render in the new Agent pickup queue se
       ],
     }),
   );
-  assert.match(html, /Agent pickup queue/);
+  // Re-anchored 2026-08-05 (work map redesign): the agent queue moved behind a
+  // collapsed expander below the owner's own queue, and its label is now plain
+  // language. Same list, same source links, new words and new placement.
+  assert.match(html, /Work agents can pick up/);
   assert.match(html, /add a guard test for the new export table/);
   assert.match(
     html,
@@ -577,4 +592,292 @@ test("renderStatusHtml: degraded gate-item scan renders an honest message instea
     baseFixture({ gateItemsError: "open issues: gh: rate limited" }),
   );
   assert.match(html, /Gate item scan degraded: open issues: gh: rate limited/);
+});
+
+// ---------------------------------------------------------------------------
+// Work map redesign (2026-08-05): the data-truth rules.
+//
+// The map used to lie by staleness -- an unticked checkbox scraped from a PR
+// body stayed in the owner's live queue forever, even after that PR merged or
+// closed. These pin the fix: demote and label, never drop.
+// ---------------------------------------------------------------------------
+
+test("classifyOwnerItem: a gate item from an open source is live", () => {
+  assert.deepEqual(
+    classifyOwnerItem({ text: "a", refLabel: "Issue #1", sourceState: "open" }),
+    { kind: "gate", stale: false },
+  );
+});
+
+test("classifyOwnerItem: a gate item from a merged or closed source is stale", () => {
+  assert.equal(
+    classifyOwnerItem({ text: "a", sourceState: "merged" }).stale,
+    true,
+  );
+  assert.equal(
+    classifyOwnerItem({ text: "a", sourceState: "closed" }).stale,
+    true,
+  );
+});
+
+test("classifyOwnerItem: an unknown source state is treated as live, not hidden", () => {
+  // Fail open: a missing state must never make a real ask disappear.
+  assert.equal(classifyOwnerItem({ text: "a" }).stale, false);
+});
+
+test("classifyOwnerItem: suggested-action strings keep their kinds", () => {
+  assert.equal(
+    classifyOwnerItem("merge PR #42 (green, non-draft)").kind,
+    "merge",
+  );
+  assert.equal(
+    classifyOwnerItem(
+      "apply pending prod migrations (Migration Drift RED): pnpm drift:assemble",
+    ).kind,
+    "drift",
+  );
+  assert.equal(
+    classifyOwnerItem('investigate red run "CI"').kind,
+    "investigate",
+  );
+  assert.equal(
+    classifyOwnerItem("close epic #7 (all steps closed)").kind,
+    "epic",
+  );
+});
+
+test("partitionOwnerQueue: ranks owner gates first, then merges, then the rest", () => {
+  const { live } = partitionOwnerQueue([
+    'investigate red run "CI"',
+    "merge PR #42 (green, non-draft)",
+    { text: "decide the rollout date", refLabel: "PR #1", sourceState: "open" },
+  ]);
+  assert.deepEqual(
+    live.map((entry) => entry.kind),
+    ["gate", "merge", "investigate"],
+  );
+});
+
+test("partitionOwnerQueue: demotes closed-source items out of the live queue without losing them", () => {
+  const stale = {
+    text: "resolve revert PR #806",
+    refLabel: "PR #800",
+    sourceState: "merged",
+    sourceAge: "2d",
+  };
+  const { live, stale: demoted } = partitionOwnerQueue([
+    stale,
+    { text: "still live", refLabel: "Issue #9", sourceState: "open" },
+  ]);
+  assert.equal(live.length, 1);
+  assert.equal(live[0].item.text, "still live");
+  assert.equal(demoted.length, 1);
+  assert.equal(demoted[0].item.text, "resolve revert PR #806");
+});
+
+test("renderStatusHtml: a closed-source item is labelled stale and still rendered in full", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      ownerQueue: [
+        {
+          text: "resolve revert PR #806",
+          refLabel: "PR #800",
+          url: "https://github.com/jpatel900/LifeOS/pull/800",
+          sourceState: "merged",
+          sourceAge: "2d",
+        },
+      ],
+    }),
+  );
+  assert.match(html, /Possibly stale/);
+  assert.match(html, /resolve revert PR #806/); // demoted, never dropped
+  assert.match(html, /2d old/);
+  // ...and it must not be counted as something waiting on the owner.
+  assert.match(html, /Nothing waiting on you right now\./);
+});
+
+test("renderStatusHtml: only the first five live items show, the rest sit behind an expander", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      ownerQueue: [1, 2, 3, 4, 5, 6, 7].map((n) => ({
+        text: `gate item ${n}`,
+        refLabel: `Issue #${n}`,
+        url: "#",
+        sourceState: "open",
+      })),
+    }),
+  );
+  assert.match(html, /The rest of your queue/);
+  assert.match(html, /gate item 7/); // present, not truncated away
+  assert.match(html, /7 items, most important first/);
+});
+
+// ---------------------------------------------------------------------------
+// Program docs -- campaign strip
+// ---------------------------------------------------------------------------
+
+const PROGRAM_MD = [
+  "## 4. Campaigns (final composition)",
+  "",
+  "- **C1 Trust & state truth** — sessions, durability. **CLOSED 2026-07-30 at 10/10.**",
+  "- **C2 Structure & navigation** — one shell. **IN FLIGHT.**",
+  "- **C3 First-run & onboarding** — new-account ritual to first capture.",
+  "",
+  "## 6. Program state (live)",
+  "",
+  "> ## CAMPAIGN C1 (TRUST) — CLOSED",
+  "",
+  "- **2026-08-05 — S2 RE-LANDED AND MERGED (#840):** the mechanism was found.",
+  "- **2026-08-04 — C2 in flight, one setback:** older note.",
+].join("\n");
+
+test("parseCampaigns: reads id, name, and state from the canonical section 4", () => {
+  const campaigns = parseCampaigns(PROGRAM_MD);
+  assert.equal(campaigns.length, 3);
+  assert.equal(campaigns[0].id, "C1");
+  assert.equal(campaigns[0].state, "closed");
+  assert.equal(campaigns[1].id, "C2");
+  assert.equal(campaigns[1].state, "in-flight");
+  assert.equal(campaigns[2].state, "queued");
+  assert.equal(campaigns[1].name, "Structure & navigation");
+});
+
+test("parseCampaigns: degrades to an empty list rather than guessing", () => {
+  assert.deepEqual(parseCampaigns("# some other document"), []);
+  assert.deepEqual(parseCampaigns(undefined), []);
+});
+
+test("parseLatestProgramNote: takes the newest dated bullet from section 6", () => {
+  const note = parseLatestProgramNote(PROGRAM_MD);
+  assert.equal(note.date, "2026-08-05");
+  assert.match(note.text, /S2 RE-LANDED AND MERGED/);
+});
+
+test("parseSlices: reads slice ids and names but never a slice state", () => {
+  const slices = parseSlices(
+    [
+      "- **S0 — Door** (small): redirect to sign-in. — **LANDED (#803)**",
+      "- **S2 — Port Plan/calendar** (largest). — merged (#804), then reverted",
+      "- **RE-SCORE** — fresh-eyes judge.",
+    ].join("\n"),
+  );
+  assert.deepEqual(
+    slices.map((s) => s.id),
+    ["S0", "S2", "RE-SCORE"],
+  );
+  assert.equal(slices[0].name, "Door");
+  // The slice doc's own state words are captured as `detail` but the strip
+  // never promotes them -- they were provably wrong on 2026-08-05.
+  assert.ok(!("state" in slices[1]));
+});
+
+test("renderStatusHtml: campaign strip marks the in-flight campaign and cites its source file", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      program: {
+        campaigns: parseCampaigns(PROGRAM_MD),
+        latestNote: parseLatestProgramNote(PROGRAM_MD),
+        campaignsPath: "docs/program/final-ux-loop.md",
+        campaignsAge: "3h",
+        slices: [],
+      },
+    }),
+  );
+  assert.match(html, /camp camp-in-flight/);
+  assert.match(html, /aria-current="step"/);
+  assert.match(html, /1 of 3 done/);
+  assert.match(html, /docs\/program\/final-ux-loop\.md/);
+  assert.match(html, /last changed 3h ago/);
+});
+
+test("renderStatusHtml: missing program docs say so instead of showing an empty strip", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      program: { campaigns: [], error: "ENOENT: no such file" },
+    }),
+  );
+  assert.match(html, /Program state unavailable: ENOENT: no such file/);
+});
+
+// ---------------------------------------------------------------------------
+// Health strip + honest failure reporting
+// ---------------------------------------------------------------------------
+
+test("buildHealthCells: a failing run on main reads as bad, not silent", () => {
+  const cells = buildHealthCells({
+    mainHealth: {
+      runs: [
+        { name: "CI", status: "completed", conclusion: "success" },
+        { name: "Provider Canary", status: "completed", conclusion: "failure" },
+      ],
+    },
+  });
+  const main = cells.find((c) => c.label === "Main branch");
+  assert.equal(main.tone, "bad");
+  assert.match(main.verdict, /1 run is failing/);
+  assert.match(main.detail, /Provider Canary/);
+});
+
+test("buildHealthCells: an unreadable signal reads as unknown, never as healthy", () => {
+  const cells = buildHealthCells({
+    mainHealth: { error: "gh: rate limited" },
+    drift: { error: "gh: rate limited" },
+    coherence: { error: "ENOENT" },
+  });
+  for (const label of ["Main branch", "Prod database", "Guards"]) {
+    const cell = cells.find((c) => c.label === label);
+    assert.equal(cell.tone, "unknown", `${label} must not read as healthy`);
+    assert.match(cell.verdict, /could not check/);
+  }
+});
+
+test("buildHealthCells: quiet guards and an up-to-date prod database read as ok", () => {
+  const cells = buildHealthCells({
+    coherence: { featureCount: 30, edgeCount: 23, unresolvedCount: 0 },
+    drift: { found: true, red: false, conclusion: "success", age: "1h" },
+  });
+  assert.equal(cells.find((c) => c.label === "Guards").tone, "ok");
+  assert.equal(cells.find((c) => c.label === "Prod database").tone, "ok");
+});
+
+test("collectDataProblems: every fetch failure is named with its reason", () => {
+  const problems = collectDataProblems({
+    prsError: "gh: rate limited",
+    mainHealth: { error: "network down" },
+    drift: { error: "no such workflow" },
+    epicsError: "gh: rate limited",
+  });
+  assert.equal(problems.length, 4);
+  assert.ok(
+    problems.some(
+      (p) => p.what === "recent runs on main" && p.reason === "network down",
+    ),
+  );
+});
+
+test("renderStatusHtml: data-fetch failures are surfaced on the page, not omitted", () => {
+  const html = renderStatusHtml(
+    baseFixture({ epicsError: "gh: rate limited" }),
+  );
+  assert.match(html, /Some data could not be read/);
+  assert.match(html, /could not read open epics/);
+  assert.match(html, /gh: rate limited/);
+});
+
+test("renderStatusHtml: a clean run shows no could-not-read notice at all", () => {
+  const html = renderStatusHtml(baseFixture());
+  assert.doesNotMatch(html, /Some data could not be read/);
+});
+
+test("renderStatusHtml: the wide PR table scrolls in its own container", () => {
+  // No horizontal page scroll at 390px: the table is the only wide thing, and
+  // it must carry its own overflow rather than pushing the body sideways.
+  const html = renderStatusHtml(baseFixture());
+  assert.match(html, /<div class="tablewrap">\s*<table>/);
+});
+
+test("renderStatusHtml: styles both colour schemes", () => {
+  const html = renderStatusHtml(baseFixture());
+  assert.match(html, /@media \(prefers-color-scheme: dark\)/);
+  assert.match(html, /color-scheme: light dark/);
 });

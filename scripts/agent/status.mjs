@@ -17,6 +17,20 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+// The HTML half lives in its own module (see its header for why). It is pure:
+// this file does all the I/O and hands it the finished data shape. `escapeHtml`
+// and `ageFromNow` are small shared pure helpers that live there to keep the
+// dependency one-way; both are re-exported at the bottom of this file so the
+// existing `./status.mjs` import path in status.test.mjs keeps working.
+import {
+  ageFromNow,
+  escapeHtml,
+  parseCampaigns,
+  parseLatestProgramNote,
+  parseSlices,
+  renderStatusHtml,
+} from "./status-html.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const MANIFEST_PATH = path.join(__dirname, "pipeline-manifest.json");
@@ -125,14 +139,6 @@ function rollupStatus(pr) {
     return "green";
   }
   return "unknown";
-}
-
-function ageFromNow(isoDate) {
-  const ms = Date.now() - new Date(isoDate).getTime();
-  const hours = ms / 36e5;
-  if (hours < 1) return "<1h";
-  if (hours < 48) return `${Math.round(hours)}h`;
-  return `${Math.round(hours / 24)}d`;
 }
 
 function section(title) {
@@ -431,6 +437,13 @@ function computeGateItems() {
   const items = [];
   const errors = [];
 
+  // Each source carries its own `state` and a timestamp. The state is not
+  // guessed -- it is implied by the query that produced the row (the open-issue
+  // and open-PR lists can only return OPEN rows; the merged list can only
+  // return merged ones), so this costs zero extra `gh` calls. The HTML work map
+  // uses it to demote items whose source has since closed into a separate
+  // "possibly stale" group instead of leaving a dead ask in the live queue
+  // forever. Nothing is dropped, and the text report ignores these fields.
   try {
     const issues = ghJson([
       "issue",
@@ -438,7 +451,7 @@ function computeGateItems() {
       "--state",
       "open",
       "--json",
-      "number,title,body,url",
+      "number,title,body,url,updatedAt",
       "--limit",
       "200",
     ]);
@@ -449,6 +462,8 @@ function computeGateItems() {
           number: issue.number,
           title: issue.title,
           url: issue.url,
+          state: "open",
+          at: issue.updatedAt ?? null,
         }),
       );
     }
@@ -463,7 +478,7 @@ function computeGateItems() {
       "--state",
       "open",
       "--json",
-      "number,title,body,url",
+      "number,title,body,url,updatedAt",
       "--limit",
       "50",
     ]);
@@ -474,6 +489,8 @@ function computeGateItems() {
           number: pr.number,
           title: pr.title,
           url: pr.url,
+          state: "open",
+          at: pr.updatedAt ?? null,
         }),
       );
     }
@@ -490,7 +507,7 @@ function computeGateItems() {
       "--limit",
       "20",
       "--json",
-      "number,title,body,url",
+      "number,title,body,url,mergedAt",
     ]);
     for (const pr of mergedPrs) {
       items.push(
@@ -499,6 +516,8 @@ function computeGateItems() {
           number: pr.number,
           title: pr.title,
           url: pr.url,
+          state: "merged",
+          at: pr.mergedAt ?? null,
         }),
       );
     }
@@ -517,7 +536,16 @@ function formatGateItem(item) {
     .trim();
   const refLabel = `${item.source.type === "issue" ? "Issue" : "PR"} #${item.source.number}`;
   const prefix = item.kind === "legacy-owner" ? "untagged (legacy): " : "";
-  return { text: `${prefix}${cleaned}`, refLabel, url: item.source.url };
+  // sourceState / sourceAge are ADDITIVE. The text report reads only `text`
+  // and `refLabel` (see main()), so adding fields here cannot change it; the
+  // HTML work map uses them to demote and to date each item.
+  return {
+    text: `${prefix}${cleaned}`,
+    refLabel,
+    url: item.source.url,
+    sourceState: item.source.state ?? null,
+    sourceAge: item.source.at ? ageFromNow(item.source.at) : null,
+  };
 }
 
 // Pure: splits already-extracted gate items into the owner queue (OWNER-GATE
@@ -798,6 +826,90 @@ function gatherPlansAndIdeas() {
   return items;
 }
 
+// Program state for the campaign strip.
+//
+// There is no machine-readable campaign source in this repo (verified
+// 2026-08-05: zero milestones, zero campaign labels, no manifest, and issue
+// titles matching /C[1-6]/ hit an unrelated coherence series). The canonical
+// prose list is docs/program/final-ux-loop.md section 4, which self-declares
+// canonical. We read it, and we stamp every block with the file's last-commit
+// age so a reader can weigh it -- an undated doc quote is how a map starts
+// lying.
+const PROGRAM_DOC = path.join("docs", "program", "final-ux-loop.md");
+const SLICE_DOC = path.join("docs", "program", "campaign-c2-structure.md");
+
+function docLastChangedAge(relPath) {
+  try {
+    const iso = execFileSync(
+      "git",
+      ["log", "-1", "--format=%cI", "--", relPath],
+      { cwd: REPO_ROOT, encoding: "utf8" },
+    ).trim();
+    return iso ? ageFromNow(iso) : null;
+  } catch {
+    return null;
+  }
+}
+
+function gatherProgram() {
+  const posix = (p) => p.split(path.sep).join("/");
+  try {
+    const markdown = readFileSync(path.join(REPO_ROOT, PROGRAM_DOC), "utf8");
+    const campaigns = parseCampaigns(markdown);
+    const latestNote = parseLatestProgramNote(markdown);
+    const program = {
+      campaigns,
+      latestNote,
+      campaignsPath: posix(PROGRAM_DOC),
+      campaignsAge: docLastChangedAge(PROGRAM_DOC),
+      slices: [],
+      slicesPath: null,
+      slicesAge: null,
+      slicesCampaign: null,
+      error:
+        campaigns.length === 0
+          ? `no campaign bullets found in ${posix(PROGRAM_DOC)} section 4`
+          : null,
+    };
+
+    // The in-flight campaign's slice plan, when one exists. Names only -- see
+    // parseSlices() for why no per-slice state is read.
+    const current = campaigns.find((c) => c.state === "in-flight");
+    if (current) {
+      try {
+        const sliceMd = readFileSync(path.join(REPO_ROOT, SLICE_DOC), "utf8");
+        program.slices = parseSlices(sliceMd);
+        program.slicesPath = posix(SLICE_DOC);
+        program.slicesAge = docLastChangedAge(SLICE_DOC);
+        program.slicesCampaign = `${current.id} ${current.name}`;
+      } catch {
+        // No slice plan for this campaign (only C2 has one). Not an error --
+        // the strip renders without it.
+      }
+    }
+    return program;
+  } catch (err) {
+    return { campaigns: [], error: err.message.split("\n")[0] };
+  }
+}
+
+// Local read of the coherence registry -- the same signal printCoherenceStatus
+// puts at the top of the text report, reshaped for the health strip's
+// "are the guards quiet?" cell.
+function gatherCoherence() {
+  try {
+    const stats = collectCoherenceStats(readCoherenceRegistry());
+    return {
+      featureCount: stats.featureCount,
+      edgeCount: stats.edgeCount,
+      unresolvedCount: stats.unresolvedPairs.length,
+      error: null,
+    };
+  } catch (err) {
+    return { error: err.message.split("\n")[0] };
+  }
+}
+
 function gatherHtmlStatusData() {
   const generatedAt = new Date().toISOString();
   const data = {
@@ -817,6 +929,15 @@ function gatherHtmlStatusData() {
     plansError: null,
     agentPickupQueue: [],
     gateItemsError: null,
+    // Signals the page reports on directly. Each carries its own error field
+    // so a failure is shown as "could not read X: <reason>" rather than
+    // silently omitted -- three of these used to be swallowed by bare catches.
+    coherence: gatherCoherence(),
+    program: gatherProgram(),
+    mainHealth: { runs: [], error: null },
+    drift: null,
+    epicsError: null,
+    pipelineError: null,
   };
 
   // Filesystem-only; doesn't need `gh`, so gather it before the auth gate.
@@ -911,24 +1032,29 @@ function gatherHtmlStatusData() {
     try {
       pipelineEntries = computePipelineEntries(manifest);
     } catch (err) {
-      data.ownerQueue.push(`pipeline: ${err.message.split("\n")[0]}`);
+      data.pipelineError = err.message.split("\n")[0];
     }
     try {
       epics = computeOpenEpics();
-    } catch {
-      // already reflected via issuesError-style failures elsewhere; owner
-      // queue simply won't include an epic-close suggestion.
+    } catch (err) {
+      data.epicsError = err.message.split("\n")[0];
     }
     try {
       runs = computeMainHealthRuns();
-    } catch {
-      // main health unavailable -- suggested actions below just won't flag
-      // a red run; the workflow health row still reports Migration Drift etc.
+      data.mainHealth = { runs, error: null };
+    } catch (err) {
+      data.mainHealth = { runs: [], error: err.message.split("\n")[0] };
     }
     try {
-      ({ red: driftRed } = computeMigrationDrift());
-    } catch {
-      // drift status unknown; omitted from owner queue rather than guessed.
+      const drift = computeMigrationDrift();
+      data.drift = { ...drift, error: null };
+      driftRed = drift.red;
+    } catch (err) {
+      data.drift = {
+        found: false,
+        red: false,
+        error: err.message.split("\n")[0],
+      };
     }
 
     data.ownerQueue.push(
@@ -944,600 +1070,6 @@ function gatherHtmlStatusData() {
   }
 
   return data;
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function ciBadge(status) {
-  const cls =
-    status === "green"
-      ? "badge badge-green"
-      : status === "red"
-        ? "badge badge-red"
-        : status === "pending"
-          ? "badge badge-pending"
-          : "badge badge-unknown";
-  return `<span class="${cls}">${escapeHtml(status)}</span>`;
-}
-
-function renderIssueCards(issues) {
-  if (!issues || issues.length === 0) {
-    return '<p class="dim">Nothing open here.</p>';
-  }
-  return issues
-    .map(
-      (issue) => `<div class="card">
-        <b><a href="${escapeHtml(issue.url ?? "#")}">#${issue.number}</a> ${escapeHtml(issue.title)}</b>
-        <span>${issue.labels.map(escapeHtml).join(", ") || "no labels"}</span>
-      </div>`,
-    )
-    .join("\n");
-}
-
-function issueStateBadge(state) {
-  return state === "OPEN"
-    ? '<span class="badge badge-open">open</span>'
-    : '<span class="badge badge-closed">closed</span>';
-}
-
-// Full-map view: every issue (open + closed) as a filterable row. Each row
-// carries data-state / data-labels / data-title attributes that the inline
-// client-side filter script reads -- no re-render, no framework.
-function renderFullIssueRows(issues) {
-  if (!issues || issues.length === 0) {
-    return '<p class="dim">No issues found.</p>';
-  }
-  return issues
-    .map((issue) => {
-      const stateLower = issue.state === "OPEN" ? "open" : "closed";
-      const labels = issue.labels ?? [];
-      const meta =
-        stateLower === "open"
-          ? issue.createdAt
-            ? `opened ${ageFromNow(issue.createdAt)} ago`
-            : ""
-          : issue.closedAt
-            ? `closed ${ageFromNow(issue.closedAt)} ago`
-            : "";
-      return `<div class="issue-row${stateLower === "closed" ? " issue-closed" : ""}" data-state="${stateLower}" data-labels="${escapeHtml(labels.join(","))}" data-title="${escapeHtml(issue.title.toLowerCase())}">
-        <b><a href="${escapeHtml(issue.url ?? "#")}">#${issue.number}</a> ${escapeHtml(issue.title)}</b>
-        ${issueStateBadge(issue.state)}
-        <span class="dim">${labels.map(escapeHtml).join(", ") || "no labels"}${meta ? ` &middot; ${escapeHtml(meta)}` : ""}</span>
-      </div>`;
-    })
-    .join("\n");
-}
-
-function collectLabelSet(issues) {
-  const set = new Set();
-  for (const issue of issues ?? []) {
-    for (const label of issue.labels ?? []) {
-      set.add(label);
-    }
-  }
-  return [...set].sort();
-}
-
-function renderLabelChips(labels) {
-  if (labels.length === 0) return "";
-  return labels
-    .map(
-      (label) =>
-        `<button type="button" class="chip label-chip" data-label="${escapeHtml(label)}">${escapeHtml(label)}</button>`,
-    )
-    .join("\n");
-}
-
-function renderPlansList(plans) {
-  if (!plans || plans.length === 0) {
-    return '<p class="dim">No plans found.</p>';
-  }
-  return plans
-    .map((plan) => {
-      if (plan.error) {
-        return `<div class="plan-row dim">${escapeHtml(plan.path)}: ${escapeHtml(plan.error)}</div>`;
-      }
-      const cls = plan.complete ? "plan-row plan-complete" : "plan-row";
-      return `<div class="${cls}">
-        <b><a href="${escapeHtml(plan.url)}">${escapeHtml(plan.path)}</a></b>
-        ${plan.status ? `<span class="dim">${escapeHtml(plan.status)}</span>` : '<span class="dim">no STATUS line</span>'}
-      </div>`;
-    })
-    .join("\n");
-}
-
-// Pure: string-building only, no I/O. Takes the shape produced by
-// gatherHtmlStatusData() (or an equivalent fixture in tests).
-function renderStatusHtml(data) {
-  const generatedLabel = escapeHtml(data.generatedAt);
-
-  const ghUnavailableSection = !data.ghAvailable
-    ? `<div class="zone warn">
-        <h2>GitHub data unavailable</h2>
-        <p>${escapeHtml(data.ghError ?? "unknown reason")}</p>
-        <p class="dim">Re-run once <code>gh auth status</code> succeeds to get live PRs, issues, and workflow health.</p>
-      </div>`
-    : "";
-
-  // ownerQueue holds two shapes: plain strings from buildSuggestedActions
-  // (merge/close/investigate actions) and gate-item objects from
-  // buildGateQueues ({ text, refLabel, url }) that carry a linked source.
-  const renderOwnerQueueItem = (item) => {
-    if (typeof item === "string") {
-      return `<li>${escapeHtml(item)}</li>`;
-    }
-    const link = item.refLabel
-      ? ` &mdash; <a href="${escapeHtml(item.url ?? "#")}">${escapeHtml(item.refLabel)}</a>`
-      : "";
-    return `<li>${escapeHtml(item.text)}${link}</li>`;
-  };
-
-  const ownerQueueItems =
-    data.ownerQueue.length === 0
-      ? "<li>Nothing waiting on you right now.</li>"
-      : data.ownerQueue.map(renderOwnerQueueItem).join("\n");
-
-  const agentPickupQueue = data.agentPickupQueue ?? [];
-  const agentPickupItems =
-    agentPickupQueue.length === 0
-      ? '<li class="dim">Nothing pre-classified as agent-doable right now.</li>'
-      : agentPickupQueue
-          .map((item) => {
-            const link = item.refLabel
-              ? ` &mdash; <a href="${escapeHtml(item.url ?? "#")}">${escapeHtml(item.refLabel)}</a>`
-              : "";
-            return `<li>${escapeHtml(item.text)}${link}</li>`;
-          })
-          .join("\n");
-  const agentPickupErrorHtml =
-    data.gateItemsError != null
-      ? `<p class="dim">Gate item scan degraded: ${escapeHtml(data.gateItemsError)}</p>`
-      : "";
-
-  const prRows =
-    data.prsError != null
-      ? `<tr><td colspan="5" class="dim">PR data unavailable: ${escapeHtml(data.prsError)}</td></tr>`
-      : data.prs.length === 0
-        ? '<tr><td colspan="5" class="dim">No open PRs.</td></tr>'
-        : data.prs
-            .map(
-              (pr) => `<tr>
-                <td><a href="${escapeHtml(pr.url ?? "#")}">#${pr.number}</a></td>
-                <td>${escapeHtml(pr.title)}</td>
-                <td>${escapeHtml(pr.author)}</td>
-                <td>${ciBadge(pr.status)}</td>
-                <td>${pr.isDraft ? "draft" : "ready"}${pr.awaiting ? " &larr; awaiting owner" : ""}</td>
-              </tr>`,
-            )
-            .join("\n");
-
-  const workflowRows =
-    data.workflows.length === 0
-      ? '<p class="dim">No workflow data.</p>'
-      : data.workflows
-          .map((wf) => {
-            if (wf.error) {
-              return `<div class="wf-item"><b>${escapeHtml(wf.label)}</b><span class="badge badge-unknown">error</span><span class="dim">${escapeHtml(wf.error)}</span></div>`;
-            }
-            if (!wf.found) {
-              return `<div class="wf-item"><b>${escapeHtml(wf.label)}</b><span class="badge badge-unknown">no runs</span></div>`;
-            }
-            return `<div class="wf-item"><b>${escapeHtml(wf.label)}</b><span class="${wf.healthy ? "badge badge-green" : "badge badge-red"}">${escapeHtml(wf.conclusion)}</span><span class="dim">${escapeHtml(wf.age)} ago</span></div>`;
-          })
-          .join("\n");
-
-  const lanesHtml =
-    data.lanes.mode === "usability-enjoyability"
-      ? `<div class="zone">
-          <h2><span class="dot dot-usability"></span> Usability</h2>
-          ${renderIssueCards(data.lanes.groups.usability)}
-        </div>
-        <div class="zone">
-          <h2><span class="dot dot-enjoyability"></span> Enjoyability</h2>
-          ${renderIssueCards(data.lanes.groups.enjoyability)}
-        </div>`
-      : `<div class="zone" style="grid-column: 1 / -1;">
-          <h2><span class="dot dot-open"></span> Open work</h2>
-          ${data.issuesError != null ? `<p class="dim">Issue data unavailable: ${escapeHtml(data.issuesError)}</p>` : renderIssueCards(data.lanes.groups.open)}
-        </div>`;
-
-  const freshness = data.mainFreshness ?? {};
-  const freshnessHtml = freshness.error
-    ? `<p class="dim">Freshness unavailable: ${escapeHtml(freshness.error)}</p>`
-    : `<p>Local <code>${escapeHtml(freshness.branch ?? "?")}</code> @ ${escapeHtml(freshness.headSha ?? "?")} (${escapeHtml(freshness.headDate ?? "?")})${
-        freshness.originSha
-          ? ` vs <code>origin/main</code> @ ${escapeHtml(freshness.originSha)} (${escapeHtml(freshness.originDate ?? "?")})${
-              typeof freshness.aheadOfOrigin === "number"
-                ? freshness.aheadOfOrigin === 0
-                  ? " -- up to date"
-                  : ` -- ${freshness.aheadOfOrigin} commit(s) ahead of origin/main`
-                : ""
-            }`
-          : " (origin/main ref not available locally)"
-      }</p>`;
-
-  const allIssues = data.allIssues ?? [];
-  const openCount = allIssues.filter((i) => i.state === "OPEN").length;
-  const closedCount = allIssues.filter((i) => i.state !== "OPEN").length;
-  const labelSet = collectLabelSet(allIssues);
-
-  const fullMapIssuesHtml =
-    data.allIssuesError != null
-      ? `<p class="dim">Issue data unavailable: ${escapeHtml(data.allIssuesError)}</p>`
-      : `<div class="filter-bar">
-          <div class="chip-row">
-            <button type="button" class="chip status-chip active" data-status="open">Open</button>
-            <button type="button" class="chip status-chip" data-status="closed">Closed</button>
-            <button type="button" class="chip status-chip" data-status="all">All</button>
-          </div>
-          <div class="chip-row">${renderLabelChips(labelSet)}</div>
-          <input type="text" id="issueSearch" class="text-filter" placeholder="Filter by title..." />
-        </div>
-        <div id="issuesList">
-          ${renderFullIssueRows(allIssues)}
-        </div>`;
-
-  const fullMapHtml = `<section>
-      <h2 class="section-title">All issues (${openCount} open / ${closedCount} closed)</h2>
-      ${fullMapIssuesHtml}
-    </section>
-
-    <section>
-      <h2 class="section-title">Plans &amp; ideas</h2>
-      ${data.plansError != null ? `<p class="dim">Plans data unavailable: ${escapeHtml(data.plansError)}</p>` : renderPlansList(data.plans)}
-    </section>`;
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LifeOS Work Map</title>
-    <style>
-      :root {
-        --bg: #0e1117;
-        --panel: #161b24;
-        --line: #2a3140;
-        --text: #dde3ec;
-        --dim: #8b93a5;
-        --green: #4ade80;
-        --red: #f87171;
-        --amber: #f59e0b;
-        --usability: #60a5fa;
-        --enjoyability: #c084fc;
-        --open: #f472b6;
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        background: var(--bg);
-        color: var(--text);
-        font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
-        padding: 28px;
-      }
-      h1 { font-size: 20px; margin: 0 0 4px; }
-      .sub { color: var(--dim); margin-bottom: 20px; font-size: 13px; }
-      .owner-queue {
-        border: 2px solid var(--amber);
-        border-radius: 12px;
-        background: rgba(245, 158, 11, 0.08);
-        padding: 16px 18px;
-        margin-bottom: 20px;
-        max-width: 1100px;
-      }
-      .owner-queue h2 {
-        margin: 0 0 10px;
-        font-size: 14px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-      .owner-queue ul { margin: 0; padding-left: 20px; }
-      .owner-queue li { margin: 4px 0; }
-      .agent-queue {
-        border: 2px solid var(--usability);
-        border-radius: 12px;
-        background: rgba(96, 165, 250, 0.08);
-        padding: 16px 18px;
-        margin-bottom: 20px;
-        max-width: 1100px;
-      }
-      .agent-queue h2 {
-        margin: 0 0 10px;
-        font-size: 14px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-      .agent-queue ul { margin: 0; padding-left: 20px; }
-      .agent-queue li { margin: 4px 0; }
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        max-width: 1100px;
-        margin-bottom: 20px;
-      }
-      .zone {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        padding: 16px 18px;
-      }
-      .zone.warn { border-color: var(--red); background: rgba(248, 113, 113, 0.08); }
-      .zone h2 {
-        font-size: 13px;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        margin: 0 0 10px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-      .dot-usability { background: var(--usability); }
-      .dot-enjoyability { background: var(--enjoyability); }
-      .dot-open { background: var(--open); }
-      .card {
-        border-left: 3px solid var(--line);
-        padding: 6px 12px;
-        margin: 8px 0;
-        border-radius: 0 8px 8px 0;
-        background: rgba(255, 255, 255, 0.02);
-      }
-      .card b { display: block; font-size: 14px; }
-      .card b a { color: var(--text); }
-      .card span { color: var(--dim); font-size: 12px; }
-      table {
-        width: 100%;
-        max-width: 1100px;
-        border-collapse: collapse;
-        margin-bottom: 20px;
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        overflow: hidden;
-      }
-      th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
-      th { color: var(--dim); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; }
-      tr:last-child td { border-bottom: none; }
-      a { color: #7dd3fc; }
-      .badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-      .badge-green { background: rgba(74, 222, 128, 0.15); color: var(--green); }
-      .badge-red { background: rgba(248, 113, 113, 0.15); color: var(--red); }
-      .badge-pending { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
-      .badge-unknown { background: rgba(139, 147, 165, 0.15); color: var(--dim); }
-      .dim { color: var(--dim); }
-      .wf-row { display: flex; flex-wrap: wrap; gap: 12px; max-width: 1100px; margin-bottom: 20px; }
-      .wf-item {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 10px 14px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-      }
-      section h2.section-title { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); margin: 0 0 8px; }
-      .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
-      .tab-btn {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        color: var(--dim);
-        padding: 8px 16px;
-        border-radius: 999px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .tab-btn.active { color: var(--text); border-color: #7dd3fc; background: rgba(125, 211, 252, 0.1); }
-      .hidden { display: none !important; }
-      .filter-bar { max-width: 1100px; margin-bottom: 14px; }
-      .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-      .chip {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        color: var(--dim);
-        padding: 4px 12px;
-        border-radius: 999px;
-        font-size: 12px;
-        cursor: pointer;
-      }
-      .chip.active { color: var(--text); border-color: var(--green); background: rgba(74, 222, 128, 0.12); }
-      .text-filter {
-        width: 100%;
-        max-width: 320px;
-        background: var(--panel);
-        border: 1px solid var(--line);
-        color: var(--text);
-        border-radius: 8px;
-        padding: 6px 10px;
-        font: inherit;
-      }
-      .issue-row {
-        border-left: 3px solid var(--line);
-        padding: 6px 12px;
-        margin: 8px 0;
-        border-radius: 0 8px 8px 0;
-        background: rgba(255, 255, 255, 0.02);
-        max-width: 1100px;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 10px;
-      }
-      .issue-row b { flex-basis: 100%; font-size: 14px; }
-      .issue-row b a { color: var(--text); }
-      .issue-closed { opacity: 0.55; }
-      .badge-open { background: rgba(74, 222, 128, 0.15); color: var(--green); }
-      .badge-closed { background: rgba(139, 147, 165, 0.15); color: var(--dim); }
-      .plan-row {
-        border-left: 3px solid var(--line);
-        padding: 6px 12px;
-        margin: 8px 0;
-        border-radius: 0 8px 8px 0;
-        background: rgba(255, 255, 255, 0.02);
-        max-width: 1100px;
-      }
-      .plan-row b a { color: var(--text); }
-      .plan-complete { opacity: 0.55; }
-    </style>
-  </head>
-  <body>
-    <h1>LifeOS Work Map</h1>
-    <div class="sub">generated ${generatedLabel} from live GitHub state</div>
-
-    <div class="tabs">
-      <button type="button" class="tab-btn active" data-view="view-now">Now</button>
-      <button type="button" class="tab-btn" data-view="view-full">Full map</button>
-    </div>
-
-    <div class="view" id="view-now">
-      ${ghUnavailableSection}
-
-      <div class="owner-queue">
-        <h2>Owner Queue</h2>
-        <ul>${ownerQueueItems}</ul>
-      </div>
-
-      <div class="agent-queue">
-        <h2>Agent pickup queue</h2>
-        ${agentPickupErrorHtml}
-        <ul>${agentPickupItems}</ul>
-      </div>
-
-      <div class="grid">
-        ${lanesHtml}
-      </div>
-
-      <section>
-        <h2 class="section-title">Open PRs</h2>
-        <table>
-          <thead><tr><th>PR</th><th>Title</th><th>Author</th><th>CI</th><th>State</th></tr></thead>
-          <tbody>
-            ${prRows}
-          </tbody>
-        </table>
-      </section>
-
-      <section>
-        <h2 class="section-title">Workflow health</h2>
-        <div class="wf-row">
-          ${workflowRows}
-        </div>
-      </section>
-
-      <section>
-        <h2 class="section-title">Repo freshness</h2>
-        ${freshnessHtml}
-      </section>
-    </div>
-
-    <div class="view hidden" id="view-full">
-      ${fullMapHtml}
-    </div>
-
-    <script>
-      (function () {
-        function all(sel) {
-          return Array.prototype.slice.call(document.querySelectorAll(sel));
-        }
-
-        all(".tab-btn").forEach(function (btn) {
-          btn.addEventListener("click", function () {
-            all(".tab-btn").forEach(function (b) {
-              b.classList.remove("active");
-            });
-            btn.classList.add("active");
-            all(".view").forEach(function (v) {
-              v.classList.add("hidden");
-            });
-            var target = document.getElementById(btn.dataset.view);
-            if (target) target.classList.remove("hidden");
-          });
-        });
-
-        var filterState = { status: "open", labels: [], text: "" };
-
-        function applyIssueFilters() {
-          all("#issuesList .issue-row").forEach(function (row) {
-            var show = true;
-            var rowState = row.dataset.state;
-            var rowLabels = (row.dataset.labels || "")
-              .split(",")
-              .filter(Boolean);
-            var title = row.dataset.title || "";
-
-            if (filterState.status !== "all" && rowState !== filterState.status) {
-              show = false;
-            }
-            if (show && filterState.labels.length > 0) {
-              var hasLabel = rowLabels.some(function (l) {
-                return filterState.labels.indexOf(l) !== -1;
-              });
-              if (!hasLabel) show = false;
-            }
-            if (show && filterState.text && title.indexOf(filterState.text) === -1) {
-              show = false;
-            }
-
-            row.classList.toggle("hidden", !show);
-          });
-        }
-
-        all(".status-chip").forEach(function (chip) {
-          chip.addEventListener("click", function () {
-            all(".status-chip").forEach(function (c) {
-              c.classList.remove("active");
-            });
-            chip.classList.add("active");
-            filterState.status = chip.dataset.status;
-            applyIssueFilters();
-          });
-        });
-
-        all(".label-chip").forEach(function (chip) {
-          chip.addEventListener("click", function () {
-            var label = chip.dataset.label;
-            var idx = filterState.labels.indexOf(label);
-            if (idx === -1) {
-              filterState.labels.push(label);
-              chip.classList.add("active");
-            } else {
-              filterState.labels.splice(idx, 1);
-              chip.classList.remove("active");
-            }
-            applyIssueFilters();
-          });
-        });
-
-        var searchInput = document.getElementById("issueSearch");
-        if (searchInput) {
-          searchInput.addEventListener("input", function () {
-            filterState.text = searchInput.value.toLowerCase();
-            applyIssueFilters();
-          });
-        }
-
-        applyIssueFilters();
-      })();
-    </script>
-  </body>
-</html>
-`;
 }
 
 function main() {
