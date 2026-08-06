@@ -44,7 +44,7 @@ Ordered by dependency, not by score. (An earlier draft of this section listed se
 
 - **C1 Trust & state truth** — sessions, durability, resurrecting work, close verdicts, honest Health. **CLOSED 2026-07-30 at 10/10.**
 - **C2 Structure & navigation** — one shell: port all four legacy screens into moments language, sign-in door, URL truth. **IN FLIGHT.**
-- **C3 First-run & onboarding** — new-account ritual to first capture. (Open OWNER-GATE: ritual content — gates C3's close only.)
+- **C3 First-run & onboarding** — new-account ritual to first capture. (Ritual content DECIDED 2026-08-05 — see §5.3; no owner decision gates C3.)
 - **C4 Flow completeness** — capture/triage/plan/execute residual contract gaps.
 - **C5 Pins for mobile & accessibility** — hit-targets, axe-at-AA in CI; cheap, high ratchet value; may interleave.
 - **C6 Payoff & polish** — completion payoffs, premium pass; entry condition: C1-C5 closed.
