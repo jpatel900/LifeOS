@@ -329,10 +329,42 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     localProposal: Phase2TimeBlockProposal,
   ) {
     const client = createSupabaseBrowserClient();
-    const persistedTaskId = persistedIdForLocalId(
+    let persistedTaskId = persistedIdForLocalId(
       localProposal.task_id,
       persistedTaskIdByLocalIdRef.current,
     );
+
+    /**
+     * #840 follow-up: the drafted block that never reached the account.
+     *
+     * The task a draft hangs off carries a DEVICE-LOCAL id until its own
+     * journalled accept is replayed — only that replay records the account id
+     * (`recordTaskDraftAcceptIds`). Draft a block inside that window and the
+     * lookup below answered null.
+     *
+     * That mattered more here than anywhere else in this file, because unlike
+     * every placement path this write is NOT journalled: `markLocalOnly` was
+     * the END of it. The draft stayed on the device, the account never heard
+     * about it, and nothing ever retried — a silent loss, reproduced locally
+     * (`persistedTaskId: null` with an empty id map while state still held
+     * `task-1`).
+     *
+     * Draining the journal first turns the common case — the task's own write
+     * is merely still in flight — into a delivered draft. If the id is still
+     * unknown afterwards the honest banner below stands: nothing is claimed
+     * that did not happen.
+     */
+    if (client && !persistedTaskId) {
+      try {
+        await replayJournaledWrites();
+      } catch {
+        // Best-effort: the re-resolve below decides what the user is told.
+      }
+      persistedTaskId = persistedIdForLocalId(
+        localProposal.task_id,
+        persistedTaskIdByLocalIdRef.current,
+      );
+    }
 
     if (!client || !persistedTaskId) {
       markLocalOnly(savedOnThisDeviceBanner("Your new proposal"));

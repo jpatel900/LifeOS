@@ -172,19 +172,6 @@ async function proposalStatuses(account: AccountClient): Promise<string[]> {
     .sort();
 }
 
-/**
- * The accept controls on screen — one per proposal still awaiting a decision.
- * Diffing this list across the draft tap is how the drafted proposal's OWN
- * control is identified; `.first()` is a coin flip once two exist.
- */
-async function acceptTestIds(page: Page): Promise<string[]> {
-  return page
-    .getByTestId(/^plan-sheet-proposal-accept-/)
-    .evaluateAll((nodes) =>
-      nodes.map((node) => (node as HTMLElement).dataset.testid ?? ""),
-    );
-}
-
 test.describe("C2-S2 — the ported Plan surface, signed in", () => {
   test(`${SIGNED_IN_TAG} place -> the rail shows it -> take it off -> the account agrees at every step`, async ({
     page,
@@ -295,14 +282,12 @@ test.describe("C2-S2 — the ported Plan surface, signed in", () => {
     await expect(page.getByTestId("plan-sheet-draft-block")).toBeEnabled({
       timeout: 20_000,
     });
-    // Triage's proposal must already be ON SCREEN before the diff below can
-    // mean anything — otherwise "the control that appeared" is just whichever
-    // of the two rendered first.
+    // Triage's proposal must already be ON SCREEN before the draft, so the
+    // count assertion after it is about the drafted card and nothing else.
     await expect(page.getByTestId(/^plan-sheet-proposal-accept-/)).toHaveCount(
       1,
       { timeout: 30_000 },
     );
-    const acceptsBeforeDraft = await acceptTestIds(page);
 
     // THE DRAFT — it reaches the ACCOUNT as its own row, beside triage's.
     await page.getByTestId("plan-sheet-draft-block").click();
@@ -318,15 +303,30 @@ test.describe("C2-S2 — the ported Plan surface, signed in", () => {
     ).find((row) => row.id !== triageProposal.id);
     expect(draftedProposal?.rationale_json?.note).toContain("Drafted a block");
 
-    // THE ACCEPT — of the DRAFTED card specifically.
-    const draftedAccept = (await acceptTestIds(page)).find(
-      (id) => !acceptsBeforeDraft.includes(id),
+    // THE ACCEPT — of the DRAFTED card specifically, named by the id the
+    // ACCOUNT gave it rather than by diffing the ids on screen.
+    //
+    // The diff this replaces assumed a card's test id never changes. It does:
+    // a proposal renders under a DEVICE-LOCAL id (`proposal-3`) until the
+    // account sync swaps in the account row, and that swap lands at an
+    // unpredictable moment. Main run 31039290572 failed all three attempts on
+    // it — twice the diff named triage's freshly re-keyed control and accepted
+    // the WRONG proposal, once the click hit the local-id node in the instant
+    // it was replaced ("element was detached from the DOM"). Both shapes
+    // reproduced locally: 3 failures in 18 runs.
+    //
+    // Waiting for the drafted proposal's OWN control is strictly stronger than
+    // the diff: it asserts the screen is showing the ACCOUNT's row, under the
+    // account's identity, before the tap — and the account uuid never changes
+    // again, so the node cannot be swapped out from under the click.
+    const draftedAccept = page.getByTestId(
+      `plan-sheet-proposal-accept-${draftedProposal?.id}`,
     );
-    expect(
+    await expect(
       draftedAccept,
       "the drafted proposal renders its own accept control",
-    ).toBeTruthy();
-    await page.getByTestId(draftedAccept as string).click();
+    ).toBeVisible({ timeout: 30_000 });
+    await draftedAccept.click();
 
     // #580 "placement wins": the accepted proposal is the DRAFTED one, and the
     // proposal triage left is superseded — retained as history, never pending.
