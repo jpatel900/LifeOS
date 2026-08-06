@@ -56,6 +56,7 @@ import { buildPipelineCounts } from "./pipelineCounts";
 import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
 import { ReviewSheet } from "./ReviewSheet";
+import { HealthSheet } from "./HealthSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
@@ -894,6 +895,14 @@ export function TodayMoments({
       },
       { id: "open-triage", label: "Open triage" },
       { id: "open-plan", label: "Open plan" },
+      // C2-S4: Health's only other way in is SideRail's "View area health →",
+      // which lives inside the Start moment and stacks to the BOTTOM of the
+      // page below 1024px (`StartMoment`'s
+      // `lg:grid-cols-[minmax(0,1fr)_20rem]`). The palette is the one entry
+      // that is the same distance away from every moment and every viewport,
+      // which is what Target Card 2's "any screen in <=2 interactions" asks
+      // for on a 390px screen.
+      { id: "open-health", label: "Open health" },
     ];
     if (moment === "start" && startVM.firstMove) {
       actions.push({ id: "start-first-move", label: "Start first move" });
@@ -958,6 +967,9 @@ export function TodayMoments({
           break;
         case "open-plan":
           openSheet("plan");
+          break;
+        case "open-health":
+          openSheet("health");
           break;
         case "start-first-move":
           if (startVM.firstMove) handleStartMove(startVM.firstMove);
@@ -1232,7 +1244,13 @@ export function TodayMoments({
               onStartMove={handleStartMove}
               onSnooze={() => showToast("Snoozed 10m")}
               onSwap={() => showToast("Looking for something else")}
-              onOpenHealth={() => router.push("/health")}
+              /* C2-S4 (#687): this was a `router.push` to the legacy health
+                 route — a jump clean out of the moments shell into the old
+                 cockpit, which Target Card 2 forbids on both counts (the old
+                 design renders; Back leaves the shell). Health is now a sheet
+                 at `?sheet=health`, and `noLegacyRouteLinks.test.ts` now
+                 forbids the old push from coming back. */
+              onOpenHealth={() => openSheet("health")}
               pipelineCounts={pipelineCounts}
               onDrillPipeline={handleDrillPipeline}
               onOpenRecovery={() => setMoment("close")}
@@ -1418,6 +1436,16 @@ export function TodayMoments({
         dayClose={closeVM.dayClose}
         onCloseDay={handleCloseDay}
         onToast={showToast}
+      />
+
+      {/* C2-S4: the system check runs when this sheet OPENS, not when the home
+          renders — see HealthSheet's doc comment. Mounting it here (the shape
+          every sheet uses) is what makes that gate necessary and deliberate. */}
+      <HealthSheet
+        open={activeSheet === "health"}
+        onClose={() => closeSheet()}
+        selectedAreaId={selectedAreaId}
+        now={now}
       />
 
       <EndSessionSheet
