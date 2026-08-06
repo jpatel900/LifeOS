@@ -881,3 +881,61 @@ test("renderStatusHtml: styles both colour schemes", () => {
   assert.match(html, /@media \(prefers-color-scheme: dark\)/);
   assert.match(html, /color-scheme: light dark/);
 });
+
+test("buildHealthCells: a failing scheduled workflow reaches the glance, not just a drawer", () => {
+  const cells = buildHealthCells({
+    workflows: [
+      {
+        file: "migration-drift.yml",
+        label: "Migration Drift",
+        found: true,
+        healthy: true,
+      },
+      {
+        file: "provider-canary.yml",
+        label: "Provider canary",
+        found: true,
+        healthy: false,
+      },
+    ],
+  });
+  const cell = cells.find((c) => c.label === "Scheduled checks");
+  assert.equal(cell.tone, "bad");
+  assert.match(cell.detail, /Provider canary/);
+});
+
+test("buildHealthCells: Migration Drift is not double-counted in scheduled checks", () => {
+  const cells = buildHealthCells({
+    workflows: [
+      {
+        file: "migration-drift.yml",
+        label: "Migration Drift",
+        found: true,
+        healthy: false,
+      },
+    ],
+  });
+  assert.equal(
+    cells.find((c) => c.label === "Scheduled checks"),
+    undefined,
+  );
+});
+
+test("stripMarkdown: gate item markup never reaches the rendered page", () => {
+  const html = renderStatusHtml(
+    baseFixture({
+      agentPickupQueue: [
+        {
+          text: "**A drafted block** can be lost in `persistenceSync.ts`",
+          refLabel: "PR #840",
+          url: "#",
+          sourceState: "merged",
+          sourceAge: "20h",
+        },
+      ],
+    }),
+  );
+  assert.match(html, /A drafted block can be lost in persistenceSync\.ts/);
+  assert.ok(!html.includes("**A drafted block"));
+  assert.match(html, /source merged/);
+});

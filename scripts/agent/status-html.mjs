@@ -133,13 +133,24 @@ function parseLatestProgramNote(markdown) {
   return null;
 }
 
+// Pure: turns a markdown fragment into the plain sentence it means. The doc
+// bullets are quoted verbatim on the page, but their markup is not content --
+// leaving it in rendered a stray "resumed:**" on the real map.
+function stripMarkdown(text) {
+  return String(text ?? "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links -> their text
+    .replace(/(\*\*|__)(.*?)\1/g, "$2") // bold
+    .replace(/`([^`]+)`/g, "$1") // code spans
+    .replace(/(\*\*|__|`)/g, "") // any unpaired leftovers
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Pure: the first sentence of a long note, for the glance line. The full text
 // is always rendered too (behind an expander) -- this is disclosure, not
 // truncation. Returns { lead, hasMore }.
 function leadSentence(text) {
-  const flat = String(text ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const flat = stripMarkdown(text);
   const match = flat.match(/^(.{0,180}?[.:!?])(\s|$)/);
   if (match && match[1].length < flat.length) {
     return { lead: match[1], hasMore: true };
@@ -441,8 +452,45 @@ function buildHealthCells(data) {
       label: "Prod database",
       tone: drift.red ? "bad" : "ok",
       verdict: drift.red ? "behind main" : "up to date with main",
-      detail: `drift check ${escapeHtml(drift.conclusion ?? "?")}, ${escapeHtml(drift.age ?? "?")} ago`,
+      // Not escaped here: renderHealthStrip escapes every field once. Escaping
+      // twice is what printed a literal "&lt;1h ago" on the first real render.
+      detail: `drift check ${drift.conclusion ?? "?"}, ${drift.age ?? "?"} ago`,
     });
+  }
+
+  // Scheduled workflows run off main's push cycle, so a failing one can sit
+  // outside the "last 8 runs on main" window and never reach the glance. That
+  // is a false all-clear -- the same class of bug as issue #758. Migration
+  // Drift is excluded here because it already has its own cell above.
+  const workflows = (data.workflows ?? []).filter(
+    (wf) => wf.file !== "migration-drift.yml",
+  );
+  if (workflows.length > 0) {
+    const broken = workflows.filter((wf) => wf.found && !wf.healthy);
+    const unreadable = workflows.filter((wf) => wf.error || !wf.found);
+    if (broken.length > 0) {
+      cells.push({
+        label: "Scheduled checks",
+        tone: "bad",
+        verdict:
+          broken.length === 1 ? "1 is failing" : `${broken.length} are failing`,
+        detail: broken.map((wf) => wf.label).join(", "),
+      });
+    } else if (unreadable.length === workflows.length) {
+      cells.push({
+        label: "Scheduled checks",
+        tone: "unknown",
+        verdict: "could not check",
+        detail: unreadable.map((wf) => wf.label).join(", "),
+      });
+    } else {
+      cells.push({
+        label: "Scheduled checks",
+        tone: "ok",
+        verdict: "all passing",
+        detail: `${workflows.length - unreadable.length} of ${workflows.length} readable`,
+      });
+    }
   }
 
   const freshness = data.mainFreshness ?? {};
@@ -454,13 +502,14 @@ function buildHealthCells(data) {
       detail: freshness.error,
     });
   } else if (typeof freshness.aheadOfOrigin === "number") {
-    const same = freshness.aheadOfOrigin === 0;
+    const ahead = freshness.aheadOfOrigin;
     cells.push({
       label: "This checkout",
-      tone: same ? "ok" : "warn",
-      verdict: same
-        ? "matches origin/main"
-        : `${freshness.aheadOfOrigin} commit(s) ahead`,
+      tone: ahead === 0 ? "ok" : "warn",
+      verdict:
+        ahead === 0
+          ? "matches origin/main"
+          : `${ahead} commit${ahead === 1 ? "" : "s"} ahead`,
       detail: `${freshness.branch ?? "?"} at ${freshness.headSha ?? "?"}`,
     });
   } else {
@@ -550,7 +599,7 @@ function renderCampaignStrip(program) {
       .map(
         (campaign) => `<li class="row">
           <b>${escapeHtml(campaign.id)} ${escapeHtml(campaign.name)} <span class="tag tag-${campaign.state}">${escapeHtml(CAMPAIGN_STATE_LABEL[campaign.state] ?? campaign.state)}</span></b>
-          <span class="dim">${escapeHtml(campaign.detail)}</span>
+          <span class="dim">${escapeHtml(stripMarkdown(campaign.detail))}</span>
         </li>`,
       )
       .join("\n")}</ul>
@@ -558,7 +607,7 @@ function renderCampaignStrip(program) {
       note
         ? `<h3 class="sub-h">Latest program note (${escapeHtml(note.date)})</h3>
            <p class="dim src">From the same file, section 6 &mdash; the doc's own live-state channel.</p>
-           <p>${escapeHtml(note.text)}</p>`
+           <p>${escapeHtml(stripMarkdown(note.text))}</p>`
         : ""
     }
     ${renderSlicePlan(program)}`;
@@ -614,7 +663,11 @@ function collectDataProblems(data) {
 function renderOwnerQueueEntry(entry) {
   const { item, kind } = entry;
   const isObject = item && typeof item === "object";
-  const text = isObject ? item.text : String(item);
+  // Gate items are scraped out of markdown bodies. The text report prints them
+  // raw (and must keep doing so), but on the page the markup is noise, not
+  // content -- it rendered a literal "**A drafted block can be silently
+  // lost.**" on the first real run.
+  const text = stripMarkdown(isObject ? item.text : String(item));
   const meta = [];
   const link = renderSourceLink(item);
   if (link) meta.push(link);
@@ -692,7 +745,19 @@ function renderStatusHtml(data) {
       : agentPickupQueue
           .map((item) => {
             const link = renderSourceLink(item);
-            return `<li>${escapeHtml(item.text)}${link ? ` &mdash; ${link}` : ""}</li>`;
+            // Same truth rule as the owner queue, applied here as a label: an
+            // item scraped from a PR that has since merged may already be dead.
+            const state = String(item.sourceState ?? "").toLowerCase();
+            const staleTag =
+              state === "merged" || state === "closed"
+                ? ` <span class="tag">source ${escapeHtml(state)}</span>`
+                : "";
+            const age = item.sourceAge
+              ? ` <span class="dim">${escapeHtml(item.sourceAge)} old</span>`
+              : "";
+            return `<li class="row"><b>${escapeHtml(stripMarkdown(item.text))}</b><span class="dim">${
+              link ? link : ""
+            }${age}${staleTag}</span></li>`;
           })
           .join("\n");
   const agentPickupErrorHtml =
@@ -972,10 +1037,14 @@ function renderStatusHtml(data) {
       .tag-in-flight { color: var(--accent); background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 
       /* --- health strip --- */
+      /* A 1px grid gap over a --line background draws the separators, so the
+         hairlines stay correct at ANY column count the grid wraps to (4-up on
+         desktop, 2-up at 390px) without per-child border rules. */
       .health {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
-        background: var(--surface);
+        grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+        gap: 1px;
+        background: var(--line);
         border: 1px solid var(--line);
         border-radius: var(--radius);
         box-shadow: var(--shadow);
@@ -984,28 +1053,28 @@ function renderStatusHtml(data) {
       .health-cell {
         display: flex;
         flex-direction: column;
-        gap: 0.15rem;
-        padding: 0.85rem 1rem;
-        border-top: 1px solid var(--line);
-      }
-      .health-cell:first-child { border-top: 0; }
-      @media (min-width: 40rem) {
-        .health-cell { border-top: 0; border-left: 1px solid var(--line); }
-        .health-cell:first-child { border-left: 0; }
+        gap: 0.1rem;
+        padding: 0.6rem 0.8rem 0.65rem;
+        background: var(--surface);
       }
       .health-label {
-        font-size: 0.75rem;
+        font-size: 0.6875rem;
         font-weight: 600;
         color: var(--ink-soft);
       }
       .health-verdict {
         display: flex;
-        align-items: center;
-        gap: 0.45rem;
-        font-size: 0.9375rem;
-        font-weight: 600;
+        align-items: baseline;
+        gap: 0.4rem;
+        font-size: 0.875rem;
+        font-weight: 650;
+        line-height: 1.3;
       }
-      .health-detail { font-size: 0.75rem; }
+      /* Pin the dot to the first line's optical centre so it stays put when a
+         long verdict wraps to two lines (align-self:center drifts to the
+         middle of the block). */
+      .health-verdict .dot { align-self: flex-start; margin-top: 0.42em; }
+      .health-detail { font-size: 0.6875rem; line-height: 1.35; }
 
       /* --- campaign strip --- */
       .camp-strip {
@@ -1032,13 +1101,16 @@ function renderStatusHtml(data) {
       .camp-id { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
       .camp-in-flight .camp-id { color: var(--accent); }
       .camp-name { font-size: 0.8125rem; line-height: 1.35; }
+      /* margin-top:auto keeps the state row on a shared baseline even when one
+         campaign's name wraps to two lines. */
       .camp-state {
         display: flex;
         align-items: center;
         gap: 0.35rem;
         font-size: 0.6875rem;
         color: var(--ink-soft);
-        margin-top: 0.15rem;
+        margin-top: auto;
+        padding-top: 0.3rem;
       }
       .camp-summary { margin: 0.75rem 0 0; font-size: 0.9375rem; }
       .prog-note { margin: 0.35rem 0 0.75rem; font-size: 0.875rem; color: var(--ink-soft); }
@@ -1340,13 +1412,6 @@ function renderStatusHtml(data) {
           ${renderHealthStrip(buildHealthCells(data))}
         </section>
 
-        <section class="block">
-          <div class="block-head">
-            <h2 class="section-title">Where the program stands</h2>
-          </div>
-          ${renderCampaignStrip(data.program)}
-        </section>
-
         <section class="block owner-queue">
           <div class="block-head">
             <h2 class="section-title">Waiting on you</h2>
@@ -1359,6 +1424,13 @@ function renderStatusHtml(data) {
           <ol class="q-list">${ownerQueueItems}</ol>
           ${ownerQueueOverflow}
           ${staleQueueHtml}
+        </section>
+
+        <section class="block">
+          <div class="block-head">
+            <h2 class="section-title">Where the program stands</h2>
+          </div>
+          ${renderCampaignStrip(data.program)}
         </section>
 
         <section class="block">
