@@ -168,31 +168,47 @@ export function SideRail({
         </CardHeader>
         <CardContent className="grid gap-2 pt-0 pb-4">
           <AreaHealthDots areas={areas} />
-          {/* C2-S5: two different questions, so two rows rather than one
-              overloaded link — "how are my areas doing" (health) and "what is
-              actually in them" (the ported All-areas surface). Same ghost-row
-              grammar; the work one sits first because it is the one a person
-              acts on. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onOpenAreas}
-            className="min-h-[44px] touch-manipulation justify-start px-0"
-            data-testid="side-rail-open-areas"
-          >
-            See all areas →
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onOpenHealth}
-            className="min-h-[44px] touch-manipulation justify-start px-0"
-            data-testid="side-rail-open-health"
-          >
-            View area health →
-          </Button>
+          {/* C2-S5: two different questions — "what is actually in my areas"
+              (the ported All-areas surface) and "how are they doing" (health)
+              — so two affordances, ONE ROW.
+
+              The row matters, and it is not a style preference. Landing these
+              stacked cost this card ~44px of height, and R5's guard measured
+              the result immediately: the floating capture pill's clearance at
+              1366x768 went from +28.78px to **-21.39px** — an overlap, in both
+              themes (`moments-home-parity.spec.ts`, "pill clears the Areas
+              card by a real margin"). R6's doc comment above explains why the
+              answer is not to buy the height back by capping the area list:
+              hiding half a map-first owner's real areas to protect a pill was
+              exactly the regression R6 reverted. Side by side, the card is the
+              same height it was, and the measured clearance returns.
+
+              The work one sits first because it is the one a person acts on.
+              Its label is short ("All areas →", not "See all areas →") for the
+              same measured reason: the pair must not wrap at the rail's 20rem
+              desktop width, since a wrapped row is the stacked case again. */}
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onOpenAreas}
+              className="min-h-[44px] shrink-0 touch-manipulation justify-start px-0"
+              data-testid="side-rail-open-areas"
+            >
+              All areas →
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onOpenHealth}
+              className="min-h-[44px] shrink-0 touch-manipulation justify-start px-0"
+              data-testid="side-rail-open-health"
+            >
+              View area health →
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

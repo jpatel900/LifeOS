@@ -78,7 +78,7 @@ describe("SideRail", () => {
       />,
     );
     const link = screen.getByTestId("side-rail-open-areas");
-    expect(link).toHaveTextContent("See all areas");
+    expect(link).toHaveTextContent("All areas");
     fireEvent.click(link);
     expect(onOpenAreas).toHaveBeenCalledTimes(1);
     expect(onOpenHealth).not.toHaveBeenCalled();
