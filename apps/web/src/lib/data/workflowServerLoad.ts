@@ -282,6 +282,28 @@ export async function loadOwnerWorkflowState(
   return {
     areas: workflowAreas,
     captureItems: captures.map((capture) => toWorkflowCapture(capture, areas)),
+    // C2-S5 (#687), investigated rather than "fixed": this is empty because
+    // there is nowhere to load drafts FROM. No `create table` across
+    // `supabase/migrations/*.sql` defines one, and that is deliberate —
+    // `lib/durability/draftStore.ts` states it: a pending draft "has no server
+    // destination and is deliberately NOT journalled." Drafts live on the
+    // device (sessionStorage, plus IndexedDB for pending ones) and only reach
+    // the account once accepted, as a task.
+    //
+    // The C2-S1 inventory's FINDING 2 named this line as the cause of the
+    // legacy "0 Triage" chip and `/areas`' false "Nothing is waiting for a
+    // decision." That chain does not hold: this loader is server-only — its
+    // one non-test caller is `app/api/brief/telegram/route.ts` — so it has
+    // never fed the web UI, whose drafts come from the device stores above.
+    // Nor does it currently mislead the brief: that route reads only
+    // `buildStartVM`, which never touches `state.taskDrafts`.
+    //
+    // The real defect FINDING 2 observed was that those surfaces counted the
+    // wrong noun — a draft only exists once a capture has already been SORTED,
+    // so an UNSORTED capture, the one thing genuinely awaiting a decision, was
+    // invisible. Fixed where it lives, in
+    // `components/moments/areasOverview.ts`. Making this line non-empty would
+    // need a migration and would not have changed anything a person sees.
     taskDrafts: [],
     projectDrafts: [],
     ambiguityAssessments: [],

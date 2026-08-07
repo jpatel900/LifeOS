@@ -30,6 +30,7 @@ const NOOP_HANDLERS = {
   onSnooze: vi.fn(),
   onSwap: vi.fn(),
   onOpenHealth: vi.fn(),
+  onOpenAreas: vi.fn(),
   onDrillPipeline: vi.fn(),
   onOpenRecovery: vi.fn(),
   onOpenTriage: vi.fn(),
