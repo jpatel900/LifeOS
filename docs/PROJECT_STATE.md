@@ -11,7 +11,7 @@ stale — check docs/program/final-ux-loop.md §6 and recent merged PRs before t
 
 **The Final UX Loop is the governing program** (`docs/program/final-ux-loop.md`, owner directive 2026-07-26): while it runs, the board's priority order comes from it, and new feature work is frozen (program rule R8) except 737-A durability slices (issue #737's device-durability work — the Trust campaign's follow-through) and P0 production incidents. The program ends only when a full re-audit scores every dimension at or above its ratified target (`docs/program/target-cards.md`) AND the owner's U3 hour of real use confirms it feels right.
 
-State as of 2026-08-05: **Campaign C1 (Trust & state truth) closed 2026-07-30 at 10/10** with every criterion pinned in CI. **Campaign C2 (Structure) is in flight** (`docs/program/campaign-c2-structure.md`): the sign-in door landed (#803); the Plan-surface port is RE-LANDED and merged (#840, owner-merged 2026-08-05) — the #806 revert's root causes were a truth spec asserting row counts instead of identities and an unpinned test clock, both fixed without weakening the spec. The Review port lane (#809) resumed from its pushed checkpoints and is in flight. The moments home is the single shell; all four legacy screens are being ported into it (owner-ratified).
+State as of 2026-08-06: **Campaign C1 (Trust & state truth) closed 2026-07-30 at 10/10** with every criterion pinned in CI. **Campaign C2 (Structure): S0 door (#803), S2 Plan port (#840 + race fix #844), and S3 Review port (#809) are all merged; main is green on the combined head.** The 2026-08-05 red-main incident closed with the drafted-proposal identity race fixed in the product (#844) and the Main Red Guard reworked to notify-and-hold with a diagnosis step (#843, owner decision 2026-08-05). The S4 Health port lane is in flight; S5 All-areas and S6 shell close-out remain, then the fresh-eyes C2 re-score. The moments home is the single shell; all four legacy screens are being ported into it (owner-ratified).
 
 The shipped product baseline: areas, capture, optional AI/mock parse, triage, local-first planning, explicit approval-gated Google Calendar event creation, execution tracking, review logging, deterministic health checks, audit-oriented persistence, and a versioned headless client surface (`/api/v1` + `@lifeos/cli`) alongside the web app.
 
@@ -46,7 +46,7 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 
 ## Next action
 
-Follow `docs/program/final-ux-loop.md` §6: finish the resumed S3 Review port (#809), then S4 Health port (mind its 4 deliberate 400s vs the signed-in tier's strict tolerance — reconcile honestly), S5 All-areas port (#691 first-area scoping rides along), S6 shell close-out, then the fresh-eyes C2 re-score. Cross-lane work follows `docs/agent/LANES.md`; check for pending CLAIM/BLOCKER/HANDOFF comments on open issues first.
+Follow `docs/program/final-ux-loop.md` §6: land the in-flight S4 Health port (its 4 deliberate 400s vs the signed-in tier's strict tolerance — reconcile honestly), then S5 All-areas port (#691 first-area scoping rides along), S6 shell close-out, then the fresh-eyes C2 re-score. Cross-lane work follows `docs/agent/LANES.md`; check for pending CLAIM/BLOCKER/HANDOFF comments on open issues first.
 
 ## Do-not-repeat
 
