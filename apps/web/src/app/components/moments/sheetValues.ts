@@ -12,7 +12,7 @@
  * contract had never heard of it.
  */
 
-export const SHEET_VALUES = ["triage", "plan", "review"] as const;
+export const SHEET_VALUES = ["triage", "plan", "review", "health"] as const;
 
 export type SheetValue = (typeof SHEET_VALUES)[number];
 
