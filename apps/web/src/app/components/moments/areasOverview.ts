@@ -110,11 +110,18 @@ export interface AreasOverviewVM {
 
 const OPEN_TASK_STATUSES = ["active", "backlog", "blocked"] as const;
 
+/** A source row as this surface needs it, before its area is resolved. */
+type UnresolvedItem = { id: string; title: string; area_id: string | null };
+
 function itemFor(
-  source: { id: string; title: string; area_id: string },
+  source: UnresolvedItem,
   areasById: Map<string, Phase2MockArea>,
 ): AreasOverviewItem | null {
-  const area = areasById.get(source.area_id);
+  // `area_id` is nullable on captures (a thought can arrive before it belongs
+  // anywhere). Same disposition as an id that resolves to nothing: it cannot
+  // render an area dot and it cannot be attributed to an area row, so it is
+  // absent from BOTH sides and the tie-out still holds.
+  const area = source.area_id ? areasById.get(source.area_id) : undefined;
   if (!area) return null;
   return {
     id: source.id,
@@ -127,9 +134,7 @@ function itemFor(
 
 export function buildAreasOverview(state: WorkflowState): AreasOverviewVM {
   const areasById = new Map(state.areas.map((area) => [area.id, area]));
-  const resolve = (
-    sources: { id: string; title: string; area_id: string }[],
-  ): AreasOverviewItem[] =>
+  const resolve = (sources: UnresolvedItem[]): AreasOverviewItem[] =>
     sources
       .map((source) => itemFor(source, areasById))
       .filter((item): item is AreasOverviewItem => item !== null);

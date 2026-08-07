@@ -19,7 +19,14 @@ const WAITING: WaitingVM[] = [
 
 describe("SideRail", () => {
   it("shows a truthful, calm empty state for waiting-on", () => {
-    render(<SideRail waitingOn={[]} areas={AREAS} onOpenHealth={vi.fn()} />);
+    render(
+      <SideRail
+        waitingOn={[]}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
+    );
     expect(screen.getByTestId("side-rail-waiting-empty")).toHaveTextContent(
       "Nothing waiting on anyone.",
     );
@@ -27,26 +34,66 @@ describe("SideRail", () => {
 
   it("renders waiting entries when present", () => {
     render(
-      <SideRail waitingOn={WAITING} areas={AREAS} onOpenHealth={vi.fn()} />,
+      <SideRail
+        waitingOn={WAITING}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
     );
     expect(screen.getByText("Contract redline")).toBeInTheDocument();
     expect(screen.getByText("8d")).toBeInTheDocument();
   });
 
-  it("calls onOpenHealth when the areas link is clicked", () => {
+  // C2-S5 re-anchor: this test was named "...when the areas link is clicked"
+  // back when the Areas card had exactly one link. It now has two, for two
+  // different questions, so each is named for the one it opens and both are
+  // asserted — the criterion (this card is how you reach area health) is
+  // unchanged, only sharpened.
+  it("calls onOpenHealth when the area-health link is clicked", () => {
     const onOpenHealth = vi.fn();
+    const onOpenAreas = vi.fn();
     render(
-      <SideRail waitingOn={[]} areas={AREAS} onOpenHealth={onOpenHealth} />,
+      <SideRail
+        waitingOn={[]}
+        areas={AREAS}
+        onOpenHealth={onOpenHealth}
+        onOpenAreas={onOpenAreas}
+      />,
     );
     fireEvent.click(screen.getByTestId("side-rail-open-health"));
     expect(onOpenHealth).toHaveBeenCalledTimes(1);
+    expect(onOpenAreas).not.toHaveBeenCalled();
+  });
+
+  it("calls onOpenAreas when the see-all-areas link is clicked", () => {
+    const onOpenHealth = vi.fn();
+    const onOpenAreas = vi.fn();
+    render(
+      <SideRail
+        waitingOn={[]}
+        areas={AREAS}
+        onOpenHealth={onOpenHealth}
+        onOpenAreas={onOpenAreas}
+      />,
+    );
+    const link = screen.getByTestId("side-rail-open-areas");
+    expect(link).toHaveTextContent("See all areas");
+    fireEvent.click(link);
+    expect(onOpenAreas).toHaveBeenCalledTimes(1);
+    expect(onOpenHealth).not.toHaveBeenCalled();
   });
 
   // SP-3 numeric steadiness: the days-waiting figure must not jiggle as it
   // changes, so it renders with tabular figures.
   it("renders the days-waiting figure with tabular-nums", () => {
     render(
-      <SideRail waitingOn={WAITING} areas={AREAS} onOpenHealth={vi.fn()} />,
+      <SideRail
+        waitingOn={WAITING}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
     );
     expect(screen.getByText("8d")).toHaveClass("tabular-nums");
   });
@@ -55,7 +102,14 @@ describe("SideRail", () => {
   // as waiting during triage) instead of being a dead end, and avoids the
   // banned dead-end phrasing.
   it("waiting-empty state names marking a task as waiting as the filling action", () => {
-    render(<SideRail waitingOn={[]} areas={AREAS} onOpenHealth={vi.fn()} />);
+    render(
+      <SideRail
+        waitingOn={[]}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
+    );
     const empty = screen.getByTestId("side-rail-waiting-empty");
     expect(empty).toHaveTextContent("Mark a task as waiting");
     expect(empty.textContent?.toLowerCase()).not.toMatch(
@@ -66,7 +120,14 @@ describe("SideRail", () => {
   // SP-9: the "View area health" affordance reaches a >=44px effective
   // hit area and drops the 300ms double-tap delay on coarse pointers.
   it("open-health button carries hit-area and touch-manipulation utilities", () => {
-    render(<SideRail waitingOn={[]} areas={AREAS} onOpenHealth={vi.fn()} />);
+    render(
+      <SideRail
+        waitingOn={[]}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
+    );
     const button = screen.getByTestId("side-rail-open-health");
     expect(button).toHaveClass("min-h-[44px]");
     expect(button).toHaveClass("touch-manipulation");
@@ -78,7 +139,12 @@ describe("SideRail", () => {
   // ok/watch/risk bucket rendered twice.
   it("renders a length-encoded age bar per waiting-on row, keyed to its bucket", () => {
     render(
-      <SideRail waitingOn={WAITING} areas={AREAS} onOpenHealth={vi.fn()} />,
+      <SideRail
+        waitingOn={WAITING}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
     );
     const row = screen.getByTestId("side-rail-waiting-row-t1");
     const bar = row.querySelector("span > span") as HTMLElement | null;
@@ -89,7 +155,12 @@ describe("SideRail", () => {
   // no fabricated person name/avatar (no people store backs `WaitingVM`).
   it("waiting rows show only the task title, no avatar or person name", () => {
     render(
-      <SideRail waitingOn={WAITING} areas={AREAS} onOpenHealth={vi.fn()} />,
+      <SideRail
+        waitingOn={WAITING}
+        areas={AREAS}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
     );
     expect(
       screen.queryByRole("img", { name: /contract redline/i }),
@@ -110,13 +181,25 @@ describe("SideRail", () => {
       color: "#2563eb",
     }));
     render(
-      <SideRail waitingOn={[]} areas={manyAreas} onOpenHealth={vi.fn()} />,
+      <SideRail
+        waitingOn={[]}
+        areas={manyAreas}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
     );
     expect(screen.getByTestId("side-rail-areas-count")).toHaveTextContent("7");
   });
 
   it("omits the area count when there are no areas (truthful, not a stray '· 0')", () => {
-    render(<SideRail waitingOn={[]} areas={[]} onOpenHealth={vi.fn()} />);
+    render(
+      <SideRail
+        waitingOn={[]}
+        areas={[]}
+        onOpenHealth={vi.fn()}
+        onOpenAreas={vi.fn()}
+      />,
+    );
     expect(
       screen.queryByTestId("side-rail-areas-count"),
     ).not.toBeInTheDocument();

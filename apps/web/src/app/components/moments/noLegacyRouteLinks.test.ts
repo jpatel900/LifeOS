@@ -14,8 +14,8 @@ import { describe, expect, it } from "vitest";
  * Scope + allowances:
  *  - `deepLink.ts` is the mapping table itself (the path strings are data, not
  *    navigation) — excluded.
- *  - `/calendar`, `/review` and `/areas` were OWNER-GATE when this guard was
- *    written (real capabilities existed only on the old page), so they are
+ *  - `/calendar` and `/review` were OWNER-GATE when this guard was written
+ *    (real capabilities existed only on the old page), so they are
  *    intentionally NOT in the forbidden set; PlanSheet's "Open full view" link
  *    stays until C2-S6 retires the legacy shell in one piece.
  *
@@ -27,11 +27,18 @@ import { describe, expect, it } from "vitest";
  * itself is still alive for S6 to retire — this guard is about where the
  * CURRENT surface sends people, which is why the two lists are separate and
  * `/health` sits in its own.
+ *
+ * C2-S5 RATCHET: `/areas` joins it, on the same owner decision and the same
+ * reasoning. One thing was different here and is worth recording: `/areas` was
+ * never actually linked from this tree — the port had to CREATE its entry
+ * point (`SideRail`'s "See all areas →" → `?sheet=areas`) rather than
+ * re-point an existing one. So this ratchet closes a door nobody had walked
+ * through yet, which is exactly when it is cheapest to close.
  */
 const REDIRECTED_ROUTES = ["today", "capture", "triage", "execute"] as const;
 
 /** Ported into the moments shell; the legacy route survives only until S6. */
-const PORTED_ROUTES = ["health"] as const;
+const PORTED_ROUTES = ["health", "areas"] as const;
 
 const FORBIDDEN_ROUTES = [...REDIRECTED_ROUTES, ...PORTED_ROUTES];
 

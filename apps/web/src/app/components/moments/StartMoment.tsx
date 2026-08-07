@@ -159,6 +159,8 @@ export interface StartMomentProps {
   onSnooze(): void;
   onSwap(): void;
   onOpenHealth(): void;
+  /** C2-S5 (#687): opens the ported All-areas surface at `?sheet=areas`. */
+  onOpenAreas(): void;
   pipelineCounts: Record<string, number>;
   onDrillPipeline(stage: string): void;
   onOpenRecovery(taskId: string): void;
@@ -173,6 +175,7 @@ export function StartMoment({
   onSnooze,
   onSwap,
   onOpenHealth,
+  onOpenAreas,
   pipelineCounts,
   onDrillPipeline,
   onOpenRecovery,
@@ -396,6 +399,7 @@ export function StartMoment({
           waitingOn={vm.waitingOn}
           areas={vm.areas}
           onOpenHealth={onOpenHealth}
+          onOpenAreas={onOpenAreas}
         />
       </div>
     </div>

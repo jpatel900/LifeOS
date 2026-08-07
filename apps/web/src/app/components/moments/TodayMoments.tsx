@@ -57,6 +57,7 @@ import { TriageSheet } from "./TriageSheet";
 import { PlanSheet } from "./PlanSheet";
 import { ReviewSheet } from "./ReviewSheet";
 import { HealthSheet } from "./HealthSheet";
+import { AreasSheet } from "./AreasSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
@@ -903,6 +904,11 @@ export function TodayMoments({
       // which is what Target Card 2's "any screen in <=2 interactions" asks
       // for on a 390px screen.
       { id: "open-health", label: "Open health" },
+      // C2-S5: same reasoning as "Open health" directly above -- SideRail
+      // lives inside the Start moment and stacks to the BOTTOM of the page
+      // below 1024px, so the palette is the entry that is the same distance
+      // away at 390px as at 1440px.
+      { id: "open-areas", label: "Open all areas" },
     ];
     if (moment === "start" && startVM.firstMove) {
       actions.push({ id: "start-first-move", label: "Start first move" });
@@ -970,6 +976,9 @@ export function TodayMoments({
           break;
         case "open-health":
           openSheet("health");
+          break;
+        case "open-areas":
+          openSheet("areas");
           break;
         case "start-first-move":
           if (startVM.firstMove) handleStartMove(startVM.firstMove);
@@ -1251,6 +1260,12 @@ export function TodayMoments({
                  at `?sheet=health`, and `noLegacyRouteLinks.test.ts` now
                  forbids the old push from coming back. */
               onOpenHealth={() => openSheet("health")}
+              /* C2-S5 (#687): the All-areas surface had NO way in from the
+                 moments shell at all -- unlike Health, there was no legacy
+                 push to re-point, so this is a new entry rather than a
+                 redirect. SideRail's Areas card is where areas already live,
+                 which makes it one interaction from the home. */
+              onOpenAreas={() => openSheet("areas")}
               pipelineCounts={pipelineCounts}
               onDrillPipeline={handleDrillPipeline}
               onOpenRecovery={() => setMoment("close")}
@@ -1446,6 +1461,16 @@ export function TodayMoments({
         onClose={() => closeSheet()}
         selectedAreaId={selectedAreaId}
         now={now}
+      />
+
+      {/* C2-S5: mounted like every other sheet (`open` is a prop, not a mount
+          condition). AreasSheet is hook-free while closed for the reason S4
+          measured -- see its doc comment. */}
+      <AreasSheet
+        open={activeSheet === "areas"}
+        onClose={() => closeSheet()}
+        selectedAreaId={selectedAreaId}
+        onSelectArea={setSelectedAreaId}
       />
 
       <EndSessionSheet
