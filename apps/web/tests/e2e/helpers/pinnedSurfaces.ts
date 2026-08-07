@@ -47,6 +47,53 @@ export async function preparePinnedSurfaces(page: Page): Promise<void> {
   await pinMomentPreference(page, "start");
 }
 
+/**
+ * `flow-moment` / `close-moment` readiness — waits for the switcher's OWN
+ * selected state, not just the panel.
+ *
+ * #687 comment 5199011727 (PR #844's addendum, comment 5199013720) root-caused
+ * an intermittent under-count on `a11y-axe-pin.spec.ts`'s strict-equality
+ * ratchet: `flow-moment`/`close-moment` navigate via `?moment=flow|close`,
+ * but `TodayMoments.tsx` starts its `moment` state from the clock/pinned
+ * preference ("start") and only reconciles it to the URL's `deepLink.moment`
+ * in an effect that runs after mount — so the panel (`getByTestId(surface.id)`)
+ * and the moment-switcher's active tab can settle on different paints. The
+ * axe scan (`axeScan.ts`) walks whatever is in the DOM the instant it runs;
+ * landing between those two paints silently drops the active tab node (one
+ * of the pinned violation nodes) from the count. Two precedent CI events hit
+ * exactly this shape: run 31056031203 (desktop, `flow-moment`, 3 -> 2 nodes)
+ * and run 30878810487 (2026-08-04, mobile sibling, `flow-moment`, 2 -> 1
+ * node) — both on commits that never touched this surface, with
+ * byte-identical baselines either side.
+ *
+ * Below the `sm` breakpoint (640px — Tailwind's default, and the same cutoff
+ * `BottomNavigator.tsx`'s `sm:hidden` / `TodayMoments.tsx`'s
+ * `hidden sm:contents` split already uses; see also the literal 640 used the
+ * same way in moments-home-parity.spec.ts) the header's `MomentSwitcher` is
+ * `display:none` and `BottomNavigator` renders a second instance
+ * (`idPrefix="bottom-nav"`, testid `moment-switcher-bottom-nav-<moment>` —
+ * MomentSwitcher.tsx) instead. The mobile precedent above hit the race on
+ * that instance, so both are covered here.
+ *
+ * This only changes WHEN the scan is allowed to run — it does not touch what
+ * it expects. The pinned baselines and `TOTAL_VIOLATION_NODES_PINNED` in
+ * a11y-axe-pin.spec.ts are unchanged by this wait.
+ */
+async function waitForSelectedMomentTab(
+  page: Page,
+  moment: "flow" | "close",
+): Promise<void> {
+  const width = page.viewportSize()?.width ?? 0;
+  const testId =
+    width < 640
+      ? `moment-switcher-bottom-nav-${moment}`
+      : `moment-switcher-${moment}`;
+  await expect(page.getByTestId(testId)).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+}
+
 export const VIEWPORTS = [
   // Matches the audit's own two viewports exactly (docs/design/ux-audit-
   // 2026-07-26-fable.md: "Chromium at 1440x1000 and 390x844").
@@ -118,6 +165,7 @@ export const PINNED_SURFACES: PinnedSurface[] = [
     async goto(page) {
       await page.goto("/?moment=flow");
       await expect(page.getByTestId("flow-moment")).toBeVisible();
+      await waitForSelectedMomentTab(page, "flow");
     },
   },
   {
@@ -125,6 +173,7 @@ export const PINNED_SURFACES: PinnedSurface[] = [
     async goto(page) {
       await page.goto("/?moment=close");
       await expect(page.getByTestId("close-moment")).toBeVisible();
+      await waitForSelectedMomentTab(page, "close");
     },
   },
   {
