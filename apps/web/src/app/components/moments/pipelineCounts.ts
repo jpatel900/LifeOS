@@ -25,12 +25,28 @@ export interface PipelineCountOptions {
   now?: Date;
 }
 
-function activeAreaId(state: WorkflowState, selectedAreaId: string | null) {
-  return (
-    state.areas.find((area) => area.id === selectedAreaId)?.id ??
-    state.areas[0]?.id ??
-    null
-  );
+/**
+ * #691 / C2-S5: the scope these counts describe. `null` means **All areas** —
+ * genuinely every area — and it is returned for exactly two inputs: nothing
+ * selected, and an id the shared area list cannot resolve. Neither may fall
+ * back to `state.areas[0]`.
+ *
+ * That fallback is what this fixes. It made the rail's headline numbers
+ * describe area 1 while the picker directly above them said "All areas" —
+ * the residual #691's own fix left open and `lib/cockpit/viewModel.ts`
+ * recorded as an AGENT-TODO. An unresolvable id gets the same answer for the
+ * same reason: "I cannot find that area" is not evidence that area 1 is the
+ * one you meant.
+ *
+ * Deliberately NOT changed: `lib/areaAccent.ts`'s `resolveSelectedArea`. That
+ * one picks an accent *colour*, and a colour genuinely needs some value to
+ * fall back to. Only the resolvers that scope *data* must refuse to guess.
+ */
+function scopeAreaId(
+  state: WorkflowState,
+  selectedAreaId: string | null,
+): string | null {
+  return state.areas.find((area) => area.id === selectedAreaId)?.id ?? null;
 }
 
 export function buildPipelineCounts(
@@ -38,10 +54,13 @@ export function buildPipelineCounts(
   selectedAreaId: string | null = null,
   options: PipelineCountOptions = {},
 ): Record<PipelineOverviewStage, number> {
-  const areaId = activeAreaId(state, selectedAreaId);
-  if (!areaId) {
+  const areaId = scopeAreaId(state, selectedAreaId);
+  if (state.areas.length === 0) {
     return { capture: 0, triage: 0, plan: 0, execute: 0, review: 0 };
   }
+  /** `null` scope counts every area; a resolved scope counts only that one. */
+  const inScope = (rowAreaId: string | null | undefined) =>
+    areaId === null ? true : rowAreaId === areaId;
 
   const now = options.now ?? new Date();
   // C1 Target Card 4: routed through the shared "not sorted yet" definition so
@@ -53,28 +72,33 @@ export function buildPipelineCounts(
     (item) => item.status === "new",
   );
   const pendingDrafts = state.taskDrafts.filter(
-    (draft) => draft.area_id === areaId && draft.status === "pending",
+    (draft) => inScope(draft.area_id) && draft.status === "pending",
   );
   // C2-S2: this rule now lives in `lib/workflow/planStatus`, shared with the
   // cockpit Plan chip and the ported Plan sheet's "To place" list, so a badge
   // can never disagree with the list it points at (planStatus.test.ts).
-  const doTodayUnplacedTasks = selectTasksToPlace(state, areaId, now);
+  // C2-S5: an All-areas scope runs that SAME rule once per area rather than
+  // reimplementing it here, so the shared definition stays the only one.
+  const doTodayUnplacedTasks =
+    areaId === null
+      ? state.areas.flatMap((area) => selectTasksToPlace(state, area.id, now))
+      : selectTasksToPlace(state, areaId, now);
   const plannedUnstartedBlocksToday = state.calendarBlocks.filter(
     (block) =>
-      block.area_id === areaId &&
+      inScope(block.area_id) &&
       block.status === "scheduled" &&
       Boolean(block.task_id) &&
       isSameCalendarDay(block.start_at, now),
   );
   const todayBlocksAwaitingReview = state.calendarBlocks.filter(
     (block) =>
-      block.area_id === areaId &&
+      inScope(block.area_id) &&
       ["completed", "missed"].includes(block.status) &&
       isSameCalendarDay(block.start_at, now),
   );
   const todaySessionsAwaitingReview = state.executionSessions.filter(
     (session) => {
-      if (session.area_id !== areaId) return false;
+      if (!inScope(session.area_id)) return false;
       if (
         !["completed", "missed", "stuck", "stopped", "distracted"].includes(
           session.status,

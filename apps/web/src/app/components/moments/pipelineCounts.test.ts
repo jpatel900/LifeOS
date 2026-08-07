@@ -254,4 +254,93 @@ describe("buildPipelineCounts", () => {
 
     expect(buildPipelineCounts(state, "area-1", { now: NOW }).review).toBe(1);
   });
+
+  /**
+   * #691 / C2-S5. Before this slice `activeAreaId` ended `?? state.areas[0]?.id`,
+   * so "All areas" quietly became "area 1": every assertion below that expects
+   * 2 returned 1, on a rail sitting directly under a picker reading "All areas".
+   *
+   * Two areas, and every stage holds exactly one item in EACH — so an
+   * all-areas answer and a first-area answer are never the same number, and no
+   * assertion here can pass by coincidence.
+   */
+  describe("#691 — 'All areas' counts every area, not the first one", () => {
+    function twoAreaState(): WorkflowState {
+      return stateWith({
+        areas: [makeArea({ id: "area-1" }), makeArea({ id: "area-2" })],
+        // Distinct `capture_item_id`s from the drafts below, so these two stay
+        // genuinely unsorted (a draft pointing at a capture is a decision).
+        captureItems: [
+          makeCaptureItem({ id: "capture-1", area_id: "area-1" }),
+          makeCaptureItem({ id: "capture-2", area_id: "area-2" }),
+        ],
+        taskDrafts: [
+          makeTaskDraft({
+            id: "draft-1",
+            area_id: "area-1",
+            capture_item_id: "capture-sorted-1",
+          }),
+          makeTaskDraft({
+            id: "draft-2",
+            area_id: "area-2",
+            capture_item_id: "capture-sorted-2",
+          }),
+        ],
+        tasks: [
+          makeTask({ id: "task-1", title: "One", area_id: "area-1" }),
+          makeTask({ id: "task-2", title: "Two", area_id: "area-2" }),
+        ],
+        calendarBlocks: [
+          // Planned-but-unstarted today (execute). Their `task_id`s are not the
+          // tasks above, so they cannot also suppress the plan count.
+          makeBlock({ id: "block-1", area_id: "area-1", task_id: "other-1" }),
+          makeBlock({ id: "block-2", area_id: "area-2", task_id: "other-2" }),
+          // Finished today, nothing logged against them yet (review).
+          makeBlock({
+            id: "block-done-1",
+            area_id: "area-1",
+            task_id: "other-3",
+            status: "completed",
+          }),
+          makeBlock({
+            id: "block-done-2",
+            area_id: "area-2",
+            task_id: "other-4",
+            status: "completed",
+          }),
+        ],
+      });
+    }
+
+    it("counts both areas at every stage when nothing is selected", () => {
+      expect(buildPipelineCounts(twoAreaState(), null, { now: NOW })).toEqual({
+        capture: 2,
+        triage: 2,
+        plan: 2,
+        execute: 2,
+        review: 2,
+      });
+    });
+
+    it("still narrows to one area when one is selected", () => {
+      expect(
+        buildPipelineCounts(twoAreaState(), "area-2", { now: NOW }),
+      ).toEqual({ capture: 1, triage: 1, plan: 1, execute: 1, review: 1 });
+    });
+
+    it("does not treat an unresolvable area id as the first area", () => {
+      // "I cannot find that area" is not evidence that area 1 was meant. The
+      // honest answer is the unnarrowed one — which is also the only answer
+      // that cannot silently describe the wrong area's workload.
+      expect(
+        buildPipelineCounts(twoAreaState(), "area-deleted", { now: NOW }),
+      ).toEqual({ capture: 2, triage: 2, plan: 2, execute: 2, review: 2 });
+    });
+
+    it("still returns zeros when the account has no areas at all", () => {
+      expect(
+        buildPipelineCounts(stateWith({ areas: [] }), null, { now: NOW }),
+      ).toEqual({ capture: 0, triage: 0, plan: 0, execute: 0, review: 0 });
+    });
+  });
 });
