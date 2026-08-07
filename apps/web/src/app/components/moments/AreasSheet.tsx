@@ -210,7 +210,15 @@ function OpenAreasSheet({
           </div>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-4">
+        {/* TWO columns, never four — measured, not guessed. The legacy screen
+            was a full-width page, so its four columns had ~340px each. A sheet
+            is `sm:max-w-3xl` (768px) at EVERY viewport above `sm`, so four
+            here would be ~170px each forever, no matter how wide the screen:
+            at 1280 the first heading already wrapped to two lines and every
+            empty-state sentence broke across four. Two gives each column the
+            same ~350px the legacy page gave it; below `sm` they stack, which
+            is what the 390px capture shows. */}
+        <div className="grid gap-4 sm:grid-cols-2">
           {vm.columns.map((col) => (
             <section
               key={col.id}
