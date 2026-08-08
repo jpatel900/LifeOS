@@ -107,8 +107,15 @@ export function splitDraft(
   );
   const [firstTitle, secondTitle] = titles.map((title) => title.trim());
   if (!draft || !firstTitle || !secondTitle) {
+    console.error("[probe] splitDraft NO-OP", {
+      draftId,
+      firstTitle,
+      secondTitle,
+      drafts: state.taskDrafts.map((d) => `${d.id}:${d.status}`),
+    });
     return state;
   }
+  console.error("[probe] splitDraft OK", { draftId, firstTitle, secondTitle });
 
   const createdAt = nowIso();
   const makeDraft = (title: string): Phase2TaskDraft => ({

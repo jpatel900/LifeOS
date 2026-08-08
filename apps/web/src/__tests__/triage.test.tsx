@@ -196,7 +196,22 @@ describe("Triage cockpit", () => {
       fireEvent.change(screen.getByPlaceholderText("Second split task"), {
         target: { value: "Donate the spare shelf" },
       });
-      fireEvent.click(screen.getByRole("button", { name: "Split draft" }));
+      const splitBtn = screen.getByRole("button", {
+        name: "Split draft",
+      }) as HTMLButtonElement;
+      console.error("[probe] pre-click", {
+        disabled: splitBtn.disabled,
+        connected: splitBtn.isConnected,
+        first: (
+          screen.getByPlaceholderText("First split task") as HTMLInputElement
+        ).value,
+        second: (
+          screen.getByPlaceholderText("Second split task") as HTMLInputElement
+        ).value,
+        cockpits: document.querySelectorAll('[data-testid="lifeos-cockpit"]')
+          .length,
+      });
+      fireEvent.click(splitBtn);
 
       expect(
         await screen.findByText("Sort tools into bins", undefined, {
