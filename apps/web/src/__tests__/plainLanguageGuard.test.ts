@@ -93,9 +93,9 @@ type BaselineEntry = {
  * that owns its removal.
  *
  * Slice F is this guard's own finding: five strings the manual inventory on
- * #692 missed. Three of them (`global-error.tsx`, the now-fixed
- * `settings/areas/page.tsx` entry #742 removed, `AreaRegistryCards.tsx`)
- * were rendered copy a person can read.
+ * #692 missed. Three of them (the now-fixed `global-error.tsx` entry #723
+ * removed, the now-fixed `settings/areas/page.tsx` entry #742 removed,
+ * `AreaRegistryCards.tsx`) were rendered copy a person can read.
  */
 const BASELINE: readonly BaselineEntry[] = [
   // ===== SLICE A (21 strings) =====
@@ -425,19 +425,17 @@ const BASELINE: readonly BaselineEntry[] = [
     file: "apps/web/src/lib/workflow/capture.ts",
     strings: ["No external calendar write in mock mode."],
   },
-  // ===== SLICE F (5 strings) =====
+  // ===== SLICE F (5 strings inventoried; 3 remain) =====
+  // Like every slice header here, the count is what the scan first FOUND, not
+  // what is listed below. Two entries are gone: `settings/areas/page.tsx`
+  // (#742) and `global-error.tsx` (#723). `AreaRegistryCards.tsx` is the one
+  // remaining entry the original note flagged as rendered copy a person can
+  // read; it is still owned by #692 and still unfixed.
   {
     slice: "F",
     file: "apps/web/src/app/api/v1/capabilities/route.ts",
     strings: [
       "supabase user access token; service-role tokens are never accepted",
-    ],
-  },
-  {
-    slice: "F",
-    file: "apps/web/src/app/global-error.tsx",
-    strings: [
-      "The error was captured through the privacy-safe observability layer.",
     ],
   },
   {
@@ -483,8 +481,19 @@ const BASELINE: readonly BaselineEntry[] = [
  * `CreateAreaForm.tsx` used to render) was never a scanner-visible literal,
  * so it carried no baseline entry to remove; see `useAreasLoadState.ts` and
  * `CreateAreaForm.tsx` for that fix.
+ *
+ * #723 took it 71 -> 70: `global-error.tsx`'s "The error was captured through
+ * the privacy-safe observability layer." is deleted, not reworded around the
+ * banned term. It was the app-wide error screen's only paragraph, and it was
+ * not merely jargon — it was FALSE whenever no adapter is configured, because
+ * `lib/observability/index.ts` returns a no-op adapter in that case. The
+ * replacement says only what that component can prove (a render did not
+ * finish) and adds an escape link, so there is no new string to baseline. See
+ * `globalError.test.tsx`, which renders the screen and asserts the absence
+ * from the DOM rather than from source — the same standard #724 set for the
+ * health screen and #742 met for the areas screen.
  */
-const BASELINE_PINNED_STRINGS = 71;
+const BASELINE_PINNED_STRINGS = 70;
 
 const repoRoot = resolve(__dirname, "../../../..");
 
