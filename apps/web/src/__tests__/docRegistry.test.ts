@@ -113,6 +113,7 @@ const IGNORED_SCAN_DIRECTORIES = new Set([
   ".next",
   ".turbo",
   ".vercel",
+  ".worktrees",
   "build",
   "coverage",
   "dist",
