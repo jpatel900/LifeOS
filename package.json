@@ -6,6 +6,7 @@
     "agent:context": "node scripts/agent-context.mjs",
     "build": "turbo build",
     "lint": "turbo lint",
+    "knip": "knip",
     "test": "turbo test",
     "type-check": "turbo type-check",
     "smoke:prod": "node scripts/run-prod-smoke.mjs",
@@ -16,6 +17,7 @@
     "drift:assemble": "node scripts/agent/assemble-migration-sql.mjs"
   },
   "devDependencies": {
+    "knip": "^6.0.0",
     "prettier": "^3.5.0",
     "turbo": "^2.9.14"
   },
