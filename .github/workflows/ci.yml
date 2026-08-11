@@ -145,6 +145,18 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      # Architecture boundaries as CI rules (chore/adopt-dependency-cruiser).
+      # `pnpm depcruise` runs scripts/agent/run-depcruise.mjs, which cruises
+      # apps/web and packages/* with .dependency-cruiser.cjs and fails on
+      # any error-severity rule violation. It also carries its own
+      # vacuous-pass guard: it reads each cruise's `--output-type json`
+      # module count and fails if apps/web sees fewer than 500 modules or
+      # packages sees fewer than 20 -- the signature of a cruise that
+      # silently resolved nothing (the exact npx/pnpm-hoisting failure mode
+      # this PR's setup notes call out) while still exiting 0.
+      - name: Dependency boundaries (dependency-cruiser)
+        run: pnpm depcruise
+
   semgrep:
     name: Semgrep static analysis
     runs-on: ubuntu-latest
