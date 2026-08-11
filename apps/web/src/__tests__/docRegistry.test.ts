@@ -1,22 +1,22 @@
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
-import { readDirCached } from "./helpers/repoWalk";
-
-// #761 — walkMarkdownFiles below walks the whole repo tree for .md files;
-// readDirCached avoids re-reading a directory more than once, and this
-// timeout is belt-and-braces for whatever IO load remains.
-vi.setConfig({ testTimeout: 30_000 });
+import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(__dirname, "../../../..");
 
 /**
  * Canonical documentation registry guard (issue #228).
  *
- * Every `.md` file in the repo must be either on the canonical allowlist
- * below or listed in the grandfather snapshot `docs/doc-registry.json`.
- * The snapshot is shrink-only: entries may be removed when files are
- * deleted, but new files may never be added to it.
+ * Every `.md` file *tracked by git* must be either on the canonical
+ * allowlist below or listed in the grandfather snapshot
+ * `docs/doc-registry.json`. The snapshot is shrink-only: entries may be
+ * removed when files are deleted, but new files may never be added to it.
+ *
+ * The scan (`listTrackedMarkdownFiles`, issue #867) covers git-tracked files
+ * only, via `git ls-files`. Untracked local scratch `.md` files (e.g. an
+ * agent's own `WORKPLAN.md` sitting in the worktree) are deliberately
+ * ignored — they never enter the repo, so they are not this guard's concern.
  *
  * Where content belongs instead of a new `.md` file:
  * - Durable decisions -> `docs/adr/`
@@ -108,42 +108,20 @@ const CANONICAL_ALLOWLIST_PATTERNS = [
  */
 const ENTRY_FILE_LINE_BUDGET = 250;
 
-const IGNORED_SCAN_DIRECTORIES = new Set([
-  ".git",
-  ".next",
-  ".turbo",
-  ".vercel",
-  ".worktrees",
-  "build",
-  "coverage",
-  "dist",
-  "node_modules",
-  "playwright-report",
-  "test-results",
-]);
-
-function walkMarkdownFiles(relativePath: string): string[] {
-  const currentPath =
-    relativePath === "" ? repoRoot : resolve(repoRoot, relativePath);
-
-  return readDirCached(currentPath).flatMap((entry) => {
-    const nextRelativePath =
-      relativePath === "" ? entry.name : `${relativePath}/${entry.name}`;
-
-    if (entry.isDirectory()) {
-      if (IGNORED_SCAN_DIRECTORIES.has(entry.name)) {
-        return [];
-      }
-
-      return walkMarkdownFiles(nextRelativePath);
-    }
-
-    if (!entry.isFile() || !entry.name.endsWith(".md")) {
-      return [];
-    }
-
-    return [nextRelativePath];
+/**
+ * Lists every `.md` file git tracks in the repo, as repo-relative paths with
+ * forward slashes — the same format the allowlist and grandfather snapshot
+ * use. `git ls-files` is authoritative for repo content and is a single fast
+ * call, unlike a recursive filesystem walk (issue #867).
+ */
+function listTrackedMarkdownFiles(): string[] {
+  const output = execFileSync("git", ["ls-files", "-z", "--", "*.md"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
   });
+
+  return output.split("\0").filter((path) => path.length > 0);
 }
 
 function isAllowlisted(path: string): boolean {
@@ -167,7 +145,7 @@ function countLines(path: string): number {
 
 describe("doc registry", () => {
   it("keeps every markdown file allowlisted or grandfathered", () => {
-    const markdownFiles = walkMarkdownFiles("").sort();
+    const markdownFiles = listTrackedMarkdownFiles().sort();
     const grandfathered = new Set(readGrandfatheredPaths());
     const unregistered = markdownFiles.filter(
       (path) => !isAllowlisted(path) && !grandfathered.has(path),
@@ -191,7 +169,7 @@ describe("doc registry", () => {
   });
 
   it("removes deleted files from the grandfather snapshot", () => {
-    const markdownFiles = new Set(walkMarkdownFiles(""));
+    const markdownFiles = new Set(listTrackedMarkdownFiles());
     const stale = readGrandfatheredPaths().filter(
       (path) => !markdownFiles.has(path),
     );
@@ -214,5 +192,23 @@ describe("doc registry", () => {
         "status -> docs/PROJECT_STATE.md, procedures -> .agents/skills/.",
       ].join("\n"),
     ).toBeLessThanOrEqual(ENTRY_FILE_LINE_BUDGET);
+  });
+
+  it("ignores untracked local scratch markdown files", () => {
+    const probeRelativePath = "__docregistry-untracked-probe__.md";
+    const probeAbsolutePath = resolve(repoRoot, probeRelativePath);
+
+    try {
+      writeFileSync(
+        probeAbsolutePath,
+        "# untracked probe\n\nThis file is never committed.\n",
+      );
+
+      const markdownFiles = listTrackedMarkdownFiles();
+
+      expect(markdownFiles).not.toContain(probeRelativePath);
+    } finally {
+      unlinkSync(probeAbsolutePath);
+    }
   });
 });
