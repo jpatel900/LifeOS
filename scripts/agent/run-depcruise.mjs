@@ -134,5 +134,7 @@ if (failed) {
   console.error("\ndepcruise: FAILED");
   process.exitCode = 1;
 } else {
-  console.log("\ndepcruise: PASSED (error-severity rules clean; see warnings above, if any)");
+  console.log(
+    "\ndepcruise: PASSED (error-severity rules clean; see warnings above, if any)",
+  );
 }
