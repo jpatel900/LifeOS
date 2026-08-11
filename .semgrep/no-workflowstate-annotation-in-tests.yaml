@@ -25,6 +25,14 @@ rules:
           - pattern: "function $F(...): WorkflowState { ... }"
           - pattern: "($X: WorkflowState): $RET => { ... }"
           - pattern: "($X: WorkflowState): $RET => $BODY"
+          # WorkflowState as a property inside an inline object-type parameter,
+          # e.g. `function f(options: { state?: WorkflowState } = {}) {}`.
+          # `{ $X: WorkflowState }` member-matches: it fires on object types
+          # with additional members and on optional (`state?:`) members too.
+          - pattern: "function $F(..., $P: { $X: WorkflowState }, ...) { ... }"
+          - pattern: "function $F(..., $P: { $X: WorkflowState }, ...): $RET { ... }"
+          - pattern: "(..., $P: { $X: WorkflowState }, ...) => { ... }"
+          - pattern: "(..., $P: { $X: WorkflowState }, ...) => $BODY"
     paths:
       include:
         - "*.test.ts"
