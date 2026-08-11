@@ -1,0 +1,21 @@
+// dependency-cruiser-only tsconfig -- do not point tsc, next build, or any
+// script other than the depcruise invocations (package.json "depcruise",
+// scripts/agent/run-depcruise.mjs) at this file.
+//
+// Next.js resolves the "@/*" -> "./src/*" path alias through its own
+// bundler and does not need `baseUrl` in tsconfig.json (verified: apps/web
+// builds fine without it). dependency-cruiser instead resolves aliases
+// through raw TypeScript module resolution, which requires `baseUrl` to be
+// present -- without it every "@/*" import silently reports as unresolved
+// (couldNotResolve: true) while the cruise still exits 0 with 0 violations.
+// That is a second, alias-shaped instance of the "silently parses zero
+// files but exits 0" trap this adoption PR's setup notes call out for the
+// npx-vs-workspace-devDependency case. This file extends the real
+// tsconfig.json and adds only the missing baseUrl so dependency-cruiser
+// sees the same resolution Next.js already performs at runtime.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "."
+  }
+}
