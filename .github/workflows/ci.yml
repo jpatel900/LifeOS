@@ -145,6 +145,45 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+  semgrep:
+    name: Semgrep static analysis
+    runs-on: ubuntu-latest
+    # Uses the official semgrep/semgrep container image (no SEMGREP_APP_TOKEN
+    # / semgrep ci needed for local rules): https://semgrep.dev/docs/semgrep-ci/sample-ci-configs
+    # "container: image: semgrep/semgrep" + "semgrep scan --config ...".
+    # Pinned to the version verified locally (1.172.0) so CI reproduces the
+    # same finding counts as the pre-merge verification for this job.
+    container:
+      image: semgrep/semgrep:1.172.0
+    # No path filter: this scans the whole apps/packages workspace tree for
+    # rule violations, same as Lint/Type-check/Test/Build above, which are
+    # also unconditional. The `changes` job's `heavy` gate only tracks
+    # apps/web/ and supabase/ (it exists to skip Playwright/Supabase e2e
+    # infra), so gating on it here would silently skip packages/-only PRs.
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # BLOCKING: bans hand-typed WorkflowState annotations in test files
+      # repo-wide (issue #859). Paths are pinned to "apps packages" -- never
+      # bare repo root -- because semgrep's default ignore silently skips
+      # dirs named test/ or tests/.
+      - name: Enforce WorkflowState test-annotation ban
+        run: >
+          semgrep scan --config .semgrep/no-workflowstate-annotation-in-tests.yaml
+          --metrics=off --error apps packages
+
+      # NON-BLOCKING audit until #858 lands: surfaces z.string().datetime()
+      # call sites missing { offset: true } (the exact gap that silently
+      # killed the calendar integration for 2 months, 2026-07-25 incident)
+      # without failing CI. Flip to --error once #858's fix merges.
+      - name: Audit datetime-offset rule (non-blocking, audit until #858 lands)
+        continue-on-error: true
+        run: >
+          semgrep scan --config .semgrep/zod-datetime-requires-offset.yaml
+          --metrics=off apps packages
+
   e2e:
     name: Playwright E2E
     needs: changes
