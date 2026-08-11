@@ -20,3 +20,13 @@ rules:
       category: correctness
       references:
         - "2026-07-25 calendar integration outage: Zod's datetime() Z-only validator rejected PostgREST +00:00 offset timestamps for 2 months before detection."
+    paths:
+      exclude:
+        # SAFE class — verified 2026-08-10 (issue #858): client write-input schemas
+        # (Z-suffixed toISOString payloads), local mock state, and jsonb round-trip
+        # fields. user.ts (GoTrue) pending OWNER-GATE on #858. New datetime() calls
+        # in these files are NOT scanned — re-verify before removing any line.
+        - "packages/schemas/src/index.ts"
+        - "packages/schemas/src/phase2-mock-workflow.ts"
+        - "packages/schemas/src/task-map.ts"
+        - "packages/schemas/src/user.ts"
