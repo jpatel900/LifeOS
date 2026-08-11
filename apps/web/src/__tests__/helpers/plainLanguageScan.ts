@@ -48,7 +48,7 @@ import { readDirCached } from "./repoWalk";
  */
 
 /** Roots that produce browser-rendered copy. */
-const SCAN_ROOTS = ["apps/web/src", "packages/ui/src"] as const;
+const SCAN_ROOTS = ["apps/web/src"] as const;
 
 const IGNORED_SCAN_DIRECTORIES = new Set([
   ".next",
