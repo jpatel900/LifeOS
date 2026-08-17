@@ -41,9 +41,18 @@
   --card-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
   --popover: oklch(0.964 0.005 95.1); /* prototype light --surface-2 #f4f3ef */
   --popover-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
+  /* C5 contrast fix (#687), second pass: #6d8bff as a solid fill against
+     --background #f7f6f3 measured 2.86:1 — under WCAG 1.4.11's 3:1 floor
+     for component boundaries. Darkened same-hue by 0.02 L to #6785f8:
+     3.09:1 on --background, 3.34:1 on --card, and every text role keeps
+     AA (4.86:1 as text on dark --sf, 6.09:1 under its ink). The earlier
+     no-single-value-passes-both analysis below predates the ink flip and
+     no longer binds: with white-on-it retired, L may sit in the narrow
+     window that passes both remaining roles. Keep --area-accent and the
+     cockpit's --acc on this exact value. */
   --primary: oklch(
-    0.67 0.174 270.2
-  ); /* prototype default/product --accent #6d8bff */
+    0.65 0.174 270.2
+  ); /* prototype default/product accent, darkened from #6d8bff to #6785f8 */
   /* C5 contrast fix (#687): the prototype's .btn-primary white (#fff) on
      --primary #6d8bff measures 3.09:1 — below the 4.5:1 AA floor for normal
      text, and the single root cause behind every non-zero row in
@@ -115,7 +124,7 @@
      theme's ring already measured 7.95:1 and is untouched. */
   --ring: oklch(0.56 0.13 270.2); /* accent-hued focus ring, AA on light surfaces */
   --area-accent: oklch(
-    0.67 0.174 270.2
+    0.65 0.174 270.2
   ); /* default area accent = prototype's default/product accent, matches --primary */
   --area-accent-soft: color-mix(in oklch, var(--area-accent) 10%, white);
   --area-accent-muted: color-mix(in oklch, var(--area-accent) 18%, white);
@@ -189,8 +198,8 @@
   --popover: oklch(0.223 0.014 272.7); /* prototype dark --bg-2 #191b22 */
   --popover-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
   --primary: oklch(
-    0.67 0.174 270.2
-  ); /* prototype default/product --accent #6d8bff */
+    0.65 0.174 270.2
+  ); /* prototype default/product accent, darkened to #6785f8 — see :root */
   /* C5 contrast fix (#687): same 3.09:1 white-on-#6d8bff failure as :root —
      --primary is theme-independent, so the ON-colour flip applies in both
      themes. See the :root comment for the full reasoning and measurements. */
@@ -221,7 +230,7 @@
   --input: oklch(0.295 0.018 276.3); /* prototype dark --line #2a2c36 */
   --ring: oklch(0.75 0.14 270.2); /* accent-hued focus ring */
   --area-accent: oklch(
-    0.67 0.174 270.2
+    0.65 0.174 270.2
   ); /* default area accent = prototype's default/product accent, matches --primary */
   --area-accent-soft: color-mix(
     in oklch,
@@ -364,7 +373,10 @@ body {
   --grn-rng: #366c5a;
   --max: 1000px;
   --cockpit-radius: 22px;
-  --acc: #6d8bff;
+  /* C5 contrast fix (#687), second pass: keep on --primary's exact value
+     (see :root) — was #6d8bff. As text on --sf it now measures 4.86:1,
+     still AA. */
+  --acc: #6785f8;
   --acc2: #839cff;
   --acc-sf: #2b314a;
   --acc-rng: #47558c;
