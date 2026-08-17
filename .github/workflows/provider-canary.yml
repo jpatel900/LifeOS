@@ -23,9 +23,10 @@
 # The synthetic probe currently sends no auth, so /api/parse-capture's auth
 # gate (#684) rejects it with a 401. That is reported as its own
 # "misconfigured" state (never as "failing" -- see #684 in FAILURES.md/the
-# canary's own commit history) and does not open an incident issue. Giving
-# the probe a real token needs an owner-provisioned secret; see the PR that
-# introduced this comment for the recommended option.
+# canary's own commit history) and does not open an incident issue.
+# Authenticating the probe needs no new secret: the existing SMOKE_EMAIL /
+# SMOKE_PASSWORD (weekly prod smoke sign-in) can mint a token. Issue #874
+# tracks that follow-up.
 #
 # Per .github/AGENT_AUTOMATION_POLICY.md this file is T2: changes require
 # human review.
