@@ -20,6 +20,13 @@
 #                          used by scripts/run-prod-smoke.mjs), used only to
 #                          target the synthetic POST at /api/parse-capture.
 #
+# The synthetic probe currently sends no auth, so /api/parse-capture's auth
+# gate (#684) rejects it with a 401. That is reported as its own
+# "misconfigured" state (never as "failing" -- see #684 in FAILURES.md/the
+# canary's own commit history) and does not open an incident issue. Giving
+# the probe a real token needs an owner-provisioned secret; see the PR that
+# introduced this comment for the recommended option.
+#
 # Per .github/AGENT_AUTOMATION_POLICY.md this file is T2: changes require
 # human review.
 name: Provider Canary
@@ -62,12 +69,30 @@ jobs:
           SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
         run: |
           set -o pipefail
-          node scripts/agent/provider-canary.mjs | tee canary-output.txt
-          state=$(grep -o 'PROVIDER_CANARY_STATE=.*' canary-output.txt | tail -n1 | cut -d= -f2)
+          # GitHub Actions runs this under `bash -e`: a plain non-zero exit
+          # from the pipeline below used to abort the script on that line,
+          # BEFORE the `echo ... >> "$GITHUB_OUTPUT"` a few lines down ever
+          # ran -- so a failing tick's state was never published and the
+          # reconcile step below could never see it (the alert path never
+          # fired). Wrapping the pipeline as an `if` condition is exempt from
+          # `-e`, so it always completes; `PIPESTATUS[0]` (node's real exit
+          # code, not tee's) is read right after. The `grep` a few lines down
+          # has the same problem when node prints no STATE line at all (e.g.
+          # secrets not configured) -- `|| true` there stops that from
+          # aborting the script too. The state is now always written to
+          # GITHUB_OUTPUT, and only then does the step exit with node's
+          # original code.
+          if node scripts/agent/provider-canary.mjs | tee canary-output.txt; then
+            node_exit=0
+          else
+            node_exit="${PIPESTATUS[0]}"
+          fi
+          state=$(grep -o 'PROVIDER_CANARY_STATE=.*' canary-output.txt | tail -n1 | cut -d= -f2 || true)
           echo "state=${state:-skipped}" >> "$GITHUB_OUTPUT"
+          exit "$node_exit"
 
       - name: Reconcile canary GitHub issue
-        if: steps.canary.outputs.state == 'healthy' || steps.canary.outputs.state == 'failing'
+        if: always() && (steps.canary.outputs.state == 'healthy' || steps.canary.outputs.state == 'failing')
         uses: actions/github-script@v8
         with:
           script: |
