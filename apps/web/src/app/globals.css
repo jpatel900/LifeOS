@@ -122,7 +122,9 @@
      1.4.11's 3:1 floor for focus indicators. Same hue, darkened until it
      clears with margin: 4.42:1 on --background, 4.78:1 on --card. Dark
      theme's ring already measured 7.95:1 and is untouched. */
-  --ring: oklch(0.56 0.13 270.2); /* accent-hued focus ring, AA on light surfaces */
+  --ring: oklch(
+    0.56 0.13 270.2
+  ); /* accent-hued focus ring, AA on light surfaces */
   --area-accent: oklch(
     0.65 0.174 270.2
   ); /* default area accent = prototype's default/product accent, matches --primary */

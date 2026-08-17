@@ -40,7 +40,9 @@ function oklchToLinearSrgb(L, C, Hdeg) {
 
 function linearToSrgb8(c) {
   const v =
-    c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(Math.max(c, 0), 1 / 2.4) - 0.055;
+    c <= 0.0031308
+      ? 12.92 * c
+      : 1.055 * Math.pow(Math.max(c, 0), 1 / 2.4) - 0.055;
   return Math.round(Math.min(1, Math.max(0, v)) * 255);
 }
 
@@ -78,9 +80,7 @@ export function parseColor(input) {
 }
 
 export function toHex([r, g, b]) {
-  return (
-    "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")
-  );
+  return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
 }
 
 /** WCAG 2.x relative luminance. */
@@ -612,7 +612,16 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const CSS_PATH = join(here, "..", "..", "apps", "web", "src", "app", "globals.css");
+const CSS_PATH = join(
+  here,
+  "..",
+  "..",
+  "apps",
+  "web",
+  "src",
+  "app",
+  "globals.css",
+);
 
 /** Pulls `--token: value;` declarations out of one top-level block. */
 function readBlock(css, selector) {
@@ -635,7 +644,10 @@ function readBlock(css, selector) {
   const re = /(--[a-z0-9-]+)\s*:\s*([^;]+);/gi;
   let m;
   while ((m = re.exec(body))) {
-    const value = m[2].replace(/\/\*[\s\S]*?\*\//g, "").replace(/\s+/g, " ").trim();
+    const value = m[2]
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\s+/g, " ")
+      .trim();
     out[m[1]] = value;
   }
   return out;
@@ -718,7 +730,12 @@ if (process.argv[1] && process.argv[1].endsWith("contrast-audit.mjs")) {
   const rows = [...auditPairs(), ...auditAlphaPairs()];
   const pad = (s, n) => String(s).padEnd(n);
   console.log(
-    pad("PAIR", 48) + pad("FG", 10) + pad("BG", 10) + pad("RATIO", 8) + pad("NEED", 6) + "RESULT",
+    pad("PAIR", 48) +
+      pad("FG", 10) +
+      pad("BG", 10) +
+      pad("RATIO", 8) +
+      pad("NEED", 6) +
+      "RESULT",
   );
   console.log("-".repeat(90));
   for (const r of rows) {
@@ -735,6 +752,8 @@ if (process.argv[1] && process.argv[1].endsWith("contrast-audit.mjs")) {
   console.log("-".repeat(90));
   console.log(`${rows.length} pairs measured, ${fails.length} FAIL`);
   for (const f of fails) {
-    console.log(`  FAIL  ${f.name}: ${f.fgHex} on ${f.bgHex} = ${f.ratio.toFixed(2)}:1 (need ${f.need}:1)`);
+    console.log(
+      `  FAIL  ${f.name}: ${f.fgHex} on ${f.bgHex} = ${f.ratio.toFixed(2)}:1 (need ${f.need}:1)`,
+    );
   }
 }
