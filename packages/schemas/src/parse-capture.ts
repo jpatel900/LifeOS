@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { offsetDatetime } from "./datetime";
 
 /**
  * AI response for capture parsing (REQUIREMENTS FR-005 + AGENTS.md).
@@ -65,7 +66,7 @@ export const ParseCaptureTaskDraftSchema = z.object({
   first_tiny_step: z.string().nullable(),
   estimated_minutes_low: z.number().int().positive().nullable(),
   estimated_minutes_high: z.number().int().positive().nullable(),
-  due_at: z.string().datetime().nullable(),
+  due_at: offsetDatetime().nullable(),
   task_type: z.enum(["task", "decision"]).optional(),
   is_reversible: z.boolean().nullable().optional(),
   confidence: z.number().min(0).max(1),

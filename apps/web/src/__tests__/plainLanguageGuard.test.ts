@@ -6,7 +6,7 @@ import {
   findPlainLanguageViolations,
 } from "./helpers/plainLanguageScan";
 
-// #761 — collectUserFacingStrings() walks apps/web/src and packages/ui/src;
+// #761 — collectUserFacingStrings() walks apps/web/src;
 // helpers/repoWalk.ts's readDirCached dedupes repeated directory reads
 // across the repo-walking guards, and this timeout is belt-and-braces for
 // whatever IO load remains.

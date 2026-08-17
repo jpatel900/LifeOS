@@ -1,0 +1,65 @@
+rules:
+  - id: no-workflowstate-annotation-in-tests
+    languages: [ts]
+    severity: ERROR
+    message: >
+      Do not hand-annotate a value as WorkflowState in a test file. Tests must
+      build WorkflowState only through workflowSeed() + the transition helpers
+      (source-of-truth guard, PR #331 / apps/web/src/__tests__/sourceOfTruth.test.ts)
+      so state shapes stay reachable through real transitions instead of
+      hand-typed literals that can drift from what the app can actually
+      produce. Build the value through the transition helpers, or -- if this
+      file is a legitimate reachability boundary -- add it to the guard's
+      allowlist instead of suppressing this finding.
+    patterns:
+      - pattern-either:
+          - pattern: "const $X: WorkflowState = $VAL"
+          - pattern: "let $X: WorkflowState = $VAL"
+          - pattern: "var $X: WorkflowState = $VAL"
+          - pattern: "function $F(..., $X: WorkflowState, ...) { ... }"
+          - pattern: "function $F(..., $X: WorkflowState, ...): $RET { ... }"
+          - pattern: "($X: WorkflowState) => { ... }"
+          - pattern: "($X: WorkflowState) => $BODY"
+          - pattern: "(..., $X: WorkflowState, ...) => { ... }"
+          - pattern: "(..., $X: WorkflowState, ...) => $BODY"
+          - pattern: "function $F(...): WorkflowState { ... }"
+          - pattern: "($X: WorkflowState): $RET => { ... }"
+          - pattern: "($X: WorkflowState): $RET => $BODY"
+          # WorkflowState as a property inside an inline object-type parameter,
+          # e.g. `function f(options: { state?: WorkflowState } = {}) {}`.
+          # `{ $X: WorkflowState }` member-matches: it fires on object types
+          # with additional members and on optional (`state?:`) members too.
+          - pattern: "function $F(..., $P: { $X: WorkflowState }, ...) { ... }"
+          - pattern: "function $F(..., $P: { $X: WorkflowState }, ...): $RET { ... }"
+          - pattern: "(..., $P: { $X: WorkflowState }, ...) => { ... }"
+          - pattern: "(..., $P: { $X: WorkflowState }, ...) => $BODY"
+    paths:
+      include:
+        - "*.test.ts"
+        - "*.test.tsx"
+      exclude:
+        # GRANDFATHERED (issue #859) — this list may only shrink. These are the
+        # 13 test files that violated this rule when it was adopted repo-wide
+        # (2026-08-10), found via:
+        #   semgrep scan --config .semgrep/no-workflowstate-annotation-in-tests.yaml
+        #     --metrics=off apps packages
+        # Fix a file's hand-typed WorkflowState annotations (build the value
+        # through workflowSeed() + transition helpers instead), then remove it
+        # from this list in the same PR. Do not add new files here.
+        - "**/apps/web/src/app/components/moments/HealthSheet.test.tsx"
+        - "**/apps/web/src/app/components/moments/ReviewSheet.test.tsx"
+        - "**/apps/web/src/app/components/moments/areasOverview.test.ts"
+        - "**/apps/web/src/app/components/moments/momentsViewModel.test.ts"
+        - "**/apps/web/src/app/components/moments/pipelineCounts.test.ts"
+        - "**/apps/web/src/app/components/moments/progressionNodes.test.ts"
+        - "**/apps/web/src/app/components/moments/useOnboardingRitual.test.ts"
+        - "**/apps/web/src/app/components/moments/useReEntryRitual.test.ts"
+        - "**/apps/web/src/lib/reEntry/reEntry.test.ts"
+        - "**/apps/web/src/lib/workflow/captureStatus.test.ts"
+        - "**/apps/web/src/lib/workflow/execution.sessionTruth.test.ts"
+        - "**/apps/web/src/lib/workflow/planStatus.test.ts"
+        - "**/apps/web/src/lib/workflow/reviewStatus.test.ts"
+    metadata:
+      category: correctness
+      references:
+        - "PR #331 introduced the hand guard at apps/web/src/__tests__/sourceOfTruth.test.ts banning ': WorkflowState' / 'as WorkflowState' annotations in cockpit/workflow tests outside the reachability helper."

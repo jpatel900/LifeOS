@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { JsonValueSchema } from "./json";
+import { offsetDatetime } from "./datetime";
 
 export const META_LEARNING_EVENT_SCHEMA_VERSION = "meta-learning-event-v1";
 export const META_LEARNING_EVENT_SCHEMA_VERSION_V2 = "meta-learning-event-v2";
@@ -74,8 +75,8 @@ export const SuggestionRecordSchema = z.object({
   status: SuggestionRecordStatusSchema,
   resolution_reason: z.string().trim().min(1).nullable(),
   decided_by: z.enum(["user", "system"]),
-  created_at: z.string().datetime(),
-  resolved_at: z.string().datetime().nullable(),
+  created_at: offsetDatetime(),
+  resolved_at: offsetDatetime().nullable(),
 });
 
 export type SuggestionRecord = z.infer<typeof SuggestionRecordSchema>;
@@ -89,7 +90,7 @@ export const CreateSuggestionRecordInputSchema = z.object({
   suggestion_json: JsonValueSchema.default({}),
   confidence: z.number().min(0).max(1).nullable().optional(),
   status: SuggestionRecordStatusSchema.optional().default("pending"),
-  resolved_at: z.string().datetime().nullable().optional(),
+  resolved_at: offsetDatetime().nullable().optional(),
   resolution_reason: z.string().trim().min(1).nullable().optional(),
   decided_by: z.enum(["user", "system"]).optional().default("user"),
 });
@@ -112,7 +113,7 @@ export const DurationProfileSchema = z.object({
   task_type: z.string().min(1),
   estimate_stats_json: DurationEstimateStatsSchema,
   sample_count: z.number().int().min(1),
-  last_updated_at: z.string().datetime(),
+  last_updated_at: offsetDatetime(),
 });
 
 export type DurationProfile = z.infer<typeof DurationProfileSchema>;
@@ -141,7 +142,7 @@ export const OverrideRecordSchema = z.object({
   old_value_json: JsonValueSchema,
   new_value_json: JsonValueSchema,
   reason: z.string().nullable(),
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type OverrideRecord = z.infer<typeof OverrideRecordSchema>;

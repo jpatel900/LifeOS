@@ -92,6 +92,38 @@ describe("ParseCaptureResponseSchema regression fixtures", () => {
     }
   });
 
+  // #858: same bug class as the #743 calendar outage — bare
+  // `z.string().datetime()` on due_at only accepted a "Z" suffix and
+  // silently rejected PostgREST's numeric-offset ("+00:00") timestamps.
+  it("accepts a task draft with a PostgREST-style offset due_at", () => {
+    const offsetFixture = {
+      ...base,
+      parse_status: "parsed" as const,
+      overall_confidence: 0.91,
+      triage_required: false,
+      triage_reasons: [],
+      drafts: [
+        {
+          draft_type: "task_draft" as const,
+          title: "Follow up with Alex about event sponsorship",
+          description: "Simple single-task capture.",
+          area_slug_suggestion: "volunteer-work",
+          first_tiny_step: "Open the sponsor note",
+          estimated_minutes_low: 15,
+          estimated_minutes_high: 25,
+          due_at: "2026-07-25T14:30:00+00:00",
+          confidence: 0.91,
+        },
+      ],
+      clarification_questions: [],
+      ambiguity_assessment: null,
+    };
+
+    expect(ParseCaptureResponseSchema.safeParse(offsetFixture).success).toBe(
+      true,
+    );
+  });
+
   it("rejects invalid enum and invalid draft shape", () => {
     const invalidEnum = {
       ...base,
