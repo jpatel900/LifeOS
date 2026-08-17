@@ -37,6 +37,27 @@ describe("meta-learning record schemas", () => {
     ).toBe("planning.default_time_block");
   });
 
+  // #858: same bug class as #743 — bare z.string().datetime() on
+  // created_at/resolved_at/last_updated_at only accepted a "Z" suffix and
+  // silently rejected PostgREST's numeric-offset ("+00:00") timestamps.
+  it("accepts a PostgREST row with offset-format created_at and resolved_at (#858)", () => {
+    expect(
+      SuggestionRecordSchema.parse({
+        ...base,
+        created_at: "2026-07-25T14:30:00+00:00",
+        suggestion_type: "time_block_proposal",
+        subject_type: "time_block_proposal",
+        subject_id: "550e8400-e29b-41d4-a716-446655440003",
+        suggestion_json: { proposed_start: "2026-07-03T14:00:00.000Z" },
+        confidence: null,
+        status: "accepted",
+        resolution_reason: null,
+        decided_by: "user",
+        resolved_at: "2026-07-25T14:31:00+00:00",
+      }).resolved_at,
+    ).toBe("2026-07-25T14:31:00+00:00");
+  });
+
   it("rejects blank or unstable policy identifiers", () => {
     expect(() =>
       CreateSuggestionRecordInputSchema.parse({
@@ -72,6 +93,20 @@ describe("meta-learning record schemas", () => {
     ).toThrow();
   });
 
+  it("accepts a PostgREST row with offset-format last_updated_at (#858)", () => {
+    expect(
+      DurationProfileSchema.parse({
+        id: "550e8400-e29b-41d4-a716-446655440010",
+        user_id: base.user_id,
+        area_id: base.area_id,
+        task_type: "deep_work",
+        estimate_stats_json: { multiplier: 1.25, sample_count: 3 },
+        sample_count: 3,
+        last_updated_at: "2026-07-25T14:30:00+00:00",
+      }).last_updated_at,
+    ).toBe("2026-07-25T14:30:00+00:00");
+  });
+
   it("validates override records for user edits and choices", () => {
     expect(
       OverrideRecordSchema.parse({
@@ -85,6 +120,22 @@ describe("meta-learning record schemas", () => {
         reason: "User edited a local time-block proposal.",
       }).schema_version,
     ).toBe(META_LEARNING_EVENT_SCHEMA_VERSION);
+  });
+
+  it("accepts an override record with offset-format created_at (#858)", () => {
+    expect(
+      OverrideRecordSchema.parse({
+        ...base,
+        created_at: "2026-07-25T14:30:00+00:00",
+        subject_type: "time_block_proposal",
+        subject_id: "550e8400-e29b-41d4-a716-446655440003",
+        override_type: "edited",
+        old_value_json: { proposed_start: "2026-07-03T14:00:00.000Z" },
+        new_value_json: { proposed_start: "2026-07-03T15:00:00.000Z" },
+        suggestion_id: null,
+        reason: "User edited a local time-block proposal.",
+      }).created_at,
+    ).toBe("2026-07-25T14:30:00+00:00");
   });
 
   it("normalizes optional override reason to null", () => {
