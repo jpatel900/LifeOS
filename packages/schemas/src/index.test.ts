@@ -21,13 +21,16 @@ import {
   ExternalWriteEventSchema,
   GoogleCalendarConnectionSchema,
   HealthCheckSchema,
+  OperatorProfileSchema,
   ParseCaptureResponseSchema,
   PersonSchema,
   ProjectSchema,
   ReviewEntrySchema,
+  RollupSummarySchema,
   UpdateAreaColorInputSchema,
   TaskSchema,
   TimeBlockProposalSchema,
+  WinRecordSchema,
 } from "./index";
 
 const uid = "550e8400-e29b-41d4-a716-446655440000";
@@ -45,6 +48,25 @@ describe("CaptureItemSchema", () => {
       inferred_area_confidence: 0.72,
       status: "new",
       created_at: "2024-01-01T12:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  // #858: same bug class as #743 (see GoogleCalendarConnectionSchema below) —
+  // this row shape is what PostgREST actually returns for a `timestamptz`
+  // column ("+00:00", not "Z"). Bare `z.string().datetime()` silently
+  // rejected it before this fix.
+  it("accepts a PostgREST row with offset-format created_at (#858)", () => {
+    const result = CaptureItemSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      raw_text: "Follow up with Alex",
+      raw_audio_ref: null,
+      capture_mode: "text",
+      inferred_area_confidence: 0.72,
+      status: "new",
+      created_at: "2026-07-25T14:30:00+00:00",
     });
     expect(result.success).toBe(true);
   });
@@ -414,6 +436,27 @@ describe("AreaSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  // #858: PostgREST-style offset timestamps, including the optional
+  // charter_updated_at column, must parse the same as a "Z" row.
+  it("accepts a PostgREST row with offset-format timestamps (#858)", () => {
+    const result = AreaSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      name: "Main Job",
+      slug: "main-job",
+      description: null,
+      color: "#336699",
+      icon: "briefcase",
+      sort_order: 0,
+      is_active: true,
+      charter_text: "Ship the Q3 launch.",
+      charter_updated_at: "2026-07-25T14:30:00+00:00",
+      created_at: "2026-07-25T14:30:00+00:00",
+      updated_at: "2026-07-25T14:30:01+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("ProjectSchema", () => {
@@ -437,6 +480,20 @@ describe("ProjectSchema", () => {
       });
       expect(result.success).toBe(true);
     }
+  });
+
+  it("accepts a PostgREST row with offset-format timestamps (#858)", () => {
+    const result = ProjectSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      title: "Q1 rollout",
+      description: null,
+      status: "active",
+      created_at: "2026-07-25T14:30:00+00:00",
+      updated_at: "2026-07-25T14:30:01+00:00",
+    });
+    expect(result.success).toBe(true);
   });
 });
 
@@ -545,6 +602,39 @@ describe("TaskSchema", () => {
       expect(result.data.committed_to_person_id).toBe(uid);
     }
   });
+
+  // #858: due_at, waiting_on_since, map_approved_at, created_at, and
+  // updated_at all went through the same bare `z.string().datetime()` gap.
+  it("accepts a PostgREST row with offset-format timestamps on every datetime column (#858)", () => {
+    const result = TaskSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      project_id: null,
+      source_capture_item_id: null,
+      title: "Ship the deck to Priya",
+      description: null,
+      status: "active",
+      priority_score: null,
+      priority_confidence: null,
+      task_type: null,
+      energy_type: null,
+      estimated_minutes_low: null,
+      estimated_minutes_high: null,
+      due_at: "2026-07-25T14:30:00+00:00",
+      definition_of_done: null,
+      first_tiny_step: null,
+      waiting_on_person_id: uid2,
+      waiting_on_since: "2026-07-25T14:30:00+00:00",
+      is_commitment: true,
+      committed_to_person_id: uid,
+      map_approved_at: "2026-07-25T14:30:00+00:00",
+      created_at: "2026-07-25T14:30:00+00:00",
+      updated_at: "2026-07-25T14:30:01+00:00",
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("PersonSchema", () => {
@@ -592,6 +682,20 @@ describe("PersonSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("accepts a PostgREST row with offset-format timestamps (#858)", () => {
+    const result = PersonSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      display_name: "Priya Sharma",
+      normalized_name: "priya sharma",
+      notes: null,
+      created_at: "2026-07-25T14:30:00+00:00",
+      updated_at: "2026-07-25T14:30:01+00:00",
+      archived_at: "2026-07-25T14:30:02+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("TimeBlockProposalSchema", () => {
@@ -611,6 +715,23 @@ describe("TimeBlockProposalSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts a PostgREST row with offset-format timestamps (#858)", () => {
+    const result = TimeBlockProposalSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      task_id: null,
+      proposed_start: "2026-07-25T14:00:00+00:00",
+      proposed_end: "2026-07-25T15:00:00+00:00",
+      rationale_json: { note: "focus block" },
+      conflict_flag: false,
+      conflict_details_json: null,
+      status: "proposed",
+      created_at: "2026-07-25T14:30:00+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("CalendarBlockSchema", () => {
@@ -627,6 +748,23 @@ describe("CalendarBlockSchema", () => {
       status: "scheduled",
       created_at: "2024-01-01T12:00:00.000Z",
       updated_at: "2024-01-01T12:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a PostgREST row with offset-format timestamps (#858)", () => {
+    const result = CalendarBlockSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      proposal_id: null,
+      task_id: null,
+      google_event_id: null,
+      start_at: "2026-07-25T14:00:00+00:00",
+      end_at: "2026-07-25T15:00:00+00:00",
+      status: "scheduled",
+      created_at: "2026-07-25T14:30:00+00:00",
+      updated_at: "2026-07-25T14:30:01+00:00",
     });
     expect(result.success).toBe(true);
   });
@@ -653,6 +791,27 @@ describe("ExecutionSessionSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts a PostgREST row with offset-format timestamps (#858)", () => {
+    const result = ExecutionSessionSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      task_id: uid,
+      calendar_block_id: null,
+      planned_minutes: 60,
+      actual_minutes: 40,
+      paused_minutes: 5,
+      distraction_minutes: 10,
+      productivity_rating: 4,
+      energy_rating: "medium",
+      outcome: "partial",
+      cap_outcome: "cut_scope",
+      notes: null,
+      created_at: "2026-07-25T14:30:00+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("ReviewEntrySchema", () => {
@@ -669,6 +828,20 @@ describe("ReviewEntrySchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts a PostgREST row with offset-format created_at (#858)", () => {
+    const result = ReviewEntrySchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      review_type: "daily",
+      period_start: "2026-07-25",
+      period_end: "2026-07-25",
+      summary_json: { wins: ["shipped"] },
+      created_at: "2026-07-25T23:00:00+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("HealthCheckSchema", () => {
@@ -682,6 +855,20 @@ describe("HealthCheckSchema", () => {
       score: 72,
       details_json: { latency_ms: 120 },
       checked_at: "2024-01-01T12:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a PostgREST row with offset-format checked_at (#858)", () => {
+    const result = HealthCheckSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      subsystem: "calendar_connector",
+      status: "watch",
+      score: 72,
+      details_json: { latency_ms: 120 },
+      checked_at: "2026-07-25T14:30:00+00:00",
     });
     expect(result.success).toBe(true);
   });
@@ -867,6 +1054,30 @@ describe("ExternalWriteEventSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("accepts a PostgREST row with offset-format created_at (#858)", () => {
+    const result = ExternalWriteEventSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      provider: "google_calendar",
+      operation: "events.insert",
+      target_type: "calendar_block",
+      target_id: uid,
+      request_summary_json: {
+        calendar_id: "primary",
+        has_google_event_id: false,
+      },
+      result_summary_json: {
+        stored_google_event_id: false,
+      },
+      result_status: "failed",
+      error_message: "Google Calendar insert failed safely.",
+      created_at: "2026-07-25T14:30:00+00:00",
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("AmbiguityAssessmentSchema", () => {
@@ -890,6 +1101,78 @@ describe("AmbiguityAssessmentSchema", () => {
       confidence_score: 0.55,
       review_trigger: "manual",
       created_at: "2024-01-01T12:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a PostgREST row with offset-format created_at (#858)", () => {
+    const result = AmbiguityAssessmentSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: null,
+      source_capture_item_id: uid2,
+      likely_objective: "Stabilize ops before event",
+      problem_type: "coordination",
+      complexity_level: "medium",
+      knowns_json: [],
+      unknowns_json: ["owner unclear"],
+      assumptions_json: [],
+      constraints_json: {},
+      risks_json: [],
+      dependencies_json: [],
+      recommended_first_move: "List stakeholders",
+      what_not_to_do_yet_json: ["full rewrite"],
+      confidence_score: 0.55,
+      review_trigger: "manual",
+      created_at: "2026-07-25T14:30:00+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("WinRecordSchema", () => {
+  it("accepts a PostgREST row with offset-format created_at (#858)", () => {
+    const result = WinRecordSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      source_task_id: uid,
+      source_project_id: null,
+      title: "Shipped the Q1 rollout",
+      detail: null,
+      occurred_at: "2026-07-25",
+      review_entry_id: null,
+      created_at: "2026-07-25T14:30:00+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("RollupSummarySchema", () => {
+  it("accepts a PostgREST row with offset-format created_at (#858)", () => {
+    const result = RollupSummarySchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      area_id: uid,
+      period_type: "week",
+      period_start: "2026-07-19",
+      period_end: "2026-07-25",
+      summary: { highlights: ["shipped"], misses: [], counts: {} },
+      created_at: "2026-07-25T14:30:00+00:00",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("OperatorProfileSchema", () => {
+  it("accepts a PostgREST row with offset-format timestamps (#858)", () => {
+    const result = OperatorProfileSchema.safeParse({
+      id: uid,
+      user_id: uid2,
+      profile_text: null,
+      compensation_rules: null,
+      created_at: "2026-07-25T14:30:00+00:00",
+      updated_at: "2026-07-25T14:30:01+00:00",
     });
     expect(result.success).toBe(true);
   });
@@ -940,6 +1223,34 @@ describe("ParseCaptureResponseSchema", () => {
         confidence: 0.4,
         review_trigger: "Area unclear between Personal and Volunteer",
       },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a task draft with a PostgREST offset-format due_at (#858)", () => {
+    const result = ParseCaptureResponseSchema.safeParse({
+      schema_version: "1.0",
+      prompt_version: "parse-capture-v1",
+      parse_status: "parsed",
+      overall_confidence: 0.9,
+      triage_required: false,
+      triage_reasons: [],
+      drafts: [
+        {
+          draft_type: "task_draft",
+          title: "Follow up with Alex about event sponsorship",
+          description: null,
+          area_slug_suggestion: null,
+          first_tiny_step: "Open the sponsor note",
+          estimated_minutes_low: 15,
+          estimated_minutes_high: 25,
+          due_at: "2026-07-25T14:30:00+00:00",
+          confidence: 0.9,
+        },
+      ],
+      clarification_questions: [],
+      ambiguity_assessment: null,
     });
 
     expect(result.success).toBe(true);

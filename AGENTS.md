@@ -88,3 +88,14 @@ Merge authority, in one place: T0 docs-only PRs may auto-merge after CI per `.gi
 ## Tooling
 
 Monorepo: pnpm workspaces + Turborepo. Node: 22.13.0. App: Next.js 15 in `apps/web`. Root commands: `pnpm install`, `pnpm dev`, `pnpm lint`, `pnpm type-check`, `pnpm test`, `pnpm build`, `pnpm format:check`. Basic dev startup needs no `.env`; Supabase, OpenAI, and Google integrations need env vars when used.
+
+## Code navigation: Graphify graph
+
+For structure questions — who calls X, what imports X, what breaks if X changes — use the Graphify code graph instead of broad grepping:
+
+- Build once at worktree start (~95s, fully local, no API cost): `graphify update .` (CLI installed at `C:\Users\jaypa\.local\bin`; if missing: `uv tool install graphifyy`).
+- Use SYMBOL commands only: `graphify explain "X()"`, `graphify affected "X()"`, `graphify path "A" "B"`, `graphify god-nodes`. The natural-language `graphify query "..."` mode is unreliable — do not use it.
+- You must already know the identifier: one targeted grep to find the symbol name, then the graph for its relationships.
+- Trust edges tagged EXTRACTED; spot-check INFERRED edges (they can mis-resolve same-named symbols across files).
+- Division of labor: the OpenBrain context pack answers WHY (decisions, lessons, constraints); the Graphify graph answers WHAT/WHERE (code structure); grep is the fallback. Brain pack first, graph for structure, grep last.
+- `graphify-out/` is gitignored — never commit it.
