@@ -44,7 +44,21 @@
   --primary: oklch(
     0.67 0.174 270.2
   ); /* prototype default/product --accent #6d8bff */
-  --primary-foreground: oklch(1 0 0); /* prototype .btn-primary color: #fff */
+  /* C5 contrast fix (#687): the prototype's .btn-primary white (#fff) on
+     --primary #6d8bff measures 3.09:1 — below the 4.5:1 AA floor for normal
+     text, and the single root cause behind every non-zero row in
+     a11y-axe-pin.spec.ts's old baseline table. Darkening --primary instead
+     was measured and rejected: the accent is ALSO a text colour on dark
+     cockpit surfaces (--acc/--blu-fg, e.g. TaskMapNodeChip's done state at
+     5.25:1 on --sf), and no single value passes both roles — white-on-it
+     needs relative luminance <= 0.183 while text-on-dark needs >= 0.238. So
+     the ON-colour moves instead: near-black navy ink (#03050f), measured
+     6.57:1 on --primary, 5.15:1 for the /80 alpha variant CommandPalette
+     paints, 5.98:1 for the /90 kbd-chip variant. Same value as cockpit
+     --on-acc and accent.ts's runtime ink — keep all three in sync. */
+  --primary-foreground: oklch(
+    0.12 0.025 270.2
+  ); /* #03050f, 6.57:1 on --primary */
   --secondary: oklch(
     0.964 0.005 95.1
   ); /* prototype light --surface-2 #f4f3ef */
@@ -57,7 +71,16 @@
     0.9 0.03 270.2
   ); /* pastel tint of the accent hue for chip bg */
   --accent-foreground: oklch(0.227 0.004 84.6); /* prototype light --ink */
-  --destructive: oklch(0.614 0.15 25.4); /* prototype light --st-red #cf5a54 */
+  /* C5 contrast fix (#687): the prototype's light --st-red #cf5a54 measured
+     3.77:1 under its near-white button label and 3.56:1 as text on white —
+     both below the 4.5:1 AA floor. Darkened same-hue to #a83630: 6.11:1
+     under the label, 6.49:1 as text on white, 4.74:1 as badge text on its
+     own 20% tint. (The DARK theme's #e56b64 is deliberately NOT darkened:
+     it is a text colour on dark surfaces at ~5.5:1, and no value passes
+     both the fill-under-light-text and text-on-dark roles — resolved in the
+     dark block by flipping the ON-colour to near-black ink instead, the
+     same flip --primary-foreground made.) */
+  --destructive: oklch(0.5 0.15 27); /* #a83630, was #cf5a54 at 3.77:1 */
   --destructive-foreground: oklch(0.98 0 0);
   /* #660 audit line X1 (shared primitives): the only remaining raw Tailwind
      palette color on a routed surface was DemoModeBanner's hardcoded
@@ -85,7 +108,12 @@
   ); /* light mode: identical to the old border-black/30 */
   --border: oklch(0.939 0.007 97.4); /* prototype light --line #ecebe6 */
   --input: oklch(0.939 0.007 97.4); /* prototype light --line #ecebe6 */
-  --ring: oklch(0.72 0.11 270.2); /* accent-hued focus ring */
+  /* C5 contrast fix (#687): the old oklch(0.72 0.11 270.2) focus ring
+     measured 2.32:1 on --background and 2.51:1 on --card — below WCAG
+     1.4.11's 3:1 floor for focus indicators. Same hue, darkened until it
+     clears with margin: 4.42:1 on --background, 4.78:1 on --card. Dark
+     theme's ring already measured 7.95:1 and is untouched. */
+  --ring: oklch(0.56 0.13 270.2); /* accent-hued focus ring, AA on light surfaces */
   --area-accent: oklch(
     0.67 0.174 270.2
   ); /* default area accent = prototype's default/product accent, matches --primary */
@@ -163,7 +191,12 @@
   --primary: oklch(
     0.67 0.174 270.2
   ); /* prototype default/product --accent #6d8bff */
-  --primary-foreground: oklch(1 0 0); /* prototype .btn-primary color: #fff */
+  /* C5 contrast fix (#687): same 3.09:1 white-on-#6d8bff failure as :root —
+     --primary is theme-independent, so the ON-colour flip applies in both
+     themes. See the :root comment for the full reasoning and measurements. */
+  --primary-foreground: oklch(
+    0.12 0.025 270.2
+  ); /* #03050f, 6.57:1 on --primary */
   --secondary: oklch(0.27 0.017 275.4); /* prototype dark --surface-2 #24262f */
   --secondary-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
   --muted: oklch(0.245 0.016 274.2); /* prototype dark --surface #1e2028 */
@@ -173,7 +206,13 @@
   --accent: oklch(0.35 0.05 270.2); /* dim accent-hued chip bg for dark theme */
   --accent-foreground: oklch(0.955 0.006 264.5); /* prototype dark --ink */
   --destructive: oklch(0.673 0.153 25.3); /* prototype dark --st-red #e56b64 */
-  --destructive-foreground: oklch(0.97 0.01 30);
+  /* C5 contrast fix (#687): the old near-white label (oklch(0.97 0.01 30),
+     #fcf3f1) measured 2.91:1 on --destructive #e56b64. The fill can't darken
+     (it is also TEXT on dark surfaces at 5.75:1 on --background), so the
+     ON-colour flips to near-black ink instead — the same flip --primary-
+     foreground already made. Same L/C as that ink, destructive's own hue:
+     #0d0303, 6.42:1 on the fill. */
+  --destructive-foreground: oklch(0.12 0.025 25.3); /* #0d0303, 6.42:1 */
   /* #660 audit line X1: light translucent border so DemoModeBanner's edge
      stays visible against the dark page background (see :root comment
      above for the light-mode half of this fix). */
@@ -311,7 +350,13 @@ body {
   --amb-fg: #e0a94a;
   --amb-sf: #39332d;
   --amb-rng: #78623f;
-  --blu-fg: #6d8bff;
+  /* C5 contrast fix (#687): #6d8bff as blue-chip TEXT on --blu-sf #2b314a
+     measured 4.14:1 — under the 4.5:1 AA floor. Lightened same-hue to
+     #8aa2ff: 5.30:1 on --blu-sf, 6.73:1 on --sf, 5.75:1 on --sf3. (--acc
+     below stays #6d8bff: as text it only ever sits on the darker plain
+     surfaces, where it measures 5.25:1 on --sf.) --blu-rng is a decorative
+     border derived from the OLD fg value; left as-is, it carries no text. */
+  --blu-fg: #8aa2ff;
   --blu-sf: #2b314a;
   --blu-rng: #47558c;
   --grn-fg: #46c08a;
@@ -323,7 +368,18 @@ body {
   --acc2: #839cff;
   --acc-sf: #2b314a;
   --acc-rng: #47558c;
-  --on-acc: #ffffff;
+  /* C5 contrast fix (#687): white on --acc #6d8bff measured 3.09:1 (the
+     same root cause as --primary-foreground; see :root). Same near-black
+     navy ink, same #03050f value — keep in sync with --primary-foreground
+     and accent.ts's runtime ink. 6.57:1 on --acc, 7.91:1 on --acc2. */
+  --on-acc: #03050f;
+  /* C5 contrast fix (#687): NEW token — the on-colour for --state-warn
+     fills (DriftRecoveryCard's reclaim button painted white/near-black ink
+     on the amber fill before, unmeasured). var(--amb-sf) inverts the
+     amber chip pair per theme: #39332d on #e0a94a = 5.90:1 here, #f8efdd
+     on #8a5f14 = 4.93:1 in the light block below (which redefines
+     --amb-sf, so this var() resolves per theme on its own). */
+  --on-warn: var(--amb-sf);
   /* Moments pass P1: color-carries-state + motion tokens */
   --state-ok: var(--grn-fg);
   --state-watch: var(--amb-fg);
@@ -417,15 +473,35 @@ body {
   --btn: #1d1c1a;
   --btn-fg: #ffffff;
   --track: #ecebe6;
-  --amb-fg: #c98a2b;
+  /* C5 contrast fix (#687): the light-theme state TEXT colours all failed
+     AA on the light surfaces they sit on — measured worst cases:
+     --amb-fg #c98a2b on --amb-sf #f8efdd = 2.57:1, --grn-fg #2f9e6f on
+     --grn-sf #eaf5ef = 3.01:1, --blu-fg #6d8bff on --blu-sf #e8ecff =
+     2.63:1 (4.5:1 required). Each darkened same-hue until it clears 4.5:1
+     on EVERY light surface it can sit on (its own -sf chip, --sf #ffffff,
+     --sf2 #f4f3ef, --sf3 #ecebe6, --bd #f7f6f3) — the #574 method, third
+     application. New worst cases: #8a5f14 on --sf3 = 4.72:1, #1d7350 on
+     --sf3 = 4.86:1, #4054c7 on --sf3 = 5.31:1. The -rng tokens are
+     decorative borders derived from the OLD fg values; left as-is. */
+  --amb-fg: #8a5f14;
   --amb-sf: #f8efdd;
   --amb-rng: #ddc196;
-  --blu-fg: #6d8bff;
+  --blu-fg: #4054c7;
   --blu-sf: #e8ecff;
   --blu-rng: #b5c2f1;
-  --grn-fg: #2f9e6f;
+  --grn-fg: #1d7350;
   --grn-sf: #eaf5ef;
   --grn-rng: #9bcab3;
+  /* C5 contrast fix (#687): --acc2/--acc-sf DID cascade from the dark base
+     ("accent doesn't vary by theme"), which painted light-blue #839cff
+     text on white --sf at 2.63:1 wherever the light cockpit uses
+     text-[var(--acc2)] (TriageView, PlanView). Light theme now overrides
+     both: --acc2 matches --blu-fg's dark-blue text (6.77:1 on --sf,
+     5.11:1 on the new --acc-sf) and --acc-sf matches --blu-sf's light
+     chip surface, so the accent chip pair reads like the blue state chip
+     pair. --acc/--acc-rng/--on-acc still cascade unchanged. */
+  --acc2: #4054c7;
+  --acc-sf: #e8ecff;
   /* Moments pass P1: color-carries-state + motion tokens */
   --state-ok: var(--grn-fg);
   --state-watch: var(--amb-fg);
