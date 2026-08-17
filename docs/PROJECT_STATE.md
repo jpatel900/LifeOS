@@ -42,7 +42,6 @@ The shipped product baseline: areas, capture, optional AI/mock parse, triage, lo
 ## Open questions
 
 - Consumer wiring for the FR-032/034/037 policy kernels is unscoped — each needs its own owner-ratified issue before becoming user-visible.
-- CI `e2e` job still lacks a Supabase-env leg (C1 residual) — infrastructure lane, queued.
 
 ## Next action
 
