@@ -309,7 +309,7 @@ export const PAIRS = [
     fgToken: "--primary",
     bgToken: "--background",
     need: LARGE,
-    note: "Filled control vs page — WCAG 1.4.11",
+    note: "Filled control vs page — ADVISORY: 1.4.11 does not require a filled button's fill to contrast with the page when its (AA-passing) label identifies the control; tracked here so the number stays visible",
   },
   {
     group: "non-text",
@@ -434,7 +434,174 @@ export const PAIRS = [
     theme: "dark",
     need: NORMAL,
   },
+  // --- C5 additions (#687): pairs found while fixing the above -------------
+  {
+    group: "cockpit --on-warn",
+    name: "on-warn on amb-fg (cockpit dark)",
+    fgToken: "--on-warn",
+    bgToken: "--amb-fg",
+    axis: "cockpit",
+    need: NORMAL,
+    note: "DriftRecoveryCard reclaim button label on the amber fill",
+  },
+  {
+    group: "cockpit --on-warn",
+    name: "on-warn on amb-fg (cockpit light)",
+    fgToken: "--on-warn",
+    bgToken: "--amb-fg",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+  },
+  {
+    group: "cockpit --acc2",
+    name: "acc2 on acc-sf (cockpit dark)",
+    fgToken: "--acc2",
+    bgToken: "--acc-sf",
+    axis: "cockpit",
+    need: NORMAL,
+    note: "PlanView/TriageView accent chip text",
+  },
+  {
+    group: "cockpit --acc2",
+    name: "acc2 on acc-sf (cockpit light)",
+    fgToken: "--acc2",
+    bgToken: "--acc-sf",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+  },
+  {
+    group: "cockpit --acc2",
+    name: "acc2 on sf (cockpit dark)",
+    fgToken: "--acc2",
+    bgToken: "--sf",
+    axis: "cockpit",
+    need: NORMAL,
+    note: "TriageView mono captions",
+  },
+  {
+    group: "cockpit --acc2",
+    name: "acc2 on sf (cockpit light)",
+    fgToken: "--acc2",
+    bgToken: "--sf",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+  },
+  {
+    group: "cockpit state text",
+    name: "amb-fg on sf (cockpit light)",
+    fgToken: "--amb-fg",
+    bgToken: "--sf",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+    note: "--state-watch text on cards",
+  },
+  {
+    group: "cockpit state text",
+    name: "amb-fg on sf3 (cockpit light, worst surface)",
+    fgToken: "--amb-fg",
+    bgToken: "--sf3",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+  },
+  {
+    group: "cockpit state text",
+    name: "grn-fg on sf (cockpit light)",
+    fgToken: "--grn-fg",
+    bgToken: "--sf",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+  },
+  {
+    group: "cockpit state text",
+    name: "grn-fg on sf3 (cockpit light, worst surface)",
+    fgToken: "--grn-fg",
+    bgToken: "--sf3",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+  },
+  {
+    group: "cockpit state text",
+    name: "blu-fg on sf3 (cockpit light, worst surface)",
+    fgToken: "--blu-fg",
+    bgToken: "--sf3",
+    axis: "cockpit",
+    theme: "light",
+    need: NORMAL,
+  },
+  {
+    group: "cockpit state text",
+    name: "blu-fg on sf3 (cockpit dark, worst surface)",
+    fgToken: "--blu-fg",
+    bgToken: "--sf3",
+    axis: "cockpit",
+    need: NORMAL,
+  },
+  {
+    group: "destructive as text",
+    name: "destructive on background (light)",
+    fgToken: "--destructive",
+    bgToken: "--background",
+    need: NORMAL,
+    note: "badge/inline error text uses text-destructive in light",
+  },
+  {
+    group: "destructive as text",
+    name: "destructive on card (light)",
+    fgToken: "--destructive",
+    bgToken: "--card",
+    need: NORMAL,
+  },
+  {
+    group: "destructive as text",
+    name: "destructive on background (dark)",
+    fgToken: "--destructive",
+    bgToken: "--background",
+    theme: "dark",
+    need: NORMAL,
+    note: "--state-risk text on dark surfaces",
+  },
+  {
+    group: "destructive as text",
+    name: "destructive on card (dark)",
+    fgToken: "--destructive",
+    bgToken: "--card",
+    theme: "dark",
+    need: NORMAL,
+  },
 ];
+
+/**
+ * Alpha-composited variants the components actually paint (Tailwind's
+ * `/NN` opacity modifiers). Computed by sRGB alpha blending — the same
+ * arithmetic the browser uses to composite the text over its backdrop.
+ */
+export const ALPHA_PAIRS = [
+  {
+    name: "primary-foreground/80 on primary (CommandPalette secondary line)",
+    fgToken: "--primary-foreground",
+    alpha: 0.8,
+    bgToken: "--primary",
+    need: NORMAL,
+  },
+  {
+    name: "primary-foreground/90 on primary (kbd chip on-accent variant)",
+    fgToken: "--primary-foreground",
+    alpha: 0.9,
+    bgToken: "--primary",
+    need: NORMAL,
+  },
+];
+
+export function blendOver(fgRgb, alpha, bgRgb) {
+  return fgRgb.map((v, i) => Math.round(alpha * v + (1 - alpha) * bgRgb[i]));
+}
 
 // ---------------------------------------------------------------------------
 // Token table, read straight out of globals.css
@@ -530,8 +697,25 @@ export function auditPairs(sets = loadTokens()) {
   });
 }
 
+export function auditAlphaPairs(sets = loadTokens()) {
+  return ALPHA_PAIRS.map((pair) => {
+    const table = pair.theme === "dark" ? sets.dark : sets.root;
+    const fg = parseColor(resolve(table, pair.fgToken));
+    const bg = parseColor(resolve(table, pair.bgToken));
+    const blended = blendOver(fg, pair.alpha, bg);
+    const ratio = contrast(toHex(blended), toHex(bg));
+    return {
+      ...pair,
+      fgHex: toHex(blended),
+      bgHex: toHex(bg),
+      ratio,
+      pass: ratio >= pair.need,
+    };
+  });
+}
+
 if (process.argv[1] && process.argv[1].endsWith("contrast-audit.mjs")) {
-  const rows = auditPairs();
+  const rows = [...auditPairs(), ...auditAlphaPairs()];
   const pad = (s, n) => String(s).padEnd(n);
   console.log(
     pad("PAIR", 48) + pad("FG", 10) + pad("BG", 10) + pad("RATIO", 8) + pad("NEED", 6) + "RESULT",
