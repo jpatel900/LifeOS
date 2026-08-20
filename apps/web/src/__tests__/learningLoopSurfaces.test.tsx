@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarPage from "../app/calendar/page";
 import { ReviewView } from "../app/components/LifeOSCockpit";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
@@ -74,10 +74,26 @@ function seedWithProposal(sessions: Phase2MockExecutionSession[]): void {
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+// C2-S6 (#687): `/calendar` is a flag-gated redirect shim now — this file
+// exercises the LEGACY cockpit plan screen directly, which only renders
+// under the #590 rollback (NEXT_PUBLIC_MOMENTS_HOME=false). Without this, the
+// live default (flag on) would call `redirect()`, which this file's
+// `next/navigation` mock does not define.
+const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
+
 beforeEach(() => {
   window.sessionStorage.clear();
   window.localStorage.clear();
   window.history.replaceState(null, "", "/calendar");
+  process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
+});
+
+afterEach(() => {
+  if (ORIGINAL_MOMENTS_HOME === undefined) {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+  } else {
+    process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
+  }
 });
 
 describe("S9 golden-journey point 6a: sourced duration recalibration", () => {

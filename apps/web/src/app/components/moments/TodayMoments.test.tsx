@@ -161,8 +161,11 @@ describe("TodayMoments", () => {
 
     const textarea = await screen.findByTestId("capture-overlay-textarea");
     expect(textarea).toHaveValue("Remember the renewal");
-    // The param is stripped so a refresh doesn't reopen the overlay.
-    expect(window.location.search).toBe("");
+    // The share param is stripped so a refresh doesn't reopen the overlay.
+    // C2-S6: the URL now also carries `?moment=<resolved>` (useMomentUrlState
+    // reconciling the initial moment into the URL at mount) — that is not
+    // this test's concern, only that the share param itself is gone.
+    expect(window.location.search).not.toContain("shared_text");
   });
 
   it("switches moments via number keys and the MomentSwitcher", () => {
@@ -1072,14 +1075,37 @@ describe("TodayMoments — P5 pipeline rail and sheets", () => {
     );
   });
 
-  it("drilling into a non-wired stage (execute) shows the 'opens with full shell' toast", () => {
+  it("drilling into review from the Pipeline rail opens the ReviewSheet", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-review"));
+
+    expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+      "aria-label",
+      "Review",
+    );
+  });
+
+  // C2-S6 (#687): every pipeline-rail node opens something real now — no
+  // control promises "the full shell" (a shell that no longer exists once
+  // C2-S6 retires the legacy routes). Capture opens the capture overlay;
+  // Execute switches to the Flow moment.
+  it("drilling into capture from the Pipeline rail opens the capture overlay", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.click(screen.getByTestId("pipeline-overview-stage-capture"));
+
+    expect(
+      screen.getByRole("dialog", { name: "Capture a thought" }),
+    ).toBeInTheDocument();
+  });
+
+  it("drilling into execute from the Pipeline rail switches to the Flow moment", () => {
     renderToday({ initialMoment: "start" });
 
     fireEvent.click(screen.getByTestId("pipeline-overview-stage-execute"));
 
-    expect(screen.getByTestId("today-moments-toast")).toHaveTextContent(
-      "Opens with the full shell",
-    );
+    expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
   });
 
   it("closes the sheet via its own Escape handling without affecting the capture overlay's independent Escape path", () => {

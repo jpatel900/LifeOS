@@ -20,7 +20,13 @@ import TriagePage from "./triage/page";
 import CalendarPage from "./calendar/page";
 import ExecutePage from "./execute/page";
 import ReviewPage from "./review/page";
+import HealthPage from "./health/page";
+import AreasOverviewPage from "./areas/page";
 
+// C2-S6 (#687): all 8 demoted routes are redirect shims now. Plan/Review/
+// Health/Areas capability parity was verified at file tier before this flip
+// (ReviewSheet.tsx ports the legacy "Needs recovery" queue in full — see the
+// #687 claim comment) — there is no more OWNER-GATE split.
 const cases: Array<{
   name: string;
   Page: () => unknown;
@@ -46,18 +52,33 @@ const cases: Array<{
     target: "/?moment=flow",
     stage: "execute",
   },
-];
-
-// OWNER-GATE routes: capabilities exist ONLY on the old page (plan placement/
-// proposals/Google approval; review diagnostics/policy proposals) — they must
-// NOT redirect until the owner decides port/keep/drop.
-const ownerGateCases: Array<{
-  name: string;
-  Page: () => unknown;
-  stage: string;
-}> = [
-  { name: "/calendar", Page: CalendarPage, stage: "plan" },
-  { name: "/review", Page: ReviewPage, stage: "review" },
+  {
+    name: "/calendar",
+    Page: CalendarPage,
+    target: "/?sheet=plan",
+    stage: "plan",
+  },
+  // NOT `/?moment=close` — the Close moment is deliberately day-scoped and
+  // lacks planned-vs-actual, needs-a-decision, aging waiting-on, open
+  // commitments and policy proposals on purpose. See ReviewSheet.tsx.
+  {
+    name: "/review",
+    Page: ReviewPage,
+    target: "/?sheet=review",
+    stage: "review",
+  },
+  {
+    name: "/health",
+    Page: HealthPage,
+    target: "/?sheet=health",
+    stage: "health",
+  },
+  {
+    name: "/areas",
+    Page: AreasOverviewPage,
+    target: "/?sheet=areas",
+    stage: "overview",
+  },
 ];
 
 describe("legacy stage-route redirect shims (#687)", () => {
@@ -84,14 +105,6 @@ describe("legacy stage-route redirect shims (#687)", () => {
       it(`${name} redirects to ${target}`, () => {
         Page();
         expect(redirectMock).toHaveBeenCalledWith(target);
-      });
-    }
-
-    for (const { name, Page, stage } of ownerGateCases) {
-      it(`${name} stays on the cockpit ${stage} stage (OWNER-GATE — no moments equivalent)`, () => {
-        const result = Page() as { props: { stage: string } };
-        expect(redirectMock).not.toHaveBeenCalled();
-        expect(result.props.stage).toBe(stage);
       });
     }
   });

@@ -39,9 +39,6 @@ import { scanInteractiveGeometry } from "./helpers/interactiveGeometry";
  *     accumulated 40px controls (tab links, color swatches, area actions) —
  *     23 on desktop, 10 on mobile (fewer because mobile collapses some rows
  *     out of the layout, not because they're bigger).
- *   - `areas` (mobile only): four icon-only stage-count chips
- *     (`aria-label="<Area>: N open"`) are 20px wide against the 44px floor —
- *     tall enough, not wide enough.
  *   - `onboarding-day` (both viewports): the inline "connect Google Calendar
  *     in Settings" prose link (OnboardingRitual.tsx) is a real 15px-tall
  *     hyperlink inside a sentence. THIS IS A FINDING BY THIS PIN'S OWN SCAN,
@@ -56,6 +53,15 @@ import { scanInteractiveGeometry } from "./helpers/interactiveGeometry";
  * overlay button chrome, mobile hero copy — both fixed elsewhere in this
  * PR). Fixing them is legitimate follow-up work, tracked as an
  * AGENT-TODO in the PR body, not silently absorbed into this pin.
+ *
+ * C2-S6 (#687): `calendar` / `health` / `areas` (the legacy routes,
+ * including the 20px-wide `areas` mobile chip debt named above in an earlier
+ * revision of this comment) retired as pinned surfaces, replaced 1:1 by
+ * `review-sheet` / `health-sheet` / `areas-sheet` — measured 0 sub-44px
+ * targets and 0 overlaps on both viewports before the swap landed, so the
+ * old `areas` mobile debt did not carry forward (the moments-native
+ * AreasSheet's chips are not the legacy 20px-wide ones). Total drops
+ * 45 -> 41 (the 4 that leave are exactly the old `areas` mobile row).
  *
  * Two assertions make it a ratchet, same mechanism as plainLanguageGuard:
  *   1. Per-surface, per-viewport counts are asserted with STRICT EQUALITY,
@@ -90,9 +96,6 @@ const BASELINE_OVERRIDES: Record<
     desktop: { subMin: 23, overlaps: 0 },
     mobile: { subMin: 10, overlaps: 0 },
   },
-  areas: {
-    mobile: { subMin: 4, overlaps: 0 },
-  },
   "onboarding-day": {
     desktop: { subMin: 1, overlaps: 0 },
     mobile: { subMin: 1, overlaps: 0 },
@@ -120,7 +123,7 @@ for (const surface of PINNED_SURFACES) {
 // deliberate per-surface entry above explaining the new count, and moving
 // either DOWN without deleting/shrinking the matching entry above is a bug
 // (assertion 3 below catches that drift).
-const TOTAL_SUB_MIN_PINNED = 45;
+const TOTAL_SUB_MIN_PINNED = 41;
 const TOTAL_OVERLAPS_PINNED = 0;
 
 test.describe("hit-target + overlap pin (Final UX Loop C5)", () => {

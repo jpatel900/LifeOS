@@ -59,6 +59,7 @@ import { ReviewSheet } from "./ReviewSheet";
 import { HealthSheet } from "./HealthSheet";
 import { AreasSheet } from "./AreasSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
+import { useMomentUrlState } from "./useMomentUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 import type { ToastAction } from "./toast";
@@ -346,12 +347,20 @@ export function TodayMoments({
     ],
   );
 
-  const [moment, setMoment] = useState<MomentValue>(() => {
+  // C2-S6 (#687): the moment itself is URL-visible, same contract as the
+  // sheet below — `useMomentUrlState` owns the push/pop mechanics, this
+  // component still resolves the INITIAL moment the same three-tier way it
+  // always has (prop -> stored preference -> heuristic); the hook then
+  // reconciles that resolved value into the URL at mount.
+  const [resolvedInitialMoment] = useState<MomentValue>(() => {
     if (initialMoment) return initialMoment;
     const stored = readStoredPreferences();
     if (stored?.moment) return stored.moment;
     return heuristicMoment(now, flowVM.currentBlock !== null);
   });
+  const { moment, setMoment, adoptMomentFromUrl } = useMomentUrlState(
+    resolvedInitialMoment,
+  );
   const [timeDisplay, setTimeDisplay] = useState<CountdownClockValue>(() => {
     const stored = readStoredPreferences();
     return stored?.timeDisplay ?? "countdown";
@@ -457,7 +466,10 @@ export function TodayMoments({
     if (onboardingActive || onboarding.pending) return;
 
     deepLinkAppliedRef.current = true;
-    if (deepLink.moment) setMoment(deepLink.moment);
+    // The URL ALREADY carries this moment (the redirect shim put it there
+    // before this component mounted) — adopt it without pushing a second,
+    // redundant history entry. Mirrors `adoptSheetFromUrl` below.
+    if (deepLink.moment) adoptMomentFromUrl(deepLink.moment);
     if (deepLink.overlay === "capture") setCaptureOpen(true);
     if (deepLink.overlay === "palette") setPaletteOpen(true);
     if (deepLink.sheet) adoptSheetFromUrl(deepLink.sheet);
@@ -468,6 +480,7 @@ export function TodayMoments({
     onboardingActive,
     onboarding.pending,
     adoptSheetFromUrl,
+    adoptMomentFromUrl,
   ]);
 
   // FR-027 (F-G1b) share target: text shared into the installed PWA lands on
@@ -684,6 +697,11 @@ export function TodayMoments({
 
   const handleDrillPipeline = useCallback(
     (stage: string) => {
+      // C2-S3/S6 (#687): every pipeline-rail node now opens something real.
+      // The old fallback — `showToast("Opens with the full shell")` — named a
+      // shell that no longer exists once C2-S6 retires it; a control that
+      // says it does something and does not is FINDING 1's defect class, so
+      // there is no fallback left, only real destinations.
       if (stage === "triage") {
         openSheet("triage");
         return;
@@ -692,19 +710,20 @@ export function TodayMoments({
         openSheet("plan");
         return;
       }
-      // C2-S3: the Review node used to land here, on a toast that named a
-      // shell the user cannot open — a control that says it does something and
-      // does not, which is FINDING 1's class. It now opens the ported Review
-      // surface. Capture and Execute still fall through deliberately: neither
-      // has been ported yet, and inventing a destination for them would repeat
-      // the defect this line just removed.
       if (stage === "review") {
         openSheet("review");
         return;
       }
-      showToast("Opens with the full shell");
+      if (stage === "capture") {
+        setCaptureOpen(true);
+        return;
+      }
+      if (stage === "execute") {
+        setMoment("flow");
+        return;
+      }
     },
-    [openSheet, showToast],
+    [openSheet, setMoment],
   );
 
   // #588: the only close-day path in this shell. "Day closed" is reported
@@ -839,7 +858,7 @@ export function TodayMoments({
           : undefined,
       );
     },
-    [state.tasks, promoteBacklogTask, deferTask, ritual, showToast],
+    [state.tasks, promoteBacklogTask, deferTask, ritual, showToast, setMoment],
   );
 
   const handleSwapRecovery = useCallback(() => {
@@ -1007,6 +1026,8 @@ export function TodayMoments({
       finishFocus,
       pauseFocus,
       handleCloseDay,
+      setMoment,
+      openSheet,
     ],
   );
 

@@ -361,14 +361,13 @@ export function AreaRegistryCards({
                       </Alert>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
-                      {/* #687 OWNER-GATE: /calendar and /review are NOT
-                          redirected (plan placement/proposals and review
-                          diagnostics exist only there), so these links keep
-                          their targets until the owner decides
-                          port/keep/drop. */}
+                      {/* C2-S6 (#687): /calendar and /review are retired
+                          redirect shims now — link straight to the moments
+                          home sheets they redirect to, so `noLegacyRouteLinks`
+                          stays enforceable against the legacy paths. */}
                       <Button asChild variant="outline" size="sm">
                         <Link
-                          href="/calendar"
+                          href="/?sheet=plan"
                           onClick={() => setSelectedAreaId(workflowAreaId)}
                         >
                           Plan area
@@ -376,7 +375,7 @@ export function AreaRegistryCards({
                       </Button>
                       <Button asChild variant="outline" size="sm">
                         <Link
-                          href="/review"
+                          href="/?sheet=review"
                           onClick={() => setSelectedAreaId(workflowAreaId)}
                         >
                           Review area
