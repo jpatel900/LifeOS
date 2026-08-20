@@ -1,16 +1,18 @@
-import { redirect } from "next/navigation";
 import { CockpitRoute } from "../components/CockpitRoute";
-import { isMomentsHomeEnabled } from "@/lib/flags";
 
-// #687 C2-S6: redirect to the moments home with the Plan sheet open. Every
-// capability this route carried (hour rail, unplan, proposals, recalibration,
-// Google Calendar approval) already lives on `?sheet=plan` (PlanSheet.tsx) —
-// see C2-S2 (#809) and the C2-S6 lane contract. The cockpit calendar stage
-// stays reachable only under the #590 rollback
-// (NEXT_PUBLIC_MOMENTS_HOME=false).
+// #687 C2-S2: still NOT redirected — but the reason has changed, and the old
+// one is no longer true. This route used to be the ONLY home of the hour-rail
+// placement UI, unplan, proposal accept/reject/nudge and Google Calendar
+// approval, so redirecting would have silently dropped them. All of that now
+// lives on the moments home's Plan surface (`?sheet=plan`), driven against the
+// same writes. What keeps this route alive is sequencing, not capability: C2-S6
+// retires the legacy shell in one piece, behind the rollback flag, with the
+// gated cockpit e2e specs re-anchored in the same change.
+//
+// NOTE for S6: FINDING 1 (the hour rail's "Drop here" over a tap it silently
+// ignores) is fixed on the ported surface only. `PlanView.tsx:227-231` still
+// carries it. The FINDING 3/4 count fixes are in `lib/cockpit/viewModel.ts`,
+// which this route does read, so those landed on both screens.
 export default function CalendarPage() {
-  if (isMomentsHomeEnabled()) {
-    redirect("/?sheet=plan");
-  }
   return <CockpitRoute stage="plan" />;
 }

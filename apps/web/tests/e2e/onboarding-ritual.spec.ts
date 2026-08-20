@@ -158,17 +158,7 @@ test.describe("onboarding ritual stays out of the way (#581)", () => {
     await page.locator("summary", { hasText: "Run setup again" }).click();
     await page.getByTestId("onboarding-rerun-button").click();
 
-    // C2-S6 RE-ANCHOR (#687), not a widening: `useMomentUrlState` now
-    // `replaceState`s `?moment=<value>` onto every moments-home URL at mount
-    // (see its own JSDoc) — even a bare `/` visit — so a bare `/\/$/` suffix
-    // pin is stale truth from before that contract landed (same class of fix
-    // nav-truth.spec.ts's `expectParam` already made). The criterion this
-    // test actually owns is "lands back on the moments-home root", not which
-    // moment resolves: `heuristicMoment` reads the wall-clock hour
-    // (playwright.config.ts), so pinning a specific `?moment=` value here
-    // would make the test flaky by time of day. Match root path + any query,
-    // reject any other path.
-    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/);
+    await expect(page).toHaveURL(/\/$/);
     await expect(page.getByTestId("onboarding-ritual")).toBeVisible();
   });
 });

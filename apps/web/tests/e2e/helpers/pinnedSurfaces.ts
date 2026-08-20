@@ -12,14 +12,9 @@ import { pinMomentPreference } from "./momentPreference";
  * completed capture: that would touch WorkflowContext/execute/session state
  * this lane does not own (see the lane contract). What IS covered mirrors
  * the audit's own drive list closely: `/` at all three moments, the capture
- * overlay, the triage/plan/review/health/areas sheets, the command palette,
- * `/settings/areas`, `/login`, and all three onboarding ritual steps.
- *
- * C2-S6 (#687): `calendar` / `health` / `areas` (the legacy routes) were
- * replaced 1:1 by `review-sheet` / `health-sheet` / `areas-sheet` (the
- * moments-native surfaces they redirect to now) — the legacy routes
- * themselves are gone as surfaces to measure, not merely renamed, because
- * measuring a redirect shim's landing page IS measuring the sheet.
+ * overlay, the triage and plan sheets, the command palette, `/calendar`,
+ * `/health`, `/areas`, `/settings/areas`, `/login`, and all three onboarding
+ * ritual steps.
  *
  * Deliberately NOT covered (documented, not silently dropped): the
  * end-of-session sheet and any surface that requires a placed block or a
@@ -212,36 +207,32 @@ export const PINNED_SURFACES: PinnedSurface[] = [
     },
   },
   {
-    // C2-S6 (#687): the `calendar` row that used to sit here is GONE —
-    // `/calendar` is a redirect shim to `?sheet=plan` now, and `plan-sheet`
-    // above already covers that surface, so there is nothing left to add a
-    // row for. `review-sheet` / `health-sheet` / `areas-sheet` below are the
-    // 1:1 replacements for the old `calendar` / `health` / `areas` legacy
-    // rows: same readiness-wait pattern as `triage-sheet` / `plan-sheet`
-    // above (wait for the sheet's own testid), and the same shared moment pin
-    // every surface in this file already gets from `preparePinnedSurfaces` in
-    // each spec's `beforeEach` — the two recorded CI races this file's header
-    // documents were both about WHICH moment underlies a sheet, not whether
-    // one is pinned, and `triage-sheet`/`plan-sheet` never needed a second,
-    // surface-local pin beyond that global one, so neither do these three.
-    id: "review-sheet",
+    id: "calendar",
     async goto(page) {
-      await page.goto("/?sheet=review");
-      await expect(page.getByTestId("review-sheet")).toBeVisible();
+      await page.goto("/calendar");
+      await expect(
+        page.getByRole("heading", { name: "Hour rail" }),
+      ).toBeVisible();
     },
   },
   {
-    id: "health-sheet",
+    id: "health",
     async goto(page) {
-      await page.goto("/?sheet=health");
-      await expect(page.getByTestId("health-sheet")).toBeVisible();
+      await page.goto("/health");
+      await expect(
+        page.getByRole("heading", {
+          name: /Everything is working|\d+ things? needs? a look/,
+        }),
+      ).toBeVisible();
     },
   },
   {
-    id: "areas-sheet",
+    id: "areas",
     async goto(page) {
-      await page.goto("/?sheet=areas");
-      await expect(page.getByTestId("areas-sheet")).toBeVisible();
+      await page.goto("/areas");
+      await expect(
+        page.getByRole("heading", { name: "All areas overview" }),
+      ).toBeVisible();
     },
   },
   {

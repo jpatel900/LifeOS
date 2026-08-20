@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import HealthPage from "../app/health/page";
 import { AppShell } from "../app/components/AppShell";
 import { HEALTH_CHECK_PRESENTATION } from "../app/components/cockpit/HealthView";
@@ -25,25 +25,9 @@ vi.mock("@/lib/data/health", async (importOriginal) => ({
   getHealthDashboard: mocks.getHealthDashboard,
 }));
 
-// C2-S6 (#687): `/health` is a flag-gated redirect shim now — this file
-// exercises the LEGACY cockpit health screen directly, which only renders
-// under the #590 rollback (NEXT_PUBLIC_MOMENTS_HOME=false). Without this, the
-// live default (flag on) would call `redirect()`, which this file's
-// `next/navigation` mock does not define.
-const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
-
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.createSupabaseBrowserClient.mockReturnValue(null);
-  process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
-});
-
-afterEach(() => {
-  if (ORIGINAL_MOMENTS_HOME === undefined) {
-    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-  } else {
-    process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
-  }
 });
 
 /**

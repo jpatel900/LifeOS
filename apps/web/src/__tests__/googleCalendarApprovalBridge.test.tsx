@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import CalendarPage from "../app/calendar/page";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import {
@@ -125,20 +125,12 @@ function renderPlanStage(state: ReturnType<typeof stateWithSyncedProposal>) {
   );
 }
 
-// C2-S6 (#687): `/calendar` is a flag-gated redirect shim now — this file
-// exercises the LEGACY cockpit plan screen's Google Calendar approval bridge
-// directly (the only place this flow has any test coverage — no flag-on e2e
-// exists for it yet, see the lane contract), which only renders under the
-// #590 rollback (NEXT_PUBLIC_MOMENTS_HOME=false).
-const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
-
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
   window.localStorage.clear();
   window.history.replaceState(null, "", "/calendar");
-  process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
 
   mocks.getSession.mockResolvedValue({
     data: { session: { access_token: "supabase-access-token" } },
@@ -147,14 +139,6 @@ beforeEach(() => {
   mocks.createSupabaseBrowserClient.mockReturnValue({
     auth: { getSession: mocks.getSession },
   });
-});
-
-afterEach(() => {
-  if (ORIGINAL_MOMENTS_HOME === undefined) {
-    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
-  } else {
-    process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
-  }
 });
 
 describe("Google Calendar approval bridge", () => {

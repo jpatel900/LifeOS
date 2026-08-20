@@ -46,7 +46,7 @@ function AdminShell({ children }: { children: ReactNode }) {
               href="/"
               className="rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
             >
-              Home
+              Cockpit
             </Link>
             <Link
               href="/settings/areas"

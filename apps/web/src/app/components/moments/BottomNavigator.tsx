@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { MoreHorizontal, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import { SAVED_ON_THIS_DEVICE_SHORT } from "@/lib/statusVocabulary";
 import { cn } from "@/lib/utils";
 import { MomentSwitcher, type MomentValue } from "./MomentSwitcher";
@@ -72,16 +72,6 @@ export interface BottomNavigatorProps {
   onCapture(): void;
   captureDisabled?: boolean;
   unsyncedCount?: number;
-  /**
-   * C2-S6 (#687), Criterion 3: the command palette's only triggers used to
-   * be keyboard (`⌘K`/`Ctrl+K`) and `?palette=1` — no touch affordance
-   * existed below `sm`, so Health/Areas were unreachable in ≤2 taps on a
-   * phone (the palette is the documented mobile answer for them —
-   * TodayMoments.tsx's own comment names it as such — but only on a device
-   * with a keyboard). This is that trigger: extends the palette's existing
-   * role rather than adding a parallel reach mechanism.
-   */
-  onOpenPalette(): void;
 }
 
 export function BottomNavigator({
@@ -91,7 +81,6 @@ export function BottomNavigator({
   onCapture,
   captureDisabled = false,
   unsyncedCount = 0,
-  onOpenPalette,
 }: BottomNavigatorProps) {
   const pendingSync = unsyncedCount > 0;
 
@@ -129,24 +118,6 @@ export function BottomNavigator({
             </span>
           </span>
         ) : null}
-      </button>
-      {/* C2-S6 (#687): the palette's touch trigger, same icon-only +
-          sr-only-label pattern as Settings right next to it (390px has no
-          room for a fourth visible text label). "More" is the plain word for
-          "everything else reachable from here" — the palette itself lists
-          Health, Areas, and every moment switch by plain-language name. */}
-      <button
-        type="button"
-        onClick={onOpenPalette}
-        aria-label="More"
-        className={cn(
-          HIT_TARGET_MIN,
-          "rounded-full text-muted-foreground hover:text-foreground",
-        )}
-        data-testid="bottom-navigator-more"
-      >
-        <MoreHorizontal aria-hidden="true" className="size-5" />
-        <span className="sr-only">More</span>
       </button>
       {/* #593: icon-only at mobile — the band now also carries Capture, and
           three text affordances don't fit 390px without crowding. 44px

@@ -57,11 +57,10 @@ import {
  *  - criterion 6's WINS noun. A win is only ever offered for a
  *    `calendar_blocks` row with `status = "completed"`
  *    (`momentsViewModel/close.ts`), and the moments home's plan sheet has no
- *    approve affordance — approving a proposal lives on the moments home's
- *    Plan sheet (`?sheet=plan`, `PlanSheet.tsx`, C2-S6 #687), which is
- *    campaign C2's remit. Probed on this branch: a blockless session ends
- *    with `execution_sessions` written and NO win candidate. Its account
- *    tier stays pinned in `phase4aRls.local.test.ts`.
+ *    approve affordance — approving a proposal still lives on the legacy
+ *    `/calendar` shell, which is campaign C2's remit. Probed on this branch:
+ *    a blockless session ends with `execution_sessions` written and NO win
+ *    candidate. Its account tier stays pinned in `phase4aRls.local.test.ts`.
  *  - criterion 6's ROLLUPS noun. Already has its own account-tier pin
  *    (`phase4aRls.local.rollupOfferTruth.test.tsx`), and a rollup offer needs
  *    prior-week area activity the seed does not carry.

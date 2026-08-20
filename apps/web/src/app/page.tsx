@@ -8,11 +8,10 @@ import {
 import { isMomentsHomeEnabled } from "@/lib/flags";
 
 // `/` renders the moments home only when the build-time
-// NEXT_PUBLIC_MOMENTS_HOME flag is on (default is ON since P7d go-live —
-// setting it to "false" is the rollback lever that keeps the seven-stage
-// cockpit today grid live; flag is ADR 0003 R1's documented rollback, do not
-// retire without owner change-control, see issue #590). The demoted stage
-// routes remain live either way.
+// NEXT_PUBLIC_MOMENTS_HOME flag is on (default OFF keeps the seven-stage
+// cockpit today grid live; flag is ADR 0003 R1's documented rollback lever —
+// do not retire without owner change-control, see issue #590). The demoted
+// stage routes remain live either way.
 //
 // Reuses LifeOSCockpit's centered/padded/max-width `.lifeos-cockpit` shell
 // (TodayMoments itself renders no page shell) so the moments home doesn't

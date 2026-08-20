@@ -143,7 +143,7 @@ describe("handoff cockpit route provider wiring", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Areas" }),
     ).toBeDefined();
-    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Cockpit" })).toHaveAttribute(
       "href",
       "/",
     );

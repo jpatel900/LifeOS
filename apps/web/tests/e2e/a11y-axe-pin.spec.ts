@@ -24,12 +24,10 @@ import { scanAxeViolationNodes } from "./helpers/axeScan";
  * THE RATCHET RULE (mirrors apps/web/src/__tests__/plainLanguageGuard.test.ts
  * and hit-target-overlap-pin.spec.ts — same mechanism, third application)
  * -----------------------------------------------------------------------
- * Every pinned surface — moments-native and `settings-areas` alike — is
- * genuinely at ZERO AA violations on both viewports (C2-S6, #687: `calendar`
- * / `health` / `areas` retired as surfaces here, replaced 1:1 by
- * `review-sheet` / `health-sheet` / `areas-sheet`, measured clean before the
- * swap landed — see the #687 claim comment) — that floor is defended here by
- * strict equality, so any regression fails immediately.
+ * The legacy cockpit surfaces (`calendar`, `health`, `areas`,
+ * `settings-areas`) are genuinely at ZERO AA violations on both viewports —
+ * that floor is defended here by strict equality, so any regression on those
+ * four surfaces fails immediately.
  *
  * Every pinned surface now measures ZERO violation nodes (C5 token pass,
  * #687). The sweep that established this pin had found one shared root

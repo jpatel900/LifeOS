@@ -1,5 +1,4 @@
 import { expect, test, type Page } from "@playwright/test";
-import { pinMomentPreference } from "./helpers/momentPreference";
 
 /**
  * #737 C1 slice S5 — undoing an unsent write must not be undone by the sync.
@@ -37,19 +36,15 @@ import { pinMomentPreference } from "./helpers/momentPreference";
  * `src/lib/durability/durableWrites.test.ts`, which drives the handler map
  * directly against stub server ops.
  *
- * ## Why this file drives `?sheet=plan` (RE-ANCHORED, C2-S6 #687)
+ * ## Why this file drives `/calendar`
  *
  * Same reason as `durable-plans-drafts.spec.ts`: the hour rail, and the tap
- * that unplans a placed block, live on `PlanSheet.tsx` (`?sheet=plan`) now —
- * the same `unplanTask` write the legacy `/calendar` route (`PlanView`) used,
- * per PlanSheet's own invariant table (C2-S2, #804/#809). `/calendar` itself
- * is a flag-gated redirect shim to `?sheet=plan` now (C2-S6).
+ * that unplans a placed block, exist ONLY on `/calendar` (#687 OWNER-GATE kept
+ * that route out of the moments redirect). `PlanSheet.tsx` on the moments home
+ * is a read-only summary with no unplan affordance.
  *
- * Clock pinning: `PlanSheet` is a sheet layered atop whichever moment is
- * active, unlike the legacy `PlanView` route it replaces (which rendered one
- * fixed 8a-6p rail regardless of moment) — so this spec now pins the moment
- * preference (`pinMomentPreference`, same helper `durable-plans-drafts.spec.ts`
- * uses) rather than depending on the wall clock.
+ * Clock pinning: none needed. PlanView renders one fixed 8a-6p rail at every
+ * hour of the day, so this spec has no dependence on the wall clock.
  */
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
@@ -184,15 +179,14 @@ function buildSeedState(taskCount: 1 | 2 = 1) {
 }
 
 async function openPlanRail(page: Page, taskCount: 1 | 2 = 1) {
-  await pinMomentPreference(page, "start");
   await page.addInitScript(
     ({ key, state }) => {
       window.sessionStorage.setItem(key, JSON.stringify(state));
     },
     { key: STORAGE_KEY, state: buildSeedState(taskCount) },
   );
-  await page.goto("/?sheet=plan");
-  await expect(page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`)).toBeVisible({
+  await page.goto("/calendar");
+  await expect(page.getByTestId(`hour-row-${PLAN_HOUR}`)).toBeVisible({
     timeout: 15_000,
   });
 }
@@ -210,7 +204,7 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
 
     // Step 1 of the disclosed sequence: place the block. This part already
     // worked before S5 — it is the setup, not the assertion.
-    await page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`).click();
+    await page.getByTestId(`hour-row-${PLAN_HOUR}`).click();
 
     await expect
       .poll(async () => placements(await readJournal(page)).length, {
@@ -221,18 +215,16 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
     const placement = placements(await readJournal(page))[0]!;
     expect(placement.payload.workflow_task_id).toBe(PLAN_TASK_ID);
 
-    // The row now reads "Tap to take it off" (PlanSheet's copy for the
-    // `unplan` row-action kind, planRail.ts:139 — the legacy PlanView's
-    // wording was "Tap to unplan"), which is the affordance step 2 uses.
-    await expect(
-      page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`),
-    ).toContainText("Tap to take it off");
+    // The row now reads "Tap to unplan", which is the affordance step 2 uses.
+    await expect(page.getByTestId(`hour-row-${PLAN_HOUR}`)).toContainText(
+      "Tap to unplan",
+    );
 
     // Step 2: the user takes it back, still with no account reachable.
-    await page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`).click();
-    await expect(
-      page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`),
-    ).not.toContainText("Tap to take it off");
+    await page.getByTestId(`hour-row-${PLAN_HOUR}`).click();
+    await expect(page.getByTestId(`hour-row-${PLAN_HOUR}`)).not.toContainText(
+      "Tap to unplan",
+    );
 
     // THE ASSERTION. The queued placement must be gone — cancelled by the
     // user's own compensating action, not left waiting to be delivered. A
@@ -261,9 +253,7 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
     // replay would show up here.
     for (const attempt of [1, 2]) {
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(
-        page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`),
-      ).toBeVisible();
+      await expect(page.getByTestId(`hour-row-${PLAN_HOUR}`)).toBeVisible();
       expect(
         placements(await readJournal(page)),
         `replay ${attempt} must not resurrect the cancelled placement`,
@@ -274,10 +264,8 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
     // sessionStorage — the tier where the placement was durable in the first
     // place.
     const newTab = await context.newPage();
-    await newTab.goto("/?sheet=plan");
-    await expect(
-      newTab.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`),
-    ).toBeVisible();
+    await newTab.goto("/calendar");
+    await expect(newTab.getByTestId(`hour-row-${PLAN_HOUR}`)).toBeVisible();
     expect(placements(await readJournal(newTab))).toHaveLength(0);
     await newTab.close();
   });
@@ -292,26 +280,19 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
     // with it, breaking never-discard in the other direction. This test is the
     // reason the fix cannot be "clear the journal on undo".
     await page.getByRole("button", { name: PLAN_TASK_TITLE }).click();
-    await page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`).click();
+    await page.getByTestId(`hour-row-${PLAN_HOUR}`).click();
     await expect
       .poll(async () => placements(await readJournal(page)).length)
       .toBe(1);
 
-    // No task-selector tap needed here: PLAN_TASK was the only OTHER ready
-    // task, and PlanSheet auto-selects the sole remaining ready task
-    // (`onlyReadyTaskId`, PlanSheet.tsx:203) once it placed — the same
-    // auto-select `durable-plans-drafts.spec.ts` relies on for a single
-    // seeded task. Every empty hour row's own aria-label now names
-    // KEEP_TASK_TITLE too (it's the row-action label, not a selector), which
-    // is why clicking a `getByRole("button", { name: KEEP_TASK_TITLE })`
-    // here would match every empty row ambiguously rather than one control.
-    await page.getByTestId(`plan-sheet-hour-${KEEP_HOUR}`).click();
+    await page.getByRole("button", { name: KEEP_TASK_TITLE }).click();
+    await page.getByTestId(`hour-row-${KEEP_HOUR}`).click();
     await expect
       .poll(async () => placements(await readJournal(page)).length)
       .toBe(2);
 
     // Undo only the first.
-    await page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`).click();
+    await page.getByTestId(`hour-row-${PLAN_HOUR}`).click();
 
     await expect
       .poll(async () => placements(await readJournal(page)).length, {
@@ -325,8 +306,8 @@ test.describe("#737 C1 S5 — an undo cancels the write it undoes", () => {
     expect(
       placements(await readJournal(page))[0]!.payload.workflow_task_id,
     ).toBe(KEEP_TASK_ID);
-    await expect(
-      page.getByTestId(`plan-sheet-hour-${KEEP_HOUR}`),
-    ).toContainText("Tap to take it off");
+    await expect(page.getByTestId(`hour-row-${KEEP_HOUR}`)).toContainText(
+      "Tap to unplan",
+    );
   });
 });
