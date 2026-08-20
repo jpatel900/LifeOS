@@ -1,21 +1,21 @@
 # Backlog Index — every planned thing, one scroll
 
-STATUS: LIVE — owner-ratified 2026-08-05. This is a MAP, not an authority: each row points at the item's real home; the home governs. Rules: one line per item; update the row when the home changes (doc-truth fixes ride standing issue #820); rows may be deleted when shipped or rejected, never silently. Built from the 2026-08-05 ten-source inventory. The Final UX Loop (R8) freezes everything below except its own section — order inside sections is rough priority, not commitment.
+STATUS: LIVE — owner-ratified 2026-08-05. This is a MAP, not an authority: each row points at the item's real home; the home governs. Rules: one line per item; update the row when the home changes (doc-truth fixes ride standing issue #820); rows may be deleted when shipped or rejected, never silently. Built from the 2026-08-05 ten-source inventory; reconciled 2026-08-16 against a full out-of-repo sweep (plans folder, OpenBrain, RiseUp) — that sweep found only the three rows now marked 2026-08-16 missing, everything else was already registered here. The Final UX Loop (R8) freezes everything below except its own section — order inside sections is rough priority, not commitment.
 
 ## Now: the governing program (only unfrozen work)
 
-| Item                                                                                                                                  | Status                     | Home                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| C2 Structure: S2 re-land (truth-spec fix), S3 (#809), S4 Health port, S5 All-areas port (+#691 scoping), S6 shell close-out, re-score | in flight                  | [campaign-c2-structure.md](campaign-c2-structure.md)                                                                 |
-| C3 First-run and onboarding (content DECIDED 2026-08-05: ratified plan)                                                               | queued                     | [final-ux-loop.md](final-ux-loop.md), [plan-onboarding-ritual](../implementation-planning/plan-onboarding-ritual.md) |
-| C4 Flow completeness                                                                                                                  | queued                     | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
-| C5 Mobile + accessibility pins (AA in CI)                                                                                             | queued                     | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
-| C6 Payoff and polish (premium pass; route `impeccable` skill)                                                                         | queued                     | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
-| 29 unchecked target-card criteria (cards 2-11)                                                                                        | the concrete UX work above | [target-cards.md](target-cards.md)                                                                                   |
-| Phase F key 1: full 11-dimension re-audit                                                                                             | after C2-C6                | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
-| Phase F key 2: owner U3 hour — PRECONDITION: refresh the scripted test plan first                                                     | owner-only                 | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
-| C1 residual: CI e2e Supabase-env leg                                                                                                  | infra, queued              | docs/PROJECT_STATE.md open questions                                                                                 |
-| 737-A durability slices (freeze-exempt)                                                                                               | as needed                  | issue #737                                                                                                           |
+| Item                                                                                                           | Status                     | Home                                                                                                                 |
+| -------------------------------------------------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| C2 Structure: S0-S5 all merged (#803 #840/#844 #809 #846 #851); left: S6 shell close-out + fresh-eyes re-score | in flight                  | [campaign-c2-structure.md](campaign-c2-structure.md)                                                                 |
+| C3 First-run and onboarding (content DECIDED 2026-08-05: ratified plan)                                        | queued                     | [final-ux-loop.md](final-ux-loop.md), [plan-onboarding-ritual](../implementation-planning/plan-onboarding-ritual.md) |
+| C4 Flow completeness                                                                                           | queued                     | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
+| C5 Mobile + accessibility pins (AA in CI)                                                                      | queued                     | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
+| C6 Payoff and polish (premium pass; route `impeccable` skill)                                                  | queued                     | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
+| 29 unchecked target-card criteria (cards 2-11)                                                                 | the concrete UX work above | [target-cards.md](target-cards.md)                                                                                   |
+| Phase F key 1: full 11-dimension re-audit                                                                      | after C2-C6                | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
+| Phase F key 2: owner U3 hour — PRECONDITION: refresh the scripted test plan first                              | owner-only                 | [final-ux-loop.md](final-ux-loop.md)                                                                                 |
+| C1 residual: CI e2e Supabase-env leg                                                                           | infra, queued              | docs/PROJECT_STATE.md open questions                                                                                 |
+| 737-A durability slices (freeze-exempt)                                                                        | as needed                  | issue #737                                                                                                           |
 
 ## Contracted but unbuilt or partial (FRs exist; frozen behind Phase F)
 
@@ -50,13 +50,16 @@ STATUS: LIVE — owner-ratified 2026-08-05. This is a MAP, not an authority: eac
 
 ## Vision items with exactly ONE home (rescued from invisibility by this index)
 
-| Item                                                                                                 | Sole home                                     |
-| ---------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| Cadence stack (one ritual per time-altitude, fixed budgets)                                          | `vision-fable-horizon-pass` H4                |
-| Meaning line / Future-Jay as user class                                                              | horizon-pass H6.1                             |
-| Claims ledger (docs/CLAIMS.md gate before any public artifact)                                       | `vision-fable-wider-pass` W4                  |
-| Voice-as-policy - delight budget - novelty-to-utility gauge - ten-year pre-mortem - lineage of minds | `vision-fable-deeper-pass` 1b/2b/1d/3c/Part 8 |
-| Second dyad note - sibling harvest - operator-only boundary - RiseUp METHOD run (not a repo task)    | wider-pass W2/W3/W5                           |
+| Item                                                                                                                                                                                                                                            | Sole home                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Cadence stack (one ritual per time-altitude, fixed budgets)                                                                                                                                                                                     | `vision-fable-horizon-pass` H4                     |
+| Meaning line / Future-Jay as user class                                                                                                                                                                                                         | horizon-pass H6.1                                  |
+| Claims ledger (docs/CLAIMS.md gate before any public artifact)                                                                                                                                                                                  | `vision-fable-wider-pass` W4                       |
+| Voice-as-policy - delight budget - novelty-to-utility gauge - ten-year pre-mortem - lineage of minds                                                                                                                                            | `vision-fable-deeper-pass` 1b/2b/1d/3c/Part 8      |
+| Second dyad note - sibling harvest - operator-only boundary - RiseUp METHOD run (not a repo task)                                                                                                                                               | wider-pass W2/W3/W5                                |
+| (2026-08-16) Sleep/body module contract: one-time import of Hermes's sleep log (daily JSONL since 2026-08-11), then LifeOS owns it and Hermes goes read-only                                                                                    | OpenBrain memory 01M026PJ17YPDHTZQFC6M2T94Q        |
+| (2026-08-16) RiseUp-proven port candidates: coast mode (early FR-037 sibling) - handoff one-pager (FR-038 prototype) - silent-unless-wrong watchdog + momentum line (FR-046 refinements) - truth-pass confirm sweep (Stage-2 migration pattern) | riseup-cockpit repo (live, verified code)          |
+| (2026-08-16) Task-map nodes colored by staleness temperature                                                                                                                                                                                    | OpenBrain inbox capture 01KZ983C9VMRNBHYZR2CAGDKD0 |
 
 ## Stage contents with no FR and no issue (ADR 0002 D3)
 
@@ -73,7 +76,7 @@ F5 daily-offer-cap in localStorage - `duration_profiles` unplumbed - `UnsortedCa
 
 ## Open defects and doc-refresh queue
 
-KNOWN_ISSUES rows 1 (calendar PATCH + FR-012), 2 (all-day conflicts unproven live), 4 (settings/areas line budget), 10 (deferred cockpit gaps), 15 (TEST_PLAN/UX_FLOWS moments refresh, queued behind C2-S6). Home: docs/KNOWN_ISSUES.md. Open feature issues: #664, #644, #643, #660, #483, #478, #555, #292, #293, #783, #737, #723, #717, #716, #715. Home: the board.
+KNOWN_ISSUES rows 1 (calendar PATCH + FR-012), 2 (all-day conflicts unproven live), 4 (settings/areas line budget), 10 (deferred cockpit gaps), 15 (TEST_PLAN/UX_FLOWS moments refresh, queued behind C2-S6). Home: docs/KNOWN_ISSUES.md. Open feature issues: #687, #664, #644, #643, #660, #483, #478, #555, #292, #293, #783, #737, #723, #717, #716, #715. Home: the board.
 
 ## Explicit non-goals (so nobody re-plans them)
 
