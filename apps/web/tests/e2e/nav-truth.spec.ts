@@ -515,6 +515,8 @@ const SHEET_REACH_TESTID: Record<(typeof SHEET_VALUES)[number], string> = {
   triage: "pipeline-overview-stage-triage",
   plan: "pipeline-overview-stage-plan",
   review: "pipeline-overview-stage-review",
+  // health/areas no longer reach via this map — see PALETTE_REACH_SHEETS
+  // below for why, and the custom `reach` branch in matrixTargets.
   health: "side-rail-open-health",
   areas: "side-rail-open-areas",
 };
@@ -527,11 +529,44 @@ const SHEET_TESTID: Record<(typeof SHEET_VALUES)[number], string> = {
   areas: "areas-sheet",
 };
 
+// C2-S6 mutation-proven gap (adversarial verifier, 2026-08-20): this matrix
+// pin used to reach health/areas via SideRail's own
+// side-rail-open-health/-areas testids. `.click()` auto-scrolls its target
+// into view, even one that sits below the fold on a real 390px phone —
+// SideRail lives inside the Start moment and stacks to the BOTTOM of the
+// page below 1024px (StartMoment's own layout, see TodayMoments.tsx's
+// comments on the palette's "Open health"/"Open all areas" actions) — so
+// that reach path passed here while masking whether the actual shipped
+// ≤2-tap mobile path (BottomNavigator's "More" trigger -> command palette)
+// was reachable at all. Proof of the gap: disconnecting TodayMoments.tsx's
+// `onOpenPalette={() => setPaletteOpen(true)}` prop wiring left every test
+// in this file (and all 69 TodayMoments/BottomNavigator vitest tests)
+// green — nothing here exercised that chain. Health and areas now reach
+// through the real trigger; the other three sheets are unaffected (their
+// PipelineOverview stage buttons are the real, documented reach for them and
+// were never in question).
+const PALETTE_REACH_SHEETS = new Set<(typeof SHEET_VALUES)[number]>([
+  "health",
+  "areas",
+]);
+
 const matrixTargets: MatrixTarget[] = [
   ...SHEET_VALUES.map(
     (sheet): MatrixTarget => ({
       name: `sheet:${sheet}`,
       reach: async (page) => {
+        if (PALETTE_REACH_SHEETS.has(sheet)) {
+          // Tap 1: BottomNavigator's "More" trigger — reachable from any
+          // moment, no Start-switch needed first.
+          await page.getByTestId("bottom-navigator-more").click();
+          await expect(page.getByTestId("command-palette")).toBeVisible();
+          // Tap 2: the palette's matching "Open health"/"Open all areas"
+          // action.
+          await page
+            .getByTestId(`command-palette-option-open-${sheet}`)
+            .click();
+          return;
+        }
         // Tap 1 (worst case — a no-op if already there): switch to Start,
         // the only moment the reach controls below render on.
         await page.getByTestId("moment-switcher-bottom-nav-start").click();
