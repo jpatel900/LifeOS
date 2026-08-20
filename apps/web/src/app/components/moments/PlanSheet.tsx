@@ -5,6 +5,7 @@ import type { ReactNode, Ref } from "react";
 import { cn } from "@/lib/utils";
 import { useWorkflow } from "@/lib/WorkflowContext";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
+import { stableWorkflowKey } from "@/lib/workflowContext/reducerCore";
 import { selectTasksToPlace } from "@/lib/workflow/planStatus";
 import { Button } from "@/components/ui/button";
 import { GoogleCalendarApprovalBridge } from "../GoogleCalendarApprovalBridge";
@@ -488,7 +489,17 @@ export function PlanSheet({
                 );
                 return (
                   <li
-                    key={proposal.id}
+                    // #844 — the RENDERED identity, stable across the
+                    // device -> account id swap: a drafted card keeps the key
+                    // it was born under when the sync swaps its row id, so the
+                    // buttons inside are reconciled in place instead of being
+                    // destroyed under the user's finger mid-tap. Test ids stay
+                    // on the CURRENT row id on purpose — the truth spec names
+                    // cards by the id the account gave them.
+                    key={stableWorkflowKey(
+                      state.accountIdByLocalId.proposals,
+                      proposal.id,
+                    )}
                     className="workflow-compact-item moments-row grid gap-2 p-3"
                     data-testid={`plan-sheet-proposal-${proposal.id}`}
                   >

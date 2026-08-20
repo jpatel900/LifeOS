@@ -58,7 +58,7 @@ export interface LoggedWinRecord {
    * Other ids that name the SAME task, when the tier knows more than one.
    *
    * A task created locally carries a non-uuid workflow id until it syncs;
-   * afterwards `dropLocalIds` replaces the row and the candidate carries the
+   * afterwards the id-alias merge replaces the row and the candidate carries the
    * account uuid — while a win still queued in the journal names the OLD id.
    * Without the alias the offer would return at exactly that moment, and
    * confirming would derive a second key (`deriveWinClientWriteId` prefers the

@@ -3,6 +3,7 @@ import {
   STORAGE_KEY,
   loadStoredStateFromSession,
   mergePersistedRows,
+  stableWorkflowKey,
   workflowReducer,
   type PersistedWorkflowPayload,
 } from "@/lib/workflowContext/reducerCore";
@@ -34,8 +35,9 @@ import {
 const ACCOUNT_TASK_ID = "11111111-1111-4111-8111-111111111111";
 const ACCOUNT_PROPOSAL_ID = "22222222-2222-4222-8222-222222222222";
 const ACCOUNT_SESSION_ID = "33333333-3333-4333-8333-333333333333";
+const ACCOUNT_BLOCK_ID = "55555555-5555-4555-8555-555555555555";
 
-function emptyAliases(): PersistedWorkflowPayload["dropLocalIds"] {
+function emptyAliases(): PersistedWorkflowPayload["idAliases"] {
   return {
     captures: new Map<string, string>(),
     tasks: new Map<string, string>(),
@@ -55,7 +57,7 @@ function syncPayload(
     blocks: [],
     sessions: [],
     reviewLog: [],
-    dropLocalIds: emptyAliases(),
+    idAliases: emptyAliases(),
     ...overrides,
   };
 }
@@ -150,7 +152,7 @@ describe("local row retirement survives the mount (device -> account identity)",
       accountId: ACCOUNT_TASK_ID,
     });
 
-    // The reload is what empties the refs. `dropLocalIds` below is empty for
+    // The reload is what empties the refs. `idAliases` below is empty for
     // exactly that reason — it is what a fresh mount actually sends.
     const next = workflowReducer(reload(recorded), {
       type: "syncPersistedWorkflow",
@@ -205,17 +207,19 @@ describe("local row retirement survives the mount (device -> account identity)",
 
     const localSession = {
       id: "session-1",
+      user_id: task!.user_id,
       task_id: task!.id,
       calendar_block_id: "block-1",
       area_id: task!.area_id,
       status: "completed" as const,
-      started_at: "2026-08-08T09:00:00.000Z",
-      ended_at: "2026-08-08T09:45:00.000Z",
+      outcome: "completed" as const,
+      planned_minutes: 45,
       actual_minutes: 45,
       paused_minutes: 0,
       distraction_minutes: 0,
       productivity_rating: 4,
       notes: null,
+      created_at: "2026-08-08T09:45:00.000Z",
     };
     const seeded: WorkflowState = {
       ...state,
@@ -242,5 +246,158 @@ describe("local row retirement survives the mount (device -> account identity)",
     );
 
     expect(rows.map((row) => row.id)).toEqual([ACCOUNT_TASK_ID, "task-9"]);
+  });
+
+  it("retires the device proposal after a reload, under the account's own task id", () => {
+    // The real post-accept shape: the account's proposal row references the
+    // task's uuid while the device's twin still hangs off `task-N`. Both
+    // aliases were recorded before the reload; the refs died with the mount.
+    const state = stateWithLocalProposal();
+    const localTask = state.tasks.at(-1);
+    const localProposal = state.timeBlockProposals.at(-1);
+    expect(localTask).toBeDefined();
+    expect(localProposal).toBeDefined();
+
+    let recorded = workflowReducer(state, {
+      type: "recordAccountId",
+      family: "tasks",
+      localId: localTask!.id,
+      accountId: ACCOUNT_TASK_ID,
+    });
+    recorded = workflowReducer(recorded, {
+      type: "recordAccountId",
+      family: "proposals",
+      localId: localProposal!.id,
+      accountId: ACCOUNT_PROPOSAL_ID,
+    });
+
+    const next = workflowReducer(reload(recorded), {
+      type: "syncPersistedWorkflow",
+      payload: syncPayload({
+        tasks: [{ ...localTask!, id: ACCOUNT_TASK_ID }],
+        proposals: [
+          {
+            ...localProposal!,
+            id: ACCOUNT_PROPOSAL_ID,
+            task_id: ACCOUNT_TASK_ID,
+          },
+        ],
+      }),
+    });
+
+    expect(next.tasks.map((task) => task.id)).toEqual([ACCOUNT_TASK_ID]);
+    expect(next.timeBlockProposals.map((row) => row.id)).toEqual([
+      ACCOUNT_PROPOSAL_ID,
+    ]);
+  });
+
+  it("retires a device proposal after a reload on content alone, resolved through the TASK alias", () => {
+    // The un-journalled create path: the proposal itself never got an alias
+    // (the write may have been delivered by another tab's drain), but the task
+    // alias survived the reload and (task, proposed_start) names the twin.
+    const state = stateWithLocalProposal();
+    const localTask = state.tasks.at(-1);
+    const localProposal = state.timeBlockProposals.at(-1);
+    expect(localTask).toBeDefined();
+    expect(localProposal).toBeDefined();
+
+    const recorded = workflowReducer(state, {
+      type: "recordAccountId",
+      family: "tasks",
+      localId: localTask!.id,
+      accountId: ACCOUNT_TASK_ID,
+    });
+
+    const next = workflowReducer(reload(recorded), {
+      type: "syncPersistedWorkflow",
+      payload: syncPayload({
+        proposals: [
+          {
+            ...localProposal!,
+            id: ACCOUNT_PROPOSAL_ID,
+            task_id: ACCOUNT_TASK_ID,
+          },
+        ],
+      }),
+    });
+
+    expect(next.timeBlockProposals.map((row) => row.id)).toEqual([
+      ACCOUNT_PROPOSAL_ID,
+    ]);
+  });
+
+  it("retires the device session after a reload, under the account's task and block ids", () => {
+    // Sessions NEVER get their own alias — `record_execution_session` returns
+    // no row id — so the merge must name the twin by (task, block), resolved
+    // through the surviving task and block aliases. This is the measured
+    // two-row probe, now driven through a real reload.
+    const state = stateWithLocalTask();
+    const task = state.tasks.at(-1);
+    expect(task).toBeDefined();
+
+    const localSession = {
+      id: "session-1",
+      user_id: task!.user_id,
+      task_id: task!.id,
+      calendar_block_id: "block-1",
+      area_id: task!.area_id,
+      status: "completed" as const,
+      outcome: "completed" as const,
+      planned_minutes: 45,
+      actual_minutes: 45,
+      paused_minutes: 0,
+      distraction_minutes: 0,
+      productivity_rating: 4,
+      notes: null,
+      created_at: "2026-08-08T09:45:00.000Z",
+    };
+    let recorded = workflowReducer(
+      { ...state, executionSessions: [localSession] },
+      {
+        type: "recordAccountId",
+        family: "tasks",
+        localId: task!.id,
+        accountId: ACCOUNT_TASK_ID,
+      },
+    );
+    recorded = workflowReducer(recorded, {
+      type: "recordAccountId",
+      family: "blocks",
+      localId: "block-1",
+      accountId: ACCOUNT_BLOCK_ID,
+    });
+
+    const next = workflowReducer(reload(recorded), {
+      type: "syncPersistedWorkflow",
+      payload: syncPayload({
+        sessions: [
+          {
+            ...localSession,
+            id: ACCOUNT_SESSION_ID,
+            task_id: ACCOUNT_TASK_ID,
+            calendar_block_id: ACCOUNT_BLOCK_ID,
+          },
+        ],
+      }),
+    });
+
+    expect(next.executionSessions.map((row) => row.id)).toEqual([
+      ACCOUNT_SESSION_ID,
+    ]);
+  });
+
+  it("stableWorkflowKey keeps a row's rendered identity across the id swap", () => {
+    // #844 shape B: the tap that never lands. A React key derived from this
+    // value is the same string before the swap (the row IS `proposal-3`) and
+    // after it (the alias points the account id back to `proposal-3`), so the
+    // element under the finger is reconciled in place, not destroyed.
+    const aliases = { "proposal-3": ACCOUNT_PROPOSAL_ID };
+
+    expect(stableWorkflowKey(aliases, "proposal-3")).toBe("proposal-3");
+    expect(stableWorkflowKey(aliases, ACCOUNT_PROPOSAL_ID)).toBe("proposal-3");
+    // A row born on the account keeps its own id — no alias, no rewrite.
+    expect(stableWorkflowKey(aliases, ACCOUNT_SESSION_ID)).toBe(
+      ACCOUNT_SESSION_ID,
+    );
   });
 });
