@@ -393,7 +393,11 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       return;
     }
 
-    recordAccountAlias("proposals", localProposal.id, proposalResult.proposal.id);
+    recordAccountAlias(
+      "proposals",
+      localProposal.id,
+      proposalResult.proposal.id,
+    );
 
     await syncPersistedWorkflowRows(client);
   }

@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  STORAGE_KEY,
-  loadStoredStateFromSession,
   mergePersistedRows,
   stableWorkflowKey,
   workflowReducer,
   type PersistedWorkflowPayload,
 } from "@/lib/workflowContext/reducerCore";
-import type { WorkflowState } from "@/lib/workflow";
 import {
   acceptLatestDraft,
   captureWorkflow,
   proposeLatestActiveTask,
+  reloadWorkflowState,
   workflowSeed,
 } from "./helpers/workflowReachability";
 
@@ -30,6 +28,12 @@ import {
  *
  * These tests deliberately drive the reducer, not a component: the merge is
  * the single place every reading surface inherits its row set from.
+ *
+ * A fixture note the assertions depend on: accepting a draft folds in a
+ * parse-created proposal AND drafting adds a second one, so the proposal
+ * state legitimately holds TWO pending local proposals for one task. Only the
+ * one whose twin is in the payload may be retired — the other surviving is
+ * the #840 rule, not a leak — so every proposal assertion names both rows.
  */
 
 const ACCOUNT_TASK_ID = "11111111-1111-4111-8111-111111111111";
@@ -63,64 +67,50 @@ function syncPayload(
 }
 
 /** A device state holding exactly one local task, made by real transitions. */
-function stateWithLocalTask(): WorkflowState {
+function stateWithLocalTask() {
   let state = workflowSeed();
   state = captureWorkflow(state, "Retirement guard fixture task.");
   state = acceptLatestDraft(state);
   return state;
 }
 
-function stateWithLocalProposal(): WorkflowState {
+function stateWithLocalProposal() {
   return proposeLatestActiveTask(stateWithLocalTask());
 }
 
-/**
- * The whole point of the suite: put the state through the SAME round trip a
- * browser reload does — serialize to `sessionStorage`, drop every per-mount
- * ref, read it back — and then sync. Anything the alias needs to survive has
- * to survive this.
- */
-function reload(state: WorkflowState): WorkflowState {
-  const store = new Map<string, string>();
-  const original = globalThis.window;
-  Object.defineProperty(globalThis, "window", {
-    configurable: true,
-    writable: true,
-    value: {
-      sessionStorage: {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => {
-          store.set(key, value);
-        },
-      },
-    },
-  });
-  try {
-    globalThis.window.sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(state),
-    );
-    const restored = loadStoredStateFromSession();
-    expect(restored.storageBlocked).toBe(false);
-    expect(restored.state).not.toBeNull();
-    return restored.state as WorkflowState;
-  } finally {
-    if (original === undefined) {
-      delete (globalThis as { window?: unknown }).window;
-    } else {
-      Object.defineProperty(globalThis, "window", {
-        configurable: true,
-        writable: true,
-        value: original,
-      });
-    }
-  }
-}
-
-function accountTwinOfTask(state: WorkflowState) {
+function accountTwinOfTask(state: ReturnType<typeof stateWithLocalTask>) {
   const local = state.tasks.at(-1);
   expect(local).toBeDefined();
   return { local: local!, account: { ...local!, id: ACCOUNT_TASK_ID } };
+}
+
+/** The two pending local proposals the fixture holds — see the module note. */
+function proposalPairOf(state: ReturnType<typeof stateWithLocalProposal>) {
+  const [drafted, folded] = state.timeBlockProposals;
+  expect(drafted).toBeDefined();
+  expect(folded).toBeDefined();
+  return { drafted, folded };
+}
+
+function localSessionFor(state: ReturnType<typeof stateWithLocalTask>) {
+  const task = state.tasks.at(-1);
+  expect(task).toBeDefined();
+  return {
+    id: "session-1",
+    user_id: task!.user_id,
+    task_id: task!.id,
+    calendar_block_id: "block-1",
+    area_id: task!.area_id,
+    status: "completed" as const,
+    outcome: "completed" as const,
+    planned_minutes: 45,
+    actual_minutes: 45,
+    paused_minutes: 0,
+    distraction_minutes: 0,
+    productivity_rating: 4,
+    notes: null,
+    created_at: "2026-08-08T09:45:00.000Z",
+  };
 }
 
 describe("local row retirement survives the mount (device -> account identity)", () => {
@@ -136,9 +126,9 @@ describe("local row retirement survives the mount (device -> account identity)",
     });
 
     expect(recorded.accountIdByLocalId.tasks[local.id]).toBe(ACCOUNT_TASK_ID);
-    expect(reload(recorded).accountIdByLocalId.tasks[local.id]).toBe(
-      ACCOUNT_TASK_ID,
-    );
+    expect(
+      reloadWorkflowState(recorded).accountIdByLocalId.tasks[local.id],
+    ).toBe(ACCOUNT_TASK_ID);
   });
 
   it("retires the device twin after a reload, with no per-mount alias map left", () => {
@@ -154,7 +144,7 @@ describe("local row retirement survives the mount (device -> account identity)",
 
     // The reload is what empties the refs. `idAliases` below is empty for
     // exactly that reason — it is what a fresh mount actually sends.
-    const next = workflowReducer(reload(recorded), {
+    const next = workflowReducer(reloadWorkflowState(recorded), {
       type: "syncPersistedWorkflow",
       payload: syncPayload({ tasks: [account] }),
     });
@@ -185,53 +175,36 @@ describe("local row retirement survives the mount (device -> account identity)",
 
   it("retires a device proposal on (task_id, proposed_start) when no alias was ever recorded", () => {
     const state = stateWithLocalProposal();
-    const local = state.timeBlockProposals.at(-1);
-    expect(local).toBeDefined();
+    const { drafted, folded } = proposalPairOf(state);
 
     const next = workflowReducer(state, {
       type: "syncPersistedWorkflow",
       payload: syncPayload({
-        proposals: [{ ...local!, id: ACCOUNT_PROPOSAL_ID }],
+        proposals: [{ ...drafted, id: ACCOUNT_PROPOSAL_ID }],
       }),
     });
 
+    // The drafted proposal's twin arrived, so it is retired on content
+    // identity alone. The folded proposal's twin did not — it must survive.
     expect(next.timeBlockProposals.map((row) => row.id)).toEqual([
       ACCOUNT_PROPOSAL_ID,
+      folded.id,
     ]);
   });
 
   it("retires a device session on (task_id, calendar_block_id) — the measured two-row probe", () => {
     const state = stateWithLocalTask();
-    const task = state.tasks.at(-1);
-    expect(task).toBeDefined();
+    const localSession = localSessionFor(state);
 
-    const localSession = {
-      id: "session-1",
-      user_id: task!.user_id,
-      task_id: task!.id,
-      calendar_block_id: "block-1",
-      area_id: task!.area_id,
-      status: "completed" as const,
-      outcome: "completed" as const,
-      planned_minutes: 45,
-      actual_minutes: 45,
-      paused_minutes: 0,
-      distraction_minutes: 0,
-      productivity_rating: 4,
-      notes: null,
-      created_at: "2026-08-08T09:45:00.000Z",
-    };
-    const seeded: WorkflowState = {
-      ...state,
-      executionSessions: [localSession],
-    };
-
-    const next = workflowReducer(seeded, {
-      type: "syncPersistedWorkflow",
-      payload: syncPayload({
-        sessions: [{ ...localSession, id: ACCOUNT_SESSION_ID }],
-      }),
-    });
+    const next = workflowReducer(
+      { ...state, executionSessions: [localSession] },
+      {
+        type: "syncPersistedWorkflow",
+        payload: syncPayload({
+          sessions: [{ ...localSession, id: ACCOUNT_SESSION_ID }],
+        }),
+      },
+    );
 
     expect(next.executionSessions.map((row) => row.id)).toEqual([
       ACCOUNT_SESSION_ID,
@@ -253,34 +226,28 @@ describe("local row retirement survives the mount (device -> account identity)",
     // task's uuid while the device's twin still hangs off `task-N`. Both
     // aliases were recorded before the reload; the refs died with the mount.
     const state = stateWithLocalProposal();
-    const localTask = state.tasks.at(-1);
-    const localProposal = state.timeBlockProposals.at(-1);
-    expect(localTask).toBeDefined();
-    expect(localProposal).toBeDefined();
+    const { local: localTask } = accountTwinOfTask(state);
+    const { drafted, folded } = proposalPairOf(state);
 
     let recorded = workflowReducer(state, {
       type: "recordAccountId",
       family: "tasks",
-      localId: localTask!.id,
+      localId: localTask.id,
       accountId: ACCOUNT_TASK_ID,
     });
     recorded = workflowReducer(recorded, {
       type: "recordAccountId",
       family: "proposals",
-      localId: localProposal!.id,
+      localId: drafted.id,
       accountId: ACCOUNT_PROPOSAL_ID,
     });
 
-    const next = workflowReducer(reload(recorded), {
+    const next = workflowReducer(reloadWorkflowState(recorded), {
       type: "syncPersistedWorkflow",
       payload: syncPayload({
-        tasks: [{ ...localTask!, id: ACCOUNT_TASK_ID }],
+        tasks: [{ ...localTask, id: ACCOUNT_TASK_ID }],
         proposals: [
-          {
-            ...localProposal!,
-            id: ACCOUNT_PROPOSAL_ID,
-            task_id: ACCOUNT_TASK_ID,
-          },
+          { ...drafted, id: ACCOUNT_PROPOSAL_ID, task_id: ACCOUNT_TASK_ID },
         ],
       }),
     });
@@ -288,6 +255,7 @@ describe("local row retirement survives the mount (device -> account identity)",
     expect(next.tasks.map((task) => task.id)).toEqual([ACCOUNT_TASK_ID]);
     expect(next.timeBlockProposals.map((row) => row.id)).toEqual([
       ACCOUNT_PROPOSAL_ID,
+      folded.id,
     ]);
   });
 
@@ -296,33 +264,28 @@ describe("local row retirement survives the mount (device -> account identity)",
     // (the write may have been delivered by another tab's drain), but the task
     // alias survived the reload and (task, proposed_start) names the twin.
     const state = stateWithLocalProposal();
-    const localTask = state.tasks.at(-1);
-    const localProposal = state.timeBlockProposals.at(-1);
-    expect(localTask).toBeDefined();
-    expect(localProposal).toBeDefined();
+    const { local: localTask } = accountTwinOfTask(state);
+    const { drafted, folded } = proposalPairOf(state);
 
     const recorded = workflowReducer(state, {
       type: "recordAccountId",
       family: "tasks",
-      localId: localTask!.id,
+      localId: localTask.id,
       accountId: ACCOUNT_TASK_ID,
     });
 
-    const next = workflowReducer(reload(recorded), {
+    const next = workflowReducer(reloadWorkflowState(recorded), {
       type: "syncPersistedWorkflow",
       payload: syncPayload({
         proposals: [
-          {
-            ...localProposal!,
-            id: ACCOUNT_PROPOSAL_ID,
-            task_id: ACCOUNT_TASK_ID,
-          },
+          { ...drafted, id: ACCOUNT_PROPOSAL_ID, task_id: ACCOUNT_TASK_ID },
         ],
       }),
     });
 
     expect(next.timeBlockProposals.map((row) => row.id)).toEqual([
       ACCOUNT_PROPOSAL_ID,
+      folded.id,
     ]);
   });
 
@@ -332,31 +295,15 @@ describe("local row retirement survives the mount (device -> account identity)",
     // through the surviving task and block aliases. This is the measured
     // two-row probe, now driven through a real reload.
     const state = stateWithLocalTask();
-    const task = state.tasks.at(-1);
-    expect(task).toBeDefined();
+    const { local: localTask } = accountTwinOfTask(state);
+    const localSession = localSessionFor(state);
 
-    const localSession = {
-      id: "session-1",
-      user_id: task!.user_id,
-      task_id: task!.id,
-      calendar_block_id: "block-1",
-      area_id: task!.area_id,
-      status: "completed" as const,
-      outcome: "completed" as const,
-      planned_minutes: 45,
-      actual_minutes: 45,
-      paused_minutes: 0,
-      distraction_minutes: 0,
-      productivity_rating: 4,
-      notes: null,
-      created_at: "2026-08-08T09:45:00.000Z",
-    };
     let recorded = workflowReducer(
       { ...state, executionSessions: [localSession] },
       {
         type: "recordAccountId",
         family: "tasks",
-        localId: task!.id,
+        localId: localTask.id,
         accountId: ACCOUNT_TASK_ID,
       },
     );
@@ -367,7 +314,7 @@ describe("local row retirement survives the mount (device -> account identity)",
       accountId: ACCOUNT_BLOCK_ID,
     });
 
-    const next = workflowReducer(reload(recorded), {
+    const next = workflowReducer(reloadWorkflowState(recorded), {
       type: "syncPersistedWorkflow",
       payload: syncPayload({
         sessions: [
