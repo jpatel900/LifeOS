@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { HIT_TARGET_INVISIBLE, HIT_TARGET_ROW } from "./hitTarget";
@@ -138,21 +138,46 @@ export function CaptureCore({
     null,
   );
 
-  // #687 (cheap residual, C2-S7): fast typing right after opening capture
-  // swallowed its own leading keystrokes. Root cause was this effect's own
-  // `requestAnimationFrame` defer — nothing owns focus for the ~16ms+ gap
-  // between mount and the NEXT paint, so keydowns fired in that window
-  // landed on whatever had focus before the overlay opened (often nothing
-  // that accepts text) and were lost. `useLayoutEffect` runs synchronously
-  // right after the DOM commit, before the browser paints anything — the
-  // textarea ref is already attached by then, so focusing it here needs no
-  // frame to wait for and closes that gap instead of narrowing it.
-  useLayoutEffect(() => {
-    if (!autoFocus) return;
-    const el = textareaRef.current;
-    if (!el) return;
-    el.focus();
-    el.setSelectionRange(el.value.length, el.value.length);
+  // #687 (cheap residual, C2-S7 — investigated, NOT a one-liner, reverted):
+  // fast typing right after opening capture can swallow its own leading
+  // keystrokes. Root cause: this effect defers the actual `el.focus()` call
+  // to the NEXT animation frame via `requestAnimationFrame`, so nothing
+  // owns focus for that ~16ms+ gap and a keydown fired in it lands wherever
+  // focus was before the overlay opened.
+  //
+  // Tried the obvious fix — swap this for a synchronous `useLayoutEffect`
+  // — and it broke a DIFFERENT, real, already-tested guarantee:
+  // `useReturnFocus.ts`'s own header comment states its capture "must
+  // happen in a synchronous effect (not requestAnimationFrame) ... before
+  // any autofocus-on-open effect ... has a chance to move focus into the
+  // dialog." React flushes ALL layout effects across a commit, child before
+  // parent, strictly before ANY passive effect runs — so a `useLayoutEffect`
+  // here (CaptureCore, the CHILD) would grab focus before
+  // `useReturnFocus`'s plain `useEffect` (CaptureOverlay, the PARENT) ever
+  // runs, and the parent would capture the TEXTAREA as "what had focus
+  // before opening" instead of the real opener. Caught by
+  // `CaptureOverlay.test.tsx`'s "SP-1 focus discipline > returns focus to
+  // the opener once closed" going red — reverted rather than shipped
+  // broken, per this lane's own guard-sacred rule.
+  //
+  // The rAF defer is what keeps this effect OUTSIDE this commit's effect
+  // flush entirely (regardless of tree position), which is why it was
+  // there. A real fix needs to either narrow the defer to something still
+  // provably later than useReturnFocus's capture (a queued microtask was
+  // not verified safe against React's own effect-flush timing in the time
+  // budget this lane had) or restructure where the "what had focus before
+  // opening" capture happens so it no longer depends on effect ordering
+  // at all. Left AS-IS (unmodified from origin/main); see the AGENT-TODO
+  // in this PR's body.
+  useEffect(() => {
+    if (!autoFocus) return undefined;
+    const id = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+    return () => cancelAnimationFrame(id);
     // Mount-only: each surface mounts a fresh CaptureCore per capture
     // session (CaptureOverlay unmounts it while closed), so seeding +
     // autofocus only need to run once per mount, never on every keystroke.
