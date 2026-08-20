@@ -895,7 +895,14 @@ export function TodayMoments({
     if (activeSheet) {
       closeSheet();
     }
-  }, [paletteOpen, captureOpen, activeSheet, closeSheet, closePalette, closeCapture]);
+  }, [
+    paletteOpen,
+    captureOpen,
+    activeSheet,
+    closeSheet,
+    closePalette,
+    closeCapture,
+  ]);
 
   // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
   // = [stalest open task, then each planned task deferral], deduped by

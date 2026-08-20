@@ -169,9 +169,7 @@ describe("TodayMoments", () => {
     // C2-S7 (#687 finding 2): the same replaceState now also WRITES
     // `capture=1` — a refresh at this exact moment must still show the
     // overlay open, not silently lose it the way the pre-fix URL would have.
-    expect(new URL(window.location.href).searchParams.get("capture")).toBe(
-      "1",
-    );
+    expect(new URL(window.location.href).searchParams.get("capture")).toBe("1");
   });
 
   it("switches moments via number keys and the MomentSwitcher", () => {
@@ -464,9 +462,7 @@ describe("TodayMoments", () => {
 
     await pressCaptureShortcut();
     expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
-    expect(new URL(window.location.href).searchParams.get("capture")).toBe(
-      "1",
-    );
+    expect(new URL(window.location.href).searchParams.get("capture")).toBe("1");
   });
 
   it("opening the command palette via Cmd+K writes ?palette=1", () => {
@@ -474,9 +470,7 @@ describe("TodayMoments", () => {
 
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(screen.getByTestId("command-palette")).toBeInTheDocument();
-    expect(new URL(window.location.href).searchParams.get("palette")).toBe(
-      "1",
-    );
+    expect(new URL(window.location.href).searchParams.get("palette")).toBe("1");
   });
 
   // The palette can open capture (or a sheet) from inside itself —
@@ -492,9 +486,7 @@ describe("TodayMoments", () => {
     fireEvent.keyDown(window, { key: "k", metaKey: true });
     expect(screen.getByTestId("command-palette")).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByTestId("command-palette-option-open-capture"),
-    );
+    fireEvent.click(screen.getByTestId("command-palette-option-open-capture"));
 
     expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
     expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
@@ -514,7 +506,9 @@ describe("TodayMoments", () => {
     renderToday({ initialMoment: "start" });
 
     await waitFor(() => {
-      expect(new URL(window.location.href).searchParams.get("sheet")).toBeNull();
+      expect(
+        new URL(window.location.href).searchParams.get("sheet"),
+      ).toBeNull();
     });
     // Nothing renders for it — matches deepLinkTargetFromParams' documented
     // "unknown/absent -> null (a plain home visit)" precedence.

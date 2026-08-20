@@ -1,6 +1,10 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parseOverlayParam, urlWithOverlay, useOverlayUrlState } from "./useOverlayUrlState";
+import {
+  parseOverlayParam,
+  urlWithOverlay,
+  useOverlayUrlState,
+} from "./useOverlayUrlState";
 
 /**
  * Final UX Loop C2-S7 (#687 finding 2): the useSheetUrlState-shaped hook for
@@ -168,11 +172,7 @@ describe.each(["capture", "palette"] as const)(
       // carries our stale param, exactly as `urlWithSheet`/`urlWithOverlay`
       // preserve every existing param.
       act(() => {
-        window.history.pushState(
-          null,
-          "",
-          `/?${param}=1&sheet=triage`,
-        );
+        window.history.pushState(null, "", `/?${param}=1&sheet=triage`);
       });
 
       act(() => result.current.closeOverlay());

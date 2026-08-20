@@ -108,9 +108,7 @@ export function useOverlayUrlState(
     // Already on this overlay's URL (e.g. re-opening after a deep link):
     // keep the stack flat rather than stacking an identical entry.
     if (
-      parseOverlayParam(
-        new URLSearchParams(window.location.search).get(param),
-      )
+      parseOverlayParam(new URLSearchParams(window.location.search).get(param))
     ) {
       return;
     }
