@@ -705,6 +705,69 @@ describe("TodayMoments", () => {
         "area-volunteer",
       );
     });
+
+    // C2-S8 hotfix (#687 finding 1, caught by CI's signed-in tier —
+    // areas-port-truth.spec.ts:211): picking an area FROM THE AREAS SHEET
+    // (not the masthead pill) used to lose the race against the sheet's own
+    // close. AreasSheet.tsx calls `onSelectArea(areaId)` (a raw
+    // `setSelectedAreaId`, no history write) THEN `onClose()`
+    // (`closeSheet()`, which — because this sheet WAS pushed —
+    // `history.back()`s). `back()` is asynchronous; when its `popstate`
+    // finally lands, the URL is whatever it was BEFORE the sheet opened
+    // (the OLD area), and `useAreaUrlState`'s popstate handler faithfully
+    // re-applies it, undoing the pick a beat later. Reproduces the CI
+    // failure shape exactly: pre-sheet area "Personal", pick "Volunteer
+    // Work" from inside the sheet, screen ends up back on "Personal".
+    it("picking an area from the Areas sheet sticks — it does not lose the race against the sheet's own close", async () => {
+      renderToday({ initialMoment: "start" });
+
+      // Pre-sheet area, via the masthead (a real pushState) — the entry
+      // Back would otherwise revert to.
+      fireEvent.click(screen.getByTestId("today-moments-area-switcher"));
+      fireEvent.click(screen.getByTestId("area-selector-option-area-personal"));
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("today-moments-area-switcher"),
+        ).toHaveTextContent("Personal");
+      });
+
+      // Reach the Areas sheet (openSheet pushes ?sheet=areas, composing with
+      // the ?area=area-personal already on the URL).
+      fireEvent.click(screen.getByTestId("bottom-navigator-more"));
+      fireEvent.click(screen.getByTestId("command-palette-option-open-areas"));
+      expect(screen.getByTestId("areas-sheet")).toBeInTheDocument();
+
+      // Pick a DIFFERENT area from inside the sheet.
+      fireEvent.click(screen.getByTestId("areas-sheet-pill-area-volunteer"));
+
+      // The sheet closes...
+      expect(screen.queryByTestId("areas-sheet")).not.toBeInTheDocument();
+      // ...and the pick STICKS — this is the exact assertion CI's
+      // areas-port-truth.spec.ts:227 makes, and the exact one that was
+      // failing (received "All areasA" / here, would have reverted to
+      // "Personal" instead of holding "Volunteer Work").
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("today-moments-area-switcher"),
+        ).toHaveTextContent("Volunteer Work");
+      });
+      // Give any stray async popstate a chance to land, then re-assert —
+      // this is what would have caught the original bug: the revert
+      // happened on a LATER tick, after the first (passing) assertion.
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(
+        screen.getByTestId("today-moments-area-switcher"),
+      ).toHaveTextContent("Volunteer Work");
+      expect(new URL(window.location.href).searchParams.get("area")).toBe(
+        "area-volunteer",
+      );
+      expect(
+        new URL(window.location.href).searchParams.get("sheet"),
+      ).toBeNull();
+    });
   });
 
   it("close-day journey: Close moment renders counts and Close the day fires without crashing", async () => {

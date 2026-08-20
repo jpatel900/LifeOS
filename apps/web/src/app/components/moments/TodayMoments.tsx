@@ -62,7 +62,11 @@ import { useSheetUrlState } from "./useSheetUrlState";
 import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
 import { isSheetValue } from "./sheetValues";
 import { parseMomentParam, useMomentUrlState } from "./useMomentUrlState";
-import { parseAreaParam, useAreaUrlState } from "./useAreaUrlState";
+import {
+  parseAreaParam,
+  urlWithArea,
+  useAreaUrlState,
+} from "./useAreaUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 import type { ToastAction } from "./toast";
@@ -439,6 +443,54 @@ export function TodayMoments({
   // and popstate re-reads the URL as the authority — see useSheetUrlState.
   const { activeSheet, openSheet, closeSheet, adoptSheetFromUrl } =
     useSheetUrlState();
+  // C2-S8 hotfix (#687 finding 1, caught by the signed-in e2e tier —
+  // areas-port-truth.spec.ts:211): AreasSheet's own click handler
+  // (AreasSheet.tsx) calls `onSelectArea(areaId)` THEN `onClose()`
+  // synchronously, in that order — the SAME "pick, then close" composition
+  // useOverlayUrlState.ts's own docstring already documents for the command
+  // palette. Wiring `onSelectArea` straight to the raw `setSelectedAreaId`
+  // (as this used to) writes NOTHING to the URL; `onClose` → `closeSheet()`
+  // then calls `history.back()` (this sheet DID push its own `?sheet=areas`
+  // entry via `openSheet`), which is ASYNCHRONOUS — `popstate` fires on a
+  // LATER task, landing on the entry from BEFORE the sheet opened, which
+  // still names the AREA THAT WAS JUST REPLACED. `useAreaUrlState`'s
+  // popstate handler is faithfully URL-authoritative (by design, matching
+  // every other Back/Forward handler in this file) — it re-applies that
+  // stale area, undoing the pick a beat after it happened. Screen showed
+  // "All areas" after picking "Personal"; URL agreed with the screen (both
+  // wrong), so this was never a URL-vs-screen disagreement — the pick
+  // itself lost the race.
+  //
+  // Fix: fold "close the sheet" and "change area" into ONE `replaceState`,
+  // never letting `closeSheet()`'s `back()` run for this path at all.
+  // `adoptSheetFromUrl(null)` closes the sheet's REACT state and clears
+  // `pushedRef` (the same "adopted, not pushed" branch `closeSheet` already
+  // takes for a sheet reached by direct URL) — AreasSheet's own subsequent
+  // `onClose()` call then finds `pushedRef.current` false and takes that
+  // same safe `replaceState` branch too, a harmless no-op re-confirming
+  // `sheet` is already absent. No `back()`, no popstate, no race.
+  const handleAreasSheetSelectArea = useCallback(
+    (areaId: string | null) => {
+      setSelectedAreaId(areaId);
+      adoptSheetFromUrl(null);
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      params.delete("sheet");
+      const search = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        urlWithArea(
+          {
+            pathname: window.location.pathname,
+            search: search ? `?${search}` : "",
+          },
+          areaId,
+        ),
+      );
+    },
+    [setSelectedAreaId, adoptSheetFromUrl],
+  );
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1671,7 +1723,7 @@ export function TodayMoments({
         open={activeSheet === "areas"}
         onClose={() => closeSheet()}
         selectedAreaId={selectedAreaId}
-        onSelectArea={setSelectedAreaId}
+        onSelectArea={handleAreasSheetSelectArea}
       />
 
       <EndSessionSheet

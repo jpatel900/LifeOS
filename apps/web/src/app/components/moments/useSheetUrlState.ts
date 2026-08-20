@@ -70,8 +70,20 @@ export interface SheetUrlState {
   /**
    * Applies a sheet the URL ALREADY carries (the mount-time deep link). Writes
    * no history: the entry that named the sheet is the one we are standing on.
+   *
+   * C2-S8 (#687 finding 1 hotfix): also accepts `null` — a caller that has
+   * ALREADY replaced the current entry itself (composing this sheet's close
+   * with some other URL-visible change in the same user action, e.g.
+   * AreasSheet picking an area and closing in one click) uses this to mark
+   * the sheet closed in REACT STATE only, with zero history side effects —
+   * unlike `closeSheet()`, which always touches history (`back()` when this
+   * hook pushed the open entry, `replaceState` otherwise). Passing `null`
+   * here also clears `pushedRef` the same way any adopt does, so a
+   * SUBSEQUENT `closeSheet()` call (e.g. `AreasSheet`'s own `onSelectArea`
+   * then `onClose()` sequence) finds nothing of its own left to pop and
+   * takes its already-safe `replaceState` branch instead of `back()`.
    */
-  adoptSheetFromUrl(sheet: SheetValue): void;
+  adoptSheetFromUrl(sheet: SheetValue | null): void;
 }
 
 export function useSheetUrlState(): SheetUrlState {
@@ -124,7 +136,7 @@ export function useSheetUrlState(): SheetUrlState {
     window.history.replaceState(null, "", urlWithSheet(window.location, null));
   }, []);
 
-  const adoptSheetFromUrl = useCallback((sheet: SheetValue) => {
+  const adoptSheetFromUrl = useCallback((sheet: SheetValue | null) => {
     pushedRef.current = false;
     setActiveSheet(sheet);
   }, []);
