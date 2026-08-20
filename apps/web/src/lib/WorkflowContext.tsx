@@ -125,6 +125,10 @@ import {
   workflowReducer,
   type PersistedWorkflowPayload,
 } from "./workflowContext/reducerCore";
+// Direct submodule import, matching `reducerCore.ts`: the workflow barrel
+// freezes the pre-split public surface, and this #844 type is consumed only by
+// the state layer.
+import type { AccountIdAliasFamily } from "./workflow/shared";
 import { createApplyWorkflowState } from "./workflowContext/applyWorkflowState";
 import {
   createPersistenceSync,
@@ -411,16 +415,40 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const buildDropLocalIds =
-    useCallback((): PersistedWorkflowPayload["dropLocalIds"] => {
+  // #844 AGENT-TODO 2: the MAP, not its key-set. The reducer retires a local
+  // row only when the mapped twin is present in the payload, so these
+  // snapshots can no longer vanish a row (see `mergePersistedRows`).
+  const buildIdAliasSnapshot =
+    useCallback((): PersistedWorkflowPayload["idAliases"] => {
       return {
-        captures: new Set(persistedCaptureIdByLocalIdRef.current.keys()),
-        tasks: new Set(persistedTaskIdByLocalIdRef.current.keys()),
-        proposals: new Set(persistedProposalIdByLocalIdRef.current.keys()),
-        blocks: new Set(persistedBlockIdByLocalIdRef.current.keys()),
-        sessions: new Set(persistedSessionIdByLocalIdRef.current.keys()),
+        captures: new Map(persistedCaptureIdByLocalIdRef.current),
+        tasks: new Map(persistedTaskIdByLocalIdRef.current),
+        proposals: new Map(persistedProposalIdByLocalIdRef.current),
+        blocks: new Map(persistedBlockIdByLocalIdRef.current),
+        sessions: new Map(persistedSessionIdByLocalIdRef.current),
       };
     }, []);
+
+  // #844 — ONE record point for "this local row became this account row".
+  // Writes the per-mount ref (synchronous reads inside the persist callbacks)
+  // AND dispatches into the reducer, whose state rides the `sessionStorage`
+  // mirror — the durable half that makes the twinship survive a reload. Every
+  // path that learns an account id goes through here; a ref.set with no
+  // dispatch is the bug this fixes.
+  const recordAccountAlias = useCallback(
+    (family: AccountIdAliasFamily, localId: string, accountId: string) => {
+      const refByFamily = {
+        captures: persistedCaptureIdByLocalIdRef,
+        tasks: persistedTaskIdByLocalIdRef,
+        proposals: persistedProposalIdByLocalIdRef,
+        blocks: persistedBlockIdByLocalIdRef,
+        sessions: persistedSessionIdByLocalIdRef,
+      } as const;
+      refByFamily[family].current.set(localId, accountId);
+      dispatch({ type: "recordAccountId", family, localId, accountId });
+    },
+    [],
+  );
 
   /**
    * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
@@ -502,7 +530,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       /**
        * #840 follow-up — THE DROP-SET IS SNAPSHOT BEFORE THE READS, NOT AFTER.
        *
-       * `dropLocalIds` names the local rows whose account counterpart is
+       * The alias snapshot names the local rows whose account counterpart is
        * already known, so the merge can retire the optimistic copy. Built
        * AFTER the awaits below, it described a moment the payload knew nothing
        * about: anything persisted DURING the read window landed in the id maps
@@ -520,8 +548,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
        *
        * Anything created after this line simply survives to the NEXT sync,
        * which reads after it exists and retires it cleanly.
+       *
+       * #844 follow-through: the snapshot is now the local->account MAP and
+       * the reducer retires a row only when its mapped twin is IN the
+       * payload, so the ordering above is belt-and-braces rather than the
+       * only thing standing between a mid-read draft and the vanish. Kept —
+       * it documents the invariant and costs nothing.
        */
-      const dropLocalIds = buildDropLocalIds();
+      const idAliases = buildIdAliasSnapshot();
 
       const [capturesResult, planningResult, executionResult] =
         await Promise.all([
@@ -561,7 +595,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             toWorkflowSession(session, areas),
           ),
           reviewLog: executionResult.reviewEntries.map(reviewEntryLine),
-          dropLocalIds,
+          idAliases,
         },
       });
       // Audit P0#4: `reviewEntryLine` flattens each row to a display string,
@@ -661,7 +695,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         });
     },
     [
-      buildDropLocalIds,
+      buildIdAliasSnapshot,
       markAccountSynced,
       markLocalOnly,
       refreshPendingLocalChanges,
@@ -789,13 +823,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         // would fall back to its local-only path.
         recordPlanPlacementIds: (payload, result) => {
           if (payload.workflow_proposal_id && result.persistedProposalId) {
-            persistedProposalIdByLocalIdRef.current.set(
+            recordAccountAlias(
+              "proposals",
               String(payload.workflow_proposal_id),
               result.persistedProposalId,
             );
           }
           if (payload.workflow_block_id && result.persistedBlockId) {
-            persistedBlockIdByLocalIdRef.current.set(
+            recordAccountAlias(
+              "blocks",
               String(payload.workflow_block_id),
               result.persistedBlockId,
             );
@@ -828,13 +864,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         }),
         recordTaskDraftAcceptIds: (payload, result) => {
           if (result.persistedTaskId) {
-            persistedTaskIdByLocalIdRef.current.set(
+            recordAccountAlias(
+              "tasks",
               String(payload.workflow_task_id),
               result.persistedTaskId,
             );
           }
           if (payload.workflow_proposal_id && result.persistedProposalId) {
-            persistedProposalIdByLocalIdRef.current.set(
+            recordAccountAlias(
+              "proposals",
               String(payload.workflow_proposal_id),
               result.persistedProposalId,
             );
@@ -880,7 +918,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
             persistedTaskIdByLocalIdRef.current,
           ),
       });
-    }, []);
+    }, [recordAccountAlias]);
 
   const applyWorkflowState = createApplyWorkflowState(stateRef, dispatch);
 
@@ -892,6 +930,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     persistedBlockIdByLocalIdRef,
     persistedSessionIdByLocalIdRef,
     selectedAreaId,
+    recordAccountAlias,
     markLocalOnly,
     markDeviceStorageBlocked,
     replayJournaledWrites,
@@ -1292,6 +1331,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     stateRef,
     persistedProposalIdByLocalIdRef,
     persistedBlockIdByLocalIdRef,
+    recordAccountAlias,
     applyWorkflowState,
     syncPersistedWorkflowRows,
     markPersistedLoadFailure,
@@ -1554,7 +1594,7 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
           // BOTH id spaces, because the journal deliberately stores both and
           // the task can cross the sync boundary while its win is queued.
           // Pre-sync the candidate carries the local id; once the task syncs,
-          // `dropLocalIds` replaces the row and the candidate carries the
+          // the id-alias merge replaces the row and the candidate carries the
           // account uuid — while the queued payload still says the local id.
           // Reporting only one of the two would re-offer the win at exactly
           // that moment, and confirming would derive a SECOND key

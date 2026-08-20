@@ -50,7 +50,7 @@ describe("mergePersistedCalendarBlocks (issue #324 echo dedup)", () => {
     const merged = mergePersistedCalendarBlocks(
       [persistedRow],
       [localBlock],
-      new Set<string>(),
+      new Map<string, string>(),
     );
 
     expect(merged).toHaveLength(1);
@@ -69,7 +69,7 @@ describe("mergePersistedCalendarBlocks (issue #324 echo dedup)", () => {
     const merged = mergePersistedCalendarBlocks(
       [persistedRow],
       [localBlock],
-      new Set<string>(),
+      new Map<string, string>(),
     );
 
     expect(merged).toHaveLength(2);
@@ -89,7 +89,7 @@ describe("mergePersistedCalendarBlocks (issue #324 echo dedup)", () => {
     const merged = mergePersistedCalendarBlocks(
       [persistedRowA, persistedRowB],
       [],
-      new Set<string>(),
+      new Map<string, string>(),
     );
 
     expect(merged).toHaveLength(2);

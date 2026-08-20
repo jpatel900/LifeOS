@@ -30,6 +30,16 @@ export interface CalendarApprovalDeps {
   stateRef: MutableRefObject<WorkflowState>;
   persistedProposalIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   persistedBlockIdByLocalIdRef: MutableRefObject<Map<string, string>>;
+  /**
+   * #844 — the ONE record point for "this local row became this account row".
+   * Writes the per-mount ref AND the reducer's durable alias map, so the
+   * twinship survives a reload.
+   */
+  recordAccountAlias: (
+    family: "blocks",
+    localId: string,
+    accountId: string,
+  ) => void;
   applyWorkflowState: ApplyWorkflowState;
   syncPersistedWorkflowRows: (
     client: MinimalSupabaseClient | null,
@@ -42,6 +52,7 @@ export function createCalendarApproval(deps: CalendarApprovalDeps) {
     stateRef,
     persistedProposalIdByLocalIdRef,
     persistedBlockIdByLocalIdRef,
+    recordAccountAlias,
     applyWorkflowState,
     syncPersistedWorkflowRows,
     markPersistedLoadFailure,
@@ -204,7 +215,7 @@ export function createCalendarApproval(deps: CalendarApprovalDeps) {
     applyWorkflowState(next);
 
     if (localBlock && typeof payload.block?.id === "string") {
-      persistedBlockIdByLocalIdRef.current.set(localBlock.id, payload.block.id);
+      recordAccountAlias("blocks", localBlock.id, payload.block.id);
     }
 
     void syncPersistedWorkflowRows(createSupabaseBrowserClient()).catch(

@@ -29,6 +29,9 @@ import {
 } from "./workflowPersistedNormalization";
 import { workflowAreaIdForPersistedArea } from "../workflowAreaMapping";
 import type { WorkflowState } from "../workflow";
+// Direct submodule import: the workflow barrel freezes the pre-split public
+// surface, and this #844 helper is consumed only by the state layer.
+import { createEmptyAccountIdAliases } from "../workflow/shared";
 
 /**
  * Issue #515 slice 2 remainder: server-side (service-role) rebuild of the
@@ -325,5 +328,9 @@ export async function loadOwnerWorkflowState(
     healthChecks: [],
     reviewLog: reviewEntries.map(reviewEntryLine),
     wipRefusal: null,
+    // #844: server-loaded state is all account rows (uuid ids), so there are
+    // no device-local twins for this map to name. Present because the state
+    // shape requires it, empty because it is truthfully empty.
+    accountIdByLocalId: createEmptyAccountIdAliases(),
   };
 }

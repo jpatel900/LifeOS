@@ -45,6 +45,9 @@ import type {
   Phase2MockTask,
 } from "../types";
 import type { WorkflowState } from "../workflow";
+// Direct submodule import: the workflow barrel freezes the pre-split public
+// surface, and this #844 type is consumed only by the state layer.
+import type { AccountIdAliasFamily } from "../workflow/shared";
 import {
   persistedAreaIdForWorkflowId,
   persistedIdForLocalId,
@@ -58,6 +61,17 @@ export interface PersistenceSyncDeps {
   persistedBlockIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   persistedSessionIdByLocalIdRef: MutableRefObject<Map<string, string>>;
   selectedAreaId: string | null;
+  /**
+   * #844 — the ONE record point for "this local row became this account row".
+   * Writes the per-mount ref AND the reducer's durable alias map, so the
+   * twinship survives a reload. Every path here that learns an account id must
+   * call this rather than setting a ref directly.
+   */
+  recordAccountAlias: (
+    family: AccountIdAliasFamily,
+    localId: string,
+    accountId: string,
+  ) => void;
   markLocalOnly: (message: string) => void;
   /** #737-A slice 2: the device journal refused the write; nothing holds it. */
   markDeviceStorageBlocked: () => void;
@@ -120,6 +134,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
     persistedBlockIdByLocalIdRef,
     persistedSessionIdByLocalIdRef,
     selectedAreaId,
+    recordAccountAlias,
     markLocalOnly,
     markDeviceStorageBlocked,
     replayJournaledWrites,
@@ -151,10 +166,7 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       return;
     }
 
-    persistedCaptureIdByLocalIdRef.current.set(
-      localCapture.id,
-      result.capture.id,
-    );
+    recordAccountAlias("captures", localCapture.id, result.capture.id);
     await syncPersistedWorkflowRows(client);
   }
 
@@ -381,7 +393,8 @@ export function createPersistenceSync(deps: PersistenceSyncDeps) {
       return;
     }
 
-    persistedProposalIdByLocalIdRef.current.set(
+    recordAccountAlias(
+      "proposals",
       localProposal.id,
       proposalResult.proposal.id,
     );

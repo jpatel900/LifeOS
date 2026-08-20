@@ -20,11 +20,63 @@ import {
   updateProposal,
   type WorkflowState,
 } from "@/lib/workflow";
+import {
+  STORAGE_KEY,
+  loadStoredStateFromSession,
+} from "@/lib/workflowContext/reducerCore";
 
 export const GOLDEN_AREA_ID = "area-main-job";
 
 export function workflowSeed(): WorkflowState {
   return createInitialWorkflowState();
+}
+
+/**
+ * #844 — put a state through the SAME round trip a browser reload does:
+ * serialize to `sessionStorage`, drop every per-mount ref, read it back.
+ * Anything that must survive a reload (the device -> account id aliases
+ * above all) has to survive this. Lives here because it returns a
+ * WorkflowState a test then keeps transitioning, which is this helper's
+ * boundary.
+ */
+export function reloadWorkflowState(state: WorkflowState): WorkflowState {
+  const store = new Map<string, string>();
+  const original = globalThis.window;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: {
+      sessionStorage: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+      },
+    },
+  });
+  try {
+    globalThis.window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(state),
+    );
+    const restored = loadStoredStateFromSession();
+    if (restored.storageBlocked || restored.state === null) {
+      throw new Error(
+        "The reload round trip failed to restore the workflow state.",
+      );
+    }
+    return restored.state;
+  } finally {
+    if (original === undefined) {
+      delete (globalThis as { window?: unknown }).window;
+    } else {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
+  }
 }
 
 export function rawCaptureWorkflow(

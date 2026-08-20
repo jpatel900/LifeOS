@@ -59,10 +59,27 @@ function makeSync(options: {
   /** What `replayJournaledWrites` does to the task id map when it drains. */
   onReplay?: (taskIdMap: Map<string, string>) => void;
 }) {
+  const persistedCaptureIdByLocalIdRef = { current: new Map<string, string>() };
   const persistedTaskIdByLocalIdRef = { current: new Map<string, string>() };
   const persistedProposalIdByLocalIdRef = {
     current: new Map<string, string>(),
   };
+  const persistedBlockIdByLocalIdRef = { current: new Map<string, string>() };
+  const persistedSessionIdByLocalIdRef = { current: new Map<string, string>() };
+  const refByFamily = {
+    captures: persistedCaptureIdByLocalIdRef,
+    tasks: persistedTaskIdByLocalIdRef,
+    proposals: persistedProposalIdByLocalIdRef,
+    blocks: persistedBlockIdByLocalIdRef,
+    sessions: persistedSessionIdByLocalIdRef,
+  } as const;
+  // Mirrors the real recorder's ref half (#844): the durable dispatch half is
+  // the reducer's job and is pinned by `localRowRetirementGuard.test.ts`.
+  const recordAccountAlias = vi.fn(
+    (family: keyof typeof refByFamily, localId: string, accountId: string) => {
+      refByFamily[family].current.set(localId, accountId);
+    },
+  );
   const markLocalOnly = vi.fn();
   const markDeviceStorageBlocked = vi.fn();
   const syncPersistedWorkflowRows = vi.fn().mockResolvedValue(undefined);
@@ -74,12 +91,13 @@ function makeSync(options: {
 
   const ops = createPersistenceSync({
     persistedAreasRef: { current: [] },
-    persistedCaptureIdByLocalIdRef: { current: new Map() },
+    persistedCaptureIdByLocalIdRef,
     persistedTaskIdByLocalIdRef,
     persistedProposalIdByLocalIdRef,
-    persistedBlockIdByLocalIdRef: { current: new Map() },
-    persistedSessionIdByLocalIdRef: { current: new Map() },
+    persistedBlockIdByLocalIdRef,
+    persistedSessionIdByLocalIdRef,
     selectedAreaId: null,
+    recordAccountAlias,
     markLocalOnly,
     markDeviceStorageBlocked,
     replayJournaledWrites,
@@ -91,6 +109,7 @@ function makeSync(options: {
     markLocalOnly,
     replayJournaledWrites,
     persistedProposalIdByLocalIdRef,
+    recordAccountAlias,
   };
 }
 
@@ -130,13 +149,21 @@ describe("persistCreatedLocalProposal — the drafted block reaches the account"
     // Without this mapping the later accept sends a null proposal id and
     // `place_time_block` mints a SECOND proposal rather than accepting this
     // one — the defect #840's own AGENT-TODO describes.
-    const { ops, persistedProposalIdByLocalIdRef } = makeSync({
-      onReplay: (taskIdMap) => taskIdMap.set(LOCAL_TASK_ID, ACCOUNT_TASK_ID),
-    });
+    const { ops, persistedProposalIdByLocalIdRef, recordAccountAlias } =
+      makeSync({
+        onReplay: (taskIdMap) => taskIdMap.set(LOCAL_TASK_ID, ACCOUNT_TASK_ID),
+      });
 
     await ops.persistCreatedLocalProposal(localDraftedProposal());
 
     expect(persistedProposalIdByLocalIdRef.current.get("proposal-3")).toBe(
+      ACCOUNT_PROPOSAL_ID,
+    );
+    // #844: the id is learned through the ONE record point, so the twinship
+    // also reaches the reducer's durable alias map — not just this ref.
+    expect(recordAccountAlias).toHaveBeenCalledWith(
+      "proposals",
+      "proposal-3",
       ACCOUNT_PROPOSAL_ID,
     );
   });
