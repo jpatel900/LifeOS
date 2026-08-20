@@ -20,11 +20,19 @@ type LoginState =
   | { status: "submitting" }
   | { status: "error"; message: string };
 
-// #581 (audit "first-use experience"): the local test credentials prefill
-// only outside production — the same NODE_ENV production guard the Google
-// OAuth config uses (lib/googleCalendar/oauth.ts). A real deployment gets
-// empty fields; local dev and tests keep the one-click sign-in.
-const DEV_CREDENTIAL_PREFILL = process.env.NODE_ENV !== "production";
+// #687 finding 4 (C2-S7, trust-critical): #581 gated the seed-account
+// prefill on `NODE_ENV !== "production"`, on the assumption that only a
+// deployed build would ever be a "real" first look at this screen. That
+// assumption was wrong for a single-user, not-yet-publicly-deployed app —
+// `pnpm dev` (NODE_ENV=development) is how the shipped page actually gets
+// looked at, so a fresh browser context routinely rendered someone else's
+// email and a masked password already filled in, which reads as a real
+// signed-in account rather than an empty sign-in door. Removed entirely,
+// unconditionally: the fields start empty in every environment. E2E specs
+// that need the seeded local account (`tests/e2e/helpers/signedInAccount.ts`'s
+// `signIn()`) already fill both fields programmatically via
+// `page.getByLabel(...).fill(...)` — none of them relied on this default
+// value, so nothing there changes.
 
 // #688: return the person to the page they came from after signing in. Only
 // same-app paths are honored — the value must be a single leading-slash path
@@ -42,12 +50,8 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = safeNextPath(searchParams?.get("next") ?? null);
-  const [email, setEmail] = useState(
-    DEV_CREDENTIAL_PREFILL ? "user_a@example.test" : "",
-  );
-  const [password, setPassword] = useState(
-    DEV_CREDENTIAL_PREFILL ? "password123" : "",
-  );
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [state, setState] = useState<LoginState>({ status: "idle" });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

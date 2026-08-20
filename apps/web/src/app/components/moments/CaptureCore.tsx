@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { HIT_TARGET_INVISIBLE, HIT_TARGET_ROW } from "./hitTarget";
@@ -138,15 +138,21 @@ export function CaptureCore({
     null,
   );
 
-  useEffect(() => {
-    if (!autoFocus) return undefined;
-    const id = requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
-    return () => cancelAnimationFrame(id);
+  // #687 (cheap residual, C2-S7): fast typing right after opening capture
+  // swallowed its own leading keystrokes. Root cause was this effect's own
+  // `requestAnimationFrame` defer — nothing owns focus for the ~16ms+ gap
+  // between mount and the NEXT paint, so keydowns fired in that window
+  // landed on whatever had focus before the overlay opened (often nothing
+  // that accepts text) and were lost. `useLayoutEffect` runs synchronously
+  // right after the DOM commit, before the browser paints anything — the
+  // textarea ref is already attached by then, so focusing it here needs no
+  // frame to wait for and closes that gap instead of narrowing it.
+  useLayoutEffect(() => {
+    if (!autoFocus) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
     // Mount-only: each surface mounts a fresh CaptureCore per capture
     // session (CaptureOverlay unmounts it while closed), so seeding +
     // autofocus only need to run once per mount, never on every keystroke.
