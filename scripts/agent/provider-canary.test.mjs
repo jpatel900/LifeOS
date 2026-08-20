@@ -172,7 +172,10 @@ test("resolveFinalState: no probe run falls back to trace signal, never false-al
 
 test("resolveFinalState: misconfigured probe (auth-blocked) surfaces distinctly, not as failing", () => {
   assert.equal(resolveFinalState("healthy", "misconfigured"), "misconfigured");
-  assert.equal(resolveFinalState("no_signal", "misconfigured"), "misconfigured");
+  assert.equal(
+    resolveFinalState("no_signal", "misconfigured"),
+    "misconfigured",
+  );
 });
 
 test("resolveFinalState: a trace-confirmed failure is never hidden behind an auth-blocked probe", () => {
