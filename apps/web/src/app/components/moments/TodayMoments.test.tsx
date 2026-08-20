@@ -551,6 +551,162 @@ describe("TodayMoments", () => {
     );
   });
 
+  // C2-S8 (#687 finding 1): an `?area=` naming an id not in the live area
+  // list is scrubbed the same way an unparseable `?sheet=`/`?capture=`/
+  // `?palette=` value already is — the bogus name never lingers. Unlike
+  // sheet/capture/palette (which have a real "absent" state: closed), area
+  // never does — some area is always the resolved truth (first area, a
+  // stored preference, or explicit All-areas), so `?area=` self-heals to
+  // THAT value rather than disappearing outright, the same "always visible"
+  // contract `?moment=` already keeps.
+  it("scrubs an unknown ?area= value from the URL, replacing it with the resolved truth", async () => {
+    window.history.replaceState(null, "", "/?area=not-a-real-area");
+
+    renderToday({ initialMoment: "start" });
+
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("area")).toBe(
+        "area-main-job",
+      );
+    });
+    expect(screen.getByTestId("today-moments")).toBeInTheDocument();
+  });
+
+  it("does not touch a VALID ?area= value", async () => {
+    window.history.replaceState(null, "", "/?area=area-personal");
+
+    renderToday({ initialMoment: "start" });
+
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("area")).toBe(
+        "area-personal",
+      );
+    });
+  });
+
+  it("does not touch the ?area=all sentinel", async () => {
+    window.history.replaceState(null, "", "/?area=all");
+
+    renderToday({ initialMoment: "start" });
+
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("area")).toBe(
+        "all",
+      );
+    });
+  });
+
+  // C2-S8 (#687 finding 2): capture and the command palette are mutually
+  // exclusive overlays — `deepLinkTargetFromParams`'s own precedence gives
+  // capture the win, so a hand-crafted URL naming both only ever renders
+  // capture. The URL used to keep claiming `palette=1` regardless; it must
+  // now be scrubbed, matching what actually rendered.
+  it("scrubs the losing half of an impossible ?capture=1&palette=1 combo, keeping only what renders", async () => {
+    window.history.replaceState(null, "", "/?capture=1&palette=1&moment=start");
+
+    renderToday({
+      initialMoment: "start",
+      deepLink: { moment: "start", overlay: "capture" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const params = new URL(window.location.href).searchParams;
+      expect(params.get("capture")).toBe("1");
+      expect(params.get("palette")).toBeNull();
+    });
+  });
+
+  // Sheet + overlay is a REAL, supported combo (S6's own composition
+  // contract) — pinning that this scrub never touches it, so finding 2's
+  // fix cannot regress into over-scrubbing a combo that DOES render both
+  // halves.
+  it("does not touch a real sheet+overlay combo that genuinely renders both", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?sheet=triage&capture=1&moment=start",
+    );
+
+    renderToday({
+      initialMoment: "start",
+      deepLink: { moment: "start", sheet: "triage", overlay: "capture" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-empty")).toBeInTheDocument();
+      expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+    });
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("sheet")).toBe("triage");
+    expect(params.get("capture")).toBe("1");
+  });
+
+  describe("area switcher URL truth (#687 finding 1)", () => {
+    it("switching area writes ?area=, and Back undoes the switch", async () => {
+      renderToday({ initialMoment: "start" });
+
+      fireEvent.click(screen.getByTestId("today-moments-area-switcher"));
+      fireEvent.click(screen.getByTestId("area-selector-option-area-personal"));
+
+      await waitFor(() => {
+        expect(new URL(window.location.href).searchParams.get("area")).toBe(
+          "area-personal",
+        );
+      });
+      expect(
+        screen.getByTestId("today-moments-area-switcher"),
+      ).toHaveTextContent("Personal");
+
+      await act(async () => {
+        window.history.back();
+        // jsdom fires popstate asynchronously — flush it.
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("today-moments-area-switcher"),
+        ).not.toHaveTextContent("Personal");
+      });
+    });
+
+    it("switching to All areas writes the ?area=all sentinel", async () => {
+      renderToday({ initialMoment: "start" });
+
+      fireEvent.click(screen.getByTestId("today-moments-area-switcher"));
+      fireEvent.click(screen.getByTestId("area-selector-option-all"));
+
+      await waitFor(() => {
+        expect(new URL(window.location.href).searchParams.get("area")).toBe(
+          "all",
+        );
+      });
+      expect(
+        screen.getByTestId("today-moments-area-switcher"),
+      ).toHaveTextContent("All areas");
+    });
+
+    it("a direct ?area= visit resolves the same area a refresh would agree with", async () => {
+      window.history.replaceState(null, "", "/?area=area-volunteer");
+
+      renderToday({ initialMoment: "start" });
+
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("today-moments-area-switcher"),
+        ).toHaveTextContent("Volunteer Work");
+      });
+      expect(new URL(window.location.href).searchParams.get("area")).toBe(
+        "area-volunteer",
+      );
+    });
+  });
+
   it("close-day journey: Close moment renders counts and Close the day fires without crashing", async () => {
     renderToday({ initialMoment: "close" });
 
@@ -1375,6 +1531,27 @@ describe("TodayMoments — P6 deep-link shims", () => {
 
   it("switches to the flow moment once when deepLink = { moment: 'flow' }", () => {
     renderToday({ initialMoment: "start", deepLink: { moment: "flow" } });
+
+    expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
+  });
+
+  // C2-S8 (#687 finding 3, root cause): `resolvedInitialMoment` used to read
+  // `window.location` for its URL tier — which does not exist during SSR, so
+  // the server always fell through to the clock heuristic regardless of the
+  // URL, while the client honored it, a structural mismatch React reported
+  // as a hydration failure. `deepLink.moment` (the SAME
+  // `deepLinkTargetFromParams(searchParams)` value page.tsx computes
+  // SERVER-side, identically available at hydration) is now consulted
+  // FIRST. jsdom always has `window`, so this cannot reproduce the SSR/CSR
+  // split itself — that was proven directly against a running dev server
+  // (a curl of `/?moment=flow` returning `data-testid="close-moment"`
+  // before the fix, `flow-moment` after) — but this pins that `deepLink`
+  // wins even against a CONFLICTING URL, the precedence order the fix
+  // depends on.
+  it("resolves the initial moment from deepLink.moment even when window.location names a different one", () => {
+    window.history.replaceState(null, "", "/?moment=close");
+
+    renderToday({ deepLink: { moment: "flow" } });
 
     expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
   });

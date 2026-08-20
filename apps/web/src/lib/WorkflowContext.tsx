@@ -104,6 +104,11 @@ import {
   reconcileStoredTaskDrafts,
 } from "./durability/draftStore";
 import type { Phase2MockExecutionSession } from "./types";
+import {
+  isMomentsHomePathname,
+  parseAreaParam,
+  urlWithArea,
+} from "./areaUrlParam";
 import { workflowAreaIdForPersistedArea } from "./workflowAreaMapping";
 import {
   STORAGE_KEY,
@@ -188,6 +193,11 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     undefined,
     createSyncedInitialState,
   );
+  // C2-S8 (#687 finding 1): deliberately NOT reading `?area=` here — this
+  // initializer also runs during SSR, where `window` does not exist, and
+  // this provider has no `searchParams`-derived prop to read instead (see
+  // the mount effect below for the URL-priority tier and why it lives there
+  // rather than here).
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(
     state.areas[0]?.id ?? null,
   );
@@ -413,6 +423,17 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       if (syncedAreas.some((area) => area.id === current)) {
         return current;
       }
+      // C2-S8 (#687 finding 1): this reconcile can run long after mount (it
+      // fires whenever the account's real areas arrive from Supabase, an
+      // async fetch) — if the account's area list no longer includes the id
+      // the URL was naming (a stale/shared link, or the area itself was
+      // renamed/removed since), the selection is about to move away from
+      // `current`. Left alone, the address bar would keep claiming `current`
+      // even though the screen no longer shows it. No special-casing needed
+      // HERE for that: the URL-sync effect below (gated on
+      // `hasHydratedFromStorage`, reactive to every `selectedAreaId` change)
+      // is the one place that keeps `?area=` truthful regardless of WHY the
+      // selection moved — this reconcile just needs to change the state.
       return syncedAreas[0]?.id ?? null;
     });
   }, []);
@@ -1377,6 +1398,55 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         setSelectedAreaId(storedSelection);
       }
     }
+    // C2-S8 (#687 finding 1): `?area=` OUTRANKS the stored device preference
+    // above — a shared link or a bookmark carrying a specific area must win
+    // over whatever THIS device remembered last time, matching how every
+    // other URL-visible piece of moments state (moment, sheet, capture,
+    // palette) already treats its own URL param as the top tier. Lives in
+    // THIS effect, not `selectedAreaId`'s own `useState` initializer above
+    // (where `resolvedInitialMoment` puts the equivalent moment-tier check,
+    // avoiding a one-frame flash) — deliberately: that initializer runs
+    // during SSR too, where `window` does not exist, and `WorkflowProvider`
+    // is mounted once in the root layout with no `searchParams` prop to read
+    // instead (unlike `page.tsx`'s `deepLink`, which IS available identically
+    // on the server and the first client render — see TodayMoments.tsx's own
+    // C2-S8 comment for the hydration bug that exact gap caused for `moment`).
+    // Reading `window.location` in the state initializer here would
+    // reintroduce that same class of bug for `selectedAreaId` (the accent
+    // color and AreaSelector's own label text would differ between the
+    // server's default-first-area render and the client's URL-resolved one).
+    // Client-only, post-hydration correction — a brief default-area flash,
+    // the same tradeoff `useSheetUrlState`/`useOverlayUrlState` already
+    // accept for their own deferred adoption — is the safe choice here. An
+    // area id the URL names that is not in the live list is left alone
+    // (not applied); TodayMoments' own scrub effect (mirroring its
+    // `?sheet=`/`?capture=`/`?palette=` scrub) strips the stale param from
+    // the address bar once the moments UI mounts.
+    //
+    // PATHNAME-GATED (caught red-first against real e2e, not guessed):
+    // `WorkflowProvider` mounts once in the root layout, so this effect runs
+    // on EVERY route (`/login`, `/settings/areas`, the demoted stage-route
+    // shims), not only the moments home — unlike `moment`/`sheet`/`overlay`,
+    // whose read/write mechanisms live entirely inside `TodayMoments.tsx`
+    // and so simply never run anywhere else. `?area=` is a moments-home URL
+    // param; reading (and, in the effect below, writing) it on any other
+    // route would plant it on a URL that has nothing to do with it — e.g. a
+    // direct `/login` visit picking up `?area=area-main-job` from nothing
+    // the user did. `isMomentsHomePathname()` is the one guard both this
+    // read and the write effect below share.
+    if (typeof window !== "undefined" && isMomentsHomePathname()) {
+      const urlAreaId = parseAreaParam(
+        new URLSearchParams(window.location.search).get("area"),
+      );
+      if (urlAreaId === null) {
+        setSelectedAreaId(null);
+      } else if (typeof urlAreaId === "string") {
+        const areas = restoredState?.areas ?? stateRef.current.areas;
+        if (areas.some((area) => area.id === urlAreaId)) {
+          setSelectedAreaId(urlAreaId);
+        }
+      }
+    }
     setHasHydratedFromStorage(true);
   }, []);
 
@@ -1526,11 +1596,46 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
   // #691: persist the area selection whenever it changes, gated on hydration
   // (like the state save above) so the pre-restore default never overwrites
   // the stored choice.
+  //
+  // C2-S8 (#687 finding 1): the SAME gate now also keeps `?area=` in the
+  // address bar agreeing with `selectedAreaId`, for every reason it can
+  // change — the mount effect's URL-priority resolution, the async
+  // `applyPersistedAreas` reconcile, a user-initiated switch
+  // (`useAreaUrlState.setArea` already pushed the entry before this fires,
+  // so the check below is a no-op), and Back/Forward landing on an entry
+  // `useAreaUrlState`'s popstate handler just applied. ONE owner for "does
+  // the URL agree with the resolved area", gated on hydration for the same
+  // reason the `storeSelectedAreaId` call above is — the pre-restore
+  // default must never overwrite a real URL — living HERE rather than in
+  // the moments UI layer specifically to dodge a real ordering hazard: this
+  // component (`WorkflowProvider`) is an ANCESTOR of the moments UI, and
+  // React fires child effects before parent effects on mount, so a
+  // same-purpose effect living in the child would run — and could write to
+  // the URL — BEFORE this component's own mount effect has resolved
+  // `selectedAreaId` at all, racing it. `replaceState` only, never a push —
+  // a background sync writing a history entry with no user action behind it
+  // is exactly the phantom Back-button step this slice exists to remove.
   useEffect(() => {
     if (!hasHydratedFromStorage) {
       return;
     }
     storeSelectedAreaId(selectedAreaId);
+    // PATHNAME-GATED — see `isMomentsHomePathname`'s own doc comment: this
+    // effect runs on every route `WorkflowProvider` mounts on, not only the
+    // moments home, so writing `?area=` unconditionally would plant it on
+    // `/login`, `/settings/areas`, and every other route too (caught
+    // red-first against nav-truth.spec.ts's own `/login` and
+    // `/settings/areas` pins).
+    if (typeof window !== "undefined" && isMomentsHomePathname()) {
+      const params = new URLSearchParams(window.location.search);
+      if (parseAreaParam(params.get("area")) !== selectedAreaId) {
+        window.history.replaceState(
+          null,
+          "",
+          urlWithArea(window.location, selectedAreaId),
+        );
+      }
+    }
   }, [hasHydratedFromStorage, selectedAreaId]);
 
   // FR-027 (F-G1a): refresh the unsynced-count signal from the device queue.

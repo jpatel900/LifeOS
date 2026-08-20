@@ -764,3 +764,92 @@ test("matrix pin: /login is stable under refresh and direct-URL entry", async ({
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await expect(page).toHaveURL(/\/login$/);
 });
+
+/**
+ * C2-S8 AREA-SWITCH URL TRUTH PIN (lane contract, #687 finding 1): switching
+ * the active area used to change app-wide content with zero URL trace,
+ * persist across reload invisibly (sessionStorage only), and leave Back
+ * unable to undo it — the exact criterion-2 failure this slice closes.
+ * `useAreaUrlState.ts`/`lib/WorkflowContext.tsx` now make `?area=` behave
+ * like every other piece of moments URL state: tap-switch writes it, Back
+ * undoes it, refresh and a direct URL agree, and an unknown area normalizes
+ * away to the resolved truth rather than lingering as a stale claim.
+ */
+test("area switcher: tapping a new area writes ?area=, and Back undoes the switch", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  const beforeUrl = page.url();
+
+  await page.getByTestId("today-moments-area-switcher").click();
+  await page.getByTestId("area-selector-option-area-personal").click();
+
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "Personal",
+  );
+  await expect(async () => {
+    expect(new URL(page.url()).searchParams.get("area")).toBe("area-personal");
+  }).toPass({ timeout: 30_000 });
+
+  await page.goBack();
+  await expect(
+    page.getByTestId("today-moments-area-switcher"),
+  ).not.toContainText("Personal");
+  expect(page.url()).toBe(beforeUrl);
+});
+
+test("area switcher: a direct ?area= URL and a refresh of it agree on the selected area", async ({
+  page,
+}) => {
+  await page.goto("/?area=area-volunteer");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "Volunteer Work",
+  );
+
+  await page.reload();
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "Volunteer Work",
+  );
+  expect(new URL(page.url()).searchParams.get("area")).toBe("area-volunteer");
+});
+
+test("area switcher: an unknown ?area= normalizes away instead of lingering as a stale claim", async ({
+  page,
+}) => {
+  await page.goto("/?area=not-a-real-area");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+
+  await expect(async () => {
+    const areaParam = new URL(page.url()).searchParams.get("area");
+    expect(areaParam).not.toBeNull();
+    expect(areaParam).not.toBe("not-a-real-area");
+  }).toPass({ timeout: 30_000 });
+});
+
+test("area switcher: switching to All areas writes the ?area=all sentinel and Back undoes it", async ({
+  page,
+}) => {
+  await page.goto("/?area=area-personal");
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "Personal",
+  );
+  const beforeUrl = page.url();
+
+  await page.getByTestId("today-moments-area-switcher").click();
+  await page.getByTestId("area-selector-option-all").click();
+
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "All areas",
+  );
+  await expect(async () => {
+    expect(new URL(page.url()).searchParams.get("area")).toBe("all");
+  }).toPass({ timeout: 30_000 });
+
+  await page.goBack();
+  await expect(page.getByTestId("today-moments-area-switcher")).toContainText(
+    "Personal",
+  );
+  expect(page.url()).toBe(beforeUrl);
+});

@@ -62,6 +62,15 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
   window.sessionStorage.clear();
   window.localStorage.clear();
+  // C2-S8 (#687 finding 1): `?area=` is now kept in sync with
+  // `selectedAreaId` by `lib/WorkflowContext.tsx` itself, so a PRIOR test in
+  // this file selecting an area writes it into `window.location` as a side
+  // effect — jsdom's `window.location` persists across `it` blocks in the
+  // same file, unlike sessionStorage/localStorage above (which this file
+  // already resets for the same reason). Reset it too, or a leaked
+  // `?area=` from an earlier test outranks THIS test's own
+  // sessionStorage-only setup via the new URL-priority tier.
+  window.history.replaceState(null, "", "/");
 });
 
 afterAll(() => {
