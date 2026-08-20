@@ -138,6 +138,37 @@ export function CaptureCore({
     null,
   );
 
+  // #687 (cheap residual, C2-S7 — investigated, NOT a one-liner, reverted):
+  // fast typing right after opening capture can swallow its own leading
+  // keystrokes. Root cause: this effect defers the actual `el.focus()` call
+  // to the NEXT animation frame via `requestAnimationFrame`, so nothing
+  // owns focus for that ~16ms+ gap and a keydown fired in it lands wherever
+  // focus was before the overlay opened.
+  //
+  // Tried the obvious fix — swap this for a synchronous `useLayoutEffect`
+  // — and it broke a DIFFERENT, real, already-tested guarantee:
+  // `useReturnFocus.ts`'s own header comment states its capture "must
+  // happen in a synchronous effect (not requestAnimationFrame) ... before
+  // any autofocus-on-open effect ... has a chance to move focus into the
+  // dialog." React flushes ALL layout effects across a commit, child before
+  // parent, strictly before ANY passive effect runs — so a `useLayoutEffect`
+  // here (CaptureCore, the CHILD) would grab focus before
+  // `useReturnFocus`'s plain `useEffect` (CaptureOverlay, the PARENT) ever
+  // runs, and the parent would capture the TEXTAREA as "what had focus
+  // before opening" instead of the real opener. Caught by
+  // `CaptureOverlay.test.tsx`'s "SP-1 focus discipline > returns focus to
+  // the opener once closed" going red — reverted rather than shipped
+  // broken, per this lane's own guard-sacred rule.
+  //
+  // The rAF defer is what keeps this effect OUTSIDE this commit's effect
+  // flush entirely (regardless of tree position), which is why it was
+  // there. A real fix needs to either narrow the defer to something still
+  // provably later than useReturnFocus's capture (a queued microtask was
+  // not verified safe against React's own effect-flush timing in the time
+  // budget this lane had) or restructure where the "what had focus before
+  // opening" capture happens so it no longer depends on effect ordering
+  // at all. Left AS-IS (unmodified from origin/main); see the AGENT-TODO
+  // in this PR's body.
   useEffect(() => {
     if (!autoFocus) return undefined;
     const id = requestAnimationFrame(() => {

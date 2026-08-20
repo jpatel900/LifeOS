@@ -248,25 +248,38 @@ test("moments home pipeline rail: Capture node opens the capture overlay directl
 // it). Risk #6 (no leaked entries, no stolen Backs) is proven by the
 // SEQUENCE of screens the following Back/Back/Forward calls land on, not by
 // asserting `length` at each of those steps.
+// Time-robustness fix (found on an unrelated PR's CI, folded in here):
+// this pin used to `goto("/")` and read back whatever moment the WALL-CLOCK
+// heuristic (`heuristicMoment`, TodayMoments.tsx) resolved at mount, storing
+// that as `initialMoment` for the later Back-lands-here assertion at the
+// bottom. `heuristicMoment` is re-evaluated fresh on every navigation — it
+// takes no seed and reads real time — so a run that starts just before an
+// hour boundary (11:00 or 17:00, the heuristic's own thresholds) could
+// observe a DIFFERENT moment than a re-render moments later would compute,
+// or simply differ from what a rerun of the SAME test produces a minute on.
+// The captured `initialMoment` was never wrong for the run that captured
+// it, but the pin's OWN premise — "the same moment mount resolved to is the
+// moment Back lands back on" — doesn't need the heuristic in the loop at
+// all: tier 2 of TodayMoments.tsx's own resolution order (`initialMoment`
+// prop -> URL's own `?moment=` -> stored preference -> clock heuristic)
+// is the URL itself, so a direct `?moment=start` entry — the same explicit-
+// URL pattern every other target in this file already uses (`directUrl`
+// above) — pins the moment without depending on wall-clock timing at all.
 test("history-walk pin: moment switch -> sheet open -> sheet close -> Back -> Back -> Forward all agree with the URL, cockpit never resurrects", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?moment=start");
   await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(page.getByTestId("start-moment")).toBeVisible();
   await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
 
   // Mount reconciliation (useMomentUrlState): the resolved initial moment
   // lands in the URL via `replaceState`, never `pushState` — the stack must
-  // not grow from this alone.
+  // not grow from this alone. Deterministic now (not heuristic-derived):
+  // the URL already named "start", so this is exactly what tier 2 of
+  // TodayMoments.tsx's resolution order returns.
   const initialMoment = new URL(page.url()).searchParams.get("moment");
-  expect(initialMoment).not.toBeNull();
-
-  // Pin to Start deterministically. If the heuristic already landed on
-  // Start this is a same-value no-op (useMomentUrlState.setMoment never
-  // pushes a redundant entry); otherwise it is one real switch — either way
-  // the depth captured right after this line is the walk's zero point.
-  await page.keyboard.press("1");
-  await expect(page.getByTestId("start-moment")).toBeVisible();
+  expect(initialMoment).toBe("start");
   const depthAtStart = await page.evaluate(() => window.history.length);
 
   // Moment switch: Start -> Flow. Exactly one push.
@@ -502,11 +515,13 @@ interface MatrixTarget {
   /** Taps only, starting from a fresh `/` visit. At most 2 calls. */
   reach(page: Page): Promise<void>;
   /**
-   * The URL param this target lands on once reached BY TAP — `null` when
-   * tap-triggered opens genuinely do not write one (see the capture-overlay
-   * entry below for the one real, verified case, not silently assumed).
+   * The URL param this target lands on once reached BY TAP. C2-S7 (#687
+   * finding 2) closed the one real gap this used to document (capture had
+   * no outbound tap-to-URL write) via `useOverlayUrlState.ts`, so every
+   * target in this matrix now writes one — `null` is kept in the type only
+   * as a documented escape hatch, not because anything currently uses it.
    */
-  urlParam: { key: "sheet" | "capture"; value: string } | null;
+  urlParam: { key: "sheet" | "capture" | "palette"; value: string } | null;
   assertSurface(page: Page): Promise<void>;
   directUrl: string;
 }
@@ -587,26 +602,36 @@ const matrixTargets: MatrixTarget[] = [
       // One tap, from any moment — BottomNavigator's Capture button.
       await page.getByTestId("bottom-navigator-capture").click();
     },
-    // VERIFIED GAP, not an oversight: unlike every sheet (`openSheet` always
-    // pushes `?sheet=`), `captureOpen` is a plain `useState` with no
-    // URL-writing call site anywhere in TodayMoments.tsx — tapping Capture
-    // opens the overlay but writes nothing to the address bar. Direct-URL
-    // entry (`/?capture=1`, the INBOUND deep-link path via
-    // `deepLinkTargetFromParams`) and refresh both still agree with the
-    // screen — proven in the sibling test below — so only the OUTBOUND
-    // tap-to-URL half is missing. Pre-existing (not introduced by C2-S6),
-    // out of this lane's declared manifest to fix (`captureOpen` and
-    // `paletteOpen` share the same gap and would need the same
-    // `useSheetUrlState`-shaped hook); recorded as an AGENT-TODO in the PR
-    // body rather than silently asserted as passing or silently dropped
-    // from this pin.
-    urlParam: null,
+    // C2-S7 (#687 finding 2): FIXED, not just re-anchored. Unlike every
+    // sheet (`openSheet` always pushes `?sheet=`), `captureOpen` used to be
+    // a plain `useState` with no URL-writing call site anywhere in
+    // TodayMoments.tsx — tapping Capture opened the overlay but wrote
+    // nothing to the address bar. `useOverlayUrlState.ts` (the
+    // `useSheetUrlState`-shaped hook for a boolean overlay) now backs it,
+    // so the tap-to-URL half this pin used to document as missing is
+    // proven below like every other target.
+    urlParam: { key: "capture", value: "1" },
     assertSurface: async (page) => {
       await expect(
         page.getByRole("dialog", { name: "Capture a thought" }),
       ).toBeVisible();
     },
     directUrl: "/?capture=1",
+  },
+  {
+    name: "command palette",
+    reach: async (page) => {
+      // One tap, from any moment — BottomNavigator's "More" trigger (the
+      // same mobile-only path the health/areas sheets above reach through).
+      await page.getByTestId("bottom-navigator-more").click();
+    },
+    // Same C2-S7 fix as the capture overlay — `useOverlayUrlState.ts`
+    // backs `paletteOpen` too.
+    urlParam: { key: "palette", value: "1" },
+    assertSurface: async (page) => {
+      await expect(page.getByTestId("command-palette")).toBeVisible();
+    },
+    directUrl: "/?palette=1",
   },
 ];
 
@@ -648,6 +673,54 @@ for (const target of matrixTargets) {
     await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
   });
 }
+
+// C2-S7 (#687 finding 2), the third leg PR #880's AGENT-TODO named
+// explicitly ("Open writes the param via pushState, close pops it, Back
+// closes the overlay") — the matrix loop above proves open+refresh/direct-URL
+// for every target including the two new overlay entries; this proves Back,
+// the one half neither the matrix nor the sheet-focused HISTORY-WALK PIN
+// covers for a boolean overlay. Desktop viewport: BottomNavigator's mobile
+// triggers are `sm:hidden`, so this uses each overlay's desktop affordance
+// instead (the pill / the Cmd+K shortcut) — the URL/history contract itself
+// is viewport-independent, already proven mobile-reachable by the matrix
+// above.
+test("Back closes the capture overlay (opened via the desktop pill) and restores the prior screen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  const beforeUrl = page.url();
+
+  await page.getByTestId("capture-affordance").click();
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("capture")).toBe("1");
+
+  await page.goBack();
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  expect(page.url()).toBe(beforeUrl);
+});
+
+test("Back closes the command palette (opened via Cmd+K) and restores the prior screen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  const beforeUrl = page.url();
+
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("palette")).toBe("1");
+
+  await page.goBack();
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  expect(page.url()).toBe(beforeUrl);
+});
 
 test("matrix pin: Settings reachable in 1 tap on mobile", async ({ page }) => {
   await page.setViewportSize(MOBILE_VIEWPORT);

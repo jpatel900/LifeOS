@@ -166,6 +166,10 @@ describe("TodayMoments", () => {
     // reconciling the initial moment into the URL at mount) — that is not
     // this test's concern, only that the share param itself is gone.
     expect(window.location.search).not.toContain("shared_text");
+    // C2-S7 (#687 finding 2): the same replaceState now also WRITES
+    // `capture=1` — a refresh at this exact moment must still show the
+    // overlay open, not silently lose it the way the pre-fix URL would have.
+    expect(new URL(window.location.href).searchParams.get("capture")).toBe("1");
   });
 
   it("switches moments via number keys and the MomentSwitcher", () => {
@@ -436,6 +440,115 @@ describe("TodayMoments", () => {
     );
 
     restoreFetch();
+  });
+
+  // #687 finding 2 (C2-S7): the VERIFIED GAP nav-truth.spec.ts's matrix pin
+  // recorded — opening capture never wrote `?capture=1`, though `/capture`
+  // (a redirect shim) already lands on exactly that URL and it survives
+  // reload. Pins the outbound half for all three named entry points.
+  //
+  // The close/Back half is deliberately NOT re-proven here: jsdom's
+  // `history.back()` schedules its popstate through two chained
+  // `setTimeout(0)` hops (jsdom's `SessionHistory.traverseByDelta`), which —
+  // because every test in this file shares one jsdom `window` — can still be
+  // pending when a LATER, unrelated test starts, firing its popstate mid-way
+  // through that test and flipping overlay state nothing in that test
+  // touched. `useOverlayUrlState.test.ts` already proves close/Back/adopt
+  // with a mocked `history.back` (matching `useSheetUrlState.test.ts`'s own
+  // established pattern for exactly this reason), and `nav-truth.spec.ts`'s
+  // matrix pin proves it against a real browser's real Back button.
+  it("opening capture via the C shortcut writes ?capture=1", async () => {
+    renderToday({ initialMoment: "start" });
+
+    await pressCaptureShortcut();
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+    expect(new URL(window.location.href).searchParams.get("capture")).toBe("1");
+  });
+
+  it("opening the command palette via Cmd+K writes ?palette=1", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(screen.getByTestId("command-palette")).toBeInTheDocument();
+    expect(new URL(window.location.href).searchParams.get("palette")).toBe("1");
+  });
+
+  // The palette can open capture (or a sheet) from inside itself —
+  // CommandPalette.tsx calls onRun then onClose in the same handler, so the
+  // destination's push and the palette's own close must not fight over the
+  // same Back slot (useOverlayUrlState.ts's own header explains the length-
+  // based fix). This is the regression the fix exists for: without it, the
+  // capture overlay would render on screen while the URL reverted to
+  // `?palette=1`.
+  it("selecting Open capture from the palette leaves the URL agreeing with the screen", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(screen.getByTestId("command-palette")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("command-palette-option-open-capture"));
+
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+    expect(screen.getByTestId("capture-overlay")).toBeInTheDocument();
+    const params = new URL(window.location.href).searchParams;
+    expect(params.get("capture")).toBe("1");
+    expect(params.get("palette")).toBeNull();
+  });
+
+  // #687 finding 3 (C2-S7, URL hygiene): an unknown `?sheet=` value rendered
+  // nothing — `deepLinkTargetFromParams` already treats it exactly like an
+  // absent param (`deepLink.test.ts`'s own "unknown sheet value yields null"
+  // case) — but the raw `bogus` string was left sitting in the address bar,
+  // unexplained, surviving a refresh. Scrubbed via `replaceState` on mount.
+  it("scrubs an unknown ?sheet= value from the URL instead of leaving it stranded", async () => {
+    window.history.replaceState(null, "", "/?sheet=bogus");
+
+    renderToday({ initialMoment: "start" });
+
+    await waitFor(() => {
+      expect(
+        new URL(window.location.href).searchParams.get("sheet"),
+      ).toBeNull();
+    });
+    // Nothing renders for it — matches deepLinkTargetFromParams' documented
+    // "unknown/absent -> null (a plain home visit)" precedence.
+    expect(screen.queryByTestId("moment-sheet-dialog")).not.toBeInTheDocument();
+    expect(screen.getByTestId("today-moments")).toBeInTheDocument();
+  });
+
+  it("scrubs unknown ?capture= / ?palette= values the same way, without touching a valid neighbor param", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?capture=bogus&palette=nope&moment=flow",
+    );
+
+    renderToday();
+
+    await waitFor(() => {
+      const params = new URL(window.location.href).searchParams;
+      expect(params.get("capture")).toBeNull();
+      expect(params.get("palette")).toBeNull();
+    });
+    // The valid, unrelated `moment=flow` param survives the scrub untouched.
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+  });
+
+  it("does not touch a VALID ?sheet= value — that stays owned by the deep-link effect", async () => {
+    window.history.replaceState(null, "", "/?sheet=triage");
+
+    renderToday({ initialMoment: "start", deepLink: { sheet: "triage" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-empty")).toBeInTheDocument();
+    });
+    expect(new URL(window.location.href).searchParams.get("sheet")).toBe(
+      "triage",
+    );
   });
 
   it("close-day journey: Close moment renders counts and Close the day fires without crashing", async () => {

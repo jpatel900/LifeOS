@@ -29,6 +29,19 @@ vi.mock("@/lib/supabase/browser", () => ({
   createSupabaseBrowserClient: mocks.createSupabaseBrowserClient,
 }));
 
+// #687 finding 4: the page no longer prefills anything (see login/page.tsx),
+// so every test that submits real credentials fills them itself first —
+// mirroring what `tests/e2e/helpers/signedInAccount.ts`'s `signIn()` already
+// does against the real browser.
+function fillCredentials(email: string, password: string) {
+  fireEvent.change(screen.getByLabelText("Email"), {
+    target: { value: email },
+  });
+  fireEvent.change(screen.getByLabelText("Password"), {
+    target: { value: password },
+  });
+}
+
 describe("LoginPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -53,14 +66,17 @@ describe("LoginPage", () => {
     expect(screen.queryByText(/test saved account flows/i)).toBeNull();
   });
 
-  // #581: the dev credential prefill stays behind the NODE_ENV production
-  // guard — under vitest (non-production) the fields keep the local test
-  // account, which the submit tests below rely on.
-  it("prefills the local dev credentials outside production", () => {
+  // #687 finding 4 (C2-S7, trust-critical): the old #581 prefill only hid
+  // behind NODE_ENV, which stayed development for `pnpm dev` — the actual
+  // way this shipped page gets looked at, since there is no separate
+  // production deployment for a single-user app yet. A fresh browser
+  // context must never show someone else's credentials already filled in,
+  // in ANY environment this test process can express.
+  it("never prefills credentials — both fields start empty", () => {
     render(<LoginPage />);
 
-    expect(screen.getByLabelText("Email")).toHaveValue("user_a@example.test");
-    expect(screen.getByLabelText("Password")).toHaveValue("password123");
+    expect(screen.getByLabelText("Email")).toHaveValue("");
+    expect(screen.getByLabelText("Password")).toHaveValue("");
   });
 
   // #692 plain language: the no-accounts case is stated in the person's
@@ -87,6 +103,7 @@ describe("LoginPage", () => {
   // used to bypass entirely.
   it("submits credentials and routes to Today when sign-in succeeds", async () => {
     render(<LoginPage />);
+    fillCredentials("user_a@example.test", "password123");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
@@ -104,6 +121,7 @@ describe("LoginPage", () => {
   it("returns to the originating page when ?next= is a same-app path", async () => {
     mocks.search = "next=%2Fhealth";
     render(<LoginPage />);
+    fillCredentials("user_a@example.test", "password123");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
@@ -120,6 +138,7 @@ describe("LoginPage", () => {
   ])("ignores an off-site ?next= (%s)", async (next) => {
     mocks.search = `next=${encodeURIComponent(next)}`;
     render(<LoginPage />);
+    fillCredentials("user_a@example.test", "password123");
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     await waitFor(() => {
