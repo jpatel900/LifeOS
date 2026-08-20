@@ -411,16 +411,47 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const buildDropLocalIds =
-    useCallback((): PersistedWorkflowPayload["dropLocalIds"] => {
+  // #844 AGENT-TODO 2: the MAP, not its key-set. The reducer retires a local
+  // row only when the mapped twin is present in the payload, so these
+  // snapshots can no longer vanish a row (see `mergePersistedRows`).
+  const buildIdAliasSnapshot =
+    useCallback((): PersistedWorkflowPayload["idAliases"] => {
       return {
-        captures: new Set(persistedCaptureIdByLocalIdRef.current.keys()),
-        tasks: new Set(persistedTaskIdByLocalIdRef.current.keys()),
-        proposals: new Set(persistedProposalIdByLocalIdRef.current.keys()),
-        blocks: new Set(persistedBlockIdByLocalIdRef.current.keys()),
-        sessions: new Set(persistedSessionIdByLocalIdRef.current.keys()),
+        captures: new Map(persistedCaptureIdByLocalIdRef.current),
+        tasks: new Map(persistedTaskIdByLocalIdRef.current),
+        proposals: new Map(persistedProposalIdByLocalIdRef.current),
+        blocks: new Map(persistedBlockIdByLocalIdRef.current),
+        sessions: new Map(persistedSessionIdByLocalIdRef.current),
       };
     }, []);
+
+  // #844 — ONE record point for "this local row became this account row".
+  // Writes the per-mount ref (synchronous reads inside the persist callbacks)
+  // AND dispatches into the reducer, whose state rides the `sessionStorage`
+  // mirror — the durable half that makes the twinship survive a reload. Every
+  // path that learns an account id goes through here; a ref.set with no
+  // dispatch is the bug this fixes.
+  const aliasRefByFamily = {
+    captures: persistedCaptureIdByLocalIdRef,
+    tasks: persistedTaskIdByLocalIdRef,
+    proposals: persistedProposalIdByLocalIdRef,
+    blocks: persistedBlockIdByLocalIdRef,
+    sessions: persistedSessionIdByLocalIdRef,
+  } as const;
+  const recordAccountAlias = useCallback(
+    (
+      family: keyof typeof aliasRefByFamily,
+      localId: string,
+      accountId: string,
+    ) => {
+      aliasRefByFamily[family].current.set(localId, accountId);
+      dispatch({ type: "recordAccountId", family, localId, accountId });
+    },
+    // The refs are stable for the life of the mount; nothing here closes over
+    // render state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   /**
    * #737 C1 S5 — THE MISSING HALF OF `pendingLocalChanges`, flagged on #736.
@@ -520,8 +551,14 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
        *
        * Anything created after this line simply survives to the NEXT sync,
        * which reads after it exists and retires it cleanly.
+       *
+       * #844 follow-through: the snapshot is now the local->account MAP and
+       * the reducer retires a row only when its mapped twin is IN the
+       * payload, so the ordering above is belt-and-braces rather than the
+       * only thing standing between a mid-read draft and the vanish. Kept —
+       * it documents the invariant and costs nothing.
        */
-      const dropLocalIds = buildDropLocalIds();
+      const idAliases = buildIdAliasSnapshot();
 
       const [capturesResult, planningResult, executionResult] =
         await Promise.all([

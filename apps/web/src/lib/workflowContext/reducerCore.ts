@@ -55,6 +55,14 @@ import {
   toggleTaskMapNodeCompletionLocal,
   type WorkflowState,
 } from "../workflow";
+// Direct submodule import: the workflow barrel (`../workflow.ts`) freezes the
+// pre-split public surface byte-for-byte, and these #844 additions are
+// consumed only by the state layer, so they ride the submodule path.
+import {
+  createEmptyAccountIdAliases,
+  type AccountIdAliasFamily,
+  type AccountIdAliases,
+} from "../workflow/shared";
 import type { TaskMapGraph } from "../taskmap/graph";
 import type {
   Phase2MockCalendarBlock,
@@ -78,6 +86,19 @@ export type WorkflowAction =
   | {
       type: "syncPersistedWorkflow";
       payload: PersistedWorkflowPayload;
+    }
+  | {
+      /**
+       * #844 — record that a device-local row and an account row are ONE
+       * entity. Dispatched at every point a persist path learns the account
+       * id (the same moments the per-mount ref maps are populated), so the
+       * twinship survives a reload in `sessionStorage` alongside the rows it
+       * protects. See `AccountIdAliases` (workflow/shared.ts).
+       */
+      type: "recordAccountId";
+      family: AccountIdAliasFamily;
+      localId: string;
+      accountId: string;
     }
   | {
       /**
@@ -295,12 +316,28 @@ export interface PersistedWorkflowPayload {
   blocks: WorkflowState["calendarBlocks"];
   sessions: WorkflowState["executionSessions"];
   reviewLog: string[];
-  dropLocalIds: {
-    captures: Set<string>;
-    tasks: Set<string>;
-    proposals: Set<string>;
-    blocks: Set<string>;
-    sessions: Set<string>;
+  /**
+   * #844 AGENT-TODO 2 — the local -> account id MAP, not a Set of keys.
+   *
+   * The old `dropLocalIds` was `Set<string>` per family: "retire these local
+   * rows, unconditionally". That shape cannot express the only safe
+   * retirement rule — *retire a local row exactly when its account twin is IN
+   * this payload* — so it had to choose between two failure directions
+   * (#840's vanish vs the duplicate card) by snapshot timing alone. Carrying
+   * the map lets the merge check twin PRESENCE per row: mapping absent →
+   * the row survives (no vanish); mapping present and the twin arrived →
+   * retired in the same dispatch that adds the twin (no duplicate, and a
+   * React key derived from the alias survives the swap).
+   *
+   * The reducer unions these with `state.accountIdByLocalId`, the durable
+   * tier that survives a reload (see `AccountIdAliases` in workflow/shared).
+   */
+  idAliases: {
+    captures: Map<string, string>;
+    tasks: Map<string, string>;
+    proposals: Map<string, string>;
+    blocks: Map<string, string>;
+    sessions: Map<string, string>;
   };
 }
 
@@ -323,19 +360,37 @@ export function isUuid(value: string | null | undefined) {
 // client), so this value is never persisted.
 export const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
+/**
+ * #844 AGENT-TODO 2 — retire a local row by TWIN PRESENCE, never by stale
+ * membership.
+ *
+ * `idAliases` maps a device-local id to the account id it is known to have
+ * become. A local row is retired exactly when that mapped twin is **in this
+ * payload** (`persistedIds.has(...)`). The two directions the old Set-based
+ * filter could not hold apart:
+ *
+ *  - alias known, twin ABSENT from the payload (read predates the write, or
+ *    the row was filtered out client-side) → the row SURVIVES. Retiring here
+ *    is #840's vanish: a row on the account and on no screen.
+ *  - alias known, twin PRESENT → retired in the same dispatch that adds the
+ *    twin, so the two ids never coexist in state — the duplicate card
+ *    (C2-S3's "Needs a decision" triple) cannot form.
+ */
 export function mergePersistedRows<T extends { id: string }>(
   persistedRows: T[],
   localRows: T[],
-  dropLocalIds: Set<string>,
+  idAliases: Map<string, string>,
 ) {
   const persistedIds = new Set(persistedRows.map((row) => row.id));
+  const twinArrived = (localId: string) => {
+    const accountId = idAliases.get(localId);
+    return accountId !== undefined && persistedIds.has(accountId);
+  };
   return [
     ...persistedRows,
     ...localRows.filter(
       (row) =>
-        !persistedIds.has(row.id) &&
-        !dropLocalIds.has(row.id) &&
-        !isUuid(row.id),
+        !persistedIds.has(row.id) && !isUuid(row.id) && !twinArrived(row.id),
     ),
   ];
 }
@@ -354,14 +409,21 @@ export function mergePersistedRows<T extends { id: string }>(
 export function mergePersistedCalendarBlocks(
   persistedRows: Phase2MockCalendarBlock[],
   localRows: Phase2MockCalendarBlock[],
-  dropLocalIds: Set<string>,
+  idAliases: Map<string, string>,
+  taskAliases: Map<string, string> = new Map(),
 ): Phase2MockCalendarBlock[] {
   const persistedIds = new Set(persistedRows.map((row) => row.id));
+  const twinArrived = (localId: string) => {
+    const accountId = idAliases.get(localId);
+    return accountId !== undefined && persistedIds.has(accountId);
+  };
   const isEchoOfPersisted = (localRow: Phase2MockCalendarBlock) =>
     persistedRows.some(
       (persistedRow) =>
         persistedRow.task_id !== null &&
-        persistedRow.task_id === localRow.task_id &&
+        (persistedRow.task_id === localRow.task_id ||
+          (localRow.task_id !== null &&
+            persistedRow.task_id === taskAliases.get(localRow.task_id))) &&
         new Date(persistedRow.start_at).getTime() ===
           new Date(localRow.start_at).getTime(),
     );
@@ -371,8 +433,101 @@ export function mergePersistedCalendarBlocks(
     ...localRows.filter(
       (row) =>
         !persistedIds.has(row.id) &&
-        !dropLocalIds.has(row.id) &&
         !isUuid(row.id) &&
+        !twinArrived(row.id) &&
+        !isEchoOfPersisted(row),
+    ),
+  ];
+}
+
+/**
+ * Proposals get the calendar blocks' echo heuristic too, because a proposal
+ * has a natural content identity — (task, proposed_start) — and the alias can
+ * legitimately be missing: the create may have been journalled on this device
+ * and delivered by a replay that never ran a record hook here (another tab's
+ * drain, or a reload between the write and the record). Same policy as
+ * `mergePersistedCalendarBlocks`, with the local task id resolved through the
+ * TASK aliases so a local proposal hanging off `task-3` still matches the
+ * account row that references the task's uuid.
+ */
+export function mergePersistedProposals(
+  persistedRows: Phase2TimeBlockProposal[],
+  localRows: Phase2TimeBlockProposal[],
+  idAliases: Map<string, string>,
+  taskAliases: Map<string, string> = new Map(),
+): Phase2TimeBlockProposal[] {
+  const persistedIds = new Set(persistedRows.map((row) => row.id));
+  const twinArrived = (localId: string) => {
+    const accountId = idAliases.get(localId);
+    return accountId !== undefined && persistedIds.has(accountId);
+  };
+  const isEchoOfPersisted = (localRow: Phase2TimeBlockProposal) =>
+    persistedRows.some(
+      (persistedRow) =>
+        (persistedRow.task_id === localRow.task_id ||
+          persistedRow.task_id === taskAliases.get(localRow.task_id)) &&
+        new Date(persistedRow.proposed_start).getTime() ===
+          new Date(localRow.proposed_start).getTime(),
+    );
+
+  return [
+    ...persistedRows,
+    ...localRows.filter(
+      (row) =>
+        !persistedIds.has(row.id) &&
+        !isUuid(row.id) &&
+        !twinArrived(row.id) &&
+        !isEchoOfPersisted(row),
+    ),
+  ];
+}
+
+/**
+ * Sessions: the measured double (`["794b7d18-…", "session-1"]`,
+ * `reviewStatus.ts`) retired at its source. An account row covering the same
+ * (task, calendar block) pair IS the local row's twin — the exact rule
+ * `dedupeSessionsForDisplay` applies at render tier, kept there as
+ * defense-in-depth. The residual it documents (two genuine sessions on one
+ * pair, one synced and one not, shown as one) is accepted here for the same
+ * reason it accepts it: over-reporting is the worse error.
+ */
+export function mergePersistedSessions(
+  persistedRows: Phase2MockExecutionSession[],
+  localRows: Phase2MockExecutionSession[],
+  idAliases: Map<string, string>,
+  taskAliases: Map<string, string> = new Map(),
+  blockAliases: Map<string, string> = new Map(),
+): Phase2MockExecutionSession[] {
+  const persistedIds = new Set(persistedRows.map((row) => row.id));
+  const twinArrived = (localId: string) => {
+    const accountId = idAliases.get(localId);
+    return accountId !== undefined && persistedIds.has(accountId);
+  };
+  const matchesAliased = (
+    persistedId: string | null,
+    localId: string | null,
+    aliases: Map<string, string>,
+  ) =>
+    persistedId === localId ||
+    (localId !== null && persistedId === (aliases.get(localId) ?? null));
+  const isEchoOfPersisted = (localRow: Phase2MockExecutionSession) =>
+    persistedRows.some(
+      (persistedRow) =>
+        matchesAliased(persistedRow.task_id, localRow.task_id, taskAliases) &&
+        matchesAliased(
+          persistedRow.calendar_block_id,
+          localRow.calendar_block_id,
+          blockAliases,
+        ),
+    );
+
+  return [
+    ...persistedRows,
+    ...localRows.filter(
+      (row) =>
+        !persistedIds.has(row.id) &&
+        !isUuid(row.id) &&
+        !twinArrived(row.id) &&
         !isEchoOfPersisted(row),
     ),
   ];
@@ -407,6 +562,31 @@ export function workflowIdForPersistedId(
     if (mapped === persistedId) return localId;
   }
   return null;
+}
+
+/**
+ * #844 AGENT-TODO 3 — the RENDERED identity of a row, stable across the
+ * device -> account id swap.
+ *
+ * A row born on this device keeps its device-local id as its identity for the
+ * life of the tab: before the swap the row id IS that local id; after the
+ * swap the alias map points back to it. React keys derived from this value
+ * therefore never change across `syncPersistedWorkflow`, so the `<li>` (and
+ * the accept/reject buttons inside it) under the user's finger is reconciled
+ * in place instead of being destroyed mid-tap — the #844 race class. A row
+ * that never had a local alias renders under its account id, unchanged.
+ *
+ * Reads the STATE-resident aliases (`state.accountIdByLocalId[family]`), not
+ * the per-mount refs, so the key also survives a reload.
+ */
+export function stableWorkflowKey(
+  aliases: Record<string, string>,
+  rowId: string,
+): string {
+  for (const [localId, accountId] of Object.entries(aliases)) {
+    if (accountId === rowId) return localId;
+  }
+  return rowId;
 }
 
 const TASK_STATUSES = new Set([
@@ -655,8 +835,41 @@ function isStoredWorkflowState(value: unknown): value is WorkflowState {
     isArrayOf(state.reviewLog, isString) &&
     (state.wipRefusal === null ||
       state.wipRefusal === undefined ||
-      isRecord(state.wipRefusal))
+      isRecord(state.wipRefusal)) &&
+    // Always present after `normalizeStoredWorkflowState`; checked so this
+    // guard stays truthful when called on anything else.
+    isRecord(state.accountIdByLocalId)
   );
+}
+
+/**
+ * #844: the alias field is normalized DEFENSIVELY, never rejected. A stored
+ * state written before this field existed (or with a corrupted family) must
+ * still hydrate — throwing the whole state away over a bookkeeping map would
+ * lose the user's rows to protect the thing that protects them. Any family
+ * that is not a clean string->string record is reset to `{}`; uuid keys are
+ * dropped (a uuid workflow id IS the account id, see `recordAccountId`).
+ */
+function normalizeStoredAccountIdAliases(value: unknown): AccountIdAliases {
+  const empty = createEmptyAccountIdAliases();
+  if (!isRecord(value)) return empty;
+  const families = Object.keys(empty) as AccountIdAliasFamily[];
+  for (const family of families) {
+    const stored = value[family];
+    if (!isRecord(stored)) continue;
+    const clean: Record<string, string> = {};
+    let valid = true;
+    for (const [localId, accountId] of Object.entries(stored)) {
+      if (typeof accountId !== "string") {
+        valid = false;
+        break;
+      }
+      if (isUuid(localId)) continue;
+      clean[localId] = accountId;
+    }
+    if (valid) empty[family] = clean;
+  }
+  return empty;
 }
 
 function normalizeStoredWorkflowState(value: unknown): unknown {
@@ -669,6 +882,9 @@ function normalizeStoredWorkflowState(value: unknown): unknown {
     projectDrafts: value.projectDrafts ?? [],
     projects: value.projects ?? [],
     wipRefusal: value.wipRefusal ?? null,
+    accountIdByLocalId: normalizeStoredAccountIdAliases(
+      value.accountIdByLocalId,
+    ),
   };
 }
 
@@ -684,33 +900,51 @@ export function workflowReducer(
         ...state,
         areas: action.areas,
       };
-    case "syncPersistedWorkflow":
+    case "syncPersistedWorkflow": {
+      // The payload maps carry what THIS mount's refs knew at snapshot time;
+      // the state aliases carry what any previous mount of this tab recorded
+      // (they rode `sessionStorage` through the reload that emptied the
+      // refs). Union of the two is the whole twinship record — and because
+      // retirement additionally requires the twin to be IN the payload
+      // (`mergePersistedRows`), an alias recorded during the read window can
+      // never vanish a row the way the pre-#840 post-read snapshot did.
+      const effective = (family: AccountIdAliasFamily): Map<string, string> =>
+        new Map([
+          ...Object.entries(state.accountIdByLocalId[family] ?? {}),
+          ...action.payload.idAliases[family],
+        ]);
+      const taskAliases = effective("tasks");
+      const blockAliases = effective("blocks");
       return {
         ...state,
         captureItems: mergePersistedRows(
           action.payload.captures,
           state.captureItems,
-          action.payload.dropLocalIds.captures,
+          effective("captures"),
         ),
         tasks: mergePersistedRows(
           action.payload.tasks,
           state.tasks,
-          action.payload.dropLocalIds.tasks,
+          taskAliases,
         ),
-        timeBlockProposals: mergePersistedRows(
+        timeBlockProposals: mergePersistedProposals(
           action.payload.proposals,
           state.timeBlockProposals,
-          action.payload.dropLocalIds.proposals,
+          effective("proposals"),
+          taskAliases,
         ),
         calendarBlocks: mergePersistedCalendarBlocks(
           action.payload.blocks,
           state.calendarBlocks,
-          action.payload.dropLocalIds.blocks,
+          blockAliases,
+          taskAliases,
         ),
-        executionSessions: mergePersistedRows(
+        executionSessions: mergePersistedSessions(
           action.payload.sessions,
           state.executionSessions,
-          action.payload.dropLocalIds.sessions,
+          effective("sessions"),
+          taskAliases,
+          blockAliases,
         ),
         reviewLog: [
           ...action.payload.reviewLog,
@@ -719,6 +953,22 @@ export function workflowReducer(
           ),
         ],
       };
+    }
+    case "recordAccountId": {
+      // A uuid workflow id IS the account id — recording it would only bloat
+      // the map. Same-value re-records are no-ops so replay-heavy paths never
+      // trigger a render for nothing.
+      if (isUuid(action.localId)) return state;
+      const family = state.accountIdByLocalId[action.family] ?? {};
+      if (family[action.localId] === action.accountId) return state;
+      return {
+        ...state,
+        accountIdByLocalId: {
+          ...state.accountIdByLocalId,
+          [action.family]: { ...family, [action.localId]: action.accountId },
+        },
+      };
+    }
     /**
      * #737 C1 re-score GAP 3 — restore the device's pending triage drafts.
      *
