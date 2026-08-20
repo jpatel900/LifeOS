@@ -189,14 +189,20 @@ export interface CompletedSessionsOption {
  * ## WHY IT DOES NOT COUNT THE REDUCER'S OWN ROWS, WHICH IS THE WHOLE TRICK
  *
  * The obvious implementation — filter `state.executionSessions` — DOUBLE
- * COUNTS, and this was measured, not guessed. `mergePersistedRows` drops a
- * local row only when `dropLocalIds` names it, and nothing ever populates
- * `persistedSessionIdByLocalIdRef`, so after a sync the reducer holds BOTH the
+ * COUNTED, and this was measured, not guessed. The merge used to drop a local
+ * row only when the per-mount drop-set named it, and nothing ever populated
+ * `persistedSessionIdByLocalIdRef`, so after a sync the reducer held BOTH the
  * optimistic `session-N` row and the account's uuid row for one session. A
  * probe against the real reducer returned
  * `["794b7d18-…", "session-1"]` — one finished session, two rows. Counting
  * those would have replaced an under-report with an over-report, which is the
  * worse of the two errors and the exact class C1 exists to end.
+ *
+ * #844 retired that double at its source — `mergePersistedSessions` now names
+ * the account twin by (task, block) and retires the device copy in the same
+ * dispatch that adds it. The durable-tier read below stays anyway: it is the
+ * design that cannot double-count even if a new seam appears, and the journal
+ * tier is still the only place an offline session exists at all.
  *
  * So the count reads the two tiers that hold exactly one record each, the same
  * shape `resolveDayClose` and `resolveLoggedWinsForDay` already use:

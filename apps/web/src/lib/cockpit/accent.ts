@@ -44,6 +44,25 @@ export function lum(hex: string) {
   return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
 }
 
+/**
+ * C5 contrast fix (#687): the on-accent text colour is the WCAG
+ * max-contrast pick between near-black navy ink and white, not a naive
+ * luminance threshold. The old `lum(acc) > 0.55 ? "#1a1a14" : "#ffffff"`
+ * put white on every mid-tone accent (e.g. white on the palette's #c44d80
+ * measured 4.45:1, under the 4.5:1 AA floor for normal text). With ink
+ * this dark (#03050f — the same value as the static --primary-foreground /
+ * --on-acc tokens in globals.css; keep all three in sync) the crossover
+ * point sits at ~4.53:1, so the winning side clears AA for every possible
+ * accent colour. Guarded by accent.contrast.test.ts.
+ */
+const ON_ACC_INK = "#03050f";
+
+export function contrastRatio(a: string, b: string) {
+  const la = lum(a);
+  const lb = lum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 export function deriveAccent(
   acc: string,
   { dark, sf2 }: { dark: boolean; sf2: string },
@@ -53,7 +72,10 @@ export function deriveAccent(
     acc2: mix(acc, dark ? "#ffffff" : "#000000", 0.16),
     accSf: mix(acc, sf2, dark ? 0.8 : 0.86),
     accRng: mix(acc, sf2, dark ? 0.5 : 0.66),
-    onAcc: lum(acc) > 0.55 ? "#1a1a14" : "#ffffff",
+    onAcc:
+      contrastRatio(ON_ACC_INK, acc) >= contrastRatio("#ffffff", acc)
+        ? ON_ACC_INK
+        : "#ffffff",
   };
 }
 

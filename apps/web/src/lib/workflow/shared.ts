@@ -37,6 +37,42 @@ export interface WipRefusal {
   created_at: string;
 }
 
+/**
+ * The device -> account identity record, one map per row family.
+ *
+ * Every row this app creates is minted under a DEVICE-LOCAL id (`task-3`,
+ * `proposal-7`) and later twinned with the account row's uuid. Before this
+ * field existed, that twinship lived only in per-mount `useRef` maps while the
+ * rows themselves were mirrored to `sessionStorage` — so any reload restored
+ * the rows and lost the twinship, and the account twin merged in as a second,
+ * permanently unretirable row (the "Needs a decision" triple card; the
+ * measured `["794b7d18-…", "session-1"]` session double).
+ *
+ * Living IN the state puts the alias at exactly the durability tier of the
+ * rows it protects: it hydrates atomically with them and dies with them when
+ * the tab closes, so it can never outlive its local id into a new tab where
+ * `nextId` recycles the suffix.
+ */
+export interface AccountIdAliases {
+  captures: Record<string, string>;
+  tasks: Record<string, string>;
+  proposals: Record<string, string>;
+  blocks: Record<string, string>;
+  sessions: Record<string, string>;
+}
+
+export type AccountIdAliasFamily = keyof AccountIdAliases;
+
+export function createEmptyAccountIdAliases(): AccountIdAliases {
+  return {
+    captures: {},
+    tasks: {},
+    proposals: {},
+    blocks: {},
+    sessions: {},
+  };
+}
+
 export interface WorkflowState {
   areas: Phase2MockArea[];
   captureItems: Phase2CaptureItem[];
@@ -52,6 +88,7 @@ export interface WorkflowState {
   healthChecks: typeof healthChecks;
   reviewLog: string[];
   wipRefusal: WipRefusal | null;
+  accountIdByLocalId: AccountIdAliases;
 }
 
 export interface ParseCaptureInput {
@@ -97,6 +134,16 @@ function maxWorkflowGeneratedIdSuffix(state: WorkflowState): number {
   for (const item of state.calendarBlocks) consider(item.id);
   for (const item of state.executionSessions) consider(item.id);
 
+  // Alias KEYS count too: a local row retired by the merge leaves its alias
+  // behind (React keys need it to stay stable across the swap), and if the
+  // counter could fall below that suffix, `nextId` would re-mint the same
+  // local id and the stale alias would twin it to the WRONG account row.
+  for (const family of Object.values(
+    state.accountIdByLocalId ?? createEmptyAccountIdAliases(),
+  )) {
+    for (const localId of Object.keys(family)) consider(localId);
+  }
+
   return max;
 }
 
@@ -133,6 +180,7 @@ export function createInitialWorkflowState(): WorkflowState {
     healthChecks,
     reviewLog: [],
     wipRefusal: null,
+    accountIdByLocalId: createEmptyAccountIdAliases(),
   };
 }
 

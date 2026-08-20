@@ -44,7 +44,11 @@ describe("handoff cockpit area accents", () => {
       acc2: "#838eec",
       accSf: "#2b304c",
       accRng: "#434b87",
-      onAcc: "#ffffff",
+      // C5 contrast fix (#687): white on this mid-tone accent measures
+      // ~3.5:1 (under the 4.5:1 AA floor); on-accent is now the
+      // max-contrast pick, so ink wins here. The AA guarantee itself is
+      // guarded by accent.contrast.test.ts.
+      onAcc: "#03050f",
     });
   });
 

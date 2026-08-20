@@ -801,10 +801,12 @@ describe("buildCloseVM", () => {
     });
 
     /**
-     * THE DOUBLE-COUNT THIS DESIGN EXISTS TO PREVENT. `mergePersistedRows`
-     * keeps the optimistic `session-N` row alongside the account's uuid row
-     * (nothing populates `persistedSessionIdByLocalIdRef`), so a count over
-     * `state.executionSessions` alone reports one finished session as two.
+     * THE DOUBLE-COUNT THIS DESIGN EXISTS TO PREVENT. The merge used to keep
+     * the optimistic `session-N` row alongside the account's uuid row, so a
+     * count over `state.executionSessions` alone reported one finished session
+     * as two. #844's `mergePersistedSessions` retires the device twin now, but
+     * this pin stays: the durable-tier count must hold even against a state
+     * that somehow carries both rows.
      */
     it("never counts the optimistic local row beside its account twin", () => {
       const state = stateWith({
@@ -1220,7 +1222,7 @@ describe("buildCloseVM", () => {
     it("still withdraws the offer after the task crosses the sync boundary", () => {
       // The narrow case the readback would otherwise miss. A task created
       // locally carries a non-uuid workflow id; its win is journalled under
-      // that id. When the task syncs, `dropLocalIds` replaces the row and the
+      // that id. When the task syncs, the id-alias merge replaces the row and the
       // Close moment's candidate carries the ACCOUNT uuid, while the queued
       // payload still names the local id. Without the alias the win is offered
       // again at exactly that moment — and confirming would derive a second

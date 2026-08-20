@@ -6,7 +6,12 @@ import { BottomNavigator } from "./BottomNavigator";
 describe("BottomNavigator", () => {
   it("renders a moment switcher (distinct testids from the header instance) and a settings link", () => {
     render(
-      <BottomNavigator value="flow" onChange={vi.fn()} onCapture={vi.fn()} />,
+      <BottomNavigator
+        value="flow"
+        onChange={vi.fn()}
+        onCapture={vi.fn()}
+        onOpenPalette={vi.fn()}
+      />,
     );
 
     expect(screen.getByTestId("bottom-navigator")).toBeInTheDocument();
@@ -26,7 +31,12 @@ describe("BottomNavigator", () => {
   it("fires the same onChange the header switcher would, with the clicked tab's value", () => {
     const onChange = vi.fn();
     render(
-      <BottomNavigator value="start" onChange={onChange} onCapture={vi.fn()} />,
+      <BottomNavigator
+        value="start"
+        onChange={onChange}
+        onCapture={vi.fn()}
+        onOpenPalette={vi.fn()}
+      />,
     );
 
     fireEvent.click(screen.getByTestId("moment-switcher-bottom-nav-close"));
@@ -35,14 +45,24 @@ describe("BottomNavigator", () => {
 
   it("is hidden at sm and up (sm:hidden) so it only ever renders below 640px", () => {
     render(
-      <BottomNavigator value="start" onChange={vi.fn()} onCapture={vi.fn()} />,
+      <BottomNavigator
+        value="start"
+        onChange={vi.fn()}
+        onCapture={vi.fn()}
+        onOpenPalette={vi.fn()}
+      />,
     );
     expect(screen.getByTestId("bottom-navigator")).toHaveClass("sm:hidden");
   });
 
   it("is fixed to the viewport bottom, above the capture pill's z-index band", () => {
     render(
-      <BottomNavigator value="start" onChange={vi.fn()} onCapture={vi.fn()} />,
+      <BottomNavigator
+        value="start"
+        onChange={vi.fn()}
+        onCapture={vi.fn()}
+        onOpenPalette={vi.fn()}
+      />,
     );
     const nav = screen.getByTestId("bottom-navigator");
     expect(nav).toHaveClass("fixed");
@@ -56,6 +76,7 @@ describe("BottomNavigator", () => {
         value="start"
         onChange={vi.fn()}
         onCapture={vi.fn()}
+        onOpenPalette={vi.fn()}
         settingsHref="/settings/custom"
       />,
     );
@@ -69,7 +90,12 @@ describe("BottomNavigator", () => {
   // pattern's other standalone-backgrounded-or-centered call sites).
   it("settings link carries hit-area and touch-manipulation utilities", () => {
     render(
-      <BottomNavigator value="start" onChange={vi.fn()} onCapture={vi.fn()} />,
+      <BottomNavigator
+        value="start"
+        onChange={vi.fn()}
+        onCapture={vi.fn()}
+        onOpenPalette={vi.fn()}
+      />,
     );
     const link = screen.getByTestId("bottom-navigator-settings-link");
     expect(link).toHaveClass("min-h-[44px]");
@@ -86,6 +112,7 @@ describe("BottomNavigator", () => {
           value="start"
           onChange={vi.fn()}
           onCapture={onCapture}
+          onOpenPalette={vi.fn()}
         />,
       );
       const button = screen.getByTestId("bottom-navigator-capture");
@@ -101,6 +128,7 @@ describe("BottomNavigator", () => {
           value="start"
           onChange={vi.fn()}
           onCapture={onCapture}
+          onOpenPalette={vi.fn()}
           captureDisabled
         />,
       );
@@ -117,12 +145,35 @@ describe("BottomNavigator", () => {
           value="start"
           onChange={vi.fn()}
           onCapture={vi.fn()}
+          onOpenPalette={vi.fn()}
           unsyncedCount={2}
         />,
       );
       const badge = screen.getByTestId("bottom-navigator-capture-badge");
       expect(badge).toHaveTextContent("2");
       expect(badge).toHaveTextContent(`captures ${SAVED_ON_THIS_DEVICE_SHORT}`);
+    });
+  });
+
+  // C2-S6 (#687), Criterion 3: the palette's touch trigger. Before this, the
+  // palette's only triggers were keydown and `?palette=1` — no tap path
+  // existed below `sm`.
+  describe("palette trigger (#687 C2-S6, Criterion 3)", () => {
+    it("renders a 44px-floor, plain-language 'More' trigger that fires onOpenPalette", () => {
+      const onOpenPalette = vi.fn();
+      render(
+        <BottomNavigator
+          value="start"
+          onChange={vi.fn()}
+          onCapture={vi.fn()}
+          onOpenPalette={onOpenPalette}
+        />,
+      );
+      const trigger = screen.getByTestId("bottom-navigator-more");
+      expect(trigger).toHaveClass("min-h-[44px]");
+      expect(trigger).toHaveAccessibleName("More");
+      fireEvent.click(trigger);
+      expect(onOpenPalette).toHaveBeenCalledTimes(1);
     });
   });
 });

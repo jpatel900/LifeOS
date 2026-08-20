@@ -70,6 +70,7 @@ function makeSync(overrides: { hasClient: boolean }) {
     persistedBlockIdByLocalIdRef: { current: new Map() },
     persistedSessionIdByLocalIdRef: { current: new Map() },
     selectedAreaId: null,
+    recordAccountAlias: vi.fn(),
     markLocalOnly,
     markDeviceStorageBlocked,
     replayJournaledWrites,

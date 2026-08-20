@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ReviewPage from "../app/review/page";
 import HealthPage from "../app/health/page";
 import { AppShell } from "../app/components/AppShell";
@@ -146,11 +146,27 @@ function mockNoWorkflowRows() {
   });
 }
 
+// C2-S6 (#687): `/review` and `/health` are flag-gated redirect shims now —
+// this file exercises the LEGACY cockpit screens directly, which only render
+// under the #590 rollback (NEXT_PUBLIC_MOMENTS_HOME=false). Without this, the
+// live default (flag on) would call `redirect()`, which this file's
+// `next/navigation` mock does not define.
+const ORIGINAL_MOMENTS_HOME = process.env.NEXT_PUBLIC_MOMENTS_HOME;
+
 beforeEach(() => {
   window.sessionStorage.clear();
   vi.clearAllMocks();
   mockCreateSupabaseBrowserClient.mockReturnValue({ mocked: true });
   mockNoWorkflowRows();
+  process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
+});
+
+afterEach(() => {
+  if (ORIGINAL_MOMENTS_HOME === undefined) {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+  } else {
+    process.env.NEXT_PUBLIC_MOMENTS_HOME = ORIGINAL_MOMENTS_HOME;
+  }
 });
 
 describe("waiting-on aging + commitment surfacing (S4 / #256)", () => {

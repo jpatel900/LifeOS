@@ -194,14 +194,20 @@ export function countNeedsDecision(items: ReviewQueueItem[]): number {
  *
  * ## The double is measured, not hypothetical
  *
- * `momentsViewModel/close.ts` records it in full: `mergePersistedRows` drops a
- * local row only when `dropLocalIds` names it, and nothing ever populates
- * `persistedSessionIdByLocalIdRef`, so after a sync the reducer holds BOTH the
- * optimistic `session-N` row and the account's uuid row for one session. A
- * probe against the real reducer returned `["794b7d18-…", "session-1"]` — one
- * finished session, two rows. `close.ts` sidesteps this by counting the two
- * DURABLE tiers instead of `state.executionSessions`; a list that renders rows
- * has no such option, so it must dedupe.
+ * `momentsViewModel/close.ts` records it in full: the merge used to drop a
+ * local row only when the per-mount drop-set named it, and nothing ever
+ * populated `persistedSessionIdByLocalIdRef`, so after a sync the reducer held
+ * BOTH the optimistic `session-N` row and the account's uuid row for one
+ * session. A probe against the real reducer returned
+ * `["794b7d18-…", "session-1"]` — one finished session, two rows. `close.ts`
+ * sidesteps this by counting the two DURABLE tiers instead of
+ * `state.executionSessions`.
+ *
+ * #844 retired the double at its source — `mergePersistedSessions` applies
+ * this same (task, block) rule inside the reducer, so the two rows never
+ * coexist in state. This render-tier dedupe is kept as defense-in-depth: it is
+ * the one claim this list makes ("no session appears twice"), and it must hold
+ * even if a new seam appears upstream.
  *
  * ## The rule, and the residual it knowingly accepts
  *
