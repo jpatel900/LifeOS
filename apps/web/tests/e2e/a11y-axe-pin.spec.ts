@@ -29,26 +29,16 @@ import { scanAxeViolationNodes } from "./helpers/axeScan";
  * that floor is defended here by strict equality, so any regression on those
  * four surfaces fails immediately.
  *
- * Every moments-native surface and every onboarding step is NOT yet at zero.
- * THIS IS A FINDING OF THIS PIN'S OWN SWEEP, not something the audit's text
- * names — the audit found one bad text node (the logo glyph, which this
- * pin's surface list never reaches — it's cockpit-only chrome). What this
- * sweep found instead, on every affected surface, is the exact same single
- * root cause: `#ffffff` text on a `#6d8bff` primary-accent background
- * measures 3.09:1 against the 4.5:1 AA floor for normal-weight body text
- * (the active moment-switcher tab, the capture-affordance pill's "Capture
- * it" label, and the command palette's matching option row all paint with
- * that pairing). One design-token fix (raising `--primary`'s contrast
- * against white, or switching that text to a darker foreground token) would
- * very likely collapse every non-zero row below to 0 or near it — that is
- * real, valuable, *design* work, and it is out of scope for a pin lane (see
- * the lane contract: this PR's only in-scope fixes are the two named
- * residuals — capture overlay button chrome and the mobile hero copy, both
- * elsewhere in this diff). Recording the honest count now, with the shared
- * root cause named once here instead of un-explained in fifteen rows, is
- * what turns it into a tracked, fixable, un-hideable number instead of an
- * undiscovered one — the AGENT-TODO in the PR body points back to this
- * comment.
+ * Every pinned surface now measures ZERO violation nodes (C5 token pass,
+ * #687). The sweep that established this pin had found one shared root
+ * cause on every non-zero surface — `#ffffff` text on the `#6d8bff` accent
+ * at 3.09:1 — and predicted a single design-token fix would collapse every
+ * row. That prediction held: the ON-colour flipped to near-black ink
+ * (--primary-foreground / --on-acc / accent.ts, kept in sync), the two
+ * residual pairs the follow-up audit surfaced (dark destructive label,
+ * accent fill against the light page) were fixed at the token level, and
+ * all 22 surface×viewport cells measured 0 on 2026-08-16. The per-surface
+ * anatomy of the old 58-node baseline lives in git history.
  *
  * Two assertions make it a ratchet, identical in shape to
  * hit-target-overlap-pin.spec.ts:
@@ -70,28 +60,13 @@ const BASELINE_OVERRIDES: Record<
   string,
   Partial<Record<ViewportId, number>>
 > = {
-  // `#ffffff` on `#6d8bff` (3.09:1 measured, 4.5:1 required) — the
-  // shared root cause named in the file header above. Node counts differ
-  // per surface because which of {moment-switcher tab, capture pill/button,
-  // palette option row} the surface actually renders differs, and mobile
-  // renders the bottom-navigator instead of the desktop pill (2 nodes
-  // there: the active tab + the Capture button, vs. desktop's tab + pill
-  // label + bold span = 3).
-  login: { desktop: 1, mobile: 1 },
-  "start-moment": { desktop: 3, mobile: 2 },
-  "flow-moment": { desktop: 3, mobile: 2 },
-  "close-moment": { desktop: 3, mobile: 3 },
-  "capture-overlay": { desktop: 3, mobile: 2 },
-  "triage-sheet": { desktop: 3, mobile: 2 },
-  "plan-sheet": { desktop: 3, mobile: 2 },
-  "command-palette": { desktop: 4, mobile: 3 },
-  "onboarding-areas": { desktop: 3, mobile: 3 },
-  "onboarding-day": { desktop: 4, mobile: 4 },
-  "onboarding-capture": { desktop: 2, mobile: 2 },
-  // `login`'s single node is its own instance of the same #ffffff/#6d8bff
-  // pairing on the "Sign in" button — a shadcn Button default-variant
-  // control, not the moments primitives above, but the same underlying
-  // `--primary` token.
+  // EMPTY since the C5 token pass (#687): the shared `#ffffff` on `#6d8bff`
+  // root cause (3.09:1) was retired by flipping the ON-colour to near-black
+  // ink, and the residual pairs (dark destructive label, accent fill on the
+  // light page) were fixed at the token level in the same branch. All 22
+  // surface×viewport cells measured ZERO violation nodes on 2026-08-16 —
+  // the old 58-node table lives in this file's git history if a future
+  // regression needs the per-surface anatomy.
 };
 
 function baselineFor(surfaceId: string, viewportId: ViewportId): number {
@@ -108,7 +83,7 @@ for (const surface of PINNED_SURFACES) {
 // MAY ONLY EVER SHRINK. Raising this is only correct alongside a deliberate
 // per-surface entry above explaining the new count (assertion 1 below
 // catches the table and this constant drifting apart).
-const TOTAL_VIOLATION_NODES_PINNED = 58;
+const TOTAL_VIOLATION_NODES_PINNED = 0;
 
 test.describe("axe WCAG AA pin (Final UX Loop C5)", () => {
   test.beforeEach(async ({ page }) => {

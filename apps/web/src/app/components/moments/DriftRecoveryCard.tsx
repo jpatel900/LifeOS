@@ -60,8 +60,12 @@ export function DriftRecoveryCard({
             onClick={onReclaim}
             className="min-h-[44px] touch-manipulation gap-2"
             style={{
+              // C5 contrast fix (#687): --primary-foreground is the
+              // ON-colour for the BLUE accent, not for the amber warn fill
+              // this button paints — --on-warn is the measured AA pair for
+              // --state-warn in both themes (globals.css).
               background: "var(--state-warn)",
-              color: "var(--primary-foreground)",
+              color: "var(--on-warn)",
             }}
             data-testid="drift-recovery-reclaim"
           >
