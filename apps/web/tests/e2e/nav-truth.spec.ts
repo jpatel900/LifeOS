@@ -248,25 +248,38 @@ test("moments home pipeline rail: Capture node opens the capture overlay directl
 // it). Risk #6 (no leaked entries, no stolen Backs) is proven by the
 // SEQUENCE of screens the following Back/Back/Forward calls land on, not by
 // asserting `length` at each of those steps.
+// Time-robustness fix (found on an unrelated PR's CI, folded in here):
+// this pin used to `goto("/")` and read back whatever moment the WALL-CLOCK
+// heuristic (`heuristicMoment`, TodayMoments.tsx) resolved at mount, storing
+// that as `initialMoment` for the later Back-lands-here assertion at the
+// bottom. `heuristicMoment` is re-evaluated fresh on every navigation — it
+// takes no seed and reads real time — so a run that starts just before an
+// hour boundary (11:00 or 17:00, the heuristic's own thresholds) could
+// observe a DIFFERENT moment than a re-render moments later would compute,
+// or simply differ from what a rerun of the SAME test produces a minute on.
+// The captured `initialMoment` was never wrong for the run that captured
+// it, but the pin's OWN premise — "the same moment mount resolved to is the
+// moment Back lands back on" — doesn't need the heuristic in the loop at
+// all: tier 2 of TodayMoments.tsx's own resolution order (`initialMoment`
+// prop -> URL's own `?moment=` -> stored preference -> clock heuristic)
+// is the URL itself, so a direct `?moment=start` entry — the same explicit-
+// URL pattern every other target in this file already uses (`directUrl`
+// above) — pins the moment without depending on wall-clock timing at all.
 test("history-walk pin: moment switch -> sheet open -> sheet close -> Back -> Back -> Forward all agree with the URL, cockpit never resurrects", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?moment=start");
   await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(page.getByTestId("start-moment")).toBeVisible();
   await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
 
   // Mount reconciliation (useMomentUrlState): the resolved initial moment
   // lands in the URL via `replaceState`, never `pushState` — the stack must
-  // not grow from this alone.
+  // not grow from this alone. Deterministic now (not heuristic-derived):
+  // the URL already named "start", so this is exactly what tier 2 of
+  // TodayMoments.tsx's resolution order returns.
   const initialMoment = new URL(page.url()).searchParams.get("moment");
-  expect(initialMoment).not.toBeNull();
-
-  // Pin to Start deterministically. If the heuristic already landed on
-  // Start this is a same-value no-op (useMomentUrlState.setMoment never
-  // pushes a redundant entry); otherwise it is one real switch — either way
-  // the depth captured right after this line is the walk's zero point.
-  await page.keyboard.press("1");
-  await expect(page.getByTestId("start-moment")).toBeVisible();
+  expect(initialMoment).toBe("start");
   const depthAtStart = await page.evaluate(() => window.history.length);
 
   // Moment switch: Start -> Flow. Exactly one push.
