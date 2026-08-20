@@ -686,6 +686,7 @@ export function LifeOSCockpit({
                   new Set(current).add(proposalId),
                 );
               }}
+              accountIdByLocalId={state.accountIdByLocalId}
             />
           ) : null}
           {stage === "execute" ? (
@@ -702,6 +703,7 @@ export function LifeOSCockpit({
               onCapture={() => navigate("capture")}
               onSideCapture={saveSideCapture}
               onUpdateFirstTinyStep={updateTaskFirstTinyStep}
+              accountIdByLocalId={state.accountIdByLocalId}
             />
           ) : null}
           {stage === "review" ? (

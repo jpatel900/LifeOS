@@ -220,11 +220,23 @@ export function PlanSheet({
     (row) => row.collapsible && !showEmptyHours,
   ).length;
 
+  // #886: `firstMoveDrafts` is keyed by task id, but a task's id can swap
+  // (device-local -> account) mid-typing when a background sync lands —
+  // the same alias `stableWorkflowKey` resolves react keys through below.
+  // Routing every read AND write through this same stable identity means a
+  // draft started before the swap is still found after it: the key fix on
+  // the `<li>` alone does not save this text, because the draft lives in a
+  // dictionary keyed by the id, not on the row itself.
+  function firstMoveDraftKey(taskId: string): string {
+    return stableWorkflowKey(state.accountIdByLocalId.tasks, taskId);
+  }
+
   function saveFirstMove(taskId: string) {
-    const value = firstMoveDrafts[taskId]?.trim();
+    const key = firstMoveDraftKey(taskId);
+    const value = firstMoveDrafts[key]?.trim();
     if (!value) return;
     updateTaskFirstTinyStep(taskId, value);
-    setFirstMoveDrafts((current) => ({ ...current, [taskId]: "" }));
+    setFirstMoveDrafts((current) => ({ ...current, [key]: "" }));
     onToast?.("First move saved");
   }
 
@@ -406,12 +418,12 @@ export function PlanSheet({
             <FirstMoveCard
               taskId={taskToPlace.id}
               taskTitle={taskToPlace.title}
-              value={firstMoveDrafts[taskToPlace.id] ?? ""}
+              value={firstMoveDrafts[firstMoveDraftKey(taskToPlace.id)] ?? ""}
               inputRef={firstMoveInputRef}
               onChange={(value) =>
                 setFirstMoveDrafts((current) => ({
                   ...current,
-                  [taskToPlace.id]: value,
+                  [firstMoveDraftKey(taskToPlace.id)]: value,
                 }))
               }
               onSave={() => saveFirstMove(taskToPlace.id)}
@@ -420,7 +432,17 @@ export function PlanSheet({
           {toPlace.length ? (
             <ul className="grid gap-2" data-testid="plan-sheet-to-place">
               {toPlace.map((task) => (
-                <li key={task.id}>
+                <li
+                  // #886 — same rendered-identity contract as the proposal
+                  // list below (#844): a task born on this device keeps its
+                  // local id as its react key across the device -> account
+                  // sync, so the row (and the button inside it) is
+                  // reconciled in place instead of destroyed mid-tap.
+                  key={stableWorkflowKey(
+                    state.accountIdByLocalId.tasks,
+                    task.id,
+                  )}
+                >
                   <button
                     type="button"
                     aria-pressed={taskIdToPlace === task.id}
@@ -540,11 +562,13 @@ export function PlanSheet({
                       <FirstMoveCard
                         taskId={task.id}
                         taskTitle={task.title}
-                        value={firstMoveDrafts[task.id] ?? ""}
+                        value={
+                          firstMoveDrafts[firstMoveDraftKey(task.id)] ?? ""
+                        }
                         onChange={(value) =>
                           setFirstMoveDrafts((current) => ({
                             ...current,
-                            [task.id]: value,
+                            [firstMoveDraftKey(task.id)]: value,
                           }))
                         }
                         onSave={() => saveFirstMove(task.id)}
@@ -663,7 +687,12 @@ export function PlanSheet({
             <ul className="grid gap-2" data-testid="plan-sheet-backlog">
               {vm.backlog.map((task) => (
                 <li
-                  key={task.id}
+                  // #886 — same rendered-identity contract as the proposal
+                  // list above (#844).
+                  key={stableWorkflowKey(
+                    state.accountIdByLocalId.tasks,
+                    task.id,
+                  )}
                   className="workflow-compact-item moments-row grid gap-2 p-3"
                 >
                   <Button
@@ -687,11 +716,11 @@ export function PlanSheet({
                     <FirstMoveCard
                       taskId={task.id}
                       taskTitle={task.title}
-                      value={firstMoveDrafts[task.id] ?? ""}
+                      value={firstMoveDrafts[firstMoveDraftKey(task.id)] ?? ""}
                       onChange={(value) =>
                         setFirstMoveDrafts((current) => ({
                           ...current,
-                          [task.id]: value,
+                          [firstMoveDraftKey(task.id)]: value,
                         }))
                       }
                       onSave={() => saveFirstMove(task.id)}

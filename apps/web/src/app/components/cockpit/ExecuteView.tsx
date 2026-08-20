@@ -5,6 +5,11 @@ import {
   appendCutScopeNote,
   cutScopeCandidatesForTask,
 } from "@/lib/taskmap/cutScope";
+import {
+  createEmptyAccountIdAliases,
+  type AccountIdAliases,
+} from "@/lib/workflow/shared";
+import { stableWorkflowKey } from "@/lib/workflowContext/reducerCore";
 import { CaptureCore } from "../moments/CaptureCore";
 import { CutScopeCandidates } from "../moments/CutScopeCandidates";
 import {
@@ -32,6 +37,11 @@ export function ExecuteView({
   onCapture,
   onSideCapture,
   onUpdateFirstTinyStep,
+  // #886 — the reducer's device -> account id alias map. Optional,
+  // defaulting to empty (every key then falls back to the row's own id,
+  // today's behavior) so this stays a mechanical, non-breaking addition for
+  // any caller that does not thread it through yet.
+  accountIdByLocalId = createEmptyAccountIdAliases(),
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
   activeTaskId: string | null;
@@ -50,7 +60,10 @@ export function ExecuteView({
   onCapture: () => void;
   onSideCapture: (text: string) => void;
   onUpdateFirstTinyStep: (taskId: string, firstTinyStep: string) => void;
+  accountIdByLocalId?: AccountIdAliases;
 }) {
+  // #886 — reachable only under the #590 rollback flag, same id-swap class
+  // as PlanSheet.tsx (#844).
   const active = vm.planned.find((item) => item.task.id === activeTaskId);
   const minutes = Math.floor(remaining / 60);
   const seconds = `${remaining % 60}`.padStart(2, "0");
@@ -100,7 +113,10 @@ export function ExecuteView({
           {vm.planned.length ? (
             vm.planned.map((item) => (
               <button
-                key={item.block.id}
+                key={stableWorkflowKey(
+                  accountIdByLocalId.blocks,
+                  item.block.id,
+                )}
                 type="button"
                 onClick={() => onStart(item.task.id, estimate(item.task))}
                 className="rounded-2xl border border-[var(--ln)] bg-[var(--sf2)] p-4 text-left hover:border-[var(--acc-rng)]"
