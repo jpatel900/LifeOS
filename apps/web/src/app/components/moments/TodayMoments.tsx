@@ -62,6 +62,11 @@ import { useSheetUrlState } from "./useSheetUrlState";
 import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
 import { isSheetValue } from "./sheetValues";
 import { parseMomentParam, useMomentUrlState } from "./useMomentUrlState";
+import {
+  parseAreaParam,
+  urlWithArea,
+  useAreaUrlState,
+} from "./useAreaUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 import type { ToastAction } from "./toast";
@@ -128,6 +133,9 @@ interface ToastState {
 
 interface StoredPreferences {
   moment?: MomentValue;
+  // C2-S8 (#687 finding 4): the countdown-vs-clock time display format stays
+  // device-local on purpose — same class of preference as the theme toggle,
+  // not a piece of app state anyone would expect a shared link to carry.
   timeDisplay?: CountdownClockValue;
 }
 
@@ -361,8 +369,32 @@ export function TodayMoments({
   // useMomentUrlState.ts's own JSDoc). The hook then reconciles the
   // resolved value into the URL at mount (a no-op when they already agree,
   // self-healing otherwise).
+  //
+  // C2-S8 (#687 finding 3, root-caused via a direct SSR curl of
+  // `/?moment=flow`, which came back with `data-testid="close-moment"` in
+  // the raw HTML): the URL tier used to read `window.location` directly,
+  // which does not exist during SSR — so on the SERVER this tier was
+  // silently SKIPPED every time, falling straight through to the clock
+  // heuristic below regardless of what the URL said, while the CLIENT (this
+  // same `useState` initializer, re-run at hydration) DID see `window` and
+  // honored the URL. Whenever the heuristic's answer differs from the URL's
+  // — any evening visit to `/?moment=flow`, since the heuristic returns
+  // "close" past 17:00 — the server rendered one moment's entire subtree
+  // (e.g. Close) and the client rendered a different one (Flow), a
+  // structural mismatch React reports as "Hydration failed ... the tree
+  // will be regenerated on the client." `deepLink.moment` is the fix: it is
+  // the SAME `deepLinkTargetFromParams(searchParams)` value on the server
+  // (page.tsx computes it there) and on this very first client render
+  // (Next.js hydrates with the identical server-resolved props), so
+  // resolving through it FIRST keeps this tier answering identically in
+  // both environments. The `window.location` read stays as a fallback
+  // tier — still fully SSR-safe (it only ever matters when `deepLink` has
+  // no `moment`, e.g. a test that mounts `TodayMoments` directly without
+  // routing through `page.tsx`) — not removed, just demoted under the prop
+  // that is actually available where this mismatch happened.
   const [resolvedInitialMoment] = useState<MomentValue>(() => {
     if (initialMoment) return initialMoment;
+    if (deepLink?.moment) return deepLink.moment;
     if (typeof window !== "undefined") {
       const fromUrl = parseMomentParam(
         new URLSearchParams(window.location.search).get("moment"),
@@ -376,6 +408,11 @@ export function TodayMoments({
   const { moment, setMoment, adoptMomentFromUrl } = useMomentUrlState(
     resolvedInitialMoment,
   );
+  // C2-S8 (#687 finding 1): the outbound push/pop half of the area
+  // switcher's URL wiring — see useAreaUrlState.ts's own header for why the
+  // initial resolution, mount self-heal and reconcile-correction all live in
+  // WorkflowContext instead of here.
+  const { setArea } = useAreaUrlState(setSelectedAreaId, state.areas);
   const [timeDisplay, setTimeDisplay] = useState<CountdownClockValue>(() => {
     const stored = readStoredPreferences();
     return stored?.timeDisplay ?? "countdown";
@@ -406,6 +443,54 @@ export function TodayMoments({
   // and popstate re-reads the URL as the authority — see useSheetUrlState.
   const { activeSheet, openSheet, closeSheet, adoptSheetFromUrl } =
     useSheetUrlState();
+  // C2-S8 hotfix (#687 finding 1, caught by the signed-in e2e tier —
+  // areas-port-truth.spec.ts:211): AreasSheet's own click handler
+  // (AreasSheet.tsx) calls `onSelectArea(areaId)` THEN `onClose()`
+  // synchronously, in that order — the SAME "pick, then close" composition
+  // useOverlayUrlState.ts's own docstring already documents for the command
+  // palette. Wiring `onSelectArea` straight to the raw `setSelectedAreaId`
+  // (as this used to) writes NOTHING to the URL; `onClose` → `closeSheet()`
+  // then calls `history.back()` (this sheet DID push its own `?sheet=areas`
+  // entry via `openSheet`), which is ASYNCHRONOUS — `popstate` fires on a
+  // LATER task, landing on the entry from BEFORE the sheet opened, which
+  // still names the AREA THAT WAS JUST REPLACED. `useAreaUrlState`'s
+  // popstate handler is faithfully URL-authoritative (by design, matching
+  // every other Back/Forward handler in this file) — it re-applies that
+  // stale area, undoing the pick a beat after it happened. Screen showed
+  // "All areas" after picking "Personal"; URL agreed with the screen (both
+  // wrong), so this was never a URL-vs-screen disagreement — the pick
+  // itself lost the race.
+  //
+  // Fix: fold "close the sheet" and "change area" into ONE `replaceState`,
+  // never letting `closeSheet()`'s `back()` run for this path at all.
+  // `adoptSheetFromUrl(null)` closes the sheet's REACT state and clears
+  // `pushedRef` (the same "adopted, not pushed" branch `closeSheet` already
+  // takes for a sheet reached by direct URL) — AreasSheet's own subsequent
+  // `onClose()` call then finds `pushedRef.current` false and takes that
+  // same safe `replaceState` branch too, a harmless no-op re-confirming
+  // `sheet` is already absent. No `back()`, no popstate, no race.
+  const handleAreasSheetSelectArea = useCallback(
+    (areaId: string | null) => {
+      setSelectedAreaId(areaId);
+      adoptSheetFromUrl(null);
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      params.delete("sheet");
+      const search = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        urlWithArea(
+          {
+            pathname: window.location.pathname,
+            search: search ? `?${search}` : "",
+          },
+          areaId,
+        ),
+      );
+    },
+    [setSelectedAreaId, adoptSheetFromUrl],
+  );
   const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -571,6 +656,26 @@ export function TodayMoments({
   // grows history (replaceState only) and never touches a VALID value —
   // those stay owned by the deep-link effect above and the overlay/sheet
   // hooks' own popstate handling.
+  //
+  // C2-S8 (#687 finding 1) extends the same pass with `?area=`: unlike
+  // sheet/capture/palette, an area id's validity is not knowable from its
+  // shape alone (it's not a fixed enum) — it has to be checked against the
+  // LIVE area list, which is why this needs `state.areas` where the other
+  // three needed only their own static parsers. `state.areas` is available
+  // synchronously on the very first render (the reducer's own initial state
+  // always seeds it, mock or restored — never empty), so reading it here,
+  // in this same mount-once pass, is safe.
+  //
+  // C2-S8 (#687 finding 2) extends it again for the one IMPOSSIBLE combo a
+  // hand-crafted URL can name: `capture` and the command palette are
+  // mutually exclusive overlays (`DeepLinkTarget.overlay` is one-or-the-
+  // other by TYPE, and `deepLinkTargetFromParams`'s own `if`/`else if` gives
+  // capture the win) — so `?capture=1&palette=1` only ever renders capture;
+  // the palette never adopts. Left alone, `?palette=1` would keep sitting in
+  // the address bar claiming a screen state that never happened. Scrubbed
+  // the same way as an outright invalid value, because from the URL's own
+  // truth-telling contract it IS one: capture's presence makes palette's
+  // "1" un-appliable, exactly like a value `isSheetValue` rejects.
   const invalidParamsScrubbedRef = useRef(false);
   useEffect(() => {
     if (invalidParamsScrubbedRef.current) return;
@@ -586,14 +691,32 @@ export function TodayMoments({
       changed = true;
     }
     const captureParam = params.get("capture");
-    if (captureParam !== null && !parseOverlayParam(captureParam)) {
+    const captureValid =
+      captureParam !== null && parseOverlayParam(captureParam);
+    if (captureParam !== null && !captureValid) {
       params.delete("capture");
       changed = true;
     }
     const paletteParam = params.get("palette");
-    if (paletteParam !== null && !parseOverlayParam(paletteParam)) {
+    const paletteValid =
+      paletteParam !== null && parseOverlayParam(paletteParam);
+    if (paletteParam !== null && !paletteValid) {
       params.delete("palette");
       changed = true;
+    } else if (captureValid && paletteValid) {
+      // Impossible combo (finding 2) — capture wins, palette never renders.
+      params.delete("palette");
+      changed = true;
+    }
+    const areaParam = params.get("area");
+    if (areaParam !== null) {
+      const parsedArea = parseAreaParam(areaParam);
+      const areaKnown =
+        parsedArea === null || state.areas.some((a) => a.id === parsedArea);
+      if (!areaKnown) {
+        params.delete("area");
+        changed = true;
+      }
     }
 
     if (!changed) return;
@@ -603,6 +726,13 @@ export function TodayMoments({
       "",
       `${window.location.pathname}${query ? `?${query}` : ""}`,
     );
+    // Deliberately empty deps, matching the mount-once contract this effect
+    // already documents above: `state.areas` is read from the closure of
+    // the FIRST render only, which is fine — it is always already populated
+    // by then (see the comment above) — and re-running this scrub on a
+    // later areas change would fight the reconcile-and-correct logic
+    // `lib/WorkflowContext.tsx` already owns for that case.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1298,7 +1428,7 @@ export function TodayMoments({
               <AreaSelector
                 areas={state.areas}
                 value={selectedAreaId}
-                onChange={setSelectedAreaId}
+                onChange={setArea}
                 shortcutEnabled={topbarShortcutsEnabled}
               />
               <div
@@ -1593,7 +1723,7 @@ export function TodayMoments({
         open={activeSheet === "areas"}
         onClose={() => closeSheet()}
         selectedAreaId={selectedAreaId}
-        onSelectArea={setSelectedAreaId}
+        onSelectArea={handleAreasSheetSelectArea}
       />
 
       <EndSessionSheet

@@ -108,5 +108,27 @@ describe("deepLinkTargetFromParams", () => {
         overlay: "capture",
       });
     });
+
+    // C2-S8 (#687 finding 1): `?area=` is deliberately NOT part of this
+    // parser's shape — no demoted route ever redirects with an `area`
+    // target (unlike moment/sheet/capture/palette, there is no
+    // `/main-job` -> `/?area=main-job` shim), so there is nothing for this
+    // SERVER-side parser to own for it (the zero-target rule: don't build a
+    // field with no caller). `selectedAreaId`'s own URL precedence is
+    // resolved separately, in `lib/WorkflowContext.tsx` (see its C2-S8
+    // comments) — this test pins that an `area` param is silently ignored
+    // HERE rather than accidentally tripping the "unknown value" branch or
+    // disturbing the composition of the fields this parser does own.
+    it("ignores ?area= (not this parser's param) without disturbing moment/sheet/overlay composition", () => {
+      expect(deepLinkTargetFromParams({ area: "area-personal" })).toBeNull();
+      expect(
+        deepLinkTargetFromParams({
+          moment: "flow",
+          sheet: "plan",
+          capture: "1",
+          area: "area-personal",
+        }),
+      ).toEqual({ moment: "flow", sheet: "plan", overlay: "capture" });
+    });
   });
 });

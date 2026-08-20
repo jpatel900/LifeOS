@@ -251,6 +251,10 @@ beforeEach(() => {
   // next (same pattern as cockpitPlanFlow.test.tsx).
   window.sessionStorage.clear();
   window.localStorage.clear();
+  // C2-S8 (#687 finding 1): `?area=` now also drives mount resolution — a
+  // stray param a previous test left in `window.location` would otherwise
+  // hydrate into this one.
+  window.history.replaceState(null, "", "/");
   restoreParseCaptureFetch = stubParseCaptureFetch();
   mockListAreas.mockResolvedValue({
     provider: "supabase",
@@ -543,6 +547,98 @@ describe("WorkflowProvider persisted area sync", () => {
       expect(screen.getByTestId("sync-message")).toHaveTextContent(
         ACCOUNT_SAVE_FAILED,
       );
+    });
+  });
+
+  // C2-S8 (#687 finding 1): `?area=` outranks the stored device preference.
+  describe("?area= URL precedence", () => {
+    it("a valid ?area= wins over a stored device preference on mount", async () => {
+      // sessionStorage already remembers "area-personal" from an earlier
+      // visit; the URL now names a different area — the URL must win.
+      window.sessionStorage.setItem(
+        "lifeos.phase2.selectedArea",
+        JSON.stringify("area-personal"),
+      );
+      window.history.replaceState(null, "", "/?area=area-volunteer");
+
+      render(
+        <WorkflowProvider>
+          <AreaProbe />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+          "area-volunteer",
+        );
+      });
+    });
+
+    it("?area=all resolves to the explicit All-areas selection, winning over a stored area preference", async () => {
+      window.sessionStorage.setItem(
+        "lifeos.phase2.selectedArea",
+        JSON.stringify("area-personal"),
+      );
+      window.history.replaceState(null, "", "/?area=all");
+
+      render(
+        <WorkflowProvider>
+          <AreaProbe />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("selected-area-id")).toHaveTextContent("");
+      });
+    });
+
+    it("an ?area= naming an id absent from every known area is not applied — the default/stored value stands", async () => {
+      window.history.replaceState(null, "", "/?area=not-a-real-area");
+
+      render(
+        <WorkflowProvider>
+          <AreaProbe />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+          "area-main-job",
+        );
+      });
+    });
+
+    // The advisor-flagged risk this session: `applyPersistedAreas`'s async
+    // reconcile can move the selection away from what `?area=` named (the
+    // account's real areas do not include it) long after the mount-time URL
+    // priority applied it — demo/mock-mode tests never reach this path
+    // (`createSupabaseBrowserClient()` returns null there), so this is the
+    // only tier that can prove the address bar gets corrected rather than
+    // left claiming a selection the screen no longer shows.
+    it("corrects a stale ?area= param once the account's real areas no longer include it", async () => {
+      window.history.replaceState(null, "", "/?area=area-personal");
+      mockListAreas.mockResolvedValue({
+        provider: "supabase",
+        // Only maps to "area-main-job" — "area-personal" is absent.
+        areas: [persistedArea],
+      });
+
+      render(
+        <WorkflowProvider>
+          <AreaProbe />
+        </WorkflowProvider>,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId("selected-area-id")).toHaveTextContent(
+          "area-main-job",
+        );
+      });
+      await waitFor(() => {
+        expect(new URL(window.location.href).searchParams.get("area")).toBe(
+          "area-main-job",
+        );
+      });
     });
   });
 
