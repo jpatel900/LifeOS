@@ -1,0 +1,32 @@
+rules:
+  - id: zod-datetime-requires-offset
+    languages: [ts]
+    severity: WARNING
+    message: >
+      z.string().datetime() without { offset: true } rejects PostgREST/Supabase
+      "+00:00" timestamps -- it only accepts the "Z" suffix. This exact gap
+      silently killed a calendar integration for 2 months (2026-07-25 incident).
+      If this string is validating data from Postgres/PostgREST/Supabase (or any
+      source that emits numeric-offset timestamps), add { offset: true }. If the
+      string is only ever an internally-generated "Z"-suffixed timestamp,
+      annotate why at the call site.
+    patterns:
+      - pattern-either:
+          - pattern: z.string().datetime()
+          - pattern: z.string().datetime($OPTS)
+      - pattern-not: "z.string().datetime({ offset: true, ... })"
+      - pattern-not: "z.string().datetime({ ..., offset: true, ... })"
+    metadata:
+      category: correctness
+      references:
+        - "2026-07-25 calendar integration outage: Zod's datetime() Z-only validator rejected PostgREST +00:00 offset timestamps for 2 months before detection."
+    paths:
+      exclude:
+        # SAFE class — verified 2026-08-10 (issue #858): client write-input schemas
+        # (Z-suffixed toISOString payloads), local mock state, and jsonb round-trip
+        # fields. user.ts (GoTrue) pending OWNER-GATE on #858. New datetime() calls
+        # in these files are NOT scanned — re-verify before removing any line.
+        - "packages/schemas/src/index.ts"
+        - "packages/schemas/src/phase2-mock-workflow.ts"
+        - "packages/schemas/src/task-map.ts"
+        - "packages/schemas/src/user.ts"

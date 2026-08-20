@@ -2,7 +2,6 @@ import { render, screen, fireEvent, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkflowProvider } from "@/lib/WorkflowContext";
 import { STORAGE_KEY } from "@/lib/workflowContext/reducerCore";
-import type { WorkflowState } from "@/lib/workflow";
 import {
   GOLDEN_AREA_ID,
   rawCaptureWorkflow,
@@ -31,7 +30,7 @@ const OTHER_AREA = "area-personal";
 function renderSheet(
   options: {
     open?: boolean;
-    state?: WorkflowState;
+    state?: ReturnType<typeof workflowSeed>;
     selectedAreaId?: string | null;
   } = {},
 ) {
