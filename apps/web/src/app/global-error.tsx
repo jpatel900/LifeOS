@@ -100,7 +100,12 @@ export default function GlobalError({
             {/* A plain anchor, not next/link: a full document load is the
                 point. Retry re-renders the same tree that just threw, so the
                 escape has to leave that tree entirely. Inline-styled to a
-                44px-tall target so it stays tappable without the stylesheet. */}
+                44px-tall target so it stays tappable without the stylesheet.
+                eslint-disable-next-line: this component renders in place of
+                the root layout when the App Router itself has crashed, so
+                there is no router context here for next/link to attach to —
+                the plain anchor is the only option that works on this path. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/"
               style={{
