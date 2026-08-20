@@ -33,23 +33,27 @@ import { pinMomentPreference } from "./helpers/momentPreference";
  *  - `src/__tests__/phase4aRls.local.test.ts` sends the same `client_write_id`
  *    TWICE against a real Postgres and asserts one row.
  *
- * ## Why the two halves use two different surfaces
+ * ## Why the two halves use two different surfaces (RE-ANCHORED, C2-S6 #687)
  *
- * Placement is NOT on the moments home. `PlanSheet.tsx` is a read-only schedule
- * summary whose "Open full view" link points at `/calendar`, and `/calendar` is
- * the one route deliberately NOT redirected into the moments home (#687
- * OWNER-GATE) precisely because the hour rail lives only there. Draft accept
- * IS on the moments home, via the triage sheet's "Do today". So the plan half
- * drives `/calendar` (PlanView) and the draft half drives `/` (TriageSheet) —
- * each on the surface the action actually ships on.
+ * Both halves are on the moments home now. `PlanSheet.tsx` (`?sheet=plan`)
+ * carries the hour rail directly — the same `planTaskAtHour`/`unplanTask`
+ * writes the legacy `/calendar` route used, per PlanSheet's own invariant
+ * table (C2-S2, #804/#809). `/calendar` itself is a flag-gated redirect
+ * shim to `?sheet=plan` now (C2-S6): the plan half used to drive `/calendar`
+ * directly because that was the only place the rail existed; it drives
+ * `?sheet=plan` directly now for the same reason, on the current surface.
+ * Draft accept IS on the moments home too, via the triage sheet's "Do
+ * today" — unchanged.
  *
  * ## Clock pinning
  *
- * The moments half pins the moment preference (`pinMomentPreference`) rather
+ * Both halves now pin the moment preference (`pinMomentPreference`) rather
  * than trusting `heuristicMoment`'s read of the browser's local hour — the
  * failure that took `session-truth.spec.ts` red on merged main while green
- * everywhere else. The `/calendar` half needs no pin: PlanView renders one
- * fixed 8a-6p hour rail at every hour of the day.
+ * everywhere else. Before C2-S6, the plan half needed no pin because
+ * `/calendar` rendered `PlanView`, a fixed 8a-6p hour rail unaffected by
+ * moment; `PlanSheet` is a sheet layered atop whichever moment is active,
+ * so it now needs the same pin the triage half always did.
  */
 
 const STORAGE_KEY = "lifeos.phase2.workflow";
@@ -250,9 +254,16 @@ async function seed(page: Page, value: unknown) {
 }
 
 async function openPlanRail(page: Page) {
+  // C2-S6 (#687): the hour rail now lives on the Plan sheet (`?sheet=plan`,
+  // PlanSheet.tsx), not the retired `/calendar` route — same
+  // `planTaskAtHour`/`unplanTask` writes, per PlanSheet's own invariant
+  // table. Pinned to Start like every other sheet-surface e2e helper in
+  // this repo (pinnedSurfaces.ts, openTriageSheet below): the sheet renders
+  // atop whatever moment is active, and pinning removes that as a variable.
+  await pinMomentPreference(page, "start");
   await seed(page, buildPlanSeedState());
-  await page.goto("/calendar");
-  await expect(page.getByTestId(`hour-row-${PLAN_HOUR}`)).toBeVisible({
+  await page.goto("/?sheet=plan");
+  await expect(page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`)).toBeVisible({
     timeout: 15_000,
   });
 }
@@ -277,7 +288,7 @@ test.describe("#737 C1 S3 — durable plans and triage drafts", () => {
   }) => {
     await openPlanRail(page);
 
-    await page.getByTestId(`hour-row-${PLAN_HOUR}`).click();
+    await page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`).click();
 
     // 1. The device has it, before anything else could have.
     await expect
@@ -308,7 +319,9 @@ test.describe("#737 C1 S3 — durable plans and triage drafts", () => {
     // 2. A hard reload. `sessionStorage` survives this too, so on its own it
     // proves little — it is the floor, not the discriminator.
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId(`hour-row-${PLAN_HOUR}`)).toBeVisible();
+    await expect(
+      page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`),
+    ).toBeVisible();
 
     expect(
       (await readJournal(page)).filter(
@@ -320,8 +333,10 @@ test.describe("#737 C1 S3 — durable plans and triage drafts", () => {
     // `sessionStorage`, shared IndexedDB. Pre-S3 the placement existed only in
     // the first tab's sessionStorage, so this read is the whole proof.
     const newTab = await context.newPage();
-    await newTab.goto("/calendar");
-    await expect(newTab.getByTestId(`hour-row-${PLAN_HOUR}`)).toBeVisible();
+    await newTab.goto("/?sheet=plan");
+    await expect(
+      newTab.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`),
+    ).toBeVisible();
 
     const fromNewTab = (await readJournal(newTab)).filter(
       (record) => record.client_write_id === clientWriteId,
@@ -336,7 +351,7 @@ test.describe("#737 C1 S3 — durable plans and triage drafts", () => {
     page,
   }) => {
     await openPlanRail(page);
-    await page.getByTestId(`hour-row-${PLAN_HOUR}`).click();
+    await page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`).click();
 
     await expect
       .poll(
@@ -357,7 +372,9 @@ test.describe("#737 C1 S3 — durable plans and triage drafts", () => {
     // and deletes the record.
     for (const attempt of [1, 2]) {
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByTestId(`hour-row-${PLAN_HOUR}`)).toBeVisible();
+      await expect(
+        page.getByTestId(`plan-sheet-hour-${PLAN_HOUR}`),
+      ).toBeVisible();
 
       const now = (await readJournal(page)).filter(
         (record) => record.entity === "plan_placement",

@@ -59,7 +59,7 @@ import { ReviewSheet } from "./ReviewSheet";
 import { HealthSheet } from "./HealthSheet";
 import { AreasSheet } from "./AreasSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
-import { useMomentUrlState } from "./useMomentUrlState";
+import { parseMomentParam, useMomentUrlState } from "./useMomentUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
 import type { ToastAction } from "./toast";
@@ -349,11 +349,24 @@ export function TodayMoments({
 
   // C2-S6 (#687): the moment itself is URL-visible, same contract as the
   // sheet below — `useMomentUrlState` owns the push/pop mechanics, this
-  // component still resolves the INITIAL moment the same three-tier way it
-  // always has (prop -> stored preference -> heuristic); the hook then
-  // reconciles that resolved value into the URL at mount.
+  // component resolves the INITIAL moment through FOUR tiers: `initialMoment`
+  // prop (test-only override, always wins outright) -> the URL's own
+  // `?moment=` param (the redirect shims' real answer, e.g. `/execute` ->
+  // `/?moment=flow`) -> stored preference -> clock heuristic. The URL tier
+  // lives HERE, not inside the hook: the hook cannot tell a genuine
+  // `initialMoment` override from a stale `?moment=` param an earlier,
+  // unrelated render left behind (a real bug this order fixes — see
+  // useMomentUrlState.ts's own JSDoc). The hook then reconciles the
+  // resolved value into the URL at mount (a no-op when they already agree,
+  // self-healing otherwise).
   const [resolvedInitialMoment] = useState<MomentValue>(() => {
     if (initialMoment) return initialMoment;
+    if (typeof window !== "undefined") {
+      const fromUrl = parseMomentParam(
+        new URLSearchParams(window.location.search).get("moment"),
+      );
+      if (fromUrl) return fromUrl;
+    }
     const stored = readStoredPreferences();
     if (stored?.moment) return stored.moment;
     return heuristicMoment(now, flowVM.currentBlock !== null);
@@ -1380,6 +1393,7 @@ export function TodayMoments({
         onChange={setMoment}
         onCapture={() => setCaptureOpen(true)}
         unsyncedCount={unsyncedCaptureCount}
+        onOpenPalette={() => setPaletteOpen(true)}
       />
 
       <CaptureOverlay

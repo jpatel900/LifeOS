@@ -68,6 +68,24 @@ describe("useMomentUrlState (C2 Target Card 2)", () => {
     replace.mockRestore();
   });
 
+  // Mount self-heals a STALE `?moment=` param the URL happens to carry —
+  // e.g. left over from a previous navigation this hook did not make —
+  // rather than adopting it. Contrast with `useSheetUrlState`, where an
+  // absent/present sheet param is itself meaningful; a moment is never
+  // "closed", so there is no equivalent case where an unexpected param
+  // should win over what the caller resolved.
+  it("mount corrects a stale ?moment= param to match the caller's resolved value", () => {
+    goto("/?moment=close");
+    const replace = vi.spyOn(window.history, "replaceState");
+
+    const { result } = renderHook(() => useMomentUrlState("start"));
+
+    expect(result.current.moment).toBe("start");
+    expect(window.location.search).toBe("?moment=start");
+    expect(replace).toHaveBeenCalledTimes(1);
+    replace.mockRestore();
+  });
+
   it("switching moments puts the new moment in the URL and pushes a history entry", () => {
     const { result } = renderHook(() => useMomentUrlState("start"));
 

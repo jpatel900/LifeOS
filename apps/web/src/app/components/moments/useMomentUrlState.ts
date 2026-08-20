@@ -30,13 +30,22 @@ import type { MomentValue } from "./MomentSwitcher";
  *   mount-time deep link from a redirect shim, e.g. `/execute` ->
  *   `/?moment=flow`) — writes no history, matching
  *   `useSheetUrlState.adoptSheetFromUrl`.
- * - **Mount** resolves the initial moment the same three-tier way
- *   `TodayMoments` always has (`initialMoment` prop -> stored preference ->
- *   clock heuristic — computed by the caller and passed in), then
- *   `replaceState`s it into the URL so a refresh reads back the same moment
- *   the screen just resolved, without growing history (a bare `/` visit
+ * - **Mount** takes `resolvedInitialMoment` as already fully resolved by the
+ *   caller — `initialMoment` prop (test-only override) -> the URL's own
+ *   `?moment=` param -> stored preference -> clock heuristic, in that order
+ *   (`TodayMoments.tsx` computes it; this hook does not re-derive it, so
+ *   there is exactly one place that order lives). It then `replaceState`s
+ *   the resolved value into the URL — a no-op whenever the URL already
+ *   agreed, which is always true on the redirect-shim path (`/execute` ->
+ *   `/?moment=flow`) and self-healing whenever it does not (a stale
+ *   `?moment=` a previous navigation left behind gets corrected to match
+ *   what actually rendered) — without growing history (a bare `/` visit
  *   still leaves exactly the one entry behind it — Back from there must
  *   leave the site untouched by this hook, never get intercepted).
+ *   URL-priority living INSIDE this hook instead of in the caller was a
+ *   real, caught red-first bug: it could not tell a genuine `initialMoment`
+ *   test override from a stale leftover URL param from an unrelated earlier
+ *   render, so it occasionally overrode the override.
  * - **popstate** (Back/Forward) is authoritative: the moment is re-read from
  *   the URL, never guessed. An entry with no `?moment=` param (a pre-feature
  *   bookmark, or a manually edited URL) falls back to `"start"` rather than
@@ -83,7 +92,10 @@ export function useMomentUrlState(
 
   // Mount only: make the URL agree with the already-resolved initial moment,
   // via `replaceState` (never `pushState`) so a plain `/` visit still leaves
-  // exactly one history entry behind it.
+  // exactly one history entry behind it. A no-op whenever the URL already
+  // agreed (the redirect-shim path); self-healing otherwise (a stale
+  // `?moment=` param left by a previous navigation is corrected to match
+  // what the caller actually resolved and rendered).
   const mountedRef = useRef(false);
   useEffect(() => {
     if (mountedRef.current) return;

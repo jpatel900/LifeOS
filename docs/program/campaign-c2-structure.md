@@ -10,9 +10,9 @@ Owner-ratified decisions binding: **port ALL FOUR legacy screens** (Plan/calenda
 - **S1 — Capability inventory** (read-only, parallel-safe): drive all four legacy screens signed-in; produce the authoritative capability checklist per screen (every control, every write path, every count), verified against DB writes — the port lanes' premise document. Includes the judge's flagged count contradiction (/calendar "0 Today" vs Start's "1 block"). Deliverable: docs comment on the C2 tracking issue (#687). — **DONE**
 - **S2 — Port Plan/calendar** (largest: hour rail, placement/unplan, proposal accept/reject/nudge, Google approval, planned-vs-actual). Rides existing moments sheet conventions + #778 placement rails. — **merged (#804), then its truth spec failed on main; main-red guard revert #806 armed; re-lands with the fix**
 - **S3 — Port Review** (policy proposals, review history; close-verdict already lives in moments). — drafted (#809), waits behind the S2 re-land
-- **S4 — Port Health** (honest probes from #758 carry over; moments framing).
-- **S5 — Port All-areas** (fix the #691 first-area scoping gap as part of the port — porting a wrong screen truthfully means fixing its lie).
-- **S6 — Shell close-out**: remove legacy routes behind the rollback flag per #687 conventions, route-level one-shell guard, URL/Back-Forward criteria pins, legacy e2e migration (the gated cockpit specs get re-anchored or retired with guards).
+- **S4 — Port Health** (honest probes from #758 carry over; moments framing). — **merged (#846)**
+- **S5 — Port All-areas** (fix the #691 first-area scoping gap as part of the port — porting a wrong screen truthfully means fixing its lie). — **merged (#851)**
+- **S6 — Shell close-out**: remove legacy routes behind the rollback flag per #687 conventions, route-level one-shell guard, URL/Back-Forward criteria pins, legacy e2e migration (the gated cockpit specs get re-anchored or retired with guards). — **IN FLIGHT (PR #880, 2026-08-20)**
 - **RE-SCORE** — fresh-eyes judge, full card 2, same protocol as C1 (rounds until targets, every pass pinned).
 
 Rules unchanged: lane playbook contract per slice, red-first, truth-map for all copy, migrations human-review, capability survival proven by content not lineage, signed-in tier pins where the criterion is account-shaped.
