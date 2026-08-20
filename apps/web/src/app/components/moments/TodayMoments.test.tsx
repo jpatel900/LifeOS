@@ -503,6 +503,60 @@ describe("TodayMoments", () => {
     expect(params.get("palette")).toBeNull();
   });
 
+  // #687 finding 3 (C2-S7, URL hygiene): an unknown `?sheet=` value rendered
+  // nothing — `deepLinkTargetFromParams` already treats it exactly like an
+  // absent param (`deepLink.test.ts`'s own "unknown sheet value yields null"
+  // case) — but the raw `bogus` string was left sitting in the address bar,
+  // unexplained, surviving a refresh. Scrubbed via `replaceState` on mount.
+  it("scrubs an unknown ?sheet= value from the URL instead of leaving it stranded", async () => {
+    window.history.replaceState(null, "", "/?sheet=bogus");
+
+    renderToday({ initialMoment: "start" });
+
+    await waitFor(() => {
+      expect(new URL(window.location.href).searchParams.get("sheet")).toBeNull();
+    });
+    // Nothing renders for it — matches deepLinkTargetFromParams' documented
+    // "unknown/absent -> null (a plain home visit)" precedence.
+    expect(screen.queryByTestId("moment-sheet-dialog")).not.toBeInTheDocument();
+    expect(screen.getByTestId("today-moments")).toBeInTheDocument();
+  });
+
+  it("scrubs unknown ?capture= / ?palette= values the same way, without touching a valid neighbor param", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/?capture=bogus&palette=nope&moment=flow",
+    );
+
+    renderToday();
+
+    await waitFor(() => {
+      const params = new URL(window.location.href).searchParams;
+      expect(params.get("capture")).toBeNull();
+      expect(params.get("palette")).toBeNull();
+    });
+    // The valid, unrelated `moment=flow` param survives the scrub untouched.
+    expect(new URL(window.location.href).searchParams.get("moment")).toBe(
+      "flow",
+    );
+    expect(screen.queryByTestId("capture-overlay")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+  });
+
+  it("does not touch a VALID ?sheet= value — that stays owned by the deep-link effect", async () => {
+    window.history.replaceState(null, "", "/?sheet=triage");
+
+    renderToday({ initialMoment: "start", deepLink: { sheet: "triage" } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("triage-sheet-empty")).toBeInTheDocument();
+    });
+    expect(new URL(window.location.href).searchParams.get("sheet")).toBe(
+      "triage",
+    );
+  });
+
   it("close-day journey: Close moment renders counts and Close the day fires without crashing", async () => {
     renderToday({ initialMoment: "close" });
 

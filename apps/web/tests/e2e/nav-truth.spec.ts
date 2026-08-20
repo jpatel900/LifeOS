@@ -502,11 +502,13 @@ interface MatrixTarget {
   /** Taps only, starting from a fresh `/` visit. At most 2 calls. */
   reach(page: Page): Promise<void>;
   /**
-   * The URL param this target lands on once reached BY TAP — `null` when
-   * tap-triggered opens genuinely do not write one (see the capture-overlay
-   * entry below for the one real, verified case, not silently assumed).
+   * The URL param this target lands on once reached BY TAP. C2-S7 (#687
+   * finding 2) closed the one real gap this used to document (capture had
+   * no outbound tap-to-URL write) via `useOverlayUrlState.ts`, so every
+   * target in this matrix now writes one — `null` is kept in the type only
+   * as a documented escape hatch, not because anything currently uses it.
    */
-  urlParam: { key: "sheet" | "capture"; value: string } | null;
+  urlParam: { key: "sheet" | "capture" | "palette"; value: string } | null;
   assertSurface(page: Page): Promise<void>;
   directUrl: string;
 }
@@ -587,26 +589,36 @@ const matrixTargets: MatrixTarget[] = [
       // One tap, from any moment — BottomNavigator's Capture button.
       await page.getByTestId("bottom-navigator-capture").click();
     },
-    // VERIFIED GAP, not an oversight: unlike every sheet (`openSheet` always
-    // pushes `?sheet=`), `captureOpen` is a plain `useState` with no
-    // URL-writing call site anywhere in TodayMoments.tsx — tapping Capture
-    // opens the overlay but writes nothing to the address bar. Direct-URL
-    // entry (`/?capture=1`, the INBOUND deep-link path via
-    // `deepLinkTargetFromParams`) and refresh both still agree with the
-    // screen — proven in the sibling test below — so only the OUTBOUND
-    // tap-to-URL half is missing. Pre-existing (not introduced by C2-S6),
-    // out of this lane's declared manifest to fix (`captureOpen` and
-    // `paletteOpen` share the same gap and would need the same
-    // `useSheetUrlState`-shaped hook); recorded as an AGENT-TODO in the PR
-    // body rather than silently asserted as passing or silently dropped
-    // from this pin.
-    urlParam: null,
+    // C2-S7 (#687 finding 2): FIXED, not just re-anchored. Unlike every
+    // sheet (`openSheet` always pushes `?sheet=`), `captureOpen` used to be
+    // a plain `useState` with no URL-writing call site anywhere in
+    // TodayMoments.tsx — tapping Capture opened the overlay but wrote
+    // nothing to the address bar. `useOverlayUrlState.ts` (the
+    // `useSheetUrlState`-shaped hook for a boolean overlay) now backs it,
+    // so the tap-to-URL half this pin used to document as missing is
+    // proven below like every other target.
+    urlParam: { key: "capture", value: "1" },
     assertSurface: async (page) => {
       await expect(
         page.getByRole("dialog", { name: "Capture a thought" }),
       ).toBeVisible();
     },
     directUrl: "/?capture=1",
+  },
+  {
+    name: "command palette",
+    reach: async (page) => {
+      // One tap, from any moment — BottomNavigator's "More" trigger (the
+      // same mobile-only path the health/areas sheets above reach through).
+      await page.getByTestId("bottom-navigator-more").click();
+    },
+    // Same C2-S7 fix as the capture overlay — `useOverlayUrlState.ts`
+    // backs `paletteOpen` too.
+    urlParam: { key: "palette", value: "1" },
+    assertSurface: async (page) => {
+      await expect(page.getByTestId("command-palette")).toBeVisible();
+    },
+    directUrl: "/?palette=1",
   },
 ];
 
@@ -648,6 +660,54 @@ for (const target of matrixTargets) {
     await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
   });
 }
+
+// C2-S7 (#687 finding 2), the third leg PR #880's AGENT-TODO named
+// explicitly ("Open writes the param via pushState, close pops it, Back
+// closes the overlay") — the matrix loop above proves open+refresh/direct-URL
+// for every target including the two new overlay entries; this proves Back,
+// the one half neither the matrix nor the sheet-focused HISTORY-WALK PIN
+// covers for a boolean overlay. Desktop viewport: BottomNavigator's mobile
+// triggers are `sm:hidden`, so this uses each overlay's desktop affordance
+// instead (the pill / the Cmd+K shortcut) — the URL/history contract itself
+// is viewport-independent, already proven mobile-reachable by the matrix
+// above.
+test("Back closes the capture overlay (opened via the desktop pill) and restores the prior screen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  const beforeUrl = page.url();
+
+  await page.getByTestId("capture-affordance").click();
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("capture")).toBe("1");
+
+  await page.goBack();
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  expect(page.url()).toBe(beforeUrl);
+});
+
+test("Back closes the command palette (opened via Cmd+K) and restores the prior screen", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  const beforeUrl = page.url();
+
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("palette")).toBe("1");
+
+  await page.goBack();
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  expect(page.url()).toBe(beforeUrl);
+});
 
 test("matrix pin: Settings reachable in 1 tap on mobile", async ({ page }) => {
   await page.setViewportSize(MOBILE_VIEWPORT);
