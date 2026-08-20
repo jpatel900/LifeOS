@@ -21,6 +21,7 @@ import {
   TIME_BLOCK_PROPOSAL_STATUSES,
 } from "./constants";
 import { JsonValueSchema } from "./json";
+import { offsetDatetime } from "./datetime";
 
 const isoDate = z
   .string()
@@ -42,9 +43,9 @@ export const AreaSchema = z.object({
   // context-assembly module; the DB remains the source of truth (migration
   // enforces both columns nullable).
   charter_text: z.string().nullable().optional(),
-  charter_updated_at: z.string().datetime().nullable().optional(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  charter_updated_at: offsetDatetime().nullable().optional(),
+  created_at: offsetDatetime(),
+  updated_at: offsetDatetime(),
 });
 
 export type Area = z.infer<typeof AreaSchema>;
@@ -60,7 +61,7 @@ export const CaptureItemSchema = z.object({
   capture_mode: z.enum(AREA_CAPTURE_MODES),
   inferred_area_confidence: z.number().min(0).max(1).nullable(),
   status: z.enum(CAPTURE_ITEM_STATUSES),
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type CaptureItem = z.infer<typeof CaptureItemSchema>;
@@ -83,7 +84,7 @@ export const AmbiguityAssessmentSchema = z.object({
   what_not_to_do_yet_json: JsonValueSchema,
   confidence_score: z.number(),
   review_trigger: z.string(),
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type AmbiguityAssessment = z.infer<typeof AmbiguityAssessmentSchema>;
@@ -95,8 +96,8 @@ export const ProjectSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable(),
   status: z.enum(PROJECT_STATUSES),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: offsetDatetime(),
+  updated_at: offsetDatetime(),
 });
 
 export type Project = z.infer<typeof ProjectSchema>;
@@ -117,7 +118,7 @@ export const TaskSchema = z.object({
   energy_type: z.string().nullable(),
   estimated_minutes_low: z.number().int().nullable(),
   estimated_minutes_high: z.number().int().nullable(),
-  due_at: z.string().datetime().nullable(),
+  due_at: offsetDatetime().nullable(),
   definition_of_done: z.string().nullable(),
   first_tiny_step: z.string().nullable(),
   // Stage 1 slice S1 (issue #253) additive columns. Marked optional so existing
@@ -126,7 +127,7 @@ export const TaskSchema = z.object({
   // user-visible change). The DB remains the source of truth: the migration
   // enforces nullable FKs/timestamps and `is_commitment not null default false`.
   waiting_on_person_id: z.string().uuid().nullable().optional(),
-  waiting_on_since: z.string().datetime().nullable().optional(),
+  waiting_on_since: offsetDatetime().nullable().optional(),
   is_commitment: z.boolean().optional(),
   committed_to_person_id: z.string().uuid().nullable().optional(),
   // FR-031 slice 3 (task-map v1 persistence, 20260711120000) additive
@@ -137,9 +138,9 @@ export const TaskSchema = z.object({
   progression_map: JsonValueSchema.nullable().optional(),
   map_status: z.enum(["draft", "approved", "superseded"]).nullable().optional(),
   map_schema_version: z.string().nullable().optional(),
-  map_approved_at: z.string().datetime().nullable().optional(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  map_approved_at: offsetDatetime().nullable().optional(),
+  created_at: offsetDatetime(),
+  updated_at: offsetDatetime(),
 });
 
 export type Task = z.infer<typeof TaskSchema>;
@@ -150,9 +151,9 @@ export const PersonSchema = z.object({
   display_name: z.string().min(1),
   normalized_name: z.string().min(1),
   notes: z.string().nullable(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-  archived_at: z.string().datetime().nullable(),
+  created_at: offsetDatetime(),
+  updated_at: offsetDatetime(),
+  archived_at: offsetDatetime().nullable(),
 });
 
 export type Person = z.infer<typeof PersonSchema>;
@@ -176,8 +177,8 @@ export const OperatorProfileSchema = z.object({
   user_id: z.string().uuid(),
   profile_text: z.string().nullable(),
   compensation_rules: z.array(CompensationRuleSchema).nullable(),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: offsetDatetime(),
+  updated_at: offsetDatetime(),
 });
 
 export type OperatorProfile = z.infer<typeof OperatorProfileSchema>;
@@ -187,13 +188,13 @@ export const TimeBlockProposalSchema = z.object({
   user_id: z.string().uuid(),
   area_id: z.string().uuid(),
   task_id: z.string().uuid().nullable(),
-  proposed_start: z.string().datetime(),
-  proposed_end: z.string().datetime(),
+  proposed_start: offsetDatetime(),
+  proposed_end: offsetDatetime(),
   rationale_json: JsonValueSchema,
   conflict_flag: z.boolean(),
   conflict_details_json: JsonValueSchema.nullable(),
   status: z.enum(TIME_BLOCK_PROPOSAL_STATUSES),
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type TimeBlockProposal = z.infer<typeof TimeBlockProposalSchema>;
@@ -205,11 +206,11 @@ export const CalendarBlockSchema = z.object({
   proposal_id: z.string().uuid().nullable(),
   task_id: z.string().uuid().nullable(),
   google_event_id: z.string().nullable(),
-  start_at: z.string().datetime(),
-  end_at: z.string().datetime(),
+  start_at: offsetDatetime(),
+  end_at: offsetDatetime(),
   status: z.enum(CALENDAR_BLOCK_STATUSES),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: offsetDatetime(),
+  updated_at: offsetDatetime(),
 });
 
 export type CalendarBlock = z.infer<typeof CalendarBlockSchema>;
@@ -233,7 +234,7 @@ export const ExecutionSessionSchema = z.object({
     .optional()
     .default(null),
   notes: z.string().nullable(),
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type ExecutionSession = z.infer<typeof ExecutionSessionSchema>;
@@ -246,7 +247,7 @@ export const ReviewEntrySchema = z.object({
   period_start: isoDate,
   period_end: isoDate,
   summary_json: JsonValueSchema,
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type ReviewEntry = z.infer<typeof ReviewEntrySchema>;
@@ -261,7 +262,7 @@ export const WinRecordSchema = z.object({
   detail: z.string().nullable(),
   occurred_at: isoDate,
   review_entry_id: z.string().uuid().nullable(),
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type WinRecord = z.infer<typeof WinRecordSchema>;
@@ -285,7 +286,7 @@ export const RollupSummarySchema = z.object({
   period_start: isoDate,
   period_end: isoDate,
   summary: RollupSummaryContentSchema,
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type RollupSummary = z.infer<typeof RollupSummarySchema>;
@@ -298,21 +299,10 @@ export const HealthCheckSchema = z.object({
   status: z.enum(HEALTH_CHECK_STATUSES),
   score: z.number().int(),
   details_json: JsonValueSchema,
-  checked_at: z.string().datetime(),
+  checked_at: offsetDatetime(),
 });
 
 export type HealthCheck = z.infer<typeof HealthCheckSchema>;
-
-// #743 P0: PostgREST serializes `timestamptz` columns with a numeric offset
-// ("+00:00"), not a "Z" suffix. Plain `z.string().datetime()` only accepts
-// "Z", so every real row read through this schema 503'd in production (the
-// OAuth callback died on this same read before the token exchange ever ran).
-// `{ offset: true }` accepts both "Z" and numeric-offset suffixes, so a value
-// written locally with `Date.prototype.toISOString()` (always "Z") and a
-// value read back from PostgREST (offset) both parse. See
-// `server.test.ts`'s "(#743 P0)" test for the verbatim production row this
-// must accept.
-const offsetDatetime = () => z.string().datetime({ offset: true });
 
 // Sanitized-only: this must never carry tokens, client secrets, or the OAuth
 // authorization code. `code`/`description` are Google's own error identifier
@@ -362,7 +352,7 @@ export const ExternalWriteEventSchema = z.object({
   result_summary_json: JsonValueSchema,
   result_status: z.enum(EXTERNAL_WRITE_RESULT_STATUSES),
   error_message: z.string().nullable(),
-  created_at: z.string().datetime(),
+  created_at: offsetDatetime(),
 });
 
 export type ExternalWriteEvent = z.infer<typeof ExternalWriteEventSchema>;

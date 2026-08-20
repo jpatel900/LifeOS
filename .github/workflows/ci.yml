@@ -145,6 +145,55 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      # Architecture boundaries as CI rules (chore/adopt-dependency-cruiser).
+      # `pnpm depcruise` runs scripts/agent/run-depcruise.mjs, which cruises
+      # apps/web and packages/* with .dependency-cruiser.cjs and fails on
+      # any error-severity rule violation. It also carries its own
+      # vacuous-pass guard: it reads each cruise's `--output-type json`
+      # module count and fails if apps/web sees fewer than 500 modules or
+      # packages sees fewer than 20 -- the signature of a cruise that
+      # silently resolved nothing (the exact npx/pnpm-hoisting failure mode
+      # this PR's setup notes call out) while still exiting 0.
+      - name: Dependency boundaries (dependency-cruiser)
+        run: pnpm depcruise
+
+  semgrep:
+    name: Semgrep static analysis
+    runs-on: ubuntu-latest
+    # Uses the official semgrep/semgrep container image (no SEMGREP_APP_TOKEN
+    # / semgrep ci needed for local rules): https://semgrep.dev/docs/semgrep-ci/sample-ci-configs
+    # "container: image: semgrep/semgrep" + "semgrep scan --config ...".
+    # Pinned to the version verified locally (1.172.0) so CI reproduces the
+    # same finding counts as the pre-merge verification for this job.
+    container:
+      image: semgrep/semgrep:1.172.0
+    # No path filter: this scans the whole apps/packages workspace tree for
+    # rule violations, same as Lint/Type-check/Test/Build above, which are
+    # also unconditional. The `changes` job's `heavy` gate only tracks
+    # apps/web/ and supabase/ (it exists to skip Playwright/Supabase e2e
+    # infra), so gating on it here would silently skip packages/-only PRs.
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      # BLOCKING: bans hand-typed WorkflowState annotations in test files
+      # repo-wide (issue #859). Paths are pinned to "apps packages" -- never
+      # bare repo root -- because semgrep's default ignore silently skips
+      # dirs named test/ or tests/.
+      - name: Enforce WorkflowState test-annotation ban
+        run: >
+          semgrep scan --config .semgrep/no-workflowstate-annotation-in-tests.yaml
+          --metrics=off --error apps packages
+
+      # BLOCKING: bans z.string().datetime() without { offset: true } (the exact gap
+      # that silently killed the calendar integration for 2 months, 2026-07-25 incident).
+      # This check is now blocking following fix #858's merge.
+      - name: Semgrep - datetime offset rule (blocking)
+        run: >
+          semgrep scan --config .semgrep/zod-datetime-requires-offset.yaml
+          --metrics=off --error apps packages
+
   e2e:
     name: Playwright E2E
     needs: changes

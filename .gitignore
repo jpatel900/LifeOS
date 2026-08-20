@@ -51,3 +51,6 @@ codex-*.json
 
 /coherence-map.html
 /lifeos-status.html
+
+# Graphify code graph (local, rebuilt per worktree)
+graphify-out/
