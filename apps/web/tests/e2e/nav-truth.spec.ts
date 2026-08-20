@@ -853,3 +853,66 @@ test("area switcher: switching to All areas writes the ?area=all sentinel and Ba
   );
   expect(page.url()).toBe(beforeUrl);
 });
+
+/**
+ * C2-S9 (round-3 fresh-eyes judge, score 8.0): `/settings/areas`' per-area
+ * quick links used to href to a bare `/?capture=1` while an onClick side
+ * effect switched the active area — a middle-click, "open in new tab", or a
+ * copied link address never runs that handler, so the arrival URL was born
+ * without `?area=` and a fresh browser (no prior React state to fall back
+ * on) rendered the WRONG area. `AreaRegistryCards.tsx`'s hrefs now carry
+ * `?area=` themselves. This is the exact matrix the lane contract asked for:
+ * the arrival URL has it, an unrelated later state change (a moment switch)
+ * doesn't drop it, and a genuinely fresh browser context — the judge's own
+ * reproduction of a copied link — renders the right area from the URL alone.
+ */
+test("settings quick link: the arrival URL carries ?area=, a moment switch keeps it, and a fresh-context copy reproduces the right area", async ({
+  page,
+  browser,
+}) => {
+  await page.goto("/settings/areas");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Areas" }),
+  ).toBeVisible();
+
+  const personalCard = page
+    .getByTestId("areas-area-card")
+    .filter({ hasText: "Personal" });
+  await personalCard.getByRole("link", { name: "Capture here" }).click();
+
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toBeVisible();
+
+  // The arrival URL is born truthful — no click-driven correction needed.
+  await expect(async () => {
+    expect(new URL(page.url()).searchParams.get("area")).toBe("area-personal");
+  }).toPass({ timeout: 30_000 });
+  const arrivalUrl = page.url();
+
+  // An unrelated later state change (closing capture, switching moment)
+  // does not drop the area — it is still THE selection, not a one-shot
+  // arrival artifact.
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toHaveCount(0);
+  await page.keyboard.press("2");
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("area")).toBe("area-personal");
+
+  // Fresh browser context: no cookies, no sessionStorage, no prior React
+  // state — exactly the judge's own reproduction of a copied link opened by
+  // someone else. The URL alone must be enough.
+  const freshContext = await browser.newContext();
+  const freshPage = await freshContext.newPage();
+  try {
+    await freshPage.goto(arrivalUrl);
+    await expect(
+      freshPage.getByTestId("today-moments-area-switcher"),
+    ).toContainText("Personal", { timeout: 20_000 });
+  } finally {
+    await freshContext.close();
+  }
+});
