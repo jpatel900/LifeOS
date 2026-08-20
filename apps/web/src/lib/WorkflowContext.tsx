@@ -99,6 +99,7 @@ import {
   pendingCaptureCount,
 } from "./capture/offlineQueue";
 import {
+  clearStoredTaskDrafts,
   listStoredTaskDrafts,
   reconcileStoredTaskDrafts,
 } from "./durability/draftStore";
@@ -158,6 +159,7 @@ import {
   resolveSupersededWrites,
 } from "./durability/durableWrites";
 import {
+  clearPendingWrites,
   listPendingWrites,
   pendingWriteCount,
   type ReplaySummary,
@@ -2376,7 +2378,27 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         markLocalOnly(savedOnThisDeviceBanner("Your swap"));
       }
     },
-    resetWorkflow: () => dispatch({ type: "reset" }),
+    // #885: a "local reset" that only rebuilds the in-memory (reducer) state
+    // leaves three device-local IndexedDB stores untouched — queued offline
+    // captures, undecided task drafts, and the pending-writes journal — each
+    // read back on the next mount (see the restore effects above), so the
+    // "wiped" data visibly comes back after a reload. These three stores are
+    // independent of the reducer's own sessionStorage snapshot and of each
+    // other, so clearing them in parallel is safe; they are awaited and
+    // sequenced to finish BEFORE the reducer's `reset` is dispatched, so a
+    // reload that races the reset can never find the stores still holding
+    // the old data. `refreshUnsyncedCount` afterward brings the visible
+    // unsynced-capture badge to zero in the same tab, matching the stores it
+    // now actually reflects.
+    resetWorkflow: async () => {
+      await Promise.all([
+        clearQueue(),
+        clearStoredTaskDrafts(),
+        clearPendingWrites(),
+      ]);
+      dispatch({ type: "reset" });
+      await refreshUnsyncedCount();
+    },
     approveProposalGoogleWrite: calendarApprovalOps.approveProposalGoogleWrite,
     cancelGoogleCalendarBlock: calendarApprovalOps.cancelGoogleCalendarBlock,
   };

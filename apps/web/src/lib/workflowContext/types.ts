@@ -312,7 +312,7 @@ export interface WorkflowContextValue {
   ) => void;
   clearWipRefusal: () => void;
   swapWipSlot: (slotTaskId: string) => void;
-  resetWorkflow: () => void;
+  resetWorkflow: () => Promise<void>;
   approveProposalGoogleWrite: (
     proposalId: string,
     options?: { acknowledgeFirstWriteWarning?: boolean },

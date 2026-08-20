@@ -54,8 +54,11 @@ export function LocalResetPanel() {
                 type="button"
                 variant="destructive"
                 onClick={() => {
-                  resetWorkflow();
-                  setResetState("success");
+                  // #885: await the real wipe (device-local IndexedDB stores,
+                  // then the in-memory reducer) before showing the success
+                  // message — the message promises an empty state, and it
+                  // must not be shown a beat before that is actually true.
+                  void resetWorkflow().then(() => setResetState("success"));
                 }}
               >
                 Yes, reset this browser
