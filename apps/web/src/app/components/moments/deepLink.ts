@@ -1,10 +1,14 @@
 /**
  * Moments pass P6 — packet: deep-link fallback shims.
  *
- * Pure mapping from a demoted stage-route path to the Today surface it
- * should deep-link into once the moments home flips at P7. This module does
- * not change any live route's rendering — it only defines the map + helpers
- * that TodayMoments' `deepLink` prop consumes.
+ * Parses the moments home's own query params (`?moment=`, `?sheet=`,
+ * `?capture=`/`?palette=`) into the target shape TodayMoments' `deepLink`
+ * prop consumes. Every demoted route (`/capture`, `/triage`, `/calendar`,
+ * `/execute`, `/review`, `/health`, `/areas`) now server-redirects straight
+ * into `/` carrying these params, so this is the single inbound parser for
+ * all of them — there is no path-keyed map to keep in sync with the redirect
+ * targets (C2-S6, #687): the redirect target IS the param, checked at file
+ * tier for each `page.tsx`.
  */
 
 import { isSheetValue, type SheetValue } from "./sheetValues";
@@ -14,23 +18,6 @@ export type DeepLinkTarget = {
   overlay?: "capture" | "palette";
   sheet?: SheetValue;
 } | null;
-
-const DEEP_LINK_MAP: Record<string, DeepLinkTarget> = {
-  "/capture": { overlay: "capture" },
-  "/triage": { sheet: "triage" },
-  "/calendar": { sheet: "plan" },
-  "/execute": { moment: "flow" },
-  "/review": { moment: "close" },
-  "/health": null,
-  "/areas": null,
-};
-
-export function deepLinkTargetForPath(path: string): DeepLinkTarget {
-  if (Object.prototype.hasOwnProperty.call(DEEP_LINK_MAP, path)) {
-    return DEEP_LINK_MAP[path];
-  }
-  return null;
-}
 
 /**
  * P7 (issue #687) wiring: the demoted stage routes now server-redirect into
@@ -51,14 +38,25 @@ function isTruthyFlag(value: RawParam): boolean {
   return v === "1" || v === "true" || v === "";
 }
 
+/**
+ * C2-S6 (#687): COMPOSES rather than picks first-match. `/?moment=flow&sheet=
+ * plan` must open Flow WITH the plan sheet — a refresh, a direct URL, or a
+ * bookmark that carries more than one target field all need to land on the
+ * same screen the params describe, not silently drop everything after the
+ * first field that matched. TodayMoments' own consumer (the `deepLink` effect)
+ * already applies `moment`, `overlay` and `sheet` independently — this parser
+ * was the only piece still throwing the rest away.
+ */
 export function deepLinkTargetFromParams(
   params: Record<string, RawParam> | undefined,
 ): DeepLinkTarget {
   if (!params) return null;
 
+  const target: NonNullable<DeepLinkTarget> = {};
+
   const moment = first(params.moment);
   if (moment === "start" || moment === "flow" || moment === "close") {
-    return { moment };
+    target.moment = moment;
   }
 
   // C2-S3: one list of sheet names, shared with `useSheetUrlState`. The inbound
@@ -67,15 +65,14 @@ export function deepLinkTargetFromParams(
   // failure #804 fixed for the two sheets that existed then.
   const sheet = first(params.sheet);
   if (isSheetValue(sheet)) {
-    return { sheet };
+    target.sheet = sheet;
   }
 
   if (isTruthyFlag(params.capture)) {
-    return { overlay: "capture" };
-  }
-  if (isTruthyFlag(params.palette)) {
-    return { overlay: "palette" };
+    target.overlay = "capture";
+  } else if (isTruthyFlag(params.palette)) {
+    target.overlay = "palette";
   }
 
-  return null;
+  return Object.keys(target).length > 0 ? target : null;
 }

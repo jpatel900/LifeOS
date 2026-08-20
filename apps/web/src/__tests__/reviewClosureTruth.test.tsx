@@ -71,6 +71,10 @@ vi.mock("@/lib/workflowContext/persistenceSync", async (importOriginal) => {
 beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+  // C2-S6 (#687): `/review` is a flag-gated redirect shim now — this file
+  // exercises the LEGACY cockpit review screen directly, which only renders
+  // under the #590 rollback.
+  vi.stubEnv("NEXT_PUBLIC_MOMENTS_HOME", "false");
   window.localStorage.clear();
   window.sessionStorage.clear();
   navigationMock.pathname = "/review";
