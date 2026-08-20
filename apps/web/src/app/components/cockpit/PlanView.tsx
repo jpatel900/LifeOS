@@ -2,6 +2,11 @@ import { useState } from "react";
 import { buildCockpitViewModel } from "@/lib/cockpit/viewModel";
 import type { ProposalRecalibrationVM } from "@/lib/learning/learningSurface";
 import { cn } from "@/lib/utils";
+import {
+  createEmptyAccountIdAliases,
+  type AccountIdAliases,
+} from "@/lib/workflow/shared";
+import { stableWorkflowKey } from "@/lib/workflowContext/reducerCore";
 import { GoogleCalendarApprovalBridge } from "../GoogleCalendarApprovalBridge";
 import { HIT_TARGET_MIN } from "../moments/hitTarget";
 import { estimate, formatHour, Panel, proposalMinutes } from "./shared";
@@ -85,6 +90,11 @@ export function PlanView({
   appliedDurationForArea,
   decidedRecalIds,
   onDecideRecalibration,
+  // #886 — the reducer's device -> account id alias map. Optional, defaulting
+  // to empty (every key then falls back to the row's own id, today's
+  // behavior) so this stays a mechanical, non-breaking addition for any
+  // caller that does not thread it through yet.
+  accountIdByLocalId = createEmptyAccountIdAliases(),
 }: {
   vm: ReturnType<typeof buildCockpitViewModel>;
   selectedTaskId: string | null;
@@ -118,7 +128,11 @@ export function PlanView({
     },
     decision: "accepted" | "dismissed",
   ) => void;
+  accountIdByLocalId?: AccountIdAliases;
 }) {
+  // #886 — reachable only under the #590 rollback flag, same id-swap class
+  // as PlanSheet.tsx (#844): the list keys below survive the device ->
+  // account id swap by resolving through this alias map.
   const onlyReadyTaskId = vm.today.length === 1 ? vm.today[0].id : null;
   const taskIdToPlace = selectedTaskId ?? onlyReadyTaskId;
   const taskToPlace =
@@ -271,7 +285,7 @@ export function PlanView({
             {vm.today.length ? (
               vm.today.map((task) => (
                 <button
-                  key={task.id}
+                  key={stableWorkflowKey(accountIdByLocalId.tasks, task.id)}
                   type="button"
                   onClick={() =>
                     onSelectTask(selectedTaskId === task.id ? null : task.id)
@@ -303,7 +317,7 @@ export function PlanView({
                 // full-cell fill; same tint+border treatment as
                 // LaunchStepPrompt above.
                 <div
-                  key={task.id}
+                  key={stableWorkflowKey(accountIdByLocalId.tasks, task.id)}
                   className="rounded-[var(--surface-radius)] border p-4 text-[var(--blu-fg)]"
                   style={{
                     borderColor: "var(--blu-rng)",
@@ -377,7 +391,10 @@ export function PlanView({
             {vm.proposals.length ? (
               vm.proposals.map(({ allDayContexts, proposal, task, hour }) => (
                 <div
-                  key={proposal.id}
+                  key={stableWorkflowKey(
+                    accountIdByLocalId.proposals,
+                    proposal.id,
+                  )}
                   className="rounded-[var(--surface-radius)] border border-[var(--ln)] bg-[var(--sf2)] p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
