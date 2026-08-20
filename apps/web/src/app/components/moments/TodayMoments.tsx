@@ -59,6 +59,8 @@ import { ReviewSheet } from "./ReviewSheet";
 import { HealthSheet } from "./HealthSheet";
 import { AreasSheet } from "./AreasSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
+import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
+import { isSheetValue } from "./sheetValues";
 import { parseMomentParam, useMomentUrlState } from "./useMomentUrlState";
 import { EndSessionSheet } from "./EndSessionSheet";
 import type { DeepLinkTarget } from "./deepLink";
@@ -379,11 +381,26 @@ export function TodayMoments({
     return stored?.timeDisplay ?? "countdown";
   });
 
-  const [captureOpen, setCaptureOpen] = useState(false);
+  // C2-S7 (#687 finding 2): capture and palette are now URL-visible via the
+  // same push/pop/adopt contract every sheet already has — see
+  // useOverlayUrlState's own header for why closing needs to survive being
+  // composed with another push (the palette can open capture or a sheet from
+  // inside itself).
+  const {
+    open: captureOpen,
+    openOverlay: openCapture,
+    closeOverlay: closeCapture,
+    adoptOverlayFromUrl: adoptCaptureFromUrl,
+  } = useOverlayUrlState("capture");
   const [captureDraft, setCaptureDraft] = useState<string>(() =>
     readStoredCaptureDraft(),
   );
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const {
+    open: paletteOpen,
+    openOverlay: openPalette,
+    closeOverlay: closePalette,
+    adoptOverlayFromUrl: adoptPaletteFromUrl,
+  } = useOverlayUrlState("palette");
   // C2 Target Card 2: the sheet is URL-visible and Back/Forward-correct.
   // `openSheet` pushes `?sheet=<value>`, `closeSheet` undoes exactly that,
   // and popstate re-reads the URL as the authority — see useSheetUrlState.
@@ -483,8 +500,8 @@ export function TodayMoments({
     // before this component mounted) — adopt it without pushing a second,
     // redundant history entry. Mirrors `adoptSheetFromUrl` below.
     if (deepLink.moment) adoptMomentFromUrl(deepLink.moment);
-    if (deepLink.overlay === "capture") setCaptureOpen(true);
-    if (deepLink.overlay === "palette") setPaletteOpen(true);
+    if (deepLink.overlay === "capture") adoptCaptureFromUrl(true);
+    if (deepLink.overlay === "palette") adoptPaletteFromUrl(true);
     if (deepLink.sheet) adoptSheetFromUrl(deepLink.sheet);
   }, [
     deepLink,
@@ -494,12 +511,21 @@ export function TodayMoments({
     onboarding.pending,
     adoptSheetFromUrl,
     adoptMomentFromUrl,
+    adoptCaptureFromUrl,
+    adoptPaletteFromUrl,
   ]);
 
   // FR-027 (F-G1b) share target: text shared into the installed PWA lands on
   // the moments home as ?shared_text=. Open the capture overlay prefilled with
   // it exactly once (deferring to the re-entry ritual, same as deep links),
   // then strip the param so a refresh doesn't reopen it.
+  //
+  // C2-S7: the SAME replaceState now also WRITES `capture=1` (not just
+  // strips `shared_text`) — otherwise this path would reintroduce the exact
+  // URL-truth gap finding 2 exists to close, just from a different entry
+  // point. `adoptCaptureFromUrl` (not `openCapture`) matches: the URL is
+  // being set directly here, so there is nothing for the overlay hook's own
+  // push to do.
   const sharedTextAppliedRef = useRef(false);
   useEffect(() => {
     if (sharedTextAppliedRef.current) return;
@@ -514,16 +540,70 @@ export function TodayMoments({
     sharedTextAppliedRef.current = true;
     setCaptureDraft(shared);
     writeStoredCaptureDraft(shared);
-    setCaptureOpen(true);
+    adoptCaptureFromUrl(true);
 
     params.delete("shared_text");
+    params.set("capture", "1");
     const query = params.toString();
     window.history.replaceState(
       null,
       "",
       `${window.location.pathname}${query ? `?${query}` : ""}`,
     );
-  }, [ritualActive, ritual.pending, onboardingActive, onboarding.pending]);
+  }, [
+    ritualActive,
+    ritual.pending,
+    onboardingActive,
+    onboarding.pending,
+    adoptCaptureFromUrl,
+  ]);
+
+  // C2-S7 (#687 finding 3, URL hygiene): an invalid `?sheet=`, `?capture=`
+  // or `?palette=` value renders nothing — `deepLinkTargetFromParams`
+  // already treats it exactly like an absent param, matching its own
+  // documented precedence ("Unknown/absent params yield null (a plain home
+  // visit)") — but the raw value was left sitting in the address bar
+  // unexplained, so a refresh kept showing a URL that named a state the
+  // screen never actually entered. Scrubbed via `replaceState`, once on
+  // mount, independent of the ritual/onboarding gate above: there is no
+  // legitimate application to defer for a value that was never valid in the
+  // first place, so scrubbing it early cannot race a later real one. Never
+  // grows history (replaceState only) and never touches a VALID value —
+  // those stay owned by the deep-link effect above and the overlay/sheet
+  // hooks' own popstate handling.
+  const invalidParamsScrubbedRef = useRef(false);
+  useEffect(() => {
+    if (invalidParamsScrubbedRef.current) return;
+    if (typeof window === "undefined") return;
+    invalidParamsScrubbedRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    let changed = false;
+
+    const sheetParam = params.get("sheet");
+    if (sheetParam !== null && !isSheetValue(sheetParam)) {
+      params.delete("sheet");
+      changed = true;
+    }
+    const captureParam = params.get("capture");
+    if (captureParam !== null && !parseOverlayParam(captureParam)) {
+      params.delete("capture");
+      changed = true;
+    }
+    const paletteParam = params.get("palette");
+    if (paletteParam !== null && !parseOverlayParam(paletteParam)) {
+      params.delete("palette");
+      changed = true;
+    }
+
+    if (!changed) return;
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -728,7 +808,7 @@ export function TodayMoments({
         return;
       }
       if (stage === "capture") {
-        setCaptureOpen(true);
+        openCapture();
         return;
       }
       if (stage === "execute") {
@@ -736,7 +816,7 @@ export function TodayMoments({
         return;
       }
     },
-    [openSheet, setMoment],
+    [openSheet, setMoment, openCapture],
   );
 
   // #588: the only close-day path in this shell. "Day closed" is reported
@@ -805,17 +885,24 @@ export function TodayMoments({
   // defensive fallback, not as the primary Escape path.
   const closeTopOverlay = useCallback(() => {
     if (paletteOpen) {
-      setPaletteOpen(false);
+      closePalette();
       return;
     }
     if (captureOpen) {
-      setCaptureOpen(false);
+      closeCapture();
       return;
     }
     if (activeSheet) {
       closeSheet();
     }
-  }, [paletteOpen, captureOpen, activeSheet, closeSheet]);
+  }, [
+    paletteOpen,
+    captureOpen,
+    activeSheet,
+    closeSheet,
+    closePalette,
+    closeCapture,
+  ]);
 
   // FR-028 recovery candidate derivation: deterministic, pure. Ordered list
   // = [stalest open task, then each planned task deferral], deduped by
@@ -897,8 +984,8 @@ export function TodayMoments({
 
   useMomentKeyboard({
     onSwitchMoment: setMoment,
-    onCapture: () => setCaptureOpen(true),
-    onPalette: () => setPaletteOpen(true),
+    onCapture: () => openCapture(),
+    onPalette: () => openPalette(),
     onPrimary: runPrimary,
     onEscape: closeTopOverlay,
     enabled: topbarShortcutsEnabled,
@@ -998,7 +1085,7 @@ export function TodayMoments({
           setMoment("close");
           break;
         case "open-capture":
-          setCaptureOpen(true);
+          openCapture();
           break;
         case "open-triage":
           openSheet("triage");
@@ -1041,6 +1128,7 @@ export function TodayMoments({
       handleCloseDay,
       setMoment,
       openSheet,
+      openCapture,
     ],
   );
 
@@ -1375,7 +1463,7 @@ export function TodayMoments({
           parse was in flight; parsing now happens in triage, and a sort
           running there must never stop you writing down a new thought. */}
       <CaptureAffordance
-        onOpen={() => setCaptureOpen(true)}
+        onOpen={() => openCapture()}
         unsyncedCount={unsyncedCaptureCount}
       />
 
@@ -1391,9 +1479,9 @@ export function TodayMoments({
       <BottomNavigator
         value={moment}
         onChange={setMoment}
-        onCapture={() => setCaptureOpen(true)}
+        onCapture={() => openCapture()}
         unsyncedCount={unsyncedCaptureCount}
-        onOpenPalette={() => setPaletteOpen(true)}
+        onOpenPalette={() => openPalette()}
       />
 
       <CaptureOverlay
@@ -1443,20 +1531,20 @@ export function TodayMoments({
               run: () => openSheet("triage"),
             });
           }
-          setCaptureOpen(false);
+          closeCapture();
           // Clear the draft only after a successful save — Esc/close must
           // preserve it, so this write happens nowhere else.
           setCaptureDraft("");
           writeStoredCaptureDraft("");
         }}
-        onClose={() => setCaptureOpen(false)}
+        onClose={() => closeCapture()}
       />
 
       <CommandPalette
         open={paletteOpen}
         actions={paletteActions}
         onRun={runPaletteAction}
-        onClose={() => setPaletteOpen(false)}
+        onClose={() => closePalette()}
       />
 
       <TriageSheet
