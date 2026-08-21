@@ -77,6 +77,9 @@ jobs:
       - name: red-guard diagnosis self-test
         run: node scripts/agent/red-guard-diagnose.mjs --self-test
 
+      - name: check-migration-drift self-test
+        run: node scripts/agent/check-migration-drift.mjs --self-test
+
   migration-timestamp-collision:
     name: Migration timestamp collision precheck
     if: github.event_name == 'pull_request'

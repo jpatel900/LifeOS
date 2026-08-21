@@ -23,6 +23,7 @@ import ExecutePage from "./execute/page";
 import ReviewPage from "./review/page";
 import HealthPage from "./health/page";
 import AreasOverviewPage from "./areas/page";
+import SettingsPage from "./settings/page";
 
 // C2-S6 (#687): all 8 demoted routes are redirect shims now. Plan/Review/
 // Health/Areas capability parity was verified at file tier before this flip
@@ -134,5 +135,41 @@ describe("legacy stage-route redirect shims (#687)", () => {
         expect(result.props.stage).toBe(stage);
       });
     }
+  });
+});
+
+// #687 round-6 finding 2: `/settings` is a separate describe block, not a
+// `cases` entry above. Every route in `cases` is a demoted COCKPIT stage —
+// gated behind `NEXT_PUBLIC_MOMENTS_HOME`, with a `CockpitStage` to fall back
+// to under the #590 rollback. `/settings` predates that split entirely: it
+// has no cockpit-stage equivalent, so it always redirects to
+// `/settings/areas`, flag or no flag. Folding it into `cases` would make the
+// rollback describe block above call `Page()` and assert a `.props.stage`
+// that `SettingsPage` never has.
+describe("/settings redirect shim (#687 round-6 finding 2)", () => {
+  const original = process.env.NEXT_PUBLIC_MOMENTS_HOME;
+
+  beforeEach(() => {
+    redirectMock.mockReset();
+  });
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    } else {
+      process.env.NEXT_PUBLIC_MOMENTS_HOME = original;
+    }
+  });
+
+  it("redirects to /settings/areas with the moments home flag unset (default)", () => {
+    delete process.env.NEXT_PUBLIC_MOMENTS_HOME;
+    SettingsPage();
+    expect(redirectMock).toHaveBeenCalledWith("/settings/areas");
+  });
+
+  it("still redirects to /settings/areas under the #590 rollback — no cockpit stage exists for /settings", () => {
+    process.env.NEXT_PUBLIC_MOMENTS_HOME = "false";
+    SettingsPage();
+    expect(redirectMock).toHaveBeenCalledWith("/settings/areas");
   });
 });
