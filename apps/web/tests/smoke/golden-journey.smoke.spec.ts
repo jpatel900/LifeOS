@@ -70,6 +70,28 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
 }) => {
   const captureText = goldenCaptureText(runId);
 
+  // ---- External-write tripwire: the whole journey, not one moment ---------
+  // The real safety invariant is "this journey never writes to Google
+  // Calendar" — not "a particular control is invisible". A DOM-visibility
+  // check only proves a snapshot; it says nothing about a future edit that
+  // adds a click. This intercepts the exact two write routes the approval
+  // bridge calls (`calendarApproval.ts`: `postGoogleCalendarRoute` posts to
+  // these and only these) and aborts + records any hit, for the ENTIRE
+  // journey below, in both branches. `blockedGoogleWrites` is asserted empty
+  // at the end of the test. This is the guard the approval-gate leg further
+  // down relies on to stay honest even though it now tolerates an Approve
+  // control existing (#840 — see that leg's comment).
+  const blockedGoogleWrites: string[] = [];
+  await page.route(
+    /\/api\/google-calendar\/(create-event|cancel-event)(\?|$)/,
+    async (route) => {
+      blockedGoogleWrites.push(
+        `${route.request().method()} ${route.request().url()}`,
+      );
+      await route.abort("failed");
+    },
+  );
+
   // ---- Authenticate so the journey exercises the PERSISTED path -----------
   // With creds + Supabase configured, log in first so the cockpit's browser
   // session carries a real Supabase session and rows persist (enabling the
@@ -257,6 +279,20 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
   ).toBeVisible();
   console.log("[smoke] PASS health: health surface reflects a truthful state.");
 
+  // ---- External-write tripwire verdict (whole journey) ---------------------
+  // The route-level guard installed at the top of this test has now watched
+  // the entire journey, both branches. This is the assertion that actually
+  // keeps the "no external write" invariant honest -- see the approval-gate
+  // leg above for why a DOM-visibility check alone stopped being enough.
+  expect(
+    blockedGoogleWrites,
+    "the golden journey must never send a Google Calendar write request " +
+      `(intercepted: ${blockedGoogleWrites.join(", ") || "none"})`,
+  ).toEqual([]);
+  console.log(
+    "[smoke] PASS external-write tripwire: zero Google Calendar write requests over the whole journey.",
+  );
+
   // ---- Best-effort marker-scoped cleanup ----------------------------------
   if (authenticated) {
     // Reuse the session established at the start of the journey.
@@ -304,13 +340,20 @@ test("golden journey: capture -> triage Sort -> (authenticated: today -> gate ->
  * 'Workflow stages' })" — and the body below passes end to end.
  *
  * WHAT MOVED, AND WHAT DID NOT:
- * - "Accept local" (a Plan-stage time-block proposal) has NO moments-home
- *   equivalent. The moments home's Plan sheet is a read-only summary of
- *   today's blocks; proposals live only in the full Plan stage at `/calendar`,
- *   which #687 deliberately did NOT redirect (owner-gated, port/keep/drop
- *   undecided). So the journey no longer creates a time block, and the Close
+ * - "Accept local" (a Plan-stage time-block proposal) had NO moments-home
+ *   equivalent when this journey was first re-anchored for #719. RE-ANCHORED
+ *   AGAIN (refs #856): PR #840 (Final UX Loop C2-S2 replant, part of #687)
+ *   ported the whole Plan surface inline, so that is no longer true — the
+ *   moments home's Plan sheet is not a read-only summary any more; it has
+ *   its own `plan-sheet-proposal-accept-<id>` / `-later-<id>` /
+ *   `-reject-<id>` controls and hour-rail placement
+ *   (`plan-sheet-hour-<hour>`), wired to the same `useWorkflow()` actions the
+ *   old Plan stage used (see PlanSheet.tsx's capability table). This journey
+ *   still does not exercise them: accepting a proposal or placing a block
+ *   would be a real write against the account for no assertion this leg
+ *   needs — the same restraint the task-map offer above shows. So the Close
  *   moment's "Completed today" counter — which counts completed calendar
- *   BLOCKS — is therefore not asserted here. It is not silently dropped: see
+ *   BLOCKS — is still not asserted here. It is not silently dropped: see
  *   the approval-gate leg below, which asserts the invariant that actually
  *   matters on this surface.
  * - "Complete" became the Flow moment's Done -> end-session sheet (#572): a
@@ -392,29 +435,56 @@ async function runAuthenticatedJourney(
   console.log("[smoke] PASS today: the accepted task is on the Start moment.");
 
   // ---- Approval gate: sacred STOP before any external write ---------------
-  // The moments home's Plan surface is a summary sheet. The invariant to prove
-  // here is that NOTHING on it can write to Google: the only route to the
-  // approval bridge is an explicit link out to the full Plan stage
-  // (`/calendar`, #687 OWNER-GATE — not redirected), which the smoke asserts
-  // exists and does NOT follow. The default smoke never writes externally.
+  // RE-ANCHORED (refs #856, was `plan-sheet-open-full`). PR #840 (Final UX
+  // Loop C2-S2 replant, part of #687) deleted the old "Open full view ->"
+  // link-out this leg used to check for: the moments-home Plan sheet IS the
+  // full Plan surface now (hour rail, proposals, and the real
+  // `GoogleCalendarApprovalBridge`, mounted inline — see PlanSheet.tsx's
+  // docstring). Checking for the deleted link is why this leg has failed
+  // every run since 2026-08-09 (issue #856) while production itself has been
+  // fine the whole time: PlanSheet.test.tsx asserts the link's ABSENCE on
+  // purpose ("this IS the full view").
+  //
+  // The invariant this leg proves did not get weaker, it changed shape:
+  //   1. The real Plan surface, with its Google approval gate, is reachable
+  //      inline from the moments home — proven by `google-approval-bridge`
+  //      (the bridge's own testid, unconditionally rendered — see its
+  //      component) being present, not by a link that no longer exists.
+  //   2. An "Approve" control MAY legitimately exist now (it could not
+  //      before #840); its presence or absence is asserted tolerantly,
+  //      assert-if-present, the same idiom the triage-map-offer leg above
+  //      uses. What must hold either way — and does NOT rely on this DOM
+  //      check alone — is that NO Google write request is ever sent by this
+  //      journey: the route-level tripwire installed at the top of this test
+  //      (`blockedGoogleWrites`) covers that for real, for the whole run, not
+  //      just this moment.
   await page.getByTestId("pipeline-overview-stage-plan").click();
   const planSheet = page.getByTestId("plan-sheet");
   await expect(planSheet).toBeVisible({ timeout: 30_000 });
   await expect(
-    page.getByTestId("plan-sheet-open-full"),
-    "the moments Plan sheet must still offer the route to the full Plan stage",
-  ).toBeVisible();
-  await expect(
-    planSheet.getByRole("button", { name: /Approve Google event for/ }),
-    "no Google write control may exist inline on the moments Plan surface",
-  ).toHaveCount(0);
+    planSheet.getByTestId("google-approval-bridge"),
+    "the moments Plan sheet must mount the real Google approval bridge inline (#840 -- this IS the full Plan surface now, not a link out to one)",
+  ).toBeVisible({ timeout: 30_000 });
+  const approveButtons = planSheet.getByRole("button", {
+    name: /Approve Google event for/,
+  });
+  const approveCount = await approveButtons.count();
+  if (approveCount > 0) {
+    console.log(
+      `[smoke] approval-gate: ${approveCount} inline Google write control(s) present ` +
+        "(a Google Calendar is connected for this account) -- present is fine, the " +
+        "smoke does not click it (assert-if-present; the route-level tripwire is the " +
+        "real guard against a write).",
+    );
+  } else {
+    console.log(
+      "[smoke] approval-gate: no inline Google write control present (no Google " +
+        "Calendar connected for this account) -- absent is also fine.",
+    );
+  }
   console.log(
-    "[smoke] PASS approval-gate: no inline Google write on the moments Plan surface; " +
-      "the only route out is the explicit link to the full Plan stage, deliberately not followed.",
-  );
-  console.log(
-    "[smoke] NOT EXERCISED: the Google approval bridge itself. It lives only at /calendar, " +
-      "which #687 did not redirect (owner-gated). Re-anchor once port/keep/drop is decided.",
+    "[smoke] PASS approval-gate: the real Plan surface is mounted inline with its " +
+      "Google approval bridge; no Approve/Cancel control was clicked.",
   );
   await page.getByTestId("moment-sheet-close").click();
   await expect(page.getByTestId("moment-sheet")).toHaveCount(0);
@@ -493,6 +563,18 @@ async function runAuthenticatedJourney(
   // complete". That is an app-truthfulness gap, not a test gap, so it is
   // reported here rather than asserted away — and the smoke deliberately does
   // NOT assert "the task left Start", because on today's build it does not.
+  //
+  // STALENESS FLAG (refs #856, not re-verified as part of this fix): this
+  // paragraph's "scheduling happens only in the full Plan stage at /calendar"
+  // framing predates PR #840, which ported hour-rail placement
+  // (`plan-sheet-hour-<hour>`) onto the moments-home Plan sheet itself. That
+  // may mean a moments-home path to `scheduled` now exists too — but this
+  // fix lane only re-verified the approval-gate leg (refs #856) and did not
+  // re-check `execution_sessions` persistence against the current app, so
+  // the console.log below and this paragraph are left exactly as they were.
+  // AGENT-TODO: re-verify whether `execution_sessions` still ends a journey
+  // with 0 rows now that the moments-home Plan sheet can place a block, and
+  // update this paragraph and the "NOT EXERCISED" log with whatever is true.
   console.log(
     "[smoke] NOT EXERCISED: persistence of the focus session outcome. On the moments home a " +
       "session started from the first move of an unplanned (active, not scheduled) task records " +
