@@ -237,9 +237,12 @@ describe("useSheetUrlState (C2 Target Card 2)", () => {
  * NOT modeled: `startTransition`'s deferral (both (1)'s resync and (2)'s
  * re-stamp are applied here synchronously, not scheduled). A fix proven
  * against this harness closes the UNBOUNDED staleness window (stale until
- * some later, unrelated navigation cashes it in) down to a sub-render-tick
- * one; whether that residual window is ever user-observable is a
- * live-browser question the PR states as unverified at this tier.
+ * some later, unrelated navigation cashes it in) down to one bounded by
+ * whenever React flushes that transition — NOT one render tick; #897's own
+ * CI evidence had a stale stamp land ~83ms after the strip, with no
+ * guaranteed ordering against whatever else runs in between. Whether that
+ * residual window is ever user-observable is a live-browser question the
+ * PR states as unverified at this tier.
  */
 function installNextRouterHistorySimulator() {
   const nativePushState = window.history.pushState.bind(window.history);

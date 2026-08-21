@@ -148,12 +148,17 @@
  * did, not a blind sweep.
  *
  * `startTransition`'s deferral is NOT undone by this fix: a resync is
- * scheduled, not synchronous, so a sub-render-tick window where
- * `canonicalUrl` is still stale survives. What this closes is the
- * UNBOUNDED window — stale until some unrelated LATER navigation cashes it
- * in — down to that much smaller one. Whether the residual window is ever
- * user-observable is a live-browser question; see the PR for what remains
- * unverified without one.
+ * scheduled at TRANSITION priority, not applied synchronously, so a window
+ * survives where `canonicalUrl` is still stale — bounded by whenever React
+ * gets around to flushing that transition, not by one render tick. That is
+ * not provably small: this file's own CI evidence (#897) had a stale stamp
+ * land roughly 83ms after the strip, and nothing here guarantees an upper
+ * bound or an ordering against whatever else dispatches in that window.
+ * What this fix closes is the UNBOUNDED window this file used to leave open
+ * — stale until some unrelated LATER navigation cashes it in — down to
+ * that bounded-by-a-transition-flush one. Whether the residual window is
+ * ever user-observable is a live-browser question; see the PR for what
+ * remains unverified without one.
  */
 
 let nextEntryId = 1;
