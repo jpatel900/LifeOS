@@ -21,5 +21,10 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
     return true;
   }
-  return target.isContentEditable;
+  // `=== true`, not a bare return: real browsers always resolve
+  // `isContentEditable` to a boolean, but jsdom (the test environment)
+  // resolves it to `undefined` for a plain element with no `contenteditable`
+  // attribute — this keeps the function honoring its declared `boolean`
+  // return type in both.
+  return target.isContentEditable === true;
 }

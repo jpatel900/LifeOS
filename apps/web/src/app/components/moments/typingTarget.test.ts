@@ -31,16 +31,12 @@ describe("isTypingTarget", () => {
 
   // The bug: BUTTON/A used to be folded into this same "typing" bucket,
   // which silently killed every window-level shortcut the instant focus
-  // landed on ANY control. `toBeFalsy` (not `toBe(false)`): jsdom's
-  // `isContentEditable` returns `undefined` rather than `false` for a plain
-  // element with no `contenteditable` attribute (real browsers always
-  // return a boolean) — an environment quirk, not something this function
-  // controls, since it just returns that property through.
+  // landed on ANY control.
   it.each(["BUTTON", "A", "DIV"])(
     "returns false for a <%s> — not a typing context",
     (tag) => {
       const element = document.createElement(tag);
-      expect(isTypingTarget(element)).toBeFalsy();
+      expect(isTypingTarget(element)).toBe(false);
     },
   );
 });
