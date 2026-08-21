@@ -149,6 +149,10 @@ describe("MastheadThemeToggle", () => {
   // Same defect, worse case: clicking the toggle itself moves focus onto
   // its own button, so the pre-fix isTypingTarget blocked "D" from ever
   // firing again without first clicking elsewhere to move focus off it.
+  // Uses `.focus()`, not `fireEvent.click`, deliberately: a click's own
+  // `onClick` calls `setTheme` directly regardless of the keydown listener,
+  // which would make this pass for the wrong reason and hide a regression
+  // — focusing without clicking isolates the keydown listener alone.
   it("keeps toggling on 'D' while its own button holds focus", async () => {
     useThemeMock.mockReturnValue({ theme: "dark", setTheme: setThemeMock });
 
@@ -156,7 +160,7 @@ describe("MastheadThemeToggle", () => {
     const button = await screen.findByTestId("masthead-theme-toggle");
     await waitFor(() => expect(button).not.toBeDisabled());
 
-    fireEvent.click(button); // focuses the button, as a real click would
+    button.focus();
     fireEvent.keyDown(button, { key: "d" });
 
     expect(setThemeMock).toHaveBeenCalledWith("light");

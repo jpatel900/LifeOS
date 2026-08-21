@@ -245,12 +245,16 @@ describe("AreaSelector", () => {
   // Same defect, worse case: the widget's OWN trigger button focuses itself
   // on click, so the pre-fix isTypingTarget blocked "A" from ever cycling a
   // SECOND time without first clicking somewhere else to move focus off it.
+  // Uses `.focus()`, not `fireEvent.click`, deliberately: a click on this
+  // trigger also toggles the listbox open/closed via its own `onClick`,
+  // which is an unrelated side effect this test doesn't want to assert on
+  // — focusing without clicking isolates the keydown listener alone.
   it("keeps cycling on 'A' while its own trigger button holds focus", () => {
     const onChange = vi.fn();
     render(<AreaSelector areas={AREAS} value={null} onChange={onChange} />);
 
     const trigger = screen.getByTestId("today-moments-area-switcher");
-    fireEvent.click(trigger); // focuses the trigger, as a real click would
+    trigger.focus();
 
     fireEvent.keyDown(trigger, { key: "a" });
     expect(onChange).toHaveBeenLastCalledWith("area-1");
