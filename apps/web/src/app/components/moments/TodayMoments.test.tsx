@@ -1596,7 +1596,7 @@ describe("TodayMoments — P5 pipeline rail and sheets", () => {
     expect(screen.queryByTestId("flow-moment")).not.toBeInTheDocument();
   });
 
-  it("the command palette offers 'Open triage' and 'Open plan', each opening the matching sheet", () => {
+  it("the command palette offers 'Open triage', 'Open plan' and 'Open review', each opening the matching sheet", () => {
     renderToday({ initialMoment: "start" });
 
     fireEvent.keyDown(window, { key: "k", metaKey: true });
@@ -1617,6 +1617,39 @@ describe("TodayMoments — P5 pipeline rail and sheets", () => {
       "aria-label",
       "Plan",
     );
+
+    fireEvent.click(screen.getByTestId("moment-sheet-close"));
+    expect(screen.queryByTestId("moment-sheet-dialog")).not.toBeInTheDocument();
+
+    // C2-S11 (#687 round-5 judge, C3 blocker): "Open review" was missing
+    // entirely — typing "review" into the palette returned "No commands
+    // match" even though the sheet itself has worked since C2-S3.
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByTestId("command-palette-option-open-review"));
+    expect(screen.getByTestId("moment-sheet-dialog")).toHaveAttribute(
+      "aria-label",
+      "Review",
+    );
+    expect(new URLSearchParams(window.location.search).get("sheet")).toBe(
+      "review",
+    );
+  });
+
+  // C2-S11 (#687 round-5 judge): pins the palette's own fuzzy-match search
+  // actually surfaces "Open review" for the query the judge typed —
+  // reproduces "typing 'review' returns No commands match" as a red-first
+  // regression guard, not just proving the click-through works once found.
+  it("typing 'review' into the palette search surfaces 'Open review'", () => {
+    renderToday({ initialMoment: "start" });
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    const input = screen.getByTestId("command-palette-input");
+    fireEvent.change(input, { target: { value: "review" } });
+
+    expect(
+      screen.getByTestId("command-palette-option-open-review"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/No commands match/)).not.toBeInTheDocument();
   });
 
   // C2-S6 mutation-proven coverage gap (adversarial verifier, 2026-08-20):

@@ -770,6 +770,128 @@ test("Back closes the command palette (opened via Cmd+K) and restores the prior 
   expect(page.url()).toBe(beforeUrl);
 });
 
+/**
+ * C2-S11 (#687 round-5 judge, C3 blocker — worst defect of the round):
+ * typing "review" into the command palette returned "No commands match",
+ * even though the Review sheet has worked since C2-S3 (reachable from the
+ * Pipeline rail). No deliberate-omission decision existed anywhere near the
+ * palette's command list — a straight gap, closed the same way its
+ * siblings (triage/plan/health/areas) are each listed.
+ */
+test("command palette: searching 'review' finds 'Open review', which opens the Review sheet with the URL updated", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+
+  await page.getByTestId("command-palette-input").fill("review");
+  await expect(page.getByText(/No commands match/)).toHaveCount(0);
+  await page.getByTestId("command-palette-option-open-review").click();
+
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Review" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("sheet")).toBe("review");
+});
+
+/**
+ * C2-S11 (#687 round-5 judge, C2 blocker — "one Back press does nothing",
+ * battery4 A2 back1/back2). Root cause: `window.history.length` never
+ * shrinks on `back()`, so after a NESTED composed transition (palette opens
+ * -> capture opens FROM WITHIN the palette -> Escape closes capture via
+ * `back()`) the palette's own length-based "did something else push since I
+ * did" check was fooled — it believed something was still on top of it even
+ * though capture's own `back()` had already landed it right back on its own
+ * entry, so a second Escape (closing palette) only stripped the URL param
+ * via `replaceState` instead of consuming a real `back()`. That left a
+ * byte-for-byte duplicate of the entry behind it in the stack: one `Back`
+ * would land on the duplicate (nothing visibly changed); a second `Back` was
+ * needed to reach a genuinely different entry. Fixed in
+ * `lib/rawHistory.ts`/`useOverlayUrlState.ts` by tracking entry IDENTITY
+ * (an id stamped into `history.state` at push time) instead of length, and
+ * by making the popstate handler's "did I lose my own entry" check
+ * conditional on where it actually landed, rather than resetting on every
+ * popstate regardless of cause.
+ *
+ * The walk below is the exact one used to reproduce and root-cause the bug
+ * live (switch moments to establish a genuinely distinct prior entry, then
+ * open the palette, open capture FROM the palette, Escape twice) — pinned
+ * here so a regression shows up as a failing e2e test, not just the unit
+ * tier (jsdom cannot exercise `back()` for real, so the unit-tier guard in
+ * `useOverlayUrlState.test.ts` hand-simulates it; this is the tier that
+ * proves it against an actual browser history stack).
+ */
+test("history walk: palette -> capture opened from inside it -> Esc -> Esc -> a single Back lands on a genuinely different, previous entry", async ({
+  page,
+}) => {
+  await page.goto("/?moment=start");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+
+  // A real prior push, distinct from every entry the composed transition
+  // below will create — this is the entry the final single Back must reach.
+  await page.keyboard.press("2");
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+  const urlBeforePalette = page.url();
+
+  // Palette opens.
+  await page.keyboard.press("Meta+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("palette")).toBe("1");
+
+  // Capture opens FROM WITHIN the palette — the composed transition
+  // (`onRun` then `onClose`) that is the neighborhood of this bug.
+  // `CommandPalette.tsx` calls `onRun` (capture's own push) THEN `onClose`
+  // (palette's own close) — since palette no longer owns the CURRENT entry
+  // once capture has pushed on top of it, palette's close strips `palette`
+  // from THAT entry rather than stealing a Back (`useOverlayUrlState`'s own
+  // documented contract) — so `palette` is gone from the URL here, even
+  // though the palette-only entry still exists, untouched, one step behind
+  // in the stack. That preserved entry is what Esc #1 below reveals.
+  await page.getByTestId("command-palette-option-open-capture").click();
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("capture")).toBe("1");
+  expect(new URL(page.url()).searchParams.get("palette")).toBeNull();
+
+  // Esc #1: closes capture. The palette reappears — Back-after-a-composed-
+  // transition undoes the destination first, landing back on the origin —
+  // exactly `useOverlayUrlState`'s documented contract.
+  await page.getByTestId("capture-overlay-textarea").press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Capture a thought" }),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("capture")).toBeNull();
+  expect(new URL(page.url()).searchParams.get("palette")).toBe("1");
+
+  // Esc #2: closes the palette itself — the entry it is standing on IS the
+  // one it originally pushed (capture's own Back landed it there), so this
+  // must ALSO consume a real Back rather than degrading into a param-strip
+  // that leaves a dead duplicate entry sitting where a real Back landed.
+  // Pressed on the palette's own input (its remount-time autofocus, per
+  // `CommandPalette.tsx`, races with Playwright's own key dispatch) rather
+  // than a bare `page.keyboard.press`, so this Escape lands on the palette's
+  // own Escape handler regardless of that race.
+  await page.getByTestId("command-palette-input").press("Escape");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("palette")).toBeNull();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+
+  // The actual pin: ONE single Back from here must land on a genuinely
+  // DIFFERENT, PREVIOUS entry (Start, from before the "2" switch) — not a
+  // silent no-op on a duplicate of the entry we are already standing on.
+  await page.goBack();
+  await expect(page.getByTestId("start-moment")).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("moment")).toBe("start");
+  expect(page.url()).not.toBe(urlBeforePalette);
+});
+
 test("matrix pin: Settings reachable in 1 tap on mobile", async ({ page }) => {
   await page.setViewportSize(MOBILE_VIEWPORT);
   await page.goto("/");

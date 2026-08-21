@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { historyPushState, historyReplaceState } from "@/lib/rawHistory";
 import type { MomentValue } from "./MomentSwitcher";
 
 /**
@@ -105,11 +106,7 @@ export function useMomentUrlState(
       new URLSearchParams(window.location.search).get("moment"),
     );
     if (fromUrl === resolvedInitialMoment) return;
-    window.history.replaceState(
-      null,
-      "",
-      urlWithMoment(window.location, resolvedInitialMoment),
-    );
+    historyReplaceState(urlWithMoment(window.location, resolvedInitialMoment));
     // Deliberately empty deps: this mirrors the old `useState` lazy
     // initializer it replaces — the resolved value is read once, at mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,7 +131,7 @@ export function useMomentUrlState(
       new URLSearchParams(window.location.search).get("moment"),
     );
     if (current === next) return;
-    window.history.pushState(null, "", urlWithMoment(window.location, next));
+    historyPushState(urlWithMoment(window.location, next));
   }, []);
 
   const adoptMomentFromUrl = useCallback((next: MomentValue) => {

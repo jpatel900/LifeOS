@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  currentHistoryEntryId,
+  historyPushState,
+  historyReplaceState,
+} from "@/lib/rawHistory";
 
 /**
  * Final UX Loop C2-S7 (#687 finding 2) — the `useSheetUrlState`-shaped hook
@@ -30,18 +35,60 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * `?palette=1`, a screen/URL disagreement of exactly the kind this whole
  * slice exists to remove.
  *
- * `window.history.length` only ever GROWS on a genuine `pushState`, from ANY
- * caller (`nav-truth.spec.ts`'s own HISTORY-WALK PIN documents the same
- * fact) — so recording the length right after our own push, and comparing it
- * at close time, tells us for free whether our entry is still the live top of
- * the stack or has already been buried under someone else's: unchanged means
- * safe to `back()` (our entry is still on top, nothing to undo but our own
- * open); grown means something else pushed since, so this close only strips
- * OUR param from whatever the current entry now is — the destination's push
- * survives untouched, and a Back after that composed transition undoes the
- * destination first, landing back on this overlay (matching what the user
- * actually did), exactly as `closeSheet`'s own no-history-theft rule already
- * guarantees for a sheet reached by URL rather than by this hook's own push.
+ * `historyPushState` (see `lib/rawHistory.ts`) stamps every entry it creates
+ * with a unique, monotonically increasing id and returns it — recording that
+ * id right after our own push, and comparing it against the CURRENT entry's
+ * id at close time, tells us for free whether our entry is still the one we
+ * are standing on: a match means safe to `back()` (nothing to undo but our
+ * own open); a mismatch means we are standing on an entry we did not create
+ * (either something else's still-live push, or a fresh popstate landing), so
+ * this close only strips OUR param from whatever the current entry now is —
+ * the destination's push survives untouched, and a Back after that composed
+ * transition undoes the destination first, landing back on this overlay
+ * (matching what the user actually did), exactly as `closeSheet`'s own
+ * no-history-theft rule already guarantees for a sheet reached by URL
+ * rather than by this hook's own push.
+ *
+ * C2-S11 (#687 round-5 judge, C2 blocker): this used to compare
+ * `window.history.length` instead of an entry id, which is unsound — length
+ * counts total entries ever pushed and never shrinks on `back()`. In a
+ * NESTED composed transition (palette opens -> capture opens FROM WITHIN the
+ * palette -> Escape closes capture via `back()` -> Escape closes palette),
+ * capture's own `back()` moves the position backward without shrinking
+ * length, so palette's length-based check wrongly concluded "something else
+ * pushed since" even though palette was, by then, standing squarely back on
+ * its own original entry — and took the replaceState-only branch instead of
+ * `back()`, turning that entry into a byte-for-byte duplicate of the one
+ * behind it. One `Back` would land on the duplicate (nothing visibly
+ * changed); a second was needed to reach a genuinely different entry — the
+ * exact "Back does nothing" defect this slice fixes. An entry id survives
+ * any number of intervening push/back cycles as long as they net back to
+ * the same position, which length cannot express.
+ *
+ * A second, easy-to-miss piece of the same defect, found only by
+ * instrumenting the REAL hook against a real dev server (the composed-nesting
+ * unit test below cannot see it, since it hand-simulates `back()` rather
+ * than exercising this hook's actual close-then-popstate sequence twice in a
+ * row): `openedAtEntryIdRef` used to be nulled UNCONDITIONALLY the instant
+ * `closeOverlay` computed `stillOnOurEntry`, even on the FALSE branch —
+ * i.e. even when closing meant "something else is on top, not mine right
+ * now," which is a claim about THIS INSTANT, not a promise that the entry
+ * is never ours again. Composed transition: palette opens (id 2) -> capture
+ * opens FROM WITHIN it (id 3) -> palette's own composed close reads
+ * `stillOnOurEntry = false` (capture's entry is on top) and, correctly,
+ * does not `back()` — but ALSO permanently zeroed its own memory of id 2.
+ * Later, capture's Escape correctly `back()`s off its own entry, landing
+ * palette back on exactly the id-2 entry it originally pushed — but palette
+ * had already forgotten that id was ever its own, so ITS OWN subsequent
+ * Escape could never recognize the entry as its to `back()` off either,
+ * permanently degrading into a param-strip. Ownership of a history entry is
+ * a property of the ENTRY'S IDENTITY, not a belief that decays the moment
+ * something else is briefly on top of it — so this hook now simply never
+ * clears the id it once pushed except when a fresh `openOverlay` overwrites
+ * it with a new one, or `adoptOverlayFromUrl` explicitly disclaims ever
+ * having pushed anything. "Do I currently own the entry I'm standing on" is
+ * answered by comparing ids fresh, every time, rather than by trusting a
+ * cached yes/no that can go stale.
  */
 
 export function parseOverlayParam(value: string | null): boolean {
@@ -82,15 +129,17 @@ export function useOverlayUrlState(
 ): OverlayUrlState {
   const [open, setOpen] = useState(false);
 
-  // The `history.length` right after OUR OWN push, or null when we did not
-  // push the current entry (adopted from the URL, or never opened). See the
-  // file header for why length — not a boolean — is what makes closing safe
-  // under composition with another hook's push.
-  const openedAtLengthRef = useRef<number | null>(null);
+  // The entry id `historyPushState` returned for OUR OWN push, or null when
+  // we have never pushed (or have explicitly disclaimed, via
+  // `adoptOverlayFromUrl`). Deliberately NOT cleared on every close or every
+  // popstate — see the file header: ownership of a history entry is a
+  // property of its identity, always re-derived by comparing against
+  // `currentHistoryEntryId()`, not a belief that should decay just because
+  // something else was briefly on top of it.
+  const pushedEntryIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     function handlePopState() {
-      openedAtLengthRef.current = null;
       setOpen(
         parseOverlayParam(
           new URLSearchParams(window.location.search).get(param),
@@ -112,21 +161,17 @@ export function useOverlayUrlState(
     ) {
       return;
     }
-    window.history.pushState(
-      null,
-      "",
+    pushedEntryIdRef.current = historyPushState(
       urlWithOverlay(window.location, param, true),
     );
-    openedAtLengthRef.current = window.history.length;
   }, [param]);
 
   const closeOverlay = useCallback(() => {
     setOpen(false);
     if (typeof window === "undefined") return;
     const stillOnOurEntry =
-      openedAtLengthRef.current !== null &&
-      window.history.length === openedAtLengthRef.current;
-    openedAtLengthRef.current = null;
+      pushedEntryIdRef.current !== null &&
+      currentHistoryEntryId() === pushedEntryIdRef.current;
     if (stillOnOurEntry) {
       // Strip our own param SYNCHRONOUSLY, via `replaceState`, before
       // calling `back()` — never rely on `back()` itself to make
@@ -142,11 +187,7 @@ export function useOverlayUrlState(
       // just reopened. Stripping here first means the URL already agrees
       // with "closed" the instant this function returns, so that early
       // return never fires on stale information.
-      window.history.replaceState(
-        null,
-        "",
-        urlWithOverlay(window.location, param, false),
-      );
+      historyReplaceState(urlWithOverlay(window.location, param, false));
       window.history.back();
       return;
     }
@@ -154,15 +195,11 @@ export function useOverlayUrlState(
     // pushed since we did (the palette-runs-an-action composition above) —
     // either way, `back()` is not ours to take. Strip only our own param
     // from whatever the current entry now is.
-    window.history.replaceState(
-      null,
-      "",
-      urlWithOverlay(window.location, param, false),
-    );
+    historyReplaceState(urlWithOverlay(window.location, param, false));
   }, [param]);
 
   const adoptOverlayFromUrl = useCallback((next: boolean) => {
-    openedAtLengthRef.current = null;
+    pushedEntryIdRef.current = null;
     setOpen(next);
   }, []);
 

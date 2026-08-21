@@ -210,3 +210,112 @@ describe.each(["capture", "palette"] as const)(
     });
   },
 );
+
+/**
+ * C2-S11 (#687 round-5 judge, C2 blocker — "one Back press does nothing",
+ * battery4 A2 back1/back2). The two tests above cover a SINGLE hook
+ * instance's reaction to something else pushing on top of it; the actual
+ * reported defect only appears with TWO mounted instances (capture's,
+ * palette's) — `popstate` is a window event, so capture's own close-via-
+ * `back()` also fires PALETTE's listener, even though palette had nothing
+ * to do with that particular pop. Pre-fix, palette's listener unconditionally
+ * forgot it owned its entry every time ANY popstate fired, so when palette
+ * was closed next it wrongly believed something else must still be on top
+ * and only stripped its param via `replaceState` — turning its own entry
+ * into a byte-for-byte duplicate of the one behind it instead of calling
+ * `back()`. One `Back` would land on that duplicate (nothing visibly
+ * changed); a second was needed to reach a genuinely different entry.
+ *
+ * Cannot be exercised by simply mocking `history.back()` as a no-op (the
+ * other tests' pattern) — the bug is specifically about what `back()`
+ * ACTUALLY does to the position, so this test's mock performs the real
+ * effect (restore the entry immediately behind, fire popstate) the way jsdom
+ * would if it implemented traversal (file header: it does not).
+ */
+describe("useOverlayUrlState — composed nesting (capture opened from palette, two live instances)", () => {
+  beforeEach(() => {
+    goto("/");
+  });
+
+  it("after Esc closes the inner overlay and Esc closes the outer one, the outer close still consumes its own Back", () => {
+    // A minimal REAL history stack, driven by the actual pushState/
+    // replaceState calls the app code makes (jsdom applies them for real —
+    // only `back()`/`forward()` traversal is unimplemented, per the file
+    // header) — so `back()`'s mock pops whatever is ACTUALLY behind the
+    // current position, exactly like a real browser, rather than restoring
+    // a hardcoded snapshot (which cannot be right for more than one pop).
+    const stack: Array<{ state: unknown; url: string }> = [
+      {
+        state: window.history.state,
+        url: `${window.location.pathname}${window.location.search}`,
+      },
+    ];
+    let position = 0;
+    const realPushState = window.history.pushState.bind(window.history);
+    const realReplaceState = window.history.replaceState.bind(window.history);
+    vi.spyOn(window.history, "pushState").mockImplementation(
+      (state, title, url) => {
+        realPushState(state, title, url ?? undefined);
+        stack.length = position + 1;
+        stack.push({
+          state: window.history.state,
+          url: `${window.location.pathname}${window.location.search}`,
+        });
+        position++;
+      },
+    );
+    vi.spyOn(window.history, "replaceState").mockImplementation(
+      (state, title, url) => {
+        realReplaceState(state, title, url ?? undefined);
+        stack[position] = {
+          state: window.history.state,
+          url: `${window.location.pathname}${window.location.search}`,
+        };
+      },
+    );
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {
+      position--;
+      const entry = stack[position];
+      realReplaceState(entry.state, "", entry.url);
+    });
+
+    const palette = renderHook(() => useOverlayUrlState("palette"));
+    const capture = renderHook(() => useOverlayUrlState("capture"));
+
+    act(() => palette.result.current.openOverlay());
+    expect(window.location.search).toBe("?palette=1");
+
+    // Capture opens FROM WITHIN the palette — a composed transition, a real
+    // pushState on top of palette's own entry.
+    act(() => capture.result.current.openOverlay());
+    expect(window.location.search).toBe("?palette=1&capture=1");
+
+    // Esc #1: close capture. It still owns the entry it pushed, so this
+    // consumes a real Back, landing on palette's own entry. `closeOverlay`
+    // does not dispatch `popstate` itself (a real Back is asynchronous,
+    // per every other test in this file) — fire it by hand, matching the
+    // file's own established pattern.
+    act(() => {
+      capture.result.current.closeOverlay();
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(capture.result.current.open).toBe(false);
+    expect(palette.result.current.open).toBe(true);
+    expect(window.location.search).toBe("?palette=1");
+    expect(back).toHaveBeenCalledTimes(1);
+
+    // Esc #2: close palette. It is standing on exactly the entry it itself
+    // pushed (capture's own Back landed it there) — this must ALSO consume
+    // a real Back, not silently degrade into a param-strip that leaves a
+    // dead duplicate entry behind.
+    back.mockClear();
+    act(() => {
+      palette.result.current.closeOverlay();
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(palette.result.current.open).toBe(false);
+    expect(back).toHaveBeenCalledTimes(1);
+
+    vi.restoreAllMocks();
+  });
+});

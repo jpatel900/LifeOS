@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { parseAreaParam, urlWithArea } from "@/lib/areaUrlParam";
+import { historyPushState } from "@/lib/rawHistory";
 
 export {
   ALL_AREAS_PARAM_VALUE,
@@ -93,7 +94,7 @@ export function useAreaUrlState(
         new URLSearchParams(window.location.search).get("area"),
       );
       if (current === areaId) return;
-      window.history.pushState(null, "", urlWithArea(window.location, areaId));
+      historyPushState(urlWithArea(window.location, areaId));
     },
     [setSelectedAreaId],
   );

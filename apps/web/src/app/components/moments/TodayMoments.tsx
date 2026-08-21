@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Settings as SettingsIcon } from "lucide-react";
 import { useWorkflow } from "@/lib/WorkflowContext";
+import { historyReplaceState } from "@/lib/rawHistory";
 import { buildCockpitAccentStyle } from "@/lib/cockpit/accent";
 import { resolveSelectedArea } from "@/lib/areaAccent";
 import { momentKeyLabel } from "@/lib/keys/keymap";
@@ -506,11 +507,7 @@ export function TodayMoments({
     if (!stored?.moment || stored.moment === resolvedInitialMoment) return;
 
     adoptMomentFromUrl(stored.moment);
-    window.history.replaceState(
-      null,
-      "",
-      urlWithMoment(window.location, stored.moment),
-    );
+    historyReplaceState(urlWithMoment(window.location, stored.moment));
     // Deliberately empty deps, matching every other mount-once effect in
     // this file: `initialMoment`/`deepLink`/`resolvedInitialMoment` are all
     // read from the closure of the FIRST render only, which is exactly what
@@ -607,9 +604,7 @@ export function TodayMoments({
       const params = new URLSearchParams(window.location.search);
       params.delete("sheet");
       const search = params.toString();
-      window.history.replaceState(
-        null,
-        "",
+      historyReplaceState(
         urlWithArea(
           {
             pathname: window.location.pathname,
@@ -760,9 +755,7 @@ export function TodayMoments({
     params.delete("shared_text");
     params.set("capture", "1");
     const query = params.toString();
-    window.history.replaceState(
-      null,
-      "",
+    historyReplaceState(
       `${window.location.pathname}${query ? `?${query}` : ""}`,
     );
   }, [
@@ -855,9 +848,7 @@ export function TodayMoments({
 
     if (!changed) return;
     const query = params.toString();
-    window.history.replaceState(
-      null,
-      "",
+    historyReplaceState(
       `${window.location.pathname}${query ? `?${query}` : ""}`,
     );
     // Deliberately empty deps, matching the mount-once contract this effect
@@ -1279,6 +1270,14 @@ export function TodayMoments({
       },
       { id: "open-triage", label: "Open triage" },
       { id: "open-plan", label: "Open plan" },
+      // C2-S11 (#687 round-5 judge, C3 blocker): Review was the one sheet
+      // missing from this list — reachable from the Pipeline rail
+      // (`handleDrillPipeline`'s "review" case) but not by name here, so
+      // typing "review" into the palette returned "No commands match" even
+      // though the sheet itself has worked since C2-S3. No deliberate-
+      // omission comment or decision existed anywhere near this list; a
+      // straight gap, closed the same way its siblings are listed.
+      { id: "open-review", label: "Open review" },
       // C2-S4: Health's only other way in is SideRail's "View area health →",
       // which lives inside the Start moment and stacks to the BOTTOM of the
       // page below 1024px (`StartMoment`'s
@@ -1356,6 +1355,9 @@ export function TodayMoments({
           break;
         case "open-plan":
           openSheet("plan");
+          break;
+        case "open-review":
+          openSheet("review");
           break;
         case "open-health":
           openSheet("health");
