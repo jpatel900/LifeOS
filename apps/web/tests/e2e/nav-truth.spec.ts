@@ -1545,7 +1545,6 @@ function oppositeOfHeuristic(): "start" | "close" {
 
 test("first paint tells the truth about the remembered moment — no coherent wrong screen, even with JavaScript off", async ({
   browser,
-  baseURL,
 }) => {
   const remembered = oppositeOfHeuristic();
   const wrong = remembered === "start" ? "close" : "start";
@@ -1556,7 +1555,10 @@ test("first paint tells the truth about the remembered moment — no coherent wr
       {
         name: "lifeos_moments_prefs",
         value: encodeURIComponent(JSON.stringify({ moment: remembered })),
-        url: baseURL,
+        // Explicit domain/path (not `url`) — matches the dev server's own
+        // `127.0.0.1` hostname (playwright.config.ts's `baseURL`) so this
+        // does not depend on the `baseURL` fixture being populated.
+        domain: "127.0.0.1",
         path: "/",
       },
     ]);
