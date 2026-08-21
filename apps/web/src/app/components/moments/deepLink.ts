@@ -76,3 +76,92 @@ export function deepLinkTargetFromParams(
 
   return Object.keys(target).length > 0 ? target : null;
 }
+
+/**
+ * C2-S12B (#687 round-6, finding 3): a hand-crafted case-variant like
+ * `?MOMENT=flow` is invisible to `deepLinkTargetFromParams` above (it reads
+ * the exact lowercase key), so the value renders nothing — but nobody ever
+ * told the URL that. TodayMoments.tsx's own S8/S9 scrub effect
+ * (`invalidParamsScrubbedRef`, dedupeParam, MOMENTS_URL_KEYS) already drops a
+ * bad VALUE for a key the app reads; it does not yet drop a key the app never
+ * reads at all. This is that companion pass, as a pure function so it is
+ * unit-testable independent of TodayMoments' effect timing.
+ *
+ * Allowlist, not denylist: keep exactly the keys enumerated below, drop
+ * everything else — INCLUDING a case-variant near-miss of a known key (e.g.
+ * `MOMENT`, `Sheet`). A near-miss is not "close enough to fix up": silently
+ * rewriting it to the canonical key would apply a value nobody's click
+ * actually asked for, and leaving it alone (as the bug does today) has the
+ * URL bar naming a key the app ignores right next to the one it honors. Drop
+ * is the only option that keeps the bar telling the truth.
+ */
+export const KNOWN_APP_PARAM_KEYS = [
+  "moment",
+  "sheet",
+  "capture",
+  "palette",
+  "area",
+] as const;
+
+/**
+ * Non-app keys this app's own URLs legitimately carry from elsewhere. Each is
+ * read case-sensitively by its own exact key, so (matching the reasoning
+ * above) a case-variant of any of these is exactly as foreign as an unrelated
+ * typo and is dropped the same way — nothing here gets normalized, only kept
+ * or removed.
+ *
+ * - `next`: `/login`'s own return-target param (`app/login/page.tsx`'s
+ *   `safeNextPath(searchParams.get("next"))`), and the same param
+ *   `AreasSettingsPage` builds when it redirects a signed-out visitor to
+ *   `/login?next=/settings/areas`.
+ * - `code`, `state`, `error`, `error_description`: Google's OAuth redirect
+ *   (`app/api/google-calendar/callback/route.ts`). That's a server route
+ *   handler, not a page this scrub ever runs on directly, but the same
+ *   allowlist is shared so a future client surface reached via that redirect
+ *   chain doesn't have its own arrival URL stripped of them.
+ * - `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`:
+ *   the standard UTM attribution keys. This app never generates links that
+ *   carry them, but a LifeOS link shared externally (email, social, a
+ *   marketing redirect) might, and this app's own URL hygiene must not be
+ *   the thing that erases someone else's attribution data.
+ */
+export const KEPT_FOREIGN_PARAM_KEYS = [
+  "next",
+  "code",
+  "state",
+  "error",
+  "error_description",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+] as const;
+
+const ALLOWED_PARAM_KEYS = new Set<string>([
+  ...KNOWN_APP_PARAM_KEYS,
+  ...KEPT_FOREIGN_PARAM_KEYS,
+]);
+
+/**
+ * Mutates `params` in place, deleting every key not on the allowlist above.
+ * Returns whether anything changed — the same call-and-check shape
+ * `dedupeParam` (TodayMoments.tsx) already uses, so wiring this in is a
+ * one-line addition to that effect's existing `for (const key of
+ * MOMENTS_URL_KEYS)` loop, e.g.:
+ *
+ *   if (dropUnknownParams(params)) changed = true;
+ *
+ * This lane's manifest does not include TodayMoments.tsx (owned by the
+ * concurrent c2-s12a-keyboard-reach lane), so that one-line wiring is not
+ * applied here — see this PR's AGENT-TODO.
+ */
+export function dropUnknownParams(params: URLSearchParams): boolean {
+  let changed = false;
+  for (const key of new Set(params.keys())) {
+    if (ALLOWED_PARAM_KEYS.has(key)) continue;
+    params.delete(key);
+    changed = true;
+  }
+  return changed;
+}

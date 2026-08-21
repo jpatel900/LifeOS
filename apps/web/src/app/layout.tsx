@@ -43,8 +43,23 @@ const inter = localFont({
   fallback: ["-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto"],
 });
 
+// #687 (round-6 fresh-eyes judge, finding: tab title): "Workflow Cockpit" was
+// the retired seven-stage shell's name — the campaign (ADR 0003) replaced it
+// with the moments home, so the one string on every tab, every sheet, and
+// even the 404 was advertising the thing that no longer exists. Plain "LifeOS"
+// matches the PWA identity already shipped in `public/manifest.webmanifest`
+// (`name`/`short_name`), so the tab and the installed-app name finally agree.
+//
+// No `title.template` + per-route titles: the moments/sheets surfaces are all
+// URL params on this ONE route (`page.tsx` renders whichever moment/sheet the
+// query string names, entirely client-side inside `TodayMoments`), so there is
+// no natural per-route `page.tsx` metadata export to hang a per-surface title
+// on for that path. `/settings/areas/page.tsx`, the one other real surface,
+// is `"use client"` — Next refuses a `metadata` export from a client
+// component. A single correct static title here is smaller and more honest
+// than forcing a per-route mechanism the app's own structure doesn't offer.
 export const metadata: Metadata = {
-  title: "LifeOS — Workflow Cockpit",
+  title: "LifeOS",
   description: "Area-scoped personal workflow cockpit",
   manifest: "/manifest.webmanifest",
   icons: {
