@@ -1242,3 +1242,66 @@ test("a stray uppercase ?MOMENT= key is scrubbed from the URL, keeping the real 
     expect(params.get("moment")).toBe("start");
   }).toPass({ timeout: 30_000 });
 });
+
+/**
+ * Fresh-eyes judge finding (#687, diagnosed by the lane that fixed PR #911's
+ * three siblings, left out of that PR's scope as a DIFFERENT root cause):
+ * "one URL renders two different screens depending on how you arrived at
+ * it." `/?palette=1&sheet=plan` entered directly used to adopt BOTH fields
+ * (`deepLinkTargetFromParams` composed them with no exclusivity check),
+ * rendering the command palette stacked on top of the Plan sheet — two
+ * full-screen dialogs live on a real dev server, confirmed before this fix.
+ * Reaching the identical URL by opening the palette and picking "Open plan"
+ * always rendered ONE screen, because the write path already treats the
+ * palette as a launcher that closes itself the instant it hands off to a
+ * destination (`runPaletteAction`'s `openSheet` call, then `CommandPalette`
+ * running `onClose`). The read path (this mount-time parse) never enforced
+ * that same rule for a URL entered directly — that mismatch WAS the bug.
+ *
+ * Fix: `deepLinkTargetFromParams` (deepLink.ts) now gives the sheet the win
+ * over palette specifically (capture is exempt — sheet + capture keeps
+ * composing, a real supported combo pinned in TodayMoments.test.tsx), the
+ * same "palette -> capture -> sheet" stacking order `MomentSheet.tsx` and
+ * `TodayMoments.tsx`'s `closeTopOverlay` already document. TodayMoments.tsx's
+ * existing `invalidParamsScrubbedRef` pass scrubs the losing `palette` param
+ * the same way it already scrubs the losing half of a capture+palette combo.
+ */
+test("direct URL naming both sheet and palette renders one screen, matching the palette-pick arrival path", async ({
+  page,
+}) => {
+  // Arrival path 1: a direct/hard-loaded URL naming both.
+  await page.goto("/?palette=1&sheet=plan");
+  await expect(page.getByTestId("plan-sheet")).toBeVisible();
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+  await expect(async () => {
+    const params = new URL(page.url()).searchParams;
+    expect(params.get("sheet")).toBe("plan");
+    expect(params.get("palette")).toBeNull();
+  }).toPass({ timeout: 30_000 });
+
+  // Arrival path 2: open the palette, then pick "Open plan" from inside it —
+  // the real, shipped route to the same destination.
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await page.keyboard.press("Control+k");
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await page.getByTestId("command-palette-option-open-plan").click();
+
+  // Both arrival paths render the identical single screen.
+  await expect(page.getByTestId("plan-sheet")).toBeVisible();
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+
+  // NOT asserted here: that the two arrival paths' FINAL URL strings are
+  // byte-identical. They are not, on today's main, for a reason outside
+  // this fix's scope — PR #911 (open, unmerged as of this lane) fixes a
+  // SEPARATE write-path race ("palette stranding") where
+  // `useOverlayUrlState.closeOverlay`'s hand-off strip loses a same-tick
+  // race against a Next.js router resync, leaving `palette=1` stranded in
+  // the address bar beside `sheet=plan` even though only the sheet ever
+  // renders. Confirmed live against this lane's dev server: the click-
+  // through path above renders one screen (asserted above) while the URL
+  // still reads `?palette=1&sheet=plan` at both 300ms and 1500ms after the
+  // click. Proving command once #911 merges: add
+  // `expect(new URL(page.url()).searchParams.get("palette")).toBeNull();`
+  // right after the click-through assertions above and confirm it passes.
+});
