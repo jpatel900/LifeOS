@@ -77,6 +77,9 @@ jobs:
       - name: red-guard diagnosis self-test
         run: node scripts/agent/red-guard-diagnose.mjs --self-test
 
+      - name: turbo test-inputs coverage self-test
+        run: node scripts/agent/check-turbo-test-inputs.mjs --self-test
+
       - name: check-migration-drift self-test
         run: node scripts/agent/check-migration-drift.mjs --self-test
 
@@ -138,6 +141,21 @@ jobs:
 
       - name: Type-check
         run: pnpm type-check
+
+      # Real (non-self-test) run of scripts/agent/check-turbo-test-inputs.mjs:
+      # re-derives, from the actual apps/web/src test tree, every repo-root
+      # path (docs/**, supabase/**, .github/, .agents/, .cursor/, scripts/,
+      # root markdown) a guard test reads via a repoRoot-relative fs call or
+      # docLinkIntegrity's PATH_PATTERN allowlist, and fails if turbo.json's
+      # `test` task inputs (below the "Test" step) don't cover one. Catches a
+      # future guard-test edit that starts scanning a new top-level directory
+      # -- or a turbo.json edit that drops coverage -- before it can silently
+      # reopen the docs-only-change-hits-a-stale-cached-PASS gap (2026-08-21,
+      # docs/FAILURES.md). The --self-test variant above only pins the pure
+      # parsing functions against synthetic fixtures; this is the check that
+      # actually enforces coverage against the live repo on every PR.
+      - name: Turbo test-inputs coverage (guards the docs/publicEvidenceHygiene cache gap)
+        run: node scripts/agent/check-turbo-test-inputs.mjs
 
       - name: Test
         run: pnpm test
