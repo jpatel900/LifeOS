@@ -219,12 +219,19 @@ describe("TriageSheet", () => {
     expect(screen.getByTestId("triage-sheet-empty")).toBeInTheDocument();
   });
 
-  // SP-8: the empty state names the filling action (capture via the C
-  // shortcut) instead of being a dead end, and avoids the banned dead-end
-  // phrasing.
-  it("empty state names the capture shortcut as the filling action", () => {
+  // SP-8: the empty state names the filling action (capture) instead of
+  // being a dead end, and avoids the banned dead-end phrasing.
+  //
+  // C2-S10 (#687 round-4): re-anchored, not deleted — "press C" used to be
+  // the ONLY wording, which is untrue on a touch viewport (no keyboard).
+  // jsdom renders both `sm:hidden`/`hidden sm:block` variants at once (CSS
+  // media queries do not apply there), so this still finds both children
+  // of the same wrapping `data-testid` and pins that EACH names its own
+  // correct filling action for its own input modality.
+  it("empty state names the capture action as the filling action, for both touch and keyboard", () => {
     renderSheet(true);
     const empty = screen.getByTestId("triage-sheet-empty");
+    expect(empty).toHaveTextContent("tap Capture below to add the first thing");
     expect(empty).toHaveTextContent("press C to capture the first thing");
     expect(empty.textContent?.toLowerCase()).not.toMatch(
       /nothing here|empty|no data|\bnone\b/,

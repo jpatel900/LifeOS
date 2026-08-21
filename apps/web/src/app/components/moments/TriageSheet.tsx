@@ -10,6 +10,7 @@ import { TaskMapDraftReview } from "./TaskMapDraftReview";
 import { UnsortedCaptures } from "./UnsortedCaptures";
 import { HIT_TARGET_MIN } from "./hitTarget";
 import { countUnsortedCaptures } from "@/lib/workflow/captureStatus";
+import { momentKeyLabel } from "@/lib/keys/keymap";
 
 /**
  * Moments pass P5 — packet: PipelineOverview + demoted-surface sheets.
@@ -217,12 +218,32 @@ export function TriageSheet({
         </div>
       ) : null}
       {pendingDrafts.length === 0 && unsortedCaptureCount === 0 ? (
-        <p
+        // C2-S10 (#687 round-4 fresh-eyes judge): "press C" is meaningless
+        // on a touch viewport — no physical keyboard. Same split
+        // StartMoment.tsx's own empty-state copy already uses (Audit #2 P2,
+        // "Mobile's primary hero tells you to press a key"): a `sm:hidden`
+        // tap-affordance line and a `hidden sm:block` keyboard-shortcut
+        // line, never both visible at once. `data-testid` moves to the
+        // wrapping element so every existing presence/visibility check
+        // still finds exactly one thing regardless of viewport; the one
+        // test that asserted the OLD universal wording is re-anchored to
+        // the split (TriageSheet.test.tsx).
+        <div
           className="text-sm text-muted-foreground"
           data-testid="triage-sheet-empty"
         >
-          Nothing waiting in triage — press C to capture the first thing.
-        </p>
+          <p className="sm:hidden">
+            Nothing waiting in triage — tap Capture below to add the first
+            thing.
+          </p>
+          <p className="hidden sm:block">
+            Nothing waiting in triage — press{" "}
+            <kbd className="rounded border border-border/60 bg-black/5 px-1 text-[0.7rem] font-semibold">
+              {momentKeyLabel("open-capture")}
+            </kbd>{" "}
+            to capture the first thing.
+          </p>
+        </div>
       ) : pendingDrafts.length === 0 ? null : (
         <ul className="grid gap-2" data-testid="triage-sheet-list">
           {pendingDrafts.map((draft) => {

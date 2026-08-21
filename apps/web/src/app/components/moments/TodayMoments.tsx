@@ -61,7 +61,11 @@ import { AreasSheet } from "./AreasSheet";
 import { useSheetUrlState } from "./useSheetUrlState";
 import { useOverlayUrlState, parseOverlayParam } from "./useOverlayUrlState";
 import { isSheetValue } from "./sheetValues";
-import { parseMomentParam, useMomentUrlState } from "./useMomentUrlState";
+import {
+  parseMomentParam,
+  urlWithMoment,
+  useMomentUrlState,
+} from "./useMomentUrlState";
 import {
   parseAreaParam,
   urlWithArea,
@@ -384,11 +388,12 @@ export function TodayMoments({
 
   // C2-S6 (#687): the moment itself is URL-visible, same contract as the
   // sheet below — `useMomentUrlState` owns the push/pop mechanics, this
-  // component resolves the INITIAL moment through FOUR tiers: `initialMoment`
+  // component resolves the INITIAL moment through tiers: `initialMoment`
   // prop (test-only override, always wins outright) -> the URL's own
   // `?moment=` param (the redirect shims' real answer, e.g. `/execute` ->
-  // `/?moment=flow`) -> stored preference -> clock heuristic. The URL tier
-  // lives HERE, not inside the hook: the hook cannot tell a genuine
+  // `/?moment=flow`) -> [a stored preference, applied AFTER hydration — see
+  // below] -> clock heuristic as the deterministic FIRST-PAINT floor. The
+  // URL tier lives HERE, not inside the hook: the hook cannot tell a genuine
   // `initialMoment` override from a stale `?moment=` param an earlier,
   // unrelated render left behind (a real bug this order fixes — see
   // useMomentUrlState.ts's own JSDoc). The hook then reconciles the
@@ -417,31 +422,131 @@ export function TodayMoments({
   // no `moment`, e.g. a test that mounts `TodayMoments` directly without
   // routing through `page.tsx`) — not removed, just demoted under the prop
   // that is actually available where this mismatch happened.
+  //
+  // C2-S10 (#687 round-4 judge, the SECOND infection site of the same
+  // hydration disease): the stored-preference tier used to sit HERE too,
+  // reading `readStoredPreferences()` -> `window.localStorage` — which,
+  // unlike `deepLink`, has NO server-side equivalent at all (the SSR
+  // request cannot see the browser's storage). So a bare `/` visit (or any
+  // moment-less redirect) had the SAME split as the finding-3 bug: server
+  // always fell through to the clock heuristic, client (this same
+  // initializer, re-run at hydration) read the real stored moment —
+  // mismatching whenever they differ, which is EVERY return visit after
+  // switching moments once (confirmed via SSR curl of a bare `/` with
+  // `lifeos.moments.preferences` primed to "flow": raw HTML had
+  // `close-moment` — the heuristic, since the repro ran past 17:00 — while
+  // the hydrated DOM had `flow-moment`). There is no `deepLink`-shaped fix
+  // available here (nothing server-side to consult), so the stored-pref
+  // tier moves OUT of this synchronous, both-environments initializer
+  // entirely: first paint now always agrees between server and client
+  // (whatever `initialMoment`/`deepLink.moment`/URL/heuristic already
+  // guaranteed), and the stored preference is adopted in a CLIENT-ONLY
+  // effect below, after hydration completes — one render showing the
+  // heuristic's answer, immediately corrected via `adoptMomentFromUrl` +
+  // `replaceState` (never a `pushState` — this is a resolution correction,
+  // not a user-initiated switch, so it must not grow history) if a
+  // remembered moment says otherwise. The remembered-moment FEATURE is
+  // unchanged; only WHEN it applies moved from "before first paint"
+  // (impossible to do safely for a client-only data source) to
+  // "immediately after".
+  // Captured in the SAME lazy evaluation as `resolvedInitialMoment` below,
+  // before `useMomentUrlState`'s own mount effect gets a chance to
+  // `replaceState` the URL to match whatever that resolved to (its
+  // self-heal, documented in useMomentUrlState.ts, runs first — hooks
+  // called earlier in this render register their effects earlier). The
+  // deferred stored-preference effect further down needs to know whether
+  // `initialMoment`/`deepLink.moment`/the URL's `?moment=` were the reason
+  // — re-reading `window.location.search` from THAT effect instead would
+  // see the self-heal's OWN echo (e.g. `?moment=close` the hook just wrote
+  // for the heuristic fallback) and misread it as a genuine explicit
+  // signal, permanently blocking the stored preference from ever applying.
+  // This ref is the one place that "was it explicit" fact is captured
+  // before anything can overwrite the evidence.
+  const explicitMomentRef = useRef(false);
   const [resolvedInitialMoment] = useState<MomentValue>(() => {
-    if (initialMoment) return initialMoment;
-    if (deepLink?.moment) return deepLink.moment;
+    if (initialMoment) {
+      explicitMomentRef.current = true;
+      return initialMoment;
+    }
+    if (deepLink?.moment) {
+      explicitMomentRef.current = true;
+      return deepLink.moment;
+    }
     if (typeof window !== "undefined") {
       const fromUrl = parseMomentParam(
         new URLSearchParams(window.location.search).get("moment"),
       );
-      if (fromUrl) return fromUrl;
+      if (fromUrl) {
+        explicitMomentRef.current = true;
+        return fromUrl;
+      }
     }
-    const stored = readStoredPreferences();
-    if (stored?.moment) return stored.moment;
     return heuristicMoment(now, flowVM.currentBlock !== null);
   });
   const { moment, setMoment, adoptMomentFromUrl } = useMomentUrlState(
     resolvedInitialMoment,
   );
+  // C2-S10: the deferred half of the tier removed above — adopts a
+  // remembered moment exactly once, right after hydration, ONLY when
+  // nothing more explicit (test override, deep link, or the URL's own
+  // `?moment=`) already resolved one; those three keep outranking the
+  // stored preference, matching the order this always had. `replaceState`,
+  // not `setMoment`'s `pushState`: this is finishing the SAME initial
+  // resolution a beat late, not a user-initiated switch, so it must not
+  // grow history (Back from a freshly-loaded `/` must still leave the site,
+  // not step through a phantom entry).
+  const storedMomentAdoptedRef = useRef(false);
+  useEffect(() => {
+    if (storedMomentAdoptedRef.current) return;
+    storedMomentAdoptedRef.current = true;
+    if (typeof window === "undefined") return;
+    if (explicitMomentRef.current) return;
+
+    const stored = readStoredPreferences();
+    if (!stored?.moment || stored.moment === resolvedInitialMoment) return;
+
+    adoptMomentFromUrl(stored.moment);
+    window.history.replaceState(
+      null,
+      "",
+      urlWithMoment(window.location, stored.moment),
+    );
+    // Deliberately empty deps, matching every other mount-once effect in
+    // this file: `initialMoment`/`deepLink`/`resolvedInitialMoment` are all
+    // read from the closure of the FIRST render only, which is exactly what
+    // "resolve once, at mount" means.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // C2-S8 (#687 finding 1): the outbound push/pop half of the area
   // switcher's URL wiring — see useAreaUrlState.ts's own header for why the
   // initial resolution, mount self-heal and reconcile-correction all live in
   // WorkflowContext instead of here.
   const { setArea } = useAreaUrlState(setSelectedAreaId, state.areas);
-  const [timeDisplay, setTimeDisplay] = useState<CountdownClockValue>(() => {
+  // C2-S10: same disease as `moment` above, a second symptom found while
+  // verifying that fix (a storage-primed reload with BOTH fields set — the
+  // real shape `writeStoredPreferences` always writes — reproduced a
+  // hydration mismatch here too, on `CountdownClockToggle`'s
+  // `aria-pressed`/label). `timeDisplay` is device-local (C2-S8 finding
+  // 4's own comment) but its READ path had the identical SSR-unsafe shape:
+  // `readStoredPreferences()` -> `window.localStorage`, synchronously,
+  // inside a `useState` initializer shared by both environments. Server
+  // always saw no `window` and fell to "countdown"; client (the same
+  // initializer, re-run at hydration) read the real stored value —
+  // mismatching whenever a user had ever chosen "Clock". Same fix shape as
+  // `moment`: the deterministic default here, the stored value adopted in
+  // the effect below, post-hydration. No URL write needed — this
+  // preference was never URL-visible.
+  const [timeDisplay, setTimeDisplay] =
+    useState<CountdownClockValue>("countdown");
+  const storedTimeDisplayAdoptedRef = useRef(false);
+  useEffect(() => {
+    if (storedTimeDisplayAdoptedRef.current) return;
+    storedTimeDisplayAdoptedRef.current = true;
     const stored = readStoredPreferences();
-    return stored?.timeDisplay ?? "countdown";
-  });
+    if (stored?.timeDisplay && stored.timeDisplay !== "countdown") {
+      setTimeDisplay(stored.timeDisplay);
+    }
+  }, []);
 
   // C2-S7 (#687 finding 2): capture and palette are now URL-visible via the
   // same push/pop/adopt contract every sheet already has — see

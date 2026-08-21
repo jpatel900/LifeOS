@@ -18,6 +18,7 @@ import TodayPage from "./today/page";
 import CapturePage from "./capture/page";
 import TriagePage from "./triage/page";
 import CalendarPage from "./calendar/page";
+import PlanPage from "./plan/page";
 import ExecutePage from "./execute/page";
 import ReviewPage from "./review/page";
 import HealthPage from "./health/page";
@@ -27,6 +28,11 @@ import AreasOverviewPage from "./areas/page";
 // Health/Areas capability parity was verified at file tier before this flip
 // (ReviewSheet.tsx ports the legacy "Needs recovery" queue in full — see the
 // #687 claim comment) — there is no more OWNER-GATE split.
+//
+// C2-S10 (#687 round-4): `/plan` joins as a 9th shim — a NEW route (not a
+// port; `/calendar` already carried this capability and stays as its own
+// working legacy bookmark), added purely so `/plan` matches its siblings'
+// naming instead of 404ing.
 const cases: Array<{
   name: string;
   Page: () => unknown;
@@ -55,6 +61,12 @@ const cases: Array<{
   {
     name: "/calendar",
     Page: CalendarPage,
+    target: "/?sheet=plan",
+    stage: "plan",
+  },
+  {
+    name: "/plan",
+    Page: PlanPage,
     target: "/?sheet=plan",
     stage: "plan",
   },
