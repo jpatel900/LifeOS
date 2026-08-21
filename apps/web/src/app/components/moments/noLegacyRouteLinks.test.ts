@@ -27,6 +27,11 @@ import { describe, expect, it } from "vitest";
  *  - C2-S5: `/areas` joined it on the same decision — the port had to CREATE
  *    its entry point (`SideRail`'s "See all areas →" → `?sheet=areas`)
  *    rather than re-point an existing one.
+ *  - C2-S10 (#687 round-4): `/plan` joins the forbidden set on arrival — it
+ *    is a brand-new redirect shim (mirroring `/calendar`, its own legacy
+ *    stage name, which was already forbidden), so nothing had to be ported;
+ *    it starts life already excluded from ever being an internal link
+ *    target, same as every sibling shim.
  *
  * Exclusions from the widened scan (one reason each):
  *  - The 8 shim `page.tsx` files themselves: their whole job is to `redirect()`
@@ -48,6 +53,7 @@ const REDIRECTED_ROUTES = [
   "triage",
   "execute",
   "calendar",
+  "plan",
   "review",
   "health",
   "areas",

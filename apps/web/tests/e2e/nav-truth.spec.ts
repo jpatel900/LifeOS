@@ -344,6 +344,54 @@ test("history-walk pin: moment switch -> sheet open -> sheet close -> Back -> Ba
   await expect(page.getByTestId("lifeos-cockpit")).toHaveCount(0);
 });
 
+/**
+ * C2-S10 RETURN-VISIT HYDRATION PIN (#687 round-4 fresh-eyes judge): the
+ * SECOND infection site of the C2-S6 hydration disease C2-S8 cured for
+ * `?moment=` — this time the stored-preference path
+ * (`lifeos.moments.preferences`, `window.localStorage`), which has no
+ * server-side equivalent at all (unlike `deepLink`, there is nothing the
+ * server can consult). Repro: open `/`, switch to Flow (which persists the
+ * preference AND writes `?moment=flow`), then load a genuinely MOMENT-LESS
+ * `/` again — the server falls back to the wall-clock heuristic, and before
+ * the fix the client's hydration render read the real stored preference
+ * instead, a full moment-subtree mismatch React reported as a hydration
+ * error on every single return visit. This is the only tier (a real
+ * browser, not jsdom) that can actually observe the SSR/CSR agreement the
+ * fix depends on — jsdom has no second environment to disagree with itself.
+ */
+test("return-visit hydration: a storage-primed load of a moment-less / shows zero pageerrors and lands on the remembered moment", async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error));
+
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+
+  // Switch to Flow — persists `lifeos.moments.preferences` AND pushes
+  // `?moment=flow` (the S8-fixed path).
+  await page.keyboard.press("2");
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+
+  // A genuinely moment-less load: bare `/`, no `?moment=` at all — the
+  // exact repro. The server has no way to know the remembered preference;
+  // first paint must agree between server and client on the deterministic
+  // heuristic, then adopt the remembered moment after hydration.
+  await page.goto("/");
+  await expect(page.getByTestId("today-moments")).toBeVisible();
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+  await expect(async () => {
+    expect(new URL(page.url()).searchParams.get("moment")).toBe("flow");
+  }).toPass({ timeout: 30_000 });
+
+  // A second moment-less load — the repro says "EVERY reload", not just
+  // the first.
+  await page.goto("/");
+  await expect(page.getByTestId("flow-moment")).toBeVisible();
+
+  expect(pageErrors).toEqual([]);
+});
+
 test("/settings/areas content is centered, not stretched edge-to-edge (#687)", async ({
   page,
 }) => {

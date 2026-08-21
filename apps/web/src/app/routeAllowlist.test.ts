@@ -11,12 +11,14 @@ import { describe, expect, it } from "vitest";
  * dropping a `page.tsx` anywhere under `app/` is enough). This is the guard
  * that makes a brand-new legacy-shaped route impossible: it enumerates every
  * `page.tsx` in the app router and fails on strict set equality against the
- * 11 known files, so an addition, a removal, or a rename all fail loudly.
+ * 12 known files, so an addition, a removal, or a rename all fail loudly.
  *
- * The 11: `/` (moments home), `/login`, `/settings/areas` (owner-ratified
- * keep, out of C2-S6 scope), plus the 8 flag-gated redirect shims —
- * `/today`, `/capture`, `/triage`, `/execute`, `/calendar`, `/review`,
- * `/health`, `/areas`.
+ * The 12: `/` (moments home), `/login`, `/settings/areas` (owner-ratified
+ * keep, out of C2-S6 scope), plus the 9 flag-gated redirect shims —
+ * `/today`, `/capture`, `/triage`, `/execute`, `/calendar`, `/plan`
+ * (C2-S10, #687 round-4: joins its siblings — `/calendar` is `/plan`'s own
+ * legacy stage name, kept as a working old bookmark, not replaced),
+ * `/review`, `/health`, `/areas`.
  */
 const APP_DIR = [
   resolve(process.cwd(), "src/app"),
@@ -32,6 +34,7 @@ const EXPECTED_ROUTES = [
   "triage",
   "execute",
   "calendar",
+  "plan",
   "review",
   "health",
   "areas",
