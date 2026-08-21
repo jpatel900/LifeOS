@@ -4,6 +4,7 @@ import { useWorkflow, WorkflowProvider } from "@/lib/WorkflowContext";
 import { latestActivityTimestamp } from "@/lib/reEntry/detect";
 import { TodayMoments } from "@/app/components/moments/TodayMoments";
 import type { TodayMomentsProps } from "@/app/components/moments/TodayMoments";
+import { resetTodayMomentsMountTrackingForTests } from "@/app/components/moments/deepLink";
 
 /**
  * Shared fixtures for TodayMoments.*.test.tsx — split from the single
@@ -19,6 +20,26 @@ import type { TodayMomentsProps } from "@/app/components/moments/TodayMoments";
  */
 
 export const FIXED_NOW = new Date("2026-07-05T15:00:00.000Z");
+
+/**
+ * C2-S13 (#687 round-7): `deepLink.ts` tracks "has TodayMoments mounted
+ * before in this tab" with a MODULE-scope flag, not React state, because it
+ * must survive a client-side route change and back (see deepLink.ts's own
+ * doc comment on `consumeIsRemount` for the full mechanism). Vitest keeps
+ * ONE module instance loaded for every `it()` in a file, so without a reset
+ * the flag reads `true` (a "remount", cross-checking the live URL instead of
+ * trusting a fresh `deepLink` prop) for every test after the first real
+ * TodayMoments mount in that file — and `window.history` is the same class
+ * of file-lifetime leak. Every split file that calls `renderToday` (or
+ * mounts `<TodayMoments>` directly) more than once needs this in its OWN
+ * file-level `afterEach` — Vitest hooks cannot be shared across files, only
+ * the reset logic itself can, which is why it lives here once instead of
+ * being hand-copied into each split file.
+ */
+export function resetTodayMomentsMountTracking(): void {
+  window.history.replaceState(null, "", "/");
+  resetTodayMomentsMountTrackingForTests();
+}
 
 /**
  * Test-only bridge that drives a real capture -> mock parse -> accept

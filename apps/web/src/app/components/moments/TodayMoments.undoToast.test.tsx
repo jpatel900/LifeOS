@@ -43,8 +43,18 @@ import { TodayMoments } from "./TodayMoments";
 import {
   RE_ENTRY_ABSENCE_DAYS,
   renderToday,
+  resetTodayMomentsMountTracking,
   useAutoSortSeededCaptures,
 } from "@/__tests__/helpers/todayMomentsHarness";
+
+// C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
+// — every split file that mounts TodayMoments more than once needs this
+// reset (deepLink.ts's module-level remount-tracking flag survives across
+// `it()`s in the same file); see the harness export's own doc comment for
+// the full mechanism.
+afterEach(() => {
+  resetTodayMomentsMountTracking();
+});
 
 /**
  * SP-6: undo over confirm. Extends the toast slot to

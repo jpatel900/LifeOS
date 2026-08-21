@@ -24,34 +24,20 @@ vi.mock("@/lib/reEntry/briefView", () => ({
   createBriefViewRecorder: () => ({ recordIfNeeded: vi.fn() }),
 }));
 
-import { renderToday } from "@/__tests__/helpers/todayMomentsHarness";
-import { resetTodayMomentsMountTrackingForTests } from "./deepLink";
+import {
+  renderToday,
+  resetTodayMomentsMountTracking,
+} from "@/__tests__/helpers/todayMomentsHarness";
 
 // C2-S13 (#687): FILE-LEVEL, applies to every `describe` below regardless of
-// nesting.
-//
-// `window.location` is shared, mutable jsdom state across every test in this
-// one file (Vitest does not reset it between `it`s, only between test
-// FILES), the same class of global the "TodayMoments" describe below already
-// resets in its own `afterEach` (localStorage/sessionStorage, plus — until
-// now — a `window.location` reset scoped ONLY to that one describe, missed
-// by every OTHER top-level describe in this file — P5, P6, SP-5, SP-10,
-// SP-6, #292, ... — several of which drive real `openSheet`/`openCapture`
-// actions that push real `?sheet=`/`?capture=` history entries).
-//
-// `resetTodayMomentsMountTrackingForTests` (deepLink.ts) resets a SEPARATE
-// piece of shared state: a module-level flag TodayMoments.tsx's deep-link
-// effect uses to tell a genuine Back/Forward remount (where a stale
-// `deepLink` prop needs cross-checking against the live URL) apart from a
-// fresh mount (where the prop is trusted outright, matching this file's own
-// pervasive convention of driving that effect by passing `deepLink` directly
-// with no matching `window.location` write). Vitest keeps ONE module
-// instance loaded for every `it()` in a file, so without this reset the flag
-// would read `true` (a "remount") for every test after the first real
-// TodayMoments mount in the file.
+// nesting. `resetTodayMomentsMountTracking` (harness) resets both
+// `window.history` and deepLink.ts's module-level remount-tracking flag —
+// Vitest keeps ONE module instance loaded for every `it()` in a file, so
+// without this the flag would read `true` (a "remount") for every test
+// after the first real TodayMoments mount in the file. See the harness
+// export's own doc comment for the full mechanism.
 afterEach(() => {
-  window.history.replaceState(null, "", "/");
-  resetTodayMomentsMountTrackingForTests();
+  resetTodayMomentsMountTracking();
 });
 
 describe("TodayMoments", () => {
