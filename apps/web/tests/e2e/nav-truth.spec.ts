@@ -1270,9 +1270,7 @@ for (const sheet of SHEET_VALUES) {
     await page.keyboard.press("Meta+k");
     await expect(page.getByTestId("command-palette")).toBeVisible();
 
-    await page
-      .getByTestId(`command-palette-option-open-${sheet}`)
-      .click();
+    await page.getByTestId(`command-palette-option-open-${sheet}`).click();
 
     await expect(page.getByTestId(SHEET_TESTID[sheet])).toBeVisible();
     await expect(page.getByTestId("command-palette")).toHaveCount(0);
