@@ -83,6 +83,7 @@ import type { ToastAction } from "./toast";
 import { useFlowFocusSession } from "./useFlowFocusSession";
 import { RunningSessionReturn } from "./RunningSessionReturn";
 import { useCloseMomentRollups } from "./useCloseMomentRollups";
+import { writeMomentsPrefsCookieClient } from "@/lib/momentsPreferencesCookie";
 
 /**
  * Moments pass P3 — packet: assembled moments (Start/Flow/Close + TodayMoments).
@@ -142,10 +143,19 @@ interface ToastState {
 }
 
 interface StoredPreferences {
+  // C2-S14 (#687 round-8, defect 1): READ-ONLY going forward — a one-time
+  // migration bridge for a browser that remembered a moment BEFORE this
+  // fix shipped (`lifeos.moments.preferences` in `window.localStorage`, no
+  // server-side equivalent, which was the whole defect). `moment` is never
+  // WRITTEN here anymore; `writeMomentsPrefsCookieClient` (imported above)
+  // is the only writer now — see the mount effect below that reads this
+  // field at most once per browser, then folds it into the cookie.
   moment?: MomentValue;
   // C2-S8 (#687 finding 4): the countdown-vs-clock time display format stays
   // device-local on purpose — same class of preference as the theme toggle,
   // not a piece of app state anyone would expect a shared link to carry.
+  // Unaffected by the C2-S14 cookie migration: never URL-visible, so it has
+  // no first-paint truthfulness defect to fix.
   timeDisplay?: CountdownClockValue;
 }
 
@@ -230,12 +240,25 @@ export interface TodayMomentsProps {
   initialMoment?: MomentValue;
   now?: Date;
   deepLink?: DeepLinkTarget;
+  /**
+   * C2-S14 (#687 round-8, defect 1): the remembered moment, resolved
+   * SERVER-SIDE by `app/page.tsx` from the `lifeos_moments_prefs` cookie —
+   * the SAME value Next hydrates this component with on the client's first
+   * render, so this tier can resolve synchronously, in `resolvedInitialMoment`
+   * below, exactly like `deepLink.moment` already does. This is what closes
+   * the "coherent wrong screen painted, then swapped" defect: unlike the
+   * OLD stored-preference tier (`window.localStorage`, client-only, adopted
+   * a beat after hydration), the server can read a cookie, so there is
+   * nothing left to defer.
+   */
+  cookieMoment?: MomentValue;
 }
 
 export function TodayMoments({
   initialMoment,
   now: nowProp,
   deepLink,
+  cookieMoment,
 }: TodayMomentsProps) {
   // SP-10: relative/aging labels (schedule "in Xm"/"Xm left" rows, waiting-on
   // day counts) and the mount-time-of-day moment heuristic all derive from
@@ -397,14 +420,14 @@ export function TodayMoments({
   // component resolves the INITIAL moment through tiers: `initialMoment`
   // prop (test-only override, always wins outright) -> the URL's own
   // `?moment=` param (the redirect shims' real answer, e.g. `/execute` ->
-  // `/?moment=flow`) -> [a stored preference, applied AFTER hydration — see
-  // below] -> clock heuristic as the deterministic FIRST-PAINT floor. The
-  // URL tier lives HERE, not inside the hook: the hook cannot tell a genuine
-  // `initialMoment` override from a stale `?moment=` param an earlier,
-  // unrelated render left behind (a real bug this order fixes — see
-  // useMomentUrlState.ts's own JSDoc). The hook then reconciles the
-  // resolved value into the URL at mount (a no-op when they already agree,
-  // self-healing otherwise).
+  // `/?moment=flow`) -> the `cookieMoment` prop (the remembered moment,
+  // resolved server-side — see below) -> clock heuristic as the
+  // deterministic FIRST-PAINT floor. The URL tier lives HERE, not inside the
+  // hook: the hook cannot tell a genuine `initialMoment` override from a
+  // stale `?moment=` param an earlier, unrelated render left behind (a real
+  // bug this order fixes — see useMomentUrlState.ts's own JSDoc). The hook
+  // then reconciles the resolved value into the URL at mount (a no-op when
+  // they already agree, self-healing otherwise).
   //
   // C2-S8 (#687 finding 3, root-caused via a direct SSR curl of
   // `/?moment=flow`, which came back with `data-testid="close-moment"` in
@@ -429,45 +452,52 @@ export function TodayMoments({
   // routing through `page.tsx`) — not removed, just demoted under the prop
   // that is actually available where this mismatch happened.
   //
-  // C2-S10 (#687 round-4 judge, the SECOND infection site of the same
-  // hydration disease): the stored-preference tier used to sit HERE too,
-  // reading `readStoredPreferences()` -> `window.localStorage` — which,
-  // unlike `deepLink`, has NO server-side equivalent at all (the SSR
-  // request cannot see the browser's storage). So a bare `/` visit (or any
-  // moment-less redirect) had the SAME split as the finding-3 bug: server
-  // always fell through to the clock heuristic, client (this same
-  // initializer, re-run at hydration) read the real stored moment —
-  // mismatching whenever they differ, which is EVERY return visit after
-  // switching moments once (confirmed via SSR curl of a bare `/` with
-  // `lifeos.moments.preferences` primed to "flow": raw HTML had
-  // `close-moment` — the heuristic, since the repro ran past 17:00 — while
-  // the hydrated DOM had `flow-moment`). There is no `deepLink`-shaped fix
-  // available here (nothing server-side to consult), so the stored-pref
-  // tier moves OUT of this synchronous, both-environments initializer
-  // entirely: first paint now always agrees between server and client
-  // (whatever `initialMoment`/`deepLink.moment`/URL/heuristic already
-  // guaranteed), and the stored preference is adopted in a CLIENT-ONLY
-  // effect below, after hydration completes — one render showing the
-  // heuristic's answer, immediately corrected via `adoptMomentFromUrl` +
-  // `replaceState` (never a `pushState` — this is a resolution correction,
-  // not a user-initiated switch, so it must not grow history) if a
-  // remembered moment says otherwise. The remembered-moment FEATURE is
-  // unchanged; only WHEN it applies moved from "before first paint"
-  // (impossible to do safely for a client-only data source) to
-  // "immediately after".
+  // C2-S14 (#687 round-8 judge, score 7.3, WORST DEFECT): this is the third
+  // and final infection site of the same hydration/first-paint disease, and
+  // the worst of the three — unlike S8's (a wrong URL) and the OLD S10 fix's
+  // (a hydration ERROR with no visible screen swap because the mismatch was
+  // small), this one painted a COMPLETE, PLAUSIBLE, WRONG page (greeting,
+  // pipeline, schedule, area chip — a whole moment's subtree) for ~1.2s
+  // before swapping the entire body, because the remembered moment lived in
+  // `window.localStorage`, which has NO server-side equivalent at all. The
+  // OLD fix (this same file, S10) made the mismatch stop CRASHING by moving
+  // the stored-preference read out of this synchronous initializer into a
+  // client-only effect after hydration — correct as far as it went, but it
+  // left the wrong-then-swap paint fully intact, just silent instead of
+  // erroring. `cookieMoment` (the prop, threaded from `app/page.tsx`) is the
+  // actual fix, because unlike `localStorage`, a cookie IS readable
+  // server-side: `page.tsx` reads `lifeos_moments_prefs` via `next/headers`
+  // `cookies()` and passes the SAME value down as a prop, so this tier now
+  // behaves exactly like `deepLink.moment` above — resolved identically on
+  // the server and the client's first render, nothing left to defer. See
+  // `lib/momentsPreferencesCookie.ts`'s header comment for the full (a)-vs-(b)
+  // trade-off this was weighed against, and why (a) — the cookie — won.
+  //
+  // The remembered-moment FEATURE is unchanged; only WHERE it is stored
+  // moved (from `localStorage` to a cookie), so the server can finally see
+  // it. A browser that remembered a moment BEFORE this fix shipped still has
+  // it in `localStorage`, not yet in the cookie — the migration effect below
+  // (`legacyMomentMigrationRef`) is the one-time bridge: on a browser with no
+  // cookie yet, it reads the OLD `localStorage` value, adopts it (exactly
+  // the way the retired post-hydration effect used to, `replaceState` only,
+  // never `pushState`), and writes it into the new cookie so every
+  // subsequent visit resolves through the (now server-visible) cookie tier
+  // instead. This is a ONE-TIME event per browser: once the cookie exists,
+  // this migration effect finds `cookieMoment` already set and no-ops.
+  //
   // Captured in the SAME lazy evaluation as `resolvedInitialMoment` below,
   // before `useMomentUrlState`'s own mount effect gets a chance to
   // `replaceState` the URL to match whatever that resolved to (its
   // self-heal, documented in useMomentUrlState.ts, runs first — hooks
   // called earlier in this render register their effects earlier). The
-  // deferred stored-preference effect further down needs to know whether
-  // `initialMoment`/`deepLink.moment`/the URL's `?moment=` were the reason
-  // — re-reading `window.location.search` from THAT effect instead would
-  // see the self-heal's OWN echo (e.g. `?moment=close` the hook just wrote
-  // for the heuristic fallback) and misread it as a genuine explicit
-  // signal, permanently blocking the stored preference from ever applying.
-  // This ref is the one place that "was it explicit" fact is captured
-  // before anything can overwrite the evidence.
+  // migration effect further down needs to know whether
+  // `initialMoment`/`deepLink.moment`/the URL's `?moment=`/`cookieMoment`
+  // were the reason — re-reading `window.location.search` from THAT effect
+  // instead would see the self-heal's OWN echo (e.g. `?moment=close` the
+  // hook just wrote for the heuristic fallback) and misread it as a genuine
+  // explicit signal, permanently blocking the legacy migration from ever
+  // running. This ref is the one place that "was it already resolved" fact
+  // is captured before anything can overwrite the evidence.
   const explicitMomentRef = useRef(false);
   const [resolvedInitialMoment] = useState<MomentValue>(() => {
     if (initialMoment) {
@@ -487,24 +517,28 @@ export function TodayMoments({
         return fromUrl;
       }
     }
+    if (cookieMoment) {
+      explicitMomentRef.current = true;
+      return cookieMoment;
+    }
     return heuristicMoment(now, flowVM.currentBlock !== null);
   });
   const { moment, setMoment, adoptMomentFromUrl } = useMomentUrlState(
     resolvedInitialMoment,
   );
-  // C2-S10: the deferred half of the tier removed above — adopts a
-  // remembered moment exactly once, right after hydration, ONLY when
-  // nothing more explicit (test override, deep link, or the URL's own
-  // `?moment=`) already resolved one; those three keep outranking the
-  // stored preference, matching the order this always had. `replaceState`,
-  // not `setMoment`'s `pushState`: this is finishing the SAME initial
-  // resolution a beat late, not a user-initiated switch, so it must not
-  // grow history (Back from a freshly-loaded `/` must still leave the site,
-  // not step through a phantom entry).
-  const storedMomentAdoptedRef = useRef(false);
+  // C2-S14: the one-time legacy migration bridge described above — adopts a
+  // PRE-COOKIE `localStorage` moment preference exactly once, right after
+  // hydration, ONLY when nothing more explicit (test override, deep link,
+  // the URL's own `?moment=`, or the cookie itself) already resolved one.
+  // `replaceState`, not `setMoment`'s `pushState`: this is finishing the SAME
+  // initial resolution a beat late, not a user-initiated switch, so it must
+  // not grow history (Back from a freshly-loaded `/` must still leave the
+  // site, not step through a phantom entry). Writes the cookie too, so this
+  // bridge fires at most once per browser.
+  const legacyMomentMigrationRef = useRef(false);
   useEffect(() => {
-    if (storedMomentAdoptedRef.current) return;
-    storedMomentAdoptedRef.current = true;
+    if (legacyMomentMigrationRef.current) return;
+    legacyMomentMigrationRef.current = true;
     if (typeof window === "undefined") return;
     if (explicitMomentRef.current) return;
 
@@ -513,6 +547,7 @@ export function TodayMoments({
 
     adoptMomentFromUrl(stored.moment);
     historyReplaceState(urlWithMoment(window.location, stored.moment));
+    writeMomentsPrefsCookieClient({ moment: stored.moment });
     // Deliberately empty deps, matching every other mount-once effect in
     // this file: `initialMoment`/`deepLink`/`resolvedInitialMoment` are all
     // read from the closure of the FIRST render only, which is exactly what
@@ -637,8 +672,15 @@ export function TodayMoments({
     [state, selectedAreaId, now],
   );
 
+  // C2-S14 (#687 round-8, defect 1): `moment` now persists to the
+  // `lifeos_moments_prefs` cookie (server-readable — see the
+  // `resolvedInitialMoment` comment above), not `localStorage`.
+  // `timeDisplay` stays in `localStorage` unchanged — it is deliberately
+  // device-local and never URL-visible (C2-S8 finding 4), so it has no
+  // server-side first-paint defect to fix.
   useEffect(() => {
-    writeStoredPreferences({ moment, timeDisplay });
+    writeMomentsPrefsCookieClient({ moment });
+    writeStoredPreferences({ timeDisplay });
   }, [moment, timeDisplay]);
 
   // #292 Stage-2 entry gate instrumentation: "brief viewed >= 4 days/week"

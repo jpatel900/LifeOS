@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { CockpitRoute } from "./components/CockpitRoute";
 import { MomentsThemeShell } from "./components/moments/MomentsThemeShell";
 import { TodayMoments } from "./components/moments/TodayMoments";
@@ -6,6 +7,11 @@ import {
   type DeepLinkTarget,
 } from "./components/moments/deepLink";
 import { isMomentsHomeEnabled } from "@/lib/flags";
+import {
+  MOMENTS_PREFS_COOKIE_NAME,
+  parseMomentsPrefsCookie,
+} from "@/lib/momentsPreferencesCookie";
+import type { MomentValue } from "./components/moments/MomentSwitcher";
 
 // `/` renders the moments home only when the build-time
 // NEXT_PUBLIC_MOMENTS_HOME flag is on (default is ON since P7d go-live —
@@ -30,10 +36,16 @@ import { isMomentsHomeEnabled } from "@/lib/flags";
 //
 // #501: `data-theme` follows the app's next-themes theme (see
 // MomentsThemeShell) rather than staying permanently unset.
-function MomentsHomeShell({ deepLink }: { deepLink: DeepLinkTarget }) {
+function MomentsHomeShell({
+  deepLink,
+  cookieMoment,
+}: {
+  deepLink: DeepLinkTarget;
+  cookieMoment: MomentValue | undefined;
+}) {
   return (
     <MomentsThemeShell>
-      <TodayMoments deepLink={deepLink} />
+      <TodayMoments deepLink={deepLink} cookieMoment={cookieMoment} />
     </MomentsThemeShell>
   );
 }
@@ -41,6 +53,16 @@ function MomentsHomeShell({ deepLink }: { deepLink: DeepLinkTarget }) {
 // #687: the demoted stage routes redirect here carrying the target as query
 // params (e.g. `/triage` -> `/?sheet=triage`), so `/` opens the matching
 // moment/sheet/overlay. searchParams is a promise in Next 15's App Router.
+//
+// C2-S14 (#687 round-8, defect 1 — the worst one): `cookies()` is read HERE,
+// not in `app/layout.tsx`, deliberately. `/` already reads `searchParams`,
+// which forces this route dynamic regardless — reading `cookies()` here adds
+// no NEW caching cost. Reading it in the root layout instead (so
+// `WorkflowProvider`'s `selectedAreaId` could resolve the area chip
+// truthfully too) would force EVERY route dynamic, including the 8 demoted
+// redirect shims, `/login`, and `/settings/areas` — 11 routes that render no
+// area-scoped content at all. See `lib/momentsPreferencesCookie.ts`'s header
+// for the full trade-off and the `pnpm build` route-table evidence.
 export default async function HomePage({
   searchParams,
 }: {
@@ -48,7 +70,16 @@ export default async function HomePage({
 }) {
   if (isMomentsHomeEnabled()) {
     const params = searchParams ? await searchParams : undefined;
-    return <MomentsHomeShell deepLink={deepLinkTargetFromParams(params)} />;
+    const cookieStore = await cookies();
+    const cookiePrefs = parseMomentsPrefsCookie(
+      cookieStore.get(MOMENTS_PREFS_COOKIE_NAME)?.value,
+    );
+    return (
+      <MomentsHomeShell
+        deepLink={deepLinkTargetFromParams(params)}
+        cookieMoment={cookiePrefs?.moment}
+      />
+    );
   }
   return <CockpitRoute stage="today" />;
 }

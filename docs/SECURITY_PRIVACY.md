@@ -21,18 +21,44 @@ Security goals:
 
 ## 2. Data Classification
 
-| Data Type            | Sensitivity | Notes                                          |
-| -------------------- | ----------- | ---------------------------------------------- |
-| Raw captures         | High        | May include private thoughts/work details      |
-| Audio files          | High        | Delete after transcription unless user opts in |
-| Tasks/projects       | Medium/High | Personal/work operational data                 |
-| Calendar event IDs   | Medium      | Links to external provider state               |
-| Execution sessions   | Medium/High | Behavioral/productivity data                   |
-| Productivity ratings | Medium      | Personal pattern data                          |
-| AI recommendations   | Medium      | Derived from private data                      |
-| Health checks        | Low/Medium  | May reveal integration status                  |
-| OAuth tokens         | Critical    | Server-side only                               |
-| Service-role key     | Critical    | Never frontend                                 |
+| Data Type                                 | Sensitivity | Notes                                          |
+| ----------------------------------------- | ----------- | ---------------------------------------------- |
+| Raw captures                              | High        | May include private thoughts/work details      |
+| Audio files                               | High        | Delete after transcription unless user opts in |
+| Tasks/projects                            | Medium/High | Personal/work operational data                 |
+| Calendar event IDs                        | Medium      | Links to external provider state               |
+| Execution sessions                        | Medium/High | Behavioral/productivity data                   |
+| Productivity ratings                      | Medium      | Personal pattern data                          |
+| AI recommendations                        | Medium      | Derived from private data                      |
+| Health checks                             | Low/Medium  | May reveal integration status                  |
+| Moments UI preferences (`moment`, `area`) | Low         | Cookie-persisted; see §3.1                     |
+| OAuth tokens                              | Critical    | Server-side only                               |
+| Service-role key                          | Critical    | Never frontend                                 |
+
+### 3.1 Moments preferences cookie (#687 C2-S14)
+
+`lifeos_moments_prefs` remembers which moment (Start/Flow/Close) and which
+area the moments home last showed, so the SERVER can render the truthful
+screen on first paint instead of guessing (the alternative — a client-only
+`localStorage`/`sessionStorage` preference — is invisible to SSR, which was
+the root cause of a "coherent wrong screen painted, then swapped" defect;
+see `apps/web/src/lib/momentsPreferencesCookie.ts`'s header comment for the
+full trade-off).
+
+- Non-HttpOnly by necessity: written client-side (`document.cookie`) in
+  response to the user switching a moment or an area, so JavaScript must be
+  able to write it. Not sensitive enough to need `HttpOnly` — see below.
+- `SameSite=Lax`, `Path=/`, 1-year `Max-Age`. `Secure` is added when served
+  over HTTPS (checked via `location.protocol`, mirroring the `Secure`
+  decision in `lib/googleCalendar/oauth.ts`'s own cookie).
+- Carries only `{ moment, area }` — both already URL-visible today via
+  `?moment=`/`?area=` on every request to `/`, so this cookie exposes
+  nothing a request to this app doesn't already expose. No tokens, no
+  identifiers beyond an area id the user already chose to name in a URL.
+- `Path=/` means it is sent on every request, including `/api/*` routes —
+  those routes ignore it (only `app/page.tsx` reads it); disclosed here
+  because it is a real, if small, per-request byte cost, not because any
+  route depends on it.
 
 ## 3. Authentication
 
