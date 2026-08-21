@@ -45,6 +45,7 @@ import {
   renderToday,
   useAutoSortSeededCaptures,
 } from "@/__tests__/helpers/todayMomentsHarness";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 
 /**
  * SP-6: undo over confirm. Extends the toast slot to
@@ -107,19 +108,28 @@ function BacklogRecoverySeedBridge({
 }
 
 describe("TodayMoments — SP-6 undo over confirm", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     window.localStorage.clear();
     window.sessionStorage.clear();
+    // #861: `fake-indexeddb/auto` backs ONE module-global store shared by every
+    // `it` in this file, and the journeys below drive real WorkflowContext
+    // actions that journal device-durable writes. Left uncleared, an earlier
+    // test's write is read back by the next test's `WorkflowProvider` mount
+    // effect (`refreshJournalledDurableState`, fired un-awaited on mount), so a
+    // later test can see durable state it never created. Same clear
+    // `durableWinsReviewsGuard.test.tsx` has always done.
+    await clearPendingWrites();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.useRealTimers();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    await clearPendingWrites();
   });
 
   it("string-only showToast still works and auto-dismisses (back-compat)", async () => {

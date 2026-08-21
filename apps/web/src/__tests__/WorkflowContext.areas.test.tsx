@@ -14,6 +14,7 @@ import {
 } from "vitest";
 import CapturePage from "../app/capture/page";
 import { WorkflowProvider, useWorkflow } from "@/lib/WorkflowContext";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 import {
   ACCOUNT_NEEDS_APP_UPDATE,
   ACCOUNT_SAVE_FAILED,
@@ -244,7 +245,7 @@ const persistedTask = {
 
 let restoreParseCaptureFetch: () => void;
 
-beforeEach(() => {
+beforeEach(async () => {
   // #691: the provider now persists the area selection (and has always
   // persisted the workflow state) to sessionStorage — each test must start
   // from clean storage or one test's stored selection hydrates into the
@@ -299,11 +300,20 @@ beforeEach(() => {
     provider: "supabase",
     proposal: null,
   });
+  // #861: `fake-indexeddb/auto` backs ONE module-global store shared by every
+  // `it` in this file. The accept path below runs the REAL persistence sync,
+  // which journals a device-durable write before the (mocked) account layer
+  // is reached — so the journal fills up even with `@/lib/data/workflow`
+  // mocked. Left uncleared, an earlier test's write is read back by the next
+  // test's `WorkflowProvider` mount effect. Same clear
+  // `durableWinsReviewsGuard.test.tsx` has always done.
+  await clearPendingWrites();
 });
 
-afterEach(() => {
+afterEach(async () => {
   restoreParseCaptureFetch();
   vi.clearAllMocks();
+  await clearPendingWrites();
 });
 
 describe("WorkflowProvider persisted area sync", () => {

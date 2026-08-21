@@ -43,6 +43,7 @@ import {
   ReEntrySeedBridge,
   TaskSeedBridge,
 } from "@/__tests__/helpers/todayMomentsHarness";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 
 /**
  * SP-10: a `now` frozen at mount goes stale in a long-lived tab — relative
@@ -63,19 +64,28 @@ import {
  * deep domain seeding.
  */
 describe("TodayMoments — SP-10 live timestamp refresh", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     window.localStorage.clear();
     window.sessionStorage.clear();
+    // #861: `fake-indexeddb/auto` backs ONE module-global store shared by every
+    // `it` in this file, and the journeys below drive real WorkflowContext
+    // actions that journal device-durable writes. Left uncleared, an earlier
+    // test's write is read back by the next test's `WorkflowProvider` mount
+    // effect (`refreshJournalledDurableState`, fired un-awaited on mount), so a
+    // later test can see durable state it never created. Same clear
+    // `durableWinsReviewsGuard.test.tsx` has always done.
+    await clearPendingWrites();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.useRealTimers();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    await clearPendingWrites();
   });
 
   it("without a now prop, buildStartVM/buildFlowVM/buildCloseVM are re-invoked with a later `now` after 61s of fake time (relative/aging labels stay true)", () => {

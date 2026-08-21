@@ -32,6 +32,7 @@ import {
   pressCaptureShortcut,
   renderToday,
 } from "@/__tests__/helpers/todayMomentsHarness";
+import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
 
 /**
  * The core moment-switching journeys: start -> first move -> Flow, ending a
@@ -39,20 +40,29 @@ import {
  * cases), capture-during-flow, and the close-day journey.
  */
 describe("TodayMoments — moment-switching journeys", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
     window.localStorage.clear();
     window.sessionStorage.clear();
+    // #861: `fake-indexeddb/auto` backs ONE module-global store shared by every
+    // `it` in this file, and the journeys below drive real WorkflowContext
+    // actions that journal device-durable writes. Left uncleared, an earlier
+    // test's write is read back by the next test's `WorkflowProvider` mount
+    // effect (`refreshJournalledDurableState`, fired un-awaited on mount), so a
+    // later test can see durable state it never created. Same clear
+    // `durableWinsReviewsGuard.test.tsx` has always done.
+    await clearPendingWrites();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.useRealTimers();
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.history.replaceState(null, "", "/");
+    await clearPendingWrites();
   });
 
   it("start-to-first-move journey: Start now switches to Flow with a running countdown", async () => {
