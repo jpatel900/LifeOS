@@ -45,6 +45,7 @@ import {
   TaskSeedBridge,
 } from "@/__tests__/helpers/todayMomentsHarness";
 import { clearPendingWrites } from "@/lib/durability/pendingWriteJournal";
+import { clearStoredTaskDrafts } from "@/lib/durability/draftStore";
 
 // C2-S13 (#687 round-7): FILE-LEVEL, applies regardless of describe nesting
 // — every split file that mounts TodayMoments more than once needs this
@@ -87,6 +88,14 @@ describe("TodayMoments — SP-10 live timestamp refresh", () => {
     // later test can see durable state it never created. Same clear
     // `durableWinsReviewsGuard.test.tsx` has always done.
     await clearPendingWrites();
+    // #914: `TaskSeedBridge`/`ReEntrySeedBridge` seed a real `taskDrafts`
+    // entry, mirrored to a SECOND, separate IndexedDB store
+    // (`lifeos-triage-drafts`, `lib/durability/draftStore.ts`) that
+    // `clearPendingWrites()` above does not touch — see
+    // `TodayMoments.journeys.test.tsx`'s own comment for the full mechanism
+    // and the shuffled-order repro that found it there. Hardening here: no
+    // observed leak in this file's own assertions, but the same seed path.
+    await clearStoredTaskDrafts();
   });
 
   afterEach(async () => {
@@ -96,6 +105,7 @@ describe("TodayMoments — SP-10 live timestamp refresh", () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     await clearPendingWrites();
+    await clearStoredTaskDrafts();
   });
 
   it("without a now prop, buildStartVM/buildFlowVM/buildCloseVM are re-invoked with a later `now` after 61s of fake time (relative/aging labels stay true)", () => {
