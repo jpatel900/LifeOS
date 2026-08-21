@@ -106,6 +106,36 @@ describe("TodayMoments — P6 deep-link shims", () => {
     expect(screen.getByTestId("flow-moment")).toBeInTheDocument();
   });
 
+  // Joint coverage for PR #911 (this describe's own remount-tracking flag)
+  // and PR #912 (deepLink.ts's sheet-wins-over-palette precedence), resolved
+  // together onto the same deepLink.ts: a Back/Forward walk that crosses a
+  // real route can remount TodayMoments with a STALE `deepLink` prop (911's
+  // fix — see `consumeIsRemount`'s doc comment) while the LIVE URL names
+  // BOTH a sheet and the palette (912's fix — see
+  // `deepLinkTargetFromParams`'s sheet-vs-palette precedence). On a remount,
+  // `deepLinkTargetFromSearch` re-parses the live URL through the SAME
+  // `deepLinkTargetFromParams` 912 fixed, so the stale prop is ignored AND
+  // the live URL's own sheet+palette conflict resolves to "sheet wins" —
+  // neither fix quietly overrides the other. Primes the remount flag with a
+  // throwaway first mount (matching a real tab's earlier hard load), then
+  // remounts with a `deepLink` prop that would render a WRONG screen
+  // (`review` sheet, no overlay) if it were trusted instead of the URL.
+  it("a remount with a stale deepLink prop still honors the live URL's sheet-wins-over-palette precedence (#911 + #912)", () => {
+    const priming = renderToday({ initialMoment: "start" });
+    priming.unmount();
+
+    window.history.replaceState(null, "", "/?sheet=plan&palette=1");
+
+    renderToday({
+      initialMoment: "start",
+      deepLink: { sheet: "review", overlay: "palette" },
+    });
+
+    expect(screen.getByTestId("plan-sheet")).toBeInTheDocument();
+    expect(screen.queryByTestId("review-sheet")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("command-palette")).not.toBeInTheDocument();
+  });
+
   // C2-S8 (#687 finding 3, root cause): `resolvedInitialMoment` used to read
   // `window.location` for its URL tier — which does not exist during SSR, so
   // the server always fell through to the clock heuristic regardless of the
