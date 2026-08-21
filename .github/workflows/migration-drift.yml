@@ -2,6 +2,17 @@
 # outrunning the production database, which only changes via a manual
 # `supabase db push`. Detection only — it never applies DDL to production.
 #
+# Checks BOTH directions (added 2026-08-21 — see docs/FAILURES.md, "A
+# migration went unseen for a month: the drift detector only looked one
+# way"): repo-ahead (a repo file not yet applied to prod — the original
+# behavior) AND prod-ahead (a prod ledger version with no repo file — how
+# 20260718184244_security_harden_functions sat undetected in production for
+# a month). The comparison lives in scripts/agent/check-migration-drift.mjs;
+# known/expected prod-only versions (this Supabase project is shared with
+# the RiseUp Cockpit project) are listed with a reason each in
+# scripts/agent/migration-drift-allowlist.mjs — an unlisted prod-only
+# version still fails this check loudly.
+#
 # Requires one repository secret to do real work: SUPABASE_PROD_DB_URL — a
 # Postgres connection string for the prod project (Supabase dashboard ->
 # Connect -> Session pooler). Prefer a read-only role; the job only reads
@@ -38,7 +49,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Compare repo migrations against production
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.13.0
+          # this job never installs pnpm, so setup-node must not try to use
+          # it for caching (it auto-detects the packageManager field)
+          package-manager-cache: false
+
+      # check-migration-drift.mjs's self-test already runs on every push and PR
+      # via the `automerge-policy-self-tests` job in ci.yml — not repeated here,
+      # so an unrelated self-test failure can never block this workflow's own
+      # documented allow_skip escape hatch (the secret-check below must be able
+      # to exit 0 on its own whenever the secret is absent, regardless of node
+      # setup or self-test health).
+      - name: Compare repo migrations against production (both directions)
         env:
           PROD_DB_URL: ${{ secrets.SUPABASE_PROD_DB_URL }}
           EVENT_NAME: ${{ github.event_name }}
@@ -54,16 +79,9 @@ jobs:
             exit 1
           fi
 
-          local_versions=$(basename -s .sql supabase/migrations/*.sql | cut -d_ -f1 | sort)
-          remote_versions=$(psql "$PROD_DB_URL" -tAc \
-            "select version from supabase_migrations.schema_migrations order by version")
+          remote_ledger="$RUNNER_TEMP/prod-migration-ledger.tsv"
+          psql "$PROD_DB_URL" -t -A -F $'\t' -c \
+            "select version, name from supabase_migrations.schema_migrations order by version" \
+            > "$remote_ledger"
 
-          missing=$(comm -23 <(printf '%s\n' "$local_versions") <(printf '%s\n' "$remote_versions"))
-
-          if [ -n "$missing" ]; then
-            echo "::error::Production is missing these repo migrations. Response procedure: .agents/skills/lifeos-migration-drift-response/SKILL.md (assemble one transaction from the files below + ledger insert; human-gated apply):"
-            printf '%s\n' "$missing"
-            exit 1
-          fi
-
-          echo "Production has all $(printf '%s\n' "$local_versions" | wc -l) repo migrations."
+          node scripts/agent/check-migration-drift.mjs --remote-file "$remote_ledger"
